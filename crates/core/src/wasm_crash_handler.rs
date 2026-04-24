@@ -27,14 +27,26 @@ const CRASH_STATE_KEY: &str = "__polyCrashState";
 const BOOT_HANG_TIMEOUT_MS: u32 = 60_000;
 
 /// How long (ms) the main thread may be unresponsive before the interaction
-/// watchdog declares a hang and shows the crash overlay. 30 s avoids false
-/// positives when an account with many DMs / contacts triggers a large
-/// first-render pass (e.g. the Dog demo account). A real deadlock that lasts
-/// longer than 30 s is still caught before the user force-quits.
+/// watchdog shows the crash overlay. 12 s fires fast enough to feel responsive
+/// while still absorbing the Dog/Teams first-render pass. The overlay then
+/// offers a visible "Reload" affordance + an auto-reload countdown so the
+/// user never has to guess whether the tab is dead.
 ///
-/// NOTE: The previous value of 5 s caused E5 (boot-hang overlay fires on Dog
-/// account switch). See `docs/plans/plan-ui-polish-round-2.md` E5.
-const INTERACTION_HANG_TIMEOUT_MS: u32 = 30_000;
+/// If the main thread is truly wedged (tight WASM loop that never yields),
+/// the ServiceWorker-based force-reloader (registered separately from
+/// `install_wasm_crash_handler`) kicks in at ~25 s and navigates the client
+/// back to its current URL, bypassing the main thread entirely.
+///
+/// NOTE: The previous value of 30 s was too long — users thought the tab was
+/// dead and closed it before the overlay ever showed. 12 s is late enough to
+/// absorb Dog-account first-render (E5 regression threshold) without feeling
+/// unresponsive.
+const INTERACTION_HANG_TIMEOUT_MS: u32 = 12_000;
+
+/// How long (ms) the overlay sits before auto-reloading if the user hasn't
+/// clicked "Reload" yet. 15 s matches typical attention span after seeing a
+/// modal — long enough to read, short enough to recover unattended.
+const OVERLAY_AUTO_RELOAD_MS: u32 = 15_000;
 
 /// Install the shared browser/WASM crash handler once for the current page.
 pub fn install_wasm_crash_handler() {
@@ -47,7 +59,38 @@ pub fn install_wasm_crash_handler() {
         install_unhandled_rejection_listener();
         install_boot_hang_watchdog(BOOT_HANG_TIMEOUT_MS);
         install_interaction_hang_watchdog(INTERACTION_HANG_TIMEOUT_MS);
+        install_service_worker_force_reloader();
     });
+}
+
+/// Register `/poly-service-worker.js` and start posting heartbeats to it.
+///
+/// The ServiceWorker runs on a separate thread from the page's main thread,
+/// so it can observe when main-thread heartbeats stop. When a gap exceeds
+/// its own timeout, it calls `client.navigate(client.url)` — a browser-level
+/// navigation that bypasses the wedged main thread and force-reloads the tab.
+/// This is the only reliable recovery path for truly infinite WASM loops.
+fn install_service_worker_force_reloader() {
+    // language=JavaScript
+    let js = r#"(function() {
+    if (!('serviceWorker' in navigator)) { return; }
+    if (window.__polyServiceWorkerInstalled) { return; }
+    window.__polyServiceWorkerInstalled = true;
+
+    navigator.serviceWorker.register('/poly-service-worker.js', { scope: '/' })
+        .then(function(reg) {
+            function beat() {
+                var sw = navigator.serviceWorker.controller || reg.active;
+                if (sw) { try { sw.postMessage({ type: 'poly-heartbeat' }); } catch (e) {} }
+            }
+            beat();
+            setInterval(beat, 500);
+        })
+        .catch(function(err) {
+            console.warn('[poly] ServiceWorker registration failed — no hang auto-reload', err);
+        });
+})();"#;
+    let _ = js_sys::eval(js);
 }
 
 /// Inject a JS heartbeat that detects post-boot main-thread deadlocks.
@@ -73,14 +116,14 @@ fn install_interaction_hang_watchdog(timeout_ms: u32) {
     window.__polyInteractionWatchdogInstalled = true;
 
     var TIMEOUT = {timeout};
+    var AUTO_RELOAD_MS = {auto_reload};
     window.__polyLastHeartbeat = Date.now();
-
-    // Gaps longer than this are OS suspend/resume, not real hangs.
-    var MAX_REAL_HANG = 60000;
 
     // Reset heartbeat on visibility change (resume from suspend, tab
     // switch). Without this, Date.now() jumps across the suspend and
-    // the watchdog sees a fake multi-hour "hang".
+    // the watchdog sees a fake multi-hour "hang". This replaces the
+    // previous MAX_REAL_HANG upper-bound filter, which also hid genuine
+    // long hangs (>60s) from the user.
     document.addEventListener('visibilitychange', function() {{
         if (document.visibilityState === 'visible') {{
             window.__polyLastHeartbeat = Date.now();
@@ -95,7 +138,7 @@ fn install_interaction_hang_watchdog(timeout_ms: u32) {
             var now = Date.now();
             var gap = now - window.__polyLastHeartbeat;
             window.__polyLastHeartbeat = now;
-            if (gap > TIMEOUT && gap < MAX_REAL_HANG) {{
+            if (gap > TIMEOUT) {{
                 showHangOverlay(gap);
             }}
         }};
@@ -105,7 +148,7 @@ fn install_interaction_hang_watchdog(timeout_ms: u32) {
 
     setInterval(function() {{
         var gap = Date.now() - window.__polyLastHeartbeat;
-        if (gap > TIMEOUT && gap < MAX_REAL_HANG) {{
+        if (gap > TIMEOUT) {{
             showHangOverlay(gap);
         }}
     }}, 1000);
@@ -133,20 +176,36 @@ fn install_interaction_hang_watchdog(timeout_ms: u32) {
         var p2 = document.createElement('p');
         p2.style.cssText = 'margin:0 0 18px 0;color:#8fbcff;font-size:14px;font-weight:600;';
         p2.textContent = 'Type: interaction-hang (' + gapMs + 'ms unresponsive)';
+        var countdown = document.createElement('p');
+        countdown.style.cssText = 'margin:0 0 18px 0;color:#d8dee9;font-size:13px;';
+        var remaining = Math.round(AUTO_RELOAD_MS / 1000);
+        countdown.textContent = 'Auto-reloading in ' + remaining + 's\u2026';
         var btn = document.createElement('button');
         btn.style.cssText = 'border:0;border-radius:10px;padding:12px 16px;background:#4f8cff;color:white;font-size:14px;font-weight:600;cursor:pointer;';
-        btn.textContent = 'Reload';
+        btn.textContent = 'Reload now';
         btn.onclick = function() {{ window.location.reload(); }};
         card.appendChild(h1);
         card.appendChild(p1);
         card.appendChild(p2);
+        card.appendChild(countdown);
         card.appendChild(btn);
         overlay.appendChild(card);
         document.body && document.body.appendChild(overlay);
         console.error('Poly interaction hang: main thread blocked for ' + gapMs + 'ms');
+
+        var ticker = setInterval(function() {{
+            remaining -= 1;
+            if (remaining <= 0) {{
+                clearInterval(ticker);
+                window.location.reload();
+            }} else {{
+                countdown.textContent = 'Auto-reloading in ' + remaining + 's\u2026';
+            }}
+        }}, 1000);
     }}
 }})();"#,
         timeout = timeout_ms,
+        auto_reload = OVERLAY_AUTO_RELOAD_MS,
     );
     let _ = js_sys::eval(&js);
 }

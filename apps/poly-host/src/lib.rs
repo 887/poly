@@ -32,7 +32,8 @@ use anyhow::{Context, Result};
 use axum::{
     Json, Router,
     extract::State,
-    http::StatusCode,
+    http::{HeaderMap, HeaderValue, StatusCode, header},
+    response::IntoResponse,
     routing::{get, post},
 };
 use poly_host_bridge::{
@@ -109,8 +110,67 @@ pub fn router(state: HostState) -> Router {
         .route("/host/exec", post(host_exec))
         .route("/host/http", post(host_http))
         .route("/host", post(host_legacy))
+        .route("/poly-service-worker.js", get(poly_service_worker))
         .with_state(state)
         .layer(cors)
+}
+
+/// ServiceWorker script — main-thread hang detector + auto-reload.
+///
+/// The main WASM app posts `{type:'poly-heartbeat'}` to this SW every 500ms.
+/// If a client stops heartbeating for more than `HEARTBEAT_TIMEOUT_MS`, the
+/// SW calls `client.navigate(client.url)` to force-reload that tab — which
+/// works even when the main thread is stuck in an infinite WASM loop
+/// (the navigation is executed at the browser level, not by main-thread JS).
+const POLY_SERVICE_WORKER_JS: &str = r#"// poly hang watchdog
+const HEARTBEAT_TIMEOUT_MS = 25000;
+const CHECK_INTERVAL_MS = 2000;
+const lastBeat = new Map();
+
+self.addEventListener('install', () => { self.skipWaiting(); });
+self.addEventListener('activate', (e) => { e.waitUntil(self.clients.claim()); });
+self.addEventListener('message', (e) => {
+  if (e.data && e.data.type === 'poly-heartbeat' && e.source) {
+    lastBeat.set(e.source.id, Date.now());
+  }
+});
+
+setInterval(async () => {
+  const now = Date.now();
+  const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+  for (const client of clients) {
+    const beat = lastBeat.get(client.id);
+    if (beat === undefined) continue;
+    if (now - beat > HEARTBEAT_TIMEOUT_MS) {
+      try {
+        console.warn('[poly-sw] force-reloading client after ' + (now - beat) + 'ms silence');
+        lastBeat.delete(client.id);
+        await client.navigate(client.url);
+      } catch (err) {
+        console.error('[poly-sw] navigate failed', err);
+      }
+    }
+  }
+}, CHECK_INTERVAL_MS);
+"#;
+
+async fn poly_service_worker() -> impl IntoResponse {
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/javascript; charset=utf-8"),
+    );
+    // Scope="/" so the SW can control navigations initiated from any path.
+    headers.insert(
+        "service-worker-allowed",
+        HeaderValue::from_static("/"),
+    );
+    // Don't cache the watchdog — we want edits to propagate on dev reload.
+    headers.insert(
+        header::CACHE_CONTROL,
+        HeaderValue::from_static("no-cache, no-store, must-revalidate"),
+    );
+    (StatusCode::OK, headers, POLY_SERVICE_WORKER_JS)
 }
 
 /// Run the router on `addr` and block until the OS sends ctrl-c / SIGTERM.
