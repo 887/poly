@@ -127,6 +127,11 @@ poly-server-client = { workspace = true, optional = true, features = [
 # KV op through a native shell's `/host/kv/*` endpoints instead of talking
 # to the browser-local IndexedDB.
 poly-host-bridge = { workspace = true, optional = true, features = ["web-direct"] }
+# WASM-safe timer for `BackendHandleExt::read_with_timeout` — tokio::time is
+# unavailable on wasm32-unknown-unknown (Instant::now() panics), so the
+# helper races the read future against gloo_timers::future::TimeoutFuture.
+# See `crates/core/src/client_manager_timeout.rs`.
+gloo-timers = { version = "0.3", features = ["futures"] }
 
 [lints]
 workspace = true

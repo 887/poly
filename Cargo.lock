@@ -6420,6 +6420,7 @@ dependencies = [
  "futures",
  "getrandom 0.2.17",
  "getrandom 0.4.2",
+ "gloo-timers",
  "hex",
  "indexed_db_futures",
  "js-sys",

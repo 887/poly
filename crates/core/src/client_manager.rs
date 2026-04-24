@@ -75,6 +75,11 @@ pub struct SignupEntry {
 /// A shared, thread-safe handle to a messenger backend.
 pub type BackendHandle = Arc<RwLock<Box<dyn ClientBackend>>>;
 
+// Hang #4 prevention helper — see `crate::client_manager_timeout` module
+// docs and `docs/plans/plan-backend-read-timeout.md`. Re-exported here so
+// consumers can `use poly_core::client_manager::BackendHandleExt;`.
+pub use crate::client_manager_timeout::{BackendHandleExt, BackendReadTimeout};
+
 /// Manages active messenger backend connections.
 ///
 /// Each backend is keyed by its account ID (e.g., `"demo-cat"` for the cat demo client).
