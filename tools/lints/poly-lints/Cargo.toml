@@ -1,0 +1,53 @@
+# poly-lints — HIR-precise dylint lints for the two CLAUDE.md hang classes
+# that the regex scripts in tools/scripts/forbid-*.sh currently gate.
+#
+# Phase 5 Track B of:
+#   docs/plans/plan-batched-signal.md         (hang class #1)
+#   docs/plans/plan-use-spawn-once.md         (hang class #3)
+#
+# This crate is deliberately EXCLUDED from the root workspace (see root
+# Cargo.toml → [workspace.exclude]) because it depends on nightly rustc
+# internal crates (rustc_hir, rustc_lint, rustc_session, rustc_span, …)
+# via `extern crate rustc_*`. Pulling it into the workspace would force
+# the entire workspace onto a pinned nightly toolchain, which the
+# project explicitly avoids (see workspace.package rust-version = "1.85").
+#
+# Instead, this crate has its own rust-toolchain.toml that pins a
+# nightly with `rustc-dev` + `llvm-tools-preview` components, and CI
+# runs it via `cargo dylint` (see .github/workflows/lint-test.yml).
+#
+# Local usage:
+#   cargo install cargo-dylint dylint-link
+#   cd tools/lints/poly-lints && cargo build --release
+#   cd ../../.. && DYLINT_LIBRARY_PATH=$PWD/tools/lints/poly-lints/target/release \
+#       cargo dylint --all -- -p poly-core
+#
+# See tools/lints/poly-lints/README.md for details.
+
+[package]
+name = "poly-lints"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "HIR-precise dylint lints for CLAUDE.md hang classes #1 (raw Signal::write) and #3 (use_effect+spawn+signal-write cycle)"
+
+[lib]
+name = "poly_lints"
+path = "src/lib.rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+# dylint_linting macros + rustc internal crate re-exports.
+# Version pin is LOAD-BEARING: each dylint release targets a specific
+# nightly. Bumping this requires bumping rust-toolchain.toml too.
+# See https://github.com/trailofbits/dylint/blob/master/README.md for
+# the compatibility matrix.
+dylint_linting = "5.0.0"
+
+[dev-dependencies]
+dylint_testing = "5.0.0"
+
+# Dylint libraries are cdylibs; no workspace lints here because this
+# crate is outside the workspace on purpose. We still apply the same
+# spirit of strict clippy in CI if desired, but local clippy over
+# rustc_private code is noisy — skipping.

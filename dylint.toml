@@ -1,0 +1,18 @@
+# dylint configuration — tells `cargo dylint` which lint libraries to
+# load by default. This file is at the workspace root so the command
+# works from anywhere in the tree.
+#
+# The `poly-lints` crate is workspace-excluded (see root Cargo.toml)
+# because it pulls in rustc internal crates on nightly. Build it
+# explicitly first:
+#
+#   (cd tools/lints/poly-lints && cargo build --release)
+#
+# then run:
+#
+#   cargo dylint --all -- -p poly-core
+#
+# See tools/lints/poly-lints/README.md for the full workflow.
+
+[[libraries]]
+path = "tools/lints/poly-lints"

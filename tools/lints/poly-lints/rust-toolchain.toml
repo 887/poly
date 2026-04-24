@@ -1,0 +1,14 @@
+# dylint requires the rustc internal crates (rustc_hir, rustc_lint, …),
+# which are only available on nightly with rustc-dev and
+# llvm-tools-preview components.
+#
+# This file is scoped to tools/lints/poly-lints/ only; the workspace
+# itself still builds on stable (see root Cargo.toml rust-version).
+#
+# When bumping the `channel`, also bump the `dylint_linting` version
+# in Cargo.toml to the matching release — dylint ties its driver to
+# a specific nightly. Check the trailofbits/dylint release notes for
+# the supported nightly range of each dylint version.
+[toolchain]
+channel = "nightly"
+components = ["llvm-tools-preview", "rustc-dev", "rust-src"]

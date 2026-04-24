@@ -50,6 +50,18 @@ members = [
     "mcp/chat-mcp",
 ]
 
+# `tools/lints/poly-lints` is DELIBERATELY excluded from the workspace.
+# It is a dylint lint library (cdylib) that depends on rustc internal
+# crates (`rustc_hir`, `rustc_lint`, …) via `extern crate rustc_*`,
+# which requires a nightly toolchain with `rustc-dev` — bringing the
+# whole workspace onto nightly would break the rust-version = "1.85"
+# stable pin. The crate has its own `rust-toolchain.toml` scoped to
+# its directory and is built + run separately by `cargo dylint`.
+# See `tools/lints/poly-lints/README.md` + `.github/workflows/lint-test.yml`.
+exclude = [
+    "tools/lints/poly-lints",
+]
+
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
