@@ -402,14 +402,17 @@ recurrence means either a missed migration site, an escape-hatch
    incidents: commit `a761fe01` (AccountIcon.onclick), the `chat_view.rs`
    `open_message_hit` batches, `restore_server_channel` PendingUpdate
    conversion, plus 3 more.
-   **Countermeasure (in progress): `BatchedSignal<T>` newtype.** Shipped
-   Phases 1-3 (commits `e091281c`, `33b18d4d`, `828f9584`) covering
+   **Countermeasure (shipped with CI gate): `BatchedSignal<T>` newtype.**
+   Phases 1-3 (commits `e091281c`, `33b18d4d`, `828f9584`) flipped
    `Signal<ChatData>` and `Signal<AppState>` — 271 `.write()` sites
    collapsed to `.batch(|v| …)` / `.pending_update()`. The deprecated
    shadow `BatchedSignal::write()` fails `#[deny(deprecated)]` so the
-   bug is now a compile error on the migrated signals. See
-   `docs/plans/plan-batched-signal.md` for the remaining Phase 4–6
-   work (other hot-path signals, clippy/dylint).
+   bug is a compile error on the migrated signals. Phase 5 lint
+   (`6c6eba3f` — `tools/scripts/forbid-signal-write.sh`) bans raw
+   `Signal::write()` across `crates/core/src/ui/`; allowlisted
+   exceptions live in `tools/scripts/signal-write-allowlist.txt` with
+   rationale comments. `docs/plans/plan-batched-signal.md` Phase 4 (other
+   hot-path signals) remains opportunistic.
 
 2. **Live `Signal::read()` guard across a `.write()` of the same signal.**
    WASM panics → no panic_hook unwinding → tight loop / unreachable. Wrap
@@ -426,14 +429,17 @@ recurrence means either a missed migration site, an escape-hatch
    incidents: Teams Sheep wedge (fix `904920b9`, ServerHome missing
    `spawned_for` guard) — the SQLite-persisted BISECT trace captured
    ~1.2M iterations before sampling.
-   **Countermeasure (Phase 1 shipped; migrations pending): `use_spawn_once<K>(key, async_fn)`
+   **Countermeasure (shipped with CI gate): `use_spawn_once<K>(key, async_fn)`
    hook** (commit `50da1841`). The hook bakes the `spawned_for: Signal<Option<K>>`
    guard into the call-site API so it can't be forgotten — ~15 lines of
-   preamble collapse to ~3. Phase 2 migrates the 2 HIGH-severity sites
-   (`ServerMediaViewerRoute`, `ForumPostView`) + the 6 MEDIUM sites from
-   the audit. Phase 5 is a clippy/dylint ban on the raw `use_effect` +
-   `spawn(async move { … signal.batch(…) })` triple. See
-   `docs/plans/plan-use-spawn-once.md` for the full checklist.
+   preamble collapse to ~3. Phases 2-4 (commit `e7abb629`) migrated 10
+   call sites including the 2 HIGH-severity bug-waiting-to-happen sites
+   (`ServerMediaViewerRoute`, `ForumPostView`). Phase 5 lint
+   (`8b2551e1` — `tools/scripts/forbid-use-effect-spawn-cycle.sh`) fails
+   CI on any raw `use_effect` + `spawn(async move { … signal.batch(…) })`
+   triple; allowlisted exceptions live in
+   `tools/scripts/use-effect-spawn-cycle-allowlist.txt` with rationale
+   comments. See `docs/plans/plan-use-spawn-once.md`.
 
 4. **`tokio::sync::RwLock::read().await` on a backend that has a perpetual
    writer.** Single-threaded WASM scheduler can starve readers. Wrap with
