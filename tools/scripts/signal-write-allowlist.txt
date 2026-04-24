@@ -23,11 +23,13 @@
 #   * component-scoped `use_signal` locals (list/set state, filter toggles,
 #     modal visibility) where multi-write cascades don't apply because the
 #     signal has one subscriber
-#   * `Signal<ChatHistoryUiState>` (`history_state`) mutations — Phase 4
-#     opportunistic, not yet migrated. High traffic but owned by the chat
-#     view; acceptable short-term risk, tracked in plan §3 Phase 4.
-#   * `Signal<AppSettings>` (`settings_sig`) and `Signal<Locale>`
-#     (`locale_sig`) mutations — Phase 4 opportunistic.
+#   * `Signal<Locale>` (`locale_sig`) mutations — Phase 4 defers locale to
+#     a later pass; low frequency, not a cascade vector.
+#
+# Phase 4 migrated `Signal<ChatHistoryUiState>` (`history_state`) and
+# `Signal<AppSettings>` (`settings_sig`) to `BatchedSignal<T>` — their
+# former allowlist entries have been removed (the shadow `.write()`
+# would now reject at compile time anyway).
 
 # ── Meta: batched_signal.rs itself defines the shadow `write`. ─────────────
 crates/core/src/state/batched_signal.rs  # defines the shadow `fn write() -> !`
@@ -51,14 +53,7 @@ crates/core/src/ui/settings/general.rs:client_manager  # clear_all_backends on s
 crates/core/src/ui/settings/plugins.rs:client_manager  # register plugin settings
 crates/core/src/ui/signup/mod.rs:client_manager  # commit_backend_account on signup
 
-# ── Signal<ChatHistoryUiState> — Phase 4 opportunistic. ────────────────────
-# `history_state` lives on ChatView; mutations are bounded to load-older /
-# load-newer async paths. Plan §3 Phase 4 lists two HIGH-severity sites to
-# migrate opportunistically. Until then they are allowed.
-crates/core/src/ui/account/common/chat_view.rs:history_state  # pagination + unread divider
-
-# ── Signal<AppSettings> / Signal<Locale> — settings-only. ──────────────────
-crates/core/src/ui/settings/general.rs:settings_sig  # LayoutModeSelector
+# ── Signal<Locale> — settings-only, not a cascade vector. ──────────────────
 crates/core/src/ui/mod.rs:locale_sig  # locale swap on boot
 crates/core/src/ui/settings/language.rs:locale_sig  # language picker
 

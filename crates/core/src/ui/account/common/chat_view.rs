@@ -933,7 +933,7 @@ struct ChatViewSignals {
     active_command_idx: Signal<usize>,
     show_command_popup: Signal<bool>,
     reply_target: Signal<Option<MessageReplyPreview>>,
-    history_state: Signal<ChatHistoryUiState>,
+    history_state: BatchedSignal<ChatHistoryUiState>,
     unread_marker_on_screen: Signal<bool>,
     virtual_window: Signal<MessageVirtualWindowState>,
     header_actions_overflow: Signal<bool>,
@@ -981,7 +981,7 @@ fn use_chat_view_signals() -> ChatViewSignals {
         active_command_idx: use_signal(|| 0_usize),
         show_command_popup: use_signal(|| false),
         reply_target: use_signal(|| None::<MessageReplyPreview>),
-        history_state: use_signal(ChatHistoryUiState::default),
+        history_state: BatchedSignal::use_batched(ChatHistoryUiState::default),
         unread_marker_on_screen: use_signal(|| false),
         virtual_window: use_signal(MessageVirtualWindowState::default),
         pinned_filter_open: use_signal(|| false),
@@ -1118,7 +1118,7 @@ fn build_chat_view_markup_ctx(signals: &ChatViewSignals) -> ChatViewMarkupCtx {
 }
 
 fn build_unread_banner_fields(
-    history_state: Signal<ChatHistoryUiState>,
+    history_state: BatchedSignal<ChatHistoryUiState>,
     messages: &[Message],
 ) -> (Option<String>, bool, String, String, String) {
     let unread_marker_id = history_state.read().unread_marker_message_id.clone();
@@ -1592,14 +1592,14 @@ fn use_pinned_messages_effect(signals: &ChatViewSignals) {
 
 fn use_history_state_effect(signals: &ChatViewSignals) {
     let app_state = signals.app_state;
-    let mut chat_data = signals.chat_data;
-    let mut history_state = signals.history_state;
+    let chat_data = signals.chat_data;
+    let history_state = signals.history_state;
     let mut scrolled_from_bottom = signals.scrolled_from_bottom;
     let mut new_messages_while_scrolled_up = signals.new_messages_while_scrolled_up;
 
     use_effect(move || {
         let Some(active_channel_id) = app_state.read().nav.selected_channel.cloned() else {
-            history_state.set(ChatHistoryUiState::default());
+            history_state.batch(|h| *h = ChatHistoryUiState::default());
             return;
         };
         let chat_snapshot = chat_data.read().clone();
@@ -1652,7 +1652,7 @@ fn use_history_state_effect(signals: &ChatViewSignals) {
             messages_loaded,
         };
         recompute_history_spacers(&mut next_history, &messages);
-        history_state.set(next_history);
+        history_state.batch(|h| *h = next_history);
     });
 }
 
@@ -1748,8 +1748,8 @@ fn use_unread_marker_visibility_effect(signals: &ChatViewSignals) {
 ///     the server badge counters are decremented.
 fn use_auto_dismiss_divider_effect(signals: &ChatViewSignals) {
     let scrolled_from_bottom = signals.scrolled_from_bottom;
-    let mut history_state = signals.history_state;
-    let mut chat_data = signals.chat_data;
+    let history_state = signals.history_state;
+    let chat_data = signals.chat_data;
 
     use_effect(move || {
         // Only act when the user is at the bottom (not scrolled away from live tail).
@@ -1772,7 +1772,7 @@ fn use_auto_dismiss_divider_effect(signals: &ChatViewSignals) {
         }
 
         // User is at the bottom, has seen everything — clear the divider.
-        history_state.write().unread_divider_visible = false;
+        history_state.batch(|h| h.unread_divider_visible = false);
 
         // Also clear bold / server badge so they don't linger.
         if let Some(channel_id) = channel_id {
@@ -1841,7 +1841,7 @@ struct ChatViewMarkupCtx {
     active_command_idx: Signal<usize>,
     show_command_popup: Signal<bool>,
     reply_target: Signal<Option<MessageReplyPreview>>,
-    history_state: Signal<ChatHistoryUiState>,
+    history_state: BatchedSignal<ChatHistoryUiState>,
     unread_marker_on_screen: Signal<bool>,
     virtual_window: Signal<MessageVirtualWindowState>,
     header_actions_overflow: Signal<bool>,
@@ -2078,7 +2078,7 @@ fn set_message_virtual_window(
 #[derive(Clone)]
 struct MessageListScrollWorkCtx {
     loading: bool,
-    history_state: Signal<ChatHistoryUiState>,
+    history_state: BatchedSignal<ChatHistoryUiState>,
     scroll_work_in_flight: Arc<AtomicBool>,
     scroll_work_requested: Arc<AtomicBool>,
     messages_for_window: Vec<Message>,
@@ -2183,7 +2183,7 @@ fn spawn_message_list_scroll_work(mut ctx: MessageListScrollWorkCtx) {
                 && !history_snapshot.loading_before
                 && ctx.top_edge_armed.swap(false, Ordering::Relaxed)
             {
-                ctx.history_state.write().loading_before = true;
+                ctx.history_state.batch(|h| h.loading_before = true);
                 load_older_messages(
                     ctx.app_state,
                     ctx.client_manager,
@@ -2198,7 +2198,7 @@ fn spawn_message_list_scroll_work(mut ctx: MessageListScrollWorkCtx) {
                 && !history_snapshot.loading_after
                 && ctx.bottom_edge_armed.swap(false, Ordering::Relaxed)
             {
-                ctx.history_state.write().loading_after = true;
+                ctx.history_state.batch(|h| h.loading_after = true);
                 load_newer_messages(
                     ctx.app_state,
                     ctx.client_manager,
@@ -3421,10 +3421,10 @@ async fn load_older_messages(
     app_state: BatchedSignal<AppState>,
     client_manager: Signal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
-    mut history_state: Signal<ChatHistoryUiState>,
+    history_state: BatchedSignal<ChatHistoryUiState>,
 ) {
     let Some(active_channel_id) = app_state.read().nav.selected_channel.cloned() else {
-        history_state.write().loading_before = false;
+        history_state.batch(|h| h.loading_before = false);
         return;
     };
     let Some(before_message_id) = chat_data
@@ -3433,8 +3433,10 @@ async fn load_older_messages(
         .first()
         .map(|message| message.id.clone())
     else {
-        history_state.write().loading_before = false;
-        history_state.write().has_more_before = false;
+        history_state.batch(|h| {
+            h.loading_before = false;
+            h.has_more_before = false;
+        });
         return;
     };
     let backend = if let Some(server_id) = app_state.read().nav.selected_server.cloned() {
@@ -3448,7 +3450,7 @@ async fn load_older_messages(
         None
     };
     let Some(backend) = backend else {
-        history_state.write().loading_before = false;
+        history_state.batch(|h| h.loading_before = false);
         return;
     };
     let anchor_snapshot = read_message_list_anchor().await;
@@ -3468,10 +3470,12 @@ async fn load_older_messages(
             .unwrap_or_default()
     };
     if older_messages.is_empty() {
-        let mut history = history_state.write();
-        history.loading_before = false;
-        history.has_more_before = false;
-        history.before_spacer_px = 0.0;
+        // HIGH-severity cascade collapse: 3 fields in one batch guard.
+        history_state.batch(|history| {
+            history.loading_before = false;
+            history.has_more_before = false;
+            history.before_spacer_px = 0.0;
+        });
         return;
     }
 
@@ -3488,10 +3492,12 @@ async fn load_older_messages(
             (merged_messages, dropped_newer_messages)
         });
 
-        let mut history = history_state.write();
-        history.has_more_before = has_more_before;
-        history.has_more_after = dropped_newer_messages || history.has_more_after;
-        recompute_history_spacers(&mut history, &merged_messages);
+        // HIGH-severity cascade collapse: 3 field writes + recompute in one batch guard.
+        history_state.batch(|history| {
+            history.has_more_before = has_more_before;
+            history.has_more_after = dropped_newer_messages || history.has_more_after;
+            recompute_history_spacers(history, &merged_messages);
+        });
     }
     // column-reverse layout: prepending older messages at the visual top does not disturb
     // scrollTop (browser measures from the visual bottom). No scroll correction needed.
@@ -3499,17 +3505,17 @@ async fn load_older_messages(
     if let Some((anchor_element_id, anchor_offset_px)) = anchor_snapshot {
         request_preserve_message_anchor(&anchor_element_id, anchor_offset_px);
     }
-    history_state.write().loading_before = false;
+    history_state.batch(|h| h.loading_before = false);
 }
 
 async fn load_newer_messages(
     app_state: BatchedSignal<AppState>,
     client_manager: Signal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
-    mut history_state: Signal<ChatHistoryUiState>,
+    history_state: BatchedSignal<ChatHistoryUiState>,
 ) {
     let Some(active_channel_id) = app_state.read().nav.selected_channel.cloned() else {
-        history_state.write().loading_after = false;
+        history_state.batch(|h| h.loading_after = false);
         return;
     };
     let Some(after_message_id) = chat_data
@@ -3518,8 +3524,10 @@ async fn load_newer_messages(
         .last()
         .map(|message| message.id.clone())
     else {
-        history_state.write().loading_after = false;
-        history_state.write().has_more_after = false;
+        history_state.batch(|h| {
+            h.loading_after = false;
+            h.has_more_after = false;
+        });
         return;
     };
     let backend = if let Some(server_id) = app_state.read().nav.selected_server.cloned() {
@@ -3533,7 +3541,7 @@ async fn load_newer_messages(
         None
     };
     let Some(backend) = backend else {
-        history_state.write().loading_after = false;
+        history_state.batch(|h| h.loading_after = false);
         return;
     };
     let anchor_snapshot = read_message_list_anchor().await;
@@ -3581,10 +3589,11 @@ async fn load_newer_messages(
         (collected_messages, reached_latest_message)
     };
     if newer_messages.is_empty() {
-        let mut history = history_state.write();
-        history.loading_after = false;
-        history.has_more_after = !reached_latest_message;
-        history.after_spacer_px = 0.0;
+        history_state.batch(|history| {
+            history.loading_after = false;
+            history.has_more_after = !reached_latest_message;
+            history.after_spacer_px = 0.0;
+        });
         return;
     }
 
@@ -3599,17 +3608,18 @@ async fn load_newer_messages(
             (merged_messages, dropped_older_messages)
         });
 
-        let mut history = history_state.write();
-        history.has_more_before = dropped_older_messages || history.has_more_before;
-        history.has_more_after = has_more_after;
-        recompute_history_spacers(&mut history, &merged_messages);
+        history_state.batch(|history| {
+            history.has_more_before = dropped_older_messages || history.has_more_before;
+            history.has_more_after = has_more_after;
+            recompute_history_spacers(history, &merged_messages);
+        });
     }
     // column-reverse: trimming older messages from the top does not disturb scrollTop.
     // Anchor restoration is still used for precise pinning when available.
     if let Some((anchor_element_id, anchor_offset_px)) = anchor_snapshot {
         request_preserve_message_anchor(&anchor_element_id, anchor_offset_px);
     }
-    history_state.write().loading_after = false;
+    history_state.batch(|h| h.loading_after = false);
 }
 
 fn render_message_list_content(ctx: ChatViewMarkupCtx) -> Element {
@@ -3738,7 +3748,7 @@ fn render_jump_to_present(ctx: ChatViewMarkupCtx) -> Element {
     let app_state = ctx.app_state;
     let client_manager = ctx.client_manager;
     let chat_data = ctx.chat_data;
-    let mut history_state = ctx.history_state;
+    let history_state = ctx.history_state;
 
     rsx! {
         div { class: "chat-jump-to-present-wrap",
@@ -3747,7 +3757,7 @@ fn render_jump_to_present(ctx: ChatViewMarkupCtx) -> Element {
                 onclick: move |_| {
                     new_messages_while_scrolled_up.set(0);
                     if history_state.read().has_more_after && !history_state.read().loading_after {
-                        history_state.write().loading_after = true;
+                        history_state.batch(|h| h.loading_after = true);
                         spawn(async move {
                             load_newer_messages(app_state, client_manager, chat_data, history_state).await;
                             // RAF-deferred so it runs after Dioxus applies the new messages to the DOM.
@@ -3778,8 +3788,8 @@ fn render_unread_banner(ctx: ChatViewMarkupCtx) -> Element {
         return rsx! {};
     }
 
-    let mut chat_data = ctx.chat_data;
-    let mut history_state = ctx.history_state;
+    let chat_data = ctx.chat_data;
+    let history_state = ctx.history_state;
     let unread_banner_channel_id = ctx.unread_banner_channel_id.clone();
     let unread_banner_count = ctx.unread_banner_count.clone();
     let unread_banner_time = ctx.unread_banner_time.clone();
@@ -3797,7 +3807,7 @@ fn render_unread_banner(ctx: ChatViewMarkupCtx) -> Element {
                         let _ = mark_channel_as_read(chat_data, &active_channel_id);
                         // Clear unread count (hides the banner) but preserve
                         // unread_divider_visible so the red line stays (Discord behaviour).
-                        history_state.write().unread_count = 0;
+                        history_state.batch(|h| h.unread_count = 0);
                     }
                 },
                 "{t(\"notifications-mark-read\")}"

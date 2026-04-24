@@ -117,7 +117,7 @@ async fn persist_mirror_chat_messages(enabled: bool) {
     }
 }
 
-fn load_general_settings(mut settings_sig: Signal<AppSettings>) {
+fn load_general_settings(settings_sig: BatchedSignal<AppSettings>) {
     spawn(async move {
         let Some(storage) = crate::STORAGE.get() else {
             return;
@@ -127,7 +127,7 @@ fn load_general_settings(mut settings_sig: Signal<AppSettings>) {
                 if settings.layout_mode == LayoutMode::AutoWidth && settings.force_mobile_layout {
                     settings.layout_mode = LayoutMode::ForceMobile;
                 }
-                settings_sig.set(settings);
+                settings_sig.batch(|s| *s = settings);
             }
             Err(err) => tracing::warn!("Failed to load general settings: {err}"),
         }
@@ -154,7 +154,7 @@ fn LayoutModeButton(label: String, active: bool, onclick: EventHandler<MouseEven
 #[component]
 fn LayoutModeSelector() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
-    let mut settings_sig = use_signal(AppSettings::default);
+    let settings_sig = BatchedSignal::use_batched(AppSettings::default);
     let mut loaded = use_signal(|| false);
 
     use_effect(move || {
@@ -182,7 +182,7 @@ fn LayoutModeSelector() -> Element {
                     label: t("settings-layout-auto-width"),
                     active: selected_mode == LayoutMode::AutoWidth,
                     onclick: move |_| {
-                        settings_sig.write().layout_mode = LayoutMode::AutoWidth;
+                        settings_sig.batch(|s| s.layout_mode = LayoutMode::AutoWidth);
                         app_state.batch(|st| st.layout_mode = LayoutMode::AutoWidth);
                         spawn(async move { persist_layout_mode(LayoutMode::AutoWidth).await; });
                     },
@@ -191,7 +191,7 @@ fn LayoutModeSelector() -> Element {
                     label: t("settings-layout-auto-portrait"),
                     active: selected_mode == LayoutMode::AutoPortrait,
                     onclick: move |_| {
-                        settings_sig.write().layout_mode = LayoutMode::AutoPortrait;
+                        settings_sig.batch(|s| s.layout_mode = LayoutMode::AutoPortrait);
                         app_state.batch(|st| st.layout_mode = LayoutMode::AutoPortrait);
                         spawn(async move { persist_layout_mode(LayoutMode::AutoPortrait).await; });
                     },
@@ -200,7 +200,7 @@ fn LayoutModeSelector() -> Element {
                     label: t("settings-layout-force-desktop"),
                     active: selected_mode == LayoutMode::ForceDesktop,
                     onclick: move |_| {
-                        settings_sig.write().layout_mode = LayoutMode::ForceDesktop;
+                        settings_sig.batch(|s| s.layout_mode = LayoutMode::ForceDesktop);
                         app_state.batch(|st| st.layout_mode = LayoutMode::ForceDesktop);
                         spawn(async move { persist_layout_mode(LayoutMode::ForceDesktop).await; });
                     },
@@ -209,7 +209,7 @@ fn LayoutModeSelector() -> Element {
                     label: t("settings-layout-force-mobile"),
                     active: selected_mode == LayoutMode::ForceMobile,
                     onclick: move |_| {
-                        settings_sig.write().layout_mode = LayoutMode::ForceMobile;
+                        settings_sig.batch(|s| s.layout_mode = LayoutMode::ForceMobile);
                         app_state.batch(|st| st.layout_mode = LayoutMode::ForceMobile);
                         spawn(async move { persist_layout_mode(LayoutMode::ForceMobile).await; });
                     },
