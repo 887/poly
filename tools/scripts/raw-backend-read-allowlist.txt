@@ -1,0 +1,21 @@
+# raw-backend-read-allowlist.txt — Phase 5 Track A of plan-backend-read-timeout.md.
+#
+# File-level fallback allowlist for `forbid-raw-backend-read.sh`.
+# Use this only when an inline comment is awkward (e.g. generated code,
+# very long lines, macro-expanded sites).
+#
+# Formats (first match wins):
+#   path                      whole-file allow (use sparingly)
+#   path:N                    pin a single line (line-drift risk)
+#   path:start-end            range allow (e.g. path:10-15)
+#
+# Add a trailing `# rationale` comment explaining WHY — future readers
+# should be able to tell whether the entry is still valid without digging
+# through git history.
+#
+# The preferred mechanism is an inline comment on the offending line:
+#   // poly-lint: allow raw backend.read().await — <reason>
+#
+# Phase 3 of plan-backend-read-timeout.md will migrate the remaining 46
+# raw sites to BackendHandleExt::read_with_timeout; once Phase 3 lands
+# this file is expected to remain empty.

@@ -59,6 +59,15 @@ jobs:
       - name: Check for raw Signal::write in UI crate
         run: ./tools/scripts/forbid-signal-write.sh
 
+      # Phase 5 Track A of docs/plans/plan-backend-read-timeout.md — bans raw
+      # backend.read().await in the UI crate to prevent CLAUDE.md hang class #4
+      # (RwLock starvation on WASM) from being reintroduced. Replacement:
+      # BackendHandleExt::read_with_timeout (crates/core/src/client_manager_timeout.rs).
+      # Inline-allowlist via: // poly-lint: allow raw backend.read().await — <reason>
+      # File-level allowlist: tools/scripts/raw-backend-read-allowlist.txt.
+      - name: Check for raw backend.read().await in UI crate
+        run: ./tools/scripts/forbid-raw-backend-read.sh
+
   dylint:
     # Phase 5 Track B of plan-batched-signal.md + plan-use-spawn-once.md —
     # HIR-precise alternative to the regex scripts above. Belt-and-suspenders:
