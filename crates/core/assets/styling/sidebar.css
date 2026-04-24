@@ -422,20 +422,10 @@
  * Pack D — stock sidebar layouts (P24/P25/P26/P27/P29)
  * =========================== */
 
-/* The ClientSidebar `<aside class="client-sidebar">` wraps the actual channel
- * list (or RepoTree / Communities / Feed layout) inside the
- * `.channel-list-wrapper` flex column. Without these flex rules the wrapper
- * auto-sizes to its content, so on sparse sidebars (Forgejo's REPOSITORIES
- * with 3 links, or any layout with few items) the sibling
- * `.voice-account-footer` sticks right under the content instead of being
- * pushed to the bottom of the column. Applying flex:1 + min-height:0 here
- * lets the inner `.channel-list { flex: 1 }` rule actually take effect. */
-.client-sidebar {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    min-height: 0;
-}
+/* The ClientSidebar `<aside class="client-sidebar">` flex sizing is
+ * handled at the parent layer via `.channel-list-wrapper > *` in
+ * account-shell.css — one universal rule covering every layout variant
+ * (ChannelList, RepoTree, Communities, Feed, future Custom kinds). */
 
 .client-sidebar .sidebar-header {
     font-size: 11px;

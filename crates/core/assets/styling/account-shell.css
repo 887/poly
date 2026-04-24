@@ -238,6 +238,24 @@
     overflow: visible;
 }
 
+/* Universal rule: every direct child of .channel-list-wrapper EXCEPT the
+ * shared footer (VoiceBar + AccountBar) should flex-grow to absorb extra
+ * vertical space, so the footer naturally docks at the bottom regardless
+ * of how sparse the sidebar layout is. This replaces per-layout rules
+ * (.channel-list, .client-sidebar, etc.) with one structural invariant
+ * that applies to ANY current or future SidebarLayoutKind variant
+ * (ChannelList, RepoTree, Communities, Feed, Custom). Without this rule,
+ * sparse layouts like Forgejo/GitHub's REPOSITORIES (3-link list) leave
+ * the wrapper auto-sized to its content and the footer ends up wedged
+ * mid-column instead of at the bottom. */
+.channel-list-wrapper > *:not(.voice-account-footer) {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+.channel-list-wrapper > .voice-account-footer {
+    flex: 0 0 auto;
+}
+
 .poly-app.poly-menu-mirrored .channel-list-wrapper {
     border-left: 1px solid var(--border-color);
     border-right: none;
