@@ -52,6 +52,13 @@ jobs:
         # tools/scripts/use-effect-spawn-cycle-allowlist.txt.
         run: bash tools/scripts/forbid-use-effect-spawn-cycle.sh
 
+      # Phase 5 Track A of docs/plans/plan-batched-signal.md — bans raw
+      # Signal::write() in the UI crate to prevent CLAUDE.md hang class #1
+      # (multi-.write() cascade) from being reintroduced. Exceptions live in
+      # tools/scripts/signal-write-allowlist.txt with rationale comments.
+      - name: Check for raw Signal::write in UI crate
+        run: ./tools/scripts/forbid-signal-write.sh
+
   test:
     name: Tests
     runs-on: ubuntu-latest

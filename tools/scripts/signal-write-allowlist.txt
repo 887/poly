@@ -1,0 +1,96 @@
+# signal-write-allowlist.txt — Phase 5 Track A of plan-batched-signal.md.
+#
+# Each non-blank, non-comment line is one allowlist entry accepted by
+# `forbid-signal-write.sh`. Formats (first match wins):
+#
+#   path                      whole-file allow (use sparingly)
+#   path:receiver             allow `.write()` calls where the receiver
+#                             identifier is `receiver`
+#   path:line=N               pin a single line (drifts when the file is edited)
+#
+# Add a trailing `# rationale` comment explaining WHY — future readers
+# should be able to tell whether the entry is still valid without digging
+# through git history.
+#
+# The lint exists to prevent CLAUDE.md hang class #1 (multi-.write()
+# cascade) on the migrated hot-path signals (`Signal<ChatData>`,
+# `Signal<AppState>`). Those are now `BatchedSignal<T>`, whose shadow
+# `.write()` is `#[deprecated] -> !`, so those sites CAN'T appear here
+# even if someone tries. The entries below cover:
+#   * the shadow `write` definition itself (meta — doesn't mutate anything)
+#   * `Signal<ClientManager>` (not migrated — Phase 4 deferred; mutations
+#     are coarse, low frequency, and not a cascade vector in practice)
+#   * component-scoped `use_signal` locals (list/set state, filter toggles,
+#     modal visibility) where multi-write cascades don't apply because the
+#     signal has one subscriber
+#   * `Signal<ChatHistoryUiState>` (`history_state`) mutations — Phase 4
+#     opportunistic, not yet migrated. High traffic but owned by the chat
+#     view; acceptable short-term risk, tracked in plan §3 Phase 4.
+#   * `Signal<AppSettings>` (`settings_sig`) and `Signal<Locale>`
+#     (`locale_sig`) mutations — Phase 4 opportunistic.
+
+# ── Meta: batched_signal.rs itself defines the shadow `write`. ─────────────
+crates/core/src/state/batched_signal.rs  # defines the shadow `fn write() -> !`
+
+# ── Macro definition — dispatch_action! expands to $state.write(). ─────────
+# The macro is declared but has zero call sites in tree today (grep confirms).
+# If/when it's used with a BatchedSignal<AppState> the expansion fails at
+# compile time on the deprecated shadow, which is the desired fate.
+crates/core/src/ui/actions.rs:state  # dispatch_action! macro body; unused today
+
+# ── Signal<ClientManager> — Phase 4 deferred (plan §3 Phase 4). ────────────
+# Low-frequency registration-time mutations; no reactive-pass cascade
+# observed in practice. Migrate when an incident proves otherwise.
+crates/core/src/ui/account/common/account_bar.rs:client_manager  # presence-status insert
+crates/core/src/ui/account/settings/profile.rs:client_manager  # profile edits
+crates/core/src/ui/create_server.rs:client_manager  # register_server on create
+crates/core/src/ui/demo.rs:client_manager  # demo activation / commit backend account
+crates/core/src/ui/mod.rs:client_manager  # test-account + signup-entry registration
+crates/core/src/ui/mod.rs:client_manager_w  # same signal, local rename inside spawn
+crates/core/src/ui/settings/general.rs:client_manager  # clear_all_backends on sign-out
+crates/core/src/ui/settings/plugins.rs:client_manager  # register plugin settings
+crates/core/src/ui/signup/mod.rs:client_manager  # commit_backend_account on signup
+
+# ── Signal<ChatHistoryUiState> — Phase 4 opportunistic. ────────────────────
+# `history_state` lives on ChatView; mutations are bounded to load-older /
+# load-newer async paths. Plan §3 Phase 4 lists two HIGH-severity sites to
+# migrate opportunistically. Until then they are allowed.
+crates/core/src/ui/account/common/chat_view.rs:history_state  # pagination + unread divider
+
+# ── Signal<AppSettings> / Signal<Locale> — settings-only. ──────────────────
+crates/core/src/ui/settings/general.rs:settings_sig  # LayoutModeSelector
+crates/core/src/ui/mod.rs:locale_sig  # locale swap on boot
+crates/core/src/ui/settings/language.rs:locale_sig  # language picker
+
+# ── Component-scoped `use_signal` locals — subscriber count 1; no cascade. ─
+# These are filter toggles, pagination counters, selected-item sets and
+# the like. `.write()` on a locally-scoped signal with one subscriber is
+# safe — the Dioxus reactive pass only rerenders the owning component.
+# Listed per file:receiver for grep auditability.
+crates/core/src/ui/account/common/agent_panel.rs:facts_clone  # local Vec<Fact> retain
+crates/core/src/ui/account/common/chat_view.rs:pending_attachments  # local draft state
+crates/core/src/ui/account/common/conversation_search_view.rs:dm_visible  # pagination counter
+crates/core/src/ui/account/common/conversation_search_view.rs:grp_visible  # pagination counter
+crates/core/src/ui/account/common/conversation_search_view.rs:enabled_types  # filter HashSet
+crates/core/src/ui/account/common/discord_forum_view.rs:selected_tag_ids  # tag filter set
+crates/core/src/ui/account/common/discord_forum_view.rs:selected_tags  # tag filter set
+crates/core/src/ui/account/common/new_conversation_view.rs:selected_user_ids  # recipient set
+crates/core/src/ui/account/settings/mod.rs:search_text  # settings search box
+crates/core/src/ui/agent/mod.rs:search_text  # agent search box
+crates/core/src/ui/client_ui/toast.rs:queue  # toast queue push/retain
+crates/core/src/ui/client_ui/view/list_body.rs:loaded_rows  # table pagination
+crates/core/src/ui/client_ui/view/tree_body.rs:loaded_rows  # tree pagination
+crates/core/src/ui/client_ui/view/toolbar.rs:selected_tab  # toolbar tab selection
+crates/core/src/ui/client_ui/view/toolbar.rs:selected_filter  # toolbar filter selection
+crates/core/src/ui/client_ui/view/toolbar.rs:selected_sort  # toolbar sort selection
+crates/core/src/ui/search.rs:dm_visible  # pagination counter
+crates/core/src/ui/search.rs:grp_visible  # pagination counter
+crates/core/src/ui/search.rs:enabled_types  # filter HashSet
+crates/core/src/ui/search.rs:enabled_accounts  # account filter HashSet
+crates/core/src/ui/settings/backup.rs:st  # per-server backup status map
+crates/core/src/ui/settings/identity.rs:identities  # local identity list
+crates/core/src/ui/settings/media.rs:active_tab  # media settings tab
+crates/core/src/ui/settings/mod.rs:search_text  # settings search box
+crates/core/src/ui/settings/plugins.rs:disabled  # plugin enable/disable toggle
+crates/core/src/ui/settings/plugins.rs:wasm_plugins  # plugin list state
+crates/core/src/ui/signup/mod.rs:statuses2  # local signup progress statuses
