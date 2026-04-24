@@ -28,7 +28,7 @@ use super::draft_banner::{DraftBanner, DraftsSidebar};
 use super::thread_view::{ActiveThreadsBar, ThreadPanel, ViewThreadButton};
 use super::user_profile_modal::open_user_profile;
 use super::user_sidebar::UserSidebar;
-use crate::client_manager::ClientManager;
+use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::ui::client_ui::{ComposerHooks, MessageActions};
 use poly_client::ComposerSlot;
 use crate::i18n::{t, t_args};
@@ -728,7 +728,17 @@ pub(crate) async fn open_message_hit(
     };
     let (account_id, backend, fallback_backend) = backend_info?;
 
-    let guard = backend.read().await;
+    let guard = match backend
+        .read_with_timeout(std::time::Duration::from_secs(5))
+        .await
+    {
+        Ok(g) => g,
+        Err(_) => {
+            tracing::warn!("permalink hit: backend read timed out, bailing out");
+            chat_data.batch(|cd| cd.loading = false);
+            return None;
+        }
+    };
     let target_channel = guard.get_channel(&target_channel_id).await.ok();
     let target_messages = guard
         .get_messages(
@@ -3547,7 +3557,17 @@ async fn load_newer_messages(
     let anchor_snapshot = read_message_list_anchor().await;
 
     let (newer_messages, reached_latest_message) = {
-        let guard = backend.read().await;
+        let guard = match backend
+            .read_with_timeout(std::time::Duration::from_secs(30))
+            .await
+        {
+            Ok(g) => g,
+            Err(_) => {
+                tracing::warn!("load_newer_messages: chain-load backend read timed out");
+                history_state.batch(|h| h.loading_after = false);
+                return;
+            }
+        };
         let mut collected_messages = Vec::new();
         let mut next_after_message_id = after_message_id;
         let mut reached_latest_message = false;

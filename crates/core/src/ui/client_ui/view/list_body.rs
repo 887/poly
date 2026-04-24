@@ -20,7 +20,7 @@
 //! prefix fall through to the generic `.view-row-card` layout — every
 //! non-forum backend (HN, GitHub, …) is unaffected.
 
-use crate::client_manager::ClientManager;
+use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::state::{AppState, BatchedSignal};
 use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::client_ui::CustomBlock;
@@ -234,16 +234,25 @@ pub fn ListBody(
                                                 return;
                                             }
                                         };
-                                        let result = {
-                                            let guard = backend.read().await;
-                                            guard.get_view_rows(
-                                                &channel_id,
-                                                cursor,
-                                                sort_id.as_deref(),
-                                                filter_id.as_deref(),
-                                                tab_id.as_deref(),
-                                            ).await
+                                        let guard = match backend
+                                            .read_with_timeout(std::time::Duration::from_secs(5))
+                                            .await
+                                        {
+                                            Ok(g) => g,
+                                            Err(_) => {
+                                                tracing::warn!("ListBody load-more: backend read timed out");
+                                                loading_more.set(false);
+                                                return;
+                                            }
                                         };
+                                        let result = guard.get_view_rows(
+                                            &channel_id,
+                                            cursor,
+                                            sort_id.as_deref(),
+                                            filter_id.as_deref(),
+                                            tab_id.as_deref(),
+                                        ).await;
+                                        drop(guard);
                                         match result {
                                             Ok(page) => {
                                                 loaded_rows.write().extend(page.rows);
@@ -403,7 +412,18 @@ pub fn ViewRowDetail(channel_id: String, account_id: String, row_id: String) -> 
                         "no backend for account {account_id}"
                     )));
                 };
-                let guard = backend.read().await;
+                let guard = match backend
+                    .read_with_timeout(std::time::Duration::from_secs(5))
+                    .await
+                {
+                    Ok(g) => g,
+                    Err(_) => {
+                        tracing::warn!("ViewRowDetail: backend read timed out");
+                        return Err(ClientError::Internal(
+                            "backend read timed out".to_string(),
+                        ));
+                    }
+                };
                 guard.get_view_detail(&channel_id, &row_id).await
             }
         })
@@ -755,7 +775,18 @@ pub(super) fn fetch_first_page(
                     "no backend for account {account_id}"
                 )));
             };
-            let guard = backend.read().await;
+            let guard = match backend
+                .read_with_timeout(std::time::Duration::from_secs(5))
+                .await
+            {
+                Ok(g) => g,
+                Err(_) => {
+                    tracing::warn!("fetch_first_page: backend read timed out");
+                    return Err(ClientError::Internal(
+                        "backend read timed out".to_string(),
+                    ));
+                }
+            };
             guard
                 .get_view_rows(
                     &channel_id,

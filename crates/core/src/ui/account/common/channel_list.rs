@@ -15,7 +15,7 @@ use super::chat_history::{
     initial_message_query, read_channel_view_anchor, remember_message_list_scroll_position,
     request_restore_scroll_position_or_bottom, request_restore_to_anchor,
 };
-use crate::client_manager::ClientManager;
+use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::state::{AppState, ChannelContextMenuState, ChatData, View};
 use crate::ui::actions::{ActionCx, UiAction};
@@ -105,7 +105,17 @@ async fn load_channel_data(
         .as_ref()
         .map(|ch| ch.channel_type);
 
-    let guard = backend.read().await;
+    let guard = match backend
+        .read_with_timeout(std::time::Duration::from_secs(5))
+        .await
+    {
+        Ok(g) => g,
+        Err(_) => {
+            tracing::warn!(channel_id = %channel_id, "load_channel_data: backend read timed out");
+            chat_data.batch(|cd| cd.loading = false);
+            return;
+        }
+    };
     let mut pending = chat_data.pending_update();
 
     match channel_type {

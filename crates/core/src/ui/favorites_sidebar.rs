@@ -21,7 +21,7 @@
 
 use crate::state::BatchedSignal;
 use super::routes::Route;
-use crate::client_manager::ClientManager;
+use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::state::chat_data::user_color;
 use crate::state::{AppState, ChatData, ContextMenuState, DragSource, View};
@@ -1131,7 +1131,17 @@ async fn load_server_data_internal(
 
     // Load server details
     {
-        let guard = backend.read().await;
+        let guard = match backend
+            .read_with_timeout(std::time::Duration::from_secs(5))
+            .await
+        {
+            Ok(g) => g,
+            Err(_) => {
+                tracing::warn!(server_id = %server_id, "load_server_data: backend read timed out");
+                chat_data.batch(|cd| cd.loading = false);
+                return;
+            }
+        };
         if let Ok(server) = guard.get_server(&server_id).await {
             pending.set(move |cd| cd.current_server = Some(server));
         }

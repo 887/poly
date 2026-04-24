@@ -15,7 +15,7 @@
 //! render flat.
 
 use super::list_body::{fetch_first_page, parse_score_meta, score_class, ViewRowDetail};
-use crate::client_manager::ClientManager;
+use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::ui::actions::{ActionCx, UiAction};
 use dioxus::prelude::*;
 use poly_client::{Cursor, TreeSpec, ViewRow};
@@ -206,16 +206,25 @@ pub fn TreeBody(
                                                 return;
                                             }
                                         };
-                                        let result = {
-                                            let guard = backend.read().await;
-                                            guard.get_view_rows(
-                                                &channel_id,
-                                                cursor,
-                                                sort_id.as_deref(),
-                                                filter_id.as_deref(),
-                                                tab_id.as_deref(),
-                                            ).await
+                                        let guard = match backend
+                                            .read_with_timeout(std::time::Duration::from_secs(5))
+                                            .await
+                                        {
+                                            Ok(g) => g,
+                                            Err(_) => {
+                                                tracing::warn!("TreeBody load-more: backend read timed out");
+                                                loading_more.set(false);
+                                                return;
+                                            }
                                         };
+                                        let result = guard.get_view_rows(
+                                            &channel_id,
+                                            cursor,
+                                            sort_id.as_deref(),
+                                            filter_id.as_deref(),
+                                            tab_id.as_deref(),
+                                        ).await;
+                                        drop(guard);
                                         match result {
                                             Ok(page) => {
                                                 loaded_rows.write().extend(page.rows);
