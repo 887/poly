@@ -606,26 +606,26 @@ fn app_root_class(app_state: &AppState) -> String {
 ///
 /// This mirrors the WIT `plugin-metadata` pattern: the host has zero
 /// compile-time knowledge of specific backends — each plugin registers itself.
-fn register_native_signup_entries(client_manager: &mut Signal<ClientManager>) {
+fn register_native_signup_entries(client_manager: &mut BatchedSignal<ClientManager>) {
     #[cfg(feature = "stoat")]
-    client_manager.write().register_signup_entry(SignupEntry {
+    client_manager.batch(|cm| cm.register_signup_entry(SignupEntry {
         slug: "stoat",
         icon: "🦦",
         name_key: "plugin-stoat-signup-name",
         desc_key: "plugin-stoat-signup-desc",
         render: poly_stoat::signup::signup_render_fn,
-    });
+    }));
 
     // Register the Poly Server backend when compiled with the `server` feature.
     // The render fn lives in poly-server-client — core has no knowledge of the form.
     #[cfg(feature = "server")]
-    client_manager.write().register_signup_entry(SignupEntry {
+    client_manager.batch(|cm| cm.register_signup_entry(SignupEntry {
         slug: "poly",
         icon: "🔷",
         name_key: "plugin-poly-signup-name",
         desc_key: "plugin-poly-signup-desc",
         render: poly_server_client::signup::signup_render_fn,
-    });
+    }));
 }
 
 /// Register all native backend plugin settings pages into `ClientManager`.
@@ -640,38 +640,32 @@ fn register_native_signup_entries(client_manager: &mut Signal<ClientManager>) {
 /// Registration is idempotent: if the activation path (e.g. [`demo::toggle_demo`])
 /// calls [`ClientManager::register_plugin_settings`] a second time, the entry
 /// is simply replaced in place.
-fn register_native_plugin_settings(client_manager: &mut Signal<ClientManager>) {
+fn register_native_plugin_settings(client_manager: &mut BatchedSignal<ClientManager>) {
     use crate::client_manager::PluginSettingsEntry;
 
     #[cfg(feature = "demo")]
-    client_manager
-        .write()
-        .register_plugin_settings(PluginSettingsEntry {
-            slug: "demo",
-            nav_label_key: "plugin-demo-title",
-            nav_icon: "🧪",
-            render: demo_settings_render_fn,
-        });
+    client_manager.batch(|cm| cm.register_plugin_settings(PluginSettingsEntry {
+        slug: "demo",
+        nav_label_key: "plugin-demo-title",
+        nav_icon: "🧪",
+        render: demo_settings_render_fn,
+    }));
 
     #[cfg(feature = "stoat")]
-    client_manager
-        .write()
-        .register_plugin_settings(PluginSettingsEntry {
-            slug: "stoat",
-            nav_label_key: "plugin-stoat-title",
-            nav_icon: "🦦",
-            render: stoat_settings_render_fn,
-        });
+    client_manager.batch(|cm| cm.register_plugin_settings(PluginSettingsEntry {
+        slug: "stoat",
+        nav_label_key: "plugin-stoat-title",
+        nav_icon: "🦦",
+        render: stoat_settings_render_fn,
+    }));
 
     #[cfg(feature = "server")]
-    client_manager
-        .write()
-        .register_plugin_settings(PluginSettingsEntry {
-            slug: "poly",
-            nav_label_key: "plugin-poly-title",
-            nav_icon: "🔷",
-            render: poly_settings_render_fn,
-        });
+    client_manager.batch(|cm| cm.register_plugin_settings(PluginSettingsEntry {
+        slug: "poly",
+        nav_label_key: "plugin-poly-title",
+        nav_icon: "🔷",
+        render: poly_settings_render_fn,
+    }));
 }
 
 /// Register test accounts from each compiled-in native plugin into `ClientManager`.
@@ -680,7 +674,7 @@ fn register_native_plugin_settings(client_manager: &mut Signal<ClientManager>) {
 /// compile out the entire block and ship zero test credentials.
 /// Called once at `App` mount via `use_effect`, immediately after
 /// [`register_native_plugin_settings`].
-fn register_native_test_accounts(client_manager: &mut Signal<ClientManager>) {
+fn register_native_test_accounts(client_manager: &mut BatchedSignal<ClientManager>) {
     // Per-call dedupe lives in `ClientManager::register_test_account` (retain
     // by (base_url, username), then push). DO NOT add a `.clear()` here —
     // an unconditional write inside this use_effect callback causes a
@@ -690,43 +684,50 @@ fn register_native_test_accounts(client_manager: &mut Signal<ClientManager>) {
     #[cfg(feature = "discord")]
     {
         for entry in poly_discord::signup::get_test_accounts() {
-            client_manager.write().register_test_account(*entry);
+            let e = *entry;
+            client_manager.batch(move |cm| cm.register_test_account(e));
         }
     }
     #[cfg(feature = "teams")]
     {
         for entry in poly_teams::signup::get_test_accounts() {
-            client_manager.write().register_test_account(*entry);
+            let e = *entry;
+            client_manager.batch(move |cm| cm.register_test_account(e));
         }
     }
     #[cfg(feature = "matrix")]
     {
         for entry in poly_matrix::signup::get_test_accounts() {
-            client_manager.write().register_test_account(*entry);
+            let e = *entry;
+            client_manager.batch(move |cm| cm.register_test_account(e));
         }
     }
     #[cfg(feature = "stoat")]
     {
         for entry in poly_stoat::signup::get_test_accounts() {
-            client_manager.write().register_test_account(*entry);
+            let e = *entry;
+            client_manager.batch(move |cm| cm.register_test_account(e));
         }
     }
     #[cfg(feature = "lemmy")]
     {
         for entry in poly_lemmy::signup::get_test_accounts() {
-            client_manager.write().register_test_account(*entry);
+            let e = *entry;
+            client_manager.batch(move |cm| cm.register_test_account(e));
         }
     }
     #[cfg(feature = "github")]
     {
         for entry in poly_github::signup::get_test_accounts() {
-            client_manager.write().register_test_account(*entry);
+            let e = *entry;
+            client_manager.batch(move |cm| cm.register_test_account(e));
         }
     }
     #[cfg(feature = "forgejo")]
     {
         for entry in poly_forgejo::signup::get_test_accounts() {
-            client_manager.write().register_test_account(*entry);
+            let e = *entry;
+            client_manager.batch(move |cm| cm.register_test_account(e));
         }
     }
     let n = client_manager.read().test_account_entries.len();
@@ -788,7 +789,7 @@ pub static AUTO_SIGNIN_DONE: std::sync::atomic::AtomicBool =
 
 #[cfg(debug_assertions)]
 fn auto_signin_test_accounts(
-    client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
 ) {
     let entries: Vec<poly_client::TestAccountEntry> =
@@ -823,8 +824,7 @@ fn auto_signin_test_accounts(
                     let session = offline_session_from_entry(&entry);
                     let account_id = session.id.clone();
                     client_manager_w
-                        .write()
-                        .register_offline_session(account_id, session);
+                        .batch(move |cm| cm.register_offline_session(account_id, session));
                 }
             }
             // Brief gap between sign-ins so the per-session reactive
@@ -864,7 +864,7 @@ fn auto_signin_test_accounts(
 #[cfg(feature = "server")]
 async fn restore_poly_accounts(
     storage: &crate::storage::Storage,
-    mut client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
 ) {
     use crate::client_manager::BackendHandle;
@@ -923,12 +923,14 @@ async fn restore_poly_accounts(
                 }
 
                 // Commit synchronously.
-                client_manager.write().commit_poly_server(
-                    account_id.clone(),
-                    session.clone(),
-                    backend_handle.clone(),
-                    server_map,
-                );
+                {
+                    let aid = account_id.clone();
+                    let sess = session.clone();
+                    let bh = backend_handle.clone();
+                    client_manager.batch(move |cm| {
+                        cm.commit_poly_server(aid, sess, bh, server_map);
+                    });
+                }
                 {
                     let aid = account_id.clone();
                     chat_data.batch(move |cd| {
@@ -1022,9 +1024,11 @@ async fn restore_poly_accounts(
                     instance_id: base_url.to_string(),
                     backend_url: Some(base_url.to_string()),
                 };
-                client_manager
-                    .write()
-                    .register_offline_session(token.account_id.clone(), offline_session.clone());
+                {
+                    let aid = token.account_id.clone();
+                    let sess = offline_session.clone();
+                    client_manager.batch(move |cm| cm.register_offline_session(aid, sess));
+                }
                 {
                     let aid_c = token.account_id.clone();
                     let sess_c = offline_session;
@@ -1079,11 +1083,11 @@ async fn restore_poly_accounts(
 // DECISION(DX-STORAGE-4): storage init in use_future ensures it runs after
 // the component mounts but before the first meaningful render completes.
 async fn init_storage(
-    mut theme_config: Signal<crate::theme::ThemeConfig>,
+    theme_config: BatchedSignal<crate::theme::ThemeConfig>,
     mut storage_ready: Signal<bool>,
     app_state: BatchedSignal<AppState>,
     mut locale_sig: Signal<String>,
-    mut client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
 ) {
     match crate::storage::Storage::init().await {
@@ -1093,7 +1097,7 @@ async fn init_storage(
                 tracing::warn!("Storage migration error: {e}");
             }
             match storage.get_theme_config().await {
-                Ok(config) => theme_config.set(config),
+                Ok(config) => theme_config.batch(|v| *v = config),
                 Err(e) => tracing::warn!("Failed to load saved theme config: {e}"),
             }
             match storage.get_app_settings().await {
@@ -1101,9 +1105,10 @@ async fn init_storage(
                     tracing::info!("Storage: setup complete, going to main layout");
                     crate::i18n::set_locale(&settings.locale);
                     *locale_sig.write() = settings.locale.clone();
-                    client_manager
-                        .write()
-                        .set_disabled_native_backends(settings.disabled_native_backends.clone());
+                    {
+                        let disabled = settings.disabled_native_backends.clone();
+                        client_manager.batch(move |cm| cm.set_disabled_native_backends(disabled));
+                    }
                     let restored_layout_mode =
                         effective_layout_mode(settings.layout_mode, settings.force_mobile_layout);
                     // Collapse the 7-write cascade into ONE batch — see
@@ -1237,7 +1242,7 @@ async fn persist_setup_completion(account_id: String) {
 
 fn router_config(
     app_state: BatchedSignal<AppState>,
-    client_manager: Signal<ClientManager>,
+    client_manager: BatchedSignal<ClientManager>,
 ) -> dioxus_router::RouterConfig<Route> {
     dioxus_router::RouterConfig::default().on_update(
         move |state: dioxus_router::GenericRouterContext<Route>| {
@@ -1284,7 +1289,7 @@ fn router_config(
 #[component]
 fn AppBody(storage_ready: bool, setup_complete: bool, app_state: BatchedSignal<AppState>) -> Element {
     // Pull context signals so we can activate demo after setup completes.
-    let client_manager: Signal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     rsx! {
         if !storage_ready {
@@ -1435,13 +1440,14 @@ pub fn App() -> Element {
     // DECISION(DX-I18N-1): Signal<String> context; use_locale() in children subscribes.
     crate::i18n::provide_locale_context();
     let locale_sig = crate::i18n::use_locale();
-    // DECISION(DX-THEME-1): Signal<ThemeConfig> context + <style> injection.
-    let theme_config: Signal<crate::theme::ThemeConfig> =
-        use_signal(crate::theme::ThemeConfig::default);
+    // DECISION(DX-THEME-1): BatchedSignal<ThemeConfig> context + <style> injection.
+    let theme_config: BatchedSignal<crate::theme::ThemeConfig> =
+        BatchedSignal::from_signal(use_signal(crate::theme::ThemeConfig::default));
     provide_context(theme_config);
 
-    // DECISION(DX-2.5.1): ClientManager + ChatData as context Signals.
-    let mut client_manager: Signal<ClientManager> = use_signal(ClientManager::new);
+    // DECISION(DX-2.5.1): ClientManager + ChatData as context BatchedSignals.
+    let mut client_manager: BatchedSignal<ClientManager> =
+        BatchedSignal::from_signal(use_signal(ClientManager::new));
     provide_context(client_manager);
 
     // ChatData is declared here (before the startup use_effect) so that the
