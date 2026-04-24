@@ -68,6 +68,14 @@ jobs:
       - name: Check for raw backend.read().await in UI crate
         run: ./tools/scripts/forbid-raw-backend-read.sh
 
+      # Phase 5 Track A of docs/plans/plan-read-guard-scoping.md — bans long-scoped
+      # Signal::read() guards in the UI crate to prevent CLAUDE.md hang class #2
+      # (read guard live across a write) from being reintroduced.
+      # Inline-allowlist via: // poly-lint: allow long-read-guard — <reason>
+      # File-level allowlist: tools/scripts/long-read-guard-allowlist.txt.
+      - name: Check for long-scoped Signal::read() guards in UI crate
+        run: ./tools/scripts/forbid-long-read-guard.sh
+
   dylint:
     # Phase 5 Track B of plan-batched-signal.md + plan-use-spawn-once.md —
     # HIR-precise alternative to the regex scripts above. Belt-and-suspenders:

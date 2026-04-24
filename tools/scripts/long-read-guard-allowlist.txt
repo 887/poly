@@ -1,0 +1,42 @@
+# long-read-guard-allowlist.txt — file-level and line-level exceptions for
+# forbid-long-read-guard.sh (Phase 5 Track A of plan-read-guard-scoping.md).
+#
+# Format: path:line # reason
+#   path         — relative to repo root
+#   line         — 1-based line number of the `let <var> = <sig>.read();` line
+#   reason       — mandatory rationale (why this is safe)
+#
+# Inline allowlist (preferred for single-line exceptions):
+#   let x = sig.read(); // poly-lint: allow long-read-guard — <reason>
+#
+# Add entries here only for multi-statement blocks where inline annotation
+# would read awkwardly, or for whole-file suppression of mechanical test
+# scaffolding. Never add entries without a reason.
+
+# chat_view.rs L607 — guard is inside an explicit { ... } block that closes
+# before the `chat_data.batch(...)` call; block-scoped, safe. The heuristic
+# fires because the block body spans >6 lines (multi-field extraction).
+crates/core/src/ui/account/common/chat_view.rs:607
+
+# chat_view.rs L1797 — same pattern: `let hs = history_state.read()` inside
+# a `{ ... }` block that extracts fields then drops. `history_state.batch`
+# executes after the closing `}`. Block-scoped, safe.
+crates/core/src/ui/account/common/chat_view.rs:1797
+
+# thread_view.rs L103 — `drop(s)` called explicitly before `app_state.batch`.
+# The guard only lives in the `if is_mobile()` branch; the batch executes in
+# the `else` branch where `s` has already been dropped.
+crates/core/src/ui/account/common/thread_view.rs:103
+
+# thread_view.rs L221 — identical pattern to L103 (same onclick handler
+# shape, different thread-chip button). Explicit `drop(s)` before batch.
+crates/core/src/ui/account/common/thread_view.rs:221
+
+# main_layout.rs L309 — guard is inside a `{ ... }` block that extracts
+# five boolean fields then drops. `app_state.batch(...)` executes after the
+# closing `}`. Block-scoped, safe.
+crates/core/src/ui/main_layout.rs:309
+
+# demo.rs L78 — guard is inside an explicit `{ ... }` block; closes before
+# `client_manager.batch(...)` and `chat_data.batch(...)`. Block-scoped, safe.
+crates/core/src/ui/demo.rs:78

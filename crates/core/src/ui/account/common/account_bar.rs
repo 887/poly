@@ -369,7 +369,9 @@ pub fn AccountBar() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let voice_conn = chat_data.read().voice_connection.clone();
-    let user = current_account_bar_user(&app_state.read(), &chat_data.read());
+    let st_snap = app_state.read().clone();
+    let cd_snap = chat_data.read().clone();
+    let user = current_account_bar_user(&st_snap, &cd_snap);
 
     let is_muted = voice_conn.as_ref().is_some_and(|vc| vc.is_muted);
     let is_deafened = voice_conn.as_ref().is_some_and(|vc| vc.is_deafened);

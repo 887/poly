@@ -1273,7 +1273,7 @@ fn router_config(
                         account_id: "demo-cat".to_string(),
                     }));
                 }
-                drop(cm);
+                drop(cm); // poly-lint: allow long-read-guard — explicit drop(cm) before batch, audit M1
                 app_state.batch(|st| st.settings_section = SettingsSection::Accounts);
                 return Some(NavigationTarget::Internal(Route::SettingsRoute));
             }

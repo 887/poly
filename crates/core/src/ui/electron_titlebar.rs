@@ -129,7 +129,9 @@ pub fn ElectronTitleBar() -> Element {
         };
     }
 
-    let title = current_title(&app_state.read(), &chat_data.read());
+    let st_snap = app_state.read().clone();
+    let cd_snap = chat_data.read().clone();
+    let title = current_title(&st_snap, &cd_snap);
 
     // Keep the OS-level window title (taskbar/dock) in sync with the custom titlebar.
     let title_for_doc = title.clone();
