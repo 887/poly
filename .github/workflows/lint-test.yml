@@ -45,6 +45,13 @@ jobs:
       - name: Format check
         run: cargo fmt --all -- --check
 
+      - name: Check for use_effect+spawn+signal-write cycles
+        # Phase 5 Track A of docs/plans/plan-use-spawn-once.md — fails CI if
+        # anyone reintroduces the CLAUDE.md hang-class-#3 triple. Replacement:
+        # crates/core/src/state/use_spawn_once.rs. Allowlist:
+        # tools/scripts/use-effect-spawn-cycle-allowlist.txt.
+        run: bash tools/scripts/forbid-use-effect-spawn-cycle.sh
+
   test:
     name: Tests
     runs-on: ubuntu-latest

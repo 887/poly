@@ -1,0 +1,69 @@
+# Allowlist for forbid-use-effect-spawn-cycle.sh
+#
+# Format: one entry per line as `path:line`
+#   - `path` is relative to the repo root (matches the script's scan output).
+#   - `line` is the line of the offending `use_effect(move ||`.
+# Blank lines and `#`-comments ignored. Every entry MUST carry a `#`
+# comment on the line above explaining why the pattern is safe here
+# and does NOT need migration to `use_spawn_once`.
+#
+# Origin: `/tmp/poly-use-spawn-once-audit.md` — the Phase 0 audit
+# classified these sites as LOW-severity because their spawned future
+# writes a DIFFERENT signal than the effect subscribes to, or the
+# effect has no signal subscription at all (one-shot on mount). They
+# match the script's regex but do not carry cycle risk.
+#
+# Adding a new entry requires a rationale comment. If you can't explain
+# why it's safe, migrate it to `use_spawn_once` instead.
+
+# Resize-tick → overflow-bool. Effect reads `mobile_layout_resize_tick`;
+# spawn writes `header_actions_overflow` / `header_actions_menu_open`.
+# Different signals → no cycle. Resize-driven; use_spawn_once key
+# would be the tick itself which changes every resize, defeating the
+# guard. Acceptable as-is.
+crates/core/src/ui/account/common/chat_view.rs:1275
+
+# Unread-marker visibility poll. Effect reads `history_state`
+# (`unread_marker_message_id`, `unread_count`); spawn writes
+# `unread_marker_on_screen` (different signal). No cycle.
+crates/core/src/ui/account/common/chat_view.rs:1709
+
+# Custom-emoji preload per channel. Reads local `channel_id` prop;
+# spawn writes `custom_emojis` (different signal). LOW-severity per
+# audit — no cross-signal cycle.
+crates/core/src/ui/account/common/chat_view.rs:4571
+
+# Media-viewer keyboard/gesture event loop. No signal subscription in
+# the effect body (one-shot on mount); spawn runs a JS event pump that
+# writes local `zoom`/`pan`/`active_pos`. Cannot be keyed — it's a
+# persistent event loop, not a keyed load.
+crates/core/src/ui/account/common/media_viewer.rs:71
+
+# ThreadPanel message load. Reads `app_state.nav.active_account_id`;
+# spawn writes `messages_w`. Different signals → no direct cycle. Audit
+# classified MEDIUM (safe if one thread open at a time); flip to
+# use_spawn_once opportunistically in Phase 4 follow-up if concurrent
+# thread opens ever land.
+crates/core/src/ui/account/common/thread_view.rs:455
+
+# Voice settings device enumeration. No signal reads in the effect
+# (runs once on mount); spawn writes `mic_devices` / `spk_devices`.
+# No cycle. Could migrate to `use_spawn_once((), ...)` but the (key=())
+# ceremony adds no safety here.
+crates/core/src/ui/account/settings/voice_settings.rs:87
+
+# Chat-style editor KV load. One-shot on mount; reads no signals, spawn
+# writes local signals (`tone`, `formality`, `emoji`, etc.). No cycle.
+crates/core/src/ui/agent/chat_style_editor.rs:48
+
+# Code-explorer directory listing. Reads `current_path` and local props;
+# spawn writes `loading` / `error_msg` / `entries` (different signals).
+# Intentional re-fetch on path change. Could migrate to
+# `use_spawn_once((channel_id, path), ...)` in a later pass.
+crates/core/src/ui/code_explorer.rs:67
+
+# Startup-overlay dismiss timer. Reads overlay state signals; spawn
+# eventually writes `startup_overlay_visible` but guarded by
+# `startup_overlay_finished.set(true)` BEFORE the spawn, so the next
+# effect run hits the early return. Explicit guard, no cycle.
+crates/core/src/ui/mod.rs:1515
