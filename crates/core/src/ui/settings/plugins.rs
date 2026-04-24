@@ -16,6 +16,7 @@
 //! # 150-line component rule
 //! Each `#[component]` fn body MUST stay under 150 lines of RSX+logic.
 
+use crate::state::BatchedSignal;
 use crate::i18n::t;
 use crate::storage::WasmPluginEntry;
 use crate::ui::actions::{ActionCx, UiAction};
@@ -373,7 +374,7 @@ fn AddWasmPlugin(on_add: EventHandler<WasmPluginEntry>) -> Element {
 #[component]
 pub fn PluginsSettings() -> Element {
     let mut client_manager: Signal<crate::client_manager::ClientManager> = use_context();
-    let mut chat_data: Signal<crate::state::ChatData> = use_context();
+    let chat_data: BatchedSignal<crate::state::ChatData> = use_context();
     let app_state: Signal<crate::state::AppState> = use_context();
 
     // Local reactive copies of the persisted list — updated on every toggle/add/remove.
@@ -475,43 +476,44 @@ pub fn PluginsSettings() -> Element {
                                                     }
                                                     // Phase 3: clean up ChatData.
                                                     if !removed_ids.is_empty() {
-                                                        let mut cd = chat_data.write();
-                                                        cd.servers.retain(|s| {
-                                                            s.backend != bt
-                                                                || !removed_ids
-                                                                    .contains(&s.account_id)
+                                                        chat_data.batch(|cd| {
+                                                            cd.servers.retain(|s| {
+                                                                s.backend != bt
+                                                                    || !removed_ids
+                                                                        .contains(&s.account_id)
+                                                            });
+                                                            cd.dm_channels.retain(|d| {
+                                                                d.backend != bt
+                                                                    || !removed_ids
+                                                                        .contains(&d.account_id)
+                                                            });
+                                                            cd.groups.retain(|g| {
+                                                                g.backend != bt
+                                                                    || !removed_ids
+                                                                        .contains(&g.account_id)
+                                                            });
+                                                            cd.notifications.retain(|n| {
+                                                                n.backend != bt
+                                                                    || !removed_ids
+                                                                        .contains(&n.account_id)
+                                                            });
+                                                            for id in &removed_ids {
+                                                                cd.friends.remove(id.as_str());
+                                                            }
+                                                            for id in &removed_ids {
+                                                                cd.account_sessions
+                                                                    .remove(id.as_str());
+                                                            }
+                                                            // Retain only favorites that still have a matching server.
+                                                            // Collect the server IDs first to avoid concurrent borrow.
+                                                            let live_server_ids: Vec<String> = cd
+                                                                .servers
+                                                                .iter()
+                                                                .map(|s| s.id.clone())
+                                                                .collect();
+                                                            cd.favorited_server_ids
+                                                                .retain(|fid| live_server_ids.contains(fid));
                                                         });
-                                                        cd.dm_channels.retain(|d| {
-                                                            d.backend != bt
-                                                                || !removed_ids
-                                                                    .contains(&d.account_id)
-                                                        });
-                                                        cd.groups.retain(|g| {
-                                                            g.backend != bt
-                                                                || !removed_ids
-                                                                    .contains(&g.account_id)
-                                                        });
-                                                        cd.notifications.retain(|n| {
-                                                            n.backend != bt
-                                                                || !removed_ids
-                                                                    .contains(&n.account_id)
-                                                        });
-                                                        for id in &removed_ids {
-                                                            cd.friends.remove(id.as_str());
-                                                        }
-                                                        for id in &removed_ids {
-                                                            cd.account_sessions
-                                                                .remove(id.as_str());
-                                                        }
-                                                        // Retain only favorites that still have a matching server.
-                                                        // Collect the server IDs first to avoid concurrent borrow.
-                                                        let live_server_ids: Vec<String> = cd
-                                                            .servers
-                                                            .iter()
-                                                            .map(|s| s.id.clone())
-                                                            .collect();
-                                                        cd.favorited_server_ids
-                                                            .retain(|fid| live_server_ids.contains(fid));
                                                     }
                                                     // Phase 4: remove stored tokens.
                                                     if let Some(storage) = crate::STORAGE.get() {

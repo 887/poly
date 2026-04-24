@@ -11,6 +11,7 @@
 //! - Multi-line composer with toolbar controls
 //! - Message reactions, editing, and context menu
 
+use crate::state::BatchedSignal;
 use super::super::super::routes::Route;
 use super::chat_history::{
     ChatHistoryUiState, MAX_LOADED_MESSAGES, OLDER_MESSAGES_PAGE_SIZE, read_message_list_anchor,
@@ -601,7 +602,7 @@ fn display_unread_count(unread_count: u32) -> String {
     unread_count.to_string()
 }
 
-pub(crate) fn mark_channel_as_read(chat_data: &mut Signal<ChatData>, channel_id: &str) -> u32 {
+pub(crate) fn mark_channel_as_read(chat_data: BatchedSignal<ChatData>, channel_id: &str) -> u32 {
     let (unread_count, mention_count, current_server_id) = {
         let data = chat_data.read();
         let (unread_count, mention_count) = data
@@ -630,47 +631,47 @@ pub(crate) fn mark_channel_as_read(chat_data: &mut Signal<ChatData>, channel_id:
         return 0;
     }
 
-    let mut data = chat_data.write();
-
-    if let Some(current_channel) = data.current_channel.as_mut()
-        && current_channel.id == channel_id
-    {
-        current_channel.unread_count = 0;
-        current_channel.mention_count = 0;
-    }
-
-    for channel in &mut data.channels {
-        if channel.id == channel_id {
-            channel.unread_count = 0;
-            channel.mention_count = 0;
-            break;
-        }
-    }
-
-    for dm in &mut data.dm_channels {
-        if dm.id == channel_id {
-            dm.unread_count = 0;
-            break;
-        }
-    }
-
-    if let Some(server_id) = current_server_id {
-        if let Some(current_server) = data.current_server.as_mut()
-            && current_server.id == server_id
+    chat_data.batch(|data| {
+        if let Some(current_channel) = data.current_channel.as_mut()
+            && current_channel.id == channel_id
         {
-            current_server.unread_count = current_server.unread_count.saturating_sub(unread_count);
-            current_server.mention_count =
-                current_server.mention_count.saturating_sub(mention_count);
+            current_channel.unread_count = 0;
+            current_channel.mention_count = 0;
         }
 
-        for server in &mut data.servers {
-            if server.id == server_id {
-                server.unread_count = server.unread_count.saturating_sub(unread_count);
-                server.mention_count = server.mention_count.saturating_sub(mention_count);
+        for channel in &mut data.channels {
+            if channel.id == channel_id {
+                channel.unread_count = 0;
+                channel.mention_count = 0;
                 break;
             }
         }
-    }
+
+        for dm in &mut data.dm_channels {
+            if dm.id == channel_id {
+                dm.unread_count = 0;
+                break;
+            }
+        }
+
+        if let Some(server_id) = current_server_id {
+            if let Some(current_server) = data.current_server.as_mut()
+                && current_server.id == server_id
+            {
+                current_server.unread_count = current_server.unread_count.saturating_sub(unread_count);
+                current_server.mention_count =
+                    current_server.mention_count.saturating_sub(mention_count);
+            }
+
+            for server in &mut data.servers {
+                if server.id == server_id {
+                    server.unread_count = server.unread_count.saturating_sub(unread_count);
+                    server.mention_count = server.mention_count.saturating_sub(mention_count);
+                    break;
+                }
+            }
+        }
+    });
 
     unread_count
 }
@@ -680,7 +681,7 @@ pub(crate) async fn open_message_hit(
     current_channel_id: Option<String>,
     current_server_id: Option<String>,
     client_manager: Signal<ClientManager>,
-    mut chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
     mut app_state: Signal<AppState>,
 ) -> Option<(Route, String)> {
     let target_message_id = hit.message.id.clone();
@@ -759,12 +760,15 @@ pub(crate) async fn open_message_hit(
     // Batch 5 cascades into one — separate writes each schedule a full
     // Dioxus reactive pass and starve the WASM scheduler (CLAUDE.md hang #1).
     {
-        let mut cd = chat_data.write();
-        cd.loading = false;
-        cd.messages = target_messages;
-        cd.members = target_members;
-        cd.current_channel = target_channel.clone();
-        cd.current_server = target_server.clone();
+        let target_channel_for_batch = target_channel.clone();
+        let target_server_for_batch = target_server.clone();
+        chat_data.batch(move |cd| {
+            cd.loading = false;
+            cd.messages = target_messages;
+            cd.members = target_members;
+            cd.current_channel = target_channel_for_batch;
+            cd.current_server = target_server_for_batch;
+        });
     }
 
     Some(build_message_hit_route(
@@ -782,7 +786,7 @@ pub(crate) async fn open_message_hit(
 }
 
 fn message_hit_already_rendered(
-    chat_data: &Signal<ChatData>,
+    chat_data: &BatchedSignal<ChatData>,
     current_channel_id: Option<&str>,
     target_channel_id: &str,
     target_message_id: &str,
@@ -908,7 +912,7 @@ fn render_chat_view() -> Element {
 struct ChatViewSignals {
     app_state: Signal<AppState>,
     client_manager: Signal<ClientManager>,
-    chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
     message_input: Signal<String>,
     show_input_emoji: Signal<bool>,
     markdown_enabled: Signal<bool>,
@@ -1151,7 +1155,7 @@ fn current_self_user_id(
 }
 
 fn current_dm_user_avatar(
-    chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
     channel_id: &Option<String>,
     is_dm_channel: bool,
 ) -> Option<String> {
@@ -1169,7 +1173,7 @@ fn current_dm_user_avatar(
 }
 
 fn current_dm_user(
-    chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
     channel_id: &Option<String>,
     is_dm_channel: bool,
 ) -> Option<User> {
@@ -1187,7 +1191,7 @@ fn current_dm_user(
 }
 
 fn current_dm_user_presence(
-    chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
     channel_id: &Option<String>,
     is_dm_channel: bool,
 ) -> PresenceStatus {
@@ -1416,9 +1420,10 @@ fn use_member_list_effect(signals: &ChatViewSignals) {
     use_effect(move || {
         let active_channel_id = app_state.read().nav.selected_channel.cloned();
         let Some(active_channel_id) = active_channel_id else {
-            let mut w = chat_data.write();
-            w.members = Vec::new();
-            w.active_group_members = Vec::new();
+            chat_data.batch(|cd| {
+                cd.members = Vec::new();
+                cd.active_group_members = Vec::new();
+            });
             return;
         };
 
@@ -1437,17 +1442,19 @@ fn use_member_list_effect(signals: &ChatViewSignals) {
                 None
             };
             let Some(backend) = backend else {
-                let mut w = chat_data.write();
-                w.members = Vec::new();
-                w.active_group_members = Vec::new();
+                chat_data.batch(|cd| {
+                    cd.members = Vec::new();
+                    cd.active_group_members = Vec::new();
+                });
                 return;
             };
             let guard = backend.read().await;
             match guard.get_channel_members(&active_channel_id).await {
                 Ok(members) => {
-                    let mut w = chat_data.write();
-                    w.members = members.clone();
-                    w.active_group_members = if is_group { members } else { Vec::new() };
+                    chat_data.batch(move |cd| {
+                        cd.members = members.clone();
+                        cd.active_group_members = if is_group { members } else { Vec::new() };
+                    });
                 }
                 Err(err) => {
                     tracing::warn!(
@@ -1455,9 +1462,10 @@ fn use_member_list_effect(signals: &ChatViewSignals) {
                         active_channel_id,
                         err
                     );
-                    let mut w = chat_data.write();
-                    w.members = Vec::new();
-                    w.active_group_members = Vec::new();
+                    chat_data.batch(|cd| {
+                        cd.members = Vec::new();
+                        cd.active_group_members = Vec::new();
+                    });
                 }
             }
         });
@@ -1591,7 +1599,7 @@ fn use_history_state_effect(signals: &ChatViewSignals) {
             if let Some(prev_channel_id) = history_state.read().channel_id.clone()
                 && history_state.read().unread_count == 0
             {
-                mark_channel_as_read(&mut chat_data, &prev_channel_id);
+                mark_channel_as_read(chat_data, &prev_channel_id);
             }
             scrolled_from_bottom.set(false);
             new_messages_while_scrolled_up.set(0);
@@ -1746,7 +1754,7 @@ fn use_auto_dismiss_divider_effect(signals: &ChatViewSignals) {
 
         // Also clear bold / server badge so they don't linger.
         if let Some(channel_id) = channel_id {
-            mark_channel_as_read(&mut chat_data, &channel_id);
+            mark_channel_as_read(chat_data, &channel_id);
         }
     });
 }
@@ -1755,7 +1763,7 @@ fn use_auto_dismiss_divider_effect(signals: &ChatViewSignals) {
 struct ChatViewMarkupCtx {
     app_state: Signal<AppState>,
     client_manager: Signal<ClientManager>,
-    chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
     channel_id: Option<String>,
     messages: Vec<Message>,
     current_channel: Option<Channel>,
@@ -2058,7 +2066,7 @@ struct MessageListScrollWorkCtx {
     virtual_window: Signal<MessageVirtualWindowState>,
     app_state: Signal<AppState>,
     client_manager: Signal<ClientManager>,
-    chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
     top_edge_armed: Arc<AtomicBool>,
     bottom_edge_armed: Arc<AtomicBool>,
     /// Signal updated by the scroll loop — true when the user is scrolled far
@@ -2587,7 +2595,7 @@ fn ChatHeaderActions(
     show_search_filters: Signal<bool>,
     header_actions_menu_open: Signal<bool>,
     header_actions_overflow: Signal<bool>,
-    chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
     client_manager: Signal<ClientManager>,
     mobile_layout_resize_tick: Signal<u64>,
     is_group_channel: bool,
@@ -3376,7 +3384,7 @@ fn render_message_list_loading_overlays(ctx: ChatViewMarkupCtx) -> Element {
 async fn load_older_messages(
     app_state: Signal<AppState>,
     client_manager: Signal<ClientManager>,
-    mut chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
     mut history_state: Signal<ChatHistoryUiState>,
 ) {
     let Some(active_channel_id) = app_state.read().nav.selected_channel.cloned() else {
@@ -3435,12 +3443,14 @@ async fn load_older_messages(
         u32::try_from(older_messages.len()).unwrap_or(0) >= OLDER_MESSAGES_PAGE_SIZE;
 
     {
-        let mut chat = chat_data.write();
-        let existing_messages = std::mem::take(&mut chat.messages);
-        let mut merged_messages = older_messages.clone();
-        merged_messages.extend(existing_messages);
-        let dropped_newer_messages = trim_message_window_from_bottom(&mut merged_messages);
-        chat.messages = merged_messages.clone();
+        let (merged_messages, dropped_newer_messages) = chat_data.batch(|chat| {
+            let existing_messages = std::mem::take(&mut chat.messages);
+            let mut merged_messages = older_messages.clone();
+            merged_messages.extend(existing_messages);
+            let dropped_newer_messages = trim_message_window_from_bottom(&mut merged_messages);
+            chat.messages = merged_messages.clone();
+            (merged_messages, dropped_newer_messages)
+        });
 
         let mut history = history_state.write();
         history.has_more_before = has_more_before;
@@ -3459,7 +3469,7 @@ async fn load_older_messages(
 async fn load_newer_messages(
     app_state: Signal<AppState>,
     client_manager: Signal<ClientManager>,
-    mut chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
     mut history_state: Signal<ChatHistoryUiState>,
 ) {
     let Some(active_channel_id) = app_state.read().nav.selected_channel.cloned() else {
@@ -3545,11 +3555,13 @@ async fn load_newer_messages(
     let has_more_after = !reached_latest_message;
 
     {
-        let mut chat = chat_data.write();
-        let mut merged_messages = std::mem::take(&mut chat.messages);
-        merged_messages.extend(newer_messages.clone());
-        let dropped_older_messages = trim_message_window_from_top(&mut merged_messages);
-        chat.messages = merged_messages.clone();
+        let (merged_messages, dropped_older_messages) = chat_data.batch(|chat| {
+            let mut merged_messages = std::mem::take(&mut chat.messages);
+            merged_messages.extend(newer_messages.clone());
+            let dropped_older_messages = trim_message_window_from_top(&mut merged_messages);
+            chat.messages = merged_messages.clone();
+            (merged_messages, dropped_older_messages)
+        });
 
         let mut history = history_state.write();
         history.has_more_before = dropped_older_messages || history.has_more_before;
@@ -3746,7 +3758,7 @@ fn render_unread_banner(ctx: ChatViewMarkupCtx) -> Element {
                 class: "chat-unread-banner-action",
                 onclick: move |_| {
                     if let Some(active_channel_id) = unread_banner_channel_id.clone() {
-                        let _ = mark_channel_as_read(&mut chat_data, &active_channel_id);
+                        let _ = mark_channel_as_read(chat_data, &active_channel_id);
                         // Clear unread count (hides the banner) but preserve
                         // unread_divider_visible so the red line stays (Discord behaviour).
                         history_state.write().unread_count = 0;
@@ -3881,7 +3893,10 @@ fn render_message_actions(
                     title: t("msg-delete"),
                     onclick: {
                         let mid = msg_id.clone();
-                        move |_| chat_data.write().messages.retain(|m| m.id != mid)
+                        move |_| {
+                            let mid_c = mid.clone();
+                            chat_data.batch(move |cd| cd.messages.retain(|m| m.id != mid_c));
+                        }
                     },
                     "🗑️"
                 }
@@ -4307,7 +4322,7 @@ struct ComposerRuntimeCtx {
     pending_attachments: Signal<Vec<PendingAttachmentPreview>>,
     reply_target: Signal<Option<MessageReplyPreview>>,
     client_manager: Signal<ClientManager>,
-    chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
     app_state: Signal<AppState>,
     new_messages_while_scrolled_up: Signal<u32>,
 }
@@ -4818,7 +4833,7 @@ fn render_chat_overlays(ctx: ChatViewMarkupCtx) -> Element {
                 on_select: {
                     let msg_id = picker_msg_id.clone();
                     move |emoji: String| {
-                        toggle_reaction_on_message(&mut chat_data, &msg_id, &emoji);
+                        toggle_reaction_on_message(chat_data, &msg_id, &emoji);
                         reaction_picker_msg.set(None);
                     }
                 },
@@ -5592,7 +5607,7 @@ fn AttachmentsView(
 #[context_menu(inherit)]
 #[component]
 fn ReactionsView(reactions: Vec<poly_client::Reaction>, message_id: String) -> Element {
-    let mut chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
     rsx! {
         div { class: "message-reactions",
             for reaction in &reactions {
@@ -5607,7 +5622,7 @@ fn ReactionsView(reactions: Vec<poly_client::Reaction>, message_id: String) -> E
                         button {
                             class: "{me_class}",
                             onclick: move |_| {
-                                toggle_reaction_on_message(&mut chat_data, &mid, &emoji_click);
+                                toggle_reaction_on_message(chat_data, &mid, &emoji_click);
                             },
                             "{emoji} {count}"
                         }
@@ -5642,7 +5657,7 @@ fn format_timestamp(ts: chrono::DateTime<chrono::Utc>) -> String {
 #[context_menu(none)]
 #[component]
 fn TypingIndicator() -> Element {
-    let chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
     let typing = chat_data.read().typing_users.clone();
 
     if typing.is_empty() {
@@ -5671,31 +5686,32 @@ fn TypingIndicator() -> Element {
 /// If the reaction already exists and we've reacted, remove our reaction.
 /// If it exists but we haven't reacted, add ours. Otherwise create a new reaction.
 /// `pub(crate)` so `ReactionContextMenu` can call it without duplicating logic.
-pub(crate) fn toggle_reaction_on_message(chat_data: &mut Signal<ChatData>, message_id: &str, emoji: &str) {
-    let mut cd = chat_data.write();
-    if let Some(msg) = cd.messages.iter_mut().find(|m| m.id == message_id) {
-        if let Some(reaction) = msg.reactions.iter_mut().find(|r| r.emoji == emoji) {
-            if reaction.me {
-                // Remove our reaction
-                reaction.count = reaction.count.saturating_sub(1);
-                reaction.me = false;
-                if reaction.count == 0 {
-                    msg.reactions.retain(|r| r.emoji != emoji);
+pub(crate) fn toggle_reaction_on_message(chat_data: BatchedSignal<ChatData>, message_id: &str, emoji: &str) {
+    chat_data.batch(|cd| {
+        if let Some(msg) = cd.messages.iter_mut().find(|m| m.id == message_id) {
+            if let Some(reaction) = msg.reactions.iter_mut().find(|r| r.emoji == emoji) {
+                if reaction.me {
+                    // Remove our reaction
+                    reaction.count = reaction.count.saturating_sub(1);
+                    reaction.me = false;
+                    if reaction.count == 0 {
+                        msg.reactions.retain(|r| r.emoji != emoji);
+                    }
+                } else {
+                    // Add our reaction
+                    reaction.count += 1;
+                    reaction.me = true;
                 }
             } else {
-                // Add our reaction
-                reaction.count += 1;
-                reaction.me = true;
+                // New reaction
+                msg.reactions.push(poly_client::Reaction {
+                    emoji: emoji.to_string(),
+                    count: 1,
+                    me: true,
+                });
             }
-        } else {
-            // New reaction
-            msg.reactions.push(poly_client::Reaction {
-                emoji: emoji.to_string(),
-                count: 1,
-                me: true,
-            });
         }
-    }
+    });
 }
 
 /// Bundled parameters for [`send_message`] to avoid the too-many-arguments lint.
@@ -5705,7 +5721,7 @@ struct SendMessageCtx {
     attachments: Vec<Attachment>,
     reply_to_message_id: Option<String>,
     client_manager: Signal<ClientManager>,
-    chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
     app_state: Signal<AppState>,
     /// Reset to 0 after sending so the Jump to Present badge clears.
     new_messages_while_scrolled_up: Signal<u32>,
@@ -5759,7 +5775,7 @@ async fn send_message(ctx: SendMessageCtx) {
     };
     match result {
         Ok(msg) => {
-            chat_data.write().messages.push(msg);
+            chat_data.batch(move |cd| cd.messages.push(msg));
             // Always scroll to bottom when the user sends a message.
             new_messages_while_scrolled_up.set(0);
             request_scroll_to_bottom();
@@ -5773,12 +5789,13 @@ async fn send_message(ctx: SendMessageCtx) {
 /// Apply an inline edit to a message in the chat data.
 ///
 /// Sets `edited = true` on the message and replaces its content with the new text.
-fn apply_edit(chat_data: &mut Signal<ChatData>, message_id: &str, new_text: String) {
-    let mut cd = chat_data.write();
-    if let Some(msg) = cd.messages.iter_mut().find(|m| m.id == message_id) {
-        msg.content = MessageContent::Text(new_text);
-        msg.edited = true;
-    }
+fn apply_edit(chat_data: BatchedSignal<ChatData>, message_id: &str, new_text: String) {
+    chat_data.batch(|cd| {
+        if let Some(msg) = cd.messages.iter_mut().find(|m| m.id == message_id) {
+            msg.content = MessageContent::Text(new_text);
+            msg.edited = true;
+        }
+    });
 }
 
 /// Inline edit UI rendered in place of the message content while editing.
@@ -5793,7 +5810,7 @@ fn MessageInlineEdit(
     message_id: String,
     editing_msg_id: Signal<Option<String>>,
     edit_draft: Signal<String>,
-    mut chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
 ) -> Element {
     let mid_save = message_id.clone();
     rsx! {
@@ -5809,7 +5826,7 @@ fn MessageInlineEdit(
                         if evt.key() == Key::Enter && !evt.modifiers().shift() {
                             evt.prevent_default();
                             let new_text = edit_draft.read().clone();
-                            apply_edit(&mut chat_data, &mid, new_text);
+                            apply_edit(chat_data, &mid, new_text);
                             editing_msg_id.set(None);
                         } else if evt.key() == Key::Escape {
                             editing_msg_id.set(None);
@@ -5832,7 +5849,7 @@ fn MessageInlineEdit(
                             let mid = mid_save.clone();
                             move |_| {
                                 let new_text = edit_draft.read().clone();
-                                apply_edit(&mut chat_data, &mid, new_text);
+                                apply_edit(chat_data, &mid, new_text);
                                 editing_msg_id.set(None);
                             }
                         },
@@ -5857,7 +5874,7 @@ const QUICK_REACTIONS: &[&str] = &["👍", "✅", "⚖️", "🔞"];
 #[component]
 fn MsgContextMenuOverlay(
     msg_context_menu: Signal<Option<MsgContextMenu>>,
-    mut chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
 ) -> Element {
     let Some(menu) = msg_context_menu.read().clone() else {
         return rsx! {};
@@ -5930,7 +5947,7 @@ fn MsgContextMenuOverlay(
 fn render_context_menu_quick_reactions(
     message_id: String,
     mut msg_context_menu: Signal<Option<MsgContextMenu>>,
-    mut chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
 ) -> Element {
     rsx! {
         div { class: "msg-context-quick-reactions",
@@ -5942,7 +5959,7 @@ fn render_context_menu_quick_reactions(
                         button {
                             class: "msg-context-quick-reaction-btn",
                             onclick: move |_| {
-                                toggle_reaction_on_message(&mut chat_data, &mid, &e);
+                                toggle_reaction_on_message(chat_data, &mid, &e);
                                 msg_context_menu.set(None);
                             },
                             "{emoji}"
@@ -6007,7 +6024,7 @@ fn render_context_menu_danger_item(
     is_own: bool,
     last_known_perms: Option<poly_client::MemberPermissions>,
     mut msg_context_menu: Signal<Option<MsgContextMenu>>,
-    mut chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
     mid_delete: String,
     channel_id: String,
     account_id: String,
@@ -6038,7 +6055,10 @@ fn render_context_menu_danger_item(
             danger: true,
             onclick: move |_| {
                 // Optimistic local removal.
-                chat_data.write().messages.retain(|message| message.id != mid_delete);
+                {
+                    let mid_c = mid_delete.clone();
+                    chat_data.batch(move |cd| cd.messages.retain(|message| message.id != mid_c));
+                }
                 msg_context_menu.set(None);
                 // Fire backend delete_message (best-effort; local removal already applied).
                 if !channel_id.is_empty() && !account_id.is_empty() {
@@ -6275,7 +6295,7 @@ fn SlashCommandPopup(
 #[context_menu(none)]
 #[component]
 fn DmContactListPanel(channel_id: String) -> Element {
-    let chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
     let app_state: Signal<AppState> = use_context();
 
     let active_account_id = app_state.read().nav.active_account_id.cloned().unwrap_or_default();

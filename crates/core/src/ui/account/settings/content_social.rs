@@ -21,6 +21,7 @@
 //! Every `#[component]` fn body in this module MUST stay under **150 lines**
 //! of RSX + logic. Extract sub-components rather than growing any file.
 
+use crate::state::BatchedSignal;
 use crate::i18n::t;
 use crate::state::ChatData;
 use crate::ui::actions::{ActionCx, UiAction};
@@ -109,7 +110,7 @@ impl UiAction for SensitiveMediaSectionAction {
 #[context_menu(none)]
 #[component]
 fn SensitiveMediaSection(
-    mut chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
     /// Show DM-related rows (dm-friends and dm-others). Requires `dms` capability.
     show_dm_rows: bool,
     /// Show the dm-friends row specifically. Requires `dms && friends`.
@@ -127,7 +128,7 @@ fn SensitiveMediaSection(
                     label: t("content-social-dm-friends"),
                     value: policy.sensitive_content_dm_friends,
                     on_change: move |level| {
-                        chat_data.write().content_policy.sensitive_content_dm_friends = level;
+                        chat_data.batch(|cd| cd.content_policy.sensitive_content_dm_friends = level);
                     },
                 }
             }
@@ -136,7 +137,7 @@ fn SensitiveMediaSection(
                     label: t("content-social-dm-others"),
                     value: policy.sensitive_content_dm_others,
                     on_change: move |level| {
-                        chat_data.write().content_policy.sensitive_content_dm_others = level;
+                        chat_data.batch(|cd| cd.content_policy.sensitive_content_dm_others = level);
                     },
                 }
             }
@@ -144,7 +145,7 @@ fn SensitiveMediaSection(
                 label: t("content-social-server-channels"),
                 value: policy.sensitive_content_server_channels,
                 on_change: move |level| {
-                    chat_data.write().content_policy.sensitive_content_server_channels = level;
+                    chat_data.batch(|cd| cd.content_policy.sensitive_content_server_channels = level);
                 },
             }
         }
@@ -168,7 +169,7 @@ impl UiAction for SpamFilterSectionAction {
 #[ui_action(SpamFilterSectionAction)]
 #[context_menu(none)]
 #[component]
-fn SpamFilterSection(mut chat_data: Signal<ChatData>) -> Element {
+fn SpamFilterSection(mut chat_data: BatchedSignal<ChatData>) -> Element {
     let current = chat_data.read().content_policy.dm_spam_filter;
     rsx! {
         div { class: "content-social-section",
@@ -191,7 +192,7 @@ fn SpamFilterSection(mut chat_data: Signal<ChatData>) -> Element {
                                     name: "dm-spam-filter",
                                     checked: is_checked,
                                     onchange: move |_| {
-                                        chat_data.write().content_policy.dm_spam_filter = value;
+                                        chat_data.batch(|cd| cd.content_policy.dm_spam_filter = value);
                                     },
                                 }
                                 span { "{t(label_key)}" }
@@ -223,7 +224,7 @@ impl UiAction for AgeRestrictedSectionAction {
 #[ui_action(AgeRestrictedSectionAction)]
 #[context_menu(none)]
 #[component]
-fn AgeRestrictedSection(mut chat_data: Signal<ChatData>) -> Element {
+fn AgeRestrictedSection(mut chat_data: BatchedSignal<ChatData>) -> Element {
     let policy = chat_data.read().content_policy.clone();
     rsx! {
         div { class: "content-social-section",
@@ -232,14 +233,14 @@ fn AgeRestrictedSection(mut chat_data: Signal<ChatData>) -> Element {
                 label: t("content-social-age-restricted-servers"),
                 checked: policy.allow_age_restricted_servers,
                 on_change: move |val| {
-                    chat_data.write().content_policy.allow_age_restricted_servers = val;
+                    chat_data.batch(|cd| cd.content_policy.allow_age_restricted_servers = val);
                 },
             }
             ToggleRow {
                 label: t("content-social-age-restricted-commands"),
                 checked: policy.allow_age_restricted_commands_in_dms,
                 on_change: move |val| {
-                    chat_data.write().content_policy.allow_age_restricted_commands_in_dms = val;
+                    chat_data.batch(|cd| cd.content_policy.allow_age_restricted_commands_in_dms = val);
                 },
             }
         }
@@ -265,7 +266,7 @@ impl UiAction for SocialPermissionsSectionAction {
 #[ui_action(SocialPermissionsSectionAction)]
 #[context_menu(none)]
 #[component]
-fn SocialPermissionsSection(mut chat_data: Signal<ChatData>) -> Element {
+fn SocialPermissionsSection(mut chat_data: BatchedSignal<ChatData>) -> Element {
     let policy = chat_data.read().content_policy.clone();
     rsx! {
         div { class: "content-social-section",
@@ -277,14 +278,14 @@ fn SocialPermissionsSection(mut chat_data: Signal<ChatData>) -> Element {
                 label: t("content-social-dms-from-members"),
                 checked: policy.allow_dms_from_server_members,
                 on_change: move |val| {
-                    chat_data.write().content_policy.allow_dms_from_server_members = val;
+                    chat_data.batch(|cd| cd.content_policy.allow_dms_from_server_members = val);
                 },
             }
             ToggleRow {
                 label: t("content-social-message-requests"),
                 checked: policy.allow_message_requests,
                 on_change: move |val| {
-                    chat_data.write().content_policy.allow_message_requests = val;
+                    chat_data.batch(|cd| cd.content_policy.allow_message_requests = val);
                 },
             }
         }
@@ -312,7 +313,7 @@ impl UiAction for FriendRequestsSectionAction {
 #[ui_action(FriendRequestsSectionAction)]
 #[context_menu(none)]
 #[component]
-fn FriendRequestsSection(mut chat_data: Signal<ChatData>) -> Element {
+fn FriendRequestsSection(mut chat_data: BatchedSignal<ChatData>) -> Element {
     let policy = chat_data.read().content_policy.clone();
     rsx! {
         div { class: "content-social-section",
@@ -321,21 +322,21 @@ fn FriendRequestsSection(mut chat_data: Signal<ChatData>) -> Element {
                 label: t("content-social-fr-everyone"),
                 checked: policy.friend_request_from_everyone,
                 on_change: move |val| {
-                    chat_data.write().content_policy.friend_request_from_everyone = val;
+                    chat_data.batch(|cd| cd.content_policy.friend_request_from_everyone = val);
                 },
             }
             ToggleRow {
                 label: t("content-social-fr-friends-of-friends"),
                 checked: policy.friend_request_from_friends_of_friends,
                 on_change: move |val| {
-                    chat_data.write().content_policy.friend_request_from_friends_of_friends = val;
+                    chat_data.batch(|cd| cd.content_policy.friend_request_from_friends_of_friends = val);
                 },
             }
             ToggleRow {
                 label: t("content-social-fr-server-members"),
                 checked: policy.friend_request_from_server_members,
                 on_change: move |val| {
-                    chat_data.write().content_policy.friend_request_from_server_members = val;
+                    chat_data.batch(|cd| cd.content_policy.friend_request_from_server_members = val);
                 },
             }
         }
@@ -374,7 +375,7 @@ impl UiAction for ContentSocialSettingsAction {
 #[context_menu(none)]
 #[component]
 pub fn ContentSocialSettings(_account_id: String, backend: String) -> Element {
-    let chat_data = use_context::<Signal<ChatData>>();
+    let chat_data = use_context::<BatchedSignal<ChatData>>();
     let caps = capabilities_for_slug(&backend);
     let has_dms = caps.should_show_dms();
     let has_friends = caps.should_show_friends();

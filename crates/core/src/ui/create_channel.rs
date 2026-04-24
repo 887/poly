@@ -11,6 +11,7 @@
 //! ## 150-line component rule
 //! Each `#[component]` fn body MUST stay under 150 lines.
 
+use crate::state::BatchedSignal;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::{AppState, ChatData};
@@ -51,7 +52,7 @@ pub(crate) fn CreateChannelPage(
 ) -> Element {
     let client_manager: Signal<ClientManager> = use_context();
     let app_state: Signal<AppState> = use_context();
-    let chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
 
     let mut channel_name = use_signal(String::new);
     let creating = use_signal(|| false);
@@ -147,7 +148,7 @@ pub(crate) fn CreateChannelPage(
 struct CreateChannelSignals {
     client_manager: Signal<ClientManager>,
     app_state: Signal<AppState>,
-    chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
     creating: Signal<bool>,
     error_msg: Signal<String>,
 }
@@ -197,14 +198,13 @@ fn do_create_channel(
                 // This mirrors what ChannelItemRow.onclick does so that
                 // ServerChat.use_effect sees already_loaded=true and skips
                 // restore_server_channel (which panics with concurrent spawns).
-                {
-                    let mut cd = chat_data.write();
+                chat_data.batch(move |cd| {
                     cd.channels.push(channel.clone());
                     cd.current_channel = Some(channel);
                     cd.messages = Vec::new();
                     cd.members = Vec::new();
                     cd.loading = false;
-                }
+                });
                 creating.set(false);
                 crate::nav!(Route::ServerChat {
                     backend,

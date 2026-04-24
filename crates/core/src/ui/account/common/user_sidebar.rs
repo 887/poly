@@ -9,7 +9,7 @@
 //! reveal the input; type to filter by display name (case-insensitive
 //! substring). The matching substring is highlighted in each visible entry.
 //!
-//! Reads members from `Signal<ChatData>` and groups them by
+//! Reads members from `BatchedSignal<ChatData>` and groups them by
 //! presence status: Online, Idle, Do Not Disturb, Offline.
 //!
 //! # 150-line component rule
@@ -17,6 +17,7 @@
 //! Extract sub-components rather than growing this file.
 // TODO(phase-2.5.7): Wire user sidebar to backend data
 
+use crate::state::BatchedSignal;
 use crate::i18n::t;
 use crate::state::ChatData;
 use crate::state::chat_data::user_color;
@@ -104,7 +105,7 @@ fn HighlightedName(name: String, query: String) -> Element {
 #[context_menu(UserRowContextMenu)]
 #[component]
 pub fn UserSidebar() -> Element {
-    let chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
     let app_state: Signal<AppState> = use_context();
     let members = chat_data.read().members.clone();
     let mut filter_open = use_signal(|| false);

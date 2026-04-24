@@ -12,6 +12,7 @@
 //! `AppState.nav` / `ChatData.current_channel` via context instead of
 //! `use_route()`.
 
+use crate::state::BatchedSignal;
 use crate::i18n::t;
 use crate::state::{AppState, ChatData, View};
 use dioxus::prelude::*;
@@ -113,7 +114,7 @@ fn ElectronWindowControls() -> Element {
 pub fn ElectronTitleBar() -> Element {
     let mut is_electron = use_signal(|| false);
     let app_state: Signal<AppState> = use_context();
-    let chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
 
     use_future(move || async move {
         let mut eval = document::eval("dioxus.send(Boolean(window.polyElectron?.isElectron));");

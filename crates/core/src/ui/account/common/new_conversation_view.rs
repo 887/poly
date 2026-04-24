@@ -4,6 +4,7 @@
 //! lands here to start a new DM (and later a group DM) with friends from the
 //! active account context.
 
+use crate::state::BatchedSignal;
 use super::channel_list::open_direct_message_from_active_account;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
@@ -17,7 +18,7 @@ use poly_ui_macros::{context_menu, ui_action};
 #[component]
 pub fn NewConversationView() -> Element {
     let app_state: Signal<AppState> = use_context();
-    let chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
     let nav = navigator();
 

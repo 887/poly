@@ -12,6 +12,7 @@
 //! - Show who reacted — debug stub (full reactors list is out of scope)
 //! - Remove my reaction — calls `toggle_reaction_on_message`
 
+use crate::state::BatchedSignal;
 use crate::i18n::t;
 use crate::state::{AppState, ChatData};
 use crate::ui::account::common::chat_view::toggle_reaction_on_message;
@@ -27,7 +28,7 @@ use poly_ui_macros::{context_menu, ui_action};
 #[component]
 pub fn ReactionContextMenu() -> Element {
     let mut app_state: Signal<AppState> = use_context();
-    let mut chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
 
     let Some(menu) = app_state.read().reaction_context_menu.clone() else {
         return rsx! {};
@@ -88,7 +89,7 @@ pub fn ReactionContextMenu() -> Element {
                     ReactionMenuItem {
                         label: t("reaction-menu-remove"),
                         onclick: move |_| {
-                            toggle_reaction_on_message(&mut chat_data, &mid, &e);
+                            toggle_reaction_on_message(chat_data, &mid, &e);
                             close();
                         },
                     }

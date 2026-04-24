@@ -10,6 +10,7 @@
 //! backend declares zero `PerChannel` sections the page shows a localized
 //! empty-state message (`channel-settings-no-plugin-sections`).
 
+use crate::state::BatchedSignal;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::ChatData;
@@ -136,7 +137,7 @@ pub fn ChannelSettingsPage(
     channel_id: String,
 ) -> Element {
     let _ = (&backend, &instance_id, &server_id);
-    let chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
 
     // Resolve channel name from ChatData, fallback to channel_id.
     let channel_name = chat_data
@@ -178,7 +179,7 @@ pub fn ChannelSettingsPage(
 #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod tests {
     //! UI snapshot coverage is deferred to the Playwright E2E layer — the
-    //! page depends on a `Signal<ChatData>` context that only a running
+    //! page depends on a `BatchedSignal<ChatData>` context that only a running
     //! VirtualDom can provide. The FTL keys used here are asserted in the
     //! host locale bundle tests (see `ui-settings-*` / `channel-settings-*`
     //! keys in `locales/en/main.ftl`).

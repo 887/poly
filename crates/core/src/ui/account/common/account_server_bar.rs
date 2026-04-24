@@ -22,6 +22,7 @@
 //! Each `#[component]` fn body MUST stay under 150 lines of RSX+logic.
 //! Extract sub-components rather than growing this file.
 
+use crate::state::BatchedSignal;
 use super::super::super::routes::Route;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
@@ -108,7 +109,7 @@ fn apply_bar2_drop(cd: &mut ChatData, drag_id: &str, target_id: &str, account_id
 #[component]
 pub fn AccountServerBar() -> Element {
     let app_state: Signal<AppState> = use_context();
-    let chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
 
     let nav = app_state.read().nav.clone();
     let active_account_id = nav.active_account_id.cloned();
@@ -242,7 +243,7 @@ fn AccountServerIcon(
 ) -> Element {
     let mut app_state: Signal<AppState> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
-    let mut chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
 
     let is_drag_over = chat_data.read().drag_over_id.as_deref() == Some(server_id.as_str());
     let item_class = match (is_selected, is_drag_over) {
@@ -275,22 +276,23 @@ fn AccountServerIcon(
 
     let sid_ds = server_id.clone();
     let on_drag_start = move |_: Event<DragData>| {
-        let mut cd = chat_data.write();
-        cd.dragging_server_id = Some(sid_ds.clone());
-        cd.drag_source = DragSource::AccountServer;
+        chat_data.batch(|cd| {
+            cd.dragging_server_id = Some(sid_ds.clone());
+            cd.drag_source = DragSource::AccountServer;
+        });
     };
 
     let sid_do = server_id.clone();
     let on_drag_over = move |evt: Event<DragData>| {
         evt.prevent_default();
         evt.stop_propagation();
-        chat_data.write().drag_over_id = Some(sid_do.clone());
+        chat_data.batch(|cd| cd.drag_over_id = Some(sid_do.clone()));
     };
 
     let sid_dl = server_id.clone();
     let on_drag_leave = move |_: Event<DragData>| {
         if chat_data.read().drag_over_id.as_deref() == Some(sid_dl.as_str()) {
-            chat_data.write().drag_over_id = None;
+            chat_data.batch(|cd| cd.drag_over_id = None);
         }
     };
 
@@ -299,27 +301,29 @@ fn AccountServerIcon(
     let on_drop = move |evt: Event<DragData>| {
         evt.prevent_default();
         evt.stop_propagation();
-        let mut cd = chat_data.write();
-        let dragging = cd.dragging_server_id.clone();
-        let src = cd.drag_source.clone();
-        cd.drag_over_id = None;
-        let Some(drag_id) = dragging else {
+        chat_data.batch(|cd| {
+            let dragging = cd.dragging_server_id.clone();
+            let src = cd.drag_source.clone();
+            cd.drag_over_id = None;
+            let Some(drag_id) = dragging else {
+                cd.dragging_server_id = None;
+                cd.drag_source = DragSource::None;
+                return;
+            };
+            if matches!(src, DragSource::AccountServer) && drag_id != tid {
+                apply_bar2_drop(cd, &drag_id, &tid, &aid_drop);
+            }
             cd.dragging_server_id = None;
             cd.drag_source = DragSource::None;
-            return;
-        };
-        if matches!(src, DragSource::AccountServer) && drag_id != tid {
-            apply_bar2_drop(&mut cd, &drag_id, &tid, &aid_drop);
-        }
-        cd.dragging_server_id = None;
-        cd.drag_source = DragSource::None;
+        });
     };
 
     let on_drag_end = move |_: Event<DragData>| {
-        let mut cd = chat_data.write();
-        cd.dragging_server_id = None;
-        cd.drag_source = DragSource::None;
-        cd.drag_over_id = None;
+        chat_data.batch(|cd| {
+            cd.dragging_server_id = None;
+            cd.drag_source = DragSource::None;
+            cd.drag_over_id = None;
+        });
     };
 
     let sid_click = server_id.clone();
@@ -336,14 +340,13 @@ fn AccountServerIcon(
         // type can flip `ServerHome` into rendering `VoiceChannelView` even before
         // `load_server_data` fires, which requests audio permission and hard-crashes
         // Chromium on Linux.
-        {
-            let mut cd = chat_data.write();
+        chat_data.batch(|cd| {
             cd.current_server = None;
             cd.current_channel = None;
             cd.channels = Vec::new();
             cd.members = Vec::new();
             cd.messages = Vec::new();
-        }
+        });
         if !preserve_drawer_context {
             let sid2 = sid_click.clone();
             spawn(async move {
@@ -450,7 +453,7 @@ fn AccountBarDmsButton(
     instance_id: String,
     account_id: String,
 ) -> Element {
-    let mut chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
 
     rsx! {
         div {
@@ -459,14 +462,13 @@ fn AccountBarDmsButton(
                 if current_view == View::DmsFriends {
                     return;
                 }
-                {
-                    let mut cd = chat_data.write();
+                chat_data.batch(|cd| {
                     cd.current_server = None;
                     cd.current_channel = None;
                     cd.channels.clear();
                     cd.messages.clear();
                     cd.members.clear();
-                }
+                });
                 navigator()
                     .push(Route::DmsHome {
                         backend: backend_slug.clone(),
@@ -496,7 +498,7 @@ fn AccountBarFriendsButton(
     account_id: String,
 ) -> Element {
     let mut app_state: Signal<AppState> = use_context();
-    let mut chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
 
     rsx! {
         div {
@@ -505,14 +507,13 @@ fn AccountBarFriendsButton(
                 if current_view == View::Friends {
                     return;
                 }
-                {
-                    let mut cd = chat_data.write();
+                chat_data.batch(|cd| {
                     cd.current_server = None;
                     cd.current_channel = None;
                     cd.channels.clear();
                     cd.messages.clear();
                     cd.members.clear();
-                }
+                });
                 crate::nav!(Route::FriendsRoute {
                     backend: backend_slug.clone(),
                     instance_id: instance_id.clone(),
@@ -536,7 +537,7 @@ fn AccountBarFriendsButton(
 #[component]
 fn AccountBarNotifsButton(current_view: View, notif_count: usize) -> Element {
     let mut app_state: Signal<AppState> = use_context();
-    let mut chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
     let backend_slug = app_state
         .read()
         .nav
@@ -563,12 +564,13 @@ fn AccountBarNotifsButton(current_view: View, notif_count: usize) -> Element {
                 if current_view == View::Notifications {
                     return;
                 }
-                let mut cd = chat_data.write();
-                cd.current_server = None;
-                cd.current_channel = None;
-                cd.channels.clear();
-                cd.messages.clear();
-                cd.members.clear();
+                chat_data.batch(|cd| {
+                    cd.current_server = None;
+                    cd.current_channel = None;
+                    cd.channels.clear();
+                    cd.messages.clear();
+                    cd.members.clear();
+                });
                 crate::nav!(Route::NotificationsRoute {
                     backend: backend_slug.clone(),
                     instance_id: instance_id.clone(),

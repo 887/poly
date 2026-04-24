@@ -8,6 +8,7 @@
 //!
 //! Mobile / full-page view is handled by the `ThreadView` route in `routes.rs`.
 
+use crate::state::BatchedSignal;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::{AppState, ChatData};
@@ -149,7 +150,7 @@ pub fn ViewThreadButton(
 pub fn ActiveThreadsBar() -> Element {
     let app_state: Signal<AppState> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
-    let chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
 
     let server_id = chat_data
         .read()

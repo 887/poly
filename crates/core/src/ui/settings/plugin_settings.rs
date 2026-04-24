@@ -14,6 +14,7 @@
 //! Plugin strings come from the plugin's own FTL bundle (loaded at startup via
 //! [`crate::i18n::init`]). Keys use the `plugin-<id>-*` prefix.
 
+use crate::state::BatchedSignal;
 use crate::i18n::t;
 use crate::ui::actions::{ActionCx, UiAction};
 use dioxus::prelude::*;
@@ -48,7 +49,7 @@ impl UiAction for DemoPluginSettingsAction {
 pub fn DemoPluginSettings() -> Element {
     let mut app_state: Signal<crate::state::AppState> = use_context();
     let client_manager: Signal<crate::client_manager::ClientManager> = use_context();
-    let chat_data: Signal<crate::state::ChatData> = use_context();
+    let chat_data: BatchedSignal<crate::state::ChatData> = use_context();
     let demo_active = client_manager.read().demo_active;
 
     rsx! {

@@ -30,6 +30,7 @@
 //! ## 150-line component rule
 //! Each `#[component]` fn body MUST stay under 150 lines.
 
+use crate::state::BatchedSignal;
 use crate::client_manager::{BackendHandle, ClientManager};
 use crate::i18n::t;
 use crate::state::ChatData;
@@ -95,7 +96,7 @@ impl UiAction for ReauthAccountPageAction {
 /// Used by both the normal per-backend signup flow and the quick test-account panel.
 pub(crate) fn build_on_complete(
     client_manager: Signal<ClientManager>,
-    chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
 ) -> Callback<SignupCompleted> {
     build_on_complete_inner(client_manager, chat_data, true)
 }
@@ -107,14 +108,14 @@ pub(crate) fn build_on_complete(
 /// is already on whatever route they restored to at startup.
 pub(crate) fn build_on_complete_no_nav(
     client_manager: Signal<ClientManager>,
-    chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
 ) -> Callback<SignupCompleted> {
     build_on_complete_inner(client_manager, chat_data, false)
 }
 
 fn build_on_complete_inner(
     mut client_manager: Signal<ClientManager>,
-    mut chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
     nav_on_complete: bool,
 ) -> Callback<SignupCompleted> {
     Callback::new(move |completed: SignupCompleted| {
@@ -183,7 +184,10 @@ fn build_on_complete_inner(
                 backend_handle.clone(),
                 server_map,
             );
-            chat_data.write().account_sessions.insert(account_id.clone(), session);
+            {
+                let aid = account_id.clone();
+                chat_data.batch(move |cd| { cd.account_sessions.insert(aid, session); });
+            }
             // Phase 3: async data load — no Signal lock held during awaits.
             {
                 let guard = backend_handle.read().await;
@@ -201,9 +205,7 @@ fn build_on_complete_inner(
                                 account_display_name: display_name.clone(),
                             })
                             .collect();
-                    let mut cd = chat_data.write();
-                    cd.servers.extend(servers);
-                    drop(cd);
+                    chat_data.batch(move |cd| cd.servers.extend(servers));
 
                     if let Some(storage) = crate::STORAGE.get()
                         && let Err(e) =
@@ -215,29 +217,38 @@ fn build_on_complete_inner(
             }
             {
                 let guard = backend_handle.read().await;
-                if let Ok(dms) = guard.get_dm_channels().await {
-                    chat_data.write().dm_channels.extend(dms);
-                }
-                if let Ok(groups) = guard.get_groups().await {
-                    chat_data.write().groups.extend(groups);
-                }
-                if let Ok(notifs) = guard.get_notifications().await {
-                    chat_data.write().notifications.extend(notifs.into_iter().filter(|n| !n.read));
-                }
-                if let Ok(friends) = guard.get_friends().await {
-                    for friend in friends {
-                        let already = chat_data.read().friends.get(&account_id).is_some_and(|v| v.iter().any(|f| f.id == friend.id));
-                        if !already {
-                            chat_data.write().friends.entry(account_id.clone()).or_default().push(friend);
+                let dms = guard.get_dm_channels().await.ok();
+                let groups = guard.get_groups().await.ok();
+                let notifs = guard.get_notifications().await.ok();
+                let friends = guard.get_friends().await.ok();
+                let blocked = guard.get_blocked_users().await.ok();
+                let policy = guard.get_content_policy().await.ok();
+                let aid = account_id.clone();
+                chat_data.batch(move |cd| {
+                    if let Some(dms) = dms {
+                        cd.dm_channels.extend(dms);
+                    }
+                    if let Some(groups) = groups {
+                        cd.groups.extend(groups);
+                    }
+                    if let Some(notifs) = notifs {
+                        cd.notifications.extend(notifs.into_iter().filter(|n| !n.read));
+                    }
+                    if let Some(friends) = friends {
+                        for friend in friends {
+                            let already = cd.friends.get(&aid).is_some_and(|v| v.iter().any(|f| f.id == friend.id));
+                            if !already {
+                                cd.friends.entry(aid.clone()).or_default().push(friend);
+                            }
                         }
                     }
-                }
-                if let Ok(blocked) = guard.get_blocked_users().await {
-                    chat_data.write().blocked_users.insert(account_id.clone(), blocked);
-                }
-                if let Ok(policy) = guard.get_content_policy().await {
-                    chat_data.write().content_policy = policy;
-                }
+                    if let Some(blocked) = blocked {
+                        cd.blocked_users.insert(aid.clone(), blocked);
+                    }
+                    if let Some(policy) = policy {
+                        cd.content_policy = policy;
+                    }
+                });
             }
             let caps = poly_client::capabilities_for_slug(&backend_slug);
             let landing = match caps.landing {
@@ -295,7 +306,7 @@ fn build_on_complete_inner(
 fn build_on_complete_reauth(
     target_account_id: String,
     mut client_manager: Signal<ClientManager>,
-    mut chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
 ) -> Callback<SignupCompleted> {
     Callback::new(move |completed: SignupCompleted| {
         let backend_handle: BackendHandle =
@@ -344,7 +355,10 @@ fn build_on_complete_reauth(
                 backend_handle.clone(),
                 server_map,
             );
-            chat_data.write().account_sessions.insert(account_id.clone(), session);
+            {
+                let aid = account_id.clone();
+                chat_data.batch(move |cd| { cd.account_sessions.insert(aid, session); });
+            }
 
             let caps = poly_client::capabilities_for_slug(&backend_slug);
             let landing = match caps.landing {
@@ -390,7 +404,7 @@ async fn remove_backend_account_now(
     account_id: String,
     backend_slug: String,
     mut client_manager: Signal<ClientManager>,
-    mut chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
 ) {
     let handle = client_manager.write().take_account(&account_id);
     if let Some(h) = handle {
@@ -398,15 +412,17 @@ async fn remove_backend_account_now(
         let _ = g.logout().await;
     }
     {
-        let mut cd = chat_data.write();
-        cd.servers.retain(|s| s.account_id != account_id);
-        cd.dm_channels.retain(|d| d.account_id != account_id);
-        cd.groups.retain(|g| g.account_id != account_id);
-        cd.notifications.retain(|n| n.account_id != account_id);
-        cd.friends.remove(&account_id);
-        cd.account_sessions.remove(&account_id);
-        let live_server_ids: Vec<String> = cd.servers.iter().map(|s| s.id.clone()).collect();
-        cd.favorited_server_ids.retain(|id| live_server_ids.contains(id));
+        let aid = account_id.clone();
+        chat_data.batch(move |cd| {
+            cd.servers.retain(|s| s.account_id != aid);
+            cd.dm_channels.retain(|d| d.account_id != aid);
+            cd.groups.retain(|g| g.account_id != aid);
+            cd.notifications.retain(|n| n.account_id != aid);
+            cd.friends.remove(&aid);
+            cd.account_sessions.remove(&aid);
+            let live_server_ids: Vec<String> = cd.servers.iter().map(|s| s.id.clone()).collect();
+            cd.favorited_server_ids.retain(|id| live_server_ids.contains(id));
+        });
     }
     if let Some(storage) = crate::STORAGE.get() {
         let _ = storage.remove_account_token(&backend_slug, &account_id).await;
@@ -525,7 +541,7 @@ fn AddAccountNav(selected_slug: Option<String>) -> Element {
 #[component]
 fn TestAccountsPanel() -> Element {
     let client_manager = use_context::<Signal<ClientManager>>();
-    let chat_data = use_context::<Signal<ChatData>>();
+    let chat_data = use_context::<BatchedSignal<ChatData>>();
     let on_complete = build_on_complete(client_manager, chat_data);
     let entries: Vec<poly_client::TestAccountEntry> = client_manager
         .read()
@@ -648,7 +664,7 @@ pub(crate) fn SignupPickerPage() -> Element {
 pub(crate) fn ClientSignupPage(client: String) -> Element {
     let _locale = crate::i18n::use_locale().read().clone();
     let client_manager = use_context::<Signal<ClientManager>>();
-    let chat_data      = use_context::<Signal<ChatData>>();
+    let chat_data      = use_context::<BatchedSignal<ChatData>>();
 
     // Load private key async — hooks must run unconditionally before any returns.
     let key_resource = use_resource({
@@ -788,7 +804,7 @@ pub(crate) fn ReauthAccountPage(
     let _locale = crate::i18n::use_locale().read().clone();
     let _ = instance_id; // carried in the URL for /:backend/:instance_id/:account_id symmetry
     let client_manager = use_context::<Signal<ClientManager>>();
-    let chat_data      = use_context::<Signal<ChatData>>();
+    let chat_data      = use_context::<BatchedSignal<ChatData>>();
 
     let display_name = chat_data
         .read()

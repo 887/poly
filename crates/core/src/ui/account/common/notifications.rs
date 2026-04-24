@@ -2,7 +2,7 @@
 //!
 //! Common implementation shared across all messenger backends.
 //!
-//! Reads from `Signal<ChatData>` and displays notifications with
+//! Reads from `BatchedSignal<ChatData>` and displays notifications with
 //! source badges indicating which backend/account they came from.
 //! Features: mark-as-read, mark-all-as-read, filter by backend,
 //! accept/decline friend requests, server invites, and voice invites.
@@ -12,6 +12,7 @@
 //! Extract sub-components rather than growing this file.
 // TODO(phase-2.5.8): Wire notifications to backend data
 
+use crate::state::BatchedSignal;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::ChatData;
@@ -170,7 +171,7 @@ pub(crate) fn filters_for_backend(slug: &str) -> Vec<NotificationMenuFilter> {
 #[ui_action(NotificationsViewAction)]
 #[component]
 pub fn NotificationsView(account_id: String, backend_slug: String) -> Element {
-    let mut chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
     let mut kind_filter = use_signal(|| NotificationMenuFilter::All);
     let notifications = chat_data.read().notifications.iter()
         .filter(|n| n.account_id == account_id)
@@ -257,8 +258,11 @@ pub fn NotificationsView(account_id: String, backend_slug: String) -> Element {
                             class: "special-page-sidebar-button",
                             onclick: move |_| {
                                 let active_kind = *kind_filter.read();
-                                chat_data.write().notifications.retain(|n| {
-                                    !(n.account_id == account_id && active_kind.matches(&n.kind))
+                                let aid = account_id.clone();
+                                chat_data.batch(move |cd| {
+                                    cd.notifications.retain(|n| {
+                                        !(n.account_id == aid && active_kind.matches(&n.kind))
+                                    });
                                 });
                             },
                             "{notifications_mark_read}"
@@ -356,7 +360,7 @@ fn NotificationFilter(
 #[ui_action(inherit)]
 #[component]
 fn NotificationList(notifications: Vec<poly_client::Notification>) -> Element {
-    let chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
 
     rsx! {
@@ -404,7 +408,7 @@ fn NotificationItemContent(
     badge: String,
     preview: String,
     time_ago: String,
-    mut chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
     client_manager: Signal<ClientManager>,
 ) -> Element {
     let (kind_icon, kind_label) = match &kind {
@@ -443,7 +447,10 @@ fn NotificationItemContent(
                                     let aid = account_id.clone();
                                     let cm = client_manager;
                                     move |_| {
-                                        chat_data.write().notifications.retain(|n| n.id != nid);
+                                        {
+                                            let nid_c = nid.clone();
+                                            chat_data.batch(move |cd| cd.notifications.retain(|n| n.id != nid_c));
+                                        }
                                         let uid = uid.clone();
                                         let nid = nid.clone();
                                         let aid = aid.clone();
@@ -471,7 +478,10 @@ fn NotificationItemContent(
                                     let aid = account_id.clone();
                                     let cm = client_manager;
                                     move |_| {
-                                        chat_data.write().notifications.retain(|n| n.id != nid);
+                                        {
+                                            let nid_c = nid.clone();
+                                            chat_data.batch(move |cd| cd.notifications.retain(|n| n.id != nid_c));
+                                        }
                                         let uid = uid.clone();
                                         let nid = nid.clone();
                                         let aid = aid.clone();
@@ -500,7 +510,10 @@ fn NotificationItemContent(
                                 onclick: {
                                     let nid = accept_id.clone();
                                     move |_| {
-                                        chat_data.write().notifications.retain(|n| n.id != nid);
+                                        {
+                                            let nid_c = nid.clone();
+                                            chat_data.batch(move |cd| cd.notifications.retain(|n| n.id != nid_c));
+                                        }
                                     }
                                 },
                                 "{t(\"notifications-accept\")}"
@@ -510,7 +523,10 @@ fn NotificationItemContent(
                                 onclick: {
                                     let nid = dismiss_id.clone();
                                     move |_| {
-                                        chat_data.write().notifications.retain(|n| n.id != nid);
+                                        {
+                                            let nid_c = nid.clone();
+                                            chat_data.batch(move |cd| cd.notifications.retain(|n| n.id != nid_c));
+                                        }
                                     }
                                 },
                                 "{t(\"notifications-decline\")}"
@@ -525,7 +541,10 @@ fn NotificationItemContent(
                                 onclick: {
                                     let nid = accept_id.clone();
                                     move |_| {
-                                        chat_data.write().notifications.retain(|n| n.id != nid);
+                                        {
+                                            let nid_c = nid.clone();
+                                            chat_data.batch(move |cd| cd.notifications.retain(|n| n.id != nid_c));
+                                        }
                                     }
                                 },
                                 "{t(\"notifications-join-voice\")}"
@@ -535,7 +554,10 @@ fn NotificationItemContent(
                                 onclick: {
                                     let nid = dismiss_id.clone();
                                     move |_| {
-                                        chat_data.write().notifications.retain(|n| n.id != nid);
+                                        {
+                                            let nid_c = nid.clone();
+                                            chat_data.batch(move |cd| cd.notifications.retain(|n| n.id != nid_c));
+                                        }
                                     }
                                 },
                                 "{t(\"notifications-dismiss\")}"
@@ -556,7 +578,10 @@ fn NotificationItemContent(
                             button {
                                 class: "btn btn-warning btn-sm notif-action-reauth",
                                 onclick: move |_| {
-                                    chat_data.write().notifications.retain(|n| n.id != nid);
+                                    {
+                                            let nid_c = nid.clone();
+                                            chat_data.batch(move |cd| cd.notifications.retain(|n| n.id != nid_c));
+                                        }
                                     navigator().push(super::super::super::routes::Route::ReauthAccount {
                                         backend: slug.clone(),
                                         instance_id: instance_id.clone(),
@@ -574,7 +599,10 @@ fn NotificationItemContent(
                                 onclick: {
                                     let nid = mark_id.clone();
                                     move |_| {
-                                        chat_data.write().notifications.retain(|n| n.id != nid);
+                                        {
+                                            let nid_c = nid.clone();
+                                            chat_data.batch(move |cd| cd.notifications.retain(|n| n.id != nid_c));
+                                        }
                                     }
                                 },
                                 "{t(\"notifications-mark-read\")}"
@@ -622,7 +650,7 @@ fn format_time_ago(ts: chrono::DateTime<chrono::Utc>) -> String {
 
 async fn handle_friend_request_action(
     client_manager: Signal<ClientManager>,
-    mut chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
     account_id: String,
     user_id: String,
     notif_id: String,
@@ -664,17 +692,18 @@ async fn handle_friend_request_action(
     };
     drop(guard);
 
-    let mut cd = chat_data.write();
-    cd.notifications
-        .retain(|notification| notification.id != notif_id);
+    chat_data.batch(move |cd| {
+        cd.notifications
+            .retain(|notification| notification.id != notif_id);
 
-    if let Some(friends) = refreshed_friends {
-        for friend in friends {
-            if !cd.friends.get(&account_id).is_some_and(|v| v.iter().any(|existing| existing.id == friend.id)) {
-                cd.friends.entry(account_id.clone()).or_default().push(friend);
+        if let Some(friends) = refreshed_friends {
+            for friend in friends {
+                if !cd.friends.get(&account_id).is_some_and(|v| v.iter().any(|existing| existing.id == friend.id)) {
+                    cd.friends.entry(account_id.clone()).or_default().push(friend);
+                }
             }
         }
-    }
+    });
 }
 
 #[cfg(test)]

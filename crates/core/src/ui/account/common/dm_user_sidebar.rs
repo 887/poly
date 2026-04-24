@@ -13,6 +13,7 @@
 //! # 150-line component rule
 //! Each `#[component]` fn body MUST stay under 150 lines of RSX+logic.
 
+use crate::state::BatchedSignal;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::chat_data::user_color;
@@ -42,7 +43,7 @@ fn presence_dot_class(status: &PresenceStatus) -> &'static str {
 #[component]
 pub fn DmUserSidebar() -> Element {
     let mut app_state: Signal<AppState> = use_context();
-    let chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
 
     let members = if chat_data.read().members.is_empty() {
@@ -97,7 +98,7 @@ fn DmMemberRow(
     member: User,
     group_id: String,
     account_id: String,
-    mut chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
     client_manager: Signal<ClientManager>,
     app_state: Signal<AppState>,
 ) -> Element {
@@ -160,7 +161,7 @@ async fn remove_member(
     user_id: String,
     account_id: String,
     client_manager: Signal<ClientManager>,
-    mut chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
 ) {
     let Some(backend) = client_manager.read().get_backend(&account_id) else {
         return;
@@ -168,10 +169,9 @@ async fn remove_member(
     let guard = backend.read().await;
     if guard.remove_group_member(&group_id, &user_id).await.is_ok() {
         // Remove the member from local state immediately for instant feedback.
-        chat_data
-            .write()
-            .active_group_members
-            .retain(|m| m.id != user_id);
-        chat_data.write().members.retain(|m| m.id != user_id);
+        chat_data.batch(|cd| {
+            cd.active_group_members.retain(|m| m.id != user_id);
+            cd.members.retain(|m| m.id != user_id);
+        });
     }
 }

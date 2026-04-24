@@ -21,6 +21,7 @@
 //! declared by plugins via the `client-menus` WIT interface and rendered by
 //! [`crate::ui::client_ui::ClientMenu`].
 
+use crate::state::BatchedSignal;
 use super::super::super::routes::Route;
 use crate::i18n::{t, t_args};
 use crate::state::{AppState, ChatData};
@@ -38,7 +39,7 @@ use poly_ui_macros::{context_menu, ui_action};
 #[component]
 pub fn ServerContextMenu() -> Element {
     let mut app_state: Signal<AppState> = use_context();
-    let mut chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
 
     let Some(menu) = app_state.read().context_menu.clone() else {
         return rsx! {};
@@ -185,10 +186,12 @@ pub fn ServerContextMenu() -> Element {
                         let sid = server_id.clone();
                         let mut close = close;
                         move |_| {
-                            if !chat_data.read().favorited_server_ids.contains(&sid) {
-                                chat_data.write().favorited_server_ids.push(sid.clone());
-                            }
-                            let new_favs = chat_data.read().favorited_server_ids.clone();
+                            let new_favs = chat_data.batch(|cd| {
+                                if !cd.favorited_server_ids.contains(&sid) {
+                                    cd.favorited_server_ids.push(sid.clone());
+                                }
+                                cd.favorited_server_ids.clone()
+                            });
                             spawn(async move {
                                 crate::ui::favorites_sidebar::persist_favorites(new_favs)
                                     .await;
@@ -313,7 +316,7 @@ fn RemoveFavoritesConfirm(
     oncancel: EventHandler<MouseEvent>,
 ) -> Element {
     let mut app_state: Signal<AppState> = use_context();
-    let mut chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
 
     // Pre-compute the title using t_args so the Fluent {$name} placeholder is filled
     let remove_title = t_args("remove-favorites-title", &[("name", server_name.as_str())]);
@@ -332,12 +335,10 @@ fn RemoveFavoritesConfirm(
                     class: "btn-danger",
                     onclick: move |_evt| {
                         let sid = server_id.clone();
-                        chat_data
-                            .write()
-                            .favorited_server_ids
-                            .retain(|id| id != &sid);
-                        let new_favs =
-                            chat_data.read().favorited_server_ids.clone();
+                        let new_favs = chat_data.batch(|cd| {
+                            cd.favorited_server_ids.retain(|id| id != &sid);
+                            cd.favorited_server_ids.clone()
+                        });
                         spawn(async move {
                             crate::ui::favorites_sidebar::persist_favorites(new_favs)
                                 .await;

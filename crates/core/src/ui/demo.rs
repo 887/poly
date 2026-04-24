@@ -12,6 +12,7 @@
 //! [`ClientManager::demo_account_ids`] at runtime so the UI layer has zero
 //! knowledge of which specific accounts the demo client creates.
 
+use crate::state::BatchedSignal;
 use crate::client_manager::{BackendHandle, ClientManager, PluginSettingsEntry};
 use crate::state::{AppState, ChatData};
 use crate::ui::account::common::chat_history::{
@@ -51,7 +52,7 @@ const AUTO_SCROLL_THRESHOLD_PX: f64 = 60.0;
 /// guard must never be held across an await boundary.
 pub(crate) async fn toggle_demo(
     mut client_manager: Signal<ClientManager>,
-    mut chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
     app_state: Signal<AppState>,
 ) {
     #[cfg(feature = "demo")]
@@ -96,39 +97,42 @@ pub(crate) async fn toggle_demo(
             // No `.await` may appear between the first write and the end of this block.
             client_manager.write().deactivate_demo();
             {
-                let mut cd = chat_data.write();
-                cd.servers.retain(|s| {
-                    s.backend != "demo"
-                        && s.backend != "demo_forum"
+                let new_fav_ids_c = new_fav_ids.clone();
+                let demo_ids_c = demo_ids.clone();
+                chat_data.batch(move |cd| {
+                    cd.servers.retain(|s| {
+                        s.backend != "demo"
+                            && s.backend != "demo_forum"
+                    });
+                    cd.dm_channels.retain(|d| {
+                        d.backend != "demo"
+                            && d.backend != "demo_forum"
+                    });
+                    cd.groups.retain(|g| {
+                        g.backend != "demo"
+                            && g.backend != "demo_forum"
+                    });
+                    cd.notifications.retain(|n| {
+                        n.backend != "demo"
+                            && n.backend != "demo_forum"
+                    });
+                    for aid in &demo_ids_c {
+                        cd.friends.remove(aid.as_str());
+                        cd.blocked_users.remove(aid.as_str());
+                    }
+                    cd.channels.clear();
+                    cd.messages.clear();
+                    cd.members.clear();
+                    cd.current_server = None;
+                    cd.current_channel = None;
+                    cd.voice_channel_participants.clear();
+                    cd.voice_connection = None;
+                    for aid in &demo_ids_c {
+                        cd.account_sessions.remove(aid.as_str());
+                    }
+                    cd.favorited_server_ids = new_fav_ids_c;
+                    cd.dragging_server_id = None;
                 });
-                cd.dm_channels.retain(|d| {
-                    d.backend != "demo"
-                        && d.backend != "demo_forum"
-                });
-                cd.groups.retain(|g| {
-                    g.backend != "demo"
-                        && g.backend != "demo_forum"
-                });
-                cd.notifications.retain(|n| {
-                    n.backend != "demo"
-                        && n.backend != "demo_forum"
-                });
-                for aid in &demo_ids {
-                    cd.friends.remove(aid.as_str());
-                    cd.blocked_users.remove(aid.as_str());
-                }
-                cd.channels.clear();
-                cd.messages.clear();
-                cd.members.clear();
-                cd.current_server = None;
-                cd.current_channel = None;
-                cd.voice_channel_participants.clear();
-                cd.voice_connection = None;
-                for aid in &demo_ids {
-                    cd.account_sessions.remove(aid.as_str());
-                }
-                cd.favorited_server_ids = new_fav_ids.clone();
-                cd.dragging_server_id = None;
             }
 
             // Phase 3: async storage persist.
@@ -294,9 +298,11 @@ pub(crate) async fn toggle_demo(
                     .filter_map(|aid| cm.sessions.get(aid).map(|s| (aid.clone(), s.clone())))
                     .collect()
             };
-            for (aid, sess) in sessions_to_insert {
-                chat_data.write().account_sessions.insert(aid, sess);
-            }
+            chat_data.batch(|cd| {
+                for (aid, sess) in sessions_to_insert {
+                    cd.account_sessions.insert(aid, sess);
+                }
+            });
 
             // Clone backend Arc handles so no Signal read lock is held across awaits.
             let backend_handles: Vec<(String, BackendHandle)> = {
@@ -317,42 +323,58 @@ pub(crate) async fn toggle_demo(
             }
             // Pre-populate favorites with all demo servers so Bar 1 shows them immediately.
             // Users can remove entries by rearranging; dragging from Bar 2 adds to this list.
-            for sid in servers.iter().map(|s| s.id.clone()) {
-                if !chat_data.read().favorited_server_ids.contains(&sid) {
-                    chat_data.write().favorited_server_ids.push(sid);
-                }
+            {
+                let fav_sids: Vec<String> = servers.iter().map(|s| s.id.clone()).collect();
+                chat_data.batch(move |cd| {
+                    for sid in fav_sids {
+                        if !cd.favorited_server_ids.contains(&sid) {
+                            cd.favorited_server_ids.push(sid);
+                        }
+                    }
+                    cd.servers = servers;
+                });
             }
-            chat_data.write().servers = servers;
 
             // Load DMs, groups, notifications, friends from all demo accounts.
             for (aid, backend) in &backend_handles {
                 let guard = backend.read().await;
-                if let Ok(dms) = guard.get_dm_channels().await {
-                    chat_data.write().dm_channels.extend(dms);
-                }
-                if let Ok(groups) = guard.get_groups().await {
-                    chat_data.write().groups.extend(groups);
-                }
+                let dms = guard.get_dm_channels().await.ok();
+                let groups = guard.get_groups().await.ok();
                 let is_forum = chat_data.read().account_sessions.get(aid)
                     .is_some_and(|s| s.backend.uses_forum_layout());
-                if !is_forum
-                    && let Ok(notifs) = guard.get_notifications().await {
-                        chat_data.write().notifications.extend(notifs.into_iter().filter(|n| !n.read));
+                let notifs = if !is_forum {
+                    guard.get_notifications().await.ok()
+                } else {
+                    None
+                };
+                let friends = guard.get_friends().await.ok();
+                // ONE batch absorbs all per-account writes for this iteration.
+                let aid_c = aid.clone();
+                chat_data.batch(move |cd| {
+                    if let Some(dms) = dms {
+                        cd.dm_channels.extend(dms);
                     }
-                if let Ok(friends) = guard.get_friends().await {
-                    for friend in friends {
-                        let already = chat_data.read().friends.get(aid.as_str()).is_some_and(|v| v.iter().any(|f| f.id == friend.id));
-                        if !already {
-                            chat_data.write().friends.entry(aid.clone()).or_default().push(friend);
+                    if let Some(groups) = groups {
+                        cd.groups.extend(groups);
+                    }
+                    if let Some(notifs) = notifs {
+                        cd.notifications.extend(notifs.into_iter().filter(|n| !n.read));
+                    }
+                    if let Some(friends) = friends {
+                        for friend in friends {
+                            let already = cd.friends.get(aid_c.as_str()).is_some_and(|v| v.iter().any(|f| f.id == friend.id));
+                            if !already {
+                                cd.friends.entry(aid_c.clone()).or_default().push(friend);
+                            }
                         }
                     }
-                }
-                // Load content policy and blocked users for the first account only.
-                // (content policy is per-account; use the first demo account's data.)
-                if !chat_data.read().blocked_users.contains_key(aid.as_str()) {
-                    chat_data.write().content_policy = poly_demo::data::demo_content_policy();
-                    chat_data.write().blocked_users.insert(aid.clone(), poly_demo::data::demo_blocked_users());
-                }
+                    // Load content policy and blocked users for the first account only.
+                    // (content policy is per-account; use the first demo account's data.)
+                    if !cd.blocked_users.contains_key(aid_c.as_str()) {
+                        cd.content_policy = poly_demo::data::demo_content_policy();
+                        cd.blocked_users.insert(aid_c.clone(), poly_demo::data::demo_blocked_users());
+                    }
+                });
                 // Load voice participants for all voice channels.
                 let servers_snapshot = chat_data.read().servers.clone();
                 for server in &servers_snapshot {
@@ -368,10 +390,10 @@ pub(crate) async fn toggle_demo(
                                 guard.get_voice_participants(&ch.id).await
                                 && !participants.is_empty()
                             {
-                                chat_data
-                                    .write()
-                                    .voice_channel_participants
-                                    .insert(ch.id.clone(), participants);
+                                let chid = ch.id.clone();
+                                chat_data.batch(move |cd| {
+                                    cd.voice_channel_participants.insert(chid, participants);
+                                });
                             }
                         }
                     }
@@ -408,7 +430,7 @@ pub(crate) async fn toggle_demo(
 #[cfg(feature = "demo")]
 pub(crate) async fn toggle_demo_forum_on(
     mut client_manager: Signal<ClientManager>,
-    mut chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
 ) {
     // Guard: bail if platypus is already registered.
     if client_manager.read().sessions.contains_key("demo-platypus") {
@@ -456,14 +478,9 @@ pub(crate) async fn toggle_demo_forum_on(
         handle,
         server_map,
     );
-    chat_data
-        .write()
-        .account_sessions
-        .insert("demo-platypus".to_string(), session);
-
-    // Populate servers + favorites.
-    {
-        let mut cd = chat_data.write();
+    chat_data.batch(move |cd| {
+        cd.account_sessions.insert("demo-platypus".to_string(), session);
+        // Populate servers + favorites.
         for srv in servers {
             if !cd.servers.iter().any(|s| s.id == srv.id) {
                 cd.servers.push(srv.clone());
@@ -472,7 +489,7 @@ pub(crate) async fn toggle_demo_forum_on(
                 cd.favorited_server_ids.push(srv.id.clone());
             }
         }
-    }
+    });
 
     tracing::info!("Forum Demo (demo-platypus) re-activated");
 }
@@ -494,7 +511,7 @@ pub(crate) fn spawn_event_stream_listener(
     account_id: String,
     backend: BackendHandle,
     mut app_state: Signal<AppState>,
-    mut chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
     client_manager: Signal<ClientManager>,
 ) {
     use futures::StreamExt as _;
@@ -528,7 +545,8 @@ pub(crate) fn spawn_event_stream_listener(
                     let selected = app_state.read().nav.selected_channel.clone();
                     if selected.as_deref() == Some(channel_id.as_str()) {
                         // Currently viewing this channel — append message live.
-                        chat_data.write().messages.push(message.clone());
+                        let msg_c = message.clone();
+                        chat_data.batch(move |cd| cd.messages.push(msg_c));
                         tracing::trace!(
                             "Live message in #{channel_id}: {}",
                             message.author.display_name
@@ -557,13 +575,15 @@ pub(crate) fn spawn_event_stream_listener(
                     ref user_id,
                     status,
                 } => {
-                    let mut cd = chat_data.write();
-                    for member in &mut cd.members {
-                        if member.id == *user_id {
-                            member.presence = status;
-                            break;
+                    let user_id_c = user_id.clone();
+                    chat_data.batch(move |cd| {
+                        for member in &mut cd.members {
+                            if member.id == user_id_c {
+                                member.presence = status;
+                                break;
+                            }
                         }
-                    }
+                    });
                 }
                 ClientEvent::TypingStarted { .. } => {
                     // TODO(phase-3): show typing indicator in chat view

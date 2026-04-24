@@ -1,5 +1,6 @@
 //! Friends management panel — special account-social management surface.
 
+use crate::state::BatchedSignal;
 use super::VoiceAccountFooter;
 use super::channel_list::open_direct_message_from_active_account;
 use crate::client_manager::ClientManager;
@@ -48,7 +49,7 @@ enum FriendsManagementTab {
 #[ui_action(FriendsPanelAction)]
 #[component]
 pub fn FriendsPanel(account_id: String, backend_slug: String) -> Element {
-    let chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
     let friends = chat_data.read().friends.get(&account_id).cloned().unwrap_or_default();
     let blocked_users = chat_data.read().blocked_users.get(&account_id).cloned().unwrap_or_default();
 
@@ -207,7 +208,7 @@ fn FriendsFilterBar(
 #[component]
 fn FriendsGrid(friends: Vec<poly_client::User>, backend_slug: String) -> Element {
     let app_state: Signal<AppState> = use_context();
-    let chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
     let nav = navigator();
     let message_label = t("friends-management-message");

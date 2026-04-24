@@ -13,6 +13,7 @@
 //! Extract sub-components rather than growing this file.
 // TODO(phase-2.5): Voice connection banner — tracked in overall-plan.md
 
+use crate::state::BatchedSignal;
 use super::routes::Route;
 use crate::i18n::t;
 use crate::state::chat_data::user_color;
@@ -171,7 +172,7 @@ fn VoiceBannerControls(
     is_muted: bool,
     is_deafened: bool,
     held_count: usize,
-    mut chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
 ) -> Element {
     let mute_title = if is_muted {
         t("voice-unmute-mic")
@@ -198,9 +199,11 @@ fn VoiceBannerControls(
                 class: if is_muted { "voice-ctrl-btn muted" } else { "voice-ctrl-btn" },
                 title: "{mute_title}",
                 onclick: move |_| {
-                    if let Some(ref mut vc) = chat_data.write().voice_connection {
-                        vc.is_muted = !vc.is_muted;
-                    }
+                    chat_data.batch(|cd| {
+                        if let Some(ref mut vc) = cd.voice_connection {
+                            vc.is_muted = !vc.is_muted;
+                        }
+                    });
                 },
                 if is_muted {
                     "🔇"
@@ -212,9 +215,11 @@ fn VoiceBannerControls(
                 class: if is_deafened { "voice-ctrl-btn muted" } else { "voice-ctrl-btn" },
                 title: "{deafen_title}",
                 onclick: move |_| {
-                    if let Some(ref mut vc) = chat_data.write().voice_connection {
-                        vc.is_deafened = !vc.is_deafened;
-                    }
+                    chat_data.batch(|cd| {
+                        if let Some(ref mut vc) = cd.voice_connection {
+                            vc.is_deafened = !vc.is_deafened;
+                        }
+                    });
                 },
                 if is_deafened {
                     "🔕"
@@ -244,7 +249,7 @@ fn VoiceBannerControls(
 #[component]
 pub fn VoiceBanner() -> Element {
     let app_state: Signal<AppState> = use_context();
-    let chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
 
     let voice_conn = chat_data.read().voice_connection.clone();
 

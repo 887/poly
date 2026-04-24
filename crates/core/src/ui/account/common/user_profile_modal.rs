@@ -19,6 +19,7 @@
 //! the hash by calling `history.back()` (which fires the hashchange + resolves
 //! the promise as a harmless no-op).
 
+use crate::state::BatchedSignal;
 use super::channel_list::open_direct_message_from_active_account;
 use super::direct_call::{DirectCallRequest, navigate_to_pending_direct_call_from_active_account};
 use crate::client_manager::ClientManager;
@@ -106,7 +107,7 @@ fn close_modal(mut app_state: Signal<AppState>) {
 #[component]
 pub fn UserProfileModal() -> Element {
     let app_state: Signal<AppState> = use_context();
-    let chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
     let user = app_state.read().nav.profile_modal_user.clone();
     let Some(user) = user else {

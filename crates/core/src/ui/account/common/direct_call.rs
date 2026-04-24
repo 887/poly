@@ -4,6 +4,7 @@
 //! existing global voice controls and participant UI, but are anchored to DMs
 //! rather than real server voice channels.
 
+use crate::state::BatchedSignal;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::{AppState, ChatData, PendingDirectCallRequest};
@@ -46,7 +47,7 @@ const JS_START_CAMERA: &str = r#"
 
 fn active_account_context(
     app_state: Signal<AppState>,
-    chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
 ) -> Option<(String, String)> {
     let account_id = app_state.read().nav.active_account_id.cloned()?;
     let instance_id = chat_data
@@ -62,7 +63,7 @@ fn active_account_context(
 async fn resolve_direct_message_for_active_account(
     user_id: String,
     app_state: Signal<AppState>,
-    mut chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
     client_manager: Signal<ClientManager>,
 ) -> Option<(DmChannel, String)> {
     let (account_id, instance_id) = active_account_context(app_state, chat_data)?;
@@ -86,12 +87,15 @@ async fn resolve_direct_message_for_active_account(
         guard.open_direct_message_channel(&user_id).await.ok()?
     };
 
-    let mut chat_data_write = chat_data.write();
-    chat_data_write.dm_channels.retain(|dm| {
-        !(dm.account_id == account_id && (dm.id == opened_dm.id || dm.user.id == user_id))
-    });
-    chat_data_write.dm_channels.push(opened_dm.clone());
-    drop(chat_data_write);
+    {
+        let dm_c = opened_dm.clone();
+        chat_data.batch(move |cd| {
+            cd.dm_channels.retain(|dm| {
+                !(dm.account_id == account_id && (dm.id == dm_c.id || dm.user.id == user_id))
+            });
+            cd.dm_channels.push(dm_c);
+        });
+    }
 
     Some((opened_dm, instance_id))
 }
@@ -100,7 +104,7 @@ async fn resolve_direct_message_for_active_account(
 pub(crate) fn navigate_to_pending_direct_call_from_active_account(
     request: DirectCallRequest,
     mut app_state: Signal<AppState>,
-    chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
     client_manager: Signal<ClientManager>,
     nav: crate::ui::dioxus_router::Navigator,
 ) {
@@ -177,7 +181,7 @@ fn direct_call_bucket_label(remote_count: usize) -> String {
     }
 }
 
-fn hold_active_call_if_needed(new_channel_id: &str, mut chat_data: Signal<ChatData>) {
+fn hold_active_call_if_needed(new_channel_id: &str, mut chat_data: BatchedSignal<ChatData>) {
     let current = chat_data.read().voice_connection.clone();
     let Some(current) = current else {
         return;
@@ -187,12 +191,12 @@ fn hold_active_call_if_needed(new_channel_id: &str, mut chat_data: Signal<ChatDa
         return;
     }
 
-    let mut writer = chat_data.write();
-    writer
-        .held_voice_connections
-        .retain(|held| held.channel_id != current.channel_id);
-    writer.held_voice_connections.insert(0, current);
-    writer.voice_connection = None;
+    chat_data.batch(move |cd| {
+        cd.held_voice_connections
+            .retain(|held| held.channel_id != current.channel_id);
+        cd.held_voice_connections.insert(0, current);
+        cd.voice_connection = None;
+    });
 }
 
 struct TemporaryCallSpec {
@@ -206,7 +210,7 @@ fn activate_existing_or_new_call(
     spec: TemporaryCallSpec,
     remote_users: Vec<User>,
     start_video: bool,
-    mut chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
 ) {
     let self_session = chat_data
         .read()
@@ -283,26 +287,27 @@ fn activate_existing_or_new_call(
         participant_user_ids: remote_users.iter().map(|user| user.id.clone()).collect(),
     };
 
-    let mut writer = chat_data.write();
-    writer
-        .voice_channel_participants
-        .insert(spec.channel_id.clone(), participants);
-    writer
-        .held_voice_connections
-        .retain(|held| held.channel_id != spec.channel_id);
-    writer.voice_connection = Some(connection);
+    chat_data.batch(move |cd| {
+        cd.voice_channel_participants
+            .insert(spec.channel_id.clone(), participants);
+        cd.held_voice_connections
+            .retain(|held| held.channel_id != spec.channel_id);
+        cd.voice_connection = Some(connection);
+    });
 }
 
-async fn maybe_start_video_camera(start_video: bool, mut chat_data: Signal<ChatData>) {
+async fn maybe_start_video_camera(start_video: bool, mut chat_data: BatchedSignal<ChatData>) {
     if !start_video {
         return;
     }
 
     let mut eval = document::eval(JS_START_CAMERA);
-    if matches!(eval.recv::<String>().await, Ok(ref s) if s == "ok")
-        && let Some(ref mut vc) = chat_data.write().voice_connection
-    {
-        vc.is_video_on = true;
+    if matches!(eval.recv::<String>().await, Ok(ref s) if s == "ok") {
+        chat_data.batch(|cd| {
+            if let Some(ref mut vc) = cd.voice_connection {
+                vc.is_video_on = true;
+            }
+        });
     }
 }
 
@@ -314,7 +319,7 @@ async fn maybe_start_video_camera(start_video: bool, mut chat_data: Signal<ChatD
 pub(crate) fn start_direct_call_from_active_account(
     request: DirectCallRequest,
     app_state: Signal<AppState>,
-    mut chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
     client_manager: Signal<ClientManager>,
 ) {
     spawn(async move {
@@ -377,18 +382,23 @@ pub(crate) fn start_direct_call_from_active_account(
                 })
                 .collect::<Vec<_>>();
 
-            let mut writer = chat_data.write();
-            writer
-                .voice_channel_participants
-                .insert(channel_id.clone(), participants);
-            if let Some(ref mut current) = writer.voice_connection {
-                current
-                    .participant_user_ids
-                    .push(request.target_user.id.clone());
-                current.channel_name = direct_call_label(&remote_users);
-                current.server_name = direct_call_bucket_label(remote_users.len());
+            {
+                let channel_id_c = channel_id.clone();
+                let participants_c = participants;
+                let target_user_id = request.target_user.id.clone();
+                let remote_users_c = remote_users;
+                chat_data.batch(move |cd| {
+                    cd.voice_channel_participants
+                        .insert(channel_id_c, participants_c);
+                    if let Some(ref mut current) = cd.voice_connection {
+                        current
+                            .participant_user_ids
+                            .push(target_user_id);
+                        current.channel_name = direct_call_label(&remote_users_c);
+                        current.server_name = direct_call_bucket_label(remote_users_c.len());
+                    }
+                });
             }
-            drop(writer);
             maybe_start_video_camera(request.start_video, chat_data).await;
             return;
         }
@@ -414,29 +424,31 @@ pub(crate) fn start_direct_call_from_active_account(
 }
 
 /// Swap the active call with the first held call, if any.
-pub(crate) fn swap_to_first_held_call(mut chat_data: Signal<ChatData>) {
+pub(crate) fn swap_to_first_held_call(mut chat_data: BatchedSignal<ChatData>) {
     let current = chat_data.read().voice_connection.clone();
     let Some(current) = current else {
         return;
     };
 
-    let mut writer = chat_data.write();
-    if writer.held_voice_connections.is_empty() {
-        return;
-    }
-    let next = writer.held_voice_connections.remove(0);
-    writer.held_voice_connections.push(current);
-    writer.voice_connection = Some(next);
+    chat_data.batch(move |cd| {
+        if cd.held_voice_connections.is_empty() {
+            return;
+        }
+        let next = cd.held_voice_connections.remove(0);
+        cd.held_voice_connections.push(current);
+        cd.voice_connection = Some(next);
+    });
 }
 
 /// Disconnect the active call and automatically resume the most recent held call.
-pub(crate) fn disconnect_active_call(mut chat_data: Signal<ChatData>) {
-    let mut writer = chat_data.write();
-    if writer.voice_connection.is_none() {
-        return;
-    }
-    writer.voice_connection = writer.held_voice_connections.first().cloned();
-    if !writer.held_voice_connections.is_empty() {
-        writer.held_voice_connections.remove(0);
-    }
+pub(crate) fn disconnect_active_call(chat_data: BatchedSignal<ChatData>) {
+    chat_data.batch(|cd| {
+        if cd.voice_connection.is_none() {
+            return;
+        }
+        cd.voice_connection = cd.held_voice_connections.first().cloned();
+        if !cd.held_voice_connections.is_empty() {
+            cd.held_voice_connections.remove(0);
+        }
+    });
 }

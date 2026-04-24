@@ -2,6 +2,7 @@
 //! for `ChannelType::Forum` channels, and Hacker News feed view for
 //! `ChannelType::HackerNews` channels.
 
+use crate::state::BatchedSignal;
 use crate::client_manager::ClientManager;
 use crate::state::chat_data::user_color;
 use crate::state::{AppState, ChatData};
@@ -132,7 +133,7 @@ fn score_class(score: i64) -> &'static str {
 #[component]
 pub fn ForumView() -> Element {
     let app_state: Signal<AppState> = use_context();
-    let chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
 
     // Channel id resolution (fixes back-button + server-switch bugs):
     //   1. Prefer `nav.selected_channel` (set by sync_route_to_app_state on
@@ -215,7 +216,7 @@ pub fn ForumView() -> Element {
 #[rustfmt::skip]
 #[component]
 pub fn ForumPostView(channel_id: String, post_id: String) -> Element {
-    let chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
     let app_state: Signal<AppState> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
 

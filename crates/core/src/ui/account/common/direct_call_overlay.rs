@@ -4,8 +4,8 @@
 //! temporary direct call becomes connected, so mobile users can swipe back or tap
 //! × to cancel before the call actually starts.
 
-#[cfg(not(target_arch = "wasm32"))]
 use super::direct_call::{DirectCallRequest, start_direct_call_from_active_account};
+use crate::state::BatchedSignal;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
@@ -28,7 +28,7 @@ pub fn OutgoingDirectCallOverlay(
     allow_add_to_active_temporary: bool,
 ) -> Element {
     let mut app_state: Signal<AppState> = use_context();
-    let chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
     #[cfg(not(target_arch = "wasm32"))]
     let client_manager: Signal<ClientManager> = use_context();
     let nav = navigator();

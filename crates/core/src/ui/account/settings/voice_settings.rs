@@ -14,6 +14,7 @@
 //! # 150-line component rule
 //! Every `#[component]` fn body in this module MUST stay under **150 lines**.
 
+use crate::state::BatchedSignal;
 use crate::i18n::t;
 use crate::state::ChatData;
 use dioxus::prelude::*;
@@ -129,7 +130,7 @@ pub fn VoiceSettings() -> Element {
 #[context_menu(none)]
 #[component]
 fn MicDevicePicker(devices: Vec<(String, String)>) -> Element {
-    let mut chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
 
     let mic_id = chat_data
         .read()
@@ -147,7 +148,7 @@ fn MicDevicePicker(devices: Vec<(String, String)>) -> Element {
                 onchange: move |e: Event<FormData>| {
                     let val = e.value();
                     let id = if val.is_empty() { None } else { Some(val) };
-                    chat_data.write().voice_media_settings.mic_device_id = id;
+                    chat_data.batch(move |cd| cd.voice_media_settings.mic_device_id = id);
                 },
                 option { value: "", "{t(\"voice-default-device\")}" }
                 for (id , label) in devices.iter() {
@@ -164,7 +165,7 @@ fn MicDevicePicker(devices: Vec<(String, String)>) -> Element {
 #[context_menu(none)]
 #[component]
 fn SpeakerDevicePicker(devices: Vec<(String, String)>) -> Element {
-    let mut chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
 
     let spk_id = chat_data
         .read()
@@ -182,7 +183,7 @@ fn SpeakerDevicePicker(devices: Vec<(String, String)>) -> Element {
                 onchange: move |e: Event<FormData>| {
                     let val = e.value();
                     let id = if val.is_empty() { None } else { Some(val) };
-                    chat_data.write().voice_media_settings.speaker_device_id = id;
+                    chat_data.batch(move |cd| cd.voice_media_settings.speaker_device_id = id);
                 },
                 option { value: "", "{t(\"voice-default-device\")}" }
                 for (id , label) in devices.iter() {
@@ -199,7 +200,7 @@ fn SpeakerDevicePicker(devices: Vec<(String, String)>) -> Element {
 #[context_menu(none)]
 #[component]
 fn NoiseCancelToggle() -> Element {
-    let mut chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
 
     let noise_cancel = chat_data.read().voice_media_settings.noise_cancel_enabled;
 
@@ -215,8 +216,10 @@ fn NoiseCancelToggle() -> Element {
                         r#type: "checkbox",
                         checked: noise_cancel,
                         onchange: move |_| {
-                            let cur = chat_data.read().voice_media_settings.noise_cancel_enabled;
-                            chat_data.write().voice_media_settings.noise_cancel_enabled = !cur;
+                            chat_data.batch(|cd| {
+                                cd.voice_media_settings.noise_cancel_enabled =
+                                    !cd.voice_media_settings.noise_cancel_enabled;
+                            });
                         },
                     }
                     span { class: "toggle-slider" }

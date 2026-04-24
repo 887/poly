@@ -6,6 +6,7 @@
 //! - `ResetSection`: Handles reset button state and logic
 //! - Helper: `run_reset_flow` async function
 
+use crate::state::BatchedSignal;
 use crate::i18n::t;
 use crate::state::{AppState, LayoutMode};
 use crate::storage::AppSettings;
@@ -295,7 +296,7 @@ enum ResetKind {
 async fn run_reset_flow(
     kind: ResetKind,
     mut client_manager: Signal<crate::client_manager::ClientManager>,
-    mut chat_data: Signal<crate::state::ChatData>,
+    chat_data: BatchedSignal<crate::state::ChatData>,
     mut app_state: Signal<AppState>,
 ) -> Result<(), String> {
     let account_ids = client_manager.read().active_account_ids();
@@ -310,7 +311,7 @@ async fn run_reset_flow(
     }
     client_manager.write().clear_all_backends();
 
-    chat_data.set(crate::state::ChatData::default());
+    chat_data.batch(|cd| *cd = crate::state::ChatData::default());
     let nav = crate::state::NavigationState {
         view: crate::state::RouteSynced::new(crate::state::View::Setup),
         ..Default::default()
@@ -348,7 +349,7 @@ async fn run_reset_flow(
 fn ResetButton(kind: ResetKind, busy: Signal<bool>, on_error: EventHandler<String>) -> Element {
     let app_state: Signal<AppState> = use_context();
     let client_manager: Signal<crate::client_manager::ClientManager> = use_context();
-    let chat_data: Signal<crate::state::ChatData> = use_context();
+    let chat_data: BatchedSignal<crate::state::ChatData> = use_context();
     let mut busy_signal = use_signal(|| *busy.read());
 
     let (label, class_name) = match kind {

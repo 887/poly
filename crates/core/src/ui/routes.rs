@@ -65,6 +65,7 @@ mod internal {
         }
     }
 }
+use crate::state::BatchedSignal;
 use internal::RouteSyncedWrite as _;
 
 use super::account::common::direct_call::{
@@ -974,7 +975,7 @@ pub fn sync_route_to_app_state(route: &Route, mut app_state: Signal<AppState>) {
 fn restore_dm_chat(
     dm_id: String,
     account_id: String,
-    mut chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
     client_manager: Signal<ClientManager>,
 ) {
     let already_set = chat_data
@@ -1034,19 +1035,20 @@ fn restore_dm_chat(
     if let Some(ch) = channel {
         // Single write guard — batching current_channel + current_server into
         // one guard so Dioxus schedules one re-render, not two.
-        let mut w = chat_data.write();
-        w.current_channel = Some(ch);
-        w.current_server = None;
+        chat_data.batch(move |cd| {
+            cd.current_channel = Some(ch);
+            cd.current_server = None;
+        });
     }
 
     spawn(async move {
-        // Single write guard for the three reset fields — one re-render.
-        {
-            let mut w = chat_data.write();
-            w.loading = true;
-            w.messages = Vec::new();
-            w.members = Vec::new();
-        }
+        // Fire an initial reset cascade so the UI paints a loading state
+        // before we await the backend.
+        chat_data.batch(|cd| {
+            cd.loading = true;
+            cd.messages = Vec::new();
+            cd.members = Vec::new();
+        });
 
         let unread_count = chat_data
             .read()
@@ -1057,7 +1059,7 @@ fn restore_dm_chat(
 
         let backend_arc = client_manager.read().get_backend(&account_id);
         let Some(backend_arc) = backend_arc else {
-            chat_data.write().loading = false;
+            chat_data.batch(|cd| cd.loading = false);
             return;
         };
 
@@ -1072,16 +1074,17 @@ fn restore_dm_chat(
         let members = guard.get_channel_members(&dm_id).await.ok();
         drop(guard);
 
-        // Single write guard for the final state update.
-        let mut w = chat_data.write();
+        // ONE terminal cascade for the whole fetch.
+        let mut pending = chat_data.pending_update();
         if let Some(msgs) = messages {
-            w.messages = msgs;
+            pending.set(move |cd| cd.messages = msgs);
             request_restore_scroll_position_or_bottom(&dm_id);
         }
         if let Some(mbrs) = members {
-            w.members = mbrs;
+            pending.set(move |cd| cd.members = mbrs);
         }
-        w.loading = false;
+        pending.set(|cd| cd.loading = false);
+        pending.apply();
     });
 }
 
@@ -1243,7 +1246,7 @@ fn DmsHome(backend: String, instance_id: String, account_id: String) -> Element 
 #[component]
 fn DmChat(backend: String, instance_id: String, account_id: String, dm_id: String) -> Element {
     let mut app_state: Signal<AppState> = use_context();
-    let chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
     let dm_id_for_pending = dm_id.clone();
     let account_id_for_pending = account_id.clone();
@@ -1377,7 +1380,7 @@ fn DmPendingCallInner(
     start_video: bool,
     allow_add_to_active_temporary: bool,
 ) -> Element {
-    let chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
     let dm_id_for_effect = dm_id.clone();
     let account_id_for_effect = account_id.clone();
@@ -1416,7 +1419,7 @@ fn DmMediaViewerRoute(
     message_id: String,
     attachment_index: usize,
 ) -> Element {
-    let chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
     let overlay_channel_id = dm_id.clone();
     let overlay_message_id = message_id.clone();
@@ -1455,7 +1458,7 @@ fn ServerMediaViewerRoute(
     message_id: String,
     attachment_index: usize,
 ) -> Element {
-    let chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
     let app_state: Signal<AppState> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
     let nav = navigator();
@@ -1562,7 +1565,7 @@ fn ServerHome(
     account_id: String,
     server_id: String,
 ) -> Element {
-    let chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
     let app_state: Signal<AppState> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
 
@@ -1663,7 +1666,7 @@ fn ServerChat(
     server_id: String,
     channel_id: String,
 ) -> Element {
-    let chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
     let app_state: Signal<AppState> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
     let nav = navigator();

@@ -4,6 +4,7 @@
 //! the left-side direct-message shell remains visible. Results are scoped to the
 //! currently active account and only include DMs and group conversations.
 
+use crate::state::BatchedSignal;
 use crate::i18n::{t, t_args};
 use crate::state::{AppState, ChatData};
 use crate::ui::main_layout::close_mobile_drawer;
@@ -170,7 +171,7 @@ fn ConversationTypeFilters(enabled_types: Signal<std::collections::HashSet<Strin
 #[component]
 pub fn ConversationSearchView() -> Element {
     let app_state: Signal<AppState> = use_context();
-    let chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
     let query = use_signal(String::new);
     let enabled_types: Signal<std::collections::HashSet<String>> = use_signal(|| {
         ["dms", "groups"]

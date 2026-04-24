@@ -10,6 +10,7 @@
 //! Each `#[component]` fn body MUST stay under 150 lines of RSX+logic.
 //! Extract sub-components rather than growing this file.
 
+use crate::state::BatchedSignal;
 use crate::i18n::{t, t_args};
 use crate::state::{AppState, ChatData};
 use crate::ui::actions::{ActionCx, UiAction};
@@ -495,7 +496,7 @@ pub fn SearchPage(
     locked_account_id: Option<String>,
 ) -> Element {
     let mut app_state: Signal<AppState> = use_context();
-    let chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: Signal<crate::client_manager::ClientManager> = use_context();
     let query = use_signal(String::new);
     let initial_type_seed = app_state.read().search_type_seed.clone();

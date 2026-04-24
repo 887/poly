@@ -10,6 +10,7 @@
 //! params (per the github backend doc-comment) so users get the full code
 //! search experience without us having to host an index.
 
+use crate::state::BatchedSignal;
 use dioxus::prelude::*;
 use poly_client::FileEntry;
 
@@ -22,7 +23,7 @@ use poly_ui_macros::{context_menu, ui_action};
 #[rustfmt::skip]
 #[component]
 pub fn CodeExplorerView(#[props(default)] route_channel_id: String) -> Element {
-    let chat_data = use_context::<Signal<ChatData>>();
+    let chat_data = use_context::<BatchedSignal<ChatData>>();
     let client_manager = use_context::<Signal<crate::client_manager::ClientManager>>();
 
     let (channel_id, server_id) = {

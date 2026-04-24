@@ -3,6 +3,7 @@
 //! The leave server action uses an inline confirm widget (no JS confirm())
 //! to avoid triggering the browser native dialog.
 
+use crate::state::BatchedSignal;
 use super::super::super::super::routes::Route;
 use crate::i18n::{t, t_args};
 use crate::state::{AppState, ChatData};
@@ -96,7 +97,7 @@ fn LeaveServerConfirm(
     oncancel: EventHandler<MouseEvent>,
 ) -> Element {
     let mut app_state: Signal<AppState> = use_context();
-    let mut chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
 
     let aid_nav = account_id.clone();
     let iid_nav = instance_id.clone();
@@ -120,19 +121,19 @@ fn LeaveServerConfirm(
                     onclick: move |_| {
                         // Remove server from chat data
                         let sid = sid_remove.clone();
-                        chat_data.write().servers.retain(|s| s.id != sid);
-                        chat_data.write().favorited_server_ids.retain(|id| id != &sid);
-                        let new_favs = chat_data.read().favorited_server_ids.clone();
+                        let new_favs = chat_data.batch(|cd| {
+                            cd.servers.retain(|s| s.id != sid);
+                            cd.favorited_server_ids.retain(|id| id != &sid);
+                            cd.account_server_order
+                                .values_mut()
+                                .for_each(|v| {
+                                    v.retain(|id| id != &sid);
+                                });
+                            cd.favorited_server_ids.clone()
+                        });
                         spawn(async move {
                             crate::ui::favorites_sidebar::persist_favorites(new_favs).await;
                         });
-                        chat_data
-                            .write()
-                            .account_server_order
-                            .values_mut() // Navigate back to the account's DM home
-                            .for_each(|v| {
-                                v.retain(|id| id != &sid);
-                            });
                         navigator()
                             .replace(Route::DmsHome {
                                 backend: bslug_nav.clone(),

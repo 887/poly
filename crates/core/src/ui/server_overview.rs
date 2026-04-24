@@ -3,6 +3,7 @@
 //! Shows a searchable grid of all repos (servers) belonging to the active
 //! account, with open issue/PR counts and quick-nav to each repo's channels.
 
+use crate::state::BatchedSignal;
 use chrono::{DateTime, Utc};
 use dioxus::prelude::*;
 
@@ -19,7 +20,7 @@ pub fn ServerOverviewPage(
     instance_id: String,
     account_id: String,
 ) -> Element {
-    let chat_data = use_context::<Signal<ChatData>>();
+    let chat_data = use_context::<BatchedSignal<ChatData>>();
     let mut search_query = use_signal(String::new);
 
     let query = search_query.read().to_lowercase();

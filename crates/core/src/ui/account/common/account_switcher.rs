@@ -9,6 +9,7 @@
 //! Extract sub-components rather than growing this file.
 // TODO(phase-2.5.20): Account switcher bar for DMs
 
+use crate::state::BatchedSignal;
 use super::super::super::routes::Route;
 use crate::i18n::t;
 use crate::state::{AppState, ChatData, SettingsSection};
@@ -25,7 +26,7 @@ use poly_ui_macros::{context_menu, ui_action};
 #[component]
 pub fn AccountSwitcher() -> Element {
     let mut app_state: Signal<AppState> = use_context();
-    let mut chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
     let voice_conn = chat_data.read().voice_connection.clone();
 
     let is_muted = voice_conn.as_ref().is_some_and(|vc| vc.is_muted);
@@ -50,9 +51,11 @@ pub fn AccountSwitcher() -> Element {
                     class: if is_muted { "account-switcher-control-btn active" } else { "account-switcher-control-btn" },
                     title: if is_muted { t("voice-unmute") } else { t("voice-mute") },
                     onclick: move |_| {
-                        if let Some(ref mut vc) = chat_data.write().voice_connection {
-                            vc.is_muted = !vc.is_muted;
-                        }
+                        chat_data.batch(|cd| {
+                            if let Some(ref mut vc) = cd.voice_connection {
+                                vc.is_muted = !vc.is_muted;
+                            }
+                        });
                     },
                     if is_muted {
                         "🔇"
@@ -65,9 +68,11 @@ pub fn AccountSwitcher() -> Element {
                     class: if is_deafened { "account-switcher-control-btn active" } else { "account-switcher-control-btn" },
                     title: if is_deafened { t("voice-undeafen") } else { t("voice-deafen") },
                     onclick: move |_| {
-                        if let Some(ref mut vc) = chat_data.write().voice_connection {
-                            vc.is_deafened = !vc.is_deafened;
-                        }
+                        chat_data.batch(|cd| {
+                            if let Some(ref mut vc) = cd.voice_connection {
+                                vc.is_deafened = !vc.is_deafened;
+                            }
+                        });
                     },
                     if is_deafened {
                         "🔕"

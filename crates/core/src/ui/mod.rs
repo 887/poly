@@ -98,7 +98,7 @@ pub(crate) use runtime_js::load_js_asset;
 pub use setup_wizard::SetupWizard;
 
 use crate::client_manager::{ClientManager, SignupEntry};
-use crate::state::{AppState, ChatData, LayoutMode, SettingsSection, View};
+use crate::state::{AppState, BatchedSignal, ChatData, LayoutMode, SettingsSection, View};
 use dioxus::prelude::*;
 use poly_ui_macros::{context_menu, ui_action};
 use routes::{route_targets_unknown_account, sync_route_to_app_state};
@@ -789,7 +789,7 @@ pub static AUTO_SIGNIN_DONE: std::sync::atomic::AtomicBool =
 #[cfg(debug_assertions)]
 fn auto_signin_test_accounts(
     client_manager: Signal<ClientManager>,
-    chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
 ) {
     let entries: Vec<poly_client::TestAccountEntry> =
         client_manager.read().test_account_entries.to_vec();
@@ -865,7 +865,7 @@ fn auto_signin_test_accounts(
 async fn restore_poly_accounts(
     storage: &crate::storage::Storage,
     mut client_manager: Signal<ClientManager>,
-    mut chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
 ) {
     use crate::client_manager::BackendHandle;
     use poly_client::ClientBackend as _;
@@ -929,10 +929,12 @@ async fn restore_poly_accounts(
                     backend_handle.clone(),
                     server_map,
                 );
-                chat_data
-                    .write()
-                    .account_sessions
-                    .insert(account_id.clone(), session);
+                {
+                    let aid = account_id.clone();
+                    chat_data.batch(move |cd| {
+                        cd.account_sessions.insert(aid, session);
+                    });
+                }
 
                 // Populate servers in chat_data and update the offline server
                 // metadata cache so they survive the next restart even when the
@@ -953,20 +955,20 @@ async fn restore_poly_accounts(
                         .collect();
                     let new_fav_ids: Vec<String> = servers.iter().map(|s| s.id.clone()).collect();
 
-                    let mut cd = chat_data.write();
-                    for id in &new_fav_ids {
-                        if !cd.favorited_server_ids.contains(id) {
-                            cd.favorited_server_ids.push(id.clone());
+                    let all_fav_ids = chat_data.batch(|cd| {
+                        for id in &new_fav_ids {
+                            if !cd.favorited_server_ids.contains(id) {
+                                cd.favorited_server_ids.push(id.clone());
+                            }
                         }
-                    }
-                    // Avoid duplicates if servers list was already populated.
-                    for srv in servers {
-                        if !cd.servers.iter().any(|s| s.id == srv.id) {
-                            cd.servers.push(srv);
+                        // Avoid duplicates if servers list was already populated.
+                        for srv in servers {
+                            if !cd.servers.iter().any(|s| s.id == srv.id) {
+                                cd.servers.push(srv);
+                            }
                         }
-                    }
-                    let all_fav_ids = cd.favorited_server_ids.clone();
-                    drop(cd);
+                        cd.favorited_server_ids.clone()
+                    });
 
                     // Persist cache + favourites without holding any Signal lock.
                     if let Err(e) = storage.upsert_offline_server_cache(&cache_records).await {
@@ -978,17 +980,22 @@ async fn restore_poly_accounts(
                 // Fetch DMs and friends in background.
                 {
                     let guard = backend_handle.read().await;
-                    if let Ok(dms) = guard.get_dm_channels().await {
-                        chat_data.write().dm_channels.extend(dms);
-                    }
-                    if let Ok(friends) = guard.get_friends().await {
-                        for friend in friends {
-                            let already = chat_data.read().friends.get(&account_id).map_or(false, |v| v.iter().any(|f| f.id == friend.id));
-                            if !already {
-                                chat_data.write().friends.entry(account_id.clone()).or_default().push(friend);
+                    let dms = guard.get_dm_channels().await.ok();
+                    let friends = guard.get_friends().await.ok();
+                    let aid = account_id.clone();
+                    chat_data.batch(move |cd| {
+                        if let Some(dms) = dms {
+                            cd.dm_channels.extend(dms);
+                        }
+                        if let Some(friends) = friends {
+                            for friend in friends {
+                                let already = cd.friends.get(&aid).is_some_and(|v| v.iter().any(|f| f.id == friend.id));
+                                if !already {
+                                    cd.friends.entry(aid.clone()).or_default().push(friend);
+                                }
                             }
                         }
-                    }
+                    });
                 }
 
                 tracing::info!("Restored poly account: {account_id}");
@@ -1018,10 +1025,13 @@ async fn restore_poly_accounts(
                 client_manager
                     .write()
                     .register_offline_session(token.account_id.clone(), offline_session.clone());
-                chat_data
-                    .write()
-                    .account_sessions
-                    .insert(token.account_id.clone(), offline_session);
+                {
+                    let aid_c = token.account_id.clone();
+                    let sess_c = offline_session;
+                    chat_data.batch(move |cd| {
+                        cd.account_sessions.insert(aid_c, sess_c);
+                    });
+                }
 
                 // Restore cached server metadata so Bar 1 can render server
                 // icons (shown as offline/disconnected) without a network round-trip.
@@ -1049,12 +1059,13 @@ async fn restore_poly_accounts(
                     })
                     .collect();
                 if !account_servers.is_empty() {
-                    let mut cd = chat_data.write();
-                    for srv in account_servers {
-                        if !cd.servers.iter().any(|s| s.id == srv.id) {
-                            cd.servers.push(srv);
+                    chat_data.batch(move |cd| {
+                        for srv in account_servers {
+                            if !cd.servers.iter().any(|s| s.id == srv.id) {
+                                cd.servers.push(srv);
+                            }
                         }
-                    }
+                    });
                 }
             }
         }
@@ -1073,7 +1084,7 @@ async fn init_storage(
     mut app_state: Signal<AppState>,
     mut locale_sig: Signal<String>,
     mut client_manager: Signal<ClientManager>,
-    mut chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
 ) {
     match crate::storage::Storage::init().await {
         Ok(storage) => {
@@ -1106,8 +1117,10 @@ async fn init_storage(
                     // Restore favorited servers so Bar 1 repopulates immediately
                     // on launch — before the server list is fetched from the network.
                     if !settings.favorited_server_ids.is_empty() {
-                        chat_data.write().favorited_server_ids =
-                            settings.favorited_server_ids.clone();
+                        let fav_ids = settings.favorited_server_ids.clone();
+                        chat_data.batch(move |cd| {
+                            cd.favorited_server_ids = fav_ids;
+                        });
                         tracing::info!(
                             "Restored {} favorited server(s) from storage",
                             settings.favorited_server_ids.len()
@@ -1261,7 +1274,7 @@ fn router_config(
 fn AppBody(storage_ready: bool, setup_complete: bool, app_state: Signal<AppState>) -> Element {
     // Pull context signals so we can activate demo after setup completes.
     let client_manager: Signal<ClientManager> = use_context();
-    let chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
     rsx! {
         if !storage_ready {
             div { class: "storage-loading" }
@@ -1389,7 +1402,7 @@ fn StartupOverlay(state: StartupOverlayState) -> Element {
 /// - `Signal<String>` — current locale (from [`crate::i18n::provide_locale_context`])
 /// - `Signal<crate::theme::ThemeConfig>` — active theme (from [`provide_context`])
 /// - `Signal<ClientManager>` — client manager for active backends
-/// - `Signal<ChatData>` — reactive chat data store
+/// - `BatchedSignal<ChatData>` — reactive chat data store
 #[rustfmt::skip]
 #[ui_action(None)]
 #[context_menu(inherit)]
@@ -1421,7 +1434,8 @@ pub fn App() -> Element {
 
     // ChatData is declared here (before the startup use_effect) so that the
     // auto-connect helper can capture it by copy in the same effect.
-    let chat_data: Signal<ChatData> = use_signal(ChatData::default);
+    let chat_data: BatchedSignal<ChatData> =
+        BatchedSignal::from_signal(use_signal(ChatData::default));
     provide_context(chat_data);
 
     // Register all native backend signup entries.  This mirrors the WIT

@@ -4,6 +4,7 @@
 //! it shows pinned messages from all conversations for the active account and
 //! lets the user jump directly back to the source DM/group message.
 
+use crate::state::BatchedSignal;
 use super::VoiceAccountFooter;
 use super::chat_view::{highlight_message, open_message_hit};
 use crate::client_manager::ClientManager;
@@ -105,7 +106,7 @@ fn build_saved_sources(items: &[SavedPinnedItem]) -> Vec<SavedSourceSummary> {
 #[component]
 pub fn SavedItemsView() -> Element {
     let app_state: Signal<AppState> = use_context();
-    let chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
     let nav = navigator();
     let title = t("saved-items-title");

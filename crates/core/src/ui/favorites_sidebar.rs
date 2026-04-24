@@ -19,6 +19,7 @@
 //! Each `#[component]` fn body MUST stay under 150 lines of RSX+logic.
 //! Extract sub-components rather than growing this file.
 
+use crate::state::BatchedSignal;
 use super::routes::Route;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
@@ -116,7 +117,7 @@ pub fn FavoritesBar() -> Element {
     let app_state: Signal<AppState> = use_context();
     let current_view = *app_state.read().nav.view;
     let client_manager: Signal<ClientManager> = use_context();
-    let mut chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
 
     let servers = chat_data.read().servers.clone();
     let demo_active = client_manager.read().demo_active;
@@ -236,8 +237,7 @@ pub fn FavoritesBar() -> Element {
                 ondrop: move |evt| {
                     evt.prevent_default();
                     drag_over.set(false);
-                    let new_favorites = {
-                        let mut cd = chat_data.write();
+                    let new_favorites = chat_data.batch(|cd| {
                         let drag_id = cd.dragging_server_id.clone();
                         let drag_src = cd.drag_source.clone();
                         // Per-item ondrop handles positional drops via stop_propagation.
@@ -256,7 +256,7 @@ pub fn FavoritesBar() -> Element {
                         cd.drag_source = DragSource::None;
                         cd.drag_over_id = None;
                         cd.favorited_server_ids.clone()
-                    };
+                    });
                     spawn(async move {
                         persist_favorites(new_favorites).await;
                     });
@@ -395,7 +395,7 @@ pub fn FavoritesBar() -> Element {
 #[ui_action(inherit)]
 #[component]
 fn AccountIcon(account_id: String, is_active: bool) -> Element {
-    let mut chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
     let app_state: Signal<AppState> = use_context();
 
@@ -489,9 +489,10 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
 
     let drag_start_id = account_id.clone();
     let on_account_drag_start = move |_: Event<DragData>| {
-        let mut cd = chat_data.write();
-        cd.dragging_server_id = Some(drag_start_id.clone());
-        cd.drag_source = DragSource::AccountIcon;
+        chat_data.batch(|cd| {
+            cd.dragging_server_id = Some(drag_start_id.clone());
+            cd.drag_source = DragSource::AccountIcon;
+        });
     };
 
     let drag_over_id = account_id.clone();
@@ -501,15 +502,16 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
         }
         evt.prevent_default();
         evt.stop_propagation();
-        chat_data.write().drag_over_id = Some(drag_over_id.clone());
+        chat_data.batch(|cd| cd.drag_over_id = Some(drag_over_id.clone()));
     };
 
     let drag_leave_id = account_id.clone();
     let on_account_drag_leave = move |_: Event<DragData>| {
-        let mut cd = chat_data.write();
-        if cd.drag_over_id.as_deref() == Some(drag_leave_id.as_str()) {
-            cd.drag_over_id = None;
-        }
+        chat_data.batch(|cd| {
+            if cd.drag_over_id.as_deref() == Some(drag_leave_id.as_str()) {
+                cd.drag_over_id = None;
+            }
+        });
     };
 
     let drop_target_id = account_id.clone();
@@ -520,19 +522,18 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
         }
         evt.prevent_default();
         evt.stop_propagation();
-        let snapshot = {
-            let mut cd = chat_data.write();
+        let snapshot = chat_data.batch(|cd| {
             let dragging = cd.dragging_server_id.clone();
             cd.drag_over_id = None;
             let Some(drag_id) = dragging else {
                 cd.dragging_server_id = None;
                 cd.drag_source = DragSource::None;
-                return;
+                return None;
             };
             if drag_id == drop_target_id {
                 cd.dragging_server_id = None;
                 cd.drag_source = DragSource::None;
-                return;
+                return None;
             }
             // Seed account_order from the live accounts if empty so we have
             // something to reorder against. Live list is sorted so the
@@ -564,7 +565,7 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
             cd.dragging_server_id = None;
             cd.drag_source = DragSource::None;
             Some(cd.account_order.clone())
-        };
+        });
         if let Some(order) = snapshot {
             spawn(async move {
                 persist_account_order(order).await;
@@ -573,10 +574,11 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
     };
 
     let on_account_drag_end = move |_: Event<DragData>| {
-        let mut cd = chat_data.write();
-        cd.dragging_server_id = None;
-        cd.drag_source = DragSource::None;
-        cd.drag_over_id = None;
+        chat_data.batch(|cd| {
+            cd.dragging_server_id = None;
+            cd.drag_source = DragSource::None;
+            cd.drag_over_id = None;
+        });
     };
 
     let account_item_class = match (is_active, is_drag_over_account) {
@@ -638,14 +640,13 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                 // Clear server/channel state — the target route will reload what's needed.
                 // Batch into one write guard so only a single Dioxus re-render cascade
                 // is scheduled (5 separate writes → 5 cascades → WASM scheduler freeze).
-                {
-                    let mut cd = chat_data.write();
+                chat_data.batch(|cd| {
                     cd.current_server = None;
                     cd.current_channel = None;
                     cd.channels.clear();
                     cd.messages.clear();
                     cd.members.clear();
-                }
+                });
 
                 // If we have a stored last route for this account, restore it.
                 // This makes account-switching feel like a true tab switch.
@@ -812,7 +813,7 @@ fn FavoriteServerIcon(
 ) -> Element {
     let mut app_state: Signal<AppState> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
-    let mut chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
 
     // Get account's connection and presence status
     let _account_conn_class: &'static str = client_manager
@@ -923,9 +924,10 @@ fn FavoriteServerIcon(
             ondragstart: {
                 let sid = server_id.clone();
                 move |_| {
-                    let mut cd = chat_data.write();
-                    cd.dragging_server_id = Some(sid.clone());
-                    cd.drag_source = DragSource::FavoriteServer;
+                    chat_data.batch(|cd| {
+                        cd.dragging_server_id = Some(sid.clone());
+                        cd.drag_source = DragSource::FavoriteServer;
+                    });
                 }
             },
             // Drag over this item — highlight as drop target
@@ -934,7 +936,7 @@ fn FavoriteServerIcon(
                 move |evt: Event<DragData>| {
                     evt.prevent_default();
                     evt.stop_propagation();
-                    chat_data.write().drag_over_id = Some(sid.clone());
+                    chat_data.batch(|cd| cd.drag_over_id = Some(sid.clone()));
                 }
             },
             // Drag leave — clear highlight if we are still the target
@@ -945,7 +947,7 @@ fn FavoriteServerIcon(
                         chat_data.read().drag_over_id.as_deref()
                         == Some(sid.as_str());
                     if currently_us {
-                        chat_data.write().drag_over_id = None;
+                        chat_data.batch(|cd| cd.drag_over_id = None);
                     }
                 }
             },
@@ -956,21 +958,20 @@ fn FavoriteServerIcon(
                     evt.prevent_default();
                     // Stop bubbling so the nav's ondrop doesn't double-handle
                     evt.stop_propagation();
-                    let new_favorites = {
-                        let mut cd = chat_data.write();
+                    let new_favorites = chat_data.batch(|cd| {
                         let dragging = cd.dragging_server_id.clone();
                         let src = cd.drag_source.clone();
                         cd.drag_over_id = None;
                         let Some(drag_id) = dragging else {
                             cd.dragging_server_id = None;
                             cd.drag_source = DragSource::None;
-                            return;
+                            return None;
                         };
                         let target_id = tid.clone();
                         if drag_id == target_id {
                             cd.dragging_server_id = None;
                             cd.drag_source = DragSource::None;
-                            return;
+                            return None;
                         }
                         match src {
                             DragSource::FavoriteServer => {
@@ -1010,19 +1011,22 @@ fn FavoriteServerIcon(
                         }
                         cd.dragging_server_id = None;
                         cd.drag_source = DragSource::None;
-                        cd.favorited_server_ids.clone()
-                    };
-                    spawn(async move {
-                        persist_favorites(new_favorites).await;
+                        Some(cd.favorited_server_ids.clone())
                     });
+                    if let Some(favs) = new_favorites {
+                        spawn(async move {
+                            persist_favorites(favs).await;
+                        });
+                    }
                 }
             },
             // Drag end — always clean up regardless of drop target
             ondragend: move |_| {
-                let mut cd = chat_data.write();
-                cd.dragging_server_id = None;
-                cd.drag_source = DragSource::None;
-                cd.drag_over_id = None;
+                chat_data.batch(|cd| {
+                    cd.dragging_server_id = None;
+                    cd.drag_source = DragSource::None;
+                    cd.drag_over_id = None;
+                });
             },
             if let Some(ref url) = icon_url {
                 img {
@@ -1087,7 +1091,7 @@ pub async fn load_server_data(
     server_id: String,
     app_state: Signal<AppState>,
     client_manager: Signal<ClientManager>,
-    chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
 ) {
     load_server_data_internal(server_id, app_state, client_manager, chat_data, true).await;
 }
@@ -1096,7 +1100,7 @@ pub async fn load_server_shell_data(
     server_id: String,
     app_state: Signal<AppState>,
     client_manager: Signal<ClientManager>,
-    chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
 ) {
     load_server_data_internal(server_id, app_state, client_manager, chat_data, false).await;
 }
@@ -1105,23 +1109,29 @@ async fn load_server_data_internal(
     server_id: String,
     mut app_state: Signal<AppState>,
     client_manager: Signal<ClientManager>,
-    mut chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
     auto_select_first_text_channel: bool,
 ) {
-    chat_data.write().loading = true;
+    // Show the spinner immediately so the content area doesn't render a
+    // stale server while we fetch the new one.  Keep this as its own
+    // cascade — the UI needs to react before we start awaiting.
+    chat_data.batch(|cd| cd.loading = true);
 
     // Find which backend owns this server
     let backend_info = client_manager.read().get_backend_for_server(&server_id);
     let Some((_account_id, backend)) = backend_info else {
-        chat_data.write().loading = false;
+        chat_data.batch(|cd| cd.loading = false);
         return;
     };
+
+    // Accumulate every async-fetched mutation into one terminal batch.
+    let mut pending = chat_data.pending_update();
 
     // Load server details
     {
         let guard = backend.read().await;
         if let Ok(server) = guard.get_server(&server_id).await {
-            chat_data.write().current_server = Some(server);
+            pending.set(move |cd| cd.current_server = Some(server));
         }
     }
 
@@ -1154,7 +1164,7 @@ async fn load_server_data_internal(
                 .cloned()
         });
 
-    chat_data.write().channels = channels;
+    pending.set(move |cd| cd.channels = channels);
 
     // Only auto-open the first text channel when the user is already in the
     // content area workflow. When the mobile left drawer is open and the user
@@ -1168,7 +1178,8 @@ async fn load_server_data_internal(
              ServerHome so no nav.push follows — we need current_channel set \
              synchronously or ChatView renders blank between click and effect",
         );
-        chat_data.write().current_channel = Some(ch.clone());
+        let ch_for_current = ch.clone();
+        pending.set(move |cd| cd.current_channel = Some(ch_for_current));
 
         // Load messages for first channel
         let guard = backend.read().await;
@@ -1176,12 +1187,12 @@ async fn load_server_data_internal(
             .get_messages(&ch.id, initial_message_query(ch.unread_count))
             .await
         {
-            chat_data.write().messages = messages;
+            pending.set(move |cd| cd.messages = messages);
             request_restore_scroll_position_or_bottom(&ch.id);
         }
         // Load members
         if let Ok(members) = guard.get_channel_members(&ch.id).await {
-            chat_data.write().members = members;
+            pending.set(move |cd| cd.members = members);
         }
     }
     if !auto_select_first_text_channel {
@@ -1191,15 +1202,18 @@ async fn load_server_data_internal(
              when loading server shell only (mobile drawer context) — must be \
              synchronous so ChatView doesn't briefly render a stale channel",
         );
-        let mut cd = chat_data.write();
-        cd.current_channel = None;
-        cd.messages.clear();
-        cd.members.clear();
+        pending.set(|cd| {
+            cd.current_channel = None;
+            cd.messages.clear();
+            cd.members.clear();
+        });
     }
 
-    chat_data.write().loading = false;
+    pending.set(|cd| cd.loading = false);
+    // ONE terminal cascade for the whole fetch.
+    pending.apply();
     // Apply any user-defined icon/banner overrides from storage.
-    apply_server_icon_overrides(&mut chat_data).await;
+    apply_server_icon_overrides(chat_data).await;
 }
 
 /// Apply user icon and banner overrides from `AppSettings` to all servers in
@@ -1210,7 +1224,7 @@ async fn load_server_data_internal(
 /// navigations and app restarts.
 ///
 /// No-ops silently if storage is not yet initialised.
-async fn apply_server_icon_overrides(chat_data: &mut Signal<crate::state::ChatData>) {
+async fn apply_server_icon_overrides(chat_data: BatchedSignal<crate::state::ChatData>) {
     let Some(storage) = crate::STORAGE.get() else {
         return;
     };
@@ -1220,23 +1234,24 @@ async fn apply_server_icon_overrides(chat_data: &mut Signal<crate::state::ChatDa
     if settings.server_icon_overrides.is_empty() && settings.server_banner_overrides.is_empty() {
         return;
     }
-    let mut cd = chat_data.write();
-    for server in &mut cd.servers {
-        if let Some(url) = settings.server_icon_overrides.get(&server.id) {
-            server.icon_url = Some(url.clone());
+    chat_data.batch(|cd| {
+        for server in &mut cd.servers {
+            if let Some(url) = settings.server_icon_overrides.get(&server.id) {
+                server.icon_url = Some(url.clone());
+            }
+            if let Some(url) = settings.server_banner_overrides.get(&server.id) {
+                server.banner_url = Some(url.clone());
+            }
         }
-        if let Some(url) = settings.server_banner_overrides.get(&server.id) {
-            server.banner_url = Some(url.clone());
+        if let Some(ref mut current) = cd.current_server {
+            if let Some(url) = settings.server_icon_overrides.get(&current.id) {
+                current.icon_url = Some(url.clone());
+            }
+            if let Some(url) = settings.server_banner_overrides.get(&current.id) {
+                current.banner_url = Some(url.clone());
+            }
         }
-    }
-    if let Some(ref mut current) = cd.current_server {
-        if let Some(url) = settings.server_icon_overrides.get(&current.id) {
-            current.icon_url = Some(url.clone());
-        }
-        if let Some(url) = settings.server_banner_overrides.get(&current.id) {
-            current.banner_url = Some(url.clone());
-        }
-    }
+    });
 }
 ///
 /// Called after every mutation of `ChatData.favorited_server_ids` to survive
@@ -1295,18 +1310,18 @@ pub async fn restore_server_channel(
     channel_id: String,
     mut app_state: Signal<AppState>,
     client_manager: Signal<ClientManager>,
-    mut chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
 ) -> Option<String> {
     // One initial cascade so the UI can paint a loading state while we
     // fetch. Every other mutation is deferred to a single terminal write
     // at the end — individual per-field writes were starving the WASM
     // scheduler on Teams (CLAUDE.md hang #1, same class as AccountIcon
     // onclick batching fix in commit a761fe01).
-    chat_data.write().loading = true;
+    chat_data.batch(|cd| cd.loading = true);
 
     let backend_info = client_manager.read().get_backend_for_server(&server_id);
     let Some((_account_id, backend)) = backend_info else {
-        chat_data.write().loading = false;
+        chat_data.batch(|cd| cd.loading = false);
         return None;
     };
 
@@ -1421,8 +1436,7 @@ pub async fn restore_server_channel(
     // Single terminal cascade — everything that was read above lands in one
     // write-guard drop, so subscribers see one consistent state update
     // instead of 5-7 intermediate ones.
-    {
-        let mut cd = chat_data.write();
+    chat_data.batch(|cd| {
         if let Some(server) = loaded_server {
             cd.current_server = Some(server);
         }
@@ -1441,14 +1455,14 @@ pub async fn restore_server_channel(
             cd.voice_channel_participants.insert(id, participants);
         }
         cd.loading = false;
-    }
+    });
 
     if let Some(ch_id) = request_scroll_for {
         request_restore_scroll_position_or_bottom(&ch_id);
     }
 
     // Apply any user-defined icon/banner overrides from storage.
-    apply_server_icon_overrides(&mut chat_data).await;
+    apply_server_icon_overrides(chat_data).await;
 
     target.map(|channel| channel.id)
 }

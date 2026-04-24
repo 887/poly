@@ -13,6 +13,7 @@
 //! - Mute / Unmute Channel (toggle, local state for now)
 //! - Copy Channel ID
 
+use crate::state::BatchedSignal;
 use crate::i18n::t;
 use crate::nav;
 use crate::state::{AppState, ChatData};
@@ -30,7 +31,7 @@ use poly_ui_macros::{context_menu, ui_action};
 #[component]
 pub fn ChannelContextMenu() -> Element {
     let mut app_state: Signal<AppState> = use_context();
-    let mut chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
 
     let Some(menu) = app_state.read().channel_context_menu.clone() else {
         return rsx! {};
@@ -71,7 +72,7 @@ pub fn ChannelContextMenu() -> Element {
                     ChannelMenuItem {
                         label: t("channel-menu-mark-read"),
                         onclick: move |_| {
-                            mark_channel_as_read(&mut chat_data, &channel_id);
+                            mark_channel_as_read(chat_data, &channel_id);
                             close();
                         },
                     }

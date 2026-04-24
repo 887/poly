@@ -21,6 +21,7 @@ mod overview;
 mod profile;
 mod roles;
 
+use crate::state::BatchedSignal;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::AppState;
@@ -515,7 +516,7 @@ pub fn ServerSettingsPage(
     }
     let _locale = crate::i18n::use_locale().read().clone();
     let search_text = use_signal(String::new);
-    let chat_data: Signal<crate::state::ChatData> = use_context();
+    let chat_data: BatchedSignal<crate::state::ChatData> = use_context();
     let app_state: Signal<AppState> = use_context();
     let mut published_section = use_signal(String::new);
 

@@ -20,6 +20,7 @@
 //! Extract sub-components rather than growing this file.
 // TODO(phase-2.5.19): Account status bar
 
+use crate::state::BatchedSignal;
 use super::super::super::routes::Route;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
@@ -285,7 +286,7 @@ fn AccountBarControls(
     is_muted: bool,
     is_deafened: bool,
     app_state: Signal<AppState>,
-    mut chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
 ) -> Element {
     let nav = app_state.read().nav.clone();
     let backend_slug = nav
@@ -311,9 +312,11 @@ fn AccountBarControls(
                     class: if is_muted { "account-btn active" } else { "account-btn" },
                     title: if is_muted { t("voice-unmute") } else { t("voice-mute") },
                     onclick: move |_| {
-                        if let Some(ref mut vc) = chat_data.write().voice_connection {
-                            vc.is_muted = !vc.is_muted;
-                        }
+                        chat_data.batch(|cd| {
+                            if let Some(ref mut vc) = cd.voice_connection {
+                                vc.is_muted = !vc.is_muted;
+                            }
+                        });
                     },
                     if is_muted {
                         "🔇"
@@ -325,9 +328,11 @@ fn AccountBarControls(
                     class: if is_deafened { "account-btn active" } else { "account-btn" },
                     title: if is_deafened { t("voice-undeafen") } else { t("voice-deafen") },
                     onclick: move |_| {
-                        if let Some(ref mut vc) = chat_data.write().voice_connection {
-                            vc.is_deafened = !vc.is_deafened;
-                        }
+                        chat_data.batch(|cd| {
+                            if let Some(ref mut vc) = cd.voice_connection {
+                                vc.is_deafened = !vc.is_deafened;
+                            }
+                        });
                     },
                     if is_deafened {
                         "🔕"
@@ -361,7 +366,7 @@ fn AccountBarControls(
 #[component]
 pub fn AccountBar() -> Element {
     let app_state: Signal<AppState> = use_context();
-    let chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
     let voice_conn = chat_data.read().voice_connection.clone();
     let user = current_account_bar_user(&app_state.read(), &chat_data.read());
 

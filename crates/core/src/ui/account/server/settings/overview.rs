@@ -11,6 +11,7 @@
 //! - [`IconPanel`] — icon URL input + preview
 //! - [`BannerPanel`] — banner URL input + preview
 
+use crate::state::BatchedSignal;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::ChatData;
@@ -47,7 +48,7 @@ fn IconPanel(
     initial_url: String,
     local_only: bool,
 ) -> Element {
-    let mut chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
     let mut url_input = use_signal(|| initial_url);
     let mut saved = use_signal(|| false);
     let preview_url = url_input.read().clone();
@@ -97,15 +98,18 @@ fn IconPanel(
                             let url = url_input.read().clone();
                             // Update in-memory chat_data immediately
                             {
-                                let mut cd = chat_data.write();
-                                if let Some(s) = cd.servers.iter_mut().find(|s| s.id == sid) {
-                                    s.icon_url = if url.is_empty() { None } else { Some(url.clone()) };
-                                }
-                                if let Some(ref mut cs) = cd.current_server
-                                    && cs.id == sid
-                                {
-                                    cs.icon_url = if url.is_empty() { None } else { Some(url.clone()) };
-                                }
+                                let url_c = url.clone();
+                                let sid_c = sid.clone();
+                                chat_data.batch(move |cd| {
+                                    if let Some(s) = cd.servers.iter_mut().find(|s| s.id == sid_c) {
+                                        s.icon_url = if url_c.is_empty() { None } else { Some(url_c.clone()) };
+                                    }
+                                    if let Some(ref mut cs) = cd.current_server
+                                        && cs.id == sid_c
+                                    {
+                                        cs.icon_url = if url_c.is_empty() { None } else { Some(url_c) };
+                                    }
+                                });
                             }
                             // Persist override to storage
                             let sid2 = sid.clone();
@@ -163,7 +167,7 @@ fn BannerPanel(
     initial_url: String,
     account_id: String,
 ) -> Element {
-    let mut chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
     let mut url_input = use_signal(|| initial_url);
     let mut saved = use_signal(|| false);
@@ -209,19 +213,22 @@ fn BannerPanel(
                             let url = url_input.read().clone();
                             // Update in-memory chat_data immediately
                             {
-                                let mut cd = chat_data.write();
-                                if let Some(s) = cd.servers.iter_mut().find(|s| s.id == sid) {
-                                    s.banner_url = if url.is_empty() { None } else { Some(url.clone()) };
-                                }
-                                if let Some(ref mut cs) = cd.current_server
-                                    && cs.id == sid
-                                {
-                                    cs.banner_url = if url.is_empty() {
-                                        None
-                                    } else {
-                                        Some(url.clone())
-                                    };
-                                }
+                                let url_c = url.clone();
+                                let sid_c = sid.clone();
+                                chat_data.batch(move |cd| {
+                                    if let Some(s) = cd.servers.iter_mut().find(|s| s.id == sid_c) {
+                                        s.banner_url = if url_c.is_empty() { None } else { Some(url_c.clone()) };
+                                    }
+                                    if let Some(ref mut cs) = cd.current_server
+                                        && cs.id == sid_c
+                                    {
+                                        cs.banner_url = if url_c.is_empty() {
+                                            None
+                                        } else {
+                                            Some(url_c)
+                                        };
+                                    }
+                                });
                             }
                             let sid2 = sid.clone();
                             let url2 = url.clone();
@@ -293,7 +300,7 @@ pub fn ServerOverviewSettings(
     account_id: String,
 ) -> Element {
     let _ = backend_slug; // backend slug no longer gates rendering; kept for prop stability
-    let chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
 
     // Read current icon / banner URLs from chat_data (may already include
     // any override applied by apply_server_icon_overrides).

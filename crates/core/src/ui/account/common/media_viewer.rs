@@ -5,6 +5,7 @@
 //! left/right navigation, keyboard arrow/Escape, scroll-wheel zoom,
 //! pinch-to-zoom (touch), and mouse drag to pan.
 
+use crate::state::BatchedSignal;
 use crate::i18n::t;
 use crate::state::{AppState, AttachmentContextMenuState, ChatData};
 use dioxus::prelude::*;
@@ -23,7 +24,7 @@ pub struct MessageMediaViewerOverlayProps {
 #[context_menu(none)]
 #[component]
 pub fn MessageMediaViewerOverlay(props: MessageMediaViewerOverlayProps) -> Element {
-    let chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
     let mut app_state: Signal<AppState> = use_context();
     let nav = navigator();
     let mut zoom = use_signal(|| 1.0_f32);

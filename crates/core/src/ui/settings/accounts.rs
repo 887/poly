@@ -10,6 +10,7 @@
 //! Each `#[component]` fn body MUST stay under 150 lines of RSX+logic.
 //! Extract sub-components rather than growing this file.
 
+use crate::state::BatchedSignal;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::ChatData;
@@ -138,7 +139,7 @@ fn AccountRow(
 pub(super) fn AccountsSettings() -> Element {
     let _locale = crate::i18n::use_locale().read().clone();
     let client_manager: Signal<ClientManager> = use_context();
-    let _chat_data: Signal<ChatData> = use_context();
+    let _chat_data: BatchedSignal<ChatData> = use_context();
 
     let account_ids = client_manager.read().active_account_ids();
 

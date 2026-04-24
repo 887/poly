@@ -10,6 +10,7 @@
 //! ## 150-line component rule
 //! Each `#[component]` fn body MUST stay under 150 lines.
 
+use crate::state::BatchedSignal;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::ChatData;
@@ -47,7 +48,7 @@ pub(crate) fn CreateServerPage(
     account_id: String,
 ) -> Element {
     let client_manager: Signal<ClientManager> = use_context();
-    let chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
 
     let mut server_name = use_signal(String::new);
     let creating = use_signal(|| false);
@@ -137,7 +138,7 @@ pub(crate) fn CreateServerPage(
 /// Bundle of mutable signals passed to the create-server async task.
 struct CreateSignals {
     client_manager: Signal<ClientManager>,
-    chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
     creating: Signal<bool>,
     error_msg: Signal<String>,
 }
@@ -176,10 +177,7 @@ fn do_create_server(
                     .write()
                     .register_server(server_id.clone(), account_id.clone());
                 // Only add to servers, NOT to favorited_server_ids.
-                {
-                    let mut cd = chat_data.write();
-                    cd.servers.push(server);
-                }
+                chat_data.batch(move |cd| cd.servers.push(server));
                 creating.set(false);
                 // Navigate to the new server's home.
                 crate::nav!(Route::ServerHome {

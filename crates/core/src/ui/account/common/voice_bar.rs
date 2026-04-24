@@ -26,6 +26,7 @@
 //! Each `#[component]` fn body stays under 150 lines. See sub-components below.
 // TODO(phase-voice-1): VoiceBar sidebar panel
 
+use crate::state::BatchedSignal;
 use super::direct_call::{disconnect_active_call, swap_to_first_held_call};
 use crate::i18n::t;
 use crate::state::ChatData;
@@ -110,7 +111,7 @@ const JS_STOP_ALL_STREAMS: &str = r#"
 #[context_menu(inherit)]
 #[component]
 pub fn VoiceBar() -> Element {
-    let chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
     let voice_conn = chat_data.read().voice_connection.clone();
 
     // Always render the preview panel so video element IDs exist in the DOM.
@@ -242,7 +243,7 @@ fn VoiceDockTile(participant: poly_client::VoiceParticipant) -> Element {
 #[component]
 fn VoiceDockControls(
     conn: poly_client::VoiceConnection,
-    mut chat_data: Signal<ChatData>,
+    chat_data: BatchedSignal<ChatData>,
 ) -> Element {
     let is_video_on = conn.is_video_on;
     let is_streaming = conn.is_streaming;
@@ -266,16 +267,20 @@ fn VoiceDockControls(
                 onclick: move |_| {
                     if is_video_on {
                         let _ = document::eval(JS_STOP_CAMERA);
-                        if let Some(ref mut vc) = chat_data.write().voice_connection {
-                            vc.is_video_on = false;
-                        }
+                        chat_data.batch(|cd| {
+                            if let Some(ref mut vc) = cd.voice_connection {
+                                vc.is_video_on = false;
+                            }
+                        });
                     } else {
                         spawn(async move {
                             let mut eval = document::eval(JS_START_CAMERA);
-                            if matches!(eval.recv::<String>().await, Ok(ref s) if s == "ok")
-                                && let Some(ref mut vc) = chat_data.write().voice_connection
-                            {
-                                vc.is_video_on = true;
+                            if matches!(eval.recv::<String>().await, Ok(ref s) if s == "ok") {
+                                chat_data.batch(|cd| {
+                                    if let Some(ref mut vc) = cd.voice_connection {
+                                        vc.is_video_on = true;
+                                    }
+                                });
                             }
                         });
                     }
@@ -289,16 +294,20 @@ fn VoiceDockControls(
                 onclick: move |_| {
                     if is_streaming {
                         let _ = document::eval(JS_STOP_SCREEN);
-                        if let Some(ref mut vc) = chat_data.write().voice_connection {
-                            vc.is_streaming = false;
-                        }
+                        chat_data.batch(|cd| {
+                            if let Some(ref mut vc) = cd.voice_connection {
+                                vc.is_streaming = false;
+                            }
+                        });
                     } else {
                         spawn(async move {
                             let mut eval = document::eval(JS_START_SCREEN);
-                            if matches!(eval.recv::<String>().await, Ok(ref s) if s == "ok")
-                                && let Some(ref mut vc) = chat_data.write().voice_connection
-                            {
-                                vc.is_streaming = true;
+                            if matches!(eval.recv::<String>().await, Ok(ref s) if s == "ok") {
+                                chat_data.batch(|cd| {
+                                    if let Some(ref mut vc) = cd.voice_connection {
+                                        vc.is_streaming = true;
+                                    }
+                                });
                             }
                         });
                     }
@@ -339,8 +348,10 @@ fn VoiceDockControls(
                 class: if noise_cancel { "voice-bar-quick-btn active" } else { "voice-bar-quick-btn" },
                 title: if noise_cancel { t("voice-noise-cancel-on") } else { t("voice-noise-cancel-off") },
                 onclick: move |_| {
-                    let cur = chat_data.read().voice_media_settings.noise_cancel_enabled;
-                    chat_data.write().voice_media_settings.noise_cancel_enabled = !cur;
+                    chat_data.batch(|cd| {
+                        cd.voice_media_settings.noise_cancel_enabled =
+                            !cd.voice_media_settings.noise_cancel_enabled;
+                    });
                 },
                 svg {
                     class: "voice-icon-svg",

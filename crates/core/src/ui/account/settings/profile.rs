@@ -13,6 +13,7 @@
 //! # 150-line component rule
 //! Each `#[component]` fn body MUST stay under 150 lines of RSX+logic.
 
+use crate::state::BatchedSignal;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::ChatData;
@@ -47,7 +48,7 @@ impl crate::ui::actions::UiAction for PolyProfileSettingsAction {
 #[context_menu(none)]
 #[component]
 pub fn PolyProfileSettings(account_id: String) -> Element {
-    let chat_data: Signal<ChatData> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
     let mut client_manager: Signal<ClientManager> = use_context();
 
     // Read session info for display name and avatar.
