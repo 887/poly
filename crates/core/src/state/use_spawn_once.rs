@@ -77,7 +77,24 @@ where
     Fut: Future<Output = ()> + 'static,
 {
     let mut spawned_for: Signal<Option<K>> = use_signal(|| None);
+    // Mirror the current `key` into a Signal so the effect below
+    // re-fires on key changes. Without this, `use_effect` only re-runs
+    // when its READ signals change — and the original effect only read
+    // `spawned_for`, which it ALSO wrote, so a key change (T001 → T002)
+    // never triggered a new spawn. This was a real bug surfaced by the
+    // Teams server-switch crash 2026-04-25.
+    let mut current_key: Signal<Option<K>> = use_signal(|| None);
+    // Write on every render — Dioxus signals dedupe by PartialEq so
+    // same-key writes are no-ops; different-key writes fire subscribers.
+    if current_key.peek().as_ref() != Some(&key) {
+        current_key.set(Some(key.clone()));
+    }
     use_effect(move || {
+        // Subscribe to current_key so the effect re-fires on key change.
+        let key = match current_key.read().clone() {
+            Some(k) => k,
+            None => return, // hook ran before first key was committed
+        };
         // Read the guard in a tightly-scoped block so its guard drops
         // before we `.set()` — avoids CLAUDE.md hang class #2 (live
         // read guard across a write on the same signal).
@@ -92,8 +109,7 @@ where
         // Clone the factory so later re-runs of this effect (with a
         // different key) still have a callable `f`.
         let f = f.clone();
-        let key_for_task = key.clone();
-        spawn(f(key_for_task));
+        spawn(f(key));
     });
 }
 
