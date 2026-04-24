@@ -11,7 +11,7 @@
 use crate::state::BatchedSignal;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
-use crate::state::{AppState, ChatData};
+use crate::state::{AppState, ChatData, use_spawn_once};
 use crate::ui::routes::Route;
 use dioxus::prelude::*;
 use poly_client::{Channel, ChannelType, Message, MessageQuery, ThreadInfo};
@@ -282,27 +282,26 @@ pub fn ThreadPanel() -> Element {
         }
     });
 
-    // Load messages for the thread into a local signal.
+    // Load messages for the thread into a local signal. Key on the
+    // (thread_id, account_id) pair — opening a different thread or
+    // switching account triggers a fresh fetch; same pair stays a no-op.
     let thread_id_for_msgs = app_state.read().nav.thread_panel_open.clone();
+    let account_id_for_msgs = app_state.read().nav.active_account_id.cloned();
     let messages: Signal<Vec<Message>> = use_signal(Vec::new);
     let mut messages_w = messages;
-    use_effect(move || {
-        let tid = thread_id_for_msgs.clone();
-        let Some(tid) = tid else { return };
-        let aid = app_state.read().nav.active_account_id.cloned();
-        let Some(aid) = aid else { return };
-        spawn(async move {
+    use_spawn_once(
+        (thread_id_for_msgs, account_id_for_msgs),
+        move |(tid, aid)| async move {
+            let Some(tid) = tid else { return };
+            let Some(aid) = aid else { return };
             let backend_arc = client_manager.read().get_backend(&aid);
             let Some(backend_arc) = backend_arc else { return };
             let guard = backend_arc.read().await;
-            if let Ok(msgs) = guard
-                .get_messages(&tid, MessageQuery::default())
-                .await
-            {
+            if let Ok(msgs) = guard.get_messages(&tid, MessageQuery::default()).await {
                 messages_w.set(msgs);
             }
-        });
-    });
+        },
+    );
 
     let channel = thread_channel.read().as_ref().and_then(|opt| opt.clone());
     let panel_thread_id = app_state.read().nav.thread_panel_open.clone();

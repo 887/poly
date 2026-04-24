@@ -33,7 +33,7 @@ use crate::ui::client_ui::{ComposerHooks, MessageActions};
 use poly_client::ComposerSlot;
 use crate::i18n::{t, t_args};
 use crate::state::chat_data::{backend_badge, format_file_size, user_color};
-use crate::state::{AppState, ChatData};
+use crate::state::{AppState, ChatData, use_spawn_once};
 use crate::ui::split_shell::RightWingShell;
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
 use dioxus::html::HasFileData;
@@ -1415,10 +1415,14 @@ fn use_composer_focus_effect(signals: &ChatViewSignals) {
 fn use_member_list_effect(signals: &ChatViewSignals) {
     let app_state = signals.app_state;
     let client_manager = signals.client_manager;
-    let mut chat_data = signals.chat_data;
+    let chat_data = signals.chat_data;
 
-    use_effect(move || {
-        let active_channel_id = app_state.read().nav.selected_channel.cloned();
+    // Key on Option<String> so channel-unset also has a stable key and we
+    // only clear members once per transition. PartialEq on Option handles
+    // both arms cleanly.
+    let active_channel_id = app_state.read().nav.selected_channel.cloned();
+    use_spawn_once(active_channel_id, move |active_channel_id| async move {
+        let mut chat_data = chat_data;
         let Some(active_channel_id) = active_channel_id else {
             chat_data.batch(|cd| {
                 cd.members = Vec::new();
@@ -1427,48 +1431,47 @@ fn use_member_list_effect(signals: &ChatViewSignals) {
             return;
         };
 
-        let selected_server = app_state.read().nav.selected_server.cloned();
-        let active_account_id = app_state.read().nav.active_account_id.cloned();
+        let selected_server = app_state.peek().nav.selected_server.cloned();
+        let active_account_id = app_state.peek().nav.active_account_id.cloned();
         let is_group = active_channel_id.starts_with("group-");
-        spawn(async move {
-            let backend = if let Some(server_id) = selected_server {
-                client_manager
-                    .read()
-                    .get_backend_for_server(&server_id)
-                    .map(|(_, handle)| handle)
-            } else if let Some(account_id) = active_account_id {
-                client_manager.read().get_backend(&account_id)
-            } else {
-                None
-            };
-            let Some(backend) = backend else {
+
+        let backend = if let Some(server_id) = selected_server {
+            client_manager
+                .read()
+                .get_backend_for_server(&server_id)
+                .map(|(_, handle)| handle)
+        } else if let Some(account_id) = active_account_id {
+            client_manager.read().get_backend(&account_id)
+        } else {
+            None
+        };
+        let Some(backend) = backend else {
+            chat_data.batch(|cd| {
+                cd.members = Vec::new();
+                cd.active_group_members = Vec::new();
+            });
+            return;
+        };
+        let guard = backend.read().await;
+        match guard.get_channel_members(&active_channel_id).await {
+            Ok(members) => {
+                chat_data.batch(move |cd| {
+                    cd.members = members.clone();
+                    cd.active_group_members = if is_group { members } else { Vec::new() };
+                });
+            }
+            Err(err) => {
+                tracing::warn!(
+                    "get_channel_members failed for channel {}: {}",
+                    active_channel_id,
+                    err
+                );
                 chat_data.batch(|cd| {
                     cd.members = Vec::new();
                     cd.active_group_members = Vec::new();
                 });
-                return;
-            };
-            let guard = backend.read().await;
-            match guard.get_channel_members(&active_channel_id).await {
-                Ok(members) => {
-                    chat_data.batch(move |cd| {
-                        cd.members = members.clone();
-                        cd.active_group_members = if is_group { members } else { Vec::new() };
-                    });
-                }
-                Err(err) => {
-                    tracing::warn!(
-                        "get_channel_members failed for channel {}: {}",
-                        active_channel_id,
-                        err
-                    );
-                    chat_data.batch(|cd| {
-                        cd.members = Vec::new();
-                        cd.active_group_members = Vec::new();
-                    });
-                }
             }
-        });
+        }
     });
 }
 
@@ -1484,43 +1487,58 @@ fn use_search_messages_effect(signals: &ChatViewSignals, ctx: &ChatViewMarkupCtx
     let is_dm_channel = ctx.is_dm_channel;
     let is_group_channel = ctx.is_group_channel;
 
-    use_effect(move || {
-        if *utility_panel.read() != Some(ChatUtilityPanel::Search) {
-            return;
-        }
-        let raw_query = search_query.read().trim().to_string();
-        if raw_query.is_empty() {
-            search_hits.set(Vec::new());
-            return;
-        }
-        let account_id = app_state.read().nav.active_account_id.cloned();
-        let Some(account_id) = account_id else {
-            search_hits.set(Vec::new());
-            return;
-        };
-        let parsed_query = build_search_query(
-            raw_query,
-            current_channel.clone(),
-            current_server.clone(),
-            self_user_id.clone(),
-            is_dm_channel,
-            is_group_channel,
-        );
-        spawn(async move {
-            let Some(backend) = client_manager.read().get_backend(&account_id) else {
-                search_hits.set(Vec::new());
-                return;
-            };
-            let guard = backend.read().await;
-            match guard.search_messages(parsed_query).await {
-                Ok(hits) => search_hits.set(hits),
-                Err(err) => {
-                    tracing::warn!("search_messages failed: {err}");
+    // Key on (query, channel_id) per plan. Panel-state and query changes
+    // both drive re-spawn via the component re-rendering with a new key.
+    // TODO(use_spawn_once): the hook does NOT debounce — each keystroke
+    // issues a fresh search. A separate `use_debounced_effect`-style
+    // primitive should wrap this call site. See plan-use-spawn-once §4.
+    let panel_is_search = *utility_panel.read() == Some(ChatUtilityPanel::Search);
+    let raw_query = search_query.read().trim().to_string();
+    let channel_key = current_channel.as_ref().map(|c| c.id.clone());
+    use_spawn_once(
+        (panel_is_search, raw_query.clone(), channel_key),
+        move |(panel_is_search, raw_query, _channel_key)| {
+            // Clone captures per-call so the outer Fn closure stays reusable
+            // (use_spawn_once requires Fn + Clone, not FnOnce).
+            let current_channel = current_channel.clone();
+            let current_server = current_server.clone();
+            let self_user_id = self_user_id.clone();
+            async move {
+                if !panel_is_search {
+                    return;
+                }
+                if raw_query.is_empty() {
                     search_hits.set(Vec::new());
+                    return;
+                }
+                let account_id = app_state.peek().nav.active_account_id.cloned();
+                let Some(account_id) = account_id else {
+                    search_hits.set(Vec::new());
+                    return;
+                };
+                let parsed_query = build_search_query(
+                    raw_query,
+                    current_channel,
+                    current_server,
+                    self_user_id,
+                    is_dm_channel,
+                    is_group_channel,
+                );
+                let Some(backend) = client_manager.read().get_backend(&account_id) else {
+                    search_hits.set(Vec::new());
+                    return;
+                };
+                let guard = backend.read().await;
+                match guard.search_messages(parsed_query).await {
+                    Ok(hits) => search_hits.set(hits),
+                    Err(err) => {
+                        tracing::warn!("search_messages failed: {err}");
+                        search_hits.set(Vec::new());
+                    }
                 }
             }
-        });
-    });
+        },
+    );
 }
 
 fn use_pinned_messages_effect(signals: &ChatViewSignals) {
@@ -1529,17 +1547,23 @@ fn use_pinned_messages_effect(signals: &ChatViewSignals) {
     let mut pinned_messages = signals.pinned_messages;
     let utility_panel = signals.utility_panel;
 
-    use_effect(move || {
-        if *utility_panel.read() != Some(ChatUtilityPanel::Pinned) {
-            return;
-        }
-        let Some(target_channel_id) = app_state.read().nav.selected_channel.cloned() else {
-            pinned_messages.set(Vec::new());
-            return;
-        };
-        let selected_server = app_state.read().nav.selected_server.cloned();
-        let active_account_id = app_state.read().nav.active_account_id.cloned();
-        spawn(async move {
+    // Key on (pinned-panel-open, channel_id) so opening the pinned panel
+    // or switching channel while it's open re-spawns; other panel changes
+    // don't.
+    let panel_is_pinned = *utility_panel.read() == Some(ChatUtilityPanel::Pinned);
+    let target_channel_id = app_state.read().nav.selected_channel.cloned();
+    use_spawn_once(
+        (panel_is_pinned, target_channel_id),
+        move |(panel_is_pinned, target_channel_id)| async move {
+            if !panel_is_pinned {
+                return;
+            }
+            let Some(target_channel_id) = target_channel_id else {
+                pinned_messages.set(Vec::new());
+                return;
+            };
+            let selected_server = app_state.peek().nav.selected_server.cloned();
+            let active_account_id = app_state.peek().nav.active_account_id.cloned();
             let backend = if let Some(server_id) = selected_server {
                 client_manager
                     .read()
@@ -1562,8 +1586,8 @@ fn use_pinned_messages_effect(signals: &ChatViewSignals) {
                     pinned_messages.set(Vec::new());
                 }
             }
-        });
-    });
+        },
+    );
 }
 
 fn use_history_state_effect(signals: &ChatViewSignals) {
@@ -1649,34 +1673,32 @@ fn use_command_preload_effect(signals: &ChatViewSignals, channel_id: &Option<Str
     let mut show_command_popup = signals.show_command_popup;
     let cmd_channel_id = channel_id.clone();
 
-    use_effect(move || {
-        let Some(cid) = cmd_channel_id.clone() else {
+    use_spawn_once(cmd_channel_id, move |cmd_channel_id| async move {
+        let Some(cid) = cmd_channel_id else {
             command_suggestions.set(Vec::new());
             show_command_popup.set(false);
             return;
         };
-        let selected_server = app_state.read().nav.selected_server.cloned();
-        let active_account_id = app_state.read().nav.active_account_id.cloned();
-        spawn(async move {
-            let backend = if let Some(server_id) = selected_server {
-                client_manager
-                    .read()
-                    .get_backend_for_server(&server_id)
-                    .map(|(_, handle)| handle)
-            } else if let Some(account_id) = active_account_id {
-                client_manager.read().get_backend(&account_id)
-            } else {
-                None
-            };
-            let Some(backend) = backend else {
-                return;
-            };
-            let guard = backend.read().await;
-            match guard.get_channel_commands(&cid).await {
-                Ok(cmds) => command_suggestions.set(cmds),
-                Err(err) => tracing::warn!("get_channel_commands failed: {err}"),
-            }
-        });
+        let selected_server = app_state.peek().nav.selected_server.cloned();
+        let active_account_id = app_state.peek().nav.active_account_id.cloned();
+        let backend = if let Some(server_id) = selected_server {
+            client_manager
+                .read()
+                .get_backend_for_server(&server_id)
+                .map(|(_, handle)| handle)
+        } else if let Some(account_id) = active_account_id {
+            client_manager.read().get_backend(&account_id)
+        } else {
+            None
+        };
+        let Some(backend) = backend else {
+            return;
+        };
+        let guard = backend.read().await;
+        match guard.get_channel_commands(&cid).await {
+            Ok(cmds) => command_suggestions.set(cmds),
+            Err(err) => tracing::warn!("get_channel_commands failed: {err}"),
+        }
     });
 }
 

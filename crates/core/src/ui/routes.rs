@@ -86,7 +86,7 @@ use super::settings::SettingsPage;
 use super::split_shell::SplitMenuShell;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
-use crate::state::{AppState, ChatData, SettingsSection, View};
+use crate::state::{AppState, ChatData, SettingsSection, View, use_spawn_once};
 use crate::ui::account::common::VoiceAccountFooter;
 use crate::ui::account::common::{FeatureUnsupportedPlaceholder, UnsupportedFeature};
 use crate::ui::account::common::chat_history::initial_message_query;
@@ -1246,7 +1246,7 @@ fn DmsHome(backend: String, instance_id: String, account_id: String) -> Element 
 #[ui_action(inherit)]
 #[component]
 fn DmChat(backend: String, instance_id: String, account_id: String, dm_id: String) -> Element {
-    let mut app_state: BatchedSignal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: Signal<ClientManager> = use_context();
     let dm_id_for_pending = dm_id.clone();
@@ -1256,15 +1256,20 @@ fn DmChat(backend: String, instance_id: String, account_id: String, dm_id: Strin
         restore_dm_chat(dm_id.clone(), account_id.clone(), chat_data, client_manager);
     });
 
-    use_effect(move || {
-        let pending = app_state.read().nav.pending_direct_call.clone();
-        let Some(pending) = pending else {
-            return;
-        };
-        if pending.account_id != account_id_for_pending || pending.dm_id != dm_id_for_pending {
-            return;
-        }
-        spawn(async move {
+    // Key on the route's own (account_id, dm_id) — stable props that uniquely
+    // identify this DmChat mount. The pending-call dispatch is a one-shot per
+    // mount; `.take()` inside the async body consumes the pending option so
+    // later renders become no-ops even if `use_spawn_once` weren't guarding us.
+    use_spawn_once(
+        (account_id_for_pending.clone(), dm_id_for_pending.clone()),
+        move |(route_account_id, route_dm_id)| async move {
+            let pending = app_state.peek().nav.pending_direct_call.clone();
+            let Some(pending) = pending else {
+                return;
+            };
+            if pending.account_id != route_account_id || pending.dm_id != route_dm_id {
+                return;
+            }
             #[cfg(target_arch = "wasm32")]
             {
                 let mut eval = document::eval(
@@ -1293,8 +1298,8 @@ fn DmChat(backend: String, instance_id: String, account_id: String, dm_id: Strin
                 chat_data,
                 client_manager,
             );
-        });
-    });
+        },
+    );
 
     rsx! {
         ChatView {}
@@ -1472,30 +1477,37 @@ fn ServerMediaViewerRoute(
     let channel_for_effect = channel_id.clone();
     let message_for_effect = message_id.clone();
 
-    use_effect(move || {
+    // Key on the URL channel id — the stable identity across renders. The
+    // "already loaded" fast-path moves inside the async body so the hook's
+    // key-guard alone owns re-spawn prevention (the old `already_loaded`
+    // check subscribed to chat_data writes and re-fired mid-restore, which
+    // is the exact hang-class #3 shape — see plan-use-spawn-once §3).
+    use_spawn_once(channel_for_effect.clone(), move |cid| {
         let backend_slug = backend_for_effect.clone();
         let instance = instance_for_effect.clone();
         let account = account_for_effect.clone();
         let route_server_id = server_for_effect.clone();
-        let cid = channel_for_effect.clone();
         let sid = server_for_effect.clone();
         let route_message_id = message_for_effect.clone();
+        async move {
+            // Cheap early return if click-navigation already populated the
+            // channel + server. Peek so we don't subscribe.
+            let already_loaded = {
+                let snapshot = chat_data.peek();
+                snapshot
+                    .current_server
+                    .as_ref()
+                    .is_some_and(|server| server.id == sid)
+                    && snapshot
+                        .current_channel
+                        .as_ref()
+                        .is_some_and(|ch| ch.id == cid && ch.server_id == sid)
+                    && snapshot.channels.iter().any(|ch| ch.id == cid)
+            };
+            if already_loaded {
+                return;
+            }
 
-        let snapshot = chat_data.read();
-        let already_loaded = snapshot
-            .current_server
-            .as_ref()
-            .is_some_and(|server| server.id == sid)
-            && snapshot
-                .current_channel
-                .as_ref()
-                .is_some_and(|ch| ch.id == cid && ch.server_id == sid)
-            && snapshot.channels.iter().any(|ch| ch.id == cid);
-        if already_loaded {
-            return;
-        }
-
-        spawn(async move {
             let resolved_channel_id = super::favorites_sidebar::restore_server_channel(
                 sid,
                 cid.clone(),
@@ -1518,7 +1530,7 @@ fn ServerMediaViewerRoute(
                     attachment_index,
                 });
             }
-        });
+        }
     });
 
     rsx! {
@@ -1572,38 +1584,27 @@ fn ServerHome(
 
     // URL-restore: server data is absent after a hard reload. Load it now.
     //
-    // Guard against double-loading: if `current_server` already matches (click
-    // navigation already ran `load_server_data`), or a load is already in flight
-    // (`loading == true`), skip spawning a second concurrent load.
-    //
-    // Additionally: track `spawned_for` to prevent RE-spawning after a previous
-    // load finished without populating current_server (e.g. backend not found
-    // for this server_id because the URL id doesn't map to any plugin's server
-    // — Teams' team_id is not a backend key). Without this guard,
-    // `load_server_data_internal` toggles loading=true→loading=false, the
-    // `already_loading` guard releases, the effect re-fires, server_already_loaded
-    // is still false (no backend → never populates current_server), and we spawn
-    // forever. See Teams channels/T001 wedge, 2026-04-24.
-    let mut spawned_for: Signal<Option<String>> = use_signal(|| None);
+    // `use_spawn_once` guards against RE-spawning after a previous load
+    // finished without populating current_server (e.g. backend not found
+    // for this server_id — Teams' team_id isn't a backend key). Without
+    // this guard, `load_server_data_internal` toggles loading=true→false,
+    // the effect re-fires, server_already_loaded is still false, and we
+    // spawn forever. See Teams channels/T001 wedge, 2026-04-24, and
+    // `docs/plans/plan-use-spawn-once.md`.
     let server_id_for_effect = server_id.clone();
-    use_effect(move || {
-        let sid = server_id_for_effect.clone();
-        let snapshot = chat_data.read();
-        let server_already_loaded = snapshot
-            .current_server
-            .as_ref()
-            .is_some_and(|s| s.id == sid);
-        // Prevent a second concurrent `load_server_data` while the click-handler's
-        // spawn is still running (i.e. loading is already true).
-        let already_loading = snapshot.loading;
-        drop(snapshot);
-        let already_spawned = spawned_for.read().as_deref() == Some(sid.as_str());
-        if server_already_loaded || already_loading || already_spawned {
-            return;
-        }
-        spawned_for.set(Some(sid.clone()));
+    use_spawn_once(server_id_for_effect, move |sid| {
         let preserve_drawer_context = crate::ui::main_layout::mobile_left_drawer_open();
-        spawn(async move {
+        async move {
+            // Cheap early return if click-navigation already loaded this
+            // server; peek so we don't subscribe.
+            let already_loaded = chat_data
+                .peek()
+                .current_server
+                .as_ref()
+                .is_some_and(|s| s.id == sid);
+            if already_loaded {
+                return;
+            }
             if preserve_drawer_context {
                 super::favorites_sidebar::load_server_shell_data(
                     sid,
@@ -1621,7 +1622,7 @@ fn ServerHome(
                 )
                 .await;
             }
-        });
+        }
     });
 
     // Only consider a channel "voice" if the loaded server actually matches
@@ -1684,42 +1685,40 @@ fn ServerChat(
     let client_manager: Signal<ClientManager> = use_context();
     let nav = navigator();
     let route_channel_id = channel_id.clone();
-    // Tracks the URL channel id we've already spawned a restore for. Without
-    // this guard, a stale-channel URL (e.g. /channel/deleted-id) infinite-
-    // loops: restore_server_channel writes chat_data 8 times, each write
-    // re-fires this use_effect, the `already_loaded` check fails because the
-    // fallback channel.id never equals the URL cid, and we spawn another
-    // restore — exponential task growth → Chrome OOM (witnessed 2026-04-19).
-    let mut spawned_for: Signal<Option<String>> = use_signal(|| None);
-    use_effect(move || {
+    // `use_spawn_once` keys on the URL channel id and refuses to re-spawn
+    // for the same key. Without this guard, a stale-channel URL (e.g.
+    // /channel/deleted-id) infinite-looped: restore_server_channel writes
+    // chat_data 8 times, each write re-fired the use_effect, the
+    // `already_loaded` check failed because the fallback channel.id never
+    // equals the URL cid, and we spawned another restore — exponential
+    // task growth → Chrome OOM (witnessed 2026-04-19).
+    use_spawn_once(channel_id.clone(), move |cid| {
         let backend_slug = backend.clone();
         let instance = instance_id.clone();
         let account = account_id.clone();
         let route_server_id = server_id.clone();
-        let cid = channel_id.clone();
         let sid = server_id.clone();
+        async move {
+            // Cheap early return if click-navigation already prepared this
+            // specific server + channel. Peek so we don't subscribe; an
+            // empty text channel is still a valid loaded state, so we must
+            // not use `messages.is_empty()` as the readiness check.
+            let already_loaded = {
+                let snapshot = chat_data.peek();
+                snapshot
+                    .current_server
+                    .as_ref()
+                    .is_some_and(|server| server.id == sid)
+                    && snapshot
+                        .current_channel
+                        .as_ref()
+                        .is_some_and(|ch| ch.id == cid && ch.server_id == sid)
+                    && snapshot.channels.iter().any(|ch| ch.id == cid)
+            };
+            if already_loaded {
+                return;
+            }
 
-        // Skip if click-navigation already prepared this specific server +
-        // channel. An empty text channel is still a valid loaded state, so we
-        // must not use `messages.is_empty()` as the readiness check here.
-        let snapshot = chat_data.read();
-        let already_loaded = snapshot
-            .current_server
-            .as_ref()
-            .is_some_and(|server| server.id == sid)
-            && snapshot
-                .current_channel
-                .as_ref()
-                .is_some_and(|ch| ch.id == cid && ch.server_id == sid)
-            && snapshot.channels.iter().any(|ch| ch.id == cid);
-        let already_spawned = spawned_for.read().as_deref() == Some(cid.as_str());
-        if already_loaded || already_spawned {
-            return;
-        }
-        drop(snapshot);
-        spawned_for.set(Some(cid.clone()));
-
-        spawn(async move {
             let resolved_channel_id = super::favorites_sidebar::restore_server_channel(
                 sid,
                 cid.clone(),
@@ -1752,7 +1751,7 @@ fn ServerChat(
                 }
                 Some(_) => {}
             }
-        });
+        }
     });
 
     // Prefer the channel type from the channels list keyed by the route's

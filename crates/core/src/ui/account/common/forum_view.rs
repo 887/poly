@@ -5,7 +5,7 @@
 use crate::state::BatchedSignal;
 use crate::client_manager::ClientManager;
 use crate::state::chat_data::user_color;
-use crate::state::{AppState, ChatData};
+use crate::state::{AppState, ChatData, use_spawn_once};
 use crate::ui::client_ui::ClientView;
 use crate::ui::context_menu::menus::{forum_post_entry, ForumPostCtx};
 use crate::ui::favorites_sidebar::restore_server_channel;
@@ -223,72 +223,62 @@ pub fn ForumPostView(channel_id: String, post_id: String) -> Element {
     let mut thread_comments: Signal<Vec<Message>> = use_signal(Vec::new);
     let mut thread_loading: Signal<bool> = use_signal(|| true);
 
-    // Load channel data + comments on mount / when post_id changes.
+    // Load channel data + comments on mount / when post_id or channel_id
+    // changes. Key on (channel_id, post_id) so navigating between posts
+    // re-spawns; same post stays a no-op. Keeps us out of hang class #3
+    // (this call-site shape wedges identically to ServerHome on a stale
+    // forum-post deep link — see plan-use-spawn-once.md §Phase 3).
     let post_id_clone = post_id.clone();
     let channel_id_clone = channel_id.clone();
-    use_effect(move || {
-        let pid = post_id_clone.clone();
-        let cid = channel_id_clone.clone();
+    use_spawn_once(
+        (channel_id_clone, post_id_clone),
+        move |(cid, pid)| async move {
+            // Peek nav + chat_data so we don't subscribe and re-trigger.
+            let server_id = app_state
+                .peek()
+                .nav
+                .selected_server
+                .cloned()
+                .unwrap_or_default();
+            let account_id = app_state.peek().nav.active_account_id.cloned();
+            let backend = account_id
+                .as_deref()
+                .and_then(|aid| client_manager.read().get_backend(aid));
 
-        // Ensure the server+channel context is loaded (handles direct URL navigation).
-        let server_id = app_state.read().nav.selected_server.cloned().unwrap_or_default();
+            let already_loaded = {
+                let snap = chat_data.peek();
+                snap.current_channel.as_ref().is_some_and(|ch| ch.id == cid)
+                    && snap.current_server.as_ref().is_some_and(|s| s.id == server_id)
+            };
 
-        let account_id = app_state.read().nav.active_account_id.cloned();
-        let backend = account_id.as_deref()
-            .and_then(|aid| client_manager.read().get_backend(aid));
-
-        // Check if channel data is already loaded for this channel.
-        let already_loaded = {
-            let snap = chat_data.read();
-            snap.current_channel.as_ref().is_some_and(|ch| ch.id == cid)
-                && snap.current_server.as_ref().is_some_and(|s| s.id == server_id)
-        };
-
-        if !already_loaded {
-            let app_state2 = app_state;
-            let client_manager2 = client_manager;
-            let chat_data2 = chat_data;
-            let backend2 = backend.clone();
-            let pid2 = pid.clone();
-            spawn(async move {
+            if !already_loaded {
                 restore_server_channel(
                     server_id,
                     cid,
-                    app_state2,
-                    client_manager2,
-                    chat_data2,
+                    app_state,
+                    client_manager,
+                    chat_data,
                 )
                 .await;
-                // After channel loaded, fetch comments.
-                if let Some(ref b) = backend2 {
-                    let b = b.clone();
-                    let comment_channel = format!("hn-post-{pid2}");
-                    let result = b.read().await
-                        .get_messages(&comment_channel, MessageQuery { limit: Some(200), ..Default::default() })
-                        .await
-                        .unwrap_or_default();
-                    thread_comments.set(result);
-                }
-                thread_loading.set(false);
-            });
-        } else {
-            // Channel already loaded — just fetch comments.
-            if let Some(ref b) = backend {
-                let b = b.clone();
-                spawn(async move {
-                    let comment_channel = format!("hn-post-{pid}");
-                    let result = b.read().await
-                        .get_messages(&comment_channel, MessageQuery { limit: Some(200), ..Default::default() })
-                        .await
-                        .unwrap_or_default();
-                    thread_comments.set(result);
-                    thread_loading.set(false);
-                });
-            } else {
-                thread_loading.set(false);
             }
-        }
-    });
+
+            // Fetch comments (same in both paths).
+            if let Some(b) = backend {
+                let comment_channel = format!("hn-post-{pid}");
+                let result = b
+                    .read()
+                    .await
+                    .get_messages(
+                        &comment_channel,
+                        MessageQuery { limit: Some(200), ..Default::default() },
+                    )
+                    .await
+                    .unwrap_or_default();
+                thread_comments.set(result);
+            }
+            thread_loading.set(false);
+        },
+    );
 
     // Find the post in the currently loaded messages.
     let post = chat_data.read().messages.iter()
