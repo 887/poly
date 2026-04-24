@@ -116,6 +116,24 @@ body {
     display: flex;
     flex-wrap: wrap;
     gap: 12px;
+    /* Cap the height so the overlay window doesn't grow off-screen with many
+       accounts (14+ in the test fixture). Scroll inside the overlay rather
+       than clipping invisibly. */
+    max-height: 50vh;
+    overflow-y: auto;
+    padding-right: 4px;
+    /* Scroll-bar styling matches the rest of Poly. */
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+.poly-startup-accounts::-webkit-scrollbar {
+    width: 6px;
+}
+
+.poly-startup-accounts::-webkit-scrollbar-thumb {
+    background-color: rgba(100, 116, 139, 0.5);
+    border-radius: 3px;
 }
 
 .poly-startup-account {
