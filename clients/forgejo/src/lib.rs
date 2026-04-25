@@ -237,8 +237,9 @@ impl ClientBackend for ForgejoClient {
             let pulls = self.api.list_repo_pulls(&owner, &repo).await?;
             return Ok(pulls.iter().map(mapping::issue_to_message).collect());
         }
-        // Single issue thread (`fj-issue-{owner}-{repo}-{number}`)
+        // Single issue thread (`fj-issue-{owner}/{repo}-{number}`)
         if let Some(rest) = channel_id.strip_prefix("fj-issue-") {
+            // rest = "{owner}/{repo}-{number}"; split off the trailing "-{number}"
             let parts: Vec<&str> = rest.rsplitn(2, '-').collect();
             if let [number_str, rest_pair] = parts.as_slice()
                 && let Ok(number) = number_str.parse::<u64>()
@@ -824,15 +825,17 @@ impl ClientBackend for ForgejoClient {
 
 /// Extract `(owner, repo)` from an issue thread channel ID.
 ///
-/// Handles `fj-issue-{owner}-{repo}-{number}`.
+/// Handles `fj-issue-{owner}/{repo}-{number}`.
+/// The `/` separates owner from repo; the trailing `-{number}` is stripped first.
 #[cfg(feature = "native")]
 fn parse_issue_thread_owner_repo(channel_id: &str) -> ClientResult<(String, String)> {
-    // Strip "fj-issue-" prefix, then the remaining has "{owner}-{repo}-{number}".
-    // We need to strip the trailing "-{number}" part.
+    // Strip "fj-issue-" prefix, then the remaining has "{owner}/{repo}-{number}".
+    // rsplitn(2, '-') splits off the trailing issue number first (last '-'),
+    // then split_owner_repo splits on '/' to get owner and repo.
     let rest = channel_id
         .strip_prefix("fj-issue-")
         .ok_or_else(|| ClientError::NotFound(format!("not an issue thread channel: {channel_id}")))?;
-    // rsplitn(2, '-') → [number, "owner-repo"]
+    // rsplitn(2, '-') → [number, "owner/repo"]
     let parts: Vec<&str> = rest.rsplitn(2, '-').collect();
     match parts.as_slice() {
         [_, owner_repo] => split_owner_repo(owner_repo),
@@ -859,7 +862,8 @@ async fn repo_owner_name_from_server_id(
 
 /// Extract `(owner, repo)` from a forum channel ID.
 ///
-/// Handles `fj-issues-{owner}-{repo}` and `fj-pulls-{owner}-{repo}`.
+/// Handles `fj-issues-{owner}/{repo}` and `fj-pulls-{owner}/{repo}`.
+/// The `/` separator is unambiguous even when owner or repo names contain hyphens.
 #[cfg(feature = "native")]
 fn parse_forum_channel(channel_id: &str) -> ClientResult<(String, String)> {
     let rest = channel_id
@@ -881,9 +885,12 @@ fn kind_from_string(s: &str) -> FileKind {
 
 #[cfg(feature = "native")]
 fn split_owner_repo(s: &str) -> ClientResult<(String, String)> {
-    s.split_once('-')
+    // Channel IDs embed owner/repo with '/' as separator (e.g. "flamingo/pink-css").
+    // Using '/' is unambiguous: both owner and repo names may contain hyphens,
+    // but neither may contain '/' (Forgejo enforces this in validation).
+    s.split_once('/')
         .map(|(o, r)| (o.to_string(), r.to_string()))
-        .ok_or_else(|| ClientError::NotFound(format!("malformed owner-repo segment: {s}")))
+        .ok_or_else(|| ClientError::NotFound(format!("malformed owner/repo segment: {s}")))
 }
 
 #[cfg(feature = "native")]

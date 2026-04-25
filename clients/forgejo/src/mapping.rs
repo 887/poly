@@ -2,12 +2,15 @@
 //!
 //! Channel ID conventions used inside the forgejo backend:
 //!
-//! | Channel kind            | ID format                           |
-//! |-------------------------|--------------------------------------|
-//! | Issues forum (per repo) | `fj-issues-{owner}-{repo}`          |
-//! | Pull requests forum     | `fj-pulls-{owner}-{repo}`           |
-//! | Code explorer           | `fj-code-{owner}-{repo}`            |
-//! | Single issue thread     | `fj-issue-{owner}-{repo}-{number}`  |
+//! | Channel kind            | ID format                            |
+//! |-------------------------|---------------------------------------|
+//! | Issues forum (per repo) | `fj-issues-{owner}/{repo}`           |
+//! | Pull requests forum     | `fj-pulls-{owner}/{repo}`            |
+//! | Code explorer           | `fj-code-{owner}/{repo}`             |
+//! | Single issue thread     | `fj-issue-{owner}/{repo}-{number}`   |
+//!
+//! The `{owner}/{repo}` portion preserves the Forgejo slash separator so that
+//! owner and repo names containing hyphens round-trip unambiguously.
 //!
 //! Server IDs are the Forgejo numeric repo ID prefixed with `fj-` so they
 //! are stable across renames.
@@ -30,34 +33,37 @@ pub fn server_id_for_repo(repo: &ForgejoRepo) -> String {
 }
 
 /// Channel ID for the per-repo issues forum.
+///
+/// Uses `owner/repo` as the separator so that hyphenated owner or repo
+/// names round-trip unambiguously.
 #[must_use]
 pub fn issues_channel_id(owner: &str, repo: &str) -> String {
-    format!("fj-issues-{owner}-{repo}")
+    format!("fj-issues-{owner}/{repo}")
 }
 
 /// Channel ID for the per-repo pull requests forum.
 #[must_use]
 pub fn pulls_channel_id(owner: &str, repo: &str) -> String {
-    format!("fj-pulls-{owner}-{repo}")
+    format!("fj-pulls-{owner}/{repo}")
 }
 
 /// Channel ID for the per-repo code explorer.
 #[must_use]
 pub fn code_channel_id(owner: &str, repo: &str) -> String {
-    format!("fj-code-{owner}-{repo}")
+    format!("fj-code-{owner}/{repo}")
 }
 
 /// Channel ID for a single issue/PR comment thread.
 #[must_use]
 pub fn issue_thread_channel_id(owner: &str, repo: &str, number: u64) -> String {
-    format!("fj-issue-{owner}-{repo}-{number}")
+    format!("fj-issue-{owner}/{repo}-{number}")
 }
 
-/// Try to parse `(owner, repo)` out of a code-channel ID (`fj-code-{owner}-{repo}`).
+/// Try to parse `(owner, repo)` out of a code-channel ID (`fj-code-{owner}/{repo}`).
 #[must_use]
 pub fn parse_code_channel(channel_id: &str) -> Option<(String, String)> {
     let rest = channel_id.strip_prefix("fj-code-")?;
-    let (owner, repo) = rest.split_once('-')?;
+    let (owner, repo) = rest.split_once('/')?;
     Some((owner.to_string(), repo.to_string()))
 }
 
