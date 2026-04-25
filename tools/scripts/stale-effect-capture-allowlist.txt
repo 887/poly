@@ -1,0 +1,68 @@
+# stale-effect-capture-allowlist.txt
+#
+# Existing use_effect(move ||) sites in crates/core/src/ui that have not yet
+# been migrated to use_reactive_effect / use_spawn_once.
+#
+# Format: file:line  # reason
+#
+# These entries were added in the Phase 1 commit for
+# docs/plans/plan-use-reactive-effect.md. Each site needs manual review in
+# Phase 2 to determine its risk class (HIGH / MEDIUM / LOW). HIGH sites
+# (captures a non-Signal prop that varies across renders) MUST be migrated to
+# use_reactive_effect or use_spawn_once and removed from this file.
+# LOW/MEDIUM sites may remain here with an updated rationale comment.
+
+crates/core/src/ui/account/common/chat_view.rs:1238 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/account/common/chat_view.rs:1285 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/account/common/chat_view.rs:1392 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/account/common/chat_view.rs:1410 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/account/common/chat_view.rs:1630 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/account/common/chat_view.rs:1690 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/account/common/chat_view.rs:1745 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/account/common/chat_view.rs:1790 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/account/common/chat_view.rs:3361 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/account/common/chat_view.rs:4634 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/account/common/direct_call_overlay.rs:95 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/account/common/draft_banner.rs:196 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/account/common/media_picker.rs:232 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/account/common/media_picker.rs:402 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/account/common/media_viewer.rs:71 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/account/common/thread_view.rs:455 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/account/common/user_profile_modal.rs:125 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/account/server/context_menu.rs:68 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/account/server/settings/mod.rs:547 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/account/server/settings/mod.rs:603 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/account/server/settings/mod.rs:614 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/account/settings/mod.rs:286 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/account/settings/mod.rs:291 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/account/settings/mod.rs:296 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/account/settings/voice_settings.rs:87 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/agent/chat_style_editor.rs:48 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/agent/mod.rs:247 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/agent/mod.rs:257 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/client_ui/custom_block.rs:334 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/client_ui/toast.rs:135 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/code_explorer.rs:67 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/electron_titlebar.rs:138 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/favorites_sidebar.rs:184 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/main_layout.rs:234 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/main_layout.rs:239 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/main_layout.rs:251 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/main_layout.rs:262 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/main_layout.rs:292 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/mod.rs:1521 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/routes.rs:1188 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/routes.rs:1255 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/routes.rs:1394 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/routes.rs:1435 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/routes.rs:2054 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/routes.rs:2125 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/search.rs:535 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/settings/backup.rs:813 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/settings/general.rs:160 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/settings/media.rs:154 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/settings/media.rs:165 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/settings/mod.rs:574 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/settings/mod.rs:588 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/settings/mod.rs:594 # Phase 2 migration pending — review capture shape
+crates/core/src/ui/split_shell.rs:152 # Phase 2 migration pending — review capture shape

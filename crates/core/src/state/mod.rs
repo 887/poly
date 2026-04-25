@@ -11,11 +11,13 @@
 pub mod batched_signal;
 pub mod chat_data;
 pub mod route_synced;
+pub mod use_reactive_effect;
 pub mod use_spawn_once;
 
 pub use batched_signal::{BatchedSignal, PendingUpdate, use_batched_context};
 pub use chat_data::{ChatData, DragSource};
 pub use route_synced::RouteSynced;
+pub use self::use_reactive_effect::use_reactive_effect;
 pub use self::use_spawn_once::use_spawn_once;
 
 use poly_client::{BackendType, MemberPermissions};

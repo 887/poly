@@ -76,6 +76,20 @@ jobs:
       - name: Check for long-scoped Signal::read() guards in UI crate
         run: ./tools/scripts/forbid-long-read-guard.sh
 
+      # Phase 5 Track A of docs/plans/plan-use-reactive-effect.md — flags raw
+      # use_effect(move ||) closures in the UI crate to prevent CLAUDE.md hang
+      # class #6 (stale non-Signal closure capture) from being introduced.
+      # Replacement: use_reactive_effect (sync keyed effect) or use_spawn_once
+      # (async keyed spawn). Inline-allowlist via:
+      #   // poly-lint: allow stale-effect-capture — <reason>
+      # File-level allowlist: tools/scripts/stale-effect-capture-allowlist.txt.
+      # continue-on-error: true while the heuristic beds in and the Phase 2
+      # migration of existing sites is in progress. Flip to hard-fail once the
+      # allowlist has been fully triaged (see plan §3 Phase 2).
+      - name: Check for stale closure captures in use_effect
+        run: ./tools/scripts/forbid-stale-effect-capture.sh
+        continue-on-error: true
+
   dylint:
     # Phase 5 Track B of plan-batched-signal.md + plan-use-spawn-once.md —
     # HIR-precise alternative to the regex scripts above. Belt-and-suspenders:

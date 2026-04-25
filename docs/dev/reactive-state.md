@@ -164,3 +164,92 @@ skips any `let` line that contains this token. For multi-site suppressions, add 
 - `tools/scripts/forbid-long-read-guard.sh` — CI enforcement script.
 - `tools/scripts/long-read-guard-allowlist.txt` — file/line allowlist.
 - CLAUDE.md "Common WASM-hang causes" section — ranked frequency list.
+
+---
+
+## Section 6 — Async / keyed effects: use_reactive_effect vs use_effect
+
+### The stale-capture footgun (Hang #6)
+
+Dioxus' `use_effect(move || { … })` re-runs only when **signals the closure
+body reads** change. It does NOT re-run because the parent component
+re-rendered with new props or local bindings. Any non-Signal value captured
+at the time the closure was first created is silently frozen.
+
+```rust
+// BAD — Hang #6. `server_id` is captured by value at first render.
+// Navigating from server A to server B changes the prop but the effect
+// never re-fires; the stale `server_id` is read every time.
+let server_id: String = props.server_id.clone();
+
+use_effect(move || {
+    do_something_with(&server_id); // silently stale after first render
+});
+```
+
+This was a real bug in `use_spawn_once` (commit `09d97a01`, 2026-04-25):
+the Teams server-switch crashed because the internal `use_effect` only
+subscribed to its own guard signal, never to the changing `key` prop.
+
+### Fix: use_reactive_effect for synchronous keyed effects
+
+`use_reactive_effect<Deps>(deps, body)` mirrors `deps` into a Signal each
+render so the inner `use_effect` subscription tracks it. The body re-fires
+whenever `deps` changes (`PartialEq`).
+
+```rust
+// GOOD — body re-fires whenever server_id changes.
+use_reactive_effect(server_id.clone(), move |sid| {
+    do_something_with(&sid);
+});
+
+// Multi-dep: wrap in a tuple.
+use_reactive_effect(
+    (server_id.clone(), channel_id.clone()),
+    move |(sid, cid)| {
+        do_something_with(&sid, &cid);
+    },
+);
+```
+
+### Fix: use_spawn_once for async keyed spawns
+
+For patterns that need to spawn an async task once per distinct key (e.g.,
+loading server data on navigation), use `use_spawn_once` — already fixed via
+commit `09d97a01` to use the same mirror-into-signal pattern internally.
+
+```rust
+// GOOD — async load fires once per distinct server_id.
+use_spawn_once(server_id.clone(), move |sid| async move {
+    load_server_data(sid).await;
+});
+```
+
+### When raw use_effect is still fine
+
+Use raw `use_effect` only for genuinely **one-shot mount effects** where:
+
+1. The closure body captures **no non-Signal values** (captures only
+   `Signal<T>`, `BatchedSignal<T>`, `Copy` primitives, or nothing at all).
+2. Or the effect intentionally runs exactly once on mount and the captured
+   snapshot is stable for the component's lifetime (e.g., a DOM event
+   listener registered once and cleaned up on unmount).
+
+When in doubt, prefer `use_reactive_effect` — over-specifying deps is safe
+(worst case: a redundant body call), while under-specifying deps silently
+stales the UI.
+
+### Summary table
+
+| Pattern | Use when |
+|---------|----------|
+| `use_reactive_effect(deps, body)` | Sync side-effect keyed on a prop / local binding that may change across renders. |
+| `use_spawn_once(key, async_fn)` | Async task that should re-spawn when a key prop changes. |
+| `use_effect(move \|\| { … })` | Genuine one-shot mount effect; closure body only reads Signals or captures no changing values. |
+
+### CI lint
+
+`tools/scripts/forbid-stale-effect-capture.sh` flags every `use_effect(move ||`
+site in `crates/core/src/ui/**`. Existing sites that have been manually
+verified as safe are listed in `tools/scripts/stale-effect-capture-allowlist.txt`.
+Inline suppression: `// poly-lint: allow stale-effect-capture — <reason>`.
