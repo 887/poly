@@ -876,12 +876,6 @@ async fn restore_poly_accounts(
         return;
     };
 
-    // Load the device identity key once — shared across all poly accounts.
-    let Ok(Some(key_bytes)) = storage.get_identity_key().await else {
-        tracing::warn!("restore_poly_accounts: no identity key found, skipping");
-        return;
-    };
-
     let poly_tokens: Vec<_> = tokens
         .into_iter()
         .filter(|t| t.backend == "poly" && t.instance_id.is_some())
@@ -890,6 +884,18 @@ async fn restore_poly_accounts(
     if poly_tokens.is_empty() {
         return;
     }
+
+    // Load the device identity key once — shared across all poly accounts.
+    // Only required when we actually have poly-server tokens to restore;
+    // checking earlier would warn on every boot for users with no poly
+    // accounts at all.
+    let Ok(Some(key_bytes)) = storage.get_identity_key().await else {
+        tracing::warn!(
+            "restore_poly_accounts: no identity key found but {} poly token(s) to restore — skipping",
+            poly_tokens.len()
+        );
+        return;
+    };
 
     tracing::info!(
         "Restoring {} poly server account(s) from storage",
