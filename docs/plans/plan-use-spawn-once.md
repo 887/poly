@@ -1,9 +1,9 @@
 # Plan — `use_spawn_once` Hook (use_effect-spawn-cycle Prevention)
 
-> Status: **pending**. Ready to start after Phase-1 `use_spawn_once` is merged.
+> Status: **✅ DONE** — Phases 1-4 + 5 lint shipped (`50da1841`, `e7abb629`, `8b2551e1`). All 10 call sites migrated, 2 HIGH bug-waiting-to-happen sites resolved, lint hard-fails in CI.
 > Related: `docs/plans/plan-batched-signal.md` (sister refactor, eliminates the multi-`.write()` cascade class — this plan eliminates the `use_effect`-spawns-future-that-writes-subscribed-signal cycle class).
 > Authors: orchestrator + cycle-site audit subagent (`/tmp/poly-use-spawn-once-audit.md`).
-> Last updated: 2026-04-24.
+> Last updated: 2026-04-25.
 
 ---
 

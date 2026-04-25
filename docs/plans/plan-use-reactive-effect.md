@@ -1,6 +1,6 @@
 # Plan — `use_reactive_effect<Deps>` Hook (Stale-Closure-Capture Prevention)
 
-> Status: **pending** — preventive, ships per the standing "do not defer" directive.
+> Status: **✅ DONE** — Phases 1+2+5 shipped with hard-fail CI gate (`de6411f8`, `09d97a01`, `cb4cf07`). 54 raw `use_effect` sites triaged, ~11 migrated, 43 inline-allowlisted as legitimate Signal-only / one-shot mount cases. `forbid-stale-effect-capture.sh` is now `continue-on-error: false`.
 > Last updated: 2026-04-25.
 
 ---

@@ -1,8 +1,8 @@
 # Plan — `BatchedSignal<T>` Newtype (Cascade-Hang Prevention)
 
-> Status: **pending** — ready to start after current Teams Sheep cascade debug (task #237) concludes.
+> Status: **✅ DONE** — Phases 1-3 + 5 lint shipped (`e091281c`, `33b18d4d`, `828f9584`, `6c6eba3f`). Phase 4 (other hot-path signals) remains opportunistic per CLAUDE.md hang #1 entry.
 > Authors: orchestrator + audit subagent (`/tmp/poly-signal-write-audit.md`) + API design subagent (`/tmp/poly-batched-signal-design.md`).
-> Last updated: 2026-04-24.
+> Last updated: 2026-04-25.
 
 ---
 

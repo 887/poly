@@ -1,8 +1,8 @@
 # Plan — Read-Guard Scoping (Class #2 Hang Prevention)
 
-> Status: **pending** — ready to start; preventive (no live incidents).
+> Status: **✅ DONE** — Phases 1+2+5 shipped (`5c1e13c7`). `BatchedSignal::with(|v|)` documented as preferred read API; audit found zero live HIGH incidents (BatchedSignal Phases 2-3 disciplined the codebase); `forbid-long-read-guard.sh` lint ships as the regression gate. Canonical patterns at `docs/dev/reactive-state.md`.
 > Authors: orchestrator (audit at [`/tmp/poly-hang-class-2-audit.md`](file:///tmp/poly-hang-class-2-audit.md)).
-> Last updated: 2026-04-24.
+> Last updated: 2026-04-25.
 
 ---
 

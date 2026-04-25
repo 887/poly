@@ -1,6 +1,6 @@
 # Plan — `.peek()` vs `.read()` Hygiene (Hang #7 Prevention)
 
-> Status: **pending** — preventive, ships per the standing "do not defer" directive.
+> Status: **✅ DONE (Phases 1+2)** — `forbid-render-time-read.sh` lint shipped (`8321406d`), 988 pre-existing sites allowlisted as MEDIUM, 3 HIGH sites migrated to `.peek()`. Currently `continue-on-error: true`; Phase 5 tightening (flip to hard-fail) deferred until allowlist stabilises.
 > Last updated: 2026-04-25.
 
 ---
