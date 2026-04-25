@@ -162,6 +162,16 @@ pub fn AccountServerBar() -> Element {
 
     rsx! {
         nav { class: "account-server-bar",
+            // Per-account Overview — first item in Bar 2 for every backend.
+            // Routes to /{backend}/{instance}/{account}/overview which renders
+            // the plugin-supplied get_account_overview_view ViewDescriptor.
+            AccountBarOverviewButton {
+                current_view,
+                backend_slug: backend_slug.clone(),
+                instance_id: instance_id.clone(),
+                account_id: account_id.clone(),
+            }
+
             // DMs / Friends button — account-scoped
             if show_dms {
                 AccountBarDmsButton {
@@ -442,6 +452,54 @@ fn ServerIconDisplay(
 
 /// Conversations button for the account server bar.
 #[rustfmt::skip]
+/// Per-account Overview button — first item in the AccountServerBar.
+///
+/// Routes to `Route::ServerOverviewRoute` which renders the plugin-supplied
+/// `get_account_overview_view` ViewDescriptor inside the standard layout
+/// (channel sidebar always present).
+#[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
+#[component]
+fn AccountBarOverviewButton(
+    current_view: View,
+    backend_slug: String,
+    instance_id: String,
+    account_id: String,
+) -> Element {
+    let chat_data: BatchedSignal<ChatData> = use_context();
+
+    rsx! {
+        div {
+            class: if current_view == View::Overview { "server-icon active" } else { "server-icon" },
+            onclick: move |_| {
+                if current_view == View::Overview {
+                    return;
+                }
+                chat_data.batch(|cd| {
+                    cd.current_server = None;
+                    cd.current_channel = None;
+                    cd.channels.clear();
+                    cd.messages.clear();
+                    cd.members.clear();
+                });
+                navigator()
+                    .push(Route::ServerOverviewRoute {
+                        backend: backend_slug.clone(),
+                        instance_id: instance_id.clone(),
+                        account_id: account_id.clone(),
+                    });
+            },
+            div { class: "icon-overview", "🏠" }
+            SidebarTooltip {
+                line1: t("account-bar-overview-tooltip"),
+                line2: None,
+                line3: None,
+            }
+        }
+    }
+}
+
 #[ui_action(inherit)]
 #[context_menu(inherit)]
 #[component]

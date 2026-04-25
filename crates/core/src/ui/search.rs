@@ -180,7 +180,12 @@ fn AvatarIcon(url: Option<String>, label: String, color: String) -> Element {
     }
 }
 
-/// Per-account checkbox in the sidebar — shows avatar/icon, name, and backend.
+/// Per-account toggle in the sidebar — shows avatar/icon, name, and backend.
+///
+/// Uses the same toggle-switch UI as the settings pages
+/// (`role="switch"` + `.toggle-slider`) so the search account filter
+/// looks consistent with the rest of the app instead of using raw browser
+/// checkboxes.
 #[context_menu(inherit)]
 #[rustfmt::skip]
 #[ui_action(inherit)]
@@ -200,9 +205,13 @@ fn AccountFilter(
         label { class: "search-account-filter",
             input {
                 r#type: "checkbox",
+                role: "switch",
+                class: "toggle-switch-input",
+                "aria-checked": "{enabled}",
                 checked: enabled,
                 onchange: move |_| on_toggle.call(aid.clone()),
             }
+            span { class: "toggle-slider" }
             AvatarIcon {
                 url: avatar_url,
                 label: display_name.clone(),
@@ -212,6 +221,45 @@ fn AccountFilter(
                 span { class: "search-account-filter-name", "{display_name}" }
                 span { class: "search-account-filter-backend",
                     "{backend_icon_str} {backend_name}"
+                }
+            }
+        }
+    }
+}
+
+/// "All" master toggle — flips every per-account toggle below.
+///
+/// Tri-state visual: indeterminate when partially-enabled, on when all
+/// accounts are enabled, off when none. Click toggles all on (when off
+/// or partial) or all off (when fully on).
+#[context_menu(inherit)]
+#[rustfmt::skip]
+#[ui_action(inherit)]
+#[component]
+fn AccountFilterAllToggle(
+    enabled_count: usize,
+    total_count: usize,
+    on_toggle_all: EventHandler<bool>,
+) -> Element {
+    let all_on = enabled_count == total_count && total_count > 0;
+    let partial = enabled_count > 0 && enabled_count < total_count;
+    let label = if all_on { "All accounts" } else if partial { "Some accounts" } else { "No accounts" };
+    rsx! {
+        label { class: "search-account-filter search-account-filter-all",
+            input {
+                r#type: "checkbox",
+                role: "switch",
+                class: "toggle-switch-input",
+                "aria-checked": "{all_on}",
+                checked: all_on,
+                "data-indeterminate": "{partial}",
+                onchange: move |_| on_toggle_all.call(!all_on),
+            }
+            span { class: "toggle-slider" }
+            div { class: "search-account-filter-info",
+                span { class: "search-account-filter-name", "{label}" }
+                span { class: "search-account-filter-backend",
+                    "{enabled_count} of {total_count}"
                 }
             }
         }
@@ -603,6 +651,28 @@ pub fn SearchPage(
             sidebar: rsx! {
                 div { class: "search-page-filters",
                     h3 { "{t(\"search-page-accounts\")}" }
+                    // Master toggle — flips every per-account toggle below.
+                    {
+                        let total_count = account_ids.len();
+                        let enabled_count = enabled_accounts.read().len();
+                        let account_ids_for_all = account_ids.clone();
+                        rsx! {
+                            AccountFilterAllToggle {
+                                enabled_count,
+                                total_count,
+                                on_toggle_all: move |new_all_state: bool| {
+                                    let mut set = enabled_accounts.write();
+                                    if new_all_state {
+                                        for aid in &account_ids_for_all {
+                                            set.insert(aid.clone());
+                                        }
+                                    } else {
+                                        set.clear();
+                                    }
+                                },
+                            }
+                        }
+                    }
                     for aid in &account_ids {
                         {
                             let cd = chat_data.read();

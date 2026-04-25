@@ -947,3 +947,5 @@ modlog-action-other = Sonstiges: { $detail }
 # Kontoübersicht-Platzhalter (Default vor Plugin-Überschreibung).
 overview-default-title = Übersicht
 overview-default-subtitle = Für dieses Konto wurde noch keine Übersicht definiert.
+
+account-bar-overview-tooltip = Übersicht

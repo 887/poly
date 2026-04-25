@@ -947,3 +947,5 @@ modlog-action-other = Autre : { $detail }
 # Aperçu par défaut (avant la redéfinition par chaque plugin).
 overview-default-title = Aperçu
 overview-default-subtitle = Aucun aperçu n’est encore défini pour ce compte.
+
+account-bar-overview-tooltip = Aperçu

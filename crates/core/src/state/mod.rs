@@ -116,6 +116,8 @@ pub enum LayoutMode {
 pub enum View {
     /// First-launch setup wizard.
     Setup,
+    /// Per-account overview — default landing for every backend.
+    Overview,
     /// DMs and friends list.
     DmsFriends,
     /// Friends browser — tiled grid view with filtering (account, server, search)

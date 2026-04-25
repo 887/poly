@@ -1125,3 +1125,5 @@ modlog-action-other = Other: { $detail }
 # Per-account overview placeholder (default impl, before each plugin overrides).
 overview-default-title = Overview
 overview-default-subtitle = This account has no overview defined yet.
+
+account-bar-overview-tooltip = Overview

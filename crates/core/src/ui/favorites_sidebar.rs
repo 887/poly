@@ -317,31 +317,21 @@ pub fn FavoritesBar() -> Element {
 
             // Footer: search + agent + settings buttons float at bottom
             div { class: "sidebar-footer",
-                // Global Search button — context-aware: when coming from an account page,
-                // navigates to account-scoped search (pre-filtered to that account).
-                // When on a non-account page (settings, root, etc.), navigates to global search.
+                // Global Search button — ALWAYS truly global, regardless of
+                // which account the user came from. Per-account scoping
+                // happens inside the search page via the AccountFilter
+                // toggles. The previous context-aware nav routed to
+                // AccountSearchRoute when on an account page, which created
+                // a surprising "I clicked the global search but it's
+                // pre-scoped" UX. The global magnifier should mean global.
                 {
                     let is_search = current_view == View::Search;
-                    let search_account = active_account.clone();
-                    let search_backend = active_backend_slug.clone();
-                    let search_instance = active_instance_id.clone();
                     rsx! {
                         div {
                             class: if is_search { "server-icon active" } else { "server-icon" },
                             onclick: move |_| {
                                 close_mobile_drawer();
-                                match (search_account.clone(), search_backend.clone(), search_instance.clone()) {
-                                    (Some(account_id), Some(backend), Some(instance_id)) => {
-                                        crate::nav!(Route::AccountSearchRoute {
-                                            backend,
-                                            instance_id,
-                                            account_id,
-                                        });
-                                    }
-                                    _ => {
-                                        crate::nav!(Route::SearchRoute);
-                                    }
-                                }
+                                crate::nav!(Route::SearchRoute);
                             },
                             title: "{t(\"nav-search\")}",
                             div { class: "icon-search", "🔍" }

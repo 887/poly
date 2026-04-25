@@ -24,6 +24,7 @@ fn current_title(app_state: &AppState, chat_data: &ChatData) -> String {
     }
 
     match *app_state.nav.view {
+        View::Overview => t("account-bar-overview-tooltip"),
         View::DmsFriends => chat_data
             .current_channel
             .as_ref()
