@@ -943,3 +943,7 @@ modlog-action-role-updated = Rolle aktualisiert
 modlog-action-message-deleted = Nachricht gelöscht
 modlog-action-channel-updated = Kanal aktualisiert
 modlog-action-other = Sonstiges: { $detail }
+
+# Kontoübersicht-Platzhalter (Default vor Plugin-Überschreibung).
+overview-default-title = Übersicht
+overview-default-subtitle = Für dieses Konto wurde noch keine Übersicht definiert.

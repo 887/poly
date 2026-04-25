@@ -72,7 +72,6 @@ mod electron_titlebar;
 mod favorites_sidebar;
 pub(crate) mod main_layout;
 pub mod routes;
-mod server_overview;
 pub(crate) mod search;
 mod settings;
 pub(crate) mod signup;

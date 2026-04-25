@@ -77,9 +77,12 @@ interface types {
 
     /// Which screen the UI should navigate to after the backend loads.
     enum landing-page {
+        /// Per-account overview (the plugin's `get-account-overview-view`).
+        /// Default for every backend; declare a different variant only when
+        /// the client genuinely wants a different first surface.
+        overview,
         direct-messages,
         first-server,
-        server-overview,
     }
 
     /// Capability flags describing what a backend supports. Used by the UI
@@ -1211,6 +1214,16 @@ interface client-views {
         /// Optional threaded comments section.
         comments-section: option<tree-spec>,
     }
+
+    /// Fetch the account-level overview view descriptor.
+    ///
+    /// Each backend supplies its own per-account "overview" view that the
+    /// host renders at `/{backend}/{instance}/{account}/overview`. This is
+    /// the default landing page for every account unless the backend
+    /// declares a different `landing` capability. Plugin-defined content:
+    /// repo grids for forge backends, community / server cards for chat
+    /// backends, curated story lists for read-only feeds, etc.
+    get-account-overview-view: func() -> result<view-descriptor, client-error>;
 
     /// D5 — fetch the channel's view descriptor.
     get-channel-view: func(

@@ -726,7 +726,7 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                 };
                 let caps = poly_client::capabilities_for_slug(&backend_slug);
                 let fallback_route = match caps.landing {
-                    poly_client::LandingPage::ServerOverview => {
+                    poly_client::LandingPage::Overview => {
                         Route::ServerOverviewRoute {
                             backend: backend_slug,
                             instance_id,

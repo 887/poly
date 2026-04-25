@@ -168,9 +168,9 @@ pub fn from_wit_backend_capabilities(c: wit::BackendCapabilities) -> pc::Backend
             pc::VoiceSupport::None
         },
         landing: match c.landing {
+            wit::LandingPage::Overview => pc::LandingPage::Overview,
             wit::LandingPage::DirectMessages => pc::LandingPage::DirectMessages,
             wit::LandingPage::FirstServer => pc::LandingPage::FirstServer,
-            wit::LandingPage::ServerOverview => pc::LandingPage::ServerOverview,
         },
         supports_typing_indicators: c.supports_typing_indicators,
         // WASM plugins using the legacy WIT interface default all moderation

@@ -714,6 +714,34 @@ pub trait ClientBackend: Send + Sync {
     /// D14 / D25 — dispatch a sidebar-item click.
     async fn invoke_sidebar_action(&self, action_id: &str) -> ClientResult<ActionOutcome>;
 
+    /// Fetch the account-level overview view descriptor.
+    ///
+    /// Each backend supplies its own per-account "overview" view rendered
+    /// at `/{backend}/{instance}/{account}/overview`. This is the default
+    /// landing page for every account unless the backend declares a
+    /// different `landing` capability. Plugin-defined content: repo grids
+    /// for forge backends, community / server cards for chat backends,
+    /// curated story lists for read-only feeds.
+    ///
+    /// The default impl returns a generic CardBody descriptor so the host
+    /// always has something to render. Phase 2 of the overview plan
+    /// replaces the default with a backend-specific impl in each
+    /// `clients/<name>/src/lib.rs`.
+    async fn get_account_overview_view(&self) -> ClientResult<ViewDescriptor> {
+        Ok(ViewDescriptor {
+            kind: ViewKind::CardGrid,
+            header: Some(ViewHeader {
+                title_key: Some("overview-default-title".to_string()),
+                subtitle_key: Some("overview-default-subtitle".to_string()),
+                info_block: None,
+            }),
+            toolbar: None,
+            body: ViewBody::CardBody(CardSpec {
+                primary_field: "name".to_string(),
+            }),
+        })
+    }
+
     /// D5 — fetch a channel's non-chat view descriptor.
     async fn get_channel_view(&self, channel_id: &str) -> ClientResult<ViewDescriptor>;
 

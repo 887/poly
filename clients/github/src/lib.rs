@@ -396,7 +396,7 @@ impl ClientBackend for GitHubClient {
     fn backend_capabilities(&self) -> BackendCapabilities {
         BackendCapabilities {
             notifications: NotificationSupport::Activity,
-            landing: poly_client::LandingPage::ServerOverview,
+            landing: poly_client::LandingPage::Overview,
             // GitHub moderation surface: only delete_message is supported.
             // kick/ban/timeout/channel-mgmt/modlog are all NotSupported.
             has_roles: false,

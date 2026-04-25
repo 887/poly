@@ -943,3 +943,7 @@ modlog-action-role-updated = Rôle mis à jour
 modlog-action-message-deleted = Message supprimé
 modlog-action-channel-updated = Salon mis à jour
 modlog-action-other = Autre : { $detail }
+
+# Aperçu par défaut (avant la redéfinition par chaque plugin).
+overview-default-title = Aperçu
+overview-default-subtitle = Aucun aperçu n’est encore défini pour ce compte.

@@ -943,3 +943,7 @@ modlog-action-role-updated = Rol actualizado
 modlog-action-message-deleted = Mensaje eliminado
 modlog-action-channel-updated = Canal actualizado
 modlog-action-other = Otro: { $detail }
+
+# Marcador de la vista general (predeterminado antes de la sobrescritura del plugin).
+overview-default-title = Vista general
+overview-default-subtitle = Esta cuenta aún no tiene vista general definida.

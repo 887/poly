@@ -95,6 +95,62 @@ pub fn ClientView(
     }
 }
 
+/// Account-level overview view — same body-engine dispatch as `ClientView`
+/// but reads the descriptor from `get_account_overview_view()` instead of
+/// `get_channel_view(channel_id)`. Used by `ServerOverviewRoute` to render
+/// each backend's plugin-supplied overview at
+/// `/{backend}/{instance}/{account}/overview`.
+#[ui_action(None)]
+#[context_menu(inherit)]
+#[component]
+pub fn AccountOverviewView(account_id: String) -> Element {
+    let client_manager: BatchedSignal<ClientManager> = use_context();
+
+    let desc_res = {
+        let account_id = account_id.clone();
+        use_resource(move || {
+            let account_id = account_id.clone();
+            async move {
+                let Some(backend) = client_manager.read().get_backend(&account_id) else {
+                    return Err(ClientError::NotFound(format!(
+                        "no backend for account {account_id}"
+                    )));
+                };
+                let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
+                    Ok(g) => g,
+                    Err(_) => {
+                        tracing::warn!("AccountOverviewView: backend read timed out");
+                        return Err(ClientError::Internal("backend read timed out".into()));
+                    }
+                };
+                guard.get_account_overview_view().await
+            }
+        })
+    };
+
+    match &*desc_res.read_unchecked() {
+        None => rsx! {
+            div { class: "client-view client-view-loading",
+                span { "Loading overview…" }
+            }
+        },
+        Some(Err(err)) => {
+            tracing::debug!("AccountOverviewView: get_account_overview_view failed: {err:?}");
+            rsx! {
+                div { class: "client-view client-view-error",
+                    div { class: "view-error", "Overview unavailable" }
+                }
+            }
+        }
+        Some(Ok(desc)) => {
+            // Reuse the same body-engine dispatcher; pass empty channel_id
+            // since overview-rows callbacks don't carry a channel context.
+            let desc: ViewDescriptor = desc.clone();
+            render_descriptor(String::new(), account_id.clone(), desc, None)
+        }
+    }
+}
+
 fn render_descriptor(
     channel_id: String,
     account_id: String,

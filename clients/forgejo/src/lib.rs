@@ -480,7 +480,7 @@ impl ClientBackend for ForgejoClient {
 
     fn backend_capabilities(&self) -> BackendCapabilities {
         BackendCapabilities {
-            landing: poly_client::LandingPage::ServerOverview,
+            landing: poly_client::LandingPage::Overview,
             // Forgejo moderation surface: only delete_message is supported.
             // All other flags remain false (no kick/ban/roles/channel-mgmt/modlog).
             has_roles: false,

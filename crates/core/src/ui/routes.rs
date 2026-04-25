@@ -80,7 +80,7 @@ use super::account::{
 use super::client_ui::ClientSidebar;
 use super::create_forum_post::{CreateForumPostPage, ForumSearchPage};
 use super::main_layout::MainLayout;
-use super::server_overview::ServerOverviewPage;
+use super::client_ui::view::AccountOverviewView;
 use super::agent::AgentPage;
 use super::settings::SettingsPage;
 use super::split_shell::SplitMenuShell;
@@ -1828,15 +1828,29 @@ fn SavedItemsRoute(backend: String, instance_id: String, account_id: String) -> 
     }
 }
 
-/// Server/repo overview — landing page for forge backends (GitHub, Forgejo).
-/// Shows a searchable list of all repos with open issues/PRs counts.
+/// Per-account overview — default landing page for every backend.
+/// Renders the plugin-supplied `get_account_overview_view()` ViewDescriptor
+/// inside the standard account layout so the channel sidebar (Bar 3) is
+/// always present (mobile drawer pattern relies on it).
 #[context_menu(None)]
 #[rustfmt::skip]
 #[ui_action(inherit)]
 #[component]
 fn ServerOverviewRoute(backend: String, instance_id: String, account_id: String) -> Element {
+    let _ = (backend, instance_id);
     rsx! {
-        ServerOverviewPage { backend, instance_id, account_id }
+        SplitMenuShell {
+            root_class: "account-view-main".to_string(),
+            sidebar_class: "channel-list-wrapper".to_string(),
+            content_class: String::new(),
+            sidebar: rsx! {
+                ClientSidebar {}
+                VoiceAccountFooter {}
+            },
+            content: rsx! {
+                AccountOverviewView { account_id }
+            },
+        }
     }
 }
 

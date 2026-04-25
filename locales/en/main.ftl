@@ -1121,3 +1121,7 @@ modlog-action-role-updated = Role updated
 modlog-action-message-deleted = Message deleted
 modlog-action-channel-updated = Channel updated
 modlog-action-other = Other: { $detail }
+
+# Per-account overview placeholder (default impl, before each plugin overrides).
+overview-default-title = Overview
+overview-default-subtitle = This account has no overview defined yet.

@@ -252,7 +252,7 @@ fn build_on_complete_inner(
             }
             let caps = poly_client::capabilities_for_slug(&backend_slug);
             let landing = match caps.landing {
-                poly_client::LandingPage::ServerOverview => Route::ServerOverviewRoute {
+                poly_client::LandingPage::Overview => Route::ServerOverviewRoute {
                     backend: backend_slug,
                     instance_id,
                     account_id,
@@ -362,7 +362,7 @@ fn build_on_complete_reauth(
 
             let caps = poly_client::capabilities_for_slug(&backend_slug);
             let landing = match caps.landing {
-                poly_client::LandingPage::ServerOverview => Route::ServerOverviewRoute {
+                poly_client::LandingPage::Overview => Route::ServerOverviewRoute {
                     backend: backend_slug,
                     instance_id,
                     account_id,

@@ -77,7 +77,7 @@ pub fn capabilities_for_slug(slug: &str) -> BackendCapabilities {
         "hackernews" => BackendCapabilities::READ_ONLY_FEED,
         "github" | "forgejo" => BackendCapabilities {
             notifications: NotificationSupport::Activity,
-            landing: LandingPage::ServerOverview,
+            // landing inherits LandingPage::Overview from READ_ONLY_FEED
             ..BackendCapabilities::READ_ONLY_FEED
         },
         "lemmy" | "demo_forum" => BackendCapabilities {
@@ -662,12 +662,17 @@ pub enum NotificationSupport {
 /// clicks the account icon in the sidebar.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LandingPage {
-    /// Direct messages list (Discord, Matrix, Teams).
+    /// Per-account overview — the plugin's `get_account_overview_view`
+    /// rendered at `/{backend}/{instance}/{account}/overview`. Default
+    /// for every backend; override only when the client genuinely wants
+    /// to drop the user somewhere else first.
+    Overview,
+    /// Direct messages list (preferred default for chat clients where
+    /// DMs are the primary surface).
     DirectMessages,
-    /// First server's channel list (HN, Lemmy).
+    /// First server's channel list — for clients where the server-list
+    /// is the only navigation worth seeing.
     FirstServer,
-    /// Repo/server overview with search and attention items (GitHub, Forgejo).
-    ServerOverview,
 }
 
 /// Voice / video channel support.
@@ -748,7 +753,7 @@ impl BackendCapabilities {
         friends: FriendModel::None,
         notifications: NotificationSupport::None,
         voice: VoiceSupport::None,
-        landing: LandingPage::FirstServer,
+        landing: LandingPage::Overview,
         supports_typing_indicators: false,
         has_roles: false,
         has_kick: false,
@@ -765,7 +770,7 @@ impl BackendCapabilities {
         friends: FriendModel::None,
         notifications: NotificationSupport::Inbox,
         voice: VoiceSupport::None,
-        landing: LandingPage::FirstServer,
+        landing: LandingPage::Overview,
         supports_typing_indicators: false,
         has_roles: false,
         has_kick: false,
@@ -830,7 +835,7 @@ impl BackendCapabilities {
         friends: FriendModel::Full,
         notifications: NotificationSupport::Activity,
         voice: VoiceSupport::Full,
-        landing: LandingPage::DirectMessages,
+        landing: LandingPage::Overview,
         supports_typing_indicators: true,
         has_roles: false,
         has_kick: false,
