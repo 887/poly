@@ -54,3 +54,8 @@ plugin-demo-sort-top-all-time = Top tous les temps
 plugin-demo-filter-placeholder = Filtrer les publications…
 
 plugin-demo-refresh = Actualiser
+
+# --- Onglets de type de liste (Abonné / Local / Tout) ---
+plugin-demo-tab-subscribed = Abonné
+plugin-demo-tab-local = Local
+plugin-demo-tab-all = Tout

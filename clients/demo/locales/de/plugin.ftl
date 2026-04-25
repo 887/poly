@@ -54,3 +54,8 @@ plugin-demo-sort-top-all-time = Top Gesamt
 plugin-demo-filter-placeholder = Beiträge filtern…
 
 plugin-demo-refresh = Aktualisieren
+
+# --- Listing-Typ-Tabs (Abonniert / Lokal / Alle) ---
+plugin-demo-tab-subscribed = Abonniert
+plugin-demo-tab-local = Lokal
+plugin-demo-tab-all = Alle

@@ -836,7 +836,7 @@ fn DMFriendsView() -> Element {
 #[ui_action(inherit)]
 #[component]
 fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
+    let mut app_state: BatchedSignal<AppState> = use_context();
     let _client_manager: BatchedSignal<ClientManager> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
 
@@ -986,10 +986,37 @@ fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
                             "Comments"
                         }
                     }
-                    // Scope filter — stacked vertically
-                    button { class: "forum-filter-btn active forum-filter-full", "Subscribed" }
-                    button { class: "forum-filter-btn forum-filter-full", "Local" }
-                    button { class: "forum-filter-btn forum-filter-full", "All" }
+                    // Scope filter — stacked vertically. onclick updates
+                    // `AppState.forum_scope` which re-keys `ForumView`'s
+                    // `ClientView` mount so `get_view_rows` re-fetches with
+                    // the new tab_id. peek() avoids an extra subscription here
+                    // since ForumView already subscribes to AppState for nav.
+                    {
+                        let scope = app_state.peek().forum_scope.clone();
+                        let cls_sub = if scope == "subscribed" { "forum-filter-btn active forum-filter-full" } else { "forum-filter-btn forum-filter-full" };
+                        let cls_loc = if scope == "local"      { "forum-filter-btn active forum-filter-full" } else { "forum-filter-btn forum-filter-full" };
+                        let cls_all = if scope == "all"        { "forum-filter-btn active forum-filter-full" } else { "forum-filter-btn forum-filter-full" };
+                        rsx! {
+                            button {
+                                class: "{cls_sub}",
+                                r#type: "button",
+                                onclick: move |_| { app_state.batch(|s| s.forum_scope = "subscribed".to_string()); },
+                                "Subscribed"
+                            }
+                            button {
+                                class: "{cls_loc}",
+                                r#type: "button",
+                                onclick: move |_| { app_state.batch(|s| s.forum_scope = "local".to_string()); },
+                                "Local"
+                            }
+                            button {
+                                class: "{cls_all}",
+                                r#type: "button",
+                                onclick: move |_| { app_state.batch(|s| s.forum_scope = "all".to_string()); },
+                                "All"
+                            }
+                        }
+                    }
                     // Show hidden toggle
                     button { class: "forum-filter-btn forum-filter-full forum-filter-text",
                         title: "Toggle hidden posts",

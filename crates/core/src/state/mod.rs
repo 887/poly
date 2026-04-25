@@ -527,6 +527,13 @@ pub struct AppState {
     /// `None` = no dialog open. Set by context menu items; cleared by the
     /// dialog's own `on_close` handler (which also resets to `None`).
     pub active_moderation_dialog: Option<ModerationDialog>,
+    /// Active feed-scope for the forum (Lemmy-style) view.
+    ///
+    /// One of `"subscribed"`, `"local"`, or `"all"`. Updated by the
+    /// Subscribed / Local / All scope buttons in the forum sidebar
+    /// (`channel_list.rs`). Read by `ForumView` to key the `ClientView`
+    /// mount and pre-select the matching toolbar tab on re-mount.
+    pub forum_scope: String,
 }
 
 impl Default for AppState {
@@ -551,6 +558,7 @@ impl Default for AppState {
             sidebar_invalidated_tick: 0,
             last_known_perms: None,
             active_moderation_dialog: None,
+            forum_scope: "subscribed".to_string(),
         }
     }
 }

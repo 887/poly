@@ -54,3 +54,8 @@ plugin-demo-sort-top-all-time = Top de todos los tiempos
 plugin-demo-filter-placeholder = Filtrar publicaciones…
 
 plugin-demo-refresh = Actualizar
+
+# --- Pestañas de tipo de listado (Suscrito / Local / Todo) ---
+plugin-demo-tab-subscribed = Suscrito
+plugin-demo-tab-local = Local
+plugin-demo-tab-all = Todo

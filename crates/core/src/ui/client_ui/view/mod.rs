@@ -35,10 +35,19 @@ use poly_ui_macros::{context_menu, ui_action};
 
 /// Host-rendered non-chat view. Reads the active backend's declared
 /// `ViewDescriptor` for `channel_id` and routes to the matching body engine.
+///
+/// `initial_tab` — if provided, the toolbar's `selected_tab` signal is
+/// pre-seeded with this value on mount. Used by `ForumView` to propagate
+/// the sidebar scope (Subscribed / Local / All) into `get_view_rows`.
 #[ui_action(None)]
 #[context_menu(inherit)]
 #[component]
-pub fn ClientView(channel_id: String, account_id: String) -> Element {
+pub fn ClientView(
+    channel_id: String,
+    account_id: String,
+    #[props(default)]
+    initial_tab: Option<String>,
+) -> Element {
     let client_manager: BatchedSignal<ClientManager> = use_context();
 
     let desc_res = {
@@ -81,12 +90,17 @@ pub fn ClientView(channel_id: String, account_id: String) -> Element {
         }
         Some(Ok(desc)) => {
             let desc: ViewDescriptor = desc.clone();
-            render_descriptor(channel_id.clone(), account_id.clone(), desc)
+            render_descriptor(channel_id.clone(), account_id.clone(), desc, initial_tab)
         }
     }
 }
 
-fn render_descriptor(channel_id: String, account_id: String, desc: ViewDescriptor) -> Element {
+fn render_descriptor(
+    channel_id: String,
+    account_id: String,
+    desc: ViewDescriptor,
+    initial_tab: Option<String>,
+) -> Element {
     let header = desc.header.clone();
     let toolbar = desc.toolbar.clone();
     let body = desc.body.clone();
@@ -98,9 +112,11 @@ fn render_descriptor(channel_id: String, account_id: String, desc: ViewDescripto
     let refresh_tick = use_signal(|| 0u32);
     // P4 — parent-owned toolbar selection signals. Toolbar writes on
     // click; body engines read and pass into `get_view_rows`.
+    // `initial_tab` (from the forum sidebar scope buttons via ForumView)
+    // pre-seeds the signal so the first `get_view_rows` uses the right scope.
     let selected_sort = use_signal(|| None::<String>);
     let selected_filter = use_signal(|| None::<String>);
-    let selected_tab = use_signal(|| None::<String>);
+    let selected_tab = use_signal(|| initial_tab.clone());
     let filter_str = filter.read().clone();
     rsx! {
         div { class: "client-view",

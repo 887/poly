@@ -1378,7 +1378,16 @@ impl ClientBackend for DemoClient3 {
                     ToolbarOption { id: "top_all_time".to_string(), label_key: "plugin-demo-sort-top-all-time".to_string(), icon: None, default_selected: false },
                 ],
                 filter_options: vec![],
-                tabs: vec![],
+                // Listing-type tabs mirror Lemmy's Subscribed / Local / All.
+                // The toolbar renders these as clickable chips and passes the
+                // selected id back to `get_view_rows` as `tab_id`. The
+                // `initial_tab` prop from `ForumView` (set from
+                // `AppState.forum_scope`) pre-selects the right chip on mount.
+                tabs: vec![
+                    ToolbarOption { id: "subscribed".to_string(), label_key: "plugin-demo-tab-subscribed".to_string(), icon: None, default_selected: true },
+                    ToolbarOption { id: "local".to_string(),      label_key: "plugin-demo-tab-local".to_string(),      icon: None, default_selected: false },
+                    ToolbarOption { id: "all".to_string(),        label_key: "plugin-demo-tab-all".to_string(),        icon: None, default_selected: false },
+                ],
                 action_items: vec![],
             }),
             body: ViewBody::TreeBody(TreeSpec {
@@ -1390,9 +1399,21 @@ impl ClientBackend for DemoClient3 {
 
     async fn get_view_rows(
         &self, channel_id: &str, _cursor: Option<Cursor>,
-        _sort_id: Option<&str>, _filter_id: Option<&str>, _tab_id: Option<&str>,
+        _sort_id: Option<&str>, _filter_id: Option<&str>, tab_id: Option<&str>,
     ) -> Result<ViewRowsPage, ClientError> {
-        let posts = data::demo3_messages(channel_id);
+        let all_posts = data::demo3_messages(channel_id);
+        // Listing-type scope: mirrors Lemmy's Subscribed / Local / All.
+        // - "subscribed" (default): all posts the user follows.
+        // - "local": instance-only subset — first half of the demo posts so
+        //   the feed visibly shrinks when the tab is clicked.
+        // - "all": federated firehose — full set.
+        let posts: Vec<_> = match tab_id.unwrap_or("subscribed") {
+            "local" => {
+                let half = (all_posts.len() + 1) / 2;
+                all_posts.into_iter().take(half).collect()
+            }
+            _ => all_posts, // "subscribed", "all", and any unknown → full set
+        };
         // Forum rows encode score / comment count / age in a greppable
         // `SCORE:N ·` prefix on `meta_text`. The host `ListBody` / `TreeBody`
         // engines pattern-match this prefix and render a Lemmy-style vote

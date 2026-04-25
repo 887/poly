@@ -37,3 +37,8 @@ plugin-demo-sort-top-year = Top Year
 plugin-demo-sort-top-all-time = Top All Time
 plugin-demo-filter-placeholder = Filter posts…
 plugin-demo-refresh = Refresh
+
+# --- Listing-type scope tabs (Subscribed / Local / All) ---
+plugin-demo-tab-subscribed = Subscribed
+plugin-demo-tab-local = Local
+plugin-demo-tab-all = All

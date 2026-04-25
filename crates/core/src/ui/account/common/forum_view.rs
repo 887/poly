@@ -196,14 +196,21 @@ pub fn ForumView() -> Element {
             }
         };
     }
-    // Key forces a full remount on channel change so use_resource inside
-    // ClientView (and its body engines) picks up the new channel_id.
+    // forum_scope drives the Local / All / Subscribed sidebar scope buttons.
+    // Including it in the key forces a full remount when the scope changes so
+    // the body engine re-fetches `get_view_rows` with the updated tab_id.
+    // peek() avoids subscribing to forum_scope directly — ForumView already
+    // subscribes to AppState via the `.read()` calls above (active_account_id,
+    // selected_channel) so any batch() on AppState re-renders this component.
+    let forum_scope = app_state.peek().forum_scope.clone();
+    // Key forces a full remount on channel or scope change so use_resource
+    // inside ClientView (and its body engines) picks up the new values.
     // Without this, switching servers keeps showing the previous server's
     // posts because use_resource holds a captured String that Dioxus
     // can't track reactively.
-    let key = format!("{}:{}", channel_id, account_id);
+    let key = format!("{}:{}:{}", channel_id, account_id, forum_scope);
     rsx! {
-        ClientView { key: "{key}", channel_id, account_id }
+        ClientView { key: "{key}", channel_id, account_id, initial_tab: Some(forum_scope) }
     }
 }
 
