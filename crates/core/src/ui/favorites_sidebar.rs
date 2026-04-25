@@ -1218,10 +1218,12 @@ async fn load_server_data_internal(
         {
             pending.set(move |cd| cd.messages = messages);
             request_restore_scroll_position_or_bottom(&ch.id);
+        } else {
         }
         // Load members
         if let Ok(members) = guard.get_channel_members(&ch.id).await {
             pending.set(move |cd| cd.members = members);
+        } else {
         }
     }
     if !auto_select_first_text_channel {
@@ -1239,7 +1241,6 @@ async fn load_server_data_internal(
             cd.members.clear();
         });
     }
-
     pending.set(|cd| cd.loading = false);
     // ONE terminal cascade for the whole fetch.
     pending.apply();

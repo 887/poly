@@ -332,13 +332,12 @@ fn AccountServerIcon(
     let bslug_click = backend_slug.clone();
     let aid_click = account_id.clone();
     let on_click = move |_: Event<MouseData>| {
-        let preserve_drawer_context = mobile_left_drawer_open();
         if let Some(previous_channel_id) = app_state.read().nav.selected_channel.cloned() {
             remember_message_list_scroll_position(&previous_channel_id);
         }
         // Clear per-server transient data synchronously before the route change so
         // that `ServerHome` never sees stale `current_channel` / `current_server`
-        // from a previous server or from demo data.  Without this, the stale channel
+        // from a previous server or from demo data. Without this, the stale channel
         // type can flip `ServerHome` into rendering `VoiceChannelView` even before
         // `load_server_data` fires, which requests audio permission and hard-crashes
         // Chromium on Linux.
@@ -349,18 +348,16 @@ fn AccountServerIcon(
             cd.members = Vec::new();
             cd.messages = Vec::new();
         });
-        if !preserve_drawer_context {
-            let sid2 = sid_click.clone();
-            spawn(async move {
-                super::super::super::favorites_sidebar::load_server_data(
-                    sid2,
-                    app_state,
-                    client_manager,
-                    chat_data,
-                )
-                .await;
-            });
-        }
+        // NOTE: do NOT spawn `load_server_data` here even when not in mobile
+        // drawer context. `ServerHome::use_effect` (via `use_spawn_once`)
+        // already kicks off the load when the route mounts. Spawning a second
+        // copy from this click handler caused the Teams server-switch hang
+        // (2026-04-25): two concurrent loaders racing on the same `chat_data`
+        // signal compounded with the loading=true→false toggles from each,
+        // re-firing every chat_data subscriber and starving the WASM
+        // scheduler. The `mobile_left_drawer_open()` distinction also needs
+        // to live in the route effect itself, not here, so there's exactly
+        // one source of truth for "what gets loaded for this server".
         crate::nav!(Route::ServerHome {
             backend: bslug_click.clone(),
             instance_id: instance_id.clone(),
