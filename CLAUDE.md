@@ -478,6 +478,27 @@ recurrence means either a missed migration site, an escape-hatch
    are single-component-scoped by definition (no subscribers outside),
    so the cross-task failure mode doesn't apply.
 
+6. **`use_effect(move || { … })` captures a non-Signal value (prop, local
+   binding) that drifts across re-renders.** Effect runs once with the
+   initial value and never re-fires when the captured value changes,
+   because Dioxus only re-runs effects whose READ signals change.
+   Symptom: "second navigation has no effect" / stale UI / downstream
+   crashes from partially-loaded state. Surfaced 2026-04-25 by the
+   Teams server-switch crash where `use_spawn_once`'s own internal
+   effect captured `key` directly and never re-fired on T001 → T002.
+   **Countermeasure (Phases 1+5 shipped, Phase 2 migration pending,
+   `docs/plans/plan-use-reactive-effect.md`):**
+   `use_reactive_effect<Deps>(deps, body)` hook (commit `de6411f8`)
+   mirrors `deps` into a Signal each render so the body re-fires through
+   PartialEq dedup whenever deps change. Plus `use_spawn_once` was
+   patched (commit `09d97a01`) using the same mirror pattern. Phase 5
+   lint `tools/scripts/forbid-stale-effect-capture.sh` flags every raw
+   `use_effect(move ||` site in `crates/core/src/ui/` with allowlisted
+   exceptions; currently `continue-on-error: true` with 54 pre-existing
+   sites in the allowlist as "Phase 2 migration pending" — flip to
+   hard-fail after the audit-driven migration shrinks the allowlist.
+   Inline allowlist: `// poly-lint: allow stale-effect-capture — <reason>`.
+
 **Last-resort diagnostic path — the out-of-band trace sink.** When a hang
 starves CDP (`evaluate_script` and `list_console_messages` time out), raw
 `tracing::warn!` goes nowhere in WASM (no subscriber wired) and
