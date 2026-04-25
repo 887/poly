@@ -253,3 +253,92 @@ stales the UI.
 site in `crates/core/src/ui/**`. Existing sites that have been manually
 verified as safe are listed in `tools/scripts/stale-effect-capture-allowlist.txt`.
 Inline suppression: `// poly-lint: allow stale-effect-capture — <reason>`.
+
+---
+
+## Section 7 — When to use `.peek()` vs `.read()`
+
+### The hang class 7 footgun
+
+Both `.peek()` and `.read()` on a `BatchedSignal<T>` return a snapshot of the
+inner value. The difference is a hidden side-effect: **`.read()` registers a
+reactive subscription** on the calling scope; `.peek()` does not.
+
+At the TOP of a render body or hook-setup function, subscribing is almost
+never the intent when the value is used to compute a **hook key**. The
+subscription means "re-render me every time this signal changes." When the
+re-render re-runs the hook-setup that reads the signal, you have a positive
+feedback loop:
+
+```
+signal write → ChatView re-renders → hook setup re-runs → .read() fires
+→ subscription re-registered → next signal write → repeat at full speed
+```
+
+Real incident (commit `55f94246`): `use_member_list_effect` read
+`app_state.read().nav.selected_channel` to compute the key for
+`use_spawn_once`. One `load_server_data` call produced **1408 ChatView
+re-renders** before the WASM scheduler starved.
+
+### Rule
+
+> **Use `.peek()` to compute a hook key or a snapshot for a one-shot async
+> body. Use `.read()` only when you WANT the caller to re-render whenever
+> the signal changes.**
+
+The typical signal for `.peek()`: the value immediately feeds `use_spawn_once`,
+`use_reactive_effect`, `.batch(`, or is captured by a `move` closure that runs
+asynchronously.
+
+The typical signal for `.read()`: the value appears directly in `rsx!`
+formatting, drives a conditional `if *x.read() { … }` that gates rendered
+output, or is passed as a prop to a child component that has its own
+subscription.
+
+### Before / after — canonical example
+
+```rust
+// BAD — hang class #7. .read() subscribes ChatView to every app_state
+// write. load_server_data's terminal pending.apply() writes app_state.nav,
+// ChatView re-renders, this body re-runs, subscription fires again — loop.
+fn use_member_list_effect(signals: &ChatViewSignals) {
+    let app_state = signals.app_state;
+    let active_channel_id = app_state.read().nav.selected_channel.cloned(); // BUG
+    use_spawn_once(active_channel_id, move |k| async move { … });
+}
+
+// GOOD — .peek() returns the same value without subscribing. ChatView
+// re-renders for its own reactive reasons; use_spawn_once re-evaluates
+// the key each render, so channel switches still propagate.
+fn use_member_list_effect(signals: &ChatViewSignals) {
+    let app_state = signals.app_state;
+    let active_channel_id = app_state.peek().nav.selected_channel.cloned(); // FIX
+    use_spawn_once(active_channel_id, move |k| async move { … });
+}
+```
+
+### `.peek()` limitation
+
+`.peek()` returns a guard that dereferences to `&T`. Field access and
+`.clone()` work; direct `.cloned()` on an `Option<String>` field also works.
+The guard does NOT implement `Clone` itself — you cannot write
+`let snap = app_state.peek().clone()` if `AppState: !Clone`, but
+`app_state.peek().nav.selected_channel.cloned()` is fine.
+
+### Classification
+
+| Severity | Shape | Action |
+|----------|-------|--------|
+| HIGH | `.read()` feeds `use_spawn_once` key, `use_reactive_effect` key, or `.batch()` | Migrate to `.peek()` immediately |
+| MEDIUM | `.read()` drives `rsx!` formatting or conditional rendering | Leave as `.read()`; allowlist in `render-time-read-allowlist.txt` |
+| LOW | `.read()` feeds a child component prop (child subscribes itself) | Leave as `.read()`; allowlist as "subscription redundant but harmless" |
+
+### CI lint
+
+`tools/scripts/forbid-render-time-read.sh` flags every `.read()` site in
+`crates/core/src/ui/**` that is not clearly inside a safe same-line context
+(`use_effect(move ||`, event handlers, `.read().await`). MEDIUM and LOW sites
+are listed in `tools/scripts/render-time-read-allowlist.txt`. HIGH sites must
+never appear in the allowlist — they must be migrated to `.peek()`.
+
+Inline suppression: `// poly-lint: allow render-time-read — <reason>`.

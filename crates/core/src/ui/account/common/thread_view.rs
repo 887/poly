@@ -11,7 +11,7 @@
 use crate::state::BatchedSignal;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
-use crate::state::{AppState, ChatData, use_spawn_once};
+use crate::state::{AppState, ChatData, use_reactive_effect, use_spawn_once};
 use crate::ui::routes::Route;
 use dioxus::prelude::*;
 use poly_client::{Channel, ChannelType, Message, MessageQuery, ThreadInfo};
@@ -285,8 +285,13 @@ pub fn ThreadPanel() -> Element {
     // Load messages for the thread into a local signal. Key on the
     // (thread_id, account_id) pair — opening a different thread or
     // switching account triggers a fresh fetch; same pair stays a no-op.
-    let thread_id_for_msgs = app_state.read().nav.thread_panel_open.clone();
-    let account_id_for_msgs = app_state.read().nav.active_account_id.cloned();
+    // **PEEK, not READ** — these values are use_spawn_once keys. A live
+    // .read() here subscribes ThreadView to every app_state write; when
+    // load_server_data writes app_state.nav, ThreadView re-renders, this
+    // setup re-runs, the read fires the subscription again — perpetual loop
+    // (hang class #7, same shape as use_member_list_effect, commit 55f94246).
+    let thread_id_for_msgs = app_state.peek().nav.thread_panel_open.clone();
+    let account_id_for_msgs = app_state.peek().nav.active_account_id.cloned();
     let messages: Signal<Vec<Message>> = use_signal(Vec::new);
     let mut messages_w = messages;
     use_spawn_once(
@@ -448,12 +453,10 @@ pub fn ThreadFullView(thread_id: String) -> Element {
         })
     };
 
-    // Load messages.
+    // Load messages; re-runs when thread_id changes.
     let messages: Signal<Vec<Message>> = use_signal(Vec::new);
     let mut messages_w = messages;
-    let thread_id_for_msgs = thread_id.clone();
-    use_effect(move || {
-        let tid = thread_id_for_msgs.clone();
+    use_reactive_effect(thread_id.clone(), move |tid| {
         let aid = app_state.read().nav.active_account_id.cloned();
         let Some(aid) = aid else { return };
         spawn(async move {

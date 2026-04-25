@@ -193,7 +193,7 @@ pub fn DraftBanner(props: DraftBannerProps) -> Element {
     {
         let account_id_init = account_id.clone();
         let chat_id_init    = chat_id.clone();
-        use_effect(move || {
+        use_effect(move || { // poly-lint: allow stale-effect-capture — component keyed by (account_id, chat_id) and remounted on change; draft load is one-shot per mount; Signal::set() requires FnMut so use_reactive_effect cannot be used here
             let loaded = if let Some(store) = DraftStore::try_open() {
                 store.pending_for_chat(&account_id_init, &chat_id_init)
             } else {

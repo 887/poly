@@ -33,7 +33,7 @@ use crate::ui::client_ui::{ComposerHooks, MessageActions};
 use poly_client::ComposerSlot;
 use crate::i18n::{t, t_args};
 use crate::state::chat_data::{backend_badge, format_file_size, user_color};
-use crate::state::{AppState, ChatData, use_spawn_once};
+use crate::state::{AppState, ChatData, use_reactive_effect, use_spawn_once};
 use crate::ui::split_shell::RightWingShell;
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
 use dioxus::html::HasFileData;
@@ -1235,7 +1235,7 @@ fn use_chat_view_effects(signals: &ChatViewSignals, ctx: &ChatViewMarkupCtx) {
 
 #[cfg(target_arch = "wasm32")]
 fn use_mobile_layout_resize_rerender_effect(mobile_layout_resize_tick: Signal<u64>) {
-    use_effect(move || {
+    use_effect(move || { // poly-lint: allow stale-effect-capture — Signal-only capture (mobile_layout_resize_tick); no non-Signal props
         use std::cell::Cell;
         use std::rc::Rc;
         use wasm_bindgen::JsCast;
@@ -1282,7 +1282,7 @@ fn use_header_actions_overflow_effect(
     mut header_actions_menu_open: Signal<bool>,
     mobile_layout_resize_tick: Signal<u64>,
 ) {
-    use_effect(move || {
+    use_effect(move || { // poly-lint: allow stale-effect-capture — Signal-only; subscribes to mobile_layout_resize_tick Signal
         let _resize_tick = *mobile_layout_resize_tick.read();
 
         spawn(async move {
@@ -1389,7 +1389,7 @@ fn use_mobile_side_column_effect(signals: &ChatViewSignals, ctx: &ChatViewMarkup
     let is_dm_channel = ctx.is_dm_channel;
     let is_group_channel = ctx.is_group_channel;
 
-    use_effect(move || {
+    use_effect(move || { // poly-lint: allow stale-effect-capture — is_dm_channel/is_group_channel are bool (Copy); app_state/utility_panel are Signals
         let member_list_open = if is_dm_channel || is_group_channel {
             app_state.read().nav.dm_right_sidebar_visible
         } else {
@@ -1407,7 +1407,7 @@ fn use_mobile_side_column_effect(signals: &ChatViewSignals, ctx: &ChatViewMarkup
 /// right after clicking a channel or DM, matching Discord UX.
 fn use_composer_focus_effect(signals: &ChatViewSignals) {
     let app_state = signals.app_state;
-    use_effect(move || {
+    use_effect(move || { // poly-lint: allow stale-effect-capture — Signal-only; subscribes to app_state Signal for channel/account changes
         // Depend on channel + active account so switching DMs also refocuses.
         let _channel = app_state.read().nav.selected_channel.clone();
         let _account = app_state.read().nav.active_account_id.clone();
@@ -1520,8 +1520,13 @@ fn use_search_messages_effect(signals: &ChatViewSignals, ctx: &ChatViewMarkupCtx
     // TODO(use_spawn_once): the hook does NOT debounce — each keystroke
     // issues a fresh search. A separate `use_debounced_effect`-style
     // primitive should wrap this call site. See plan-use-spawn-once §4.
-    let panel_is_search = *utility_panel.read() == Some(ChatUtilityPanel::Search);
-    let raw_query = search_query.read().trim().to_string();
+    // **PEEK, not READ** — panel_is_search and raw_query are use_spawn_once
+    // keys. A live .read() here subscribes ChatView to every write of
+    // utility_panel / search_query; when load_server_data writes app_state
+    // (which cascades a chat_data re-render), ChatView re-renders, this setup
+    // re-runs, the subscriptions re-fire — perpetual loop (hang class #7).
+    let panel_is_search = *utility_panel.peek() == Some(ChatUtilityPanel::Search);
+    let raw_query = search_query.peek().trim().to_string();
     let channel_key = current_channel.as_ref().map(|c| c.id.clone());
     use_spawn_once(
         (panel_is_search, raw_query.clone(), channel_key),
@@ -1585,8 +1590,14 @@ fn use_pinned_messages_effect(signals: &ChatViewSignals) {
     // Key on (pinned-panel-open, channel_id) so opening the pinned panel
     // or switching channel while it's open re-spawns; other panel changes
     // don't.
-    let panel_is_pinned = *utility_panel.read() == Some(ChatUtilityPanel::Pinned);
-    let target_channel_id = app_state.read().nav.selected_channel.cloned();
+    //
+    // **PEEK, not READ** — both values are use_spawn_once keys. A live
+    // .read() here subscribes ChatView to every write of utility_panel and
+    // app_state.nav; when load_server_data writes selected_channel, ChatView
+    // re-renders, this setup re-runs, the subscriptions re-fire — perpetual
+    // loop (hang class #7, same as use_member_list_effect, commit 55f94246).
+    let panel_is_pinned = *utility_panel.peek() == Some(ChatUtilityPanel::Pinned);
+    let target_channel_id = app_state.peek().nav.selected_channel.cloned();
     use_spawn_once(
         (panel_is_pinned, target_channel_id),
         move |(panel_is_pinned, target_channel_id)| async move {
@@ -1639,7 +1650,7 @@ fn use_history_state_effect(signals: &ChatViewSignals) {
     let mut scrolled_from_bottom = signals.scrolled_from_bottom;
     let mut new_messages_while_scrolled_up = signals.new_messages_while_scrolled_up;
 
-    use_effect(move || {
+    use_effect(move || { // poly-lint: allow stale-effect-capture — Signal-only; subscribes to app_state, chat_data, history_state Signals
         let Some(active_channel_id) = app_state.read().nav.selected_channel.cloned() else {
             history_state.batch(|h| *h = ChatHistoryUiState::default());
             return;
@@ -1699,7 +1710,7 @@ fn use_history_state_effect(signals: &ChatViewSignals) {
 }
 
 fn use_member_list_preferences_effect(app_state: BatchedSignal<AppState>) {
-    use_effect(move || {
+    use_effect(move || { // poly-lint: allow stale-effect-capture — Signal-only; subscribes to app_state Signal
         let server_member_list_open = app_state.read().nav.right_sidebar_visible;
         let dm_member_list_open = app_state.read().nav.dm_right_sidebar_visible;
         spawn(async move {
@@ -1754,7 +1765,7 @@ fn use_unread_marker_visibility_effect(signals: &ChatViewSignals) {
     let mut unread_marker_on_screen = signals.unread_marker_on_screen;
     let history_state = signals.history_state;
 
-    use_effect(move || {
+    use_effect(move || { // poly-lint: allow stale-effect-capture — Signal-only; subscribes to history_state Signal
         let unread_marker_id = history_state.read().unread_marker_message_id.clone();
         let unread_count = history_state.read().unread_count;
 
@@ -1799,7 +1810,7 @@ fn use_auto_dismiss_divider_effect(signals: &ChatViewSignals) {
     let history_state = signals.history_state;
     let chat_data = signals.chat_data;
 
-    use_effect(move || {
+    use_effect(move || { // poly-lint: allow stale-effect-capture — Signal-only; subscribes to scrolled_from_bottom, history_state, chat_data Signals
         // Only act when the user is at the bottom (not scrolled away from live tail).
         if *scrolled_from_bottom.read() {
             return;
@@ -3370,7 +3381,7 @@ fn render_message_list(ctx: ChatViewMarkupCtx) -> Element {
     let mut virtual_window = ctx.virtual_window;
     let scrolled_from_bottom = ctx.scrolled_from_bottom;
 
-    use_effect(move || {
+    use_effect(move || { // poly-lint: allow stale-effect-capture — virtualize_messages is bool (Copy); virtual_window/scrolled_from_bottom are Signals
         if !virtualize_messages {
             if virtual_window.read().enabled {
                 virtual_window.set(MessageVirtualWindowState::default());
@@ -4643,8 +4654,7 @@ fn render_input_emoji_picker(ctx: ChatViewMarkupCtx) -> Element {
     // Load custom emojis for the current channel on mount.
     let custom_emojis = use_signal(Vec::<poly_client::CustomEmoji>::new);
     let app_state_for_emoji = ctx.app_state;
-    use_effect(move || {
-        let channel_id = channel_id.clone();
+    use_reactive_effect(channel_id.clone(), move |channel_id| {
         let mut custom_emojis = custom_emojis;
         let client_manager = client_manager;
         let app_state = app_state_for_emoji;
