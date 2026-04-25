@@ -65,7 +65,7 @@ pub fn ServerContextMenu() -> Element {
         let menu_id = server_id.clone();
         // capture a mutable copy of the signal so we can call .set() later
         let mut show_remove_confirm = show_remove_confirm; // Signal is Copy, no clone needed
-        use_effect(move || {
+        use_effect(move || { // poly-lint: allow stale-effect-capture — show_remove_confirm.set() requires FnMut; server context menu remounts for each server; Signal::set() incompatible with use_reactive_effect (Fn-only)
             // `menu_id` is captured so the effect re-runs when the menu target
             // changes (including when a menu closes and reopens for a new server).
             let _ = &menu_id;

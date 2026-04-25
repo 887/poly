@@ -83,12 +83,11 @@ jobs:
       # (async keyed spawn). Inline-allowlist via:
       #   // poly-lint: allow stale-effect-capture — <reason>
       # File-level allowlist: tools/scripts/stale-effect-capture-allowlist.txt.
-      # continue-on-error: true while the heuristic beds in and the Phase 2
-      # migration of existing sites is in progress. Flip to hard-fail once the
-      # allowlist has been fully triaged (see plan §3 Phase 2).
+      # Phase 2 migration complete (2026-04-24). All 54 original allowlist entries
+      # resolved — HIGH sites migrated to use_reactive_effect, LOW/one-shot sites
+      # keep raw use_effect with inline poly-lint: allow comments. Hard-fail enabled.
       - name: Check for stale closure captures in use_effect
         run: ./tools/scripts/forbid-stale-effect-capture.sh
-        continue-on-error: true
 
       # Phases 1+2 of docs/plans/plan-peek-vs-read.md — flags render-time
       # .read() calls that silently subscribe the parent component to a signal
