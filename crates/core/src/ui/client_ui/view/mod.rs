@@ -28,7 +28,7 @@ pub use toolbar::ViewToolbar;
 pub use tree_body::TreeBody;
 
 use crate::client_manager::{BackendHandleExt, ClientManager};
-use crate::state::BatchedSignal;
+use crate::state::{BatchedSignal, use_reactive_effect};
 use dioxus::prelude::*;
 use poly_client::{ClientError, ViewBody, ViewDescriptor};
 use poly_ui_macros::{context_menu, ui_action};
@@ -117,6 +117,22 @@ fn render_descriptor(
     let selected_sort = use_signal(|| None::<String>);
     let selected_filter = use_signal(|| None::<String>);
     let selected_tab = use_signal(|| initial_tab.clone());
+    // Dioxus' `key:` attribute does NOT remount a single component when its
+    // key changes — `use_signal` therefore keeps the value from first mount,
+    // ignoring later prop changes. This sync effect bridges that gap so a
+    // sidebar scope click (which updates `initial_tab` via ForumView's key)
+    // actually propagates into `selected_tab` and the body engine refetches.
+    // Without this, demo-forum's Subscribed/Local/All buttons did nothing
+    // even after the body_key was made tab-aware (witnessed 2026-04-25).
+    {
+        let initial_tab_for_sync = initial_tab.clone();
+        use_reactive_effect(initial_tab_for_sync, move |new_tab| {
+            // Signal<T>: Copy; clone the handle so the Fn closure can mutate
+            // through a fresh local binding.
+            let mut t = selected_tab;
+            t.set(new_tab);
+        });
+    }
     let filter_str = filter.read().clone();
     rsx! {
         div { class: "client-view",
@@ -135,13 +151,21 @@ fn render_descriptor(
             }
             div { class: "client-view-body",
                 {
-                    // Force a full remount of the body engine when channel_id
-                    // or account_id changes. use_resource inside the body
-                    // captures these as plain Strings, not Signals, so Dioxus
-                    // can't track reactivity on them; without a key-based
-                    // remount, switching servers leaves a stale resource and
-                    // the forum keeps showing the previous server's posts.
-                    let body_key = format!("{}:{}", channel_id, account_id);
+                    // Force a full remount of the body engine when channel_id,
+                    // account_id, OR any of the toolbar selections (sort,
+                    // filter, scope) change. use_resource inside the body
+                    // captures these as plain Strings/Options, not Signals,
+                    // so Dioxus can't track reactivity on them; without a
+                    // key-based remount the resource keeps the stale values
+                    // and the user's Local/All click does nothing.
+                    let body_key = format!(
+                        "{}:{}:{:?}:{:?}:{:?}",
+                        channel_id,
+                        account_id,
+                        selected_sort.read(),
+                        selected_filter.read(),
+                        selected_tab.read(),
+                    );
                     match body {
                         ViewBody::ListBody(spec) => rsx! {
                             ListBody {

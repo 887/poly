@@ -650,6 +650,15 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
 
                 // If we have a stored last route for this account, restore it.
                 // This makes account-switching feel like a true tab switch.
+                //
+                // EXCEPT — if the stored route is a DMs/Friends/Notifications
+                // route but the backend doesn't actually support that surface,
+                // ignore it and fall through to the capability-based default.
+                // Without this guard, a one-off visit to a non-supported page
+                // (manual URL nav, deep-link, stale persisted state from an
+                // earlier capability shape) leaves the account permanently
+                // landing there — e.g. demo_forum opening on an empty Direct
+                // Messages page even though demo_forum has has_dms == false.
                 if !preserve_drawer_context {
                     let last_route_url = app_state
                         .read()
@@ -660,8 +669,28 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                     if let Some(url) = last_route_url
                         && let Ok(route) = url.parse::<Route>()
                     {
-                        navigator().push(route);
-                        return;
+                        let backend_slug_for_route_check = chat_data
+                            .read()
+                            .account_sessions
+                            .get(&aid)
+                            .map(|s| s.backend.slug().to_string());
+                        let route_is_compatible = if let Some(slug) = backend_slug_for_route_check {
+                            let caps = poly_client::capabilities_for_slug(&slug);
+                            let path = url.as_str();
+                            let dm_path = path.contains("/dms");
+                            let friends_path = path.contains("/friends");
+                            let notif_path = path.contains("/notifications");
+                            let needs_dms = dm_path && !caps.should_show_dms();
+                            let needs_friends = friends_path && !caps.should_show_friends();
+                            let needs_notif = notif_path && !caps.should_show_notifications();
+                            !(needs_dms || needs_friends || needs_notif)
+                        } else {
+                            true
+                        };
+                        if route_is_compatible {
+                            navigator().push(route);
+                            return;
+                        }
                     }
                 }
 

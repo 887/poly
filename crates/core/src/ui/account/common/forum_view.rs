@@ -202,7 +202,7 @@ pub fn ForumView() -> Element {
     // peek() avoids subscribing to forum_scope directly — ForumView already
     // subscribes to AppState via the `.read()` calls above (active_account_id,
     // selected_channel) so any batch() on AppState re-renders this component.
-    let forum_scope = app_state.peek().forum_scope.clone();
+    let forum_scope = app_state.read().forum_scope.clone();
     // Key forces a full remount on channel or scope change so use_resource
     // inside ClientView (and its body engines) picks up the new values.
     // Without this, switching servers keeps showing the previous server's
