@@ -773,7 +773,6 @@ chat-type-message-group = Message { $group }
 chat-markdown-formatting = Markdown formatting
 
 # Users extras
-user-no-members = No members to show
 account-not-signed-in = Not signed in
 
 # Theme color labels

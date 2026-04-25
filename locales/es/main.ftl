@@ -584,7 +584,6 @@ chat-type-message-group = Escribe en { $group }
 chat-markdown-formatting = Formato Markdown
 
 # Usuarios extras
-user-no-members = No hay miembros que mostrar
 user-all-offline-hidden = Todos los miembros están desconectados y ocultos
 account-not-signed-in = No conectado
 

@@ -103,6 +103,19 @@ async fn test_get_servers() {
         assert_eq!(cat.channel_ids.len(), 1);
         assert!(cat.channel_ids[0].starts_with("lemmy-feed-"));
     }
+
+    // server.account_id MUST match session.id ("lemmy-session-{n}"), NOT
+    // "lemmy-user-{n}". A mismatch causes AccountServerBar to filter out all
+    // communities for the account, landing the user on the empty Notifications
+    // page instead of the first community.
+    for server in &servers {
+        assert_eq!(
+            server.account_id, session.id,
+            "server.account_id must equal session.id so AccountServerBar can \
+             filter servers for this account; got '{}' vs '{}'",
+            server.account_id, session.id
+        );
+    }
 }
 
 /// `get_channels` returns a single "Posts" Forum channel per community.

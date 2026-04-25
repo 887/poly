@@ -99,11 +99,18 @@ impl LemmyClient {
     }
 
     /// Return (account_id, account_display_name) or an AuthFailed error.
+    ///
+    /// The `account_id` MUST match `session.id` produced during `authenticate`
+    /// (`"lemmy-session-{user_id}"`). Using a different prefix such as
+    /// `"lemmy-user-{user_id}"` causes `Server.account_id` to diverge from the
+    /// session key stored in `ClientManager`, making the account-server-bar
+    /// filter find zero servers and routing the user to the empty Notifications
+    /// page instead of the first community.
     fn current_account_metadata(&self) -> ClientResult<(String, String)> {
         let session = self.http.session().ok_or_else(|| {
             ClientError::AuthFailed("Lemmy client is not authenticated".to_string())
         })?;
-        let account_id = format!("lemmy-user-{}", session.user_id);
+        let account_id = format!("lemmy-session-{}", session.user_id);
         let display = session.user_display_name;
         Ok((account_id, display))
     }
