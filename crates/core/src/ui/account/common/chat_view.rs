@@ -1705,7 +1705,15 @@ fn use_history_state_effect(signals: &ChatViewSignals) {
             messages_loaded,
         };
         recompute_history_spacers(&mut next_history, &messages);
-        history_state.batch(|h| *h = next_history);
+        // `set_if_changed` (hang class #8 countermeasure) — without the
+        // equality check, an empty channel (`messages_loaded` stays
+        // `false` because `messages.is_empty()`) re-runs the
+        // early-return-disabled branch every render, writes
+        // `history_state` every time, re-fires every `history_state`
+        // subscriber (this effect included), and pegs the WASM scheduler.
+        // Witnessed 2026-04-25 on Teams T001/CH002 (3162 ChatView
+        // re-renders for one load_server_data call).
+        history_state.set_if_changed(next_history);
     });
 }
 

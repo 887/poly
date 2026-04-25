@@ -9,11 +9,13 @@
 //! - Setup wizard state
 
 pub mod batched_signal;
+pub mod bisect_log;
 pub mod chat_data;
 pub mod route_synced;
 pub mod use_reactive_effect;
 pub mod use_spawn_once;
 
+pub use bisect_log::bisect_log;
 pub use batched_signal::{BatchedSignal, PendingUpdate, use_batched_context};
 pub use chat_data::{ChatData, DragSource};
 pub use route_synced::RouteSynced;

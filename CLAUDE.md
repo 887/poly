@@ -527,6 +527,34 @@ recurrence means either a missed migration site, an escape-hatch
    guards; the difference is a hidden side-effect on the reactive graph
    that Rust types can't encode without Dioxus internals changes.
 
+8. **`use_effect` body that subscribes to signal `S` and writes `S` with
+   no value-equality check.** `BatchedSignal::batch` always notifies
+   subscribers regardless of whether the closure actually changed the
+   value. An effect that reads `S` (subscribing) and unconditionally
+   writes `S` will re-fire after its own write — forever — UNLESS the
+   body's early-return guard fires for the steady state. When the guard
+   has a hole (e.g. `messages_loaded` for an empty channel), the loop
+   pegs the WASM scheduler and CDP wedges. Surfaced 2026-04-25 by the
+   Teams T001/CH002 click hang: `use_history_state_effect` early-
+   returned only when `messages_loaded == true`, but for an empty
+   channel `messages.is_empty()` so `messages_loaded` stayed `false`,
+   the effect re-wrote `history_state` every render, every write
+   re-fired the effect. Bisect captured 3162 ChatView re-renders for
+   1× `load_server_data` call. Distinct from #2 (read-guard scoping —
+   that's about borrow-rule panics from a live read across a write of
+   the same signal in one scope) and #6 (stale closure capture — that's
+   about effects NOT re-firing when they should).
+   **Countermeasure (Phase 1 shipped):** `BatchedSignal::set_if_changed(next)`
+   and `batch_if_changed(|cur| -> next)` — both compare `next` against the
+   current value and skip the write when equal, so subscribers don't
+   re-notify and self-write effects converge. Requires `T: PartialEq`.
+   Phase 1 (commit pending): helper API + first migration site
+   (`use_history_state_effect`). Phase 2 (TODO): lint
+   `tools/scripts/forbid-effect-self-write.sh` flagging `use_effect`
+   bodies that read signal `X` and write `X` via raw `.set(`/`.batch(`
+   instead of `_if_changed`. Inline allowlist convention:
+   `// poly-lint: allow effect-self-write — <reason>`.
+
 **Last-resort diagnostic path — the out-of-band trace sink.** When a hang
 starves CDP (`evaluate_script` and `list_console_messages` time out), raw
 `tracing::warn!` goes nowhere in WASM (no subscriber wired) and

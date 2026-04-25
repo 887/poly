@@ -156,6 +156,63 @@ impl<T: 'static> BatchedSignal<T> {
         }
     }
 
+    /// Write the closure-computed next value only if it differs from the
+    /// current value. Use this **inside `use_effect` bodies that subscribe
+    /// to the same signal** to break self-triggered re-render loops.
+    ///
+    /// # Why this exists
+    ///
+    /// `BatchedSignal::batch` always notifies subscribers, regardless of
+    /// whether the closure actually changed the value. An effect that
+    /// reads signal `S` (subscribing) and then writes `S` will re-fire
+    /// after its own write — forever — unless an early-return guard inside
+    /// the body fires for the steady state. When the early-return guard
+    /// has a hole (e.g. `messages_loaded` for an empty channel), the loop
+    /// pegs the WASM scheduler.
+    ///
+    /// `batch_if_changed` makes the guard intrinsic to the API: the write
+    /// is suppressed when nothing changed, so the signal doesn't re-notify
+    /// and the effect doesn't re-fire.
+    ///
+    /// See `CLAUDE.md` § "Common WASM-hang causes" **#8**.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use_effect(move || {
+    ///     let snapshot = chat_data.read().clone();
+    ///     let mut next = ChatHistoryUiState { ... derived from snapshot ... };
+    ///     // Old shape — re-fires forever when the early-return doesn't catch the steady state:
+    ///     // history_state.batch(|h| *h = next);
+    ///     // New shape — write is suppressed when next == current:
+    ///     history_state.batch_if_changed(|_| next);
+    /// });
+    /// ```
+    pub fn batch_if_changed<F>(&self, f: F)
+    where
+        T: PartialEq,
+        F: FnOnce(&T) -> T,
+    {
+        let next = f(&*self.inner.read());
+        if *self.inner.read() == next {
+            return;
+        }
+        self.batch(|v| *v = next);
+    }
+
+    /// Replace the value only if `next != current`. Convenience wrapper
+    /// over [`BatchedSignal::batch_if_changed`] for sites that already
+    /// have the next value in hand.
+    pub fn set_if_changed(&self, next: T)
+    where
+        T: PartialEq,
+    {
+        if *self.inner.read() == next {
+            return;
+        }
+        self.batch(|v| *v = next);
+    }
+
     /// **Banned** — use [`BatchedSignal::batch`] instead.
     ///
     /// Multiple consecutive `.write()` calls each drop a guard and
