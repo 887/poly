@@ -1652,7 +1652,9 @@ fn use_history_state_effect(signals: &ChatViewSignals) {
 
     use_effect(move || { // poly-lint: allow stale-effect-capture — Signal-only; subscribes to app_state, chat_data, history_state Signals
         let Some(active_channel_id) = app_state.read().nav.selected_channel.cloned() else {
-            history_state.batch(|h| *h = ChatHistoryUiState::default());
+            // hang #8 countermeasure: skip the write when already default,
+            // otherwise the unconditional write re-fires the effect.
+            history_state.set_if_changed(ChatHistoryUiState::default());
             return;
         };
         let chat_snapshot = chat_data.read().clone();

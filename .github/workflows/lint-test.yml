@@ -106,6 +106,25 @@ jobs:
         run: ./tools/scripts/forbid-render-time-read.sh
         continue-on-error: true
 
+      # Phase 1 of CLAUDE.md hang class #8 — flags `use_effect(move ||)`
+      # bodies that READ a signal X (subscribing) AND WRITE that same signal
+      # X via raw `.set(` / `.batch(` (not the `_if_changed` variants).
+      # `BatchedSignal::batch` always notifies subscribers, so an effect
+      # that subscribes-to and writes-to the same signal re-fires after its
+      # own write — a tight WASM-scheduler loop when the body's
+      # early-return guard has a hole for the steady state. Real incident:
+      # Teams T001/CH002 empty-channel wedge (3162 ChatView re-renders for
+      # one load_server_data call, fixed in commit 49e5f7d7).
+      # Fix: use `BatchedSignal::set_if_changed(next)` or
+      # `batch_if_changed(|cur| -> next)`.
+      # Inline-allowlist via: // poly-lint: allow effect-self-write — <reason>
+      # File-level allowlist: tools/scripts/effect-self-write-allowlist.txt.
+      # continue-on-error: true while the lint beds in (heuristic over-counts
+      # spawn-only writes that don't actually subscribe).
+      - name: Check for effect-self-write loops (hang class 8)
+        run: ./tools/scripts/forbid-effect-self-write.sh
+        continue-on-error: true
+
   dylint:
     # Phase 5 Track B of plan-batched-signal.md + plan-use-spawn-once.md —
     # HIR-precise alternative to the regex scripts above. Belt-and-suspenders:

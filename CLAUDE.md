@@ -544,15 +544,18 @@ recurrence means either a missed migration site, an escape-hatch
    that's about borrow-rule panics from a live read across a write of
    the same signal in one scope) and #6 (stale closure capture — that's
    about effects NOT re-firing when they should).
-   **Countermeasure (Phase 1 shipped):** `BatchedSignal::set_if_changed(next)`
-   and `batch_if_changed(|cur| -> next)` — both compare `next` against the
+   **Countermeasure (Phases 1+2 shipped with CI gate):**
+   `BatchedSignal::set_if_changed(next)` and
+   `batch_if_changed(|cur| -> next)` — both compare `next` against the
    current value and skip the write when equal, so subscribers don't
    re-notify and self-write effects converge. Requires `T: PartialEq`.
-   Phase 1 (commit pending): helper API + first migration site
-   (`use_history_state_effect`). Phase 2 (TODO): lint
-   `tools/scripts/forbid-effect-self-write.sh` flagging `use_effect`
-   bodies that read signal `X` and write `X` via raw `.set(`/`.batch(`
-   instead of `_if_changed`. Inline allowlist convention:
+   Phase 1 (commit `49e5f7d7`): helper API + 2 migration sites in
+   `use_history_state_effect`. Phase 2 lint
+   `tools/scripts/forbid-effect-self-write.sh` flags any `use_effect`
+   body that reads signal `X` and writes `X` via raw `.set(`/`.batch(`
+   instead of `_if_changed`. Currently `continue-on-error: true` with
+   8 known-safe sites allowlisted (converging state machines + spawn-only
+   writes). Inline allowlist convention:
    `// poly-lint: allow effect-self-write — <reason>`.
 
 **Last-resort diagnostic path — the out-of-band trace sink.** When a hang

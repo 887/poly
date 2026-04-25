@@ -1,0 +1,25 @@
+# Allowlist for forbid-effect-self-write.sh (CLAUDE.md hang class #8).
+#
+# Format: `path:line` per entry — `line` is the start line of the
+# `use_effect(move ||` block.
+#
+# Each entry needs a rationale comment explaining why this self-write
+# pattern is safe:
+#  - "converging" — the body has an explicit early-return that fires
+#    after the first write (guards on the field that gets mutated);
+#  - "spawn-only" — reads happen only inside a `spawn(async move { … })`
+#    block, NOT in the use_effect closure body, so the use_effect itself
+#    isn't subscribed to those signals.
+#
+# Inline `// poly-lint: allow effect-self-write — <reason>` comments
+# inside an effect body also suppress the lint without needing a file
+# entry.
+
+crates/core/src/ui/account/common/chat_view.rs:1823    # converging — `unread_divider_visible` is the modified field; the early return at !divider_visible || unread_count != 0 fires after the first write.
+crates/core/src/ui/account/common/chat_view.rs:3394    # converging — the `if virtual_window.read().enabled` guard fires after the first .set(default()) call.
+crates/core/src/ui/account/common/media_viewer.rs:71   # spawn-only — all signal reads + writes are inside a `spawn(async move { … })` event-listener loop; the use_effect closure body itself doesn't subscribe.
+crates/core/src/ui/account/server/settings/mod.rs:547  # converging — the `if published_section.read().as_str() != slug` guard fires after the first .set(slug) call.
+crates/core/src/ui/mod.rs:1521                          # converging state machine — startup-overlay transitions through enabled/visible/finished branches; each branch is gated on a different combination of the same flags so the body settles into a terminal state.
+crates/core/src/ui/search.rs:535                        # converging — `app_state.search_type_seed` is set to None after consuming a Some(seed); subsequent iterations see None and skip the write.
+crates/core/src/ui/settings/general.rs:160              # converging — `loaded` flag is set to true on first run; subsequent iterations early-return at `if *loaded.read()`.
+crates/core/src/ui/settings/media.rs:154                # converging — same one-shot `loaded` flag pattern as settings/general.rs (line 160).
