@@ -486,18 +486,46 @@ recurrence means either a missed migration site, an escape-hatch
    crashes from partially-loaded state. Surfaced 2026-04-25 by the
    Teams server-switch crash where `use_spawn_once`'s own internal
    effect captured `key` directly and never re-fired on T001 → T002.
-   **Countermeasure (Phases 1+5 shipped, Phase 2 migration pending,
+   **Countermeasure (Phases 1+2+5 shipped with HARD-FAIL CI gate,
    `docs/plans/plan-use-reactive-effect.md`):**
    `use_reactive_effect<Deps>(deps, body)` hook (commit `de6411f8`)
    mirrors `deps` into a Signal each render so the body re-fires through
    PartialEq dedup whenever deps change. Plus `use_spawn_once` was
-   patched (commit `09d97a01`) using the same mirror pattern. Phase 5
-   lint `tools/scripts/forbid-stale-effect-capture.sh` flags every raw
-   `use_effect(move ||` site in `crates/core/src/ui/` with allowlisted
-   exceptions; currently `continue-on-error: true` with 54 pre-existing
-   sites in the allowlist as "Phase 2 migration pending" — flip to
-   hard-fail after the audit-driven migration shrinks the allowlist.
-   Inline allowlist: `// poly-lint: allow stale-effect-capture — <reason>`.
+   patched (commit `09d97a01`) using the same mirror pattern. Phase 2
+   migration (commit `cb4cf07`) triaged all 54 raw `use_effect` sites:
+   ~11 migrated to `use_reactive_effect`, 43 KEEP+inline-allowlisted as
+   legitimate Signal-only / one-shot mount cases. Phase 5 lint
+   `tools/scripts/forbid-stale-effect-capture.sh` is now `continue-on-
+   error: false` (hard-fail). Inline allowlist: `// poly-lint: allow
+   stale-effect-capture — <reason>`.
+
+7. **Render-time `signal.read()` that subscribes the parent to a signal
+   used only for a hook key (or one-shot snapshot).** The `.read()` at
+   the top of a render body silently subscribes the WHOLE component to
+   the signal. Any subsequent write to that signal — even one the
+   component itself triggers via async cascade — re-renders the parent,
+   re-runs the read, infinite loop. Surfaced 2026-04-25 by the Teams
+   server-switch crash: `use_member_list_effect` did
+   `app_state.read().nav.selected_channel.cloned()` for its
+   `use_spawn_once` key. After `load_server_data`'s terminal
+   `pending.apply()` wrote `app_state.nav.selected_channel`, ChatView
+   re-rendered, the read re-fired the subscription. Bisect captured
+   1408× ChatView re-renders for 1× `load_server_data` call.
+   **Countermeasure (Phases 1+2 shipped, `docs/plans/plan-peek-vs-read.md`):**
+   Use `.peek()` instead of `.read()` whenever the value isn't needed
+   reactively (hook keys, one-shot snapshots, values passed unchanged
+   to a child that has its own subscription). Phase 1 lint
+   `tools/scripts/forbid-render-time-read.sh` (commit `8321406d`)
+   flags every render-time `.read()` in `crates/core/src/ui/` with
+   allowlist exceptions for the legitimate cases (rsx! formatting,
+   conditional rendering, child-component prop threading where
+   subscription IS the intent). Currently `continue-on-error: true`
+   with 988 pre-existing sites allowlisted as MEDIUM (rsx! / cond
+   rendering); 3 HIGH sites already migrated to `.peek()`. Inline
+   allowlist: `// poly-lint: allow render-time-read — <reason>`. Type-
+   system newtype option not viable: `peek` and `read` return identical
+   guards; the difference is a hidden side-effect on the reactive graph
+   that Rust types can't encode without Dioxus internals changes.
 
 **Last-resort diagnostic path — the out-of-band trace sink.** When a hang
 starves CDP (`evaluate_script` and `list_console_messages` time out), raw
