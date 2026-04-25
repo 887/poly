@@ -989,10 +989,11 @@ fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
                     // Scope filter — stacked vertically. onclick updates
                     // `AppState.forum_scope` which re-keys `ForumView`'s
                     // `ClientView` mount so `get_view_rows` re-fetches with
-                    // the new tab_id. peek() avoids an extra subscription here
-                    // since ForumView already subscribes to AppState for nav.
+                    // the new tab_id. read() (not peek!) so the active class
+                    // re-renders when the user clicks one of the buttons —
+                    // peek() left the previous active button highlighted.
                     {
-                        let scope = app_state.peek().forum_scope.clone();
+                        let scope = app_state.read().forum_scope.clone();
                         let cls_sub = if scope == "subscribed" { "forum-filter-btn active forum-filter-full" } else { "forum-filter-btn forum-filter-full" };
                         let cls_loc = if scope == "local"      { "forum-filter-btn active forum-filter-full" } else { "forum-filter-btn forum-filter-full" };
                         let cls_all = if scope == "all"        { "forum-filter-btn active forum-filter-full" } else { "forum-filter-btn forum-filter-full" };

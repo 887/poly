@@ -1378,16 +1378,13 @@ impl ClientBackend for DemoClient3 {
                     ToolbarOption { id: "top_all_time".to_string(), label_key: "plugin-demo-sort-top-all-time".to_string(), icon: None, default_selected: false },
                 ],
                 filter_options: vec![],
-                // Listing-type tabs mirror Lemmy's Subscribed / Local / All.
-                // The toolbar renders these as clickable chips and passes the
-                // selected id back to `get_view_rows` as `tab_id`. The
-                // `initial_tab` prop from `ForumView` (set from
-                // `AppState.forum_scope`) pre-selects the right chip on mount.
-                tabs: vec![
-                    ToolbarOption { id: "subscribed".to_string(), label_key: "plugin-demo-tab-subscribed".to_string(), icon: None, default_selected: true },
-                    ToolbarOption { id: "local".to_string(),      label_key: "plugin-demo-tab-local".to_string(),      icon: None, default_selected: false },
-                    ToolbarOption { id: "all".to_string(),        label_key: "plugin-demo-tab-all".to_string(),        icon: None, default_selected: false },
-                ],
+                // Subscribed / Local / All are rendered in the SIDEBAR
+                // (channel_list.rs) — the same place Lemmy puts them — and
+                // delivered to `get_view_rows` via `tab_id` through
+                // ForumView's `initial_tab` prop. Declaring them as toolbar
+                // tabs here would render a duplicate row of chips above the
+                // post list, which is not how Lemmy looks.
+                tabs: vec![],
                 action_items: vec![],
             }),
             body: ViewBody::TreeBody(TreeSpec {
@@ -1401,18 +1398,30 @@ impl ClientBackend for DemoClient3 {
         &self, channel_id: &str, _cursor: Option<Cursor>,
         _sort_id: Option<&str>, _filter_id: Option<&str>, tab_id: Option<&str>,
     ) -> Result<ViewRowsPage, ClientError> {
-        let all_posts = data::demo3_messages(channel_id);
+        let subscribed_posts = data::demo3_messages(channel_id);
         // Listing-type scope: mirrors Lemmy's Subscribed / Local / All.
-        // - "subscribed" (default): all posts the user follows.
-        // - "local": instance-only subset — first half of the demo posts so
-        //   the feed visibly shrinks when the tab is clicked.
-        // - "all": federated firehose — full set.
-        let posts: Vec<_> = match tab_id.unwrap_or("subscribed") {
-            "local" => {
-                let half = (all_posts.len() + 1) / 2;
-                all_posts.into_iter().take(half).collect()
+        // Each scope returns a visibly-different post set so the demo
+        // actually shows the wiring working.
+        // - "subscribed" (default): the user's own curated feed — the
+        //   handcrafted posts in `data::demo3_messages`.
+        // - "local": instance-only — only posts authored by users on
+        //   the demo's home instance (display_name suffixed with
+        //   `(demo_forum)`). Visibly fewer than subscribed.
+        // - "all": federated firehose — subscribed + a handful of
+        //   posts synthesised as if they came from other federated
+        //   instances (display_name suffixed with `@instance.name`).
+        //   Visibly more than subscribed.
+        let posts: Vec<Message> = match tab_id.unwrap_or("subscribed") {
+            "local" => subscribed_posts
+                .into_iter()
+                .filter(|m| m.author.display_name.contains("(demo_forum)"))
+                .collect(),
+            "all" => {
+                let mut combined = subscribed_posts;
+                combined.extend(demo_federated_posts(channel_id));
+                combined
             }
-            _ => all_posts, // "subscribed", "all", and any unknown → full set
+            _ => subscribed_posts,
         };
         // Forum rows encode score / comment count / age in a greppable
         // `SCORE:N ·` prefix on `meta_text`. The host `ListBody` / `TreeBody`
@@ -1507,5 +1516,56 @@ impl ClientBackend for DemoClient3 {
         &self, action_id: &str, _channel_id: &str, _message_id: &str,
     ) -> Result<ActionOutcome, ClientError> {
         Err(ClientError::NotFound(format!("unknown message action: {action_id}")))
+    }
+}
+
+/// Synthesised "federated" demo posts that appear only in the All scope.
+///
+/// Author display names use the `name@instance.tld` convention to look like
+/// posts coming from other Lemmy-style instances the demo's home instance
+/// has federated with. The post IDs are namespaced with `fpost-fed-` so they
+/// never collide with the handcrafted local IDs in `data::demo3_messages`.
+fn demo_federated_posts(channel_id: &str) -> Vec<Message> {
+    use crate::data::DEMO_FORUM_BACKEND;
+    fn mk(id: &str, name: &str, body: &str, age_h: i64, score: u32) -> Message {
+        Message {
+            id: id.to_string(),
+            author: User {
+                id: format!("demo3-fed-{}", name.replace(['@', '.'], "-")),
+                display_name: name.to_string(),
+                avatar_url: None,
+                presence: PresenceStatus::Offline,
+                backend: BackendType::from(DEMO_FORUM_BACKEND),
+            },
+            content: MessageContent::Text(body.to_string()),
+            timestamp: Utc::now() - Duration::hours(age_h),
+            attachments: vec![],
+            reactions: vec![Reaction { emoji: "👍".to_string(), count: score, me: false }],
+            reply_to: None,
+            edited: false,
+            thread: None,
+        }
+    }
+    match channel_id {
+        "forum-rust-posts" => vec![
+            mk("fpost-fed-rust-1", "rustacean@lemmy.world",
+               "[All] crates.io reached 200k crates this week. Top growth area: async-runtime adapters. Anyone else surprised by the wasm-runtime spike?",
+               2, 312),
+            mk("fpost-fed-rust-2", "embedded_dev@beehaw.org",
+               "[All] Showed Rust to a C team for the first time today. They were sold on the borrow checker the moment I demoed it catching a use-after-free.",
+               5, 188),
+            mk("fpost-fed-rust-3", "crab_friend@programming.dev",
+               "[All] PSA: `cargo nextest` if you havent tried it. ~3x faster than `cargo test` on our 800-test repo because of better test scheduling.",
+               9, 96),
+        ],
+        "forum-rust-questions" => vec![
+            mk("fpost-fed-rustq-1", "askrust@lemmy.world",
+               "[All] How do you all structure a workspace with 30+ internal crates? Were hitting compile-time pain and considering merging some.",
+               4, 71),
+            mk("fpost-fed-rustq-2", "newbie@beehaw.org",
+               "[All] Coming from Go — whats the idiomatic Rust equivalent of a small struct with a constructor? `impl Foo { pub fn new(...) -> Self }` or builder?",
+               8, 52),
+        ],
+        _ => vec![],
     }
 }
