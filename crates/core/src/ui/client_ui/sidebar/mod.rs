@@ -60,6 +60,11 @@ pub fn ClientSidebar() -> Element {
     // itself delegates to the existing `ChannelList` that handles the
     // DMs-home empty state.
     let account_id = app_state.read().nav.active_account_id.cloned();
+    // When a repo backend (RepoTree) has a specific server selected, the inner
+    // sidebar must show only that repo's channels — not the full repo list.
+    // Read reactively so the layout switches when the user navigates into or
+    // out of a repo.
+    let has_selected_server = app_state.read().nav.selected_server.is_some();
 
     let decl_res = {
         let account_id = account_id.clone();
@@ -147,6 +152,15 @@ pub fn ClientSidebar() -> Element {
                 | SidebarLayoutKind::Custom => rsx! { ChannelListLayout {} },
                 SidebarLayoutKind::Communities => rsx! { CommunitiesLayout {} },
                 SidebarLayoutKind::Feed => rsx! { FeedLayout {} },
+                // RepoTree backends (GitHub, Forgejo) expose a tree of all
+                // repos at the account level. Once the user drills into a
+                // specific repo server, the sidebar must show only that
+                // repo's channels (Issues / PRs / Discussions), not the
+                // full repo list. ChannelListLayout reads from the selected
+                // server's channels — exactly what we want inside a repo.
+                SidebarLayoutKind::RepoTree if has_selected_server => {
+                    rsx! { ChannelListLayout {} }
+                }
                 SidebarLayoutKind::RepoTree => rsx! { RepoTreeLayout {} },
             }
         }
