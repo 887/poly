@@ -1661,25 +1661,15 @@ fn use_history_state_effect(signals: &ChatViewSignals) {
         if chat_snapshot.loading {
             return;
         }
-        let is_channel_switch =
-            history_state.read().channel_id.as_deref() != Some(&active_channel_id);
+        let prev_channel_id = history_state.read().channel_id.clone();
+        let prev_messages_loaded = history_state.read().messages_loaded;
+        let is_channel_switch = prev_channel_id.as_deref() != Some(&active_channel_id);
 
-        if history_state.read().channel_id.as_deref() == Some(&active_channel_id)
-            && history_state.read().messages_loaded
-        {
+        if !is_channel_switch && prev_messages_loaded {
             return;
         }
 
-        // Channel switched — if the outgoing channel has no remaining unread
-        // messages (user saw everything), mark it as read so the bold name and
-        // server badge are cleared immediately rather than waiting for a backend
-        // sync. This also clears mention badges on the channel / server.
         if is_channel_switch {
-            if let Some(prev_channel_id) = history_state.read().channel_id.clone()
-                && history_state.read().unread_count == 0
-            {
-                mark_channel_as_read(chat_data, &prev_channel_id);
-            }
             scrolled_from_bottom.set(false);
             new_messages_while_scrolled_up.set(0);
         }
@@ -1691,6 +1681,7 @@ fn use_history_state_effect(signals: &ChatViewSignals) {
         );
         let messages_loaded = !messages.is_empty();
         let has_more_after = messages_loaded && chat_snapshot.messages_loaded_via_anchor;
+        let active_channel_id_for_mark = active_channel_id.clone();
         let mut next_history = ChatHistoryUiState {
             channel_id: Some(active_channel_id),
             has_more_before: messages_loaded,
@@ -1702,7 +1693,9 @@ fn use_history_state_effect(signals: &ChatViewSignals) {
             unread_count,
             unread_marker_message_id: unread_marker_message_id(&messages, unread_count),
             // Show the unread divider on channel open when there are unread messages.
-            // The divider persists until the channel is switched (even after mark-as-read).
+            // The divider persists until the channel is switched — we capture the
+            // marker position now and (below) flush chat_data.unread_count to 0 so
+            // re-entering the channel later (without new messages) shows no divider.
             unread_divider_visible: unread_count > 0,
             messages_loaded,
         };
@@ -1716,6 +1709,22 @@ fn use_history_state_effect(signals: &ChatViewSignals) {
         // Witnessed 2026-04-25 on Teams T001/CH002 (3162 ChatView
         // re-renders for one load_server_data call).
         history_state.set_if_changed(next_history);
+
+        // Mark the channel as read in chat_data the moment the user actually
+        // sees it with messages loaded. Discord-style: the in-channel divider
+        // stays visible for this visit (preserved in history_state above), but
+        // the sidebar bolding + server unread badge clear immediately, and the
+        // next time the user opens this channel they get a clean view (unless
+        // new messages arrived). Two entry conditions cover both code paths:
+        //   - sync: channel switch + messages already in chat_data
+        //   - async: channel switch with empty messages, then messages load
+        // The early-return guard above prevents the resulting chat_data write
+        // from re-running the marker computation and erasing the divider.
+        let entered_with_messages =
+            messages_loaded && unread_count > 0 && (is_channel_switch || !prev_messages_loaded);
+        if entered_with_messages {
+            mark_channel_as_read(chat_data, &active_channel_id_for_mark);
+        }
     });
 }
 
