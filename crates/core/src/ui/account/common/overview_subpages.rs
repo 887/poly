@@ -9,7 +9,9 @@
 use crate::i18n::t;
 use crate::state::{BatchedSignal, ChatData};
 use crate::ui::actions::{ActionCx, UiAction};
+use crate::ui::routes::Route;
 use dioxus::prelude::*;
+use poly_client::NotificationKind;
 use poly_ui_macros::{context_menu, ui_action};
 
 /// Actions for the overview sub-pages (placeholder; click handlers are
@@ -59,14 +61,36 @@ pub fn OverviewMissedView(account_id: String) -> Element {
                         h3 { "{t(\"overview-section-unread-dms\")}" }
                         div { class: "overview-card-grid",
                             for dm in dm_unreads.iter() {
-                                div {
-                                    key: "{dm.id}",
-                                    class: "client-view-card view-row-card",
-                                    div { class: "client-view-card-primary view-row-primary",
-                                        "{dm.user.display_name}"
-                                    }
-                                    div { class: "client-view-card-meta view-row-meta",
-                                        "{dm.unread_count} unread"
+                                {
+                                    let dm_id = dm.id.clone();
+                                    let dm_account_id = dm.account_id.clone();
+                                    let backend_slug = dm.backend.slug().to_string();
+                                    let instance_id = chat_data
+                                        .read()
+                                        .account_sessions
+                                        .get(&dm_account_id)
+                                        .map(|s| s.instance_id.clone())
+                                        .unwrap_or_else(|| backend_slug.clone());
+                                    rsx! {
+                                        button {
+                                            key: "{dm.id}",
+                                            class: "client-view-card view-row-card overview-card-clickable",
+                                            r#type: "button",
+                                            onclick: move |_| {
+                                                crate::nav!(Route::DmChat {
+                                                    backend: backend_slug.clone(),
+                                                    instance_id: instance_id.clone(),
+                                                    account_id: dm_account_id.clone(),
+                                                    dm_id: dm_id.clone(),
+                                                });
+                                            },
+                                            div { class: "client-view-card-primary view-row-primary",
+                                                "{dm.user.display_name}"
+                                            }
+                                            div { class: "client-view-card-meta view-row-meta",
+                                                "{dm.unread_count} unread"
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -78,11 +102,81 @@ pub fn OverviewMissedView(account_id: String) -> Element {
                         h3 { "{t(\"overview-section-unread-notifications\")}" }
                         div { class: "overview-card-grid",
                             for n in notifs.iter() {
-                                div {
-                                    key: "{n.id}",
-                                    class: "client-view-card view-row-card",
-                                    div { class: "client-view-card-primary view-row-primary",
-                                        "{n.preview}"
+                                {
+                                    let n_id = n.id.clone();
+                                    let n_account = n.account_id.clone();
+                                    let backend_slug = n.backend.slug().to_string();
+                                    let instance_id = chat_data
+                                        .read()
+                                        .account_sessions
+                                        .get(&n_account)
+                                        .map(|s| s.instance_id.clone())
+                                        .unwrap_or_else(|| backend_slug.clone());
+                                    let kind = n.kind.clone();
+                                    rsx! {
+                                        button {
+                                            key: "{n.id}",
+                                            class: "client-view-card view-row-card overview-card-clickable",
+                                            r#type: "button",
+                                            onclick: move |_| {
+                                                // Resolve a navigation target for each notification
+                                                // kind. Mention lacks server_id and we don't have a
+                                                // cheap channel→server lookup in ChatData, so we
+                                                // fall back to the per-account NotificationsRoute
+                                                // — the user can still act on it from there.
+                                                let route = match &kind {
+                                                    NotificationKind::FriendRequest { .. } => {
+                                                        Route::FriendsRoute {
+                                                            backend: backend_slug.clone(),
+                                                            instance_id: instance_id.clone(),
+                                                            account_id: n_account.clone(),
+                                                        }
+                                                    }
+                                                    NotificationKind::ServerInvite { server_id } => {
+                                                        Route::ServerHome {
+                                                            backend: backend_slug.clone(),
+                                                            instance_id: instance_id.clone(),
+                                                            account_id: n_account.clone(),
+                                                            server_id: server_id.clone(),
+                                                        }
+                                                    }
+                                                    NotificationKind::VoiceChannelInvite {
+                                                        server_id,
+                                                        channel_id,
+                                                        ..
+                                                    } => Route::ServerChat {
+                                                        backend: backend_slug.clone(),
+                                                        instance_id: instance_id.clone(),
+                                                        account_id: n_account.clone(),
+                                                        server_id: server_id.clone(),
+                                                        channel_id: channel_id.clone(),
+                                                    },
+                                                    NotificationKind::ReauthRequired { backend_slug: bs } => {
+                                                        Route::ReauthAccount {
+                                                            backend: bs.clone(),
+                                                            instance_id: instance_id.clone(),
+                                                            account_id: n_account.clone(),
+                                                        }
+                                                    }
+                                                    NotificationKind::Mention { .. }
+                                                    | NotificationKind::Other(_) => {
+                                                        Route::NotificationsRoute {
+                                                            backend: backend_slug.clone(),
+                                                            instance_id: instance_id.clone(),
+                                                            account_id: n_account.clone(),
+                                                        }
+                                                    }
+                                                };
+                                                let nid = n_id.clone();
+                                                chat_data.batch(move |cd| {
+                                                    cd.notifications.retain(|notif| notif.id != nid);
+                                                });
+                                                crate::nav!(route);
+                                            },
+                                            div { class: "client-view-card-primary view-row-primary",
+                                                "{n.preview}"
+                                            }
+                                        }
                                     }
                                 }
                             }
