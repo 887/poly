@@ -683,11 +683,21 @@ impl ClientBackend for ForgejoClient {
         })
     }
 
-    async fn get_channel_view(&self, _channel_id: &str) -> ClientResult<ViewDescriptor> {
+    async fn get_channel_view(&self, channel_id: &str) -> ClientResult<ViewDescriptor> {
+        // Per-channel header (Issues / Pull Requests / Discussions are
+        // their own sidebar channels now; the toolbar tab row was
+        // eliminated since the sidebar IS the switcher).
+        let title_key = if channel_id.starts_with("fj-pulls-") {
+            "plugin-forgejo-view-pulls-title"
+        } else if channel_id.starts_with("fj-discussions-") {
+            "plugin-forgejo-view-discussions-title"
+        } else {
+            "plugin-forgejo-view-issues-title"
+        };
         Ok(ViewDescriptor {
             kind: ViewKind::Split,
             header: Some(ViewHeader {
-                title_key: Some("plugin-forgejo-view-issues-title".to_string()),
+                title_key: Some(title_key.to_string()),
                 subtitle_key: None,
                 info_block: None,
             }),
@@ -697,11 +707,8 @@ impl ClientBackend for ForgejoClient {
                     ToolbarOption { id: "open".to_string(), label_key: "plugin-forgejo-filter-open".to_string(), icon: None, default_selected: true },
                     ToolbarOption { id: "closed".to_string(), label_key: "plugin-forgejo-filter-closed".to_string(), icon: None, default_selected: false },
                 ],
-                tabs: vec![
-                    ToolbarOption { id: "issues".to_string(), label_key: "plugin-forgejo-tab-issues".to_string(), icon: None, default_selected: true },
-                    ToolbarOption { id: "pulls".to_string(), label_key: "plugin-forgejo-tab-pulls".to_string(), icon: None, default_selected: false },
-                    ToolbarOption { id: "discussions".to_string(), label_key: "plugin-forgejo-tab-discussions".to_string(), icon: None, default_selected: false },
-                ],
+                // Tabs row eliminated — channel sidebar is the switcher.
+                tabs: vec![],
                 action_items: vec![],
             }),
             body: ViewBody::SplitBody(SplitSpec {
@@ -911,13 +918,15 @@ async fn repo_owner_name_from_server_id(
 
 /// Extract `(owner, repo)` from a forum channel ID.
 ///
-/// Handles `fj-issues-{owner}/{repo}` and `fj-pulls-{owner}/{repo}`.
-/// The `/` separator is unambiguous even when owner or repo names contain hyphens.
+/// Handles `fj-issues-{owner}/{repo}`, `fj-pulls-{owner}/{repo}`, and
+/// `fj-discussions-{owner}/{repo}`. The `/` separator is unambiguous
+/// even when owner or repo names contain hyphens.
 #[cfg(feature = "native")]
 fn parse_forum_channel(channel_id: &str) -> ClientResult<(String, String)> {
     let rest = channel_id
         .strip_prefix("fj-issues-")
         .or_else(|| channel_id.strip_prefix("fj-pulls-"))
+        .or_else(|| channel_id.strip_prefix("fj-discussions-"))
         .ok_or_else(|| ClientError::NotFound(format!("not a forum channel: {channel_id}")))?;
     split_owner_repo(rest)
 }

@@ -27,9 +27,13 @@ plugin-forgejo-setting-default-issue-state-desc = Which issue state (open or clo
 plugin-forgejo-overview-title = My Repositories
 plugin-forgejo-overview-subtitle = Repos, stars, forks, and open issues at a glance
 
-plugin-forgejo-view-issues-title = Issues & PRs
+plugin-forgejo-view-issues-title = Issues
+plugin-forgejo-view-pulls-title = Pull Requests
+plugin-forgejo-view-discussions-title = Discussions
 plugin-forgejo-filter-open = Open
 plugin-forgejo-filter-closed = Closed
+# Tabs row was removed — sidebar channels are the switcher; keys stay
+# as channel-name labels in the sidebar.
 plugin-forgejo-tab-issues = Issues
 plugin-forgejo-tab-pulls = Pull Requests
 plugin-forgejo-tab-discussions = Discussions

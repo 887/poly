@@ -928,15 +928,21 @@ fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
                             let nav_selected = app_state.read().nav.selected_channel.cloned().unwrap_or_default();
                             let is_active = ch_id == nav_selected;
                             let icon = match ch.channel_type {
-                                ChannelType::Forum => {
-                                    if ch.name.contains("pull") { "🔀" } else { "🐛" }
-                                }
+                                ChannelType::Forum => match ch.name.as_str() {
+                                    "pull-requests" => "🔀",
+                                    "discussions" => "💬",
+                                    // "issues" + everything else falls through to a
+                                    // notepad — issues aren't always bugs (feature
+                                    // requests, tasks, RFCs).
+                                    _ => "📋",
+                                },
                                 ChannelType::Code => "📁",
                                 _ => "#",
                             };
                             let label = match ch.name.as_str() {
                                 "issues" => "Issues",
                                 "pull-requests" => "Pull Requests",
+                                "discussions" => "Discussions",
                                 "code" => "Code",
                                 other => other,
                             };

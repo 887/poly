@@ -119,7 +119,14 @@ pub fn server_from_repo(repo: &ForgejoRepo, account_id: &str, account_display_na
     }
 }
 
-/// Build the full channel list for a repo (issues forum, PR forum, code explorer).
+/// Channel ID for the per-repo discussions forum.
+#[must_use]
+pub fn discussions_channel_id(owner: &str, repo: &str) -> String {
+    format!("fj-discussions-{owner}/{repo}")
+}
+
+/// Build the full channel list for a repo:
+/// issues forum, PR forum, discussions forum, code explorer.
 #[must_use]
 pub fn channels_for_repo(repo: &ForgejoRepo) -> Vec<Channel> {
     let (owner, name) = split_full_name(&repo.full_name);
@@ -140,6 +147,18 @@ pub fn channels_for_repo(repo: &ForgejoRepo) -> Vec<Channel> {
         Channel {
             id: pulls_channel_id(&owner, &name),
             name: "pull-requests".to_string(),
+            channel_type: ChannelType::Forum,
+            server_id: server_id.clone(),
+            unread_count: 0,
+            mention_count: 0,
+            last_message_id: None,
+            forum_tags: None,
+            parent_channel_id: None,
+            thread_metadata: None,
+        },
+        Channel {
+            id: discussions_channel_id(&owner, &name),
+            name: "discussions".to_string(),
             channel_type: ChannelType::Forum,
             server_id: server_id.clone(),
             unread_count: 0,
