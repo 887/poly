@@ -71,7 +71,7 @@ async fn test_authenticate_wrong_password() {
 async fn test_get_servers() {
     let base_url = start_test_server().await;
     let mut client = LemmyClient::new(&base_url);
-    client
+    let session = client
         .authenticate(AuthCredentials::EmailPassword {
             email: "testuser".to_string(),
             password: "password123".to_string(),
@@ -681,6 +681,95 @@ async fn test_delete_message_bad_id() {
         "bad message id should return NotFound, got: {:?}",
         result
     );
+}
+
+// ---------------------------------------------------------------------------
+// Account overview — get_account_overview_view + get_view_rows("lemmy-overview")
+// ---------------------------------------------------------------------------
+
+/// `get_account_overview_view` returns a CardGrid descriptor pointing at the
+/// `lemmy-overview` synthetic channel.
+#[tokio::test]
+async fn test_get_account_overview_view_descriptor() {
+    use poly_client::{ClientBackend, ViewBody, ViewKind};
+    let base_url = start_test_server().await;
+    let client = auth_client(&base_url).await;
+
+    let descriptor = client
+        .get_account_overview_view()
+        .await
+        .expect("get_account_overview_view should succeed");
+
+    assert_eq!(descriptor.kind, ViewKind::CardGrid, "must be a CardGrid");
+    match &descriptor.body {
+        ViewBody::CardBody(spec) => {
+            assert_eq!(spec.primary_field, "name", "primary_field must be 'name'");
+        }
+        other => panic!("expected CardBody, got {other:?}"),
+    }
+    let header = descriptor.header.expect("header must be present");
+    assert_eq!(
+        header.title_key.as_deref(),
+        Some("plugin-lemmy-overview-title"),
+        "title_key must match FTL key"
+    );
+}
+
+/// `get_view_rows("lemmy-overview")` returns one row per subscribed community with
+/// primary_text = community title, meta_text containing "subscribers" and "active".
+#[tokio::test]
+async fn test_get_view_rows_overview_communities() {
+    use poly_client::{ClientBackend, MenuTargetKind};
+    let base_url = start_test_server().await;
+    let client = auth_client(&base_url).await;
+
+    let page = client
+        .get_view_rows("lemmy-overview", None, None, None, None)
+        .await
+        .expect("get_view_rows(lemmy-overview) should succeed");
+
+    assert!(page.rows.len() >= 2, "should return both seeded subscribed communities");
+    // No paging for the overview.
+    assert!(page.next_cursor.is_none(), "overview has no paging cursor");
+
+    let titles: Vec<&str> = page.rows.iter().map(|r| r.primary_text.as_str()).collect();
+    assert!(
+        titles.contains(&"Rust Programming"),
+        "Rust community must appear; got {titles:?}"
+    );
+    assert!(
+        titles.contains(&"Programming"),
+        "Programming community must appear; got {titles:?}"
+    );
+
+    for row in &page.rows {
+        // id is "lemmy-community-{n}"
+        assert!(
+            row.id.starts_with("lemmy-community-"),
+            "row id must be lemmy-community-n, got {}",
+            row.id
+        );
+        // meta_text must contain subscriber + active counts
+        let meta = row.meta_text.as_deref().expect("meta_text required");
+        assert!(
+            meta.contains("subscribers"),
+            "meta must include subscriber count: {meta}"
+        );
+        assert!(
+            meta.contains("active"),
+            "meta must include active-user count: {meta}"
+        );
+        assert!(
+            meta.contains("unread"),
+            "meta must include unread count: {meta}"
+        );
+        // context_menu target is Server (community)
+        assert_eq!(
+            row.context_menu_target_kind,
+            MenuTargetKind::Server,
+            "overview rows must target Server"
+        );
+    }
 }
 
 /// `kick_member` always returns NotSupported for Lemmy.

@@ -26,3 +26,6 @@ plugin-github-filter-closed = Closed
 plugin-github-tab-issues = Issues
 plugin-github-tab-pulls = Pull Requests
 plugin-github-tab-discussions = Discussions
+
+plugin-github-overview-title = My Repositories
+plugin-github-overview-subtitle = Stars, forks and open issues across your repos

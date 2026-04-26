@@ -27,8 +27,8 @@ use async_trait::async_trait;
 use futures::stream::{self, Stream};
 #[cfg(feature = "native")]
 use mapping::{
-    build_channels, build_server, hn_comment_to_message, hn_item_to_message, hn_item_to_view_row,
-    hn_user_to_user, post_id_from_channel,
+    build_channels, build_server, hn_comment_to_message, hn_item_to_message, hn_item_to_overview_row,
+    hn_item_to_view_row, hn_user_to_user, post_id_from_channel,
 };
 #[cfg(feature = "native")]
 use poly_client::*;
@@ -415,6 +415,30 @@ impl ClientBackend for HackerNewsClient {
         Err(ClientError::NotFound(format!("unknown sidebar action: {action_id}")))
     }
 
+    /// HN account overview — show the top stories as a curated welcome view.
+    /// HN has no concept of multiple servers/accounts beyond "the front page",
+    /// so the overview is simply the current Top feed rendered as a ListBody.
+    async fn get_account_overview_view(&self) -> ClientResult<ViewDescriptor> {
+        Ok(ViewDescriptor {
+            kind: ViewKind::FlatList,
+            header: Some(ViewHeader {
+                title_key: Some("plugin-hackernews-overview-title".to_string()),
+                subtitle_key: Some("plugin-hackernews-overview-subtitle".to_string()),
+                info_block: None,
+            }),
+            toolbar: None,
+            body: ViewBody::ListBody(ListSpec {
+                row_template: RowTemplate {
+                    primary_field: "title".to_string(),
+                    secondary_field: Some("author-domain".to_string()),
+                    meta_field: Some("points-comments-age".to_string()),
+                    icon_field: None,
+                },
+                page_size: 30,
+            }),
+        })
+    }
+
     async fn get_channel_view(&self, _channel_id: &str) -> ClientResult<ViewDescriptor> {
         Ok(ViewDescriptor {
             kind: ViewKind::FlatList,
@@ -444,9 +468,17 @@ impl ClientBackend for HackerNewsClient {
         _filter_id: Option<&str>,
         _tab_id: Option<&str>,
     ) -> ClientResult<ViewRowsPage> {
-        let feed = HnFeed::from_channel_id(channel_id).ok_or_else(|| {
-            ClientError::NotFound(format!("unknown channel: {channel_id}"))
-        })?;
+        // Empty channel_id means the host is requesting overview rows
+        // (see `AccountOverviewView` in core — it passes `""` for overview).
+        // Route those to the Top feed and use the overview row format.
+        let (feed, is_overview) = if channel_id.is_empty() {
+            (HnFeed::Top, true)
+        } else {
+            let f = HnFeed::from_channel_id(channel_id).ok_or_else(|| {
+                ClientError::NotFound(format!("unknown channel: {channel_id}"))
+            })?;
+            (f, false)
+        };
 
         // Determine page offset from cursor (Offset kind).
         let offset: usize = cursor
@@ -484,7 +516,13 @@ impl ClientBackend for HackerNewsClient {
         let rows = items
             .iter()
             .filter(|item| !item.deleted.unwrap_or(false) && !item.dead.unwrap_or(false))
-            .map(hn_item_to_view_row)
+            .map(|item| {
+                if is_overview {
+                    hn_item_to_overview_row(item)
+                } else {
+                    hn_item_to_view_row(item)
+                }
+            })
             .collect();
 
         Ok(ViewRowsPage { rows, next_cursor })

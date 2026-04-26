@@ -78,6 +78,11 @@ plugin-matrix-setting-allow-guests-label = Permitir invitados
 
 plugin-matrix-setting-allow-guests-desc = Cuando está activado, los usuarios sin cuenta de Matrix pueden unirse y leer este Space.
 
+# Account overview view
+plugin-matrix-overview-title = Salas y Spaces
+
+plugin-matrix-overview-subtitle = Tus salas y Spaces a los que perteneces
+
 plugin-matrix-composer-me-label = Acción /me
 
 plugin-matrix-message-action-verify-sender-label = Verificar remitente

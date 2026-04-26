@@ -33,6 +33,10 @@ plugin-stoat-setting-privacy-label = Privacy
 plugin-stoat-setting-allow-dms-from-server-members-label = Allow DMs from Members
 plugin-stoat-setting-allow-dms-from-server-members-desc = When enabled, other members of this server can send you direct messages.
 
+# Account overview
+plugin-stoat-overview-title = Your Servers
+plugin-stoat-overview-subtitle = All servers for this Stoat account
+
 # Composer buttons
 plugin-stoat-composer-emoji-label = Emoji
 # Message actions

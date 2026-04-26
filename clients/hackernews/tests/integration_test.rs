@@ -610,6 +610,92 @@ async fn test_get_view_detail_invalid_id() {
 }
 
 // ---------------------------------------------------------------------------
+// get_account_overview_view + overview get_view_rows tests
+// ---------------------------------------------------------------------------
+
+/// `get_account_overview_view` returns a FlatList ListBody descriptor.
+#[tokio::test]
+async fn test_get_account_overview_view_returns_list_body() {
+    use poly_client::{ClientBackend, ViewBody, ViewKind};
+
+    let server = TestHnServer::start().await;
+    let client = client_connected_to(&server).await;
+
+    let desc = client
+        .get_account_overview_view()
+        .await
+        .expect("get_account_overview_view should succeed");
+
+    assert_eq!(desc.kind, ViewKind::FlatList, "overview kind must be FlatList");
+    assert!(desc.header.is_some(), "overview must have a header");
+    let header = desc.header.unwrap();
+    assert!(header.title_key.is_some(), "overview header must have a title_key");
+
+    match desc.body {
+        ViewBody::ListBody(spec) => {
+            assert!(spec.page_size > 0, "page_size must be positive");
+            assert!(!spec.row_template.primary_field.is_empty(), "primary_field must not be empty");
+        }
+        other => panic!("expected ListBody, got {other:?}"),
+    }
+}
+
+/// `get_view_rows("")` (overview) returns non-empty rows with the overview row format.
+#[tokio::test]
+async fn test_get_view_rows_overview_empty_channel_id() {
+    use poly_client::ClientBackend;
+
+    let server = TestHnServer::start().await;
+    let client = client_connected_to(&server).await;
+
+    let page = client
+        .get_view_rows("", None, None, None, None)
+        .await
+        .expect("get_view_rows('') for overview should succeed");
+
+    assert!(!page.rows.is_empty(), "overview should have at least one row");
+
+    for row in &page.rows {
+        assert!(!row.id.is_empty(), "row.id must not be empty");
+        assert!(!row.primary_text.is_empty(), "row.primary_text (title) must not be empty");
+
+        // secondary_text = "author · domain" or just "author"
+        let secondary = row.secondary_text.as_deref().expect("secondary_text must be Some for overview");
+        assert!(!secondary.is_empty(), "secondary_text must not be empty");
+
+        // meta_text = "N points · M comments · age"
+        let meta = row.meta_text.as_deref().expect("meta_text must be Some for overview");
+        assert!(meta.contains("points"), "meta must contain 'points': {meta}");
+        assert!(meta.contains("comments"), "meta must contain 'comments': {meta}");
+    }
+}
+
+/// Overview secondary_text includes domain when story has a URL.
+#[tokio::test]
+async fn test_overview_row_secondary_includes_domain() {
+    use poly_client::ClientBackend;
+
+    let server = TestHnServer::start().await;
+    let client = client_connected_to(&server).await;
+
+    let page = client
+        .get_view_rows("", None, None, None, None)
+        .await
+        .expect("get_view_rows('') should succeed");
+
+    // Story 1001 in seed data has url "https://example.com/new-internet".
+    // Its secondary_text should contain the domain "example.com" and the author.
+    let row_1001 = page.rows.iter().find(|r| r.id == "1001");
+    if let Some(row) = row_1001 {
+        let secondary = row.secondary_text.as_deref().unwrap_or("");
+        assert!(
+            secondary.contains("example.com"),
+            "secondary_text for a URL story must include the domain: {secondary}"
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Pack C.2 — settings storage round-trip
 // ---------------------------------------------------------------------------
 

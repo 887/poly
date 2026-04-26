@@ -7,7 +7,7 @@
 
 use std::sync::Arc;
 
-use poly_client::{AuthCredentials, ClientBackend, MessageContent, MessageQuery};
+use poly_client::{AuthCredentials, ClientBackend, MessageContent, MessageQuery, ViewBody, ViewKind};
 use poly_stoat::StoatClient;
 use poly_test_common::TestServerBase;
 use poly_test_stoat::{StoatState, router};
@@ -648,4 +648,70 @@ async fn test_settings_storage_round_trip() {
         .await
         .expect("get_setting_value should succeed");
     assert_eq!(got, "stoat-nick");
+}
+
+// ---------------------------------------------------------------------------
+// Account overview
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_get_account_overview_view_returns_card_grid() {
+    let (base_url, _shutdown) = start_test_server().await;
+    let client = authenticated_client(&base_url).await;
+
+    let view = client
+        .get_account_overview_view()
+        .await
+        .expect("get_account_overview_view should succeed");
+
+    assert_eq!(view.kind, ViewKind::CardGrid, "kind must be CardGrid");
+    assert!(
+        matches!(view.body, ViewBody::CardBody(_)),
+        "body must be CardBody"
+    );
+    let header = view.header.expect("header must be present");
+    let title = header.title_key.expect("title_key must be set");
+    assert!(
+        title.starts_with("plugin-stoat-"),
+        "title_key must use plugin-stoat- prefix, got: {title}"
+    );
+}
+
+#[tokio::test]
+async fn test_get_view_rows_overview_returns_server_cards() {
+    let (base_url, _shutdown) = start_test_server().await;
+    let client = authenticated_client(&base_url).await;
+
+    let page = client
+        .get_view_rows("", None, None, None, None)
+        .await
+        .expect("get_view_rows(\"\") should succeed for overview");
+
+    assert!(!page.rows.is_empty(), "overview must return at least one server row");
+    assert!(page.next_cursor.is_none(), "overview has no pagination");
+
+    for row in &page.rows {
+        assert!(!row.id.is_empty(), "row id must not be empty");
+        assert!(!row.primary_text.is_empty(), "primary_text (server name) must not be empty");
+        let meta = row.meta_text.as_deref().expect("meta_text must be present");
+        assert!(
+            meta.contains("members"),
+            "meta_text must contain 'members', got: {meta}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn test_get_view_rows_non_overview_returns_not_supported() {
+    let (base_url, _shutdown) = start_test_server().await;
+    let client = authenticated_client(&base_url).await;
+
+    let result = client
+        .get_view_rows("some-channel-id", None, None, None, None)
+        .await;
+
+    assert!(
+        result.is_err(),
+        "non-overview channel_id should return an error"
+    );
 }

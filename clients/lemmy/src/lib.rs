@@ -28,8 +28,8 @@ mod guest;
 #[cfg(feature = "native")]
 use api::{
     BanFromCommunityRequest, LemmyHttpClient, LemmySession, community_to_channel, cursor_to_page,
-    map_comment_to_message, map_community_to_server, map_person, map_pm_to_dm_channel,
-    map_post_to_message, map_post_to_viewrow, next_page_cursor,
+    map_comment_to_message, map_community_to_server, map_community_to_viewrow, map_person,
+    map_pm_to_dm_channel, map_post_to_message, map_post_to_viewrow, next_page_cursor,
 };
 #[cfg(feature = "native")]
 use async_trait::async_trait;
@@ -674,6 +674,25 @@ impl ClientBackend for LemmyClient {
         Err(ClientError::NotFound(format!("unknown sidebar action: {action_id}")))
     }
 
+    /// Account overview: a CardGrid of the user's subscribed communities.
+    ///
+    /// Uses the synthetic channel id `"lemmy-overview"`. `get_view_rows`
+    /// recognises this id and fetches subscribed communities instead of posts.
+    async fn get_account_overview_view(&self) -> ClientResult<ViewDescriptor> {
+        Ok(ViewDescriptor {
+            kind: ViewKind::CardGrid,
+            header: Some(ViewHeader {
+                title_key: Some("plugin-lemmy-overview-title".to_string()),
+                subtitle_key: None,
+                info_block: None,
+            }),
+            toolbar: None,
+            body: ViewBody::CardBody(CardSpec {
+                primary_field: "name".to_string(),
+            }),
+        })
+    }
+
     async fn get_channel_view(&self, _channel_id: &str) -> ClientResult<ViewDescriptor> {
         Ok(ViewDescriptor {
             kind: ViewKind::Tree,
@@ -707,9 +726,21 @@ impl ClientBackend for LemmyClient {
         _filter_id: Option<&str>,
         _tab_id: Option<&str>,
     ) -> ClientResult<ViewRowsPage> {
+        // The account overview uses a synthetic channel id that routes here
+        // instead of to a community post feed.
+        if channel_id == "lemmy-overview" {
+            let resp = self.http.fetch_subscribed_communities().await?;
+            let rows: Vec<ViewRow> = resp
+                .communities
+                .iter()
+                .map(|view| map_community_to_viewrow(view, 0))
+                .collect();
+            return Ok(ViewRowsPage { rows, next_cursor: None });
+        }
+
         let community_id = Self::parse_feed_channel(channel_id).ok_or_else(|| {
             ClientError::NotFound(format!(
-                "get_view_rows: channel must be a lemmy-feed-{{id}}: {channel_id}"
+                "get_view_rows: channel must be a lemmy-feed-{{id}} or lemmy-overview: {channel_id}"
             ))
         })?;
 

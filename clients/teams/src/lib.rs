@@ -1084,19 +1084,75 @@ impl ClientBackend for TeamsClient {
         Err(ClientError::NotFound(format!("unknown sidebar action: {action_id}")))
     }
 
+    async fn get_account_overview_view(&self) -> ClientResult<ViewDescriptor> {
+        Ok(ViewDescriptor {
+            kind: ViewKind::CardGrid,
+            header: Some(ViewHeader {
+                title_key: Some("plugin-teams-overview-title".to_string()),
+                subtitle_key: Some("plugin-teams-overview-subtitle".to_string()),
+                info_block: None,
+            }),
+            toolbar: None,
+            body: ViewBody::CardBody(CardSpec {
+                primary_field: "name".to_string(),
+            }),
+        })
+    }
+
     async fn get_channel_view(&self, _channel_id: &str) -> ClientResult<ViewDescriptor> {
         Err(ClientError::NotSupported("channel-view not yet implemented".into()))
     }
 
     async fn get_view_rows(
         &self,
-        _channel_id: &str,
+        channel_id: &str,
         _cursor: Option<Cursor>,
         _sort_id: Option<&str>,
         _filter_id: Option<&str>,
         _tab_id: Option<&str>,
     ) -> ClientResult<ViewRowsPage> {
-        Err(ClientError::NotSupported("view-rows not yet implemented".into()))
+        // Empty channel_id signals the account overview — return one card per team.
+        if !channel_id.is_empty() {
+            return Err(ClientError::NotSupported("view-rows not yet implemented for team channels".into()));
+        }
+
+        let servers = self.get_servers().await?;
+
+        // Fetch channel counts concurrently for each team.
+        let mut rows = Vec::with_capacity(servers.len());
+        for server in &servers {
+            let channel_count = self
+                .get_channels(&server.id)
+                .await
+                .map(|chs| chs.len())
+                .unwrap_or(0);
+
+            let meta = format!(
+                "{} channel{} · {} unread · @{} mentions",
+                channel_count,
+                if channel_count == 1 { "" } else { "s" },
+                server.unread_count,
+                server.mention_count,
+            );
+
+            rows.push(ViewRow {
+                id: server.id.clone(),
+                primary_text: server.name.clone(),
+                secondary_text: server.description.clone(),
+                meta_text: Some(meta),
+                icon: None,
+                badge: if server.mention_count > 0 {
+                    Some(format!("@{}", server.mention_count))
+                } else if server.unread_count > 0 {
+                    Some(server.unread_count.to_string())
+                } else {
+                    None
+                },
+                context_menu_target_kind: MenuTargetKind::Server,
+            });
+        }
+
+        Ok(ViewRowsPage { rows, next_cursor: None })
     }
 
     async fn get_view_detail(

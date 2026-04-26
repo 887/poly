@@ -726,6 +726,118 @@ async fn test_get_servers_repo_card_fields() {
 }
 
 // ---------------------------------------------------------------------------
+// Phase 2 — get_account_overview_view + overview get_view_rows
+// ---------------------------------------------------------------------------
+
+/// `get_account_overview_view` returns a CardGrid with correct header keys.
+#[tokio::test]
+async fn test_get_account_overview_view_descriptor() {
+    use poly_client::{ClientBackend, ViewBody, ViewKind};
+    let base_url = start_test_server().await;
+    let token = get_test_token(&base_url, "penguin").await;
+    let mut client = GitHubClient::with_http(&base_url);
+    client
+        .authenticate(AuthCredentials::Token(token))
+        .await
+        .unwrap();
+
+    let desc = client
+        .get_account_overview_view()
+        .await
+        .expect("get_account_overview_view should succeed");
+
+    assert_eq!(desc.kind, ViewKind::CardGrid);
+    let header = desc.header.expect("overview descriptor must have a header");
+    assert_eq!(
+        header.title_key.as_deref(),
+        Some("plugin-github-overview-title"),
+        "title_key must be plugin-github-overview-title"
+    );
+    assert_eq!(
+        header.subtitle_key.as_deref(),
+        Some("plugin-github-overview-subtitle"),
+        "subtitle_key must be plugin-github-overview-subtitle"
+    );
+    assert!(desc.toolbar.is_none(), "overview has no toolbar");
+    match desc.body {
+        ViewBody::CardBody(spec) => assert_eq!(spec.primary_field, "name"),
+        other => panic!("expected CardBody, got {other:?}"),
+    }
+}
+
+/// `get_view_rows` with empty channel_id returns one card per cached repo.
+#[tokio::test]
+async fn test_get_view_rows_overview_returns_repo_cards() {
+    use poly_client::ClientBackend;
+    let base_url = start_test_server().await;
+    let token = get_test_token(&base_url, "penguin").await;
+    let mut client = GitHubClient::with_http(&base_url);
+    client
+        .authenticate(AuthCredentials::Token(token))
+        .await
+        .unwrap();
+    // Populate repos cache
+    client.get_servers().await.unwrap();
+
+    let page = client
+        .get_view_rows("", None, None, None, None)
+        .await
+        .expect("get_view_rows overview should succeed");
+
+    assert_eq!(page.rows.len(), 2, "penguin has 2 repos");
+    assert!(page.next_cursor.is_none(), "single-page overview has no cursor");
+
+    let iceberg = page
+        .rows
+        .iter()
+        .find(|r| r.primary_text == "penguin/iceberg-os")
+        .expect("iceberg-os card must be present");
+
+    // secondary_text is the repo description
+    assert_eq!(
+        iceberg.secondary_text.as_deref(),
+        Some("An operating system designed for extremely cold environments"),
+        "secondary_text should be the repo description"
+    );
+
+    // meta_text contains stars, forks, open issues
+    let meta = iceberg.meta_text.as_deref().unwrap_or("");
+    assert!(meta.contains("★ 42"), "meta_text must contain star count");
+    assert!(meta.contains("forks"), "meta_text must contain forks");
+    assert!(meta.contains("open"), "meta_text must contain open issues label");
+
+    // badge is the primary language
+    assert_eq!(
+        iceberg.badge.as_deref(),
+        Some("Rust"),
+        "badge should be the repo language"
+    );
+
+    // context_menu_target_kind is Server
+    assert_eq!(
+        iceberg.context_menu_target_kind,
+        poly_client::MenuTargetKind::Server,
+        "context_menu_target_kind must be Server"
+    );
+}
+
+/// `get_view_rows` overview with no cached repos returns an empty page (not an error).
+#[tokio::test]
+async fn test_get_view_rows_overview_empty_cache() {
+    use poly_client::ClientBackend;
+    let base_url = start_test_server().await;
+    // Create client but do NOT call get_servers — cache stays empty.
+    let client = GitHubClient::with_http(&base_url);
+
+    let page = client
+        .get_view_rows("", None, None, None, None)
+        .await
+        .expect("empty overview should succeed");
+
+    assert!(page.rows.is_empty(), "no cached repos → empty page");
+}
+
+// ---------------------------------------------------------------------------
 // Pack C.2 — settings storage round-trip
 // ---------------------------------------------------------------------------
 

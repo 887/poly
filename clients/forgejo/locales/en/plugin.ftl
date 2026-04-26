@@ -24,6 +24,9 @@ plugin-forgejo-setting-show-private-repos-desc = Include private repositories in
 plugin-forgejo-setting-default-issue-state-label = Default Issue State
 plugin-forgejo-setting-default-issue-state-desc = Which issue state (open or closed) to show by default when browsing a repository.
 
+plugin-forgejo-overview-title = My Repositories
+plugin-forgejo-overview-subtitle = Repos, stars, forks, and open issues at a glance
+
 plugin-forgejo-view-issues-title = Issues & PRs
 plugin-forgejo-filter-open = Open
 plugin-forgejo-filter-closed = Closed

@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use poly_client::{
     AuthCredentials, BackendType, ChannelType, ClientBackend, ClientEvent, ForumSortOrder,
-    MessageContent, MessageQuery, PresenceStatus,
+    MenuTargetKind, MessageContent, MessageQuery, PresenceStatus, ViewBody, ViewKind,
 };
 use poly_discord::DiscordClient;
 use poly_test_discord::{DiscordState, router};
@@ -481,4 +481,73 @@ async fn test_gateway_thread_create_flow() {
         }
         other => panic!("expected ChannelUpdated, got {:?}", other),
     }
+}
+
+// ---------------------------------------------------------------------------
+// Account overview view tests
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_get_account_overview_view_descriptor() {
+    let srv = TestServer::start().await;
+    let client = srv.authenticated_client("koala").await;
+
+    let view = client.get_account_overview_view().await.expect("get_account_overview_view");
+
+    assert_eq!(view.kind, ViewKind::CardGrid, "overview should be a CardGrid");
+    match view.body {
+        ViewBody::CardBody(spec) => {
+            assert_eq!(spec.primary_field, "name", "primary_field should be 'name'");
+        }
+        other => panic!("expected CardBody, got {:?}", other),
+    }
+    let header = view.header.expect("overview should have a header");
+    assert!(
+        header.title_key.as_deref() == Some("plugin-discord-overview-title"),
+        "title_key mismatch: {:?}",
+        header.title_key
+    );
+}
+
+#[tokio::test]
+async fn test_get_view_rows_overview_returns_guild_cards() {
+    let srv = TestServer::start().await;
+    let client = srv.authenticated_client("koala").await;
+
+    // Empty channel_id is the account-overview sentinel.
+    let page = client
+        .get_view_rows("", None, None, None, None)
+        .await
+        .expect("get_view_rows overview");
+
+    // Koala is a member of both guilds (seed data: guild 100 + 101).
+    assert_eq!(page.rows.len(), 2, "koala should see 2 guild cards");
+    assert!(page.next_cursor.is_none(), "overview has no pagination cursor");
+
+    let names: Vec<&str> = page.rows.iter().map(|r| r.primary_text.as_str()).collect();
+    assert!(names.contains(&"Australiana"), "Australiana card expected");
+    assert!(names.contains(&"Wildlife Chat"), "Wildlife Chat card expected");
+
+    for row in &page.rows {
+        // meta_text must include "members" suffix (may be "? members" for test server).
+        let meta = row.meta_text.as_deref().expect("meta_text should be present");
+        assert!(meta.contains("members"), "meta_text should contain 'members': {meta}");
+        // context menu target should be Server.
+        assert_eq!(
+            row.context_menu_target_kind,
+            MenuTargetKind::Server,
+            "context_menu_target_kind should be Server"
+        );
+    }
+}
+
+#[tokio::test]
+async fn test_get_view_rows_non_empty_channel_not_supported() {
+    let srv = TestServer::start().await;
+    let client = srv.authenticated_client("koala").await;
+
+    // Non-overview channel_id should return NotSupported.
+    let result = client.get_view_rows("200", None, None, None, None).await;
+    assert!(result.is_err(), "non-overview channel should return an error");
+    matches!(result.unwrap_err(), poly_client::ClientError::NotSupported(_));
 }

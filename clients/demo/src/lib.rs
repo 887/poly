@@ -550,15 +550,55 @@ impl ClientBackend for DemoClient {
         Err(ClientError::NotFound(format!("unknown sidebar action: {action_id}")))
     }
 
+    async fn get_account_overview_view(&self) -> ClientResult<ViewDescriptor> {
+        Ok(ViewDescriptor {
+            kind: ViewKind::CardGrid,
+            header: Some(ViewHeader {
+                title_key: Some("plugin-demo-overview-title".to_string()),
+                subtitle_key: Some("plugin-demo-overview-subtitle".to_string()),
+                info_block: None,
+            }),
+            toolbar: None,
+            body: ViewBody::CardBody(CardSpec {
+                primary_field: "name".to_string(),
+            }),
+        })
+    }
+
     async fn get_channel_view(&self, _channel_id: &str) -> Result<ViewDescriptor, ClientError> {
         // Chat-only backend; no structured view.
         Err(ClientError::NotSupported("chat-only backend; no structured view".into()))
     }
 
     async fn get_view_rows(
-        &self, _channel_id: &str, _cursor: Option<Cursor>,
+        &self, channel_id: &str, _cursor: Option<Cursor>,
         _sort_id: Option<&str>, _filter_id: Option<&str>, _tab_id: Option<&str>,
     ) -> Result<ViewRowsPage, ClientError> {
+        if channel_id == "overview" {
+            let rows = data::demo_servers()
+                .into_iter()
+                .map(|s| {
+                    let members = data::demo_server_member_count(&s.id);
+                    let unread = s.unread_count;
+                    let mentions = s.mention_count;
+                    let meta = if mentions > 0 {
+                        format!("{members} members · {unread} unread · @{mentions} mentions")
+                    } else {
+                        format!("{members} members · {unread} unread")
+                    };
+                    ViewRow {
+                        id: s.id.clone(),
+                        primary_text: s.name.clone(),
+                        secondary_text: Some(data::demo_server_description(&s.id).to_string()),
+                        meta_text: Some(meta),
+                        icon: None,
+                        badge: None,
+                        context_menu_target_kind: MenuTargetKind::Server,
+                    }
+                })
+                .collect();
+            return Ok(ViewRowsPage { rows, next_cursor: None });
+        }
         Err(ClientError::NotSupported("chat-only backend; no view rows".into()))
     }
 
@@ -968,15 +1008,55 @@ impl ClientBackend for DemoClient2 {
         Err(ClientError::NotFound(format!("unknown sidebar action: {action_id}")))
     }
 
+    async fn get_account_overview_view(&self) -> ClientResult<ViewDescriptor> {
+        Ok(ViewDescriptor {
+            kind: ViewKind::CardGrid,
+            header: Some(ViewHeader {
+                title_key: Some("plugin-demo-overview-title".to_string()),
+                subtitle_key: Some("plugin-demo-overview-subtitle".to_string()),
+                info_block: None,
+            }),
+            toolbar: None,
+            body: ViewBody::CardBody(CardSpec {
+                primary_field: "name".to_string(),
+            }),
+        })
+    }
+
     async fn get_channel_view(&self, _channel_id: &str) -> Result<ViewDescriptor, ClientError> {
         // Chat-only backend; no structured view.
         Err(ClientError::NotSupported("chat-only backend; no structured view".into()))
     }
 
     async fn get_view_rows(
-        &self, _channel_id: &str, _cursor: Option<Cursor>,
+        &self, channel_id: &str, _cursor: Option<Cursor>,
         _sort_id: Option<&str>, _filter_id: Option<&str>, _tab_id: Option<&str>,
     ) -> Result<ViewRowsPage, ClientError> {
+        if channel_id == "overview" {
+            let rows = data::demo2_servers()
+                .into_iter()
+                .map(|s| {
+                    let members = data::demo_server_member_count(&s.id);
+                    let unread = s.unread_count;
+                    let mentions = s.mention_count;
+                    let meta = if mentions > 0 {
+                        format!("{members} members · {unread} unread · @{mentions} mentions")
+                    } else {
+                        format!("{members} members · {unread} unread")
+                    };
+                    ViewRow {
+                        id: s.id.clone(),
+                        primary_text: s.name.clone(),
+                        secondary_text: Some(data::demo_server_description(&s.id).to_string()),
+                        meta_text: Some(meta),
+                        icon: None,
+                        badge: None,
+                        context_menu_target_kind: MenuTargetKind::Server,
+                    }
+                })
+                .collect();
+            return Ok(ViewRowsPage { rows, next_cursor: None });
+        }
         Err(ClientError::NotSupported("chat-only backend; no view rows".into()))
     }
 
@@ -1347,6 +1427,21 @@ impl ClientBackend for DemoClient3 {
         Err(ClientError::NotFound(format!("unknown sidebar action: {action_id}")))
     }
 
+    async fn get_account_overview_view(&self) -> ClientResult<ViewDescriptor> {
+        Ok(ViewDescriptor {
+            kind: ViewKind::CardGrid,
+            header: Some(ViewHeader {
+                title_key: Some("plugin-demo-forum-overview-title".to_string()),
+                subtitle_key: Some("plugin-demo-forum-overview-subtitle".to_string()),
+                info_block: None,
+            }),
+            toolbar: None,
+            body: ViewBody::CardBody(CardSpec {
+                primary_field: "name".to_string(),
+            }),
+        })
+    }
+
     async fn get_channel_view(&self, _channel_id: &str) -> Result<ViewDescriptor, ClientError> {
         // Demo declares a Tree view for any non-chat channel. Chat channels
         // are routed through `chat_view.rs` before this is called; forum-style
@@ -1398,6 +1493,36 @@ impl ClientBackend for DemoClient3 {
         &self, channel_id: &str, _cursor: Option<Cursor>,
         _sort_id: Option<&str>, _filter_id: Option<&str>, tab_id: Option<&str>,
     ) -> Result<ViewRowsPage, ClientError> {
+        if channel_id == "overview" {
+            // Account overview: one card per subscribed community.
+            let rows = data::demo3_servers()
+                .into_iter()
+                .map(|s| {
+                    let members = data::demo_server_member_count(&s.id);
+                    let posts_count = data::demo3_messages(
+                        s.categories
+                            .first()
+                            .and_then(|c| c.channel_ids.first())
+                            .map(|id| id.as_str())
+                            .unwrap_or(""),
+                    )
+                    .len();
+                    let meta = format!("{members} subscribers · {posts_count} posts");
+                    ViewRow {
+                        id: s.id.clone(),
+                        primary_text: s.name.clone(),
+                        secondary_text: Some(
+                            data::demo_server_description(&s.id).to_string(),
+                        ),
+                        meta_text: Some(meta),
+                        icon: None,
+                        badge: None,
+                        context_menu_target_kind: MenuTargetKind::Server,
+                    }
+                })
+                .collect();
+            return Ok(ViewRowsPage { rows, next_cursor: None });
+        }
         let subscribed_posts = data::demo3_messages(channel_id);
         // Listing-type scope: mirrors Lemmy's Subscribed / Local / All.
         // Each scope returns a visibly-different post set so the demo

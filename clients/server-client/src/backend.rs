@@ -1110,19 +1110,85 @@ impl ClientBackend for PolyServerBackend {
         Err(ClientError::NotFound(format!("unknown sidebar action: {action_id}")))
     }
 
+    async fn get_account_overview_view(&self) -> ClientResult<ViewDescriptor> {
+        Ok(ViewDescriptor {
+            kind: ViewKind::CardGrid,
+            header: Some(ViewHeader {
+                title_key: Some("plugin-poly-overview-title".to_string()),
+                subtitle_key: Some("plugin-poly-overview-subtitle".to_string()),
+                info_block: None,
+            }),
+            toolbar: None,
+            body: ViewBody::CardBody(CardSpec {
+                primary_field: "name".to_string(),
+            }),
+        })
+    }
+
     async fn get_channel_view(&self, _channel_id: &str) -> ClientResult<ViewDescriptor> {
         Err(ClientError::NotSupported("channel-view not yet implemented".into()))
     }
 
     async fn get_view_rows(
         &self,
-        _channel_id: &str,
+        channel_id: &str,
         _cursor: Option<Cursor>,
         _sort_id: Option<&str>,
         _filter_id: Option<&str>,
         _tab_id: Option<&str>,
     ) -> ClientResult<ViewRowsPage> {
-        Err(ClientError::NotSupported("view-rows not yet implemented".into()))
+        // Overview sentinel: the AccountOverviewView component passes channel_id=""
+        // when calling get_view_rows for the account-level overview.
+        if !channel_id.is_empty() {
+            return Err(ClientError::NotSupported("channel view-rows not yet implemented".into()));
+        }
+
+        let wire_servers = self
+            .http
+            .get_servers()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+
+        let account_id = self.account_id.clone().unwrap_or_default();
+        let display_name = self.display_name.clone().unwrap_or_default();
+
+        let mut rows = Vec::with_capacity(wire_servers.len());
+        for ws in &wire_servers {
+            let server_id = ws.id.clone().unwrap_or_default();
+            // Map the wire server to a poly_client::Server for unread/mention counts.
+            let server = Self::map_server(ws, &[], &account_id, &display_name);
+
+            // Fetch member count from server detail. A failure is non-fatal:
+            // fall back to 0 rather than surfacing an error for a single server.
+            let member_count = if server_id.is_empty() {
+                0usize
+            } else {
+                self.http
+                    .get_server(&server_id)
+                    .await
+                    .map(|detail| detail.members.len())
+                    .unwrap_or(0)
+            };
+
+            let meta_text = format!(
+                "{} members · {} unread · @{} mentions",
+                member_count,
+                server.unread_count,
+                server.mention_count,
+            );
+
+            rows.push(ViewRow {
+                id: server_id,
+                primary_text: server.name.clone(),
+                secondary_text: server.description.clone(),
+                meta_text: Some(meta_text),
+                icon: server.icon_url.clone(),
+                badge: None,
+                context_menu_target_kind: MenuTargetKind::Server,
+            });
+        }
+
+        Ok(ViewRowsPage { rows, next_cursor: None })
     }
 
     async fn get_view_detail(

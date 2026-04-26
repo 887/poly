@@ -266,6 +266,78 @@ async fn test_concurrent_sessions() {
 }
 
 // ---------------------------------------------------------------------------
+// Account overview view (get_account_overview_view + get_view_rows)
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_get_account_overview_view_descriptor() {
+    use poly_client::{ViewBody, ViewKind};
+    let srv = TestServer::start().await;
+    let client = srv.authenticated_client("Sheep").await;
+    let desc = client
+        .get_account_overview_view()
+        .await
+        .expect("get_account_overview_view");
+    assert_eq!(desc.kind, ViewKind::CardGrid);
+    assert!(matches!(desc.body, ViewBody::CardBody(_)));
+    let header = desc.header.expect("header should be present");
+    assert!(
+        header.title_key.as_deref().is_some(),
+        "overview header should have a title_key"
+    );
+}
+
+#[tokio::test]
+async fn test_get_view_rows_overview_returns_teams() {
+    let srv = TestServer::start().await;
+    let client = srv.authenticated_client("Sheep").await;
+    // Empty channel_id triggers the account-overview path.
+    let page = client
+        .get_view_rows("", None, None, None, None)
+        .await
+        .expect("get_view_rows overview");
+    assert!(!page.rows.is_empty(), "overview should return at least one team card");
+    let names: Vec<_> = page.rows.iter().map(|r| r.primary_text.as_str()).collect();
+    assert!(names.contains(&"Contoso Corp"), "Contoso Corp card expected");
+    assert!(names.contains(&"Project Alpha"), "Project Alpha card expected");
+    // Each row meta_text should mention "channel" count.
+    for row in &page.rows {
+        let meta = row.meta_text.as_deref().expect("meta_text should be set");
+        assert!(
+            meta.contains("channel"),
+            "meta_text should mention channel count: {meta}"
+        );
+        assert!(
+            meta.contains("unread"),
+            "meta_text should mention unread count: {meta}"
+        );
+        assert!(
+            meta.contains('@'),
+            "meta_text should mention mention count: {meta}"
+        );
+    }
+    assert!(page.next_cursor.is_none(), "overview has no pagination");
+}
+
+#[tokio::test]
+async fn test_get_view_rows_non_overview_returns_not_supported() {
+    let srv = TestServer::start().await;
+    let client = srv.authenticated_client("Sheep").await;
+    let result = client
+        .get_view_rows("T001/CH001", None, None, None, None)
+        .await;
+    assert!(
+        result.is_err(),
+        "non-overview channel_id should return an error"
+    );
+    let err = result.unwrap_err();
+    assert!(
+        matches!(err, poly_client::ClientError::NotSupported(_)),
+        "expected NotSupported, got {err:?}"
+    );
+}
+
+// ---------------------------------------------------------------------------
 // Pack C.2 — settings storage round-trip
 // ---------------------------------------------------------------------------
 

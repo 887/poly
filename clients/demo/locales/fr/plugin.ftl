@@ -59,3 +59,11 @@ plugin-demo-refresh = Actualiser
 plugin-demo-tab-subscribed = Abonné
 plugin-demo-tab-local = Local
 plugin-demo-tab-all = Tout
+
+# --- Vue d'ensemble du compte (backends chat : demo / demo_chat) ---
+plugin-demo-overview-title = Vos serveurs
+plugin-demo-overview-subtitle = Tous les serveurs de ce compte
+
+# --- Vue d'ensemble du compte (backend forum : demo_forum) ---
+plugin-demo-forum-overview-title = Vos communautés
+plugin-demo-forum-overview-subtitle = Toutes les communautés auxquelles vous êtes abonné

@@ -302,6 +302,42 @@ impl MatrixClient {
             MessageContent::WithAttachments { text, .. } => text.clone(),
         }
     }
+
+    /// Extract the room topic from state events (`m.room.topic`).
+    fn extract_room_topic(state: &[api::RoomEvent]) -> Option<String> {
+        state
+            .iter()
+            .find(|ev| ev.event_type == "m.room.topic")
+            .and_then(|ev| ev.content.get("topic"))
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string)
+    }
+
+    /// Extract the canonical alias from state events (`m.room.canonical_alias`).
+    fn extract_canonical_alias(state: &[api::RoomEvent]) -> Option<String> {
+        state
+            .iter()
+            .find(|ev| ev.event_type == "m.room.canonical_alias")
+            .and_then(|ev| ev.content.get("alias"))
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string)
+    }
+
+    /// Count joined members from state events (`m.room.member` with
+    /// `membership == "join"`).
+    fn count_joined_members(state: &[api::RoomEvent]) -> usize {
+        state
+            .iter()
+            .filter(|ev| {
+                ev.event_type == "m.room.member"
+                    && ev
+                        .content
+                        .get("membership")
+                        .and_then(serde_json::Value::as_str)
+                        == Some("join")
+            })
+            .count()
+    }
 }
 
 // ─── F4: Space tree ────────────────────────────────────────────────────────
@@ -1202,7 +1238,7 @@ impl ClientBackend for MatrixClient {
     fn backend_capabilities(&self) -> BackendCapabilities {
         BackendCapabilities {
             voice: VoiceSupport::None,
-            landing: poly_client::LandingPage::DirectMessages,
+            landing: poly_client::LandingPage::Overview,
             // Moderation flags (B-MX)
             has_roles: false,        // Power levels are different; expose differently in UI
             has_kick: true,
@@ -1476,19 +1512,76 @@ impl ClientBackend for MatrixClient {
         Err(ClientError::NotFound(format!("unknown sidebar action: {action_id}")))
     }
 
+    async fn get_account_overview_view(&self) -> ClientResult<ViewDescriptor> {
+        Ok(ViewDescriptor {
+            kind: ViewKind::CardGrid,
+            header: Some(ViewHeader {
+                title_key: Some("plugin-matrix-overview-title".to_string()),
+                subtitle_key: Some("plugin-matrix-overview-subtitle".to_string()),
+                info_block: None,
+            }),
+            toolbar: None,
+            body: ViewBody::CardBody(CardSpec {
+                primary_field: "name".to_string(),
+            }),
+        })
+    }
+
     async fn get_channel_view(&self, _channel_id: &str) -> ClientResult<ViewDescriptor> {
         Err(ClientError::NotSupported("channel-view not yet implemented".into()))
     }
 
     async fn get_view_rows(
         &self,
-        _channel_id: &str,
+        channel_id: &str,
         _cursor: Option<Cursor>,
         _sort_id: Option<&str>,
         _filter_id: Option<&str>,
         _tab_id: Option<&str>,
     ) -> ClientResult<ViewRowsPage> {
-        Err(ClientError::NotSupported("view-rows not yet implemented".into()))
+        if channel_id != "account-overview" {
+            return Err(ClientError::NotSupported("view-rows not yet implemented".into()));
+        }
+
+        let joined = self.http.fetch_joined_rooms().await?;
+        let homeserver_url = self.homeserver_url().to_string();
+
+        let mut rows = Vec::new();
+        for room_id in &joined.joined_rooms {
+            let state = self.http.fetch_room_state(room_id).await.unwrap_or_default();
+
+            let name = Self::extract_canonical_alias(&state)
+                .unwrap_or_else(|| Self::extract_room_name(&state, room_id));
+            let topic = Self::extract_room_topic(&state);
+            let member_count = Self::count_joined_members(&state);
+            let icon = Self::extract_avatar_url(&state, &homeserver_url);
+
+            // Unread / mention counts are not tracked in-memory by this backend
+            // (no persistent sync state). They default to 0.
+            let unread: u32 = 0;
+            let mentions: u32 = 0;
+
+            let meta_text = format!(
+                "{member_count} members · {unread} unread · @{mentions} mentions"
+            );
+
+            let is_space = Self::is_space_room(&state);
+            rows.push(ViewRow {
+                id: room_id.clone(),
+                primary_text: name,
+                secondary_text: topic,
+                meta_text: Some(meta_text),
+                icon,
+                badge: None,
+                context_menu_target_kind: if is_space {
+                    MenuTargetKind::Server
+                } else {
+                    MenuTargetKind::Channel
+                },
+            });
+        }
+
+        Ok(ViewRowsPage { rows, next_cursor: None })
     }
 
     async fn get_view_detail(

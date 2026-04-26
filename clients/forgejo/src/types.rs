@@ -34,6 +34,15 @@ pub struct ForgejoRepo {
     pub default_branch: Option<String>,
     /// Web URL of the repo.
     pub html_url: String,
+    /// Number of stars the repo has received.
+    #[serde(default)]
+    pub stars_count: u64,
+    /// Number of forks.
+    #[serde(default)]
+    pub forks_count: u64,
+    /// Number of open issues (issues only, not PRs).
+    #[serde(default)]
+    pub open_issues_count: u64,
 }
 
 /// A Forgejo user / org as embedded inside a repo or issue.

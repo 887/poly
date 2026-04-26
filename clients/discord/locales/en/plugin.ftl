@@ -41,6 +41,10 @@ plugin-discord-setting-privacy-label = Privacy
 plugin-discord-setting-allow-dms-from-server-members-label = Allow DMs from Members
 plugin-discord-setting-allow-dms-from-server-members-desc = When enabled, other members of this server can send you direct messages.
 
+# Account overview card grid
+plugin-discord-overview-title = Your Servers
+plugin-discord-overview-subtitle = All Discord servers you have joined.
+
 # Composer buttons
 plugin-discord-composer-stickers-label = Stickers
 # Message actions

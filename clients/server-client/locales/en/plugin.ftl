@@ -64,6 +64,10 @@ plugin-poly-menu-privacy-settings-label = Privacy Settings
 plugin-poly-menu-edit-per-server-profile-label = Edit Server Profile
 plugin-poly-menu-federation-settings-label = Federation Settings
 
+# --- Account overview (Phase 2 — get_account_overview_view) ---
+plugin-poly-overview-title = Your Servers
+plugin-poly-overview-subtitle = All servers you have joined on this Poly Server account.
+
 # --- Declarative settings sections (WP 3) ---
 plugin-poly-setting-profile-label = Profile
 plugin-poly-setting-nickname-label = Nickname

@@ -668,6 +668,21 @@ impl ClientBackend for ForgejoClient {
         Err(ClientError::NotFound(format!("unknown sidebar action: {action_id}")))
     }
 
+    async fn get_account_overview_view(&self) -> ClientResult<ViewDescriptor> {
+        Ok(ViewDescriptor {
+            kind: ViewKind::CardGrid,
+            header: Some(ViewHeader {
+                title_key: Some("plugin-forgejo-overview-title".to_string()),
+                subtitle_key: Some("plugin-forgejo-overview-subtitle".to_string()),
+                info_block: None,
+            }),
+            toolbar: None,
+            body: ViewBody::CardBody(CardSpec {
+                primary_field: "name".to_string(),
+            }),
+        })
+    }
+
     async fn get_channel_view(&self, _channel_id: &str) -> ClientResult<ViewDescriptor> {
         Ok(ViewDescriptor {
             kind: ViewKind::Split,
@@ -712,6 +727,40 @@ impl ClientBackend for ForgejoClient {
         filter_id: Option<&str>,
         tab_id: Option<&str>,
     ) -> ClientResult<ViewRowsPage> {
+        // Account overview: return one CardRow per cached repo with
+        // stars / forks / open-issues in meta_text.
+        if channel_id == "fj-overview" {
+            let repos = self.repos.lock().await;
+            let page: u32 = cursor
+                .as_ref()
+                .and_then(|c| c.value.parse().ok())
+                .unwrap_or(1);
+            let page_size: usize = 30;
+            let start = ((page - 1) as usize) * page_size;
+            let slice: Vec<_> = repos.iter().skip(start).take(page_size).collect();
+            let rows: Vec<ViewRow> = slice
+                .iter()
+                .map(|r| ViewRow {
+                    id: mapping::server_id_for_repo(r),
+                    primary_text: r.full_name.clone(),
+                    secondary_text: r.description.clone(),
+                    meta_text: Some(format!(
+                        "⭐ {} · 🍴 {} · {} open issues",
+                        r.stars_count, r.forks_count, r.open_issues_count
+                    )),
+                    icon: None,
+                    badge: None,
+                    context_menu_target_kind: MenuTargetKind::Server,
+                })
+                .collect();
+            let next_cursor = if repos.len() > start + page_size {
+                Some(Cursor { kind: CursorKind::Offset, value: (page + 1).to_string() })
+            } else {
+                None
+            };
+            return Ok(ViewRowsPage { rows, next_cursor });
+        }
+
         // Pack E.4 — Discussions tab: Forgejo lacks a discussions API.
         if tab_id == Some("discussions") {
             return Ok(ViewRowsPage { rows: Vec::new(), next_cursor: None });

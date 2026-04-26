@@ -142,6 +142,14 @@ impl DiscordHttpClient {
         self.get(&format!("/api/v10/guilds/{guild_id}")).await
     }
 
+    /// Fetch a guild including `approximate_member_count`.
+    ///
+    /// Passes `?with_counts=true` — real Discord includes the field; test
+    /// servers that omit it parse as `None` due to `#[serde(default)]`.
+    pub async fn get_guild_with_counts(&self, guild_id: &str) -> Result<DiscordGuild, ClientError> {
+        self.get(&format!("/api/v10/guilds/{guild_id}?with_counts=true")).await
+    }
+
     pub async fn get_channel(&self, channel_id: &str) -> Result<DiscordChannel, ClientError> {
         self.get(&format!("/api/v10/channels/{channel_id}")).await
     }

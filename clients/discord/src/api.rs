@@ -44,6 +44,11 @@ pub struct DiscordGuild {
     /// The user ID of the guild owner.
     #[serde(default)]
     pub owner_id: Option<String>,
+    /// Approximate member count, present when `with_counts=true` is passed to
+    /// `GET /guilds/{id}`. Absent from the list endpoint and from test servers
+    /// that don't include it.
+    #[serde(default)]
+    pub approximate_member_count: Option<u32>,
 }
 
 /// A tag available in a Discord forum channel.

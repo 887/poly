@@ -25,6 +25,7 @@ plugin-lemmy-setting-mute-community-desc = Hide posts from this community in you
 plugin-lemmy-setting-show-nsfw-label = Show NSFW Content
 plugin-lemmy-setting-show-nsfw-desc = When enabled, posts marked as NSFW will appear in your feeds instead of being filtered out.
 
+plugin-lemmy-overview-title = My Communities
 plugin-lemmy-view-posts-title = Posts
 plugin-lemmy-sort-hot = Hot
 plugin-lemmy-sort-new = New

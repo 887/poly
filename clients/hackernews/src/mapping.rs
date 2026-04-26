@@ -401,6 +401,61 @@ pub fn hn_item_to_view_row(item: &HnItem) -> ViewRow {
     }
 }
 
+/// Extract the domain name from a URL string, e.g. `"https://example.com/foo"` → `"example.com"`.
+/// Returns `None` if the URL has no host or cannot be parsed simply.
+fn domain_from_url(url: &str) -> Option<String> {
+    // Strip scheme (e.g. "https://")
+    let after_scheme = if let Some(pos) = url.find("://") {
+        &url[pos + 3..]
+    } else {
+        url
+    };
+    // Take everything before the first '/'
+    let host = after_scheme.split('/').next()?;
+    // Drop port if present
+    let host = host.split(':').next().unwrap_or(host);
+    // Strip leading "www."
+    let host = host.strip_prefix("www.").unwrap_or(host);
+    if host.is_empty() {
+        None
+    } else {
+        Some(host.to_string())
+    }
+}
+
+/// Map a HN story item to a `ViewRow` for the account-level overview.
+///
+/// Format differences from `hn_item_to_view_row`:
+/// - `secondary_text` = `"<author> · <domain>"` (domain extracted from URL)
+/// - `meta_text` = `"N points · M comments · <age>"`
+pub fn hn_item_to_overview_row(item: &HnItem) -> ViewRow {
+    let title = item.title.clone().unwrap_or_default();
+
+    let author = item.by.as_deref().unwrap_or("unknown");
+    let domain = item.url.as_deref().and_then(domain_from_url);
+    let secondary_text = Some(match domain {
+        Some(d) => format!("{author} · {d}"),
+        None => author.to_string(),
+    });
+
+    let meta_text = Some(format!(
+        "{} points · {} comments · {}",
+        item.score.unwrap_or(0),
+        item.descendants.unwrap_or(0),
+        humanize_age(item.time),
+    ));
+
+    ViewRow {
+        id: item.id.to_string(),
+        primary_text: title,
+        secondary_text,
+        meta_text,
+        icon: None,
+        badge: None,
+        context_menu_target_kind: MenuTargetKind::Message,
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Unit tests (Pack E.2 — §1.2 layer a)
 // ---------------------------------------------------------------------------

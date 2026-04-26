@@ -49,6 +49,9 @@ fn repo_json(r: &crate::state::Repo) -> Value {
         "updated_at": r.updated_at,
         "default_branch": r.default_branch,
         "html_url": r.html_url,
+        "stars_count": r.stars_count,
+        "forks_count": r.forks_count,
+        "open_issues_count": r.open_issues_count,
     })
 }
 

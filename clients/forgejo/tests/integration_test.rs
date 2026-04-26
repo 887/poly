@@ -648,6 +648,62 @@ async fn test_kick_member_returns_not_supported() {
     }
 }
 
+/// `get_account_overview_view` returns a CardGrid descriptor.
+#[tokio::test]
+async fn test_get_account_overview_view() {
+    use poly_client::{ClientBackend, ViewBody};
+    let base_url = start_test_server().await;
+    let token = get_test_token(&base_url, "otter").await;
+    let mut client = ForgejoClient::new(&base_url);
+    client.authenticate(AuthCredentials::Token(token)).await.unwrap();
+
+    let descriptor = client
+        .get_account_overview_view()
+        .await
+        .expect("get_account_overview_view should succeed");
+
+    assert!(
+        matches!(descriptor.body, ViewBody::CardBody(_)),
+        "overview body must be CardBody"
+    );
+    assert!(descriptor.header.is_some(), "header should be set");
+    let header = descriptor.header.unwrap();
+    assert_eq!(
+        header.title_key.as_deref(),
+        Some("plugin-forgejo-overview-title"),
+        "title_key must match FTL key"
+    );
+}
+
+/// `get_view_rows` on the overview channel returns one row per cached repo
+/// with stars/forks/open-issues in meta_text.
+#[tokio::test]
+async fn test_get_view_rows_overview() {
+    use poly_client::ClientBackend;
+    let base_url = start_test_server().await;
+    let token = get_test_token(&base_url, "otter").await;
+    let mut client = ForgejoClient::new(&base_url);
+    client.authenticate(AuthCredentials::Token(token)).await.unwrap();
+    // Populate repo cache
+    client.get_servers().await.unwrap();
+
+    let page = client
+        .get_view_rows("fj-overview", None, None, None, None)
+        .await
+        .expect("get_view_rows overview should succeed");
+
+    // otter owns 2 repos (dam-builder + fish-finder)
+    assert_eq!(page.rows.len(), 2, "otter has 2 repos");
+
+    for row in &page.rows {
+        assert!(!row.primary_text.is_empty(), "primary_text (repo name) must not be empty");
+        let meta = row.meta_text.as_deref().unwrap_or("");
+        assert!(meta.contains("open issues"), "meta should include open issues count");
+        assert!(meta.contains('·'), "meta should have separator between stats");
+    }
+    assert_eq!(page.next_cursor, None, "2 repos fits in one page");
+}
+
 /// State-aware menu: starred repo shows "unstar-repo" label key.
 #[tokio::test]
 async fn test_context_menu_starred() {

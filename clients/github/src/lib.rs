@@ -620,6 +620,25 @@ impl ClientBackend for GitHubClient {
         Err(ClientError::NotFound(format!("unknown sidebar action: {action_id}")))
     }
 
+    /// Return a CardGrid overview of the user's repos with stars/forks/open-issue counts.
+    ///
+    /// The host passes an empty `channel_id` when it calls `get_view_rows` for
+    /// this view (see `AccountOverviewView` in `crates/core/src/ui/client_ui/view/mod.rs`).
+    async fn get_account_overview_view(&self) -> ClientResult<ViewDescriptor> {
+        Ok(ViewDescriptor {
+            kind: ViewKind::CardGrid,
+            header: Some(ViewHeader {
+                title_key: Some("plugin-github-overview-title".to_string()),
+                subtitle_key: Some("plugin-github-overview-subtitle".to_string()),
+                info_block: None,
+            }),
+            toolbar: None,
+            body: ViewBody::CardBody(CardSpec {
+                primary_field: "name".to_string(),
+            }),
+        })
+    }
+
     async fn get_channel_view(&self, _channel_id: &str) -> ClientResult<ViewDescriptor> {
         Ok(ViewDescriptor {
             kind: ViewKind::Split,
@@ -664,6 +683,29 @@ impl ClientBackend for GitHubClient {
         filter_id: Option<&str>,
         tab_id: Option<&str>,
     ) -> ClientResult<ViewRowsPage> {
+        // Empty channel_id is the host's signal that this is the account
+        // overview view (see `AccountOverviewView` — it calls get_view_rows
+        // with channel_id = ""). Return one card per cached repo.
+        if channel_id.is_empty() {
+            let repos = self.repos.lock().await;
+            let rows: Vec<ViewRow> = repos
+                .iter()
+                .map(|r| ViewRow {
+                    id: mapping::server_id_for_repo(r),
+                    primary_text: r.full_name.clone(),
+                    secondary_text: r.description.clone(),
+                    meta_text: Some(format!(
+                        "★ {} · {} forks · {} open",
+                        r.stargazers_count, r.forks_count, r.open_issues_count
+                    )),
+                    icon: None,
+                    badge: r.language.clone(),
+                    context_menu_target_kind: MenuTargetKind::Server,
+                })
+                .collect();
+            return Ok(ViewRowsPage { rows, next_cursor: None });
+        }
+
         let (owner, repo) = parse_forum_channel(channel_id)?;
 
         // Discussions tab uses GraphQL — separate from the REST issues path.

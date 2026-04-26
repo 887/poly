@@ -746,3 +746,96 @@ async fn test_settings_storage_round_trip() {
         .expect("get_setting_value should succeed");
     assert_eq!(got, "matrix-nick");
 }
+
+#[tokio::test]
+async fn test_get_account_overview_view_returns_card_grid() {
+    use poly_client::{ViewBody, ViewKind};
+
+    let srv = TestServer::start().await;
+    let (_user_id, token) = get_test_token(&srv.base_url, "Owl").await;
+
+    let mut client = make_client(&srv.base_url);
+    client
+        .authenticate(AuthCredentials::Token(token))
+        .await
+        .expect("authenticate");
+
+    let view = client
+        .get_account_overview_view()
+        .await
+        .expect("get_account_overview_view");
+
+    assert_eq!(view.kind, ViewKind::CardGrid, "overview must use CardGrid");
+    assert!(
+        matches!(view.body, ViewBody::CardBody(_)),
+        "overview body must be CardBody, got: {:?}",
+        view.body
+    );
+    let header = view.header.expect("overview must have a header");
+    assert_eq!(
+        header.title_key.as_deref(),
+        Some("plugin-matrix-overview-title"),
+        "title key must match FTL key"
+    );
+}
+
+#[tokio::test]
+async fn test_get_view_rows_account_overview_lists_rooms() {
+    let srv = TestServer::start().await;
+    let (_user_id, token) = get_test_token(&srv.base_url, "Owl").await;
+
+    let mut client = make_client(&srv.base_url);
+    client
+        .authenticate(AuthCredentials::Token(token))
+        .await
+        .expect("authenticate");
+
+    let page = client
+        .get_view_rows("account-overview", None, None, None, None)
+        .await
+        .expect("get_view_rows account-overview");
+
+    assert!(!page.rows.is_empty(), "must return at least one row");
+
+    // Every row must have a non-empty primary_text (room name / alias).
+    for row in &page.rows {
+        assert!(!row.primary_text.is_empty(), "primary_text must not be empty: {row:?}");
+    }
+
+    // meta_text must contain "members" keyword.
+    for row in &page.rows {
+        let meta = row.meta_text.as_deref().unwrap_or("");
+        assert!(meta.contains("members"), "meta_text must contain 'members': {meta}");
+    }
+
+    // At least one of the seeded spaces/rooms should appear by name.
+    let names: Vec<&str> = page.rows.iter().map(|r| r.primary_text.as_str()).collect();
+    assert!(
+        names.iter().any(|n| *n == "The Hollow Tree" || *n == "Neon Reef" || *n == "general"),
+        "expected a known room name in overview rows: {names:?}"
+    );
+
+    // No next cursor for a complete room list.
+    assert!(page.next_cursor.is_none(), "overview must not paginate");
+}
+
+#[tokio::test]
+async fn test_get_view_rows_non_overview_returns_not_supported() {
+    let srv = TestServer::start().await;
+    let (_user_id, token) = get_test_token(&srv.base_url, "Owl").await;
+
+    let mut client = make_client(&srv.base_url);
+    client
+        .authenticate(AuthCredentials::Token(token))
+        .await
+        .expect("authenticate");
+
+    let result = client
+        .get_view_rows("!general1:localhost", None, None, None, None)
+        .await;
+
+    assert!(
+        matches!(result, Err(poly_client::ClientError::NotSupported(_))),
+        "non-overview channel_id must return NotSupported, got: {result:?}"
+    );
+}

@@ -38,6 +38,10 @@ plugin-discord-setting-allow-dms-from-server-members-label = Autoriser les DMs d
 
 plugin-discord-setting-allow-dms-from-server-members-desc = Lorsqu'activé, les autres membres de ce serveur peuvent vous envoyer des messages directs.
 
+# Account overview card grid
+plugin-discord-overview-title = Vos serveurs
+plugin-discord-overview-subtitle = Tous les serveurs Discord que vous avez rejoints.
+
 # Composer buttons
 plugin-discord-composer-stickers-label = Stickers
 

@@ -1210,6 +1210,46 @@ pub fn demo_users() -> Vec<User> {
         .collect()
 }
 
+/// Return the mock member count for a server by id.
+///
+/// These are fixed demo values used in overview cards.  They have no
+/// relationship to the actual size of `demo_users()`.
+pub fn demo_server_member_count(server_id: &str) -> u32 {
+    match server_id {
+        "server-poly-dev"    => 284,
+        "server-gaming"      => 512,
+        "server-music"       => 138,
+        "server-opensource"  => 621,
+        "server-bookclub"    => 93,
+        "server-cooking"     => 217,
+        "server-fitness"     => 175,
+        // demo_forum communities
+        "comm-rust-lang"     => 48_300,
+        "comm-linux"         => 72_400,
+        "comm-programming"   => 29_150,
+        _                    => 42,
+    }
+}
+
+/// Short description for demo servers shown in overview cards.
+///
+/// Falls back to an empty string so callers can always display something.
+pub fn demo_server_description(server_id: &str) -> &'static str {
+    match server_id {
+        "server-poly-dev"   => "Building the unified messaging layer",
+        "server-gaming"     => "Relax, play, and share gaming moments",
+        "server-music"      => "Theory, production, and playlist sharing",
+        "server-opensource" => "Collaborate on open source projects",
+        "server-bookclub"   => "Monthly reads and literary discussions",
+        "server-cooking"    => "Recipes, techniques, and foodie talk",
+        "server-fitness"    => "Workouts, nutrition, and motivation",
+        "comm-rust-lang"    => "The Rust programming language community",
+        "comm-linux"        => "Linux news, tips, and rice",
+        "comm-programming"  => "General programming discussion",
+        _                   => "",
+    }
+}
+
 /// Generate demo servers with categories.
 ///
 /// Returns 3 servers from the demo account, each with multiple categories.

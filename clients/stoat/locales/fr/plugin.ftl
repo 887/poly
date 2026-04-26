@@ -41,6 +41,10 @@ plugin-stoat-setting-allow-dms-from-server-members-label = Autoriser les DMs des
 
 plugin-stoat-setting-allow-dms-from-server-members-desc = Lorsqu'activé, les autres membres de ce serveur peuvent vous envoyer des messages directs.
 
+# Account overview
+plugin-stoat-overview-title = Vos serveurs
+plugin-stoat-overview-subtitle = Tous les serveurs de ce compte Stoat
+
 plugin-stoat-composer-emoji-label = Emoji
 
 plugin-stoat-message-action-report-label = Signaler

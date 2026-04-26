@@ -18,3 +18,6 @@ plugin-hackernews-setting-items-per-page-label = Items Per Page
 plugin-hackernews-setting-items-per-page-desc = How many stories to load per page. Higher values require more network requests.
 
 plugin-hackernews-view-stories-title = Stories
+
+plugin-hackernews-overview-title = Hacker News
+plugin-hackernews-overview-subtitle = Top stories right now

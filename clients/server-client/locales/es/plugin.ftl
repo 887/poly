@@ -58,6 +58,10 @@ plugin-poly-profile-saved = ¡Perfil guardado!
 plugin-poly-profile-avatar-coming-soon = Subida de avatar próximamente.
 plugin-poly-profile-banner-coming-soon = Subida de banner próximamente.
 
+# --- Vista general de cuenta (Fase 2 — get_account_overview_view) ---
+plugin-poly-overview-title = Tus servidores
+plugin-poly-overview-subtitle = Todos los servidores a los que te has unido con esta cuenta de Poly Server.
+
 # keys added by P46/P47
 plugin-poly-menu-invite-people-label = Invitar personas
 

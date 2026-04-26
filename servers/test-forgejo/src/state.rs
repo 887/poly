@@ -43,6 +43,12 @@ pub struct Repo {
     pub updated_at: String,
     pub default_branch: String,
     pub html_url: String,
+    #[serde(default)]
+    pub stars_count: u64,
+    #[serde(default)]
+    pub forks_count: u64,
+    #[serde(default)]
+    pub open_issues_count: u64,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -143,6 +149,9 @@ impl ForgejoState {
             updated_at: "2026-01-15T12:00:00Z".to_string(),
             default_branch: "main".to_string(),
             html_url: "https://forgejo.example.com/otter/dam-builder".to_string(),
+            stars_count: 42,
+            forks_count: 7,
+            open_issues_count: 2,
         };
         let fish_finder = Repo {
             id: 2,
@@ -155,6 +164,9 @@ impl ForgejoState {
             updated_at: "2026-01-10T08:00:00Z".to_string(),
             default_branch: "main".to_string(),
             html_url: "https://forgejo.example.com/otter/fish-finder".to_string(),
+            stars_count: 15,
+            forks_count: 3,
+            open_issues_count: 0,
         };
         let pink_css = Repo {
             id: 3,
@@ -167,6 +179,9 @@ impl ForgejoState {
             updated_at: "2026-01-05T16:00:00Z".to_string(),
             default_branch: "main".to_string(),
             html_url: "https://forgejo.example.com/flamingo/pink-css".to_string(),
+            stars_count: 8,
+            forks_count: 1,
+            open_issues_count: 1,
         };
 
         self.repos.insert("otter/dam-builder".to_string(), dam_builder);

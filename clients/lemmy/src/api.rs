@@ -85,9 +85,24 @@ pub struct LemmyPerson {
 #[derive(Debug, Clone, Deserialize)]
 pub struct LemmyCommunity {
     pub id: i64,
+    /// Short handle name (e.g. `"rust"`). Absent in some embedded responses
+    /// (e.g. modlog entries) so we default to empty string.
+    #[serde(default)]
+    pub name: String,
     pub title: String,
+    #[serde(default)]
+    pub description: Option<String>,
     pub icon: Option<String>,
     pub banner: Option<String>,
+}
+
+/// Aggregate counts for a community (subscribers, active users, etc.).
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct CommunityCounts {
+    #[serde(default)]
+    pub subscribers: i64,
+    #[serde(default)]
+    pub users_active_week: i64,
 }
 
 /// A community view as returned in list responses.
@@ -99,6 +114,9 @@ pub struct CommunityView {
     /// unauthenticated list responses omit it.
     #[serde(default)]
     pub subscribed: Option<String>,
+    /// Aggregate stats: subscriber count, active-user count, etc.
+    #[serde(default)]
+    pub counts: CommunityCounts,
 }
 
 /// Response from `GET /api/v3/community/list`.
@@ -353,6 +371,38 @@ pub fn map_community_to_server(view: &CommunityView, account_id: &str, account_d
         language: None,
         forks_count: None,
         open_issues_count: None,
+    }
+}
+
+/// Map a `CommunityView` to a Poly `ViewRow` for the account overview card grid.
+///
+/// - `primary_text`   — community title (display name)
+/// - `secondary_text` — short handle name (`!rust@lemmy.example.com` style) or description
+/// - `meta_text`      — `"X subscribers · Y active · Z unread"`
+pub fn map_community_to_viewrow(view: &CommunityView, unread: u32) -> ViewRow {
+    let community = &view.community;
+    let counts = &view.counts;
+
+    let secondary = community
+        .description
+        .as_deref()
+        .filter(|d| !d.is_empty())
+        .map(|d| d.to_string())
+        .unwrap_or_else(|| community.name.clone());
+
+    let meta = format!(
+        "{} subscribers · {} active · {} unread",
+        counts.subscribers, counts.users_active_week, unread,
+    );
+
+    ViewRow {
+        id: format!("lemmy-community-{}", community.id),
+        primary_text: community.title.clone(),
+        secondary_text: Some(secondary),
+        meta_text: Some(meta),
+        icon: community.icon.clone(),
+        badge: if unread > 0 { Some(unread.to_string()) } else { None },
+        context_menu_target_kind: MenuTargetKind::Server,
     }
 }
 

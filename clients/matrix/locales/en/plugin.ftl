@@ -64,6 +64,10 @@ plugin-matrix-setting-privacy-label = Privacy
 plugin-matrix-setting-allow-guests-label = Allow Guests
 plugin-matrix-setting-allow-guests-desc = When enabled, users without a Matrix account can join and read this Space.
 
+# Account overview view
+plugin-matrix-overview-title = Rooms & Spaces
+plugin-matrix-overview-subtitle = Your joined rooms and spaces
+
 # Composer buttons
 plugin-matrix-composer-me-label = /me action
 # Message actions
