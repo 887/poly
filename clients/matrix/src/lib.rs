@@ -254,6 +254,53 @@ impl MatrixClient {
         Some(mxc_to_http_thumbnail(raw, homeserver_url))
     }
 
+    /// Patch each message's `author.display_name` + `author.avatar_url` with
+    /// the sender's profile data. Matrix message events only carry the raw
+    /// MXID — without this the chat shows `@user:server` text and a blank
+    /// avatar for every author. Profiles are fetched in parallel and
+    /// deduplicated per unique sender to avoid N requests for N messages.
+    async fn hydrate_message_authors(&self, mut messages: Vec<Message>) -> Vec<Message> {
+        use std::collections::{HashMap, HashSet};
+        let unique_senders: Vec<String> = {
+            let mut seen = HashSet::new();
+            messages
+                .iter()
+                .map(|m| m.author.id.clone())
+                .filter(|id| seen.insert(id.clone()))
+                .collect()
+        };
+        if unique_senders.is_empty() {
+            return messages;
+        }
+        let homeserver_url = self.homeserver_url().to_string();
+        let profile_futures: Vec<_> = unique_senders
+            .iter()
+            .map(|id| self.http.fetch_profile(id))
+            .collect();
+        let profiles = futures::future::join_all(profile_futures).await;
+        let mut by_id: HashMap<String, (Option<String>, Option<String>)> = HashMap::new();
+        for (id, result) in unique_senders.into_iter().zip(profiles) {
+            if let Ok(p) = result {
+                let avatar = p
+                    .avatar_url
+                    .as_deref()
+                    .map(|raw| mxc_to_http_thumbnail(raw, &homeserver_url));
+                by_id.insert(id, (p.displayname, avatar));
+            }
+        }
+        for m in &mut messages {
+            if let Some((display, avatar)) = by_id.get(&m.author.id) {
+                if let Some(d) = display {
+                    m.author.display_name = d.clone();
+                }
+                if let Some(a) = avatar {
+                    m.author.avatar_url = Some(a.clone());
+                }
+            }
+        }
+        messages
+    }
+
     fn is_space_room(state: &[api::RoomEvent]) -> bool {
         state.iter().any(|ev| {
             ev.event_type == "m.room.create"
@@ -771,7 +818,7 @@ impl ClientBackend for MatrixClient {
             session.sync_next_batch.unwrap_or_default()
         };
 
-        if from.is_empty() {
+        let messages = if from.is_empty() {
             // No pagination token; do an initial sync to get one
             let sync = self.http.sync(None, Some(0)).await?;
             let prev_batch = sync
@@ -789,25 +836,27 @@ impl ClientBackend for MatrixClient {
                 .fetch_messages(channel_id, &prev_batch, "b", Some(limit))
                 .await?;
 
-            return Ok(response
+            response
                 .chunk
                 .iter()
                 .filter_map(Self::room_event_to_message)
-                .collect());
-        }
+                .collect::<Vec<_>>()
+        } else {
+            let dir = if query.after.is_some() { "f" } else { "b" };
+            let limit = u64::from(query.limit.unwrap_or(50));
+            let response = self
+                .http
+                .fetch_messages(channel_id, &from, dir, Some(limit))
+                .await?;
 
-        let dir = if query.after.is_some() { "f" } else { "b" };
-        let limit = u64::from(query.limit.unwrap_or(50));
-        let response = self
-            .http
-            .fetch_messages(channel_id, &from, dir, Some(limit))
-            .await?;
+            response
+                .chunk
+                .iter()
+                .filter_map(Self::room_event_to_message)
+                .collect::<Vec<_>>()
+        };
 
-        Ok(response
-            .chunk
-            .iter()
-            .filter_map(Self::room_event_to_message)
-            .collect())
+        Ok(self.hydrate_message_authors(messages).await)
     }
 
     async fn get_user(&self, id: &str) -> ClientResult<User> {
