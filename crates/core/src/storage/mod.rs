@@ -278,6 +278,13 @@ pub struct AppSettings {
     /// remote can serve the correct plugin binary.
     #[serde(default)]
     pub wasm_plugins: Vec<WasmPluginEntry>,
+    /// Slugs of bundled WASM plugins (e.g. `"discord"`, `"teams"`) that the
+    /// user has explicitly removed. Tracked separately from `wasm_plugins`
+    /// so that `ensure_bundled_plugins` does not re-inject them on the
+    /// next launch. Bundled plugins are identified by stable
+    /// `bundled://<slug>` URLs.
+    #[serde(default)]
+    pub removed_bundled_plugins: Vec<String>,
     /// Whether the Poly Server backend should use WebSocket/JSON-RPC for
     /// real-time event delivery.
     ///
@@ -341,6 +348,10 @@ pub struct OfflineServerRecord {
 pub struct WasmPluginEntry {
     /// The base URL to fetch the plugin from.
     /// The app appends `?wit=<version>` before making the request.
+    ///
+    /// Bundled plugins use the stable `bundled://<slug>` scheme — the
+    /// loader recognises the prefix and reads bytes from the in-binary
+    /// asset rather than fetching over HTTP.
     pub url: String,
     /// Optional user-defined name override. Falls back to the URL hostname.
     #[serde(default)]
@@ -348,6 +359,14 @@ pub struct WasmPluginEntry {
     /// Whether this plugin is currently enabled.
     #[serde(default = "default_true")]
     pub enabled: bool,
+    /// `true` for plugins auto-injected by `ensure_bundled_plugins` at
+    /// startup (e.g. Discord, Teams). Bundled plugins surface a "Bundled"
+    /// badge in the UI and, when removed, are tracked in
+    /// [`AppSettings::removed_bundled_plugins`] so they don't get
+    /// re-injected on the next launch. Defaults to `false` for backwards
+    /// compatibility with previously persisted user-added entries.
+    #[serde(default)]
+    pub bundled: bool,
 }
 
 fn default_true() -> bool {

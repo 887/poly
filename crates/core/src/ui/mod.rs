@@ -1101,6 +1101,11 @@ async fn init_storage(
             if let Err(e) = storage.run_migrations().await {
                 tracing::warn!("Storage migration error: {e}");
             }
+            // Auto-inject bundled WASM plugins (Discord, Teams) into the
+            // sideloaded list so they appear in /settings/plugins on first
+            // launch. Idempotent: re-launches don't add duplicates, and
+            // user-removed plugins are remembered across restarts.
+            crate::bundled_plugins::ensure_bundled_plugins(&storage).await;
             match storage.get_theme_config().await {
                 Ok(config) => theme_config.batch(|v| *v = config),
                 Err(e) => tracing::warn!("Failed to load saved theme config: {e}"),
@@ -1220,6 +1225,7 @@ async fn persist_setup_completion(account_id: String) {
         // All native backends enabled by default; no WASM plugins yet.
         disabled_native_backends: Vec::new(),
         wasm_plugins: Vec::new(),
+        removed_bundled_plugins: Vec::new(),
         // Use WebSocket for real-time events by default.
         poly_use_websocket: true,
         force_mobile_layout: false,

@@ -239,6 +239,7 @@ plugins-status-connected = Verbunden
 plugins-status-error = Fehler
 plugins-type-builtin = Integriert
 plugins-type-sideloaded = Nachgeladen
+plugins-type-bundled = Mitgeliefert
 plugins-not-compiled = nicht in diesem Build
 plugins-active-accounts = Aktive Konten
 plugins-sideloaded-title = Nachgeladene WASM-Plugins

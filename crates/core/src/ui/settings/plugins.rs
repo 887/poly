@@ -71,6 +71,7 @@ mod tests {
             url: "https://example.com/plugin.wasm".into(),
             name: None,
             enabled: true,
+            bundled: false,
         });
     }
 }
@@ -179,6 +180,18 @@ fn WasmPluginRow(
         .to_string();
     let idx_toggle = index;
     let idx_remove = index;
+    let is_bundled = entry.bundled;
+    // Bundled plugins get a recognisable icon per known slug; user-added
+    // plugins fall back to the generic plug emoji.
+    let icon = if is_bundled {
+        match crate::bundled_plugins::slug_from_url(&entry.url) {
+            Some("discord") => "🎮",
+            Some("teams") => "🟦",
+            _ => "📦",
+        }
+    } else {
+        "🔌"
+    };
     rsx! {
         div { class: "plugin-row",
             label { class: "plugin-row-toggle toggle-switch",
@@ -191,13 +204,17 @@ fn WasmPluginRow(
                 }
                 span { class: "toggle-slider" }
             }
-            div { class: "plugin-row-icon", "🔌" }
+            div { class: "plugin-row-icon", "{icon}" }
             div { class: "plugin-row-info",
                 div { class: "plugin-row-name", "{display_name}" }
                 div { class: "plugin-row-description", "{entry.url}" }
             }
             div { class: "plugin-row-meta",
-                span { class: "plugin-type-badge wasm", "{t(\"plugins-type-sideloaded\")}" }
+                if is_bundled {
+                    span { class: "plugin-type-badge wasm", "{t(\"plugins-type-bundled\")}" }
+                } else {
+                    span { class: "plugin-type-badge wasm", "{t(\"plugins-type-sideloaded\")}" }
+                }
                 button {
                     class: "btn btn-small btn-danger",
                     onclick: move |_| on_remove.call(idx_remove),
@@ -267,6 +284,7 @@ fn AddWasmPlugin(on_add: EventHandler<WasmPluginEntry>) -> Element {
                                 url: u,
                                 name: None,
                                 enabled: true,
+                                bundled: false,
                             });
                             url.set(String::new());
                         },
@@ -301,6 +319,7 @@ fn AddWasmPlugin(on_add: EventHandler<WasmPluginEntry>) -> Element {
                                     url: format!("file://{file_name}"),
                                     name: Some(file_name),
                                     enabled: true,
+                                    bundled: false,
                                 });
                                 url.set(String::new());
                             }
@@ -341,12 +360,16 @@ pub fn PluginsSettings() -> Element {
     // Local reactive copies of the persisted list — updated on every toggle/add/remove.
     let mut disabled: Signal<Vec<String>> = use_signal(Vec::new);
     let mut wasm_plugins: Signal<Vec<WasmPluginEntry>> = use_signal(Vec::new);
+    // Tracks bundled plugin slugs the user has explicitly removed so that
+    // `ensure_bundled_plugins` doesn't re-inject them on the next launch.
+    let mut removed_bundled: Signal<Vec<String>> = use_signal(Vec::new);
 
     // Load settings from storage once on mount.
     use_future(move || async move {
         let s = load_settings().await;
         disabled.set(s.disabled_native_backends.clone());
         wasm_plugins.set(s.wasm_plugins.clone());
+        removed_bundled.set(s.removed_bundled_plugins.clone());
     });
 
     let disabled_snap = disabled.read().clone();
@@ -493,6 +516,8 @@ pub fn PluginsSettings() -> Element {
                                                     settings.disabled_native_backends =
                                                         new_disabled;
                                                     settings.wasm_plugins = wasm;
+                                                    // removed_bundled_plugins is unchanged here;
+                                                    // load_settings + save round-trip preserves it.
                                                     save_settings(&settings).await;
                                                 });
                                             }
@@ -553,17 +578,37 @@ pub fn PluginsSettings() -> Element {
                             });
                         },
                         on_remove: move |i: usize| {
+                            // If the removed entry is a bundled plugin
+                            // (`bundled://<slug>`), record the slug so
+                            // ensure_bundled_plugins respects the user's
+                            // intent on the next launch and doesn't
+                            // re-inject it. See bundled_plugins.rs.
                             let mut wasm = wasm_plugins.write();
+                            let removed_slug: Option<String> = wasm
+                                .get(i)
+                                .filter(|e| e.bundled)
+                                .and_then(|e| {
+                                    crate::bundled_plugins::slug_from_url(&e.url)
+                                        .map(str::to_string)
+                                });
                             if i < wasm.len() {
                                 wasm.remove(i);
                             }
                             let new_wasm = wasm.clone();
                             drop(wasm);
+                            if let Some(slug) = removed_slug {
+                                let mut rb = removed_bundled.write();
+                                if !rb.contains(&slug) {
+                                    rb.push(slug);
+                                }
+                            }
                             let dis = disabled.read().clone();
+                            let new_removed = removed_bundled.read().clone();
                             spawn(async move {
                                 let mut s = load_settings().await;
                                 s.disabled_native_backends = dis;
                                 s.wasm_plugins = new_wasm;
+                                s.removed_bundled_plugins = new_removed;
                                 save_settings(&s).await;
                             });
                         },
