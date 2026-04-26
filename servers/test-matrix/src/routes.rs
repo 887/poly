@@ -1078,3 +1078,35 @@ pub async fn reseed(State(state): State<std::sync::Arc<MatrixState>>) -> impl In
     state.reseed();
     Json(serde_json::json!({ "status": "reseeded" }))
 }
+
+/// GET /_matrix/media/v3/thumbnail/{server}/{mediaId}
+/// (and the matching /download/ alias)
+///
+/// Serves bundled demo avatar bytes for a few well-known media IDs so the
+/// chat avatars resolve in dev. Real homeservers proxy from their own media
+/// store; this mock just maps ids → embedded bytes.
+pub async fn media_thumbnail(
+    Path((_server, media_id)): Path<(String, String)>,
+) -> impl IntoResponse {
+    static OWL_PNG: &[u8] = include_bytes!("../../../clients/demo/assets/owl.png");
+    static AXOLOTL_SVG: &[u8] = include_bytes!("../../../clients/demo/assets/axolotl.svg");
+    static HOLLOW_TREE_SVG: &[u8] = include_bytes!("../../../clients/demo/assets/owl.svg");
+    static NEON_REEF_SVG: &[u8] = include_bytes!("../../../clients/demo/assets/axolotl.svg");
+
+    let (bytes, mime): (&[u8], &str) = match media_id.as_str() {
+        "owl_avatar" => (OWL_PNG, "image/png"),
+        "axolotl_avatar" => (AXOLOTL_SVG, "image/svg+xml"),
+        "hollow_tree_avatar" => (HOLLOW_TREE_SVG, "image/svg+xml"),
+        "neon_reef_avatar" => (NEON_REEF_SVG, "image/svg+xml"),
+        _ => return (StatusCode::NOT_FOUND, "unknown media id").into_response(),
+    };
+    (
+        StatusCode::OK,
+        [
+            (axum::http::header::CONTENT_TYPE, mime),
+            (axum::http::header::CACHE_CONTROL, "public, max-age=3600"),
+        ],
+        bytes,
+    )
+        .into_response()
+}

@@ -41,6 +41,9 @@ pub fn router(state: Arc<MatrixState>) -> Router {
         .route("/_matrix/client/v3/rooms/{roomId}/members", get(routes::room_members))
         .route("/_matrix/client/v3/rooms/{roomId}/messages", get(routes::get_messages))
         .route("/_matrix/client/v3/rooms/{roomId}/send/{eventType}/{txnId}", put(routes::send_message))
+        // Media (avatar thumbnails) — minimal subset poly-matrix requests
+        .route("/_matrix/media/v3/thumbnail/{server}/{mediaId}", get(routes::media_thumbnail))
+        .route("/_matrix/media/v3/download/{server}/{mediaId}", get(routes::media_thumbnail))
         // Sync
         .route("/_matrix/client/v3/sync", get(routes::sync))
         // Spaces
