@@ -181,6 +181,10 @@ fn WasmPluginRow(
     let idx_toggle = index;
     let idx_remove = index;
     let is_bundled = entry.bundled;
+    // In-DOM remove confirmation. Avoids window.confirm() (per existing
+    // pattern in `LeaveServerConfirm`) — Remove is destructive so the
+    // first click only arms it, the second click commits.
+    let mut confirm_remove = use_signal(|| false);
     // Bundled plugins get a recognisable icon per known slug; user-added
     // plugins fall back to the generic plug emoji.
     let icon = if is_bundled {
@@ -215,10 +219,27 @@ fn WasmPluginRow(
                 } else {
                     span { class: "plugin-type-badge wasm", "{t(\"plugins-type-sideloaded\")}" }
                 }
-                button {
-                    class: "btn btn-small btn-danger",
-                    onclick: move |_| on_remove.call(idx_remove),
-                    "{t(\"plugins-remove\")}"
+                if confirm_remove() {
+                    span { class: "plugin-row-confirm-prompt", "{t(\"plugins-remove-confirm\")}" }
+                    button {
+                        class: "btn btn-small",
+                        onclick: move |_| confirm_remove.set(false),
+                        "{t(\"plugins-remove-cancel\")}"
+                    }
+                    button {
+                        class: "btn btn-small btn-danger",
+                        onclick: move |_| {
+                            confirm_remove.set(false);
+                            on_remove.call(idx_remove);
+                        },
+                        "{t(\"plugins-remove-yes\")}"
+                    }
+                } else {
+                    button {
+                        class: "btn btn-small btn-danger",
+                        onclick: move |_| confirm_remove.set(true),
+                        "{t(\"plugins-remove\")}"
+                    }
                 }
             }
         }

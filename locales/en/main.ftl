@@ -308,6 +308,9 @@ plugins-install-from-file = From File
 plugins-add-file-description = Select a local .wasm file to install as a plugin. The plugin can optionally contain its own update URL in its metadata.
 plugins-file-hint = The plugin will be registered locally. Reload the app to activate it.
 plugins-remove = Remove
+plugins-remove-confirm = Remove this plugin?
+plugins-remove-yes = Yes, remove
+plugins-remove-cancel = Cancel
 plugins-wit-hint = WIT interface version
 
 # Plugin capabilities panel (shown when a plugin row is expanded)

@@ -251,6 +251,9 @@ plugins-name-placeholder = Nombre a mostrar (opcional)
 plugins-add-btn = Añadir plugin
 plugins-url-required = Por favor introduce una URL de plugin
 plugins-remove = Eliminar
+plugins-remove-confirm = ¿Eliminar este plugin?
+plugins-remove-yes = Sí, eliminar
+plugins-remove-cancel = Cancelar
 plugins-wit-hint = Versión de interfaz WIT
 
 # Ajustes de plugins
