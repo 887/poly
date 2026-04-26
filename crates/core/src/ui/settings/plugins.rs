@@ -76,6 +76,10 @@ const WIT_VERSION: &str = "0.1.0";
 /// Lists every known backend; `available` is `false` when the backend
 /// was not compiled in (feature flag absent). An unavailable backend shows
 /// greyed-out so the user knows it exists but is not in this build.
+// IMPORTANT — Discord and Teams are intentionally NOT in this list. They
+// ship as WASM plugins only (loaded at runtime), never as built-in native
+// backends. Adding them here was a regression; the user explicitly
+// rejected baking those two into the binary.
 const NATIVE_BACKENDS: &[NativeBackend] = &[
     NativeBackend {
         slug: "demo",
@@ -99,18 +103,32 @@ const NATIVE_BACKENDS: &[NativeBackend] = &[
         available: cfg!(feature = "matrix"),
     },
     NativeBackend {
-        slug: "discord",
-        icon: "🟣",
-        name: "Discord",
-        description: "Popular gaming and community chat platform.",
-        available: cfg!(feature = "discord"),
+        slug: "lemmy",
+        icon: "🦫",
+        name: "Lemmy",
+        description: "Federated link aggregator. Connect to any Lemmy instance with your credentials.",
+        available: cfg!(feature = "lemmy"),
     },
     NativeBackend {
-        slug: "teams",
-        icon: "🟦",
-        name: "Microsoft Teams",
-        description: "Enterprise communication platform by Microsoft.",
-        available: cfg!(feature = "teams"),
+        slug: "github",
+        icon: "🐙",
+        name: "GitHub",
+        description: "Read-only GitHub / GHE client. Browses repos, issues, pull requests, and source code through your local gh CLI.",
+        available: cfg!(feature = "github"),
+    },
+    NativeBackend {
+        slug: "forgejo",
+        icon: "🦊",
+        name: "Forgejo",
+        description: "Forgejo / Gitea / Codeberg client. Browse repos, issues, pull requests, and source code via the Forgejo REST API.",
+        available: cfg!(feature = "forgejo"),
+    },
+    NativeBackend {
+        slug: "hackernews",
+        icon: "📰",
+        name: "Hacker News",
+        description: "Read-only HN feed. Top / New / Best / Ask / Show / Jobs.",
+        available: cfg!(feature = "hackernews"),
     },
     NativeBackend {
         slug: "poly",
