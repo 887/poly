@@ -179,6 +179,14 @@ impl TeamsState {
             team_id: "T002".into(),
             description: None,
         });
+        // Test Arena channel — dedicated clean space for back-and-forth tests
+        self.channels.insert("CH_ARENA".into(), Channel {
+            id: "CH_ARENA".into(),
+            display_name: "test-arena".into(),
+            team_id: "T001".into(),
+            description: Some("Dedicated back-and-forth test channel".into()),
+        });
+        self.messages.insert("CH_ARENA".into(), vec![]);
 
         self.teams.insert("T001".into(), Team {
             id: "T001".into(),

@@ -52,5 +52,9 @@ serde_json = { workspace = true }
 reqwest = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time", "net"] }
 
+[[test]]
+name = "back_and_forth"
+path = "tests/back_and_forth.rs"
+
 [lints]
 workspace = true

@@ -198,6 +198,35 @@ impl GitHubState {
             language: Some("TypeScript".to_string()),
         };
 
+        // Test arena repo — shared between penguin (owner) and chameleon (collaborator)
+        // Used by back-and-forth tests for issue-comment chat
+        let test_arena = Repo {
+            id: 200,
+            full_name: "penguin/test-arena".to_string(),
+            name: "test-arena".to_string(),
+            description: Some("Shared test arena repo for back-and-forth integration tests".to_string()),
+            owner: penguin.clone(),
+            private: false,
+            archived: false,
+            pushed_at: Some("2026-04-01T00:00:00Z".to_string()),
+            default_branch: Some("main".to_string()),
+            html_url: "https://github.com/penguin/test-arena".to_string(),
+            stargazers_count: 0,
+            language: None,
+        };
+        self.repos.insert("penguin/test-arena".to_string(), test_arena);
+        // Empty issue list for test-arena; tests will post issues dynamically
+        self.issues.insert("penguin/test-arena".to_string(), vec![]);
+        // Both animals have push access
+        self.repo_permissions.insert(
+            "penguin/penguin/test-arena".to_string(),
+            RepoPermissions { admin: true, maintain: true, push: true, triage: true, pull: true },
+        );
+        self.repo_permissions.insert(
+            "chameleon/penguin/test-arena".to_string(),
+            RepoPermissions { admin: false, maintain: false, push: true, triage: true, pull: true },
+        );
+
         self.repos
             .insert("penguin/iceberg-os".to_string(), iceberg_os);
         self.repos

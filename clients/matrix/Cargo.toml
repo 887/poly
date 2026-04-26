@@ -65,5 +65,9 @@ path = "tests/integration.rs"
 name = "moderation"
 path = "tests/moderation.rs"
 
+[[test]]
+name = "back_and_forth"
+path = "tests/back_and_forth.rs"
+
 [lints]
 workspace = true

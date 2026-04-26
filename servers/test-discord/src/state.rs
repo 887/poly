@@ -487,13 +487,30 @@ impl DiscordState {
             thread_message_id: None,
         });
 
+        // Test Arena channel (id=250) in guild 100 — clean state for back-and-forth tests
+        self.channels.insert(Id::new(250), Channel {
+            id: Id::new(250),
+            name: "test-arena".into(),
+            guild_id: Some(Id::new(100)),
+            channel_type: ChannelType::GuildText,
+            parent_id: None,
+            available_tags: vec![],
+            default_forum_layout: None,
+            applied_tags: vec![],
+            thread_metadata: None,
+            owner_id: None,
+            message_count: None,
+            member_count: None,
+            thread_message_id: None,
+        });
+
         // Guilds — 100, 101 (updated with new channel IDs)
         self.guilds.insert(Id::new(100), Guild {
             id: Id::new(100),
             name: "Australiana".into(),
             owner_id: Id::new(1),
             channels: vec![
-                Id::new(200), Id::new(201),
+                Id::new(200), Id::new(201), Id::new(250),
                 Id::new(500), Id::new(501), Id::new(502), Id::new(503),
                 Id::new(510), Id::new(511),
             ],

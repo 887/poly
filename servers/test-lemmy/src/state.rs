@@ -167,6 +167,16 @@ impl LemmyState {
         // Communities
         let communities = vec![
             Community {
+                id: 3,
+                name: "test_arena".to_string(),
+                title: "Test Arena".to_string(),
+                description: Some("Dedicated back-and-forth test community for Hedgehog and Beaver".to_string()),
+                icon: None,
+                banner: None,
+                actor_id: "https://lemmy.example.com/c/test_arena".to_string(),
+                subscribed: true,
+            },
+            Community {
                 id: 1,
                 name: "rust".to_string(),
                 title: "Rust Programming".to_string(),
@@ -190,6 +200,24 @@ impl LemmyState {
         for c in communities {
             self.communities.insert(c.id.to_string(), c);
         }
+
+        // Posts for community 3 (test_arena) — one seeded post acts as the
+        // shared "channel" for back-and-forth tests
+        self.posts.insert("3".to_string(), vec![
+            Post {
+                id: 10,
+                name: "test-arena chat thread".to_string(),
+                body: Some("Back-and-forth integration test post. Hedgehog and Beaver chat here.".to_string()),
+                url: None,
+                creator_id: 3, // hedgehog
+                creator_name: "hedgehog".to_string(),
+                community_id: 3,
+                published: "2026-04-01T00:00:00Z".to_string(),
+                score: 0,
+                comment_count: 0,
+            },
+        ]);
+        self.comments.insert("3".to_string(), vec![]);
 
         // Posts for community 1 (rust)
         self.posts.insert(

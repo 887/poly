@@ -141,8 +141,9 @@ async fn test_get_servers() {
 
     let servers = client.get_servers().await.expect("get_servers");
 
-    // Seed data has 2 servers: "The Burrow" (SRV001) and "Midnight Dumpster" (SRV002)
-    assert_eq!(servers.len(), 2, "expected exactly 2 seeded servers");
+    // Seed data has 3 servers: "The Burrow" (SRV001), "Midnight Dumpster" (SRV002),
+    // and "Test Arena" (SRV_ARENA) which was added for back-and-forth integration tests.
+    assert_eq!(servers.len(), 3, "expected exactly 3 seeded servers");
 
     let names: Vec<&str> = servers.iter().map(|s| s.name.as_str()).collect();
     assert!(
@@ -152,6 +153,10 @@ async fn test_get_servers() {
     assert!(
         names.contains(&"Midnight Dumpster"),
         "expected 'Midnight Dumpster' server, got: {names:?}"
+    );
+    assert!(
+        names.contains(&"Test Arena"),
+        "expected 'Test Arena' server, got: {names:?}"
     );
 
     for srv in &servers {
@@ -596,7 +601,7 @@ async fn test_sync_unreads_via_get_servers() {
     // get_servers() internally calls fetch_unreads() — exercising the unread code path.
     let servers = client.get_servers().await.expect("get_servers");
 
-    assert_eq!(servers.len(), 2, "expected 2 seeded servers");
+    assert_eq!(servers.len(), 3, "expected 3 seeded servers (The Burrow + Midnight Dumpster + Test Arena)");
     // Each server carries an unread_count field (may be 0 with no seeded unreads).
     for srv in &servers {
         let _ = srv.unread_count;

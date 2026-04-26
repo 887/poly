@@ -271,6 +271,29 @@ impl StoatState {
             },
         );
 
+        // Test Arena server — dedicated clean space for back-and-forth tests
+        let arena_srv_id = "SRV_ARENA".to_string();
+        let arena_ch_id = "CH_ARENA".to_string();
+
+        self.create_channel(&arena_ch_id, "test-arena", Some("Dedicated back-and-forth test channel"), Some(&arena_srv_id), "TextChannel");
+
+        self.servers.insert(
+            arena_srv_id.clone(),
+            Server {
+                id: arena_srv_id.clone(),
+                name: "Test Arena".into(),
+                owner: stoat_id.clone(),
+                icon_url: None,
+                channels: vec![arena_ch_id.clone()],
+                categories: vec![Category {
+                    id: "CAT_ARENA".into(),
+                    title: "Test Channels".into(),
+                    channels: vec![arena_ch_id.clone()],
+                }],
+                members: vec![stoat_id.clone(), raccoon_id.clone()],
+            },
+        );
+
         // Server 2: Midnight Dumpster
         let srv2_id = "SRV002".to_string();
         let gen2_id = "CH004".to_string();

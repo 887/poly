@@ -67,6 +67,10 @@ name = "moderation"
 path = "tests/moderation.rs"
 
 [[test]]
+name = "back_and_forth"
+path = "tests/back_and_forth.rs"
+
+[[test]]
 name = "integration"
 path = "tests/integration.rs"
 

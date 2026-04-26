@@ -184,6 +184,27 @@ impl ForgejoState {
             open_issues_count: 1,
         };
 
+        // Test arena repo — shared between otter (owner) and flamingo (collaborator)
+        // Used by back-and-forth tests for issue-comment chat
+        let test_arena = Repo {
+            id: 10,
+            full_name: "otter/test-arena".to_string(),
+            name: "test-arena".to_string(),
+            description: Some("Shared test arena repo for back-and-forth integration tests".to_string()),
+            owner: otter.clone(),
+            private: false,
+            archived: false,
+            updated_at: "2026-04-01T00:00:00Z".to_string(),
+            default_branch: "main".to_string(),
+            html_url: "https://forgejo.example.com/otter/test-arena".to_string(),
+            stars_count: 0,
+            forks_count: 0,
+            open_issues_count: 0,
+        };
+        self.repos.insert("otter/test-arena".to_string(), test_arena);
+        // Empty issue list for the test arena repo
+        self.issues.insert("otter/test-arena".to_string(), vec![]);
+
         self.repos.insert("otter/dam-builder".to_string(), dam_builder);
         self.repos.insert("otter/fish-finder".to_string(), fish_finder);
         self.repos.insert("flamingo/pink-css".to_string(), pink_css);

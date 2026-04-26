@@ -507,7 +507,6 @@ pub async fn get_site(
 
 #[derive(Deserialize, Default)]
 pub struct ListCommentsQuery {
-    #[allow(dead_code)]
     pub post_id: Option<i64>,
     #[allow(dead_code)]
     pub community_id: Option<i64>,
@@ -523,17 +522,158 @@ pub struct ListCommentsQuery {
 
 /// GET /api/v3/comment/list
 ///
-/// Returns an empty comment list — the mock server does not seed comments
-/// yet, but the route must exist so polling clients don't 404.
+/// Returns comments stored for the post referenced by `post_id` query param.
 pub async fn list_comments(
     State(state): State<Arc<LemmyState>>,
     headers: HeaderMap,
-    Query(_q): Query<ListCommentsQuery>,
+    Query(q): Query<ListCommentsQuery>,
 ) -> impl IntoResponse {
     if bearer_user_id(&state, &headers).is_none() {
         return auth_error().into_response();
     }
+
+    // If a post_id is provided, look up comments keyed by post ID.
+    if let Some(post_id) = q.post_id {
+        let comments: Vec<Value> = state
+            .comments
+            .iter()
+            .flat_map(|entry| {
+                entry
+                    .value()
+                    .iter()
+                    .filter(|c| c.post_id == post_id)
+                    .map(|c| comment_view(c, &state))
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        return Json(json!({ "comments": comments })).into_response();
+    }
+
     Json(json!({ "comments": [] })).into_response()
+}
+
+#[derive(Deserialize)]
+pub struct CreateCommentRequest {
+    pub content: String,
+    pub post_id: i64,
+    #[serde(default)]
+    pub parent_id: Option<i64>,
+}
+
+/// POST /api/v3/comment — create a new comment on a post.
+pub async fn create_comment(
+    State(state): State<Arc<LemmyState>>,
+    headers: HeaderMap,
+    Json(body): Json<CreateCommentRequest>,
+) -> impl IntoResponse {
+    let user_id = match bearer_user_id(&state, &headers) {
+        Some(uid) => uid,
+        None => return auth_error().into_response(),
+    };
+
+    let user = match state.users.get(&user_id) {
+        Some(u) => u.clone(),
+        None => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({ "error": "user_not_found" })),
+            )
+                .into_response();
+        }
+    };
+
+    // Find the community this post belongs to
+    let post_community_id: Option<String> = state
+        .posts
+        .iter()
+        .find_map(|entry| {
+            entry
+                .value()
+                .iter()
+                .find(|p| p.id == body.post_id)
+                .map(|p| p.community_id.to_string())
+        });
+
+    let community_id_str = match post_community_id {
+        Some(id) => id,
+        None => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({ "error": "post_not_found" })),
+            )
+                .into_response();
+        }
+    };
+
+    // Allocate a new comment ID
+    let new_id = {
+        let max = state
+            .comments
+            .iter()
+            .flat_map(|e| e.value().iter().map(|c| c.id).collect::<Vec<_>>())
+            .max()
+            .unwrap_or(0);
+        max + 1
+    };
+
+    let comment = crate::state::Comment {
+        id: new_id,
+        content: body.content.clone(),
+        creator_id: user.id,
+        creator_name: user.name.clone(),
+        post_id: body.post_id,
+        community_id: community_id_str.parse::<i64>().unwrap_or(0),
+        published: chrono::Utc::now().to_rfc3339(),
+    };
+
+    let view = comment_view(&comment, &state);
+
+    state
+        .comments
+        .entry(community_id_str)
+        .or_default()
+        .push(comment);
+
+    Json(json!({ "comment_view": view })).into_response()
+}
+
+fn comment_view(comment: &crate::state::Comment, state: &LemmyState) -> Value {
+    let creator = state
+        .users
+        .get(&comment.creator_name)
+        .map(|u| {
+            json!({
+                "id": u.id,
+                "name": u.name,
+                "display_name": u.display_name,
+                "avatar": u.avatar,
+                "actor_id": u.actor_id,
+            })
+        })
+        .unwrap_or_else(|| json!({ "id": comment.creator_id, "name": comment.creator_name }));
+
+    json!({
+        "comment": {
+            "id": comment.id,
+            "content": comment.content,
+            "creator_id": comment.creator_id,
+            "post_id": comment.post_id,
+            "community_id": comment.community_id,
+            "published": comment.published,
+            "deleted": false,
+            "removed": false,
+            "local": true,
+            "path": format!("0.{}", comment.id),
+        },
+        "creator": creator,
+        "counts": {
+            "comment_id": comment.id,
+            "score": 0,
+            "upvotes": 0,
+            "downvotes": 0,
+            "published": comment.published,
+        }
+    })
 }
 
 // ---------------------------------------------------------------------------

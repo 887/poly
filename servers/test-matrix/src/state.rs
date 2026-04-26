@@ -178,6 +178,10 @@ impl MatrixState {
             }));
         }
 
+        // Test Arena room (clean state for back-and-forth tests)
+        let arena_id = "!test_arena:localhost".to_string();
+        self.create_room(&arena_id, "test-arena", Some("Dedicated back-and-forth test room"), false, Some(&space1_id), &[&owl_id, &axolotl_id]);
+
         // Space 2: Neon Reef
         let space2_id = "!space2:localhost".to_string();
         let gen2_id = "!general2:localhost".to_string();
