@@ -1810,16 +1810,12 @@ fn SavedItemsRoute(backend: String, instance_id: String, account_id: String) -> 
 
 /// Per-account overview — default landing page for every backend.
 ///
-/// Renders the plugin-supplied `get_account_overview_view()` ViewDescriptor.
-/// Intentionally does NOT render the channel sidebar (column 3): the
-/// account-server-bar (Bar 2) is the navigation column for the account
-/// scope, and the overview body itself IS the server-list. Falling through
-/// to ClientSidebar / ChannelListLayout produced a useless "Direct Messages
-/// — No messages yet. Start the conversation!" placeholder in column 3
-/// that confuses the user in the overview context.
-///
-/// Mobile pattern still works: Bar 1 (favorites), Bar 2 (account-server-bar)
-/// and the content panel slide together as before.
+/// Renders the plugin-supplied `get_account_overview_view()` ViewDescriptor
+/// inside the standard account layout: Bar 1 (favorites) + Bar 2
+/// (account-server-bar) + Channel sidebar column (the host's
+/// `OverviewSidebar` with category toggles) + Content (cards). Same shape
+/// as DMs / Friends / Server pages so the mobile pattern is uniform and
+/// the account footer (Cat / etc.) stays at the bottom of column 3.
 #[context_menu(None)]
 #[rustfmt::skip]
 #[ui_action(inherit)]
@@ -1827,7 +1823,18 @@ fn SavedItemsRoute(backend: String, instance_id: String, account_id: String) -> 
 fn ServerOverviewRoute(backend: String, instance_id: String, account_id: String) -> Element {
     let _ = (backend, instance_id);
     rsx! {
-        AccountOverviewView { account_id }
+        SplitMenuShell {
+            root_class: "account-view-main".to_string(),
+            sidebar_class: "channel-list-wrapper".to_string(),
+            content_class: String::new(),
+            sidebar: rsx! {
+                crate::ui::account::common::OverviewSidebar {}
+                VoiceAccountFooter {}
+            },
+            content: rsx! {
+                AccountOverviewView { account_id }
+            },
+        }
     }
 }
 

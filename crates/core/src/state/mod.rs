@@ -536,6 +536,12 @@ pub struct AppState {
     /// (`channel_list.rs`). Read by `ForumView` to key the `ClientView`
     /// mount and pre-select the matching toolbar tab on re-mount.
     pub forum_scope: String,
+    /// Active scope for the per-account overview sidebar toggles.
+    ///
+    /// One of `"servers"` (default), `"dms"`, `"friends"`, `"notifications"`.
+    /// Updated by the toggle buttons in `OverviewSidebar`. Read by the
+    /// account overview body to filter which categories of cards render.
+    pub overview_scope: String,
 }
 
 impl Default for AppState {
@@ -561,6 +567,7 @@ impl Default for AppState {
             last_known_perms: None,
             active_moderation_dialog: None,
             forum_scope: "subscribed".to_string(),
+            overview_scope: "servers".to_string(),
         }
     }
 }

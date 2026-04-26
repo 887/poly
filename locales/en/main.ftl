@@ -1127,3 +1127,8 @@ overview-default-title = Overview
 overview-default-subtitle = This account has no overview defined yet.
 
 account-bar-overview-tooltip = Overview
+
+overview-toggle-servers = Servers
+overview-toggle-dms = Direct Messages
+overview-toggle-friends = Friends
+overview-toggle-notifications = Notifications

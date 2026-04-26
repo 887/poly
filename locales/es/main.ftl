@@ -949,3 +949,8 @@ overview-default-title = Vista general
 overview-default-subtitle = Esta cuenta aún no tiene vista general definida.
 
 account-bar-overview-tooltip = Vista general
+
+overview-toggle-servers = Servidores
+overview-toggle-dms = Mensajes directos
+overview-toggle-friends = Amigos
+overview-toggle-notifications = Notificaciones

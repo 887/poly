@@ -949,3 +949,8 @@ overview-default-title = Übersicht
 overview-default-subtitle = Für dieses Konto wurde noch keine Übersicht definiert.
 
 account-bar-overview-tooltip = Übersicht
+
+overview-toggle-servers = Server
+overview-toggle-dms = Direktnachrichten
+overview-toggle-friends = Freunde
+overview-toggle-notifications = Benachrichtigungen
