@@ -595,6 +595,16 @@ impl Storage {
         Ok(Self(StorageInner::init().await?))
     }
 
+    /// Test-only: open Storage with a caller-provided base directory
+    /// rather than the OS-default data dir. Used by integration tests
+    /// that need a tempdir-isolated SQLite file.
+    #[cfg(all(test, not(target_arch = "wasm32"), not(feature = "storage-surreal")))]
+    pub(crate) async fn init_with_path(
+        base_dir: std::path::PathBuf,
+    ) -> Result<Self, StorageError> {
+        Ok(Self(StorageInner::init_with_path(base_dir).await?))
+    }
+
     // ── Raw KV access ─────────────────────────────────────────────────────────
 
     /// Get a value by key. Returns `None` if the key is not present.

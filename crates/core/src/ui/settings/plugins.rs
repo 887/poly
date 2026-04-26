@@ -563,19 +563,38 @@ pub fn PluginsSettings() -> Element {
                         index: idx,
                         entry: entry.clone(),
                         on_toggle: move |i: usize| {
+                            // Mirror into the local signal first; persist
+                            // through the canonical
+                            // `plugin_admin::set_plugin_enabled_with_storage`
+                            // helper (same code path the MCP
+                            // `/host/plugins/set-enabled` endpoint uses).
                             let mut wasm = wasm_plugins.write();
-                            if let Some(p) = wasm.get_mut(i) {
-                                p.enabled = !p.enabled;
-                            }
+                            let target: Option<(String, bool)> =
+                                wasm.get_mut(i).map(|p| {
+                                    p.enabled = !p.enabled;
+                                    (p.url.clone(), p.enabled)
+                                });
                             let new_wasm = wasm.clone();
                             drop(wasm);
+                            if let Some((url, enabled)) = target {
+                                spawn(async move {
+                                    if let Some(storage) = crate::STORAGE.get() {
+                                        if let Err(e) =
+                                            crate::plugin_admin::set_plugin_enabled_with_storage(
+                                                storage, &url, enabled,
+                                            )
+                                            .await
+                                        {
+                                            tracing::warn!("Failed to toggle plugin: {e}");
+                                        }
+                                    }
+                                });
+                            }
                             let dis = disabled.read().clone();
                             // Reconcile signup entries IMMEDIATELY against
                             // the new wasm_plugins state so the favorites
                             // "+" picker reflects the toggle without a
-                            // restart. Build a synthetic AppSettings just
-                            // for the bundled-enabled lookup — only the
-                            // wasm_plugins field matters.
+                            // restart.
                             let new_wasm_for_sync = new_wasm.clone();
                             client_manager.batch(move |cm| {
                                 let s = crate::storage::AppSettings {
@@ -592,12 +611,15 @@ pub fn PluginsSettings() -> Element {
                             });
                         },
                         on_remove: move |i: usize| {
-                            // If the removed entry is a bundled plugin
-                            // (`bundled://<slug>`), record the slug so
-                            // ensure_bundled_plugins respects the user's
-                            // intent on the next launch and doesn't
-                            // re-inject it. See bundled_plugins.rs.
+                            // Mirror into the local signal first (drop the
+                            // entry + record the bundled tombstone for an
+                            // immediate UI update), then delegate persistence
+                            // to `plugin_admin::remove_wasm_plugin_with_storage`
+                            // — same code path the MCP `/host/plugins/remove`
+                            // endpoint uses, so the tombstone semantics stay
+                            // identical across both surfaces.
                             let mut wasm = wasm_plugins.write();
+                            let removed_url: Option<String> = wasm.get(i).map(|e| e.url.clone());
                             let removed_slug: Option<String> = wasm
                                 .get(i)
                                 .filter(|e| e.bundled)
@@ -616,13 +638,26 @@ pub fn PluginsSettings() -> Element {
                                     rb.push(slug);
                                 }
                             }
-                            let dis = disabled.read().clone();
-                            let new_removed = removed_bundled.read().clone();
-                            // Reconcile signup entries IMMEDIATELY: when a
-                            // bundled plugin is removed it disappears from
-                            // wasm_plugins, so its slug is no longer in
-                            // bundled_enabled_slugs and the picker drops it
-                            // without a restart.
+                            // Delegate canonical persistence (wasm_plugins +
+                            // bundled tombstone) to the same helper the MCP
+                            // `/host/plugins/remove` endpoint uses.
+                            if let Some(url) = removed_url {
+                                spawn(async move {
+                                    if let Some(storage) = crate::STORAGE.get() {
+                                        if let Err(e) =
+                                            crate::plugin_admin::remove_wasm_plugin_with_storage(
+                                                storage, &url,
+                                            )
+                                            .await
+                                        {
+                                            tracing::warn!("Failed to remove plugin: {e}");
+                                        }
+                                    }
+                                });
+                            }
+                            // Reconcile signup entries IMMEDIATELY against the
+                            // new wasm_plugins state so the favorites "+"
+                            // picker reflects the removal without a restart.
                             let new_wasm_for_sync = new_wasm.clone();
                             client_manager.batch(move |cm| {
                                 let s = crate::storage::AppSettings {
@@ -631,13 +666,6 @@ pub fn PluginsSettings() -> Element {
                                 };
                                 crate::bundled_plugins::sync_bundled_signup_entries(cm, &s);
                             });
-                            spawn(async move {
-                                let mut s = load_settings().await;
-                                s.disabled_native_backends = dis;
-                                s.wasm_plugins = new_wasm;
-                                s.removed_bundled_plugins = new_removed;
-                                save_settings(&s).await;
-                            });
                         },
                     }
                 }
@@ -645,14 +673,24 @@ pub fn PluginsSettings() -> Element {
 
             AddWasmPlugin {
                 on_add: move |entry: WasmPluginEntry| {
-                    wasm_plugins.write().push(entry);
-                    let new_wasm = wasm_plugins.read().clone();
-                    let dis = disabled.read().clone();
+                    // Mirror into the local signal first so the UI updates
+                    // synchronously, then delegate persistence to the
+                    // canonical `plugin_admin::add_wasm_plugin_with_storage`
+                    // helper (same code path the MCP `/host/plugins/add`
+                    // endpoint uses — single source of truth).
+                    wasm_plugins.write().push(entry.clone());
                     spawn(async move {
-                        let mut s = load_settings().await;
-                        s.disabled_native_backends = dis;
-                        s.wasm_plugins = new_wasm;
-                        save_settings(&s).await;
+                        if let Some(storage) = crate::STORAGE.get() {
+                            if let Err(e) = crate::plugin_admin::add_wasm_plugin_with_storage(
+                                storage,
+                                &entry.url,
+                                entry.name.clone(),
+                            )
+                            .await
+                            {
+                                tracing::warn!("Failed to add plugin: {e}");
+                            }
+                        }
                     });
                 },
             }

@@ -34,6 +34,7 @@ pub mod bundled_plugins;
 pub mod client_manager;
 pub mod client_manager_timeout;
 pub mod crypto;
+pub mod plugin_admin;
 // Legacy database module (native-only and only available with the SurrealDB backend).
 #[cfg(all(not(target_arch = "wasm32"), feature = "storage-surreal"))]
 pub mod db;

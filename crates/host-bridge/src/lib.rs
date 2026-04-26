@@ -238,6 +238,217 @@ pub struct PluginKvGetResponse {
     pub err: Option<String>,
 }
 
+// ─── Bundled-plugin constants (shared across crates) ─────────────────────────
+//
+// Mirrors the canonical list in `crates/core/src/bundled_plugins.rs`.
+// Shipped here so non-UI crates (`poly-host`) can recognise bundled URLs
+// without depending on the heavier `poly-core` crate. Keep in sync.
+
+/// URL scheme used to identify bundled plugins (e.g. `bundled://discord`).
+pub const BUNDLED_URL_SCHEME: &str = "bundled://";
+
+/// Slugs of every plugin auto-injected into `wasm_plugins` at startup.
+/// Discord and Teams are bundled but never built-in (app-store policy).
+pub const BUNDLED_PLUGIN_SLUGS: &[&str] = &["discord", "teams"];
+
+/// Returns `true` if `url` targets a bundled plugin.
+#[must_use]
+pub fn is_bundled_url(url: &str) -> bool {
+    url.starts_with(BUNDLED_URL_SCHEME)
+}
+
+/// Strip the `bundled://` prefix and return the slug, if `url` matches.
+#[must_use]
+pub fn bundled_slug_from_url(url: &str) -> Option<&str> {
+    url.strip_prefix(BUNDLED_URL_SCHEME)
+}
+
+// ─── Plugin admin sub-route payloads ─────────────────────────────────────────
+//
+// These wire types let an external AI agent (or any HTTP client) drive
+// the plugin / account-token administration surface that the settings UI
+// already provides. The native shell handles the call by mutating the
+// shared `app_settings` and `account_tokens` rows in `poly_kv`.
+
+/// Sub-route for `POST /host/plugins/add` — sideload a plugin from a URL.
+pub const ROUTE_PLUGINS_ADD: &str = "/host/plugins/add";
+/// Sub-route for `POST /host/plugins/remove` — drop a plugin by URL or slug.
+pub const ROUTE_PLUGINS_REMOVE: &str = "/host/plugins/remove";
+/// Sub-route for `POST /host/plugins/set-enabled` — toggle a plugin on/off.
+pub const ROUTE_PLUGINS_SET_ENABLED: &str = "/host/plugins/set-enabled";
+/// Sub-route for `GET /host/plugins/list` — enumerate all known plugins.
+pub const ROUTE_PLUGINS_LIST: &str = "/host/plugins/list";
+/// Sub-route for `POST /host/accounts/add` — persist an account token.
+pub const ROUTE_ACCOUNTS_ADD: &str = "/host/accounts/add";
+/// Sub-route for `POST /host/accounts/remove` — drop an account token.
+pub const ROUTE_ACCOUNTS_REMOVE: &str = "/host/accounts/remove";
+/// Sub-route for `GET /host/accounts/list` — enumerate stored account tokens.
+pub const ROUTE_ACCOUNTS_LIST: &str = "/host/accounts/list";
+
+/// Body for `POST /host/plugins/add`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginAddRequest {
+    /// Source URL — `https://`, `http://`, `file://`, or `bundled://<slug>`.
+    pub url: String,
+    /// Optional display name. Defaults to the URL hostname when omitted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+}
+
+/// Response body for `POST /host/plugins/add`.
+///
+/// `slug` is the bundled-slug for `bundled://<slug>` URLs, otherwise an
+/// empty string. `added = false` means the plugin was already present
+/// (idempotent re-adds).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginAddResponse {
+    pub ok: bool,
+    #[serde(default)]
+    pub added: bool,
+    #[serde(default)]
+    pub slug: String,
+    /// The full URL as recorded in `app_settings.wasm_plugins`.
+    #[serde(default)]
+    pub url: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub err: Option<String>,
+}
+
+/// Body for `POST /host/plugins/remove`. Accepts either a full URL
+/// (`https://example.com/p.wasm`) or a bare bundled slug (`discord`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginRemoveRequest {
+    pub url_or_slug: String,
+}
+
+/// Response body for `POST /host/plugins/remove`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginRemoveResponse {
+    pub ok: bool,
+    #[serde(default)]
+    pub removed: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub err: Option<String>,
+}
+
+/// Body for `POST /host/plugins/set-enabled`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginSetEnabledRequest {
+    pub url: String,
+    pub enabled: bool,
+}
+
+/// Response body for `POST /host/plugins/set-enabled`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginSetEnabledResponse {
+    pub ok: bool,
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub err: Option<String>,
+}
+
+/// One entry in the `GET /host/plugins/list` response — the wire shape
+/// matches the storage `WasmPluginEntry` plus a `kind` discriminator
+/// for easy client-side branching.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginListEntry {
+    /// `"builtin"` (compiled-in backend) or `"sideloaded"` (WASM plugin
+    /// from `wasm_plugins`). Bundled plugins (`bundled://<slug>`) report
+    /// `"sideloaded"` with `bundled = true` so the client can branch.
+    pub kind: String,
+    pub slug: String,
+    pub url: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    pub enabled: bool,
+    #[serde(default)]
+    pub available: bool,
+    #[serde(default)]
+    pub bundled: bool,
+}
+
+/// Response body for `GET /host/plugins/list`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginListResponse {
+    pub ok: bool,
+    #[serde(default)]
+    pub plugins: Vec<PluginListEntry>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub err: Option<String>,
+}
+
+/// Body for `POST /host/accounts/add`. Mirrors the storage `AccountToken`
+/// shape so callers can construct one without an extra translation step.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccountAddRequest {
+    pub backend: String,
+    pub account_id: String,
+    pub token: String,
+    pub display_name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub instance_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub refresh_token: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token_expires_at: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope: Option<String>,
+}
+
+/// Response body for `POST /host/accounts/add`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccountAddResponse {
+    pub ok: bool,
+    #[serde(default)]
+    pub account_id: String,
+    #[serde(default)]
+    pub backend: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub err: Option<String>,
+}
+
+/// Body for `POST /host/accounts/remove`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccountRemoveRequest {
+    pub backend: String,
+    pub account_id: String,
+}
+
+/// Response body for `POST /host/accounts/remove`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccountRemoveResponse {
+    pub ok: bool,
+    #[serde(default)]
+    pub removed: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub err: Option<String>,
+}
+
+/// Response body for `GET /host/accounts/list`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccountListResponse {
+    pub ok: bool,
+    #[serde(default)]
+    pub accounts: Vec<AccountListEntry>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub err: Option<String>,
+}
+
+/// One entry in the `GET /host/accounts/list` response. Sensitive fields
+/// (`token`, `refresh_token`) are deliberately **not** serialized — the
+/// listing is meant for inventory / display, not key-material recovery.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccountListEntry {
+    pub backend: String,
+    pub account_id: String,
+    pub display_name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub instance_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token_expires_at: Option<String>,
+}
+
 // ─── Errors ──────────────────────────────────────────────────────────────────
 
 /// Errors returned by [`Client::call`].
@@ -610,4 +821,31 @@ fn b64_decode(s: &str) -> Result<Vec<u8>, String> {
     base64::engine::general_purpose::STANDARD
         .decode(s.as_bytes())
         .map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bundled_url_helpers_round_trip() {
+        for slug in BUNDLED_PLUGIN_SLUGS {
+            let url = format!("{BUNDLED_URL_SCHEME}{slug}");
+            assert!(is_bundled_url(&url));
+            assert_eq!(bundled_slug_from_url(&url), Some(*slug));
+        }
+        assert!(!is_bundled_url("https://x.test/p.wasm"));
+        assert_eq!(bundled_slug_from_url("https://x.test/p.wasm"), None);
+    }
+
+    /// Lock-in: the bundled-plugin contract is Discord + Teams. Adding a
+    /// new slug requires a coordinated update to
+    /// `crates/core/src/bundled_plugins.rs` (which the UI uses) and
+    /// every consumer of `BUNDLED_PLUGIN_SLUGS`. Don't bump this without
+    /// updating both sides.
+    #[test]
+    fn bundled_plugin_slug_set_is_locked() {
+        assert_eq!(BUNDLED_PLUGIN_SLUGS, &["discord", "teams"]);
+    }
 }

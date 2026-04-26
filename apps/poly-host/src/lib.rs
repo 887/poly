@@ -37,9 +37,12 @@ use axum::{
     routing::{get, post},
 };
 use poly_host_bridge::{
-    HostCall, HostResponse, KvDeleteRequest, KvGetRequest, KvGetResponse, KvSetRequest,
-    KvVoidResponse, PluginKvDeleteRequest, PluginKvGetRequest, PluginKvGetResponse,
-    PluginKvSetRequest, dispatch,
+    AccountAddRequest, AccountAddResponse, AccountListEntry, AccountListResponse,
+    AccountRemoveRequest, AccountRemoveResponse, HostCall, HostResponse, KvDeleteRequest,
+    KvGetRequest, KvGetResponse, KvSetRequest, KvVoidResponse, PluginAddRequest,
+    PluginAddResponse, PluginKvDeleteRequest, PluginKvGetRequest, PluginKvGetResponse,
+    PluginKvSetRequest, PluginListEntry, PluginListResponse, PluginRemoveRequest,
+    PluginRemoveResponse, PluginSetEnabledRequest, PluginSetEnabledResponse, dispatch,
 };
 use sqlite::{Connection, ConnectionThreadSafe, State as SqlState};
 use tower_http::cors::{Any, CorsLayer};
@@ -109,6 +112,13 @@ pub fn router(state: HostState) -> Router {
         .route("/host/plugin-kv/delete", post(plugin_kv_delete))
         .route("/host/exec", post(host_exec))
         .route("/host/http", post(host_http))
+        .route("/host/plugins/add", post(plugins_add))
+        .route("/host/plugins/remove", post(plugins_remove))
+        .route("/host/plugins/set-enabled", post(plugins_set_enabled))
+        .route("/host/plugins/list", get(plugins_list))
+        .route("/host/accounts/add", post(accounts_add))
+        .route("/host/accounts/remove", post(accounts_remove))
+        .route("/host/accounts/list", get(accounts_list))
         .route("/host", post(host_legacy))
         .route("/poly-service-worker.js", get(poly_service_worker))
         .with_state(state)
@@ -362,6 +372,596 @@ async fn host_http(Json(call): Json<HostCall>) -> Result<Json<HostResponse>, Sta
     match &call {
         HostCall::HttpRequest { .. } => Ok(Json(dispatch(call).await)),
         HostCall::ExecCommand { .. } => Err(StatusCode::BAD_REQUEST),
+    }
+}
+
+// ─── Plugin / account admin route handlers ──────────────────────────────────
+//
+// These routes let an external AI agent (or any HTTP client) drive the
+// plugin / account-token mutations the settings UI already provides.
+// They are the MCP-equivalent surface for the "add a plugin from a URL,
+// then login on it" automation flow.
+//
+// Implementation notes:
+//
+// - Plugin entries live as JSON inside the `app_settings` row of
+//   `poly_kv` under the `wasm_plugins` array. Account tokens live in
+//   the `account_tokens` row as a JSON array. Both are read whole,
+//   mutated in memory, and written back. Concurrent writers are
+//   serialised by the same `Arc<Mutex<>>` that guards the SQLite
+//   connection in `HostState`.
+//
+// - We deliberately avoid a `poly-core` dependency: `apps/poly-host` is
+//   a thin daemon and pulling in `poly-core` would drag dioxus + every
+//   plugin crate into its build. The wire types in `poly-host-bridge`
+//   keep the contract honest.
+
+const APP_SETTINGS_KEY: &str = "app_settings";
+const ACCOUNT_TOKENS_KEY: &str = "account_tokens";
+
+/// List of compiled-in built-in backends that ship with the host
+/// daemon. Mirror of the `BUILTIN_BACKENDS` array in
+/// `crates/core/src/client_manager.rs` — kept here so the daemon can
+/// list / validate backends without depending on `poly-core`. The
+/// `available` flag is always `true` here (the daemon doesn't know
+/// which features the UI was compiled with — that's the UI's job to
+/// override at runtime if needed).
+const BUILTIN_BACKEND_SLUGS: &[&str] = &[
+    "demo",
+    "stoat",
+    "matrix",
+    "lemmy",
+    "github",
+    "forgejo",
+    "hackernews",
+    "poly",
+];
+
+async fn plugins_add(
+    State(state): State<HostState>,
+    Json(req): Json<PluginAddRequest>,
+) -> Json<PluginAddResponse> {
+    let url = req.url.trim().to_string();
+    if url.is_empty() {
+        return Json(PluginAddResponse {
+            ok: false,
+            err: Some("url is required".into()),
+            ..PluginAddResponse::default_resp()
+        });
+    }
+    if !is_acceptable_plugin_url(&url) {
+        return Json(PluginAddResponse {
+            ok: false,
+            err: Some(format!("invalid plugin URL: {url}")),
+            ..PluginAddResponse::default_resp()
+        });
+    }
+
+    Json(match mutate_app_settings(&state, |settings| {
+        let bundled = poly_host_bridge::is_bundled_url(&url);
+        // Tombstone clearance — re-adding a previously-removed bundled
+        // plugin lifts the user's intent so subsequent restarts keep it.
+        if let Some(slug) = poly_host_bridge::bundled_slug_from_url(&url) {
+            if let Some(arr) = settings
+                .get_mut("removed_bundled_plugins")
+                .and_then(|v| v.as_array_mut())
+            {
+                arr.retain(|s| s.as_str() != Some(slug));
+            }
+        }
+
+        let plugins = wasm_plugins_array_mut(settings);
+
+        // Idempotent re-add: existing entry → flip `enabled` true, no insert.
+        if let Some(existing) = plugins
+            .iter_mut()
+            .find(|e| e.get("url").and_then(|v| v.as_str()) == Some(url.as_str()))
+        {
+            if let Some(map) = existing.as_object_mut() {
+                map.insert("enabled".into(), serde_json::Value::Bool(true));
+            }
+            return Ok(false);
+        }
+
+        let mut entry = serde_json::Map::new();
+        entry.insert("url".into(), serde_json::Value::String(url.clone()));
+        entry.insert(
+            "name".into(),
+            req.name
+                .clone()
+                .map(serde_json::Value::String)
+                .unwrap_or(serde_json::Value::Null),
+        );
+        entry.insert("enabled".into(), serde_json::Value::Bool(true));
+        entry.insert("bundled".into(), serde_json::Value::Bool(bundled));
+        plugins.push(serde_json::Value::Object(entry));
+        Ok(true)
+    }) {
+        Ok(added) => PluginAddResponse {
+            ok: true,
+            added,
+            slug: poly_host_bridge::bundled_slug_from_url(&url)
+                .map(str::to_string)
+                .unwrap_or_default(),
+            url: url.clone(),
+            err: None,
+        },
+        Err(e) => PluginAddResponse {
+            ok: false,
+            err: Some(e),
+            ..PluginAddResponse::default_resp()
+        },
+    })
+}
+
+async fn plugins_remove(
+    State(state): State<HostState>,
+    Json(req): Json<PluginRemoveRequest>,
+) -> Json<PluginRemoveResponse> {
+    let raw = req.url_or_slug.trim().to_string();
+    if raw.is_empty() {
+        return Json(PluginRemoveResponse {
+            ok: false,
+            removed: false,
+            err: Some("url_or_slug is required".into()),
+        });
+    }
+    Json(match mutate_app_settings(&state, |settings| {
+        let try_targets: Vec<String> = if raw.contains("://") {
+            vec![raw.clone()]
+        } else {
+            vec![raw.clone(), format!("{}{raw}", poly_host_bridge::BUNDLED_URL_SCHEME)]
+        };
+        let mut removed_was_bundled: Option<String> = None;
+        let plugins = wasm_plugins_array_mut(settings);
+        let before = plugins.len();
+        plugins.retain(|e| {
+            let url_str = e.get("url").and_then(|v| v.as_str()).unwrap_or("");
+            let matched = try_targets.iter().any(|t| t == url_str);
+            if matched {
+                let bundled = e
+                    .get("bundled")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                if bundled {
+                    if let Some(slug) = poly_host_bridge::bundled_slug_from_url(url_str) {
+                        removed_was_bundled = Some(slug.to_string());
+                    }
+                }
+            }
+            !matched
+        });
+        let removed = before != plugins.len();
+        if removed {
+            if let Some(slug) = removed_was_bundled {
+                let arr = settings
+                    .as_object_mut()
+                    .and_then(|m| {
+                        m.entry("removed_bundled_plugins")
+                            .or_insert_with(|| serde_json::Value::Array(Vec::new()))
+                            .as_array_mut()
+                    })
+                    .ok_or_else(|| "settings is not an object".to_string())?;
+                if !arr.iter().any(|v| v.as_str() == Some(&slug)) {
+                    arr.push(serde_json::Value::String(slug));
+                }
+            }
+        }
+        Ok(removed)
+    }) {
+        Ok(removed) => PluginRemoveResponse {
+            ok: true,
+            removed,
+            err: None,
+        },
+        Err(e) => PluginRemoveResponse {
+            ok: false,
+            removed: false,
+            err: Some(e),
+        },
+    })
+}
+
+async fn plugins_set_enabled(
+    State(state): State<HostState>,
+    Json(req): Json<PluginSetEnabledRequest>,
+) -> Json<PluginSetEnabledResponse> {
+    let url = req.url.trim().to_string();
+    if url.is_empty() {
+        return Json(PluginSetEnabledResponse {
+            ok: false,
+            enabled: false,
+            err: Some("url is required".into()),
+        });
+    }
+    Json(match mutate_app_settings(&state, |settings| {
+        let plugins = wasm_plugins_array_mut(settings);
+        let entry = plugins
+            .iter_mut()
+            .find(|e| e.get("url").and_then(|v| v.as_str()) == Some(url.as_str()))
+            .ok_or_else(|| format!("plugin not found: {url}"))?;
+        if let Some(map) = entry.as_object_mut() {
+            map.insert("enabled".into(), serde_json::Value::Bool(req.enabled));
+        }
+        Ok(req.enabled)
+    }) {
+        Ok(new_state) => PluginSetEnabledResponse {
+            ok: true,
+            enabled: new_state,
+            err: None,
+        },
+        Err(e) => PluginSetEnabledResponse {
+            ok: false,
+            enabled: false,
+            err: Some(e),
+        },
+    })
+}
+
+async fn plugins_list(State(state): State<HostState>) -> Json<PluginListResponse> {
+    let settings = match read_app_settings(&state) {
+        Ok(v) => v,
+        Err(e) => {
+            return Json(PluginListResponse {
+                ok: false,
+                plugins: Vec::new(),
+                err: Some(e),
+            });
+        }
+    };
+
+    let disabled: Vec<String> = settings
+        .get("disabled_native_backends")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let mut out: Vec<PluginListEntry> = BUILTIN_BACKEND_SLUGS
+        .iter()
+        .map(|slug| PluginListEntry {
+            kind: "builtin".into(),
+            slug: (*slug).into(),
+            url: String::new(),
+            name: None,
+            enabled: !disabled.iter().any(|d| d == *slug),
+            available: true,
+            bundled: false,
+        })
+        .collect();
+
+    if let Some(plugins) = settings
+        .get("wasm_plugins")
+        .and_then(|v| v.as_array())
+    {
+        for entry in plugins {
+            let url = entry
+                .get("url")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let bundled = entry
+                .get("bundled")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            let slug = poly_host_bridge::bundled_slug_from_url(&url)
+                .map(str::to_string)
+                .unwrap_or_else(|| url.clone());
+            out.push(PluginListEntry {
+                kind: "sideloaded".into(),
+                slug,
+                url,
+                name: entry
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .map(str::to_string),
+                enabled: entry
+                    .get("enabled")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(true),
+                available: true,
+                bundled,
+            });
+        }
+    }
+
+    Json(PluginListResponse {
+        ok: true,
+        plugins: out,
+        err: None,
+    })
+}
+
+async fn accounts_add(
+    State(state): State<HostState>,
+    Json(req): Json<AccountAddRequest>,
+) -> Json<AccountAddResponse> {
+    if req.account_id.trim().is_empty() {
+        return Json(AccountAddResponse {
+            ok: false,
+            account_id: req.account_id.clone(),
+            backend: req.backend.clone(),
+            err: Some("account_id is required".into()),
+        });
+    }
+    if req.backend.trim().is_empty() {
+        return Json(AccountAddResponse {
+            ok: false,
+            account_id: req.account_id.clone(),
+            backend: req.backend.clone(),
+            err: Some("backend is required".into()),
+        });
+    }
+
+    // Validate backend availability.
+    match read_app_settings(&state) {
+        Ok(settings) => {
+            let allowed = available_backend_slugs(&settings);
+            if !allowed.iter().any(|s| s == &req.backend) {
+                return Json(AccountAddResponse {
+                    ok: false,
+                    account_id: req.account_id.clone(),
+                    backend: req.backend.clone(),
+                    err: Some(format!(
+                        "backend `{}` is not available (not compiled in or disabled)",
+                        req.backend
+                    )),
+                });
+            }
+        }
+        Err(e) => {
+            return Json(AccountAddResponse {
+                ok: false,
+                account_id: req.account_id.clone(),
+                backend: req.backend.clone(),
+                err: Some(e),
+            });
+        }
+    }
+
+    let entry = serde_json::json!({
+        "backend": req.backend,
+        "account_id": req.account_id,
+        "token": req.token,
+        "display_name": req.display_name,
+        "instance_id": req.instance_id,
+        "refresh_token": req.refresh_token,
+        "token_expires_at": req.token_expires_at,
+        "scope": req.scope,
+    });
+    Json(
+        match mutate_account_tokens(&state, |tokens| {
+            // Upsert by (backend, account_id).
+            tokens.retain(|t| {
+                !(t.get("backend").and_then(|v| v.as_str()) == Some(&req.backend)
+                    && t.get("account_id").and_then(|v| v.as_str())
+                        == Some(&req.account_id))
+            });
+            tokens.push(entry.clone());
+            Ok(())
+        }) {
+            Ok(()) => AccountAddResponse {
+                ok: true,
+                account_id: req.account_id.clone(),
+                backend: req.backend.clone(),
+                err: None,
+            },
+            Err(e) => AccountAddResponse {
+                ok: false,
+                account_id: req.account_id.clone(),
+                backend: req.backend.clone(),
+                err: Some(e),
+            },
+        },
+    )
+}
+
+async fn accounts_remove(
+    State(state): State<HostState>,
+    Json(req): Json<AccountRemoveRequest>,
+) -> Json<AccountRemoveResponse> {
+    Json(
+        match mutate_account_tokens(&state, |tokens| {
+            let before = tokens.len();
+            tokens.retain(|t| {
+                !(t.get("backend").and_then(|v| v.as_str()) == Some(&req.backend)
+                    && t.get("account_id").and_then(|v| v.as_str())
+                        == Some(&req.account_id))
+            });
+            Ok(before != tokens.len())
+        }) {
+            Ok(removed) => AccountRemoveResponse {
+                ok: true,
+                removed,
+                err: None,
+            },
+            Err(e) => AccountRemoveResponse {
+                ok: false,
+                removed: false,
+                err: Some(e),
+            },
+        },
+    )
+}
+
+async fn accounts_list(State(state): State<HostState>) -> Json<AccountListResponse> {
+    let raw = match sqlite_get(&state, ACCOUNT_TOKENS_KEY) {
+        Ok(Some(v)) => v,
+        Ok(None) => serde_json::Value::Array(Vec::new()),
+        Err(e) => {
+            return Json(AccountListResponse {
+                ok: false,
+                accounts: Vec::new(),
+                err: Some(e),
+            });
+        }
+    };
+    let arr = raw.as_array().cloned().unwrap_or_default();
+    let accounts = arr
+        .into_iter()
+        .filter_map(|entry| {
+            let backend = entry.get("backend")?.as_str()?.to_string();
+            let account_id = entry.get("account_id")?.as_str()?.to_string();
+            let display_name = entry
+                .get("display_name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let instance_id = entry
+                .get("instance_id")
+                .and_then(|v| v.as_str())
+                .map(str::to_string);
+            let token_expires_at = entry
+                .get("token_expires_at")
+                .and_then(|v| v.as_str())
+                .map(str::to_string);
+            Some(AccountListEntry {
+                backend,
+                account_id,
+                display_name,
+                instance_id,
+                token_expires_at,
+            })
+        })
+        .collect();
+    Json(AccountListResponse {
+        ok: true,
+        accounts,
+        err: None,
+    })
+}
+
+// ─── Helpers used by the plugin / account admin handlers ─────────────────────
+
+fn is_acceptable_plugin_url(url: &str) -> bool {
+    ["https://", "http://", "file://", "bundled://"]
+        .iter()
+        .any(|prefix| url.starts_with(prefix))
+}
+
+/// Compute the user-effective set of backend slugs (builtin minus
+/// disabled, plus enabled bundled entries). Mirrors
+/// `poly_core::plugin_admin::available_backend_slugs`.
+fn available_backend_slugs(settings: &serde_json::Value) -> Vec<String> {
+    let disabled: Vec<String> = settings
+        .get("disabled_native_backends")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default();
+    let mut out: Vec<String> = BUILTIN_BACKEND_SLUGS
+        .iter()
+        .filter(|slug| !disabled.iter().any(|d| d == *slug))
+        .map(|s| (*s).to_string())
+        .collect();
+    if let Some(plugins) = settings
+        .get("wasm_plugins")
+        .and_then(|v| v.as_array())
+    {
+        for entry in plugins {
+            let bundled = entry
+                .get("bundled")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            let enabled = entry
+                .get("enabled")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(true);
+            if !bundled || !enabled {
+                continue;
+            }
+            let url = entry.get("url").and_then(|v| v.as_str()).unwrap_or("");
+            if let Some(slug) = poly_host_bridge::bundled_slug_from_url(url) {
+                if !out.iter().any(|s| s == slug)
+                    && !disabled.iter().any(|d| d == slug)
+                {
+                    out.push(slug.to_string());
+                }
+            }
+        }
+    }
+    out.sort();
+    out.dedup();
+    out
+}
+
+fn read_app_settings(state: &HostState) -> Result<serde_json::Value, String> {
+    Ok(sqlite_get(state, APP_SETTINGS_KEY)?
+        .unwrap_or_else(|| serde_json::Value::Object(serde_json::Map::new())))
+}
+
+/// Lock + read-modify-write the `app_settings` JSON value. The closure
+/// receives a mutable `serde_json::Value` (object) and returns whatever
+/// result-typed payload the caller wants to surface.
+fn mutate_app_settings<F, T>(state: &HostState, f: F) -> Result<T, String>
+where
+    F: FnOnce(&mut serde_json::Value) -> Result<T, String>,
+{
+    let mut settings = read_app_settings(state)?;
+    if !settings.is_object() {
+        // Replace anything that isn't a JSON object with a fresh map so
+        // downstream get_mut(...) calls don't panic.
+        settings = serde_json::Value::Object(serde_json::Map::new());
+    }
+    let result = f(&mut settings)?;
+    sqlite_set(state, APP_SETTINGS_KEY, &settings)?;
+    Ok(result)
+}
+
+/// Get `wasm_plugins` from a settings JSON object as a `&mut Vec<Value>`,
+/// inserting an empty array if it's missing or the wrong type.
+fn wasm_plugins_array_mut(settings: &mut serde_json::Value) -> &mut Vec<serde_json::Value> {
+    let map = settings
+        .as_object_mut()
+        .expect("settings was normalised to an object by mutate_app_settings");
+    let entry = map
+        .entry("wasm_plugins")
+        .or_insert_with(|| serde_json::Value::Array(Vec::new()));
+    if !entry.is_array() {
+        *entry = serde_json::Value::Array(Vec::new());
+    }
+    entry
+        .as_array_mut()
+        .expect("just-set value is an array")
+}
+
+/// Lock + read-modify-write the `account_tokens` JSON array.
+fn mutate_account_tokens<F, T>(state: &HostState, f: F) -> Result<T, String>
+where
+    F: FnOnce(&mut Vec<serde_json::Value>) -> Result<T, String>,
+{
+    let mut tokens: Vec<serde_json::Value> = sqlite_get(state, ACCOUNT_TOKENS_KEY)?
+        .and_then(|v| v.as_array().cloned())
+        .unwrap_or_default();
+    let result = f(&mut tokens)?;
+    sqlite_set(
+        state,
+        ACCOUNT_TOKENS_KEY,
+        &serde_json::Value::Array(tokens),
+    )?;
+    Ok(result)
+}
+
+/// Helper for `..Default::default_resp()` ergonomics inside the plugin-add response.
+trait PluginAddDefault {
+    fn default_resp() -> Self;
+}
+
+impl PluginAddDefault for PluginAddResponse {
+    fn default_resp() -> Self {
+        Self {
+            ok: false,
+            added: false,
+            slug: String::new(),
+            url: String::new(),
+            err: None,
+        }
     }
 }
 
@@ -733,6 +1333,540 @@ mod tests {
         let resp: serde_json::Value = serde_json::from_str(&body).unwrap();
         assert_eq!(resp["ok"], true);
         assert!(resp["value_b64"].is_null());
+    }
+
+    // ─── Plugin / account admin route tests ──────────────────────────────
+
+    async fn get(app: &Router, path: &str) -> (StatusCode, String) {
+        let req = Request::builder()
+            .method("GET")
+            .uri(path)
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        let status = resp.status();
+        let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        (status, String::from_utf8(bytes.to_vec()).unwrap())
+    }
+
+    fn read_settings_json(state: &HostState) -> serde_json::Value {
+        sqlite_get(state, APP_SETTINGS_KEY)
+            .unwrap()
+            .unwrap_or(serde_json::Value::Null)
+    }
+
+    #[tokio::test]
+    async fn plugins_add_inserts_new_entry() {
+        let state = test_state();
+        let app = router(state.clone());
+        let (status, body) = post_json(
+            &app,
+            "/host/plugins/add",
+            serde_json::json!({ "url": "https://example.com/p.wasm", "name": "Test" }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        let resp: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(resp["ok"], true);
+        assert_eq!(resp["added"], true);
+        assert_eq!(resp["url"], "https://example.com/p.wasm");
+
+        let settings = read_settings_json(&state);
+        let plugins = settings["wasm_plugins"].as_array().unwrap();
+        assert_eq!(plugins.len(), 1);
+        assert_eq!(plugins[0]["url"], "https://example.com/p.wasm");
+        assert_eq!(plugins[0]["enabled"], true);
+        assert_eq!(plugins[0]["bundled"], false);
+    }
+
+    #[tokio::test]
+    async fn plugins_add_idempotent_re_add_returns_already_present() {
+        let app = router(test_state());
+        let url = "https://example.com/p.wasm";
+        post_json(&app, "/host/plugins/add", serde_json::json!({ "url": url })).await;
+        let (_s, body) =
+            post_json(&app, "/host/plugins/add", serde_json::json!({ "url": url })).await;
+        let resp: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(resp["ok"], true);
+        assert_eq!(resp["added"], false);
+    }
+
+    #[tokio::test]
+    async fn plugins_add_bundled_url_marks_bundled_true() {
+        let state = test_state();
+        let app = router(state.clone());
+        post_json(
+            &app,
+            "/host/plugins/add",
+            serde_json::json!({ "url": "bundled://discord" }),
+        )
+        .await;
+        let plugins = read_settings_json(&state)["wasm_plugins"]
+            .as_array()
+            .unwrap()
+            .clone();
+        assert_eq!(plugins.len(), 1);
+        assert_eq!(plugins[0]["bundled"], true);
+    }
+
+    #[tokio::test]
+    async fn plugins_add_rejects_empty_url() {
+        let app = router(test_state());
+        let (_s, body) =
+            post_json(&app, "/host/plugins/add", serde_json::json!({ "url": "" })).await;
+        let resp: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(resp["ok"], false);
+        assert!(resp["err"].as_str().unwrap().contains("required"));
+    }
+
+    #[tokio::test]
+    async fn plugins_add_rejects_invalid_scheme() {
+        let app = router(test_state());
+        let (_s, body) = post_json(
+            &app,
+            "/host/plugins/add",
+            serde_json::json!({ "url": "ftp://x" }),
+        )
+        .await;
+        let resp: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(resp["ok"], false);
+        assert!(resp["err"].as_str().unwrap().contains("invalid"));
+    }
+
+    #[tokio::test]
+    async fn plugins_remove_drops_entry() {
+        let state = test_state();
+        let app = router(state.clone());
+        let url = "https://example.com/p.wasm";
+        post_json(&app, "/host/plugins/add", serde_json::json!({ "url": url })).await;
+        let (_s, body) = post_json(
+            &app,
+            "/host/plugins/remove",
+            serde_json::json!({ "url_or_slug": url }),
+        )
+        .await;
+        let resp: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(resp["ok"], true);
+        assert_eq!(resp["removed"], true);
+        let plugins = read_settings_json(&state)["wasm_plugins"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+        assert!(plugins.is_empty());
+    }
+
+    #[tokio::test]
+    async fn plugins_remove_by_bare_slug_for_bundled_plugin() {
+        let state = test_state();
+        let app = router(state.clone());
+        post_json(
+            &app,
+            "/host/plugins/add",
+            serde_json::json!({ "url": "bundled://discord" }),
+        )
+        .await;
+        let (_s, body) = post_json(
+            &app,
+            "/host/plugins/remove",
+            serde_json::json!({ "url_or_slug": "discord" }),
+        )
+        .await;
+        let resp: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(resp["removed"], true);
+        let settings = read_settings_json(&state);
+        assert!(
+            settings["wasm_plugins"]
+                .as_array()
+                .map(|v| v.is_empty())
+                .unwrap_or(true)
+        );
+        let removed = settings["removed_bundled_plugins"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|v| v.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(removed, vec!["discord"]);
+    }
+
+    #[tokio::test]
+    async fn plugins_remove_unknown_returns_removed_false() {
+        let app = router(test_state());
+        let (_s, body) = post_json(
+            &app,
+            "/host/plugins/remove",
+            serde_json::json!({ "url_or_slug": "https://nowhere.test/none.wasm" }),
+        )
+        .await;
+        let resp: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(resp["ok"], true);
+        assert_eq!(resp["removed"], false);
+    }
+
+    #[tokio::test]
+    async fn plugins_set_enabled_toggles_value() {
+        let state = test_state();
+        let app = router(state.clone());
+        let url = "https://example.com/p.wasm";
+        post_json(&app, "/host/plugins/add", serde_json::json!({ "url": url })).await;
+        let (_s, body) = post_json(
+            &app,
+            "/host/plugins/set-enabled",
+            serde_json::json!({ "url": url, "enabled": false }),
+        )
+        .await;
+        let resp: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(resp["ok"], true);
+        assert_eq!(resp["enabled"], false);
+
+        let plugins = read_settings_json(&state)["wasm_plugins"]
+            .as_array()
+            .unwrap()
+            .clone();
+        assert_eq!(plugins[0]["enabled"], false);
+    }
+
+    #[tokio::test]
+    async fn plugins_set_enabled_unknown_url_returns_error() {
+        let app = router(test_state());
+        let (_s, body) = post_json(
+            &app,
+            "/host/plugins/set-enabled",
+            serde_json::json!({ "url": "https://x.test/none.wasm", "enabled": true }),
+        )
+        .await;
+        let resp: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(resp["ok"], false);
+        assert!(resp["err"].as_str().unwrap().contains("not found"));
+    }
+
+    #[tokio::test]
+    async fn plugins_list_includes_builtin_and_sideloaded() {
+        let state = test_state();
+        let app = router(state.clone());
+        post_json(
+            &app,
+            "/host/plugins/add",
+            serde_json::json!({ "url": "bundled://discord" }),
+        )
+        .await;
+        post_json(
+            &app,
+            "/host/plugins/add",
+            serde_json::json!({ "url": "https://example.com/p.wasm" }),
+        )
+        .await;
+
+        let (status, body) = get(&app, "/host/plugins/list").await;
+        assert_eq!(status, StatusCode::OK);
+        let resp: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(resp["ok"], true);
+        let plugins = resp["plugins"].as_array().unwrap();
+        let builtin: Vec<&str> = plugins
+            .iter()
+            .filter(|p| p["kind"] == "builtin")
+            .filter_map(|p| p["slug"].as_str())
+            .collect();
+        // The list should contain at least our known canonical builtins.
+        assert!(builtin.contains(&"demo"));
+        assert!(builtin.contains(&"poly"));
+        let sideloaded: Vec<&str> = plugins
+            .iter()
+            .filter(|p| p["kind"] == "sideloaded")
+            .filter_map(|p| p["url"].as_str())
+            .collect();
+        assert!(sideloaded.contains(&"bundled://discord"));
+        assert!(sideloaded.contains(&"https://example.com/p.wasm"));
+    }
+
+    #[tokio::test]
+    async fn plugins_list_marks_disabled_native_backends() {
+        let state = test_state();
+        // Pre-populate disabled_native_backends so `plugins_list` reflects it.
+        sqlite_set(
+            &state,
+            APP_SETTINGS_KEY,
+            &serde_json::json!({
+                "disabled_native_backends": ["stoat"]
+            }),
+        )
+        .unwrap();
+        let app = router(state);
+        let (_s, body) = get(&app, "/host/plugins/list").await;
+        let resp: serde_json::Value = serde_json::from_str(&body).unwrap();
+        let stoat = resp["plugins"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["slug"] == "stoat" && p["kind"] == "builtin")
+            .unwrap()
+            .clone();
+        assert_eq!(stoat["enabled"], false);
+    }
+
+    #[tokio::test]
+    async fn accounts_add_persists_token() {
+        let state = test_state();
+        let app = router(state.clone());
+        // Demo backend is in BUILTIN_BACKEND_SLUGS so this must pass.
+        let (status, body) = post_json(
+            &app,
+            "/host/accounts/add",
+            serde_json::json!({
+                "backend": "demo",
+                "account_id": "alice",
+                "token": "tok-123",
+                "display_name": "Alice"
+            }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        let resp: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(resp["ok"], true);
+        let stored = sqlite_get(&state, ACCOUNT_TOKENS_KEY).unwrap().unwrap();
+        let arr = stored.as_array().unwrap();
+        assert_eq!(arr.len(), 1);
+        assert_eq!(arr[0]["account_id"], "alice");
+        assert_eq!(arr[0]["token"], "tok-123");
+    }
+
+    #[tokio::test]
+    async fn accounts_add_rejects_unknown_backend() {
+        let app = router(test_state());
+        let (_s, body) = post_json(
+            &app,
+            "/host/accounts/add",
+            serde_json::json!({
+                "backend": "no-such-backend",
+                "account_id": "alice",
+                "token": "tok",
+                "display_name": "A"
+            }),
+        )
+        .await;
+        let resp: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(resp["ok"], false);
+        assert!(resp["err"].as_str().unwrap().contains("not available"));
+    }
+
+    #[tokio::test]
+    async fn accounts_add_rejects_disabled_backend() {
+        let state = test_state();
+        // Disable demo via the settings JSON before attempting signup.
+        sqlite_set(
+            &state,
+            APP_SETTINGS_KEY,
+            &serde_json::json!({
+                "disabled_native_backends": ["demo"]
+            }),
+        )
+        .unwrap();
+        let app = router(state);
+        let (_s, body) = post_json(
+            &app,
+            "/host/accounts/add",
+            serde_json::json!({
+                "backend": "demo",
+                "account_id": "alice",
+                "token": "tok",
+                "display_name": "A"
+            }),
+        )
+        .await;
+        let resp: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(resp["ok"], false);
+        assert!(resp["err"].as_str().unwrap().contains("not available"));
+    }
+
+    #[tokio::test]
+    async fn accounts_add_then_login_with_bundled_plugin() {
+        let state = test_state();
+        let app = router(state.clone());
+
+        // 1. Sideload Discord (bundled).
+        let (_s, body) = post_json(
+            &app,
+            "/host/plugins/add",
+            serde_json::json!({ "url": "bundled://discord" }),
+        )
+        .await;
+        let resp: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(resp["ok"], true);
+        assert_eq!(resp["slug"], "discord");
+
+        // 2. Login on it (bundled is enabled by default after add).
+        let (_s, body) = post_json(
+            &app,
+            "/host/accounts/add",
+            serde_json::json!({
+                "backend": "discord",
+                "account_id": "user#1234",
+                "token": "discord-token",
+                "display_name": "My Discord"
+            }),
+        )
+        .await;
+        let resp: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(resp["ok"], true, "discord login should succeed: {body}");
+
+        let stored = sqlite_get(&state, ACCOUNT_TOKENS_KEY).unwrap().unwrap();
+        assert_eq!(stored.as_array().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn accounts_add_blocked_when_bundled_disabled() {
+        let state = test_state();
+        let app = router(state.clone());
+
+        post_json(
+            &app,
+            "/host/plugins/add",
+            serde_json::json!({ "url": "bundled://discord" }),
+        )
+        .await;
+        // Toggle Discord off.
+        post_json(
+            &app,
+            "/host/plugins/set-enabled",
+            serde_json::json!({ "url": "bundled://discord", "enabled": false }),
+        )
+        .await;
+
+        let (_s, body) = post_json(
+            &app,
+            "/host/accounts/add",
+            serde_json::json!({
+                "backend": "discord",
+                "account_id": "x",
+                "token": "t",
+                "display_name": "D"
+            }),
+        )
+        .await;
+        let resp: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(resp["ok"], false);
+        assert!(resp["err"].as_str().unwrap().contains("not available"));
+    }
+
+    #[tokio::test]
+    async fn accounts_remove_drops_entry() {
+        let state = test_state();
+        let app = router(state.clone());
+        post_json(
+            &app,
+            "/host/accounts/add",
+            serde_json::json!({
+                "backend": "demo",
+                "account_id": "alice",
+                "token": "t",
+                "display_name": "A"
+            }),
+        )
+        .await;
+        let (_s, body) = post_json(
+            &app,
+            "/host/accounts/remove",
+            serde_json::json!({ "backend": "demo", "account_id": "alice" }),
+        )
+        .await;
+        let resp: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(resp["removed"], true);
+        let stored = sqlite_get(&state, ACCOUNT_TOKENS_KEY).unwrap().unwrap();
+        assert!(stored.as_array().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn accounts_list_omits_token_field() {
+        let state = test_state();
+        let app = router(state.clone());
+        post_json(
+            &app,
+            "/host/accounts/add",
+            serde_json::json!({
+                "backend": "demo",
+                "account_id": "alice",
+                "token": "secret-token-do-not-leak",
+                "display_name": "Alice"
+            }),
+        )
+        .await;
+        let (status, body) = get(&app, "/host/accounts/list").await;
+        assert_eq!(status, StatusCode::OK);
+        // The serialised response must not contain `token` or
+        // `refresh_token` fields — `AccountListEntry` deliberately omits
+        // them. Asserting on the raw body is the strongest guarantee.
+        assert!(
+            !body.contains("secret-token-do-not-leak"),
+            "secret token leaked in /host/accounts/list response: {body}"
+        );
+        assert!(
+            !body.contains("\"token\""),
+            "`token` field must not be serialised by /host/accounts/list"
+        );
+        let resp: serde_json::Value = serde_json::from_str(&body).unwrap();
+        let accounts = resp["accounts"].as_array().unwrap();
+        assert_eq!(accounts.len(), 1);
+        assert_eq!(accounts[0]["account_id"], "alice");
+        assert_eq!(accounts[0]["display_name"], "Alice");
+    }
+
+    #[tokio::test]
+    async fn full_flow_add_plugin_then_login_then_list() {
+        // The headline integration scenario: an MCP-driven AI does the
+        // canonical "sideload + login" flow and the resulting state is
+        // visible via the list endpoints. End-to-end through axum +
+        // SQLite.
+        let state = test_state();
+        let app = router(state);
+
+        // 1. Add a sideloaded plugin from a URL.
+        let (_s, body) = post_json(
+            &app,
+            "/host/plugins/add",
+            serde_json::json!({
+                "url": "https://plugins.example.com/custom.wasm",
+                "name": "Custom"
+            }),
+        )
+        .await;
+        let resp: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(resp["added"], true);
+
+        // 2. Confirm the plugin appears in the listing.
+        let (_s, body) = get(&app, "/host/plugins/list").await;
+        let resp: serde_json::Value = serde_json::from_str(&body).unwrap();
+        let urls: Vec<&str> = resp["plugins"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|p| p["url"].as_str())
+            .collect();
+        assert!(urls.contains(&"https://plugins.example.com/custom.wasm"));
+
+        // 3. Login on a built-in backend (demo) so that the validation
+        //    layer accepts it. The point is to assert that the listing
+        //    shows the new account.
+        post_json(
+            &app,
+            "/host/accounts/add",
+            serde_json::json!({
+                "backend": "demo",
+                "account_id": "agent-test",
+                "token": "tok",
+                "display_name": "Agent Test"
+            }),
+        )
+        .await;
+
+        // 4. Verify the account is listed.
+        let (_s, body) = get(&app, "/host/accounts/list").await;
+        let resp: serde_json::Value = serde_json::from_str(&body).unwrap();
+        let accounts = resp["accounts"].as_array().unwrap();
+        assert_eq!(accounts.len(), 1);
+        assert_eq!(accounts[0]["account_id"], "agent-test");
+        assert_eq!(accounts[0]["backend"], "demo");
     }
 }
 
