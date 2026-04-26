@@ -179,7 +179,24 @@ pub async fn restore_native_accounts(
 
         let credentials = AuthCredentials::Token(token.token.clone());
         match backend.authenticate(credentials).await {
-            Ok(session) => {
+            Ok(mut session) => {
+                // Mirror the signup-time avatar overlay: when a backend
+                // returns no avatar (or a non-http one) and the display
+                // name matches a known animal test account, swap in the
+                // bundled cute portrait so restored accounts don't degrade
+                // to letter-fallback bubbles.
+                #[cfg(feature = "demo")]
+                if (session.user.avatar_url.is_none()
+                    || session
+                        .user
+                        .avatar_url
+                        .as_deref()
+                        .is_some_and(|u| !u.starts_with("http")))
+                    && let Some(url) =
+                        poly_demo::data::test_animal_avatar(&session.user.display_name)
+                {
+                    session.user.avatar_url = Some(url);
+                }
                 let account_id = session.id.clone();
                 let backend_handle: BackendHandle =
                     Arc::new(RwLock::new(backend as Box<dyn ClientBackend + Send + Sync>));
@@ -301,12 +318,18 @@ pub async fn restore_native_accounts(
                 );
 
                 let backend_slug = token.backend.clone();
+                // Same animal-avatar overlay as the success path so an
+                // offline-restored test account still gets its portrait.
+                #[cfg(feature = "demo")]
+                let avatar_url = poly_demo::data::test_animal_avatar(&token.display_name);
+                #[cfg(not(feature = "demo"))]
+                let avatar_url: Option<String> = None;
                 let offline_session = Session {
                     id: token.account_id.clone(),
                     user: User {
                         id: token.account_id.clone(),
                         display_name: token.display_name.clone(),
-                        avatar_url: None,
+                        avatar_url,
                         presence: PresenceStatus::Offline,
                         backend: BackendType::from(backend_slug.as_str()),
                     },
