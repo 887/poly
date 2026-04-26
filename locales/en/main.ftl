@@ -1132,3 +1132,26 @@ overview-toggle-servers = Servers
 overview-toggle-dms = Direct Messages
 overview-toggle-friends = Friends
 overview-toggle-notifications = Notifications
+
+# Overview sub-page nav (channel-style sidebar)
+overview-page-general = General
+overview-page-missed = Things you missed
+overview-page-stats = Stats
+overview-page-agents = Agents
+
+# Overview sub-page bodies
+overview-page-missed-title = Things you missed
+overview-page-missed-subtitle = Recent unread notifications and direct messages for this account.
+overview-page-stats-title = Stats
+overview-page-stats-subtitle = Your activity at a glance.
+overview-page-agents-title = Active Agents
+overview-page-agents-subtitle = Agentic functions running across your servers.
+overview-page-agents-empty = No agents are active yet. The agent SDK is coming soon.
+overview-empty-allcaughtup = You're all caught up.
+overview-section-unread-dms = Unread Direct Messages
+overview-section-unread-notifications = Unread Notifications
+overview-stat-servers = Servers
+overview-stat-dms = Direct Messages
+overview-stat-groups = Groups
+overview-stat-unread = Unread
+overview-stat-mentions = Mentions

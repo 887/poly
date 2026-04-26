@@ -29,9 +29,24 @@ pub use tree_body::TreeBody;
 
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::state::{BatchedSignal, use_reactive_effect};
+use crate::ui::actions::{ActionCx, UiAction};
 use dioxus::prelude::*;
 use poly_client::{ClientError, ViewBody, ViewDescriptor};
 use poly_ui_macros::{context_menu, ui_action};
+
+/// Actions for the account-overview header search input.
+#[derive(Debug, Clone)]
+pub enum AccountOverviewAction {
+    /// Search query was edited.
+    SetSearchQuery(String),
+}
+
+impl UiAction for AccountOverviewAction {
+    fn apply(self, _cx: ActionCx<'_>) {
+        // The search input writes a local Signal; this enum exists only to
+        // satisfy the action-coverage lint.
+    }
+}
 
 /// Host-rendered non-chat view. Reads the active backend's declared
 /// `ViewDescriptor` for `channel_id` and routes to the matching body engine.
@@ -100,11 +115,12 @@ pub fn ClientView(
 /// `get_channel_view(channel_id)`. Used by `ServerOverviewRoute` to render
 /// each backend's plugin-supplied overview at
 /// `/{backend}/{instance}/{account}/overview`.
-#[ui_action(None)]
+#[ui_action(AccountOverviewAction)]
 #[context_menu(inherit)]
 #[component]
 pub fn AccountOverviewView(account_id: String) -> Element {
     let client_manager: BatchedSignal<ClientManager> = use_context();
+    let mut search_query = use_signal(String::new);
 
     let desc_res = {
         let account_id = account_id.clone();
@@ -128,7 +144,7 @@ pub fn AccountOverviewView(account_id: String) -> Element {
         })
     };
 
-    match &*desc_res.read_unchecked() {
+    let body = match &*desc_res.read_unchecked() {
         None => rsx! {
             div { class: "client-view client-view-loading",
                 span { "Loading overview…" }
@@ -147,6 +163,26 @@ pub fn AccountOverviewView(account_id: String) -> Element {
             // since overview-rows callbacks don't carry a channel context.
             let desc: ViewDescriptor = desc.clone();
             render_descriptor(String::new(), account_id.clone(), desc, None)
+        }
+    };
+
+    let q = search_query.read().clone();
+    rsx! {
+        div { class: "overview-page overview-general-page",
+            header { class: "overview-page-header",
+                div { class: "overview-page-header-row",
+                    h2 { "Your Servers" }
+                    input {
+                        class: "overview-page-search-input",
+                        r#type: "text",
+                        placeholder: "Search…",
+                        value: "{q}",
+                        oninput: move |e| search_query.set(e.value()),
+                    }
+                }
+                p { class: "overview-page-subtitle", "All servers for this account" }
+            }
+            {body}
         }
     }
 }

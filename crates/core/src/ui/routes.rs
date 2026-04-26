@@ -124,6 +124,9 @@ pub fn route_account_id(route: &Route) -> Option<&str> {
         | Route::AccountSettingsRoute { account_id, .. }
         | Route::CreateServerRoute { account_id, .. }
         | Route::ServerOverviewRoute { account_id, .. }
+        | Route::ServerOverviewMissedRoute { account_id, .. }
+        | Route::ServerOverviewStatsRoute { account_id, .. }
+        | Route::ServerOverviewAgentsRoute { account_id, .. }
         | Route::ThreadView { account_id, .. } => Some(account_id.as_str()),
         // Reauth intentionally returns None so route_targets_unknown_account
         // never treats a reauth URL as pointing at a missing account — the
@@ -358,6 +361,18 @@ pub enum Route {
         #[connected(linked)]
         #[route("/:backend/:instance_id/:account_id/overview")]
         ServerOverviewRoute { backend: String, instance_id: String, account_id: String },
+
+        #[connected(linked)]
+        #[route("/:backend/:instance_id/:account_id/overview/missed")]
+        ServerOverviewMissedRoute { backend: String, instance_id: String, account_id: String },
+
+        #[connected(linked)]
+        #[route("/:backend/:instance_id/:account_id/overview/stats")]
+        ServerOverviewStatsRoute { backend: String, instance_id: String, account_id: String },
+
+        #[connected(linked)]
+        #[route("/:backend/:instance_id/:account_id/overview/agents")]
+        ServerOverviewAgentsRoute { backend: String, instance_id: String, account_id: String },
 
         // ── App-level (not account-scoped) ───────────────────────────
         #[connected(linked)]
@@ -901,11 +916,10 @@ pub fn sync_route_to_app_state(route: &Route, app_state: BatchedSignal<AppState>
                 .account_last_routes
                 .insert(account_id.clone(), route_url);
         }
-        Route::ServerOverviewRoute {
-            backend,
-            instance_id,
-            account_id,
-        } => {
+        Route::ServerOverviewRoute { backend, instance_id, account_id }
+        | Route::ServerOverviewMissedRoute { backend, instance_id, account_id }
+        | Route::ServerOverviewStatsRoute { backend, instance_id, account_id }
+        | Route::ServerOverviewAgentsRoute { backend, instance_id, account_id } => {
             s.nav.view.set(View::Overview);
             s.nav.active_backend.set(Some(BackendType::from_slug(backend)));
             s.nav.active_instance_id.set(Some(instance_id.clone()));
@@ -1824,15 +1838,84 @@ fn ServerOverviewRoute(backend: String, instance_id: String, account_id: String)
     let _ = (backend, instance_id);
     rsx! {
         SplitMenuShell {
-            root_class: "account-view-main".to_string(),
-            sidebar_class: "channel-list-wrapper".to_string(),
-            content_class: String::new(),
+            root_class: "account-view-main overview-shell".to_string(),
+            sidebar_class: "special-page-sidebar overview-panel-sidebar".to_string(),
+            content_class: "special-page-content overview-panel-content".to_string(),
             sidebar: rsx! {
                 crate::ui::account::common::OverviewSidebar {}
                 VoiceAccountFooter {}
             },
             content: rsx! {
                 AccountOverviewView { account_id }
+            },
+        }
+    }
+}
+
+/// Per-account overview — "Things you missed" sub-page.
+#[context_menu(None)]
+#[rustfmt::skip]
+#[ui_action(inherit)]
+#[component]
+fn ServerOverviewMissedRoute(backend: String, instance_id: String, account_id: String) -> Element {
+    let _ = (backend, instance_id);
+    rsx! {
+        SplitMenuShell {
+            root_class: "account-view-main overview-shell".to_string(),
+            sidebar_class: "special-page-sidebar overview-panel-sidebar".to_string(),
+            content_class: "special-page-content overview-panel-content".to_string(),
+            sidebar: rsx! {
+                crate::ui::account::common::OverviewSidebar {}
+                VoiceAccountFooter {}
+            },
+            content: rsx! {
+                crate::ui::account::common::OverviewMissedView { account_id }
+            },
+        }
+    }
+}
+
+/// Per-account overview — Statistics sub-page.
+#[context_menu(None)]
+#[rustfmt::skip]
+#[ui_action(inherit)]
+#[component]
+fn ServerOverviewStatsRoute(backend: String, instance_id: String, account_id: String) -> Element {
+    let _ = (backend, instance_id);
+    rsx! {
+        SplitMenuShell {
+            root_class: "account-view-main overview-shell".to_string(),
+            sidebar_class: "special-page-sidebar overview-panel-sidebar".to_string(),
+            content_class: "special-page-content overview-panel-content".to_string(),
+            sidebar: rsx! {
+                crate::ui::account::common::OverviewSidebar {}
+                VoiceAccountFooter {}
+            },
+            content: rsx! {
+                crate::ui::account::common::OverviewStatsView { account_id }
+            },
+        }
+    }
+}
+
+/// Per-account overview — Active Agents sub-page.
+#[context_menu(None)]
+#[rustfmt::skip]
+#[ui_action(inherit)]
+#[component]
+fn ServerOverviewAgentsRoute(backend: String, instance_id: String, account_id: String) -> Element {
+    let _ = (backend, instance_id);
+    rsx! {
+        SplitMenuShell {
+            root_class: "account-view-main overview-shell".to_string(),
+            sidebar_class: "special-page-sidebar overview-panel-sidebar".to_string(),
+            content_class: "special-page-content overview-panel-content".to_string(),
+            sidebar: rsx! {
+                crate::ui::account::common::OverviewSidebar {}
+                VoiceAccountFooter {}
+            },
+            content: rsx! {
+                crate::ui::account::common::OverviewAgentsView { account_id }
             },
         }
     }
@@ -2328,6 +2411,9 @@ fn route_variant_name(route: &Route) -> &'static str {
         Route::NotificationsRoute { .. } => "NotificationsRoute",
         Route::SavedItemsRoute { .. } => "SavedItemsRoute",
         Route::ServerOverviewRoute { .. } => "ServerOverviewRoute",
+        Route::ServerOverviewMissedRoute { .. } => "ServerOverviewMissedRoute",
+        Route::ServerOverviewStatsRoute { .. } => "ServerOverviewStatsRoute",
+        Route::ServerOverviewAgentsRoute { .. } => "ServerOverviewAgentsRoute",
         Route::SettingsRoute => "SettingsRoute",
         Route::SettingsSectionRoute { .. } => "SettingsSectionRoute",
         Route::AgentRoute => "AgentRoute",

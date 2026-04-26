@@ -1,0 +1,168 @@
+//! Stub bodies for the per-account overview sub-pages:
+//! `Things you missed`, `Stats`, `Agents`.
+//!
+//! Each is a thin host-rendered component that gives the user something to
+//! see while the per-page content is built out (see plan
+//! `/home/laragana/.claude/plans/iridescent-finding-blossom.md`). Phase 2
+//! agents will fill these in with the real data sources.
+
+use crate::i18n::t;
+use crate::state::{BatchedSignal, ChatData};
+use crate::ui::actions::{ActionCx, UiAction};
+use dioxus::prelude::*;
+use poly_ui_macros::{context_menu, ui_action};
+
+/// Actions for the overview sub-pages (placeholder; click handlers are
+/// per-card and will be wired during the per-backend Phase 2).
+#[derive(Debug, Clone)]
+pub enum OverviewSubpageAction {
+    /// User clicked something in the missed/stats/agents view.
+    ItemClick(String),
+}
+
+impl UiAction for OverviewSubpageAction {
+    fn apply(self, _cx: ActionCx<'_>) {}
+}
+
+/// "Things you missed" — recent unread notifications + recent friend DMs.
+#[ui_action(OverviewSubpageAction)]
+#[context_menu(inherit)]
+#[component]
+pub fn OverviewMissedView(account_id: String) -> Element {
+    let chat_data: BatchedSignal<ChatData> = use_context();
+    let notifs: Vec<_> = chat_data
+        .read()
+        .notifications
+        .iter()
+        .filter(|n| n.account_id == account_id && !n.read)
+        .cloned()
+        .collect();
+    let dm_unreads: Vec<_> = chat_data
+        .read()
+        .dm_channels
+        .iter()
+        .filter(|dm| dm.account_id == account_id && dm.unread_count > 0)
+        .cloned()
+        .collect();
+
+    rsx! {
+        div { class: "overview-page overview-missed-page",
+            header { class: "overview-page-header",
+                h2 { "{t(\"overview-page-missed-title\")}" }
+                p { class: "overview-page-subtitle", "{t(\"overview-page-missed-subtitle\")}" }
+            }
+            if notifs.is_empty() && dm_unreads.is_empty() {
+                p { class: "overview-page-empty", "{t(\"overview-empty-allcaughtup\")}" }
+            } else {
+                if !dm_unreads.is_empty() {
+                    section { class: "overview-section",
+                        h3 { "{t(\"overview-section-unread-dms\")}" }
+                        div { class: "overview-card-grid",
+                            for dm in dm_unreads.iter() {
+                                div {
+                                    key: "{dm.id}",
+                                    class: "client-view-card view-row-card",
+                                    div { class: "client-view-card-primary view-row-primary",
+                                        "{dm.user.display_name}"
+                                    }
+                                    div { class: "client-view-card-meta view-row-meta",
+                                        "{dm.unread_count} unread"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                if !notifs.is_empty() {
+                    section { class: "overview-section",
+                        h3 { "{t(\"overview-section-unread-notifications\")}" }
+                        div { class: "overview-card-grid",
+                            for n in notifs.iter() {
+                                div {
+                                    key: "{n.id}",
+                                    class: "client-view-card view-row-card",
+                                    div { class: "client-view-card-primary view-row-primary",
+                                        "{n.preview}"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// "Stats" — basic counts pulled from chat_data.
+#[ui_action(OverviewSubpageAction)]
+#[context_menu(inherit)]
+#[component]
+pub fn OverviewStatsView(account_id: String) -> Element {
+    let chat_data: BatchedSignal<ChatData> = use_context();
+    let cd = chat_data.read();
+    let server_count = cd.servers.iter().filter(|s| s.account_id == account_id).count();
+    let dm_count = cd.dm_channels.iter().filter(|d| d.account_id == account_id).count();
+    let group_count = cd.groups.iter().filter(|g| g.account_id == account_id).count();
+    let unread_total: u32 = cd
+        .servers
+        .iter()
+        .filter(|s| s.account_id == account_id)
+        .map(|s| s.unread_count)
+        .sum();
+    let mention_total: u32 = cd
+        .servers
+        .iter()
+        .filter(|s| s.account_id == account_id)
+        .map(|s| s.mention_count)
+        .sum();
+
+    rsx! {
+        div { class: "overview-page overview-stats-page",
+            header { class: "overview-page-header",
+                h2 { "{t(\"overview-page-stats-title\")}" }
+                p { class: "overview-page-subtitle", "{t(\"overview-page-stats-subtitle\")}" }
+            }
+            div { class: "overview-stats-grid",
+                StatCard { label: t("overview-stat-servers"), value: server_count.to_string() }
+                StatCard { label: t("overview-stat-dms"), value: dm_count.to_string() }
+                StatCard { label: t("overview-stat-groups"), value: group_count.to_string() }
+                StatCard { label: t("overview-stat-unread"), value: unread_total.to_string() }
+                StatCard { label: t("overview-stat-mentions"), value: mention_total.to_string() }
+            }
+        }
+    }
+}
+
+#[ui_action(inherit)]
+#[context_menu(inherit)]
+#[component]
+fn StatCard(label: String, value: String) -> Element {
+    rsx! {
+        div { class: "overview-stat-card",
+            div { class: "overview-stat-value", "{value}" }
+            div { class: "overview-stat-label", "{label}" }
+        }
+    }
+}
+
+/// "Agents" — placeholder list of active agentic functions across all servers
+/// for this account. Per the plan this will list the user's active agent
+/// tasks (translation, draft replies, scheduled outreach, etc.).
+#[ui_action(OverviewSubpageAction)]
+#[context_menu(inherit)]
+#[component]
+pub fn OverviewAgentsView(account_id: String) -> Element {
+    let _ = account_id;
+    rsx! {
+        div { class: "overview-page overview-agents-page",
+            header { class: "overview-page-header",
+                h2 { "{t(\"overview-page-agents-title\")}" }
+                p { class: "overview-page-subtitle", "{t(\"overview-page-agents-subtitle\")}" }
+            }
+            p { class: "overview-page-empty",
+                "{t(\"overview-page-agents-empty\")}"
+            }
+        }
+    }
+}

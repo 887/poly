@@ -954,3 +954,24 @@ overview-toggle-servers = Server
 overview-toggle-dms = Direktnachrichten
 overview-toggle-friends = Freunde
 overview-toggle-notifications = Benachrichtigungen
+
+# Übersichts-Subseiten
+overview-page-general = Allgemein
+overview-page-missed = Verpasstes
+overview-page-stats = Statistik
+overview-page-agents = Agenten
+overview-page-missed-title = Verpasstes
+overview-page-missed-subtitle = Aktuelle ungelesene Benachrichtigungen und Direktnachrichten dieses Kontos.
+overview-page-stats-title = Statistik
+overview-page-stats-subtitle = Deine Aktivität auf einen Blick.
+overview-page-agents-title = Aktive Agenten
+overview-page-agents-subtitle = Agentische Funktionen über deine Server hinweg.
+overview-page-agents-empty = Noch keine Agenten aktiv. Das Agent-SDK kommt bald.
+overview-empty-allcaughtup = Alles erledigt.
+overview-section-unread-dms = Ungelesene Direktnachrichten
+overview-section-unread-notifications = Ungelesene Benachrichtigungen
+overview-stat-servers = Server
+overview-stat-dms = Direktnachrichten
+overview-stat-groups = Gruppen
+overview-stat-unread = Ungelesen
+overview-stat-mentions = Erwähnungen

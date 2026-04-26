@@ -115,7 +115,12 @@
    ═══════════════════════════════════════════════════════════════ */
 
 .special-page-sidebar {
-    width: 260px;
+    /* Width MUST match `.channel-list-wrapper` (240px) so the third column
+       has the same visual width across DMs / Servers / Friends /
+       Notifications / Overview. Previously was 260px which made
+       Friends/Notifications visibly wider than chat-server channel
+       sidebars. */
+    width: 240px;
     background: var(--bg-secondary);
     border-right: 1px solid var(--border-color);
     position: relative;
@@ -1028,4 +1033,133 @@
     font-size: 0.875rem;
     margin: 0;
     max-width: 320px;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Overview pages — channel-style menu in column 3, search at top of
+   column 4, card grid for each sub-page.
+   ═══════════════════════════════════════════════════════════════ */
+
+.overview-menu-button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-align: left;
+}
+
+.overview-menu-icon {
+    flex: 0 0 auto;
+    font-size: 16px;
+    line-height: 1;
+}
+
+.overview-menu-label {
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.overview-page {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 20px 24px;
+    overflow-y: auto;
+    height: 100%;
+}
+
+.overview-page-header {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.overview-page-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.overview-page-header h2 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+}
+
+.overview-page-subtitle {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.overview-page-search-input {
+    flex: 0 1 320px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 8px 12px;
+    color: var(--text-primary);
+    font-size: 14px;
+}
+
+.overview-page-search-input:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+}
+
+.overview-page-empty {
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+.overview-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.overview-section h3 {
+    margin: 0 0 4px;
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-secondary);
+}
+
+.overview-card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 12px;
+}
+
+.overview-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
+}
+
+.overview-stat-card {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.overview-stat-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.overview-stat-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
 }
