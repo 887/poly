@@ -141,9 +141,28 @@ fn build_on_complete_inner(
             }
         spawn(async move {
             // Guard: reject duplicate session IDs (e.g. two anonymous HN accounts).
-            if client_manager.read().sessions.contains_key(&session.id) {
-                tracing::warn!("signup: session '{}' already exists — ignoring duplicate", session.id);
-                return;
+            // EXCEPTION: a Disconnected/Unauthenticated session is an offline
+            // placeholder created by `account_restore::restore_native_accounts`
+            // when its stored token failed to authenticate. Allow signup to
+            // replace those — otherwise re-signing-in (which gives us a fresh
+            // valid token) silently no-ops and the account stays offline.
+            {
+                use poly_client::ConnectionStatus;
+                let cm = client_manager.read();
+                if cm.sessions.contains_key(&session.id) {
+                    let connected = matches!(
+                        cm.connection_statuses.get(&session.id),
+                        Some(ConnectionStatus::Connected) | Some(ConnectionStatus::Connecting),
+                    );
+                    if connected {
+                        tracing::warn!("signup: session '{}' already connected — ignoring duplicate", session.id);
+                        return;
+                    }
+                    tracing::info!("signup: replacing offline placeholder for session '{}'", session.id);
+                    drop(cm);
+                    let aid = session.id.clone();
+                    client_manager.batch(move |cm| { cm.take_account(&aid); });
+                }
             }
             let backend_slug = session.backend.slug().to_string();
             let account_id  = session.id.clone();
