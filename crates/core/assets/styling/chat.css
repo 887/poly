@@ -521,6 +521,11 @@
     border: 1px solid var(--border-primary);
     border-radius: var(--radius-full);
     font-size: 12px;
+    /* Without an explicit color the count text inherits whichever low-
+       contrast value the parent set (often --text-muted on the message
+       row), making the number unreadable on dark themes. The .me variant
+       below already overrides this with white. */
+    color: var(--text-primary);
     cursor: pointer;
     transition: background-color var(--transition-fast);
 }
