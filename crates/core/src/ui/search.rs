@@ -519,17 +519,22 @@ fn TypeFilters(enabled_types: Signal<std::collections::HashSet<String>>) -> Elem
                     let checked = enabled_types.read().contains(*type_key);
                     rsx! {
                         label { class: "search-type-filter-item",
-                            input {
-                                r#type: "checkbox",
-                                checked,
-                                onchange: move |_| {
-                                    let mut set = enabled_types.write();
-                                    if set.contains(&tk) {
-                                        set.remove(&tk);
-                                    } else {
-                                        set.insert(tk.clone());
-                                    }
-                                },
+                            label { class: "toggle-switch",
+                                input {
+                                    r#type: "checkbox",
+                                    role: "switch",
+                                    "aria-checked": "{checked}",
+                                    checked,
+                                    onchange: move |_| {
+                                        let mut set = enabled_types.write();
+                                        if set.contains(&tk) {
+                                            set.remove(&tk);
+                                        } else {
+                                            set.insert(tk.clone());
+                                        }
+                                    },
+                                }
+                                span { class: "toggle-slider" }
                             }
                             span { "{label}" }
                         }
