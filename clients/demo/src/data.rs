@@ -1076,6 +1076,32 @@ pub const DEMO2_ACCOUNT_NAME: &str = "Dog (demo)";
 /// The shared demo instance ID — both demo accounts live on this virtual instance.
 pub const DEMO_INSTANCE_ID: &str = "demo";
 
+/// `User` representation of the cat account, suitable for inclusion in
+/// member / friends lists rendered to *other* clients (e.g. so Dog's
+/// friends list shows Cat).
+#[must_use]
+pub fn demo_cat_user() -> User {
+    User {
+        id: "demo-user-self".to_string(),
+        display_name: "🐱 Cat (demo)".to_string(),
+        avatar_url: Some(DEMO_CAT_AVATAR.to_string()),
+        presence: PresenceStatus::Online,
+        backend: BackendType::from("demo"),
+    }
+}
+
+/// `User` representation of the dog account.
+#[must_use]
+pub fn demo_dog_user() -> User {
+    User {
+        id: "demo2-user-self".to_string(),
+        display_name: "🐶 Dog (demo)".to_string(),
+        avatar_url: Some(DEMO_DOG_AVATAR.to_string()),
+        presence: PresenceStatus::Online,
+        backend: BackendType::from("demo"),
+    }
+}
+
 /// Generate a demo session for the cat account (demo-cat).
 pub fn demo_session() -> Session {
     Session {
@@ -1253,6 +1279,112 @@ pub fn demo_server_description(server_id: &str) -> &'static str {
 /// Generate demo servers with categories.
 ///
 /// Returns 3 servers from the demo account, each with multiple categories.
+/// Server visible to both Cat (demo) and Dog (demo) — a tiny shared
+/// arena so the two demo accounts have at least one channel they can
+/// both join. Each client sees a copy with their own `account_id`.
+#[must_use]
+pub fn cat_dog_shared_server(account_id: &str, account_display_name: &str) -> Server {
+    Server {
+        id: "cat-dog-arena".to_string(),
+        name: "Cat ↔ Dog Arena".to_string(),
+        icon_url: Some(themed_server_icon("🐾", "#fb923c", "#a78bfa")),
+        banner_url: Some(themed_banner("#3b1d4f", "#7e22ce", "#fde68a", "🐾")),
+        categories: vec![Category {
+            id: "cat-arena".to_string(),
+            name: "Hangout".to_string(),
+            channel_ids: vec!["ch-arena-general".to_string()],
+        }],
+        backend: BackendType::from("demo"),
+        unread_count: 0,
+        mention_count: 0,
+        account_id: account_id.to_string(),
+        account_display_name: account_display_name.to_string(),
+        default_channel_id: Some("ch-arena-general".to_string()),
+        description: Some("Shared playground for the two demo animals.".to_string()),
+        star_count: None,
+        language: None,
+        forks_count: None,
+        open_issues_count: None,
+    }
+}
+
+/// The single channel inside the cat ↔ dog shared server.
+#[must_use]
+pub fn cat_dog_arena_channel() -> Channel {
+    Channel {
+        id: "ch-arena-general".to_string(),
+        name: "general".to_string(),
+        channel_type: ChannelType::Text,
+        server_id: "cat-dog-arena".to_string(),
+        unread_count: 0,
+        mention_count: 0,
+        last_message_id: Some("arena-msg-3".to_string()),
+        forum_tags: None,
+        parent_channel_id: None,
+        thread_metadata: None,
+    }
+}
+
+/// Seeded back-and-forth chatter inside `#general` of the Cat ↔ Dog Arena.
+/// Returned identically from `demo_channel_messages` regardless of which
+/// client's view we're rendering — the arena is the one place the two
+/// accounts share a state-for-state-identical message log.
+#[must_use]
+pub fn cat_dog_arena_messages() -> Vec<Message> {
+    use chrono::{Duration, Utc};
+    let now = Utc::now();
+    vec![
+        Message {
+            id: "arena-msg-0".to_string(),
+            author: demo_cat_user(),
+            content: MessageContent::Text(
+                "🐱 First one in the arena! Anyone home?".to_string(),
+            ),
+            timestamp: now - Duration::hours(2),
+            attachments: vec![],
+            reactions: vec![Reaction { emoji: "👋".to_string(), count: 1, me: false }],
+            reply_to: None,
+            edited: false,
+            thread: None,
+        },
+        Message {
+            id: "arena-msg-1".to_string(),
+            author: demo_dog_user(),
+            content: MessageContent::Text("🐶 woof! arena online".to_string()),
+            timestamp: now - Duration::hours(2) + Duration::minutes(2),
+            attachments: vec![],
+            reactions: vec![],
+            reply_to: None,
+            edited: false,
+            thread: None,
+        },
+        Message {
+            id: "arena-msg-2".to_string(),
+            author: demo_cat_user(),
+            content: MessageContent::Text(
+                "Race you to the next demo screenshot 😼".to_string(),
+            ),
+            timestamp: now - Duration::hours(1),
+            attachments: vec![],
+            reactions: vec![],
+            reply_to: None,
+            edited: false,
+            thread: None,
+        },
+        Message {
+            id: "arena-msg-3".to_string(),
+            author: demo_dog_user(),
+            content: MessageContent::Text("you're on 🐕💨".to_string()),
+            timestamp: now - Duration::minutes(45),
+            attachments: vec![],
+            reactions: vec![Reaction { emoji: "🏁".to_string(), count: 1, me: true }],
+            reply_to: None,
+            edited: false,
+            thread: None,
+        },
+    ]
+}
+
 pub fn demo_servers() -> Vec<Server> {
     vec![
         Server {
@@ -1339,6 +1471,7 @@ pub fn demo_servers() -> Vec<Server> {
             forks_count: None,
             open_issues_count: None,
         },
+        cat_dog_shared_server(DEMO_ACCOUNT_ID, DEMO_ACCOUNT_NAME),
     ]
 }
 
@@ -1460,12 +1593,14 @@ pub fn demo2_servers() -> Vec<Server> {
             forks_count: None,
             open_issues_count: None,
         },
+        cat_dog_shared_server(DEMO2_ACCOUNT_ID, DEMO2_ACCOUNT_NAME),
     ]
 }
 
 /// Generate channels for demo2 servers.
 pub fn demo2_channels(server_id: &str) -> Vec<Channel> {
     match server_id {
+        "cat-dog-arena" => vec![cat_dog_arena_channel()],
         "server-opensource" => vec![
             Channel {
                 id: "ch2-general".to_string(),
@@ -1750,6 +1885,7 @@ pub fn demo2_notifications() -> Vec<Notification> {
 /// Generate channels for a given server.
 pub fn demo_channels(server_id: &str) -> Vec<Channel> {
     match server_id {
+        "cat-dog-arena" => vec![cat_dog_arena_channel()],
         "server-poly-dev" => vec![
             Channel {
                 id: "ch-general".to_string(),
@@ -4806,6 +4942,12 @@ fn demo_message_text(message: &Message) -> String {
 
 /// Get the full message history for a demo account channel.
 fn demo_account_messages(channel_id: &str, demo2: bool) -> Vec<Message> {
+    // The Cat ↔ Dog Arena is the one channel both demo accounts share —
+    // return identical messages regardless of which client is asking so
+    // their views stay in sync.
+    if channel_id == "ch-arena-general" {
+        return cat_dog_arena_messages();
+    }
     if channel_id.starts_with("dm-") {
         return demo_dm_messages(channel_id);
     }

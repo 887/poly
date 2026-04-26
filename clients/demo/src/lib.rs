@@ -215,7 +215,12 @@ impl ClientBackend for DemoClient {
     }
 
     async fn get_friends(&self) -> ClientResult<Vec<User>> {
-        Ok(data::demo_users().into_iter().take(8).collect())
+        // Cat is friends with the eight stock demo people PLUS Dog so
+        // the two demo accounts can be exercised end-to-end (DM, shared
+        // arena, friends-list interop).
+        let mut friends = data::demo_users().into_iter().take(8).collect::<Vec<_>>();
+        friends.push(data::demo_dog_user());
+        Ok(friends)
     }
 
     async fn get_channel_members(&self, _channel_id: &str) -> ClientResult<Vec<User>> {
@@ -778,8 +783,11 @@ impl ClientBackend for DemoClient2 {
     }
 
     async fn get_friends(&self) -> ClientResult<Vec<User>> {
-        // Dog account has a different friend circle
-        Ok(data::demo_users().into_iter().skip(2).take(6).collect())
+        // Dog account has a different friend circle plus Cat — see Cat's
+        // get_friends for the matching reciprocal entry.
+        let mut friends = data::demo_users().into_iter().skip(2).take(6).collect::<Vec<_>>();
+        friends.push(data::demo_cat_user());
+        Ok(friends)
     }
 
     async fn get_channel_members(&self, _channel_id: &str) -> ClientResult<Vec<User>> {
