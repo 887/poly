@@ -28,6 +28,7 @@ pub use toolbar::ViewToolbar;
 pub use tree_body::TreeBody;
 
 use crate::client_manager::{BackendHandleExt, ClientManager};
+use crate::i18n::t;
 use crate::state::{BatchedSignal, use_reactive_effect};
 use crate::ui::actions::{ActionCx, UiAction};
 use dioxus::prelude::*;
@@ -144,6 +145,31 @@ pub fn AccountOverviewView(account_id: String) -> Element {
         })
     };
 
+    // Extract the per-backend header strings from the plugin's descriptor
+    // so the host-rendered title/subtitle/placeholder use backend-native
+    // wording (Discord = "Your Servers", GitHub = "My Repositories",
+    // Lemmy = "My Communities", Teams = "Teams Overview", etc.) instead
+    // of a hardcoded "Your Servers". Falls back to a generic key when
+    // the plugin doesn't supply one.
+    let (header_title, header_subtitle) = match &*desc_res.read_unchecked() {
+        Some(Ok(desc)) => {
+            let title = desc
+                .header
+                .as_ref()
+                .and_then(|h| h.title_key.clone())
+                .map(|k| t(&k))
+                .unwrap_or_else(|| t("overview-default-title"));
+            let subtitle = desc
+                .header
+                .as_ref()
+                .and_then(|h| h.subtitle_key.clone())
+                .map(|k| t(&k))
+                .unwrap_or_default();
+            (title, subtitle)
+        }
+        _ => (t("overview-default-title"), String::new()),
+    };
+
     let body = match &*desc_res.read_unchecked() {
         None => rsx! {
             div { class: "client-view client-view-loading",
@@ -161,30 +187,61 @@ pub fn AccountOverviewView(account_id: String) -> Element {
         Some(Ok(desc)) => {
             // Reuse the same body-engine dispatcher; pass empty channel_id
             // since overview-rows callbacks don't carry a channel context.
-            let desc: ViewDescriptor = desc.clone();
-            render_descriptor(String::new(), account_id.clone(), desc, None)
+            // Strip the plugin's header from the descriptor — the host
+            // already renders title/subtitle above so we don't show a
+            // duplicate.
+            let mut desc: ViewDescriptor = desc.clone();
+            desc.header = None;
+            render_descriptor_with_filter(
+                String::new(),
+                account_id.clone(),
+                desc,
+                None,
+                search_query.read().clone(),
+            )
         }
     };
 
     let q = search_query.read().clone();
+    let search_placeholder = t("overview-search-placeholder");
     rsx! {
         div { class: "overview-page overview-general-page",
+            // Mirrors the People/Friends layout:
+            //   row 1: plugin-supplied title + subtitle (backend-native
+            //          wording: "Your Servers" / "My Repositories" / etc.)
+            //   row 2: full-width search input.
+            //   row 3: body (cards).
             header { class: "overview-page-header",
-                div { class: "overview-page-header-row",
-                    h2 { "Your Servers" }
-                    input {
-                        class: "overview-page-search-input",
-                        r#type: "text",
-                        placeholder: "Search…",
-                        value: "{q}",
-                        oninput: move |e| search_query.set(e.value()),
-                    }
+                h2 { "{header_title}" }
+                if !header_subtitle.is_empty() {
+                    p { class: "overview-page-subtitle", "{header_subtitle}" }
                 }
-                p { class: "overview-page-subtitle", "All servers for this account" }
+            }
+            div { class: "overview-page-search-row",
+                input {
+                    class: "overview-page-search-input overview-page-search-input-fullwidth",
+                    r#type: "text",
+                    placeholder: "{search_placeholder}",
+                    value: "{q}",
+                    oninput: move |e| search_query.set(e.value()),
+                }
             }
             {body}
         }
     }
+}
+
+/// Wrapper used by `AccountOverviewView` to thread the host-side search
+/// input down to the body engines (currently only `CardBody` honors it).
+/// Other views call `render_descriptor` directly with no extra filter.
+fn render_descriptor_with_filter(
+    channel_id: String,
+    account_id: String,
+    desc: ViewDescriptor,
+    initial_tab: Option<String>,
+    extra_filter: String,
+) -> Element {
+    render_descriptor_inner(channel_id, account_id, desc, initial_tab, Some(extra_filter))
 }
 
 fn render_descriptor(
@@ -192,6 +249,16 @@ fn render_descriptor(
     account_id: String,
     desc: ViewDescriptor,
     initial_tab: Option<String>,
+) -> Element {
+    render_descriptor_inner(channel_id, account_id, desc, initial_tab, None)
+}
+
+fn render_descriptor_inner(
+    channel_id: String,
+    account_id: String,
+    desc: ViewDescriptor,
+    initial_tab: Option<String>,
+    extra_filter: Option<String>,
 ) -> Element {
     let header = desc.header.clone();
     let toolbar = desc.toolbar.clone();
@@ -277,6 +344,7 @@ fn render_descriptor(
                                 channel_id: channel_id.clone(),
                                 account_id: account_id.clone(),
                                 spec,
+                                filter: extra_filter.clone().unwrap_or_default(),
                             }
                         },
                         ViewBody::TreeBody(spec) => rsx! {

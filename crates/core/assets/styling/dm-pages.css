@@ -1163,3 +1163,44 @@
     text-transform: uppercase;
     letter-spacing: 0.04em;
 }
+
+/* Full-width search row on the General overview page (mirrors the
+   .friends-search-bar layout shown to the user as the reference). */
+.overview-page-search-row {
+    width: 100%;
+}
+.overview-page-search-input-fullwidth {
+    width: 100%;
+    flex: 1 1 100%;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 10px 14px;
+    font-size: 14px;
+    color: var(--text-primary);
+}
+.overview-page-search-input-fullwidth:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+}
+
+/* The plugin-supplied ViewDescriptor renders its OWN header (e.g. "Your
+   Discord Servers") inside .client-view. On the General overview page we
+   already render the host header above with the search bar, so suppress
+   the inner duplicate. */
+.overview-general-page .client-view-header {
+    display: none;
+}
+
+/* CardBody overview cards — make obvious that they are clickable. */
+.client-view-card.overview-clickable {
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, transform 0.05s;
+}
+.client-view-card.overview-clickable:hover {
+    background: var(--bg-hover);
+    border-color: var(--accent-primary);
+}
+.client-view-card.overview-clickable:active {
+    transform: scale(0.99);
+}

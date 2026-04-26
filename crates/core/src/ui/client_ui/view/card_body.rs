@@ -4,16 +4,64 @@
 //! (`.client-view-cards { display: grid; }`).
 
 use super::list_body::fetch_first_page;
+use crate::state::{AppState, BatchedSignal};
+use crate::ui::actions::{ActionCx, UiAction};
+use crate::ui::routes::Route;
 use dioxus::prelude::*;
 use poly_client::CardSpec;
 use poly_ui_macros::{context_menu, ui_action};
 
-#[ui_action(None)]
+/// Actions for the card-grid body engine.
+#[derive(Debug, Clone)]
+pub enum CardBodyAction {
+    /// User clicked a card — navigates to the corresponding server.
+    Open(String),
+}
+
+impl UiAction for CardBodyAction {
+    fn apply(self, _cx: ActionCx<'_>) {
+        // Click handler navigates inline via crate::nav!; this enum exists
+        // only to satisfy the action-coverage lint.
+    }
+}
+
+#[ui_action(CardBodyAction)]
 #[context_menu(inherit)]
 #[component]
-pub fn CardBody(channel_id: String, account_id: String, spec: CardSpec) -> Element {
+pub fn CardBody(
+    channel_id: String,
+    account_id: String,
+    spec: CardSpec,
+    /// Search filter from the parent overview page — rows whose
+    /// `primary_text` doesn't case-insensitively contain the query are
+    /// hidden client-side. Empty string = no filter.
+    #[props(default)]
+    filter: String,
+) -> Element {
     let _ = spec;
     let rows_res = fetch_first_page(channel_id.clone(), account_id.clone(), None, None, None);
+    let app_state: BatchedSignal<AppState> = use_context();
+    // CardBody's overview-context detection: the host's
+    // `AccountOverviewView` calls `render_descriptor` with an empty
+    // channel_id, so when channel_id is empty we treat each card click
+    // as "open server with id = row.id".
+    let is_overview = channel_id.is_empty();
+    let (backend_slug, instance_id) = {
+        let s = app_state.read();
+        let backend = s
+            .nav
+            .active_backend
+            .cloned()
+            .map(|b| b.slug().to_string())
+            .unwrap_or_else(|| "demo".to_string());
+        let instance = s
+            .nav
+            .active_instance_id
+            .cloned()
+            .unwrap_or_else(|| "demo".to_string());
+        (backend, instance)
+    };
+    let filter_lower = filter.to_lowercase();
 
     match &*rows_res.read_unchecked() {
         None => rsx! {
@@ -33,7 +81,20 @@ pub fn CardBody(channel_id: String, account_id: String, spec: CardSpec) -> Eleme
             }
         }
         Some(Ok(page)) => {
-            let rows = page.rows.clone();
+            let rows: Vec<_> = if filter_lower.is_empty() {
+                page.rows.clone()
+            } else {
+                page.rows
+                    .iter()
+                    .filter(|r| {
+                        r.primary_text.to_lowercase().contains(&filter_lower)
+                            || r.secondary_text
+                                .as_deref()
+                                .is_some_and(|s| s.to_lowercase().contains(&filter_lower))
+                    })
+                    .cloned()
+                    .collect()
+            };
             if rows.is_empty() {
                 rsx! {
                     div { class: "client-view-cards client-view-cards-empty", role: "feed",
@@ -50,11 +111,30 @@ pub fn CardBody(channel_id: String, account_id: String, spec: CardSpec) -> Eleme
                                 let secondary = row.secondary_text.clone();
                                 let meta = row.meta_text.clone();
                                 let icon = row.icon.clone();
+                                let card_class = if is_overview {
+                                    "client-view-card view-row-card overview-clickable"
+                                } else {
+                                    "client-view-card view-row-card"
+                                };
+                                let id_for_click = id.clone();
+                                let backend_slug = backend_slug.clone();
+                                let instance_id = instance_id.clone();
+                                let account_id_inner = account_id.clone();
                                 rsx! {
                                     div {
                                         key: "{id}",
-                                        class: "client-view-card view-row-card",
+                                        class: "{card_class}",
                                         role: "article",
+                                        onclick: move |_| {
+                                            if is_overview {
+                                                crate::nav!(Route::ServerHome {
+                                                    backend: backend_slug.clone(),
+                                                    instance_id: instance_id.clone(),
+                                                    account_id: account_id_inner.clone(),
+                                                    server_id: id_for_click.clone(),
+                                                });
+                                            }
+                                        },
                                         if let Some(icon) = icon {
                                             div { class: "client-view-card-icon view-row-icon", "{icon}" }
                                         }

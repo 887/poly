@@ -1155,3 +1155,5 @@ overview-stat-dms = Direct Messages
 overview-stat-groups = Groups
 overview-stat-unread = Unread
 overview-stat-mentions = Mentions
+
+overview-search-placeholder = Search…

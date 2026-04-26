@@ -975,3 +975,5 @@ overview-stat-dms = Direktnachrichten
 overview-stat-groups = Gruppen
 overview-stat-unread = Ungelesen
 overview-stat-mentions = Erwähnungen
+
+overview-search-placeholder = Suchen…

@@ -974,3 +974,5 @@ overview-stat-dms = Messages directs
 overview-stat-groups = Groupes
 overview-stat-unread = Non lus
 overview-stat-mentions = Mentions
+
+overview-search-placeholder = Rechercher…
