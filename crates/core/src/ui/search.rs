@@ -203,15 +203,16 @@ fn AccountFilter(
     let aid = account_id.clone();
     rsx! {
         label { class: "search-account-filter",
-            input {
-                r#type: "checkbox",
-                role: "switch",
-                class: "toggle-switch-input",
-                "aria-checked": "{enabled}",
-                checked: enabled,
-                onchange: move |_| on_toggle.call(aid.clone()),
+            label { class: "toggle-switch",
+                input {
+                    r#type: "checkbox",
+                    role: "switch",
+                    "aria-checked": "{enabled}",
+                    checked: enabled,
+                    onchange: move |_| on_toggle.call(aid.clone()),
+                }
+                span { class: "toggle-slider" }
             }
-            span { class: "toggle-slider" }
             AvatarIcon {
                 url: avatar_url,
                 label: display_name.clone(),
@@ -246,16 +247,17 @@ fn AccountFilterAllToggle(
     let label = if all_on { "All accounts" } else if partial { "Some accounts" } else { "No accounts" };
     rsx! {
         label { class: "search-account-filter search-account-filter-all",
-            input {
-                r#type: "checkbox",
-                role: "switch",
-                class: "toggle-switch-input",
-                "aria-checked": "{all_on}",
-                checked: all_on,
-                "data-indeterminate": "{partial}",
-                onchange: move |_| on_toggle_all.call(!all_on),
+            label { class: "toggle-switch",
+                input {
+                    r#type: "checkbox",
+                    role: "switch",
+                    "aria-checked": "{all_on}",
+                    checked: all_on,
+                    "data-indeterminate": "{partial}",
+                    onchange: move |_| on_toggle_all.call(!all_on),
+                }
+                span { class: "toggle-slider" }
             }
-            span { class: "toggle-slider" }
             div { class: "search-account-filter-info",
                 span { class: "search-account-filter-name", "{label}" }
                 span { class: "search-account-filter-backend",
