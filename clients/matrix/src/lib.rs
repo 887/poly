@@ -312,6 +312,19 @@ impl MatrixClient {
         })
     }
 
+    /// Stash the resolved profile (display name + HTTP-thumbnail avatar URL)
+    /// onto the session state so `build_message_from_send` can populate the
+    /// message author block without re-fetching `/profile/{userId}` for
+    /// every send.
+    fn cache_session_profile(&self, profile: &api::ProfileResponse) {
+        let display_name = profile.displayname.clone();
+        let avatar_url = profile
+            .avatar_url
+            .as_deref()
+            .map(|raw| mxc_to_http_thumbnail(raw, self.homeserver_url()));
+        let _ = self.http.update_session_profile(display_name, avatar_url);
+    }
+
     fn build_message_from_send(
         &self,
         event_id: String,
@@ -329,7 +342,7 @@ impl MatrixClient {
                     .display_name
                     .clone()
                     .unwrap_or_else(|| session.user_id.clone()),
-                avatar_url: None,
+                avatar_url: session.avatar_url.clone(),
                 presence: PresenceStatus::Online,
                 backend: BackendType::from("matrix"),
             },
@@ -612,6 +625,7 @@ impl ClientBackend for MatrixClient {
                         avatar_url: None,
                     },
                 );
+                self.cache_session_profile(&profile);
                 let session_state = self.http.session().ok_or_else(|| {
                     ClientError::Internal("session not set after token auth".into())
                 })?;
@@ -627,6 +641,7 @@ impl ClientBackend for MatrixClient {
                         displayname: None,
                         avatar_url: None,
                     });
+                self.cache_session_profile(&profile);
                 let session_state = self.http.session().ok_or_else(|| {
                     ClientError::Internal("session not set after password auth".into())
                 })?;

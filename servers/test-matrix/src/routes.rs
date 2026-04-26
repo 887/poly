@@ -1090,8 +1090,12 @@ pub async fn media_thumbnail(
 ) -> impl IntoResponse {
     static OWL_PNG: &[u8] = include_bytes!("../../../clients/demo/assets/owl.png");
     static AXOLOTL_SVG: &[u8] = include_bytes!("../../../clients/demo/assets/axolotl.svg");
-    static HOLLOW_TREE_SVG: &[u8] = include_bytes!("../../../clients/demo/assets/owl.svg");
-    static NEON_REEF_SVG: &[u8] = include_bytes!("../../../clients/demo/assets/axolotl.svg");
+    // Distinct assets for the seeded rooms so the server-bar icons are
+    // visually distinguishable from the user's account icons. (Otherwise
+    // both rooms render with the same owl/axolotl artwork as the user
+    // avatars and look like duplicates of the accounts.)
+    static HOLLOW_TREE_SVG: &[u8] = include_bytes!("../../../clients/demo/assets/hedgehog.svg");
+    static NEON_REEF_SVG: &[u8] = include_bytes!("../../../clients/demo/assets/parrot.svg");
 
     let (bytes, mime): (&[u8], &str) = match media_id.as_str() {
         "owl_avatar" => (OWL_PNG, "image/png"),

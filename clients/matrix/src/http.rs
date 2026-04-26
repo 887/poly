@@ -26,6 +26,11 @@ pub struct MatrixSessionState {
     pub user_id: String,
     /// Display name of the authenticated user when known.
     pub display_name: Option<String>,
+    /// HTTP thumbnail URL for the authenticated user's avatar (resolved from
+    /// the `mxc://` URI in their profile). Populated lazily after the
+    /// profile fetch in `MatrixClient::authenticate`. `None` until then,
+    /// or if the user has no avatar.
+    pub avatar_url: Option<String>,
     /// The `since` token for the next `/sync` request.
     pub sync_next_batch: Option<String>,
 }
@@ -82,6 +87,26 @@ impl MatrixHttpClient {
             .write()
             .map_err(|err| ClientError::Internal(format!("session lock poisoned: {err}")))?;
         *guard = Some(state);
+        Ok(())
+    }
+
+    /// Update the cached profile (display name + resolved avatar URL) on the
+    /// existing session. Called after the post-auth `/profile/{userId}` fetch
+    /// so subsequent send-message echoes can populate the author block
+    /// without an extra round-trip.
+    pub fn update_session_profile(
+        &self,
+        display_name: Option<String>,
+        avatar_url: Option<String>,
+    ) -> ClientResult<()> {
+        let mut guard = self
+            .session
+            .write()
+            .map_err(|err| ClientError::Internal(format!("session lock poisoned: {err}")))?;
+        if let Some(state) = guard.as_mut() {
+            state.display_name = display_name;
+            state.avatar_url = avatar_url;
+        }
         Ok(())
     }
 
@@ -152,6 +177,7 @@ impl MatrixHttpClient {
             device_id: login.device_id.clone(),
             user_id: login.user_id.clone(),
             display_name: None,
+            avatar_url: None,
             sync_next_batch: None,
         })?;
 
@@ -182,6 +208,7 @@ impl MatrixHttpClient {
             device_id: whoami.device_id.clone().unwrap_or_default(),
             user_id: whoami.user_id.clone(),
             display_name: None,
+            avatar_url: None,
             sync_next_batch: None,
         })?;
 
@@ -693,6 +720,7 @@ mod tests {
                 device_id: "DEVICE01".to_string(),
                 user_id: "@alice:example.test".to_string(),
                 display_name: None,
+                avatar_url: None,
                 sync_next_batch: None,
             })
             .unwrap();
@@ -714,6 +742,7 @@ mod tests {
                 device_id: "D".to_string(),
                 user_id: "@u:e".to_string(),
                 display_name: None,
+                avatar_url: None,
                 sync_next_batch: None,
             })
             .unwrap();
@@ -733,6 +762,7 @@ mod tests {
                 device_id: "DEV42".to_string(),
                 user_id: "@bob:example.test".to_string(),
                 display_name: Some("Bob".to_string()),
+                avatar_url: None,
                 sync_next_batch: Some("s123".to_string()),
             })
             .unwrap();
