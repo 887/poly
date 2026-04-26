@@ -80,6 +80,158 @@ pub type BackendHandle = Arc<RwLock<Box<dyn ClientBackend>>>;
 // consumers can `use poly_core::client_manager::BackendHandleExt;`.
 pub use crate::client_manager_timeout::{BackendHandleExt, BackendReadTimeout};
 
+// ── Built-in plugin registry ────────────────────────────────────────────────
+//
+// Single source of truth for "which WASM-style plugins are bundled with this
+// Poly binary". Drives the Built-in WASM plugins section in Settings →
+// Plugins. The signup picker reads `ClientManager::signup_entries` (a runtime
+// Vec populated by per-plugin `register_signup_entry` calls); both views
+// derive from feature-flag presence at compile time.
+//
+// Conceptually every Poly backend is a WASM plugin — there is no "native"
+// plugin concept in the user's mental model. The historical "native vs WASM"
+// distinction in code refers only to *how the plugin reaches the machine*:
+// built-in plugins are bundled with the binary and updated alongside it;
+// sideloaded plugins are added at runtime by the user.
+//
+// IMPORTANT POLICY: Discord and Microsoft Teams must NEVER appear here.
+// They ship as sideloadable WASM plugins only — never bundled — for app-
+// store / TOS reasons. The `dev-plugins` feature in `apps/web/Cargo.toml`
+// pulls them in for local development but they remain off by default in
+// release builds.
+
+/// Compile-time descriptor for a single built-in plugin.
+///
+/// All fields are `'static` so the descriptor can live in a const array
+/// without heap allocation, and so that callers can copy it freely.
+#[derive(Clone, Copy, Debug)]
+pub struct BuiltinBackendDescriptor {
+    /// URL slug used everywhere — accounts, routes, FTL keys.
+    pub slug: &'static str,
+    /// Emoji shown in the plugin row icon column.
+    pub icon: &'static str,
+    /// Human-readable display name. Plain ASCII fallback so the UI shows a
+    /// readable label even when the plugin's own FTL bundle is missing.
+    pub name: &'static str,
+    /// One-line description shown under the plugin name.
+    pub description: &'static str,
+    /// Whether this descriptor's backend was actually compiled into the
+    /// binary. `false` entries render as a greyed-out row with the
+    /// `not in this build` badge.
+    pub available: bool,
+}
+
+/// All built-in plugins known to this build.
+///
+/// Built at compile time from `cfg!(feature = "...")` checks. Both the
+/// `available = true` and `available = false` cases are emitted so the
+/// settings UI can show a "this build doesn't include backend X" affordance,
+/// and so that switching feature flags is purely a recompile (no UI code
+/// edits required).
+///
+/// **Discord and Teams are intentionally absent.** See module-level policy
+/// comment above.
+#[must_use]
+pub fn builtin_backend_descriptors() -> &'static [BuiltinBackendDescriptor] {
+    &BUILTIN_BACKENDS
+}
+
+/// Convenience — just the slugs of every built-in plugin (regardless of
+/// whether the feature was compiled in).
+#[must_use]
+pub fn builtin_backend_slugs() -> Vec<&'static str> {
+    BUILTIN_BACKENDS.iter().map(|d| d.slug).collect()
+}
+
+const BUILTIN_BACKENDS: [BuiltinBackendDescriptor; 8] = [
+    BuiltinBackendDescriptor {
+        slug: "demo",
+        icon: "🧪",
+        name: "Demo",
+        description: "Built-in mock data for exploring Poly without real accounts.",
+        available: cfg!(feature = "demo"),
+    },
+    BuiltinBackendDescriptor {
+        slug: "stoat",
+        icon: "🦦",
+        name: "Stoat (Revolt)",
+        description: "Open-source alternative to Discord. Self-hosted or revolt.chat.",
+        available: cfg!(feature = "stoat"),
+    },
+    BuiltinBackendDescriptor {
+        slug: "matrix",
+        icon: "🟩",
+        name: "Matrix",
+        description: "Federated, end-to-end encrypted messaging protocol.",
+        available: cfg!(feature = "matrix"),
+    },
+    BuiltinBackendDescriptor {
+        slug: "lemmy",
+        icon: "🦫",
+        name: "Lemmy",
+        description: "Federated link aggregator. Connect to any Lemmy instance with your credentials.",
+        available: cfg!(feature = "lemmy"),
+    },
+    BuiltinBackendDescriptor {
+        slug: "github",
+        icon: "🐙",
+        name: "GitHub",
+        description: "Read-only GitHub / GHE client. Browses repos, issues, pull requests, and source code through your local gh CLI.",
+        available: cfg!(feature = "github"),
+    },
+    BuiltinBackendDescriptor {
+        slug: "forgejo",
+        icon: "🦊",
+        name: "Forgejo",
+        description: "Forgejo / Gitea / Codeberg client. Browse repos, issues, pull requests, and source code via the Forgejo REST API.",
+        available: cfg!(feature = "forgejo"),
+    },
+    BuiltinBackendDescriptor {
+        slug: "hackernews",
+        icon: "📰",
+        name: "Hacker News",
+        description: "Read-only HN feed. Top / New / Best / Ask / Show / Jobs.",
+        available: cfg!(feature = "hackernews"),
+    },
+    BuiltinBackendDescriptor {
+        slug: "poly",
+        icon: "🔷",
+        name: "Poly Server",
+        description: "Self-hosted Poly backup / sync server with E2E encryption.",
+        available: cfg!(feature = "server"),
+    },
+];
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod builtin_backend_registry_tests {
+    use super::*;
+
+    /// User policy lock-in: Discord and Teams must never be a built-in plugin.
+    /// They ship as sideloadable WASM plugins only.
+    #[test]
+    fn discord_and_teams_are_never_builtin() {
+        let slugs: Vec<&str> = builtin_backend_slugs();
+        assert!(
+            !slugs.contains(&"discord"),
+            "discord must NOT be a built-in plugin — sideloaded WASM only"
+        );
+        assert!(
+            !slugs.contains(&"teams"),
+            "teams must NOT be a built-in plugin — sideloaded WASM only"
+        );
+    }
+
+    /// Sanity: the registry is non-empty and the demo descriptor is always
+    /// present (its availability flips with the `demo` feature, but the
+    /// entry itself is unconditional so the row renders even when disabled).
+    #[test]
+    fn registry_lists_demo() {
+        let slugs: Vec<&str> = builtin_backend_slugs();
+        assert!(slugs.contains(&"demo"));
+    }
+}
+
 /// Manages active messenger backend connections.
 ///
 /// Each backend is keyed by its account ID (e.g., `"demo-cat"` for the cat demo client).

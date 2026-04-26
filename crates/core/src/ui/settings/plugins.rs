@@ -1,14 +1,21 @@
 //! Plugin manager settings page.
 //!
-//! Plugins in Poly are **messenger backends** — each backend type (Demo,
-//! Discord, Matrix, Stoat, Teams, Poly Server) is a plugin. Native backends
-//! are compiled-in by feature flag; WASM plugins can be loaded from URLs.
+//! Every Poly messenger backend is a WASM-style plugin. They split into two
+//! groups based on **how they reach the user's machine**:
+//!
+//! - **Built-in WASM plugins** — bundled with the Poly binary at compile
+//!   time and updated when the user updates the app. The registry lives in
+//!   [`crate::client_manager::builtin_backend_descriptors`] and is the
+//!   single source of truth shared with the signup picker / `ClientManager`.
+//! - **Sideloaded WASM plugins** — added by the user at runtime via the
+//!   "Add Plugin" form below (URL or local `.wasm` file).
 //!
 //! This page lets the user:
-//! - Toggle native backends on / off with checkboxes
-//! - Add WASM plugins from URLs (the app appends `?wit=<version>`)
-//! - Toggle WASM plugins on / off
-//! - Remove WASM plugins
+//! - Toggle built-in plugins on / off with checkboxes
+//! - Add sideloaded WASM plugins from URLs (the app appends `?wit=<version>`)
+//!   or local files
+//! - Toggle sideloaded WASM plugins on / off
+//! - Remove sideloaded WASM plugins
 //!
 //! Accounts are *sessions created by a logged-in plugin* — they live in the
 //! Accounts settings page, not here.
@@ -71,83 +78,12 @@ mod tests {
 /// WIT version string appended to WASM plugin fetch URLs.
 const WIT_VERSION: &str = "0.1.0";
 
-/// All native backend types compiled into this build.
-///
-/// Lists every known backend; `available` is `false` when the backend
-/// was not compiled in (feature flag absent). An unavailable backend shows
-/// greyed-out so the user knows it exists but is not in this build.
-// IMPORTANT — Discord and Teams are intentionally NOT in this list. They
-// ship as WASM plugins only (loaded at runtime), never as built-in native
-// backends. Adding them here was a regression; the user explicitly
-// rejected baking those two into the binary.
-const NATIVE_BACKENDS: &[NativeBackend] = &[
-    NativeBackend {
-        slug: "demo",
-        icon: "🧪",
-        name: "Demo",
-        description: "Built-in mock data for exploring Poly without real accounts.",
-        available: true,
-    },
-    NativeBackend {
-        slug: "stoat",
-        icon: "🦦",
-        name: "Stoat (Revolt)",
-        description: "Open-source alternative to Discord. Self-hosted or revolt.chat.",
-        available: cfg!(feature = "stoat"),
-    },
-    NativeBackend {
-        slug: "matrix",
-        icon: "🟩",
-        name: "Matrix",
-        description: "Federated, end-to-end encrypted messaging protocol.",
-        available: cfg!(feature = "matrix"),
-    },
-    NativeBackend {
-        slug: "lemmy",
-        icon: "🦫",
-        name: "Lemmy",
-        description: "Federated link aggregator. Connect to any Lemmy instance with your credentials.",
-        available: cfg!(feature = "lemmy"),
-    },
-    NativeBackend {
-        slug: "github",
-        icon: "🐙",
-        name: "GitHub",
-        description: "Read-only GitHub / GHE client. Browses repos, issues, pull requests, and source code through your local gh CLI.",
-        available: cfg!(feature = "github"),
-    },
-    NativeBackend {
-        slug: "forgejo",
-        icon: "🦊",
-        name: "Forgejo",
-        description: "Forgejo / Gitea / Codeberg client. Browse repos, issues, pull requests, and source code via the Forgejo REST API.",
-        available: cfg!(feature = "forgejo"),
-    },
-    NativeBackend {
-        slug: "hackernews",
-        icon: "📰",
-        name: "Hacker News",
-        description: "Read-only HN feed. Top / New / Best / Ask / Show / Jobs.",
-        available: cfg!(feature = "hackernews"),
-    },
-    NativeBackend {
-        slug: "poly",
-        icon: "🔷",
-        name: "Poly Server",
-        description: "Self-hosted Poly backup / sync server with E2E encryption.",
-        available: cfg!(feature = "server"),
-    },
-];
-
-/// Compile-time backend descriptor (only const-compatible types).
-struct NativeBackend {
-    slug: &'static str,
-    icon: &'static str,
-    name: &'static str,
-    description: &'static str,
-    /// Whether this backend was compiled in (feature flag check).
-    available: bool,
-}
+// The list of built-in WASM plugins lives in
+// [`crate::client_manager::builtin_backend_descriptors`] — a single
+// registry shared with the signup picker and `ClientManager` so adding /
+// removing a built-in is a one-line edit in one place. See the policy
+// comment there for why Discord and Teams are excluded.
+use crate::client_manager::builtin_backend_descriptors;
 
 /// Load current app settings from storage (or return default).
 async fn load_settings() -> crate::storage::AppSettings {
@@ -167,12 +103,17 @@ async fn save_settings(settings: &crate::storage::AppSettings) {
     }
 }
 
-/// A single native backend row with toggle checkbox.
+/// A single built-in plugin row with toggle checkbox.
+///
+/// Despite the historical "native" name in code, every Poly backend is
+/// conceptually a WASM plugin — `BuiltinPluginRow` renders the entries that
+/// are bundled with the binary, distinguishing them from sideloaded plugins
+/// added at runtime.
 #[rustfmt::skip]
 #[ui_action(inherit)]
 #[context_menu(inherit)]
 #[component]
-fn NativePluginRow(
+fn BuiltinPluginRow(
     slug: String,
     icon: String,
     name: String,
@@ -214,7 +155,7 @@ fn NativePluginRow(
                 }
             }
             div { class: "plugin-row-meta",
-                span { class: "plugin-type-badge native", "{t(\"plugins-type-native\")}" }
+                span { class: "plugin-type-badge native", "{t(\"plugins-type-builtin\")}" }
             }
         }
     }
@@ -256,7 +197,7 @@ fn WasmPluginRow(
                 div { class: "plugin-row-description", "{entry.url}" }
             }
             div { class: "plugin-row-meta",
-                span { class: "plugin-type-badge wasm", "{t(\"plugins-type-wasm\")}" }
+                span { class: "plugin-type-badge wasm", "{t(\"plugins-type-sideloaded\")}" }
                 button {
                     class: "btn btn-small btn-danger",
                     onclick: move |_| on_remove.call(idx_remove),
@@ -380,8 +321,10 @@ fn AddWasmPlugin(on_add: EventHandler<WasmPluginEntry>) -> Element {
 
 /// Plugin manager settings page.
 ///
-/// Shows all messenger backend plugins (native + WASM) with toggle checkboxes.
-/// Native backends are compiled-in; WASM plugins are loaded from user-provided URLs.
+/// Two sections, both showing WASM-style messenger backend plugins:
+/// - **Built-in WASM plugins** — bundled with this Poly binary, iterated
+///   from [`crate::client_manager::builtin_backend_descriptors`].
+/// - **Sideloaded WASM plugins** — added by the user via URL or local file.
 ///
 /// **Accounts** ("Cat (demo)", "Dog (demo)") are sessions created when a plugin
 /// authenticates a user — they appear in the Accounts settings page. Here we
@@ -416,15 +359,15 @@ pub fn PluginsSettings() -> Element {
                 "{t(\"settings-plugins-description\")}"
             }
 
-            // ── Native backends ────────────────────────────────────────────
+            // ── Built-in WASM plugins ──────────────────────────────────────
             h3 { class: "settings-subsection-title",
-                "{t(\"plugins-native-title\")}"
+                "{t(\"plugins-builtin-title\")}"
             }
             p { class: "settings-description",
-                "{t(\"plugins-native-description\")}"
+                "{t(\"plugins-builtin-description\")}"
             }
             div { class: "plugin-list",
-                for backend in NATIVE_BACKENDS {
+                for backend in builtin_backend_descriptors() {
                     {
                         let slug = backend.slug.to_string();
                         let slug_key = slug.clone();
@@ -441,7 +384,7 @@ pub fn PluginsSettings() -> Element {
                             .filter(|s| s.backend.slug() == backend.slug)
                             .count();
                         rsx! {
-                            NativePluginRow {
+                            BuiltinPluginRow {
                                 key: "{slug_key}",
                                 slug: slug.clone(),
                                 icon: backend.icon.to_string(),
@@ -576,12 +519,12 @@ pub fn PluginsSettings() -> Element {
                 }
             }
 
-            // ── WASM plugins ───────────────────────────────────────────────
+            // ── Sideloaded WASM plugins ────────────────────────────────────
             h3 { class: "settings-subsection-title",
-                "{t(\"plugins-wasm-title\")}"
+                "{t(\"plugins-sideloaded-title\")}"
             }
             p { class: "settings-description",
-                "{t(\"plugins-wasm-description\")}"
+                "{t(\"plugins-sideloaded-description\")}"
             }
             div { class: "plugin-list",
                 if wasm_snap.is_empty() {
