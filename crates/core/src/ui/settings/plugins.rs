@@ -473,13 +473,18 @@ pub fn PluginsSettings() -> Element {
                                                 client_manager
                                                     .batch(move |cm| cm.set_disabled_native_backends(nd));
                                                 let wasm = wasm_plugins.read().clone();
+                                                let _ = backend_slug;
                                                 spawn(async move {
-                                                    // Phase 2: async logout (no signal lock).
-                                                    for h in handles {
-                                                        let mut g = h.write().await;
-                                                        let _ = g.logout().await;
-                                                    }
-                                                    // Phase 3: clean up ChatData.
+                                                    // Phase 2: drop the in-memory backend
+                                                    // handles. NOTE: we deliberately do NOT
+                                                    // call `logout()` — that would invalidate
+                                                    // the server-side session and make the
+                                                    // tokens unusable on re-enable. Disable
+                                                    // is a soft mute; remove-account is the
+                                                    // destructive path.
+                                                    drop(handles);
+                                                    // Phase 3: clean up ChatData so the UI
+                                                    // reflects the disable immediately.
                                                     if !removed_ids.is_empty() {
                                                         chat_data.batch(|cd| {
                                                             cd.servers.retain(|s| {
@@ -520,18 +525,9 @@ pub fn PluginsSettings() -> Element {
                                                                 .retain(|fid| live_server_ids.contains(fid));
                                                         });
                                                     }
-                                                    // Phase 4: remove stored tokens.
-                                                    if let Some(storage) = crate::STORAGE.get() {
-                                                        for id in &removed_ids {
-                                                            let _ = storage
-                                                                .remove_account_token(
-                                                                    &backend_slug,
-                                                                    id,
-                                                                )
-                                                                .await;
-                                                        }
-                                                    }
-                                                    // Phase 5: persist the disabled state.
+                                                    // Phase 4: persist the disabled state.
+                                                    // Stored account tokens are intentionally
+                                                    // preserved so re-enable can restore them.
                                                     let mut settings =
                                                         load_settings().await;
                                                     settings.disabled_native_backends =
