@@ -552,6 +552,19 @@ pub fn PluginsSettings() -> Element {
                                                 s.wasm_plugins = wasm;
                                                 save_settings(&s).await;
                                             });
+                                            // Restore any accounts for the newly re-enabled backend.
+                                            let toggled_for_restore = toggled.clone();
+                                            spawn(async move {
+                                                if let Some(storage) = crate::STORAGE.get() {
+                                                    crate::account_restore::restore_native_accounts(
+                                                        storage,
+                                                        client_manager,
+                                                        chat_data,
+                                                        Some(&toggled_for_restore),
+                                                    )
+                                                    .await;
+                                                }
+                                            });
                                         }
                                     }
                                 },

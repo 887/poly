@@ -69,7 +69,7 @@ pub(crate) mod create_forum_post;
 pub(crate) mod create_server;
 pub(crate) mod demo;
 mod electron_titlebar;
-mod favorites_sidebar;
+pub(crate) mod favorites_sidebar;
 pub(crate) mod main_layout;
 pub mod routes;
 pub(crate) mod search;
@@ -1202,6 +1202,14 @@ async fn init_storage(
                     // This runs after demo restore so both can coexist.
                     #[cfg(feature = "server")]
                     restore_poly_accounts(&storage, client_manager, chat_data).await;
+                    // Restore all other native (non-poly) accounts from persisted tokens.
+                    crate::account_restore::restore_native_accounts(
+                        &storage,
+                        client_manager,
+                        chat_data,
+                        None,
+                    )
+                    .await;
                 }
                 Ok(_) => tracing::info!("Storage: no setup found, showing wizard"),
                 Err(e) => tracing::warn!("Storage: failed to read app_settings: {e}"),

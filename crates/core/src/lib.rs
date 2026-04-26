@@ -30,6 +30,7 @@
 //! - `discord` — Include the Discord client
 //! - `teams` — Include the Microsoft Teams client
 
+pub mod account_restore;
 pub mod bundled_plugins;
 pub mod client_manager;
 pub mod client_manager_timeout;
