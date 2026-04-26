@@ -729,7 +729,7 @@ impl ClientBackend for ForgejoClient {
     ) -> ClientResult<ViewRowsPage> {
         // Account overview: return one CardRow per cached repo with
         // stars / forks / open-issues in meta_text.
-        if channel_id == "fj-overview" {
+        if channel_id.is_empty() || channel_id == "fj-overview" {
             let repos = self.repos.lock().await;
             let page: u32 = cursor
                 .as_ref()

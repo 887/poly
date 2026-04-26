@@ -574,7 +574,7 @@ impl ClientBackend for DemoClient {
         &self, channel_id: &str, _cursor: Option<Cursor>,
         _sort_id: Option<&str>, _filter_id: Option<&str>, _tab_id: Option<&str>,
     ) -> Result<ViewRowsPage, ClientError> {
-        if channel_id == "overview" {
+        if channel_id.is_empty() || channel_id == "overview" {
             let rows = data::demo_servers()
                 .into_iter()
                 .map(|s| {
@@ -1032,7 +1032,7 @@ impl ClientBackend for DemoClient2 {
         &self, channel_id: &str, _cursor: Option<Cursor>,
         _sort_id: Option<&str>, _filter_id: Option<&str>, _tab_id: Option<&str>,
     ) -> Result<ViewRowsPage, ClientError> {
-        if channel_id == "overview" {
+        if channel_id.is_empty() || channel_id == "overview" {
             let rows = data::demo2_servers()
                 .into_iter()
                 .map(|s| {
@@ -1493,7 +1493,7 @@ impl ClientBackend for DemoClient3 {
         &self, channel_id: &str, _cursor: Option<Cursor>,
         _sort_id: Option<&str>, _filter_id: Option<&str>, tab_id: Option<&str>,
     ) -> Result<ViewRowsPage, ClientError> {
-        if channel_id == "overview" {
+        if channel_id.is_empty() || channel_id == "overview" {
             // Account overview: one card per subscribed community.
             let rows = data::demo3_servers()
                 .into_iter()

@@ -1539,7 +1539,7 @@ impl ClientBackend for MatrixClient {
         _filter_id: Option<&str>,
         _tab_id: Option<&str>,
     ) -> ClientResult<ViewRowsPage> {
-        if channel_id != "account-overview" {
+        if !channel_id.is_empty() && channel_id != "account-overview" {
             return Err(ClientError::NotSupported("view-rows not yet implemented".into()));
         }
 

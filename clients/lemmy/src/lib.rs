@@ -728,7 +728,7 @@ impl ClientBackend for LemmyClient {
     ) -> ClientResult<ViewRowsPage> {
         // The account overview uses a synthetic channel id that routes here
         // instead of to a community post feed.
-        if channel_id == "lemmy-overview" {
+        if channel_id.is_empty() || channel_id == "lemmy-overview" {
             let resp = self.http.fetch_subscribed_communities().await?;
             let rows: Vec<ViewRow> = resp
                 .communities
