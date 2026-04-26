@@ -1106,6 +1106,19 @@ async fn init_storage(
             // launch. Idempotent: re-launches don't add duplicates, and
             // user-removed plugins are remembered across restarts.
             crate::bundled_plugins::ensure_bundled_plugins(&storage).await;
+            // Bundled plugins are user-toggleable, so they can't be
+            // baked into `register_native_signup_entries` (which runs at
+            // mount, before storage). Sync `signup_entries` against the
+            // post-injection settings so Discord/Teams appear in the
+            // signup picker IFF the user hasn't disabled them.
+            if let Ok(settings_for_signup) = storage.get_app_settings().await {
+                client_manager.batch(move |cm| {
+                    crate::bundled_plugins::sync_bundled_signup_entries(
+                        cm,
+                        &settings_for_signup,
+                    );
+                });
+            }
             match storage.get_theme_config().await {
                 Ok(config) => theme_config.batch(|v| *v = config),
                 Err(e) => tracing::warn!("Failed to load saved theme config: {e}"),

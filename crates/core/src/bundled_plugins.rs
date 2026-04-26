@@ -36,6 +36,7 @@
 //! that surface in the Sideloaded section, with the same toggle/remove
 //! affordances as user-added plugins.
 
+use crate::client_manager::{ClientManager, SignupEntry};
 use crate::storage::{AppSettings, WasmPluginEntry};
 
 /// Compile-time descriptor for a single bundled WASM plugin.
@@ -78,6 +79,41 @@ pub fn is_bundled_url(url: &str) -> bool {
     url.starts_with("bundled://")
 }
 
+/// Slugs of every bundled plugin whose `WasmPluginEntry` is currently
+/// `enabled = true` in `settings.wasm_plugins`.
+///
+/// This is the runtime view of "which bundled backends should the user
+/// be able to add accounts on right now?". It walks `settings.wasm_plugins`
+/// (the persisted, user-toggleable list) and returns the slug of every
+/// entry with `bundled = true && enabled = true`.
+///
+/// Used by the signup picker (so toggling a bundled plugin OFF in
+/// `/settings/plugins` immediately hides it from the "+" account picker)
+/// and by capability lookup (already slug-keyed in `clients/client`).
+#[must_use]
+pub fn bundled_enabled_slugs(settings: &AppSettings) -> Vec<&'static str> {
+    let mut out = Vec::new();
+    for plugin in BUNDLED_PLUGINS {
+        let url = format!("bundled://{}", plugin.slug);
+        if settings
+            .wasm_plugins
+            .iter()
+            .any(|e| e.url == url && e.enabled)
+        {
+            out.push(plugin.slug);
+        }
+    }
+    out
+}
+
+/// Look up the [`BundledPlugin`] descriptor by slug.
+///
+/// Returns `None` if `slug` is not the slug of a bundled plugin.
+#[must_use]
+pub fn bundled_plugin_by_slug(slug: &str) -> Option<&'static BundledPlugin> {
+    BUNDLED_PLUGINS.iter().find(|p| p.slug == slug)
+}
+
 /// Convert an existing `WasmPluginEntry` into a `BundledPlugin` slug,
 /// if its URL matches the bundled scheme.
 #[must_use]
@@ -118,6 +154,73 @@ pub fn inject_bundled_into_settings(settings: &mut AppSettings) -> bool {
         changed = true;
     }
     changed
+}
+
+/// Build the [`SignupEntry`] for a bundled plugin slug.
+///
+/// Each compiled-in bundled backend (today: Discord + Teams) returns
+/// `Some(entry)`. Returns `None` for unknown slugs or for slugs whose
+/// underlying client crate wasn't compiled into this build (e.g.
+/// `--no-default-features` releases that strip `dev-plugins`).
+///
+/// Lives in `bundled_plugins` (not `client_manager`) so that swapping
+/// the runtime path later — e.g. when `clients/discord` is moved into
+/// a true WASM Component Model plugin loaded by `poly-plugin-host` —
+/// only requires editing this function. The host code that calls it
+/// (`sync_bundled_signup_entries`) is unchanged.
+#[must_use]
+pub fn signup_entry_for_bundled_slug(slug: &str) -> Option<SignupEntry> {
+    match slug {
+        #[cfg(feature = "discord")]
+        "discord" => Some(SignupEntry {
+            slug: "discord",
+            icon: "💬",
+            name_key: "plugin-discord-signup-name",
+            desc_key: "plugin-discord-signup-desc",
+            render: poly_discord::signup::signup_render_fn,
+        }),
+        #[cfg(feature = "teams")]
+        "teams" => Some(SignupEntry {
+            slug: "teams",
+            icon: "🟦",
+            name_key: "plugin-teams-signup-name",
+            desc_key: "plugin-teams-signup-desc",
+            render: poly_teams::signup::signup_render_fn,
+        }),
+        _ => None,
+    }
+}
+
+/// Reconcile `cm.signup_entries` for every bundled plugin against the
+/// user's enabled/disabled state in `settings.wasm_plugins`.
+///
+/// For each bundled plugin slug:
+/// - If the slug appears in [`bundled_enabled_slugs`] AND the underlying
+///   client crate is compiled in, register its [`SignupEntry`].
+/// - Otherwise, unregister it.
+///
+/// Idempotent — safe to call from `init_storage` AND from the
+/// `/settings/plugins` toggle handler. Any compile-time-absent backend
+/// (e.g. `discord` feature off) is silently skipped.
+pub fn sync_bundled_signup_entries(cm: &mut ClientManager, settings: &AppSettings) {
+    let enabled = bundled_enabled_slugs(settings);
+    for plugin in BUNDLED_PLUGINS {
+        let is_enabled = enabled.iter().any(|s| *s == plugin.slug);
+        match (is_enabled, signup_entry_for_bundled_slug(plugin.slug)) {
+            (true, Some(entry)) => cm.register_signup_entry(entry),
+            (false, _) => cm.unregister_signup_entry(plugin.slug),
+            (true, None) => {
+                // Bundled plugin is enabled in settings but the host
+                // wasn't compiled with the underlying feature — leave
+                // signup_entries untouched. Plugins page renders the
+                // row with a "not in this build" affordance.
+                tracing::debug!(
+                    "bundled plugin {} enabled in settings but feature not compiled in",
+                    plugin.slug
+                );
+            }
+        }
+    }
 }
 
 /// Storage-aware wrapper: load `AppSettings`, inject bundled entries,
@@ -229,6 +332,37 @@ mod tests {
             .find(|e| e.url == "bundled://teams")
             .unwrap();
         assert!(teams.enabled);
+    }
+
+    #[test]
+    fn bundled_enabled_slugs_reflects_toggle_state() {
+        let mut settings = AppSettings::default();
+        // Empty settings → no bundled plugins enabled.
+        assert!(bundled_enabled_slugs(&settings).is_empty());
+
+        // Inject the defaults — both should be enabled.
+        let _ = inject_bundled_into_settings(&mut settings);
+        let slugs = bundled_enabled_slugs(&settings);
+        assert!(slugs.contains(&"discord"));
+        assert!(slugs.contains(&"teams"));
+
+        // Toggle Teams off → only Discord remains.
+        let teams = settings
+            .wasm_plugins
+            .iter_mut()
+            .find(|e| e.url == "bundled://teams")
+            .unwrap();
+        teams.enabled = false;
+        let slugs = bundled_enabled_slugs(&settings);
+        assert!(slugs.contains(&"discord"));
+        assert!(!slugs.contains(&"teams"));
+    }
+
+    #[test]
+    fn bundled_plugin_by_slug_lookup() {
+        assert_eq!(bundled_plugin_by_slug("discord").map(|p| p.slug), Some("discord"));
+        assert_eq!(bundled_plugin_by_slug("teams").map(|p| p.slug), Some("teams"));
+        assert!(bundled_plugin_by_slug("matrix").is_none());
     }
 
     #[test]

@@ -1,5 +1,7 @@
 plugin-discord-title = Discord
 plugin-discord-description = Popular gaming and community chat platform.
+plugin-discord-signup-name = Discord
+plugin-discord-signup-desc = Connect a Discord account using your user token.
 
 plugin-discord-menu-invite-people-label = Invite People
 plugin-discord-menu-privacy-settings-label = Privacy Settings

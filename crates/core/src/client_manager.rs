@@ -143,6 +143,32 @@ pub fn builtin_backend_slugs() -> Vec<&'static str> {
     BUILTIN_BACKENDS.iter().map(|d| d.slug).collect()
 }
 
+/// Union of built-in backend slugs (compile-time, available + unavailable)
+/// and currently-enabled bundled plugin slugs (runtime, from
+/// `settings.wasm_plugins`).
+///
+/// This is the authoritative answer to "which backends can the user
+/// currently sign up for?". It powers the signup picker filter and any
+/// other code that needs to know whether a given backend is reachable
+/// from the running app.
+///
+/// **Why not just `signup_entries`?** `signup_entries` is the list of
+/// fully-rendered `SignupEntry` structs (including i18n keys and a
+/// render fn). It's the right source for the picker's UI but it's
+/// overkill for callers that only need to ask "is slug X available?".
+/// `available_backend_slugs` is the semantic-level lookup; it doesn't
+/// require holding a `SignupEntry`.
+#[must_use]
+pub fn available_backend_slugs(settings: &crate::storage::AppSettings) -> Vec<&'static str> {
+    let mut out: Vec<&'static str> = builtin_backend_slugs();
+    for slug in crate::bundled_plugins::bundled_enabled_slugs(settings) {
+        if !out.contains(&slug) {
+            out.push(slug);
+        }
+    }
+    out
+}
+
 const BUILTIN_BACKENDS: [BuiltinBackendDescriptor; 8] = [
     BuiltinBackendDescriptor {
         slug: "demo",
@@ -229,6 +255,35 @@ mod builtin_backend_registry_tests {
     fn registry_lists_demo() {
         let slugs: Vec<&str> = builtin_backend_slugs();
         assert!(slugs.contains(&"demo"));
+    }
+
+    #[test]
+    fn available_backend_slugs_unions_builtins_and_bundled() {
+        use crate::storage::AppSettings;
+        let mut settings = AppSettings::default();
+        // Empty bundled list → only built-ins are available.
+        let slugs = available_backend_slugs(&settings);
+        assert!(slugs.contains(&"demo"));
+        assert!(!slugs.contains(&"discord"));
+        assert!(!slugs.contains(&"teams"));
+
+        // Inject + enable bundled defaults → Discord and Teams join.
+        let _ = crate::bundled_plugins::inject_bundled_into_settings(&mut settings);
+        let slugs = available_backend_slugs(&settings);
+        assert!(slugs.contains(&"demo"));
+        assert!(slugs.contains(&"discord"));
+        assert!(slugs.contains(&"teams"));
+
+        // Disable Teams → it's filtered out, Discord still present.
+        let teams = settings
+            .wasm_plugins
+            .iter_mut()
+            .find(|e| e.url == "bundled://teams")
+            .unwrap();
+        teams.enabled = false;
+        let slugs = available_backend_slugs(&settings);
+        assert!(slugs.contains(&"discord"));
+        assert!(!slugs.contains(&"teams"));
     }
 }
 
@@ -622,6 +677,19 @@ impl ClientManager {
         self.signup_entries.retain(|e| e.slug != entry.slug);
         self.signup_entries.push(entry);
         tracing::debug!("Signup entry registered: {}", entry.slug);
+    }
+
+    /// Remove a signup entry by slug (no-op if not registered).
+    ///
+    /// Called when the user toggles a bundled plugin OFF in
+    /// `/settings/plugins` so the favorites-bar "+" picker stops
+    /// offering it without a restart.
+    pub fn unregister_signup_entry(&mut self, slug: &str) {
+        let before = self.signup_entries.len();
+        self.signup_entries.retain(|e| e.slug != slug);
+        if self.signup_entries.len() < before {
+            tracing::debug!("Signup entry unregistered: {slug}");
+        }
     }
 
     /// Register a test account entry from a native plugin.

@@ -570,6 +570,20 @@ pub fn PluginsSettings() -> Element {
                             let new_wasm = wasm.clone();
                             drop(wasm);
                             let dis = disabled.read().clone();
+                            // Reconcile signup entries IMMEDIATELY against
+                            // the new wasm_plugins state so the favorites
+                            // "+" picker reflects the toggle without a
+                            // restart. Build a synthetic AppSettings just
+                            // for the bundled-enabled lookup — only the
+                            // wasm_plugins field matters.
+                            let new_wasm_for_sync = new_wasm.clone();
+                            client_manager.batch(move |cm| {
+                                let s = crate::storage::AppSettings {
+                                    wasm_plugins: new_wasm_for_sync,
+                                    ..crate::storage::AppSettings::default()
+                                };
+                                crate::bundled_plugins::sync_bundled_signup_entries(cm, &s);
+                            });
                             spawn(async move {
                                 let mut s = load_settings().await;
                                 s.disabled_native_backends = dis;
@@ -604,6 +618,19 @@ pub fn PluginsSettings() -> Element {
                             }
                             let dis = disabled.read().clone();
                             let new_removed = removed_bundled.read().clone();
+                            // Reconcile signup entries IMMEDIATELY: when a
+                            // bundled plugin is removed it disappears from
+                            // wasm_plugins, so its slug is no longer in
+                            // bundled_enabled_slugs and the picker drops it
+                            // without a restart.
+                            let new_wasm_for_sync = new_wasm.clone();
+                            client_manager.batch(move |cm| {
+                                let s = crate::storage::AppSettings {
+                                    wasm_plugins: new_wasm_for_sync,
+                                    ..crate::storage::AppSettings::default()
+                                };
+                                crate::bundled_plugins::sync_bundled_signup_entries(cm, &s);
+                            });
                             spawn(async move {
                                 let mut s = load_settings().await;
                                 s.disabled_native_backends = dis;
