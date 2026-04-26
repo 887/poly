@@ -117,7 +117,12 @@ pub fn server_from_repo(repo: &GhRepo, account_id: &str, account_display_name: &
     }
 }
 
-/// Build the full channel list for a repo (issues forum, PR forum, code explorer).
+/// Build the full channel list for a repo:
+/// issues forum, PR forum, discussions forum, code explorer.
+///
+/// Discussions used to live as a third tab inside the Issues channel
+/// view, but the user asked for it to be a top-level sidebar entry like
+/// Issues / Pull Requests so the toolbar tab row could be eliminated.
 #[must_use]
 pub fn channels_for_repo(repo: &GhRepo) -> Vec<Channel> {
     let (owner, name) = split_full_name(&repo.full_name);
@@ -148,6 +153,18 @@ pub fn channels_for_repo(repo: &GhRepo) -> Vec<Channel> {
             thread_metadata: None,
         },
         Channel {
+            id: discussions_channel_id(&owner, &name),
+            name: "discussions".to_string(),
+            channel_type: ChannelType::Forum,
+            server_id: server_id.clone(),
+            unread_count: 0,
+            mention_count: 0,
+            last_message_id: None,
+            forum_tags: None,
+            parent_channel_id: None,
+            thread_metadata: None,
+        },
+        Channel {
             id: code_channel_id(&owner, &name),
             name: "code".to_string(),
             channel_type: ChannelType::Code,
@@ -160,6 +177,12 @@ pub fn channels_for_repo(repo: &GhRepo) -> Vec<Channel> {
             thread_metadata: None,
         },
     ]
+}
+
+/// Channel id for the Discussions forum on a repo.
+#[must_use]
+pub fn discussions_channel_id(owner: &str, repo: &str) -> String {
+    format!("gh-discussions-{owner}-{repo}")
 }
 
 // ---------------------------------------------------------------------------

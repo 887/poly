@@ -20,9 +20,13 @@ plugin-github-setting-show-private-repos-desc = Include private repositories in 
 plugin-github-setting-default-issue-state-label = Default Issue State
 plugin-github-setting-default-issue-state-desc = Which issue state (open or closed) to show by default when browsing a repository.
 
-plugin-github-view-issues-title = Issues & PRs
+plugin-github-view-issues-title = Issues
+plugin-github-view-pulls-title = Pull Requests
+plugin-github-view-discussions-title = Discussions
 plugin-github-filter-open = Open
 plugin-github-filter-closed = Closed
+# Tabs row was removed (each is its own sidebar channel) but the keys
+# stay as the channel-name labels for the sidebar list.
 plugin-github-tab-issues = Issues
 plugin-github-tab-pulls = Pull Requests
 plugin-github-tab-discussions = Discussions

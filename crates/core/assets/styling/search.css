@@ -345,3 +345,12 @@
     text-overflow: ellipsis;
     overflow: hidden;
 }
+/* Override the generic `.poly-split-content-stage > * { flex: 1 }` rule
+   for the search header, which would otherwise stretch the
+   title+input+toggles row to fill the entire content panel and push the
+   actual results down by hundreds of pixels (witnessed on mobile). */
+.poly-app .poly-split-content-stage > .search-page-header,
+.poly-app .search-page-results > .search-page-header,
+.poly-app .poly-split-content > .search-page-header {
+    flex: 0 0 auto !important;
+}

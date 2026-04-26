@@ -639,11 +639,22 @@ impl ClientBackend for GitHubClient {
         })
     }
 
-    async fn get_channel_view(&self, _channel_id: &str) -> ClientResult<ViewDescriptor> {
+    async fn get_channel_view(&self, channel_id: &str) -> ClientResult<ViewDescriptor> {
+        // Per-channel header: each of the 3 forum channels (issues / pulls /
+        // discussions) is its own focused view in the sidebar so the
+        // content area no longer needs the toolbar tab row to switch
+        // between them. The sidebar's channel selection IS the switch.
+        let title_key = if channel_id.starts_with("gh-pulls-") {
+            "plugin-github-view-pulls-title"
+        } else if channel_id.starts_with("gh-discussions-") {
+            "plugin-github-view-discussions-title"
+        } else {
+            "plugin-github-view-issues-title"
+        };
         Ok(ViewDescriptor {
             kind: ViewKind::Split,
             header: Some(ViewHeader {
-                title_key: Some("plugin-github-view-issues-title".to_string()),
+                title_key: Some(title_key.to_string()),
                 subtitle_key: None,
                 info_block: None,
             }),
@@ -653,11 +664,8 @@ impl ClientBackend for GitHubClient {
                     ToolbarOption { id: "open".to_string(), label_key: "plugin-github-filter-open".to_string(), icon: None, default_selected: true },
                     ToolbarOption { id: "closed".to_string(), label_key: "plugin-github-filter-closed".to_string(), icon: None, default_selected: false },
                 ],
-                tabs: vec![
-                    ToolbarOption { id: "issues".to_string(), label_key: "plugin-github-tab-issues".to_string(), icon: None, default_selected: true },
-                    ToolbarOption { id: "pulls".to_string(), label_key: "plugin-github-tab-pulls".to_string(), icon: None, default_selected: false },
-                    ToolbarOption { id: "discussions".to_string(), label_key: "plugin-github-tab-discussions".to_string(), icon: None, default_selected: false },
-                ],
+                // Tabs row eliminated — the channel sidebar is the switcher.
+                tabs: vec![],
                 action_items: vec![],
             }),
             body: ViewBody::SplitBody(SplitSpec {
@@ -708,8 +716,10 @@ impl ClientBackend for GitHubClient {
 
         let (owner, repo) = parse_forum_channel(channel_id)?;
 
-        // Discussions tab uses GraphQL — separate from the REST issues path.
-        if tab_id == Some("discussions") {
+        // Discussions is now a top-level channel in the sidebar
+        // (`gh-discussions-*`); keep the legacy `tab_id == "discussions"`
+        // path for the host's older toolbar code-path during transition.
+        if channel_id.starts_with("gh-discussions-") || tab_id == Some("discussions") {
             let (discussions, next_cursor) = self
                 .cli
                 .list_discussions(&owner, &repo, 50, None)
@@ -915,11 +925,13 @@ fn split_owner_repo(s: &str) -> ClientResult<(String, String)> {
 
 /// Extract `(owner, repo)` from a forum channel ID.
 ///
-/// Handles both `gh-issues-{owner}-{repo}` and `gh-pulls-{owner}-{repo}`.
+/// Handles `gh-issues-{owner}-{repo}`, `gh-pulls-{owner}-{repo}`,
+/// and `gh-discussions-{owner}-{repo}`.
 fn parse_forum_channel(channel_id: &str) -> ClientResult<(String, String)> {
     let rest = channel_id
         .strip_prefix("gh-issues-")
         .or_else(|| channel_id.strip_prefix("gh-pulls-"))
+        .or_else(|| channel_id.strip_prefix("gh-discussions-"))
         .ok_or_else(|| ClientError::NotFound(format!("not a forum channel: {channel_id}")))?;
     split_owner_repo(rest)
 }
