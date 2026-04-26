@@ -1079,10 +1079,15 @@ pub const DEMO_INSTANCE_ID: &str = "demo";
 /// `User` representation of the cat account, suitable for inclusion in
 /// member / friends lists rendered to *other* clients (e.g. so Dog's
 /// friends list shows Cat).
+///
+/// IMPORTANT: the `id` MUST match the user.id used inside the existing
+/// `dm-demo-cat` DmChannel (`"demo-cat-user"`). The friends-list click
+/// handler looks up an existing DM via `dm.user.id == friend.id`, so a
+/// mismatch here means clicking Cat in Dog's friends does nothing.
 #[must_use]
 pub fn demo_cat_user() -> User {
     User {
-        id: "demo-user-self".to_string(),
+        id: "demo-cat-user".to_string(),
         display_name: "🐱 Cat (demo)".to_string(),
         avatar_url: Some(DEMO_CAT_AVATAR.to_string()),
         presence: PresenceStatus::Online,
@@ -1090,11 +1095,12 @@ pub fn demo_cat_user() -> User {
     }
 }
 
-/// `User` representation of the dog account.
+/// `User` representation of the dog account. ID must match `demo-dog-user`
+/// referenced by the seeded `dm-demo-dog` DmChannel.
 #[must_use]
 pub fn demo_dog_user() -> User {
     User {
-        id: "demo2-user-self".to_string(),
+        id: "demo-dog-user".to_string(),
         display_name: "🐶 Dog (demo)".to_string(),
         avatar_url: Some(DEMO_DOG_AVATAR.to_string()),
         presence: PresenceStatus::Online,
