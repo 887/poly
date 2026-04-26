@@ -240,9 +240,14 @@ fn StatCard(label: String, value: String) -> Element {
     }
 }
 
-/// "Agents" — placeholder list of active agentic functions across all servers
-/// for this account. Per the plan this will list the user's active agent
-/// tasks (translation, draft replies, scheduled outreach, etc.).
+/// "Agents" — list of channels and DMs where the user has turned on agent
+/// features for this account. When none are active, render an empty-state
+/// card explaining how to enable them via the 🤖 header button next to the
+/// member-list toggle in any chat.
+///
+/// Per-channel/DM agent enablement isn't persisted yet (the agent panel is a
+/// UI-only toggle today), so the active list is always empty until that lands.
+/// The empty state still ships now so users discover where to enable it.
 #[ui_action(OverviewSubpageAction)]
 #[context_menu(inherit)]
 #[component]
@@ -254,8 +259,14 @@ pub fn OverviewAgentsView(account_id: String) -> Element {
                 h2 { "{t(\"overview-page-agents-title\")}" }
                 p { class: "overview-page-subtitle", "{t(\"overview-page-agents-subtitle\")}" }
             }
-            p { class: "overview-page-empty",
-                "{t(\"overview-page-agents-empty\")}"
+            div { class: "overview-empty-state",
+                div { class: "overview-empty-icon", "🤖" }
+                h3 { class: "overview-empty-title",
+                    "{t(\"overview-page-agents-empty-title\")}"
+                }
+                p { class: "overview-empty-body",
+                    "{t(\"overview-page-agents-empty-body\")}"
+                }
             }
         }
     }

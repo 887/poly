@@ -71,16 +71,22 @@ fn SensitiveMediaRow(
 #[component]
 fn ToggleRow(label: String, checked: bool, on_change: EventHandler<bool>) -> Element {
     rsx! {
-        label { class: "content-social-toggle-row toggle-switch",
+        // Row is a horizontal flex container; the switch nests inside it
+        // as its own `.toggle-switch` element. Combining both classes on
+        // one element makes `.toggle-switch`'s 44px width win and collapses
+        // the label to one-word-per-line wrapping.
+        label { class: "content-social-toggle-row",
             span { class: "content-social-toggle-label", "{label}" }
-            input {
-                r#type: "checkbox",
-                role: "switch",
-                "aria-checked": if checked { "true" } else { "false" },
-                checked,
-                onchange: move |e| on_change.call(e.checked()),
+            span { class: "toggle-switch",
+                input {
+                    r#type: "checkbox",
+                    role: "switch",
+                    "aria-checked": if checked { "true" } else { "false" },
+                    checked,
+                    onchange: move |e| on_change.call(e.checked()),
+                }
+                span { class: "toggle-slider" }
             }
-            span { class: "toggle-slider" }
         }
     }
 }
