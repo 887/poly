@@ -822,9 +822,16 @@ channel-menu-copy-id = Copy Channel ID
 
 # DM (1-on-1) context menu
 dm-menu-profile = Profile
-dm-menu-mute = Mute User
-dm-menu-unmute = Unmute User
+dm-menu-start-call = Start a Call
+dm-menu-add-note = Add Note
+dm-menu-add-nickname = Add Friend Nickname
 dm-menu-close = Close DM
+dm-menu-invite-to-server = Invite to Server
+dm-menu-remove-friend = Remove Friend
+dm-menu-ignore = Ignore
+dm-menu-block = Block
+dm-menu-mute = Mute
+dm-menu-unmute = Unmute
 dm-menu-copy-name = Copy Display Name
 dm-menu-copy-user-id = Copy User ID
 

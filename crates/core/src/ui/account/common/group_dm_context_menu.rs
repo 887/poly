@@ -23,7 +23,6 @@ pub fn GroupDmContextMenu() -> Element {
     let x = menu.x;
     let y = menu.y;
     let channel_id = menu.channel_id.clone();
-    let display_name = menu.display_name.clone();
     let mut muted = use_signal(|| false);
 
     let close = move || {
@@ -44,9 +43,6 @@ pub fn GroupDmContextMenu() -> Element {
             style: "left: min({x}px, calc(100vw - 220px)); top: min({y}px, calc(100vh - 280px));",
             onclick: move |evt| evt.stop_propagation(),
 
-            div { class: "context-menu-label", "{display_name}" }
-            div { class: "context-menu-separator" }
-
             // Mark as Read
             {
                 let cid = channel_id.clone();
@@ -61,6 +57,8 @@ pub fn GroupDmContextMenu() -> Element {
                     }
                 }
             }
+
+            div { class: "context-menu-separator" }
 
             // Edit Group (stub — group settings dialog not yet wired)
             {
