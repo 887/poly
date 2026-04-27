@@ -820,6 +820,21 @@ channel-menu-unmute = Unmute Channel
 channel-menu-copy-link = Copy Link
 channel-menu-copy-id = Copy Channel ID
 
+# DM (1-on-1) context menu
+dm-menu-profile = Profile
+dm-menu-mute = Mute User
+dm-menu-unmute = Unmute User
+dm-menu-close = Close DM
+dm-menu-copy-name = Copy Display Name
+dm-menu-copy-user-id = Copy User ID
+
+# Group DM context menu
+group-dm-menu-edit = Edit Group
+group-dm-menu-invite = Invite Friends to Group DM
+group-dm-menu-mute = Mute Conversation
+group-dm-menu-unmute = Unmute Conversation
+group-dm-menu-leave = Leave Conversation
+
 # Attachment (image) right-click context menu
 attachment-menu-copy-image = Copy Image
 attachment-menu-save-image = Save Image

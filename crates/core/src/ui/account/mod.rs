@@ -96,6 +96,8 @@ pub use common::AccountSwitcher;
 pub use common::AttachmentContextMenu;
 pub use common::AvatarContextMenu;
 pub use common::ChannelContextMenu;
+pub use common::DmContextMenu;
+pub use common::GroupDmContextMenu;
 pub use common::ReactionContextMenu;
 pub use common::ChannelList;
 pub use common::ChatView;

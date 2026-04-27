@@ -442,6 +442,38 @@ pub struct AttachmentContextMenuState {
     pub filename: String,
 }
 
+/// State for the active right-click DM (1-on-1) context menu.
+#[derive(Debug, Clone)]
+pub struct DmContextMenuState {
+    pub x: f64,
+    pub y: f64,
+    /// DM channel ID (the `dm-...` id).
+    pub channel_id: String,
+    /// Other party's user ID.
+    pub user_id: String,
+    /// Other party's display name.
+    pub display_name: String,
+    /// Account ID that owns this DM.
+    pub account_id: String,
+    pub instance_id: String,
+    pub backend_slug: String,
+}
+
+/// State for the active right-click group-DM context menu.
+#[derive(Debug, Clone)]
+pub struct GroupDmContextMenuState {
+    pub x: f64,
+    pub y: f64,
+    /// Group channel ID.
+    pub channel_id: String,
+    /// Display name of the group (or comma-joined member names).
+    pub display_name: String,
+    /// Account ID that owns this group.
+    pub account_id: String,
+    pub instance_id: String,
+    pub backend_slug: String,
+}
+
 /// State for the active right-click channel context menu.
 #[derive(Debug, Clone)]
 pub struct ChannelContextMenuState {
@@ -496,6 +528,10 @@ pub struct AppState {
     pub context_menu: Option<ContextMenuState>,
     /// Active right-click channel context menu, if any.
     pub channel_context_menu: Option<ChannelContextMenuState>,
+    /// Active right-click DM (1-on-1) context menu, if any.
+    pub dm_context_menu: Option<DmContextMenuState>,
+    /// Active right-click group-DM context menu, if any.
+    pub group_dm_context_menu: Option<GroupDmContextMenuState>,
     /// Active right-click attachment (image) context menu, if any.
     pub attachment_context_menu: Option<AttachmentContextMenuState>,
     /// Active right-click reaction chip context menu, if any.
@@ -559,6 +595,8 @@ impl Default for AppState {
             search_type_seed: None,
             context_menu: None,
             channel_context_menu: None,
+            dm_context_menu: None,
+            group_dm_context_menu: None,
             attachment_context_menu: None,
             reaction_context_menu: None,
             avatar_context_menu: None,

@@ -87,8 +87,10 @@
 
 .context-menu-separator {
     height: 1px;
-    background: var(--sidebar-separator, rgba(255, 255, 255, 0.06));
-    margin: 4px 0;
+    /* Discord-style: ~0.18 opacity gives a clearly visible divider on the
+       dark menu background without competing with item text. */
+    background: rgba(255, 255, 255, 0.18);
+    margin: 6px 8px;
 }
 
 /* ── Drag-over indicator ──────────────────────────────────────────────────── */
