@@ -6472,6 +6472,7 @@ dependencies = [
  "rand 0.10.0",
  "serde",
  "tokio",
+ "tracing",
  "wit-bindgen 0.53.1",
 ]
 

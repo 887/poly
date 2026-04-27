@@ -14,6 +14,33 @@ use chrono::{Duration, Utc};
 use dioxus::prelude::*;
 use poly_client::*;
 use rand::distr::{Alphanumeric, SampleString};
+use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
+
+/// Shared in-memory message store across all demo clients.
+///
+/// Keyed on `channel_id`. Cat / Dog / forum-self all read+write the
+/// same map so messages sent from one perspective show up when the
+/// channel is viewed from another. Lifetime = process lifetime; demo
+/// never persists across restarts.
+fn sent_message_store() -> &'static Mutex<HashMap<String, Vec<Message>>> {
+    static STORE: OnceLock<Mutex<HashMap<String, Vec<Message>>>> = OnceLock::new();
+    STORE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+pub fn record_sent_message(channel_id: &str, msg: Message) {
+    if let Ok(mut g) = sent_message_store().lock() {
+        g.entry(channel_id.to_string()).or_default().push(msg);
+    }
+}
+
+pub fn extra_messages_for(channel_id: &str) -> Vec<Message> {
+    sent_message_store()
+        .lock()
+        .ok()
+        .and_then(|g| g.get(channel_id).cloned())
+        .unwrap_or_default()
+}
 
 /// Return a clone of `users[idx]`, or a placeholder user when the index is
 /// out of range.  All demo data uses indices 0–9 against the 10-element
@@ -2396,18 +2423,30 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
 }
 
 /// Generate a demo sent message.
-pub fn demo_sent_message(_channel_id: &str, content: MessageContent) -> Message {
+pub fn demo_sent_message(channel_id: &str, content: MessageContent) -> Message {
+    demo_sent_message_for(channel_id, content, demo_session().user)
+}
+
+/// Generate + persist a sent message attributed to a specific user.
+///
+/// All three demo `send_message` impls funnel through this so the
+/// shared in-memory store sees every send (Cat, Dog, forum-self).
+pub fn demo_sent_message_for(
+    channel_id: &str,
+    content: MessageContent,
+    author: User,
+) -> Message {
     let attachments = match &content {
         MessageContent::Text(_) => Vec::new(),
         MessageContent::WithAttachments { attachments, .. } => attachments.clone(),
     };
 
-    Message {
+    let msg = Message {
         id: format!(
             "msg-sent-{}",
             Alphanumeric.sample_string(&mut rand::rng(), 16)
         ),
-        author: demo_session().user,
+        author,
         content,
         timestamp: Utc::now(),
         attachments,
@@ -2415,7 +2454,9 @@ pub fn demo_sent_message(_channel_id: &str, content: MessageContent) -> Message 
         reply_to: None,
         edited: false,
         thread: None,
-    }
+    };
+    record_sent_message(channel_id, msg.clone());
+    msg
 }
 
 /// Generate a demo sent reply message.
@@ -4947,35 +4988,27 @@ fn demo_message_text(message: &Message) -> String {
 }
 
 /// Get the full message history for a demo account channel.
+///
+/// Returns the seed messages followed by anything sent in-process
+/// (the shared in-memory store). All demo clients see the union.
 fn demo_account_messages(channel_id: &str, demo2: bool) -> Vec<Message> {
-    // The Cat ↔ Dog Arena is the one channel both demo accounts share —
-    // return identical messages regardless of which client is asking so
-    // their views stay in sync.
-    if channel_id == "ch-arena-general" {
-        return cat_dog_arena_messages();
-    }
-    if channel_id.starts_with("dm-") {
-        return demo_dm_messages(channel_id);
-    }
-    if channel_id.starts_with("group-") || channel_id.starts_with("group2-") {
-        return demo_group_messages(channel_id);
-    }
-
-    if demo2 {
+    let mut seed = if channel_id == "ch-arena-general" {
+        // Cat ↔ Dog Arena is shared between both demo accounts.
+        cat_dog_arena_messages()
+    } else if channel_id.starts_with("dm-") {
+        demo_dm_messages(channel_id)
+    } else if channel_id.starts_with("group-") || channel_id.starts_with("group2-") {
+        demo_group_messages(channel_id)
+    } else if demo2 {
         let rich = demo2_messages_rich(channel_id);
-        if rich.is_empty() {
-            demo2_messages(channel_id)
-        } else {
-            rich
-        }
+        if rich.is_empty() { demo2_messages(channel_id) } else { rich }
     } else {
         let rich = demo2_messages_rich(channel_id);
-        if rich.is_empty() {
-            demo_messages(channel_id)
-        } else {
-            rich
-        }
-    }
+        if rich.is_empty() { demo_messages(channel_id) } else { rich }
+    };
+
+    seed.extend(extra_messages_for(channel_id));
+    seed
 }
 
 /// Apply a message history query to a full ordered message list.

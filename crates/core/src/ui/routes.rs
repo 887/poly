@@ -1585,20 +1585,18 @@ fn ServerHome(
     // the effect re-fires, server_already_loaded is still false, and we
     // spawn forever. See Teams channels/T001 wedge, 2026-04-24, and
     // `docs/plans/plan-use-spawn-once.md`.
-    let server_id_for_effect = server_id.clone();
-    use_spawn_once(server_id_for_effect, move |sid| {
+    // Key on (account_id, server_id) so switching accounts on the same
+    // server URL forces a reload of that account's view of the server.
+    let spawn_key = format!("{account_id}|{server_id}");
+    let sid_for_async = server_id.clone();
+    use_spawn_once(spawn_key, move |_key| {
+        let sid = sid_for_async.clone();
         let preserve_drawer_context = crate::ui::main_layout::mobile_left_drawer_open();
         async move {
-            // Cheap early return if click-navigation already loaded this
-            // server; peek so we don't subscribe.
-            let already_loaded = chat_data
-                .peek()
-                .current_server
-                .as_ref()
-                .is_some_and(|s| s.id == sid);
-            if already_loaded {
-                return;
-            }
+            // No `already_loaded` fast-path: the (account_id, server_id) key
+            // already guarantees we only spawn once per account-switch, and
+            // current_server can belong to a *different* account, so an id
+            // match doesn't mean the cached data is for *this* account.
             if preserve_drawer_context {
                 super::favorites_sidebar::load_server_shell_data(
                     sid,
@@ -1686,33 +1684,20 @@ fn ServerChat(
     // `already_loaded` check failed because the fallback channel.id never
     // equals the URL cid, and we spawned another restore — exponential
     // task growth → Chrome OOM (witnessed 2026-04-19).
-    use_spawn_once(channel_id.clone(), move |cid| {
+    // Key on (account_id, channel_id) so switching accounts on the same
+    // channel URL (e.g. demo-cat → demo-dog on cat-dog-arena/general) forces
+    // a reload — without the account in the key, the readiness check passes
+    // and the view stays stuck on the previous account's cached messages.
+    let spawn_key = format!("{account_id}|{channel_id}");
+    let cid_for_async = channel_id.clone();
+    use_spawn_once(spawn_key, move |_key| {
         let backend_slug = backend.clone();
         let instance = instance_id.clone();
         let account = account_id.clone();
         let route_server_id = server_id.clone();
         let sid = server_id.clone();
+        let cid = cid_for_async.clone();
         async move {
-            // Cheap early return if click-navigation already prepared this
-            // specific server + channel. Peek so we don't subscribe; an
-            // empty text channel is still a valid loaded state, so we must
-            // not use `messages.is_empty()` as the readiness check.
-            let already_loaded = {
-                let snapshot = chat_data.peek();
-                snapshot
-                    .current_server
-                    .as_ref()
-                    .is_some_and(|server| server.id == sid)
-                    && snapshot
-                        .current_channel
-                        .as_ref()
-                        .is_some_and(|ch| ch.id == cid && ch.server_id == sid)
-                    && snapshot.channels.iter().any(|ch| ch.id == cid)
-            };
-            if already_loaded {
-                return;
-            }
-
             let resolved_channel_id = super::favorites_sidebar::restore_server_channel(
                 sid,
                 cid.clone(),

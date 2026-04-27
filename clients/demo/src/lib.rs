@@ -724,7 +724,11 @@ impl ClientBackend for DemoClient2 {
         channel_id: &str,
         content: MessageContent,
     ) -> ClientResult<Message> {
-        Ok(data::demo_sent_message(channel_id, content))
+        Ok(data::demo_sent_message_for(
+            channel_id,
+            content,
+            data::demo2_session().user,
+        ))
     }
 
     async fn send_reply_message(
