@@ -978,6 +978,21 @@ pub struct StoatChannelEdit {
     pub nsfw: Option<bool>,
 }
 
+/// `DataEditGroup` payload for `PATCH /channels/{channel_id}` on a Group channel.
+///
+/// Used by `edit_group_dm`. The `icon` field in the Revolt protocol requires an
+/// Autumn file upload first; that path is left as a future increment (only `name`
+/// is supported here).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Default)]
+pub struct StoatGroupEdit {
+    /// New group display name.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Fields to clear (e.g. `["Icon"]` to remove the group icon).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub remove: Option<Vec<String>>,
+}
+
 /// Server member info returned by `GET /servers/{server_id}/members/@me`.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct StoatServerMemberMe {

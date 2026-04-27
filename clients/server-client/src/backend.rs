@@ -881,6 +881,137 @@ impl ClientBackend for PolyServerBackend {
             .collect())
     }
 
+    // ── Social policy ────────────────────────────────────────────────────────
+
+    async fn block_user(&self, user_id: &str) -> ClientResult<()> {
+        self.http
+            .block_user(user_id)
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))
+    }
+
+    async fn unblock_user(&self, user_id: &str) -> ClientResult<()> {
+        self.http
+            .unblock_user(user_id)
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))
+    }
+
+    async fn ignore_user(&self, user_id: &str) -> ClientResult<()> {
+        self.http
+            .ignore_user(user_id)
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))
+    }
+
+    async fn unignore_user(&self, user_id: &str) -> ClientResult<()> {
+        self.http
+            .unignore_user(user_id)
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))
+    }
+
+    async fn add_friend(&self, user_id: &str) -> ClientResult<()> {
+        self.http
+            .add_friend_by_id(user_id)
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))
+    }
+
+    async fn remove_friend(&self, user_id: &str) -> ClientResult<()> {
+        self.http
+            .remove_friend_by_id(user_id)
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))
+    }
+
+    async fn set_friend_nickname(
+        &self,
+        user_id: &str,
+        nickname: Option<&str>,
+    ) -> ClientResult<()> {
+        self.http
+            .set_relationship_nickname(user_id, nickname)
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))
+    }
+
+    async fn set_user_note(&self, user_id: &str, note: Option<&str>) -> ClientResult<()> {
+        self.http
+            .set_user_note(user_id, note)
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))
+    }
+
+    // ── Conversation lifecycle ────────────────────────────────────────────────
+
+    async fn close_dm_channel(&self, channel_id: &str) -> ClientResult<()> {
+        self.http
+            .close_dm_channel(channel_id)
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))
+    }
+
+    async fn mute_conversation(
+        &self,
+        channel_id: &str,
+        until: Option<chrono::DateTime<chrono::Utc>>,
+    ) -> ClientResult<()> {
+        let until_str = until.map(|u| u.to_rfc3339());
+        self.http
+            .mute_conversation(channel_id, until_str.as_deref())
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))
+    }
+
+    async fn unmute_conversation(&self, channel_id: &str) -> ClientResult<()> {
+        self.http
+            .unmute_conversation(channel_id)
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))
+    }
+
+    async fn leave_group_dm(&self, channel_id: &str) -> ClientResult<()> {
+        self.http
+            .leave_group_dm(channel_id)
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))
+    }
+
+    async fn edit_group_dm(
+        &self,
+        channel_id: &str,
+        name: Option<&str>,
+        avatar_url: Option<&str>,
+    ) -> ClientResult<()> {
+        self.http
+            .edit_group_dm(channel_id, name, avatar_url)
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))
+    }
+
+    async fn add_users_to_group_dm(
+        &self,
+        channel_id: &str,
+        user_ids: &[String],
+    ) -> ClientResult<()> {
+        self.http
+            .add_users_to_group_dm(channel_id, user_ids)
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))
+    }
+
+    async fn invite_user_to_server(
+        &self,
+        server_id: &str,
+        user_id: &str,
+    ) -> ClientResult<()> {
+        self.http
+            .invite_user_to_server(server_id, user_id)
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))
+    }
+
     // ── Voice ────────────────────────────────────────────────────────────────
 
     async fn get_voice_participants(

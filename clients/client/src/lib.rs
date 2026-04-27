@@ -307,6 +307,118 @@ pub trait ClientBackend: Send + Sync {
         Err(ClientError::NotSupported("unblock_user".to_string()))
     }
 
+    /// Block a user. Future messages from them are hidden and they
+    /// cannot DM the calling user.
+    async fn block_user(&self, user_id: &str) -> ClientResult<()> {
+        let _ = user_id;
+        Err(ClientError::NotSupported("block_user".to_string()))
+    }
+
+    /// Ignore a user — quieter than block. Their messages are kept
+    /// but notifications are suppressed and DMs hidden from the list.
+    async fn ignore_user(&self, user_id: &str) -> ClientResult<()> {
+        let _ = user_id;
+        Err(ClientError::NotSupported("ignore_user".to_string()))
+    }
+
+    /// Reverse a previous `ignore_user`.
+    async fn unignore_user(&self, user_id: &str) -> ClientResult<()> {
+        let _ = user_id;
+        Err(ClientError::NotSupported("unignore_user".to_string()))
+    }
+
+    /// Send a friend request to another user.
+    async fn add_friend(&self, user_id: &str) -> ClientResult<()> {
+        let _ = user_id;
+        Err(ClientError::NotSupported("add_friend".to_string()))
+    }
+
+    /// Remove a friend (or cancel an outgoing/incoming request).
+    async fn remove_friend(&self, user_id: &str) -> ClientResult<()> {
+        let _ = user_id;
+        Err(ClientError::NotSupported("remove_friend".to_string()))
+    }
+
+    /// Set or clear a per-friend nickname (`None` clears).
+    async fn set_friend_nickname(
+        &self,
+        user_id: &str,
+        nickname: Option<&str>,
+    ) -> ClientResult<()> {
+        let _ = (user_id, nickname);
+        Err(ClientError::NotSupported("set_friend_nickname".to_string()))
+    }
+
+    /// Set or clear a private note about a user (`None` clears).
+    /// Notes are visible only to the calling user.
+    async fn set_user_note(&self, user_id: &str, note: Option<&str>) -> ClientResult<()> {
+        let _ = (user_id, note);
+        Err(ClientError::NotSupported("set_user_note".to_string()))
+    }
+
+    // --- Conversation lifecycle ---
+
+    /// Hide a DM (1-on-1 or group) from the conversation list. The
+    /// channel itself is not deleted; receiving a new message reopens it.
+    async fn close_dm_channel(&self, channel_id: &str) -> ClientResult<()> {
+        let _ = channel_id;
+        Err(ClientError::NotSupported("close_dm_channel".to_string()))
+    }
+
+    /// Mute notifications for a conversation (channel or DM) until the
+    /// given timestamp; pass `None` to mute indefinitely.
+    async fn mute_conversation(
+        &self,
+        channel_id: &str,
+        until: Option<chrono::DateTime<chrono::Utc>>,
+    ) -> ClientResult<()> {
+        let _ = (channel_id, until);
+        Err(ClientError::NotSupported("mute_conversation".to_string()))
+    }
+
+    /// Reverse a previous `mute_conversation`.
+    async fn unmute_conversation(&self, channel_id: &str) -> ClientResult<()> {
+        let _ = channel_id;
+        Err(ClientError::NotSupported("unmute_conversation".to_string()))
+    }
+
+    /// Leave a group DM. The remaining members continue without the caller.
+    async fn leave_group_dm(&self, channel_id: &str) -> ClientResult<()> {
+        let _ = channel_id;
+        Err(ClientError::NotSupported("leave_group_dm".to_string()))
+    }
+
+    /// Update a group DM's name and/or avatar (`None` leaves field unchanged).
+    async fn edit_group_dm(
+        &self,
+        channel_id: &str,
+        name: Option<&str>,
+        avatar_url: Option<&str>,
+    ) -> ClientResult<()> {
+        let _ = (channel_id, name, avatar_url);
+        Err(ClientError::NotSupported("edit_group_dm".to_string()))
+    }
+
+    /// Add one or more users to a group DM.
+    async fn add_users_to_group_dm(
+        &self,
+        channel_id: &str,
+        user_ids: &[String],
+    ) -> ClientResult<()> {
+        let _ = (channel_id, user_ids);
+        Err(ClientError::NotSupported("add_users_to_group_dm".to_string()))
+    }
+
+    /// Send a server invite to a specific user (DM-style invite).
+    async fn invite_user_to_server(
+        &self,
+        server_id: &str,
+        user_id: &str,
+    ) -> ClientResult<()> {
+        let _ = (server_id, user_id);
+        Err(ClientError::NotSupported("invite_user_to_server".to_string()))
+    }
+
     // --- Presence ---
 
     // --- Voice / Video ---

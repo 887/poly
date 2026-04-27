@@ -1188,6 +1188,7 @@ fn DMChannelItem(
                     account_id: lp_account_id.clone(),
                     instance_id: lp_instance_id.clone(),
                     backend_slug: lp_backend_slug.clone(),
+                    unread_count: unread,
                 });
             });
         },
@@ -1210,6 +1211,7 @@ fn DMChannelItem(
                         account_id: menu_account_id.clone(),
                         instance_id: menu_instance_id.clone(),
                         backend_slug: menu_backend_slug.clone(),
+                        unread_count: unread,
                     });
                 });
             },
@@ -1239,6 +1241,12 @@ fn DMChannelItem(
                     cd.current_channel = Some(cur_chan);
                     cd.current_server = None;
                 });
+                // Clear unread immediately on click — bypasses use_history_state_effect
+                // timing races (loading=true window) so the badge always disappears.
+                crate::ui::account::common::chat_view::mark_channel_as_read(
+                    chat_data,
+                    &channel_id,
+                );
                 app_state.batch(|st| st.nav.dm_right_sidebar_visible = false);
                 let cid = channel_id.clone();
                 let aid = account_id.clone();
@@ -1328,6 +1336,7 @@ fn GroupChannelItem(
                     account_id: lp_account_id.clone(),
                     instance_id: lp_instance_id.clone(),
                     backend_slug: lp_backend_slug.clone(),
+                    unread_count: 0,
                 });
             });
         },
@@ -1349,6 +1358,7 @@ fn GroupChannelItem(
                         account_id: menu_account_id.clone(),
                         instance_id: menu_instance_id.clone(),
                         backend_slug: menu_backend_slug.clone(),
+                        unread_count: 0,
                     });
                 });
             },
@@ -1379,6 +1389,10 @@ fn GroupChannelItem(
                     cd.current_channel = Some(cur_chan);
                     cd.current_server = None;
                 });
+                crate::ui::account::common::chat_view::mark_channel_as_read(
+                    chat_data,
+                    &group_id,
+                );
                 let cid = group_id.clone();
                 let aid = account_id.clone();
                 spawn(async move {
@@ -1600,6 +1614,8 @@ fn ChannelItemRow(channel: Channel) -> Element {
                     let ch = channel_for_click.clone();
                     chat_data.batch(|cd| cd.current_channel = Some(ch));
                 }
+                // Clear unread immediately on click — same race fix as DMChannelItem.
+                crate::ui::account::common::chat_view::mark_channel_as_read(chat_data, &ch_id);
                 // Persist last visited channel for this server (fire-and-forget).
                 let server_id_for_persist = channel.server_id.clone();
                 let channel_id_for_persist = ch_id.clone();

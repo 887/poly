@@ -1125,6 +1125,212 @@ impl PolyServerHttpClient {
         }
         Ok(resp.json().await?)
     }
+
+    // ── Social-policy endpoints ───────────────────────────────────────────────
+
+    /// `POST /api/v1/relationships/block` — block a user.
+    pub async fn block_user(&self, user_id: &str) -> Result<()> {
+        let resp = self
+            .auth_post(&self.url("/api/v1/relationships/block"))
+            .await?
+            .json(&json!({ "user_id": user_id }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(Self::parse_error(resp).await);
+        }
+        Ok(())
+    }
+
+    /// `DELETE /api/v1/relationships/block/:user_id` — unblock a user.
+    pub async fn unblock_user(&self, user_id: &str) -> Result<()> {
+        let resp = self
+            .auth_delete(&self.url(&format!("/api/v1/relationships/block/{user_id}")))
+            .await?
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(Self::parse_error(resp).await);
+        }
+        Ok(())
+    }
+
+    /// `POST /api/v1/relationships/ignore` — ignore a user.
+    pub async fn ignore_user(&self, user_id: &str) -> Result<()> {
+        let resp = self
+            .auth_post(&self.url("/api/v1/relationships/ignore"))
+            .await?
+            .json(&json!({ "user_id": user_id }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(Self::parse_error(resp).await);
+        }
+        Ok(())
+    }
+
+    /// `DELETE /api/v1/relationships/ignore/:user_id` — unignore a user.
+    pub async fn unignore_user(&self, user_id: &str) -> Result<()> {
+        let resp = self
+            .auth_delete(&self.url(&format!("/api/v1/relationships/ignore/{user_id}")))
+            .await?
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(Self::parse_error(resp).await);
+        }
+        Ok(())
+    }
+
+    /// `POST /api/v1/relationships/friend` — send a friend request by user ID.
+    pub async fn add_friend_by_id(&self, user_id: &str) -> Result<()> {
+        let resp = self
+            .auth_post(&self.url("/api/v1/relationships/friend"))
+            .await?
+            .json(&json!({ "user_id": user_id }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(Self::parse_error(resp).await);
+        }
+        Ok(())
+    }
+
+    /// `DELETE /api/v1/relationships/friend/:user_id` — remove a friend by user ID.
+    pub async fn remove_friend_by_id(&self, user_id: &str) -> Result<()> {
+        let resp = self
+            .auth_delete(&self.url(&format!("/api/v1/relationships/friend/{user_id}")))
+            .await?
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(Self::parse_error(resp).await);
+        }
+        Ok(())
+    }
+
+    /// `PATCH /api/v1/relationships/:user_id/nickname` — set or clear a friend nickname.
+    pub async fn set_relationship_nickname(&self, user_id: &str, nickname: Option<&str>) -> Result<()> {
+        let resp = self
+            .auth_patch(&self.url(&format!("/api/v1/relationships/{user_id}/nickname")))
+            .await?
+            .json(&json!({ "nickname": nickname }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(Self::parse_error(resp).await);
+        }
+        Ok(())
+    }
+
+    /// `PATCH /api/v1/relationships/:user_id/note` — set or clear a private note.
+    pub async fn set_user_note(&self, user_id: &str, note: Option<&str>) -> Result<()> {
+        let resp = self
+            .auth_patch(&self.url(&format!("/api/v1/relationships/{user_id}/note")))
+            .await?
+            .json(&json!({ "note": note }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(Self::parse_error(resp).await);
+        }
+        Ok(())
+    }
+
+    /// `POST /api/v1/dm/:channel_id/close` — hide a DM from the list.
+    pub async fn close_dm_channel(&self, channel_id: &str) -> Result<()> {
+        let resp = self
+            .auth_post(&self.url(&format!("/api/v1/dm/{channel_id}/close")))
+            .await?
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(Self::parse_error(resp).await);
+        }
+        Ok(())
+    }
+
+    /// `POST /api/v1/conversation/:channel_id/mute` — mute notifications until `until`.
+    pub async fn mute_conversation(&self, channel_id: &str, until: Option<&str>) -> Result<()> {
+        let resp = self
+            .auth_post(&self.url(&format!("/api/v1/conversation/{channel_id}/mute")))
+            .await?
+            .json(&json!({ "until": until }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(Self::parse_error(resp).await);
+        }
+        Ok(())
+    }
+
+    /// `DELETE /api/v1/conversation/:channel_id/mute` — unmute a conversation.
+    pub async fn unmute_conversation(&self, channel_id: &str) -> Result<()> {
+        let resp = self
+            .auth_delete(&self.url(&format!("/api/v1/conversation/{channel_id}/mute")))
+            .await?
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(Self::parse_error(resp).await);
+        }
+        Ok(())
+    }
+
+    /// `POST /api/v1/group-dm/:channel_id/leave` — leave a group DM.
+    pub async fn leave_group_dm(&self, channel_id: &str) -> Result<()> {
+        let resp = self
+            .auth_post(&self.url(&format!("/api/v1/group-dm/{channel_id}/leave")))
+            .await?
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(Self::parse_error(resp).await);
+        }
+        Ok(())
+    }
+
+    /// `PATCH /api/v1/group-dm/:channel_id` — rename / update avatar for a group DM.
+    pub async fn edit_group_dm(&self, channel_id: &str, name: Option<&str>, avatar_url: Option<&str>) -> Result<()> {
+        let resp = self
+            .auth_patch(&self.url(&format!("/api/v1/group-dm/{channel_id}")))
+            .await?
+            .json(&json!({ "name": name, "avatar_url": avatar_url }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(Self::parse_error(resp).await);
+        }
+        Ok(())
+    }
+
+    /// `POST /api/v1/group-dm/:channel_id/members` — add users to a group DM.
+    pub async fn add_users_to_group_dm(&self, channel_id: &str, user_ids: &[String]) -> Result<()> {
+        let resp = self
+            .auth_post(&self.url(&format!("/api/v1/group-dm/{channel_id}/members")))
+            .await?
+            .json(&json!({ "user_ids": user_ids }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(Self::parse_error(resp).await);
+        }
+        Ok(())
+    }
+
+    /// `POST /api/v1/server/:server_id/invite-user` — send a DM-style invite to a user.
+    pub async fn invite_user_to_server(&self, server_id: &str, user_id: &str) -> Result<()> {
+        let resp = self
+            .auth_post(&self.url(&format!("/api/v1/server/{server_id}/invite-user")))
+            .await?
+            .json(&json!({ "user_id": user_id }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(Self::parse_error(resp).await);
+        }
+        Ok(())
+    }
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

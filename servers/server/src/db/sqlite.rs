@@ -54,6 +54,8 @@ impl Db {
         let _ = conn.execute("ALTER TABLE channel ADD COLUMN nsfw INTEGER NOT NULL DEFAULT 0");
         // Migration B-PS: create bans and modlog tables.
         conn.execute(MODERATION_SCHEMA)?;
+        // Migration: social ops — blocks, ignores, relationship meta, mutes, user invites.
+        conn.execute(SOCIAL_SCHEMA)?;
 
         info!("SQLite schema applied");
         Ok(Self {
@@ -809,6 +811,144 @@ impl Db {
         Ok(())
     }
 
+    // ── Relationship operations ──────────────────────────────────────────────
+
+    /// Block a user (upsert into user_blocks).
+    pub async fn block_user(&self, blocker_id: &str, blocked_id: &str) -> Result<()> {
+        let conn = self.inner.lock().await;
+        let now = now_iso();
+        exec_bind(&conn,
+            "INSERT OR REPLACE INTO user_blocks (blocker_id, blocked_id, created_at) VALUES (?1, ?2, ?3)",
+            &[blocker_id, blocked_id, &now])
+    }
+
+    /// Unblock a user.
+    pub async fn unblock_user(&self, blocker_id: &str, blocked_id: &str) -> Result<()> {
+        let conn = self.inner.lock().await;
+        exec_bind(&conn,
+            "DELETE FROM user_blocks WHERE blocker_id = ?1 AND blocked_id = ?2",
+            &[blocker_id, blocked_id])
+    }
+
+    /// Ignore a user (upsert into user_ignores).
+    pub async fn ignore_user(&self, ignorer_id: &str, ignored_id: &str) -> Result<()> {
+        let conn = self.inner.lock().await;
+        let now = now_iso();
+        exec_bind(&conn,
+            "INSERT OR REPLACE INTO user_ignores (ignorer_id, ignored_id, created_at) VALUES (?1, ?2, ?3)",
+            &[ignorer_id, ignored_id, &now])
+    }
+
+    /// Unignore a user.
+    pub async fn unignore_user(&self, ignorer_id: &str, ignored_id: &str) -> Result<()> {
+        let conn = self.inner.lock().await;
+        exec_bind(&conn,
+            "DELETE FROM user_ignores WHERE ignorer_id = ?1 AND ignored_id = ?2",
+            &[ignorer_id, ignored_id])
+    }
+
+    /// Send a friend request by user ID (not username).
+    pub async fn create_friend_request_by_id(&self, from_id: &str, to_id: &str) -> Result<()> {
+        let conn = self.inner.lock().await;
+        let id = new_id("friend_request");
+        let now = now_iso();
+        exec_bind(&conn,
+            "INSERT OR IGNORE INTO friend_request (id, \"from\", \"to\", status, created_at) VALUES (?1, ?2, ?3, 'pending', ?4)",
+            &[&id, from_id, to_id, &now])
+    }
+
+    /// Set or clear a nickname for a relationship (None clears).
+    pub async fn set_relationship_nickname(&self, user_id: &str, target_id: &str, nickname: Option<&str>) -> Result<()> {
+        let conn = self.inner.lock().await;
+        let now = now_iso();
+        match nickname {
+            Some(n) => exec_bind(&conn,
+                "INSERT INTO user_relationship_meta (user_id, target_id, nickname, updated_at) VALUES (?1, ?2, ?3, ?4) \
+                 ON CONFLICT(user_id, target_id) DO UPDATE SET nickname = excluded.nickname, updated_at = excluded.updated_at",
+                &[user_id, target_id, n, &now]),
+            None => exec_bind(&conn,
+                "INSERT INTO user_relationship_meta (user_id, target_id, nickname, updated_at) VALUES (?1, ?2, NULL, ?3) \
+                 ON CONFLICT(user_id, target_id) DO UPDATE SET nickname = NULL, updated_at = excluded.updated_at",
+                &[user_id, target_id, &now]),
+        }
+    }
+
+    /// Set or clear a private note about a user (None clears).
+    pub async fn set_user_note(&self, user_id: &str, target_id: &str, note: Option<&str>) -> Result<()> {
+        let conn = self.inner.lock().await;
+        let now = now_iso();
+        match note {
+            Some(n) => exec_bind(&conn,
+                "INSERT INTO user_relationship_meta (user_id, target_id, note, updated_at) VALUES (?1, ?2, ?3, ?4) \
+                 ON CONFLICT(user_id, target_id) DO UPDATE SET note = excluded.note, updated_at = excluded.updated_at",
+                &[user_id, target_id, n, &now]),
+            None => exec_bind(&conn,
+                "INSERT INTO user_relationship_meta (user_id, target_id, note, updated_at) VALUES (?1, ?2, NULL, ?3) \
+                 ON CONFLICT(user_id, target_id) DO UPDATE SET note = NULL, updated_at = excluded.updated_at",
+                &[user_id, target_id, &now]),
+        }
+    }
+
+    // ── Conversation lifecycle operations ────────────────────────────────────
+
+    /// Mark a DM/group channel as hidden for the user.
+    pub async fn close_dm_channel(&self, user_id: &str, channel_id: &str) -> Result<()> {
+        let conn = self.inner.lock().await;
+        exec_bind(&conn,
+            "DELETE FROM participant WHERE user = ?1 AND channel = ?2",
+            &[user_id, channel_id])
+    }
+
+    /// Mute a conversation until the given timestamp (or indefinitely if None).
+    pub async fn mute_conversation(&self, user_id: &str, channel_id: &str, until: Option<&str>) -> Result<()> {
+        let conn = self.inner.lock().await;
+        let now = now_iso();
+        match until {
+            Some(u) => exec_bind(&conn,
+                "INSERT INTO conversation_mutes (user_id, channel_id, muted_until, created_at) VALUES (?1, ?2, ?3, ?4) \
+                 ON CONFLICT(user_id, channel_id) DO UPDATE SET muted_until = excluded.muted_until, created_at = excluded.created_at",
+                &[user_id, channel_id, u, &now]),
+            None => exec_bind(&conn,
+                "INSERT INTO conversation_mutes (user_id, channel_id, muted_until, created_at) VALUES (?1, ?2, NULL, ?3) \
+                 ON CONFLICT(user_id, channel_id) DO UPDATE SET muted_until = NULL, created_at = excluded.created_at",
+                &[user_id, channel_id, &now]),
+        }
+    }
+
+    /// Unmute a conversation.
+    pub async fn unmute_conversation(&self, user_id: &str, channel_id: &str) -> Result<()> {
+        let conn = self.inner.lock().await;
+        exec_bind(&conn,
+            "DELETE FROM conversation_mutes WHERE user_id = ?1 AND channel_id = ?2",
+            &[user_id, channel_id])
+    }
+
+    /// Update group DM name and/or avatar_url. Skips fields that are None.
+    pub async fn update_group_dm(&self, channel_id: &str, name: Option<&str>, avatar_url: Option<&str>) -> Result<()> {
+        let conn = self.inner.lock().await;
+        if let Some(n) = name {
+            exec_bind(&conn, "UPDATE channel SET name = ?1 WHERE id = ?2", &[n, channel_id])?;
+        }
+        if let Some(av) = avatar_url {
+            // avatar_url is stored in an optional column; add it if not present.
+            let _ = conn.execute("ALTER TABLE channel ADD COLUMN avatar_url TEXT");
+            exec_bind(&conn, "UPDATE channel SET avatar_url = ?1 WHERE id = ?2", &[av, channel_id])?;
+        }
+        Ok(())
+    }
+
+    // ── Server invite (user-targeted) ────────────────────────────────────────
+
+    /// Record a server invite sent to a specific user via DM.
+    pub async fn create_user_invite(&self, server_id: &str, inviter_id: &str, invitee_id: &str) -> Result<()> {
+        let conn = self.inner.lock().await;
+        let id = new_id("user_invite");
+        let now = now_iso();
+        exec_bind(&conn,
+            "INSERT OR IGNORE INTO user_invites (id, server_id, inviter_id, invitee_id, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+            &[&id, server_id, inviter_id, invitee_id, &now])
+    }
+
     // ── Broadcast helpers ────────────────────────────────────────────────────
 
     pub async fn get_channel_member_ids(&self, channel_id: &str) -> Vec<String> {
@@ -1016,6 +1156,55 @@ CREATE TABLE IF NOT EXISTS server_modlog (
     timestamp   TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_modlog_server ON server_modlog(server_id, timestamp DESC);
+";
+
+/// Schema for social features — blocks, ignores, relationship metadata, mutes, user invites.
+/// Created on every startup (idempotent — all statements use IF NOT EXISTS).
+const SOCIAL_SCHEMA: &str = "
+-- Per-user blocks
+CREATE TABLE IF NOT EXISTS user_blocks (
+    blocker_id  TEXT NOT NULL,
+    blocked_id  TEXT NOT NULL,
+    created_at  TEXT NOT NULL,
+    PRIMARY KEY (blocker_id, blocked_id)
+);
+
+-- Per-user ignores (quieter than block)
+CREATE TABLE IF NOT EXISTS user_ignores (
+    ignorer_id  TEXT NOT NULL,
+    ignored_id  TEXT NOT NULL,
+    created_at  TEXT NOT NULL,
+    PRIMARY KEY (ignorer_id, ignored_id)
+);
+
+-- Per-relationship metadata (nickname, private note)
+CREATE TABLE IF NOT EXISTS user_relationship_meta (
+    user_id     TEXT NOT NULL,
+    target_id   TEXT NOT NULL,
+    nickname    TEXT,
+    note        TEXT,
+    updated_at  TEXT NOT NULL,
+    PRIMARY KEY (user_id, target_id)
+);
+
+-- Per-user conversation mutes
+CREATE TABLE IF NOT EXISTS conversation_mutes (
+    user_id     TEXT NOT NULL,
+    channel_id  TEXT NOT NULL,
+    muted_until TEXT,
+    created_at  TEXT NOT NULL,
+    PRIMARY KEY (user_id, channel_id)
+);
+
+-- Server invites targeted at a specific user (DM-style invite)
+CREATE TABLE IF NOT EXISTS user_invites (
+    id          TEXT PRIMARY KEY,
+    server_id   TEXT NOT NULL,
+    inviter_id  TEXT NOT NULL,
+    invitee_id  TEXT NOT NULL,
+    created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_user_invites_invitee ON user_invites(invitee_id);
 ";
 
 const SCHEMA: &str = "

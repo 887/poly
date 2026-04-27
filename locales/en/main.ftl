@@ -842,6 +842,18 @@ group-dm-menu-mute = Mute Conversation
 group-dm-menu-unmute = Unmute Conversation
 group-dm-menu-leave = Leave Conversation
 
+# Toast labels for context-menu backend ops
+dm-action-ok = Done
+dm-action-unsupported = Not supported by this backend
+dm-action-error = Action failed
+dm-action-coming-soon = Coming soon
+
+# Account-icon right-click menu
+account-menu-mark-read = Mark Account as Read
+account-menu-settings = Account Settings
+account-menu-sign-out = Sign Out
+account-menu-copy-id = Copy Account ID
+
 # Attachment (image) right-click context menu
 attachment-menu-copy-image = Copy Image
 attachment-menu-save-image = Save Image

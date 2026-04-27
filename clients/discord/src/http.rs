@@ -518,4 +518,187 @@ impl DiscordHttpClient {
         let path = format!("/api/v10/guilds/{guild_id}/audit-logs?limit={limit}");
         self.get(&path).await
     }
+
+    // ── Social / Relationship operations ─────────────────────────────────────
+
+    /// `PUT /users/@me/relationships/{user_id}` with `{"type": relationship_type}`.
+    ///
+    /// `relationship_type` values: 1 = friend request, 2 = block.
+    pub async fn put_relationship(
+        &self,
+        user_id: &str,
+        relationship_type: u8,
+    ) -> Result<(), ClientError> {
+        let path = format!("/api/v10/users/@me/relationships/{user_id}");
+        let body = serde_json::json!({ "type": relationship_type });
+        let resp = self
+            .http
+            .put(self.api_url(&path))
+            .header("Authorization", self.token_header())
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+        let status = resp.status().as_u16();
+        match status {
+            200 | 201 | 204 => Ok(()),
+            401 => Err(ClientError::AuthFailed("Unauthorized".into())),
+            403 => Err(ClientError::PermissionDenied("Forbidden".into())),
+            _ => Err(ClientError::Network(format!("put_relationship HTTP {status}"))),
+        }
+    }
+
+    /// `DELETE /users/@me/relationships/{user_id}` — remove friend or unblock.
+    pub async fn delete_relationship(&self, user_id: &str) -> Result<(), ClientError> {
+        let path = format!("/api/v10/users/@me/relationships/{user_id}");
+        let resp = self
+            .http
+            .delete(self.api_url(&path))
+            .header("Authorization", self.token_header())
+            .send()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+        let status = resp.status().as_u16();
+        match status {
+            200 | 204 => Ok(()),
+            401 => Err(ClientError::AuthFailed("Unauthorized".into())),
+            403 => Err(ClientError::PermissionDenied("Forbidden".into())),
+            404 => Err(ClientError::NotFound("relationship not found".into())),
+            _ => Err(ClientError::Network(format!("delete_relationship HTTP {status}"))),
+        }
+    }
+
+    /// `PUT /users/@me/notes/{user_id}` — set or clear a private user note.
+    pub async fn put_user_note(&self, user_id: &str, note: &str) -> Result<(), ClientError> {
+        let path = format!("/api/v10/users/@me/notes/{user_id}");
+        let body = serde_json::json!({ "note": note });
+        let resp = self
+            .http
+            .put(self.api_url(&path))
+            .header("Authorization", self.token_header())
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+        let status = resp.status().as_u16();
+        match status {
+            200 | 204 => Ok(()),
+            401 => Err(ClientError::AuthFailed("Unauthorized".into())),
+            404 => Err(ClientError::NotFound("user not found".into())),
+            _ => Err(ClientError::Network(format!("put_user_note HTTP {status}"))),
+        }
+    }
+
+    // ── DM / channel lifecycle ────────────────────────────────────────────────
+
+    /// `DELETE /channels/{channel_id}` — close DM or leave group DM.
+    pub async fn delete_channel(&self, channel_id: &str) -> Result<(), ClientError> {
+        let path = format!("/api/v10/channels/{channel_id}");
+        let resp = self
+            .http
+            .delete(self.api_url(&path))
+            .header("Authorization", self.token_header())
+            .send()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+        let status = resp.status().as_u16();
+        match status {
+            200 | 204 => Ok(()),
+            401 => Err(ClientError::AuthFailed("Unauthorized".into())),
+            403 => Err(ClientError::PermissionDenied("Forbidden".into())),
+            404 => Err(ClientError::NotFound("channel not found".into())),
+            _ => Err(ClientError::Network(format!("delete_channel HTTP {status}"))),
+        }
+    }
+
+    /// `PUT /channels/{channel_id}/recipients/{user_id}` — add a user to a group DM.
+    pub async fn add_group_dm_recipient(
+        &self,
+        channel_id: &str,
+        user_id: &str,
+    ) -> Result<(), ClientError> {
+        let path = format!("/api/v10/channels/{channel_id}/recipients/{user_id}");
+        let resp = self
+            .http
+            .put(self.api_url(&path))
+            .header("Authorization", self.token_header())
+            .json(&serde_json::json!({}))
+            .send()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+        let status = resp.status().as_u16();
+        match status {
+            200 | 204 => Ok(()),
+            401 => Err(ClientError::AuthFailed("Unauthorized".into())),
+            403 => Err(ClientError::PermissionDenied("Forbidden".into())),
+            _ => Err(ClientError::Network(format!("add_group_dm_recipient HTTP {status}"))),
+        }
+    }
+
+    /// `POST /channels/{channel_id}/invites` — create a new invite.
+    ///
+    /// Returns the invite code string.
+    pub async fn create_invite(
+        &self,
+        channel_id: &str,
+        max_age_secs: u64,
+        max_uses: u32,
+    ) -> Result<String, ClientError> {
+        let path = format!("/api/v10/channels/{channel_id}/invites");
+        let body = serde_json::json!({
+            "max_age": max_age_secs,
+            "max_uses": max_uses,
+            "unique": true,
+        });
+        let resp = self
+            .http
+            .post(self.api_url(&path))
+            .header("Authorization", self.token_header())
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+        let status = resp.status().as_u16();
+        if !resp.status().is_success() {
+            return Err(ClientError::Network(format!("create_invite HTTP {status}")));
+        }
+        let value: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| ClientError::Internal(e.to_string()))?;
+        value
+            .get("code")
+            .and_then(|v| v.as_str())
+            .map(str::to_string)
+            .ok_or_else(|| ClientError::Internal("create_invite: missing 'code' field".into()))
+    }
+
+    /// `POST /users/@me/channels` — open a DM with a user.
+    ///
+    /// Returns the channel ID.
+    pub async fn open_dm(&self, user_id: &str) -> Result<String, ClientError> {
+        let path = "/api/v10/users/@me/channels";
+        let body = serde_json::json!({ "recipient_id": user_id });
+        let resp = self
+            .http
+            .post(self.api_url(path))
+            .header("Authorization", self.token_header())
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+        let status = resp.status().as_u16();
+        if !resp.status().is_success() {
+            return Err(ClientError::Network(format!("open_dm HTTP {status}")));
+        }
+        let value: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| ClientError::Internal(e.to_string()))?;
+        value
+            .get("id")
+            .and_then(|v| v.as_str())
+            .map(str::to_string)
+            .ok_or_else(|| ClientError::Internal("open_dm: missing 'id' field".into()))
+    }
 }

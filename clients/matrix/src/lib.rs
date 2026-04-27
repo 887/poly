@@ -1291,6 +1291,201 @@ impl ClientBackend for MatrixClient {
         Ok(Vec::new())
     }
 
+    // ── Block / Ignore (m.ignored_user_list account data) ─────────────────────
+
+    /// Block a user. Matrix conflates block and ignore via `m.ignored_user_list`.
+    ///
+    /// Fetches the current ignore list, adds `user_id`, and writes it back via
+    /// `PUT /_matrix/client/v3/user/:user_id/account_data/m.ignored_user_list`.
+    async fn block_user(&self, user_id: &str) -> ClientResult<()> {
+        let me = self.current_user_id()?;
+        let mut list = self.http.fetch_ignored_user_list(&me).await?;
+        list.ignored_users
+            .entry(user_id.to_string())
+            .or_insert(serde_json::Value::Object(serde_json::Map::new()));
+        self.http.put_ignored_user_list(&me, &list).await
+    }
+
+    /// Ignore a user — Matrix conflates block and ignore via `m.ignored_user_list`.
+    async fn ignore_user(&self, user_id: &str) -> ClientResult<()> {
+        // Same operation as block_user — Matrix uses m.ignored_user_list for both.
+        let me = self.current_user_id()?;
+        let mut list = self.http.fetch_ignored_user_list(&me).await?;
+        list.ignored_users
+            .entry(user_id.to_string())
+            .or_insert(serde_json::Value::Object(serde_json::Map::new()));
+        self.http.put_ignored_user_list(&me, &list).await
+    }
+
+    /// Unblock a user. Removes them from `m.ignored_user_list`.
+    async fn unblock_user(&self, user_id: &str) -> ClientResult<()> {
+        let me = self.current_user_id()?;
+        let mut list = self.http.fetch_ignored_user_list(&me).await?;
+        list.ignored_users.remove(user_id);
+        self.http.put_ignored_user_list(&me, &list).await
+    }
+
+    /// Unignore a user — same as `unblock_user` in Matrix.
+    async fn unignore_user(&self, user_id: &str) -> ClientResult<()> {
+        // Same operation as unblock_user — Matrix uses m.ignored_user_list for both.
+        let me = self.current_user_id()?;
+        let mut list = self.http.fetch_ignored_user_list(&me).await?;
+        list.ignored_users.remove(user_id);
+        self.http.put_ignored_user_list(&me, &list).await
+    }
+
+    // ── Friend system (not native to Matrix) ──────────────────────────────────
+
+    /// Matrix has no native friend concept — returns `NotSupported`.
+    // TODO(matrix): no native friend concept
+    async fn add_friend(&self, _user_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported(
+            "add_friend: Matrix has no native friend concept".to_string(),
+        ))
+    }
+
+    /// Matrix has no native friend concept — returns `NotSupported`.
+    // TODO(matrix): no native friend concept
+    async fn remove_friend(&self, _user_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported(
+            "remove_friend: Matrix has no native friend concept".to_string(),
+        ))
+    }
+
+    /// Matrix has no native friend concept — returns `NotSupported`.
+    // TODO(matrix): no native friend concept
+    async fn set_friend_nickname(
+        &self,
+        _user_id: &str,
+        _nickname: Option<&str>,
+    ) -> ClientResult<()> {
+        Err(ClientError::NotSupported(
+            "set_friend_nickname: Matrix has no native friend concept".to_string(),
+        ))
+    }
+
+    // ── User notes (not native to Matrix) ─────────────────────────────────────
+
+    /// Matrix has no native per-user note system — returns `NotSupported`.
+    // TODO(matrix): no native user-note storage; could store in account_data
+    async fn set_user_note(&self, _user_id: &str, _note: Option<&str>) -> ClientResult<()> {
+        Err(ClientError::NotSupported(
+            "set_user_note: Matrix has no native user note system".to_string(),
+        ))
+    }
+
+    // ── Conversation lifecycle ─────────────────────────────────────────────────
+
+    /// Close a DM channel: leave the room, forget it, and remove from `m.direct`.
+    ///
+    /// Matrix does not have a "hide without leaving" concept for DMs, so this
+    /// issues a leave + forget (matching how Element Web implements "close DM")
+    /// and removes the room from the `m.direct` account data map.
+    async fn close_dm_channel(&self, channel_id: &str) -> ClientResult<()> {
+        // Leave first (required before forget).
+        self.http.leave_room(channel_id).await?;
+        // Forget the room so it disappears from the room list.
+        self.http.forget_room(channel_id).await?;
+        // Remove from m.direct so it no longer appears as a DM.
+        let me = self.current_user_id()?;
+        let mut m_direct = self.http.fetch_m_direct(&me).await?;
+        if let Some(obj) = m_direct.as_object_mut() {
+            // m.direct maps other_user_id → [room_id, ...]; remove rooms matching channel_id.
+            for rooms in obj.values_mut() {
+                if let Some(arr) = rooms.as_array_mut() {
+                    arr.retain(|v| v.as_str() != Some(channel_id));
+                }
+            }
+            // Remove entries whose room list became empty.
+            obj.retain(|_, v| v.as_array().map_or(true, |a| !a.is_empty()));
+        }
+        self.http.put_m_direct(&me, &m_direct).await?;
+        Ok(())
+    }
+
+    /// Mute a conversation via a room-level push rule (`dont_notify`).
+    ///
+    /// Matrix push rules have no native expiry; the `until` timestamp is
+    /// documented but cannot be enforced by the homeserver — it is ignored here.
+    async fn mute_conversation(
+        &self,
+        channel_id: &str,
+        _until: Option<chrono::DateTime<chrono::Utc>>,
+    ) -> ClientResult<()> {
+        self.http.put_room_push_rule_mute(channel_id).await
+    }
+
+    /// Unmute a conversation by deleting the room-level push rule.
+    async fn unmute_conversation(&self, channel_id: &str) -> ClientResult<()> {
+        self.http.delete_room_push_rule(channel_id).await
+    }
+
+    /// Leave a group DM via `POST /_matrix/client/v3/rooms/{roomId}/leave`.
+    async fn leave_group_dm(&self, channel_id: &str) -> ClientResult<()> {
+        self.http.leave_room(channel_id).await
+    }
+
+    /// Update a group DM's name and/or avatar.
+    ///
+    /// - `name`: sets `m.room.name` state event.
+    /// - `avatar_url`: sets `m.room.avatar` state event. Non-`mxc://` URLs are
+    ///   skipped with a warning because Matrix only accepts `mxc://` URIs for
+    ///   room avatars.
+    async fn edit_group_dm(
+        &self,
+        channel_id: &str,
+        name: Option<&str>,
+        avatar_url: Option<&str>,
+    ) -> ClientResult<()> {
+        if let Some(n) = name {
+            self.http.set_room_name(channel_id, n).await?;
+        }
+        if let Some(url) = avatar_url {
+            if url.starts_with("mxc://") {
+                self.http.set_room_avatar(channel_id, url).await?;
+            } else {
+                tracing::warn!(
+                    "edit_group_dm(matrix): avatar_url {url:?} is not an mxc:// URI — skipped"
+                );
+            }
+        }
+        Ok(())
+    }
+
+    /// Add one or more users to a group DM (room) via per-user invites.
+    async fn add_users_to_group_dm(
+        &self,
+        channel_id: &str,
+        user_ids: &[String],
+    ) -> ClientResult<()> {
+        for uid in user_ids {
+            self.http.invite_to_room(channel_id, uid).await?;
+        }
+        Ok(())
+    }
+
+    /// Invite a user to a server (Matrix Space).
+    ///
+    /// Matrix has no "server invite" concept equivalent to Discord. The closest
+    /// mapping is inviting to the Space room directly. If `server_id` looks like
+    /// a Matrix room ID (`!...`) the invite is sent; otherwise `NotSupported` is
+    /// returned.
+    async fn invite_user_to_server(
+        &self,
+        server_id: &str,
+        user_id: &str,
+    ) -> ClientResult<()> {
+        if server_id.starts_with('!') {
+            self.http.invite_to_room(server_id, user_id).await
+        } else {
+            Err(ClientError::NotSupported(
+                "invite_user_to_server: server_id is not a Matrix room ID; \
+                 Matrix has no invite-link concept — pass the Space room ID instead"
+                    .to_string(),
+            ))
+        }
+    }
+
     fn backend_type(&self) -> BackendType {
         BackendType::from("matrix")
     }

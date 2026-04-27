@@ -1884,4 +1884,175 @@ impl ClientBackend for DiscordClient {
             other => Err(ClientError::NotFound(format!("unknown message action: {other}"))),
         }
     }
+
+    // ── Social / Relationship operations ─────────────────────────────────────
+
+    /// Block a user. Sends `PUT /users/@me/relationships/:user_id` with `{"type": 2}`.
+    async fn block_user(&self, user_id: &str) -> ClientResult<()> {
+        self.http.put_relationship(user_id, 2).await
+    }
+
+    /// Unblock a user. Mirrors `block_user` using DELETE on the same endpoint.
+    async fn unblock_user(&self, user_id: &str) -> ClientResult<()> {
+        self.http.delete_relationship(user_id).await
+    }
+
+    /// Discord does not expose a distinct "ignore" concept separate from blocking.
+    /// We fall back to block so the action has a real effect rather than silently
+    /// dropping the request.
+    async fn ignore_user(&self, user_id: &str) -> ClientResult<()> {
+        // TODO(discord): Discord has no server-side "ignore" — mapping to block.
+        // If a future Discord API adds ignore (relationship type 3 or similar),
+        // update this to use the correct type.
+        self.http.put_relationship(user_id, 2).await
+    }
+
+    /// Reverse of `ignore_user` — same as unblock since we mapped ignore → block.
+    async fn unignore_user(&self, user_id: &str) -> ClientResult<()> {
+        // TODO(discord): mirroring unblock since ignore maps to block above.
+        self.http.delete_relationship(user_id).await
+    }
+
+    /// Send a friend request. Uses `PUT /users/@me/relationships/:user_id` with `{"type": 1}`.
+    ///
+    /// The modern Discord API accepts a user ID directly; the older
+    /// `POST /users/@me/relationships` with username+discriminator is not used
+    /// here because discriminators were retired for most users.
+    async fn add_friend(&self, user_id: &str) -> ClientResult<()> {
+        self.http.put_relationship(user_id, 1).await
+    }
+
+    /// Remove a friend (or cancel an outgoing / incoming request).
+    async fn remove_friend(&self, user_id: &str) -> ClientResult<()> {
+        self.http.delete_relationship(user_id).await
+    }
+
+    /// Discord does not expose per-friend nicknames via its public API.
+    async fn set_friend_nickname(
+        &self,
+        _user_id: &str,
+        _nickname: Option<&str>,
+    ) -> ClientResult<()> {
+        // TODO(discord): Discord has no public endpoint for friend nicknames.
+        Err(ClientError::NotSupported(
+            "set_friend_nickname: Discord does not expose friend nicknames via API".to_string(),
+        ))
+    }
+
+    /// Set or clear a private note about a user. `None` clears (sends empty string).
+    async fn set_user_note(&self, user_id: &str, note: Option<&str>) -> ClientResult<()> {
+        self.http.put_user_note(user_id, note.unwrap_or("")).await
+    }
+
+    // ── Conversation lifecycle ────────────────────────────────────────────────
+
+    /// Hide a DM from the channel list. Discord uses `DELETE /channels/:id` for this;
+    /// the channel is not destroyed — a new message will re-open it.
+    async fn close_dm_channel(&self, channel_id: &str) -> ClientResult<()> {
+        self.http.delete_channel(channel_id).await
+    }
+
+    /// Mute a conversation.
+    ///
+    /// Discord exposes per-channel notification overrides via
+    /// `PATCH /users/@me/guilds/:guild_id/settings` (for guild channels) or
+    /// channel-level notification objects. The correct endpoint differs between
+    /// DMs and guild channels and requires knowing the guild context.
+    ///
+    /// TODO(discord): Implement proper per-channel mute via the notification
+    /// settings API (`PATCH /users/@me/guilds/:guild_id/settings` for guild
+    /// channels; DM muting is not officially supported in the public API).
+    async fn mute_conversation(
+        &self,
+        _channel_id: &str,
+        _until: Option<chrono::DateTime<chrono::Utc>>,
+    ) -> ClientResult<()> {
+        Err(ClientError::NotSupported(
+            "mute_conversation: Discord notification settings require guild context; not yet implemented".to_string(),
+        ))
+    }
+
+    /// Unmute a conversation.
+    ///
+    /// TODO(discord): reverse of mute_conversation above.
+    async fn unmute_conversation(&self, _channel_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported(
+            "unmute_conversation: Discord notification settings require guild context; not yet implemented".to_string(),
+        ))
+    }
+
+    /// Leave a group DM. Reuses `DELETE /channels/:id` — Discord removes the
+    /// caller from the group without deleting it for others.
+    async fn leave_group_dm(&self, channel_id: &str) -> ClientResult<()> {
+        self.http.delete_channel(channel_id).await
+    }
+
+    /// Update a group DM's name and/or icon.
+    ///
+    /// Discord accepts `icon` as a base64 data URI; we pass `avatar_url` as-is
+    /// (works for self-hosted Spacebar; for real Discord the caller must encode).
+    async fn edit_group_dm(
+        &self,
+        channel_id: &str,
+        name: Option<&str>,
+        avatar_url: Option<&str>,
+    ) -> ClientResult<()> {
+        let mut body = serde_json::json!({});
+        if let Some(n) = name {
+            body["name"] = serde_json::json!(n);
+        }
+        if let Some(icon) = avatar_url {
+            body["icon"] = serde_json::json!(icon);
+        }
+        self.http.patch_channel(channel_id, body).await.map(|_| ())
+    }
+
+    /// Add one or more users to a group DM.
+    ///
+    /// Issues one `PUT /channels/:channel_id/recipients/:user_id` per user.
+    /// Stops and returns the first error if any call fails.
+    async fn add_users_to_group_dm(
+        &self,
+        channel_id: &str,
+        user_ids: &[String],
+    ) -> ClientResult<()> {
+        for uid in user_ids {
+            self.http.add_group_dm_recipient(channel_id, uid).await?;
+        }
+        Ok(())
+    }
+
+    /// Send a server invite to a specific user via DM.
+    ///
+    /// Two-step:
+    /// 1. Fetch the server's `default_channel_id` (system channel), then create
+    ///    an invite with `POST /channels/:channel_id/invites`.
+    /// 2. Open a DM with the user and send the invite URL as a message.
+    ///
+    /// If the server has no system channel configured, returns `NotSupported`.
+    async fn invite_user_to_server(
+        &self,
+        server_id: &str,
+        user_id: &str,
+    ) -> ClientResult<()> {
+        // Step 1: resolve system channel.
+        let guild = self.http.get_guild(server_id).await?;
+        let system_channel_id = guild.system_channel_id.ok_or_else(|| {
+            ClientError::NotSupported(
+                "invite_user_to_server: server has no system channel; cannot create invite".to_string(),
+            )
+        })?;
+
+        // Step 2: create invite (1 day, 1 use).
+        let invite_code = self
+            .http
+            .create_invite(&system_channel_id, 86400, 1)
+            .await?;
+        let invite_url = format!("https://discord.gg/{invite_code}");
+
+        // Step 3: open DM and send the invite URL.
+        let dm_channel_id = self.http.open_dm(user_id).await?;
+        self.http.send_message(&dm_channel_id, &invite_url).await?;
+        Ok(())
+    }
 }

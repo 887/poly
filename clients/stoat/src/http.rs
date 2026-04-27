@@ -7,8 +7,9 @@
 use crate::api::{
     StoatAllMemberResponse, StoatAuthenticatedSession, StoatAutumnUploadResponse,
     StoatBanCreate, StoatBansResponse, StoatBulkMessageResponse, StoatChannel, StoatChannelEdit,
-    StoatChannelUnread, StoatLoginResponse, StoatMemberEdit, StoatMessage, StoatPasswordLoginRequest,
-    StoatRootConfig, StoatSendFriendRequest, StoatSendMessageRequest, StoatServer, StoatUser,
+    StoatChannelUnread, StoatGroupEdit, StoatLoginResponse, StoatMemberEdit, StoatMessage,
+    StoatPasswordLoginRequest, StoatRootConfig, StoatSendFriendRequest, StoatSendMessageRequest,
+    StoatServer, StoatUser,
 };
 use crate::config::StoatConfig;
 use poly_client::{Attachment, ClientError, ClientResult, MessageQuery};
@@ -790,6 +791,112 @@ impl StoatHttpClient {
         &self,
         channel_id: &str,
         edit: &StoatChannelEdit,
+    ) -> ClientResult<()> {
+        let response = self
+            .authenticated_request(Method::PATCH, &format!("/channels/{channel_id}"))?
+            .json(edit)
+            .send()
+            .await
+            .map_err(Self::network_error)?;
+
+        if !(response.status().is_success() || response.status().as_u16() == 204) {
+            return Err(Self::parse_error(response).await);
+        }
+        Ok(())
+    }
+
+    // ── User relationship ops ────────────────────────────────────────────────
+
+    /// Block a user (`PUT /users/{user_id}/block`).
+    pub async fn block_user(&self, user_id: &str) -> ClientResult<()> {
+        let response = self
+            .authenticated_request(Method::PUT, &format!("/users/{user_id}/block"))?
+            .send()
+            .await
+            .map_err(Self::network_error)?;
+
+        if !(response.status().is_success() || response.status().as_u16() == 204) {
+            return Err(Self::parse_error(response).await);
+        }
+        Ok(())
+    }
+
+    /// Unblock a user (`DELETE /users/{user_id}/block`).
+    pub async fn unblock_user(&self, user_id: &str) -> ClientResult<()> {
+        let response = self
+            .authenticated_request(Method::DELETE, &format!("/users/{user_id}/block"))?
+            .send()
+            .await
+            .map_err(Self::network_error)?;
+
+        if !(response.status().is_success() || response.status().as_u16() == 204) {
+            return Err(Self::parse_error(response).await);
+        }
+        Ok(())
+    }
+
+    /// Send a friend request by user ID (`PUT /users/{user_id}/friend`).
+    ///
+    /// Stoat reuses this endpoint for both sending and accepting a request;
+    /// the server resolves the correct transition.
+    pub async fn add_friend(&self, user_id: &str) -> ClientResult<()> {
+        let response = self
+            .authenticated_request(Method::PUT, &format!("/users/{user_id}/friend"))?
+            .send()
+            .await
+            .map_err(Self::network_error)?;
+
+        if !(response.status().is_success() || response.status().as_u16() == 204) {
+            return Err(Self::parse_error(response).await);
+        }
+        Ok(())
+    }
+
+    /// Remove a friend or cancel a pending request by user ID
+    /// (`DELETE /users/{user_id}/friend`).
+    ///
+    /// Distinct from `remove_friend` which discards the user object; this
+    /// variant simply performs the HTTP call and returns `()`.
+    pub async fn remove_friend_by_id(&self, user_id: &str) -> ClientResult<()> {
+        let response = self
+            .authenticated_request(Method::DELETE, &format!("/users/{user_id}/friend"))?
+            .send()
+            .await
+            .map_err(Self::network_error)?;
+
+        if !(response.status().is_success() || response.status().as_u16() == 204) {
+            return Err(Self::parse_error(response).await);
+        }
+        Ok(())
+    }
+
+    // ── DM / group channel lifecycle ─────────────────────────────────────────
+
+    /// Close a DM channel or leave a group DM (`DELETE /channels/{channel_id}`).
+    ///
+    /// For 1-on-1 DMs this hides the conversation; the channel reopens when a
+    /// new message arrives.  For Group channels the caller leaves the group.
+    pub async fn close_or_leave_channel(&self, channel_id: &str) -> ClientResult<()> {
+        let response = self
+            .authenticated_request(
+                Method::DELETE,
+                &format!("/channels/{channel_id}?leave_silent=true"),
+            )?
+            .send()
+            .await
+            .map_err(Self::network_error)?;
+
+        if !(response.status().is_success() || response.status().as_u16() == 204) {
+            return Err(Self::parse_error(response).await);
+        }
+        Ok(())
+    }
+
+    /// Edit a Group DM's metadata (`PATCH /channels/{channel_id}`).
+    pub async fn edit_group_dm(
+        &self,
+        channel_id: &str,
+        edit: &StoatGroupEdit,
     ) -> ClientResult<()> {
         let response = self
             .authenticated_request(Method::PATCH, &format!("/channels/{channel_id}"))?

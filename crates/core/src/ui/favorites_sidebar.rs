@@ -578,10 +578,38 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
         (false, false) => "server-icon account-icon",
     };
 
+    let menu_aid = account_id.clone();
+    let menu_display = display_name.clone();
+    let menu_app_state = app_state;
+    let menu_chat_data = chat_data;
+    let on_account_contextmenu = move |evt: Event<MouseData>| {
+        evt.prevent_default();
+        evt.stop_propagation();
+        let coords = evt.client_coordinates();
+        let (slug, inst) = {
+            let cd = menu_chat_data.read();
+            cd.account_sessions
+                .get(&menu_aid)
+                .map(|s| (s.backend.slug().to_string(), s.instance_id.clone()))
+                .unwrap_or_else(|| ("demo".to_string(), "demo".to_string()))
+        };
+        menu_app_state.batch(|st| {
+            st.account_context_menu = Some(crate::state::AccountContextMenuState {
+                x: coords.x,
+                y: coords.y,
+                account_id: menu_aid.clone(),
+                display_name: menu_display.clone(),
+                backend_slug: slug,
+                instance_id: inst,
+            });
+        });
+    };
+
     rsx! {
         div {
             class: "{account_item_class}",
             draggable: "true",
+            oncontextmenu: on_account_contextmenu,
             ondragstart: on_account_drag_start,
             ondragover: on_account_drag_over,
             ondragleave: on_account_drag_leave,

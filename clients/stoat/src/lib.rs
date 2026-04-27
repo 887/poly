@@ -49,7 +49,8 @@ pub use api::StoatRootConfig;
 #[cfg(feature = "native")]
 use api::{
     StoatBanCreate, StoatBulkMessageResponse, StoatChannelEdit, StoatChannelUnread,
-    StoatMemberEdit, StoatRelationshipStatus, StoatSendMessageRequest, reply_preview_from_message,
+    StoatGroupEdit, StoatMemberEdit, StoatRelationshipStatus, StoatSendMessageRequest,
+    reply_preview_from_message,
 };
 #[cfg(feature = "native")]
 use async_trait::async_trait;
@@ -1640,6 +1641,110 @@ impl ClientBackend for StoatClient {
             other => Err(ClientError::NotFound(format!("unknown message action: {other}"))),
         }
     }
+
+    // ── User relationship ops (Wave 2 — B-ST social actions) ─────────────────
+
+    async fn block_user(&self, user_id: &str) -> ClientResult<()> {
+        self.http.block_user(user_id).await
+    }
+
+    async fn unblock_user(&self, user_id: &str) -> ClientResult<()> {
+        self.http.unblock_user(user_id).await
+    }
+
+    /// Stoat has no separate "ignore" concept distinct from block.
+    ///
+    /// Decision: map `ignore_user` → `block_user` so the UI action produces a
+    /// meaningful effect rather than silently failing.  The docstring says
+    /// "quieter than block" but Revolt/Stoat does not expose an ignore tier,
+    /// so block is the closest available operation.
+    async fn ignore_user(&self, user_id: &str) -> ClientResult<()> {
+        // TODO(stoat): Stoat has no separate ignore tier; mapped to block.
+        self.http.block_user(user_id).await
+    }
+
+    /// Reverse of `ignore_user` — maps to unblock for the same reason.
+    async fn unignore_user(&self, user_id: &str) -> ClientResult<()> {
+        // TODO(stoat): Stoat has no separate ignore tier; mapped to unblock.
+        self.http.unblock_user(user_id).await
+    }
+
+    async fn add_friend(&self, user_id: &str) -> ClientResult<()> {
+        self.http.add_friend(user_id).await
+    }
+
+    async fn remove_friend(&self, user_id: &str) -> ClientResult<()> {
+        self.http.remove_friend_by_id(user_id).await
+    }
+
+    // set_friend_nickname: Revolt/Stoat has no per-friend nickname endpoint.
+    // Trait default (NotSupported) is inherited.
+
+    // set_user_note: Revolt/Stoat has no user-note endpoint.
+    // Trait default (NotSupported) is inherited.
+
+    // ── Conversation lifecycle ────────────────────────────────────────────────
+
+    async fn close_dm_channel(&self, channel_id: &str) -> ClientResult<()> {
+        self.http.close_or_leave_channel(channel_id).await
+    }
+
+    // mute_conversation: PATCH /channels/{channel_id} with notification overrides
+    // requires a nested `notify` field that varies by Stoat instance version.
+    // TODO(stoat): implement mute_conversation once the notification-override schema
+    // is confirmed stable across official and self-hosted Stoat instances.
+    // Trait default (NotSupported) is inherited.
+
+    // unmute_conversation: same as above.
+    // Trait default (NotSupported) is inherited.
+
+    async fn leave_group_dm(&self, channel_id: &str) -> ClientResult<()> {
+        self.http.close_or_leave_channel(channel_id).await
+    }
+
+    async fn edit_group_dm(
+        &self,
+        channel_id: &str,
+        name: Option<&str>,
+        avatar_url: Option<&str>,
+    ) -> ClientResult<()> {
+        if avatar_url.is_some() {
+            // Revolt icon updates require an Autumn file upload first; we can't
+            // accept a plain URL here.  Log and proceed with whatever else changed.
+            tracing::warn!(
+                "edit_group_dm: Stoat requires an Autumn upload for icon changes; \
+                 avatar_url ignored for channel {channel_id}"
+            );
+        }
+
+        let edit = StoatGroupEdit {
+            name: name.map(str::to_string),
+            remove: None,
+        };
+
+        self.http.edit_group_dm(channel_id, &edit).await
+    }
+
+    async fn add_users_to_group_dm(
+        &self,
+        channel_id: &str,
+        user_ids: &[String],
+    ) -> ClientResult<()> {
+        // Revolt exposes a per-user endpoint; fan out one call per user.
+        future::try_join_all(
+            user_ids
+                .iter()
+                .map(|user_id| self.http.add_group_member(channel_id, user_id)),
+        )
+        .await
+        .map(|_| ())
+    }
+
+    // invite_user_to_server: creating an invite code and DMing it to a specific
+    // user requires two separate API calls and a pre-existing DM channel.
+    // TODO(stoat): implement invite_user_to_server — create invite via
+    // POST /channels/{channel_id}/invites, then send the link via DM.
+    // Trait default (NotSupported) is inherited.
 }
 
 #[cfg(all(feature = "native", not(target_arch = "wasm32")))]

@@ -15,8 +15,9 @@
 //! Extract sub-components rather than growing this file.
 
 use super::account::{
-    AccountServerBar, AttachmentContextMenu, AvatarContextMenu, ChannelContextMenu,
-    DmContextMenu, GroupDmContextMenu, ReactionContextMenu, ServerContextMenu, UserProfileModal,
+    AccountContextMenu, AccountServerBar, AttachmentContextMenu, AvatarContextMenu,
+    ChannelContextMenu, DmContextMenu, GroupDmContextMenu, ReactionContextMenu,
+    ServerContextMenu, UserProfileModal,
 };
 use super::context_menu::host::ContextMenuStack;
 use super::favorites_sidebar::FavoritesBar;
@@ -305,24 +306,26 @@ pub fn MainLayout() -> Element {
                 // Collapse the 5 context-menu-clear writes into ONE batch —
                 // previously each .write() triggered a separate Dioxus reactive
                 // cascade. See CLAUDE.md § Common WASM-hang causes #1.
-                let (has_ctx, has_chan, has_dm, has_gdm, has_att, has_react, has_stack) = {
+                let (has_ctx, has_chan, has_dm, has_gdm, has_acc, has_att, has_react, has_stack) = {
                     let st = app_state.read();
                     (
                         st.context_menu.is_some(),
                         st.channel_context_menu.is_some(),
                         st.dm_context_menu.is_some(),
                         st.group_dm_context_menu.is_some(),
+                        st.account_context_menu.is_some(),
                         st.attachment_context_menu.is_some(),
                         st.reaction_context_menu.is_some(),
                         !st.context_menu_stack.is_empty(),
                     )
                 };
-                if has_ctx || has_chan || has_dm || has_gdm || has_att || has_react || has_stack {
+                if has_ctx || has_chan || has_dm || has_gdm || has_acc || has_att || has_react || has_stack {
                     app_state.batch(|st| {
                         if has_ctx { st.context_menu = None; }
                         if has_chan { st.channel_context_menu = None; }
                         if has_dm { st.dm_context_menu = None; }
                         if has_gdm { st.group_dm_context_menu = None; }
+                        if has_acc { st.account_context_menu = None; }
                         if has_att { st.attachment_context_menu = None; }
                         if has_react { st.reaction_context_menu = None; }
                         if has_stack { st.context_menu_stack.clear(); }
@@ -341,6 +344,8 @@ pub fn MainLayout() -> Element {
             DmContextMenu {}
             // Floating group-DM right-click / long-press context menu
             GroupDmContextMenu {}
+            // Floating account-icon right-click / long-press context menu
+            AccountContextMenu {}
             // Floating attachment (image) right-click context menu
             AttachmentContextMenu {}
             // Floating reaction chip right-click context menu (D2.b)

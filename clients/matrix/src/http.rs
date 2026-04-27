@@ -5,10 +5,11 @@
 //! resume after interruptions.
 
 use crate::api::{
-    BanRequest, JoinedRoomsResponse, KickRequest, LoginIdentifier, LoginRequest,
-    LoginResponse, MessagesResponse, PowerLevelsContent, ProfileResponse, RedactRequest,
-    RoomEvent, RoomMembersResponse, RoomNameRequest, RoomTopicRequest, SendEventResponse,
-    SendMessageRequest, SpaceHierarchyResponse, SyncResponse, UnbanRequest, WhoAmIResponse,
+    BanRequest, IgnoredUserListContent, InviteRequest, JoinedRoomsResponse, KickRequest,
+    LoginIdentifier, LoginRequest, LoginResponse, MessagesResponse, PowerLevelsContent,
+    ProfileResponse, PushRuleRequest, RedactRequest, RoomAvatarRequest, RoomEvent,
+    RoomMembersResponse, RoomNameRequest, RoomTopicRequest, SendEventResponse, SendMessageRequest,
+    SpaceHierarchyResponse, SyncResponse, UnbanRequest, WhoAmIResponse,
 };
 use crate::config::MatrixConfig;
 use poly_client::{ClientError, ClientResult};
@@ -574,6 +575,232 @@ impl MatrixHttpClient {
             .json(&RoomTopicRequest {
                 topic: topic.to_string(),
             })
+            .send()
+            .await
+            .map_err(Self::network_error)?;
+
+        if !response.status().is_success() {
+            return Err(Self::parse_error(response).await);
+        }
+        Ok(())
+    }
+
+    // -----------------------------------------------------------------------
+    // Ignored users (account data)
+    // -----------------------------------------------------------------------
+
+    /// Fetch `m.ignored_user_list` account data.
+    ///
+    /// Returns a default (empty) struct if the event does not exist yet.
+    pub async fn fetch_ignored_user_list(
+        &self,
+        user_id: &str,
+    ) -> ClientResult<IgnoredUserListContent> {
+        let path = format!(
+            "/_matrix/client/v3/user/{user_id}/account_data/m.ignored_user_list"
+        );
+        let response = self
+            .authenticated_request(Method::GET, &path)?
+            .send()
+            .await
+            .map_err(Self::network_error)?;
+
+        if response.status().as_u16() == 404 {
+            return Ok(IgnoredUserListContent::default());
+        }
+        if !response.status().is_success() {
+            return Err(Self::parse_error(response).await);
+        }
+        response.json().await.map_err(Self::network_error)
+    }
+
+    /// Write `m.ignored_user_list` account data via
+    /// `PUT /_matrix/client/v3/user/{userId}/account_data/m.ignored_user_list`.
+    pub async fn put_ignored_user_list(
+        &self,
+        user_id: &str,
+        content: &IgnoredUserListContent,
+    ) -> ClientResult<()> {
+        let path = format!(
+            "/_matrix/client/v3/user/{user_id}/account_data/m.ignored_user_list"
+        );
+        let response = self
+            .authenticated_request(Method::PUT, &path)?
+            .json(content)
+            .send()
+            .await
+            .map_err(Self::network_error)?;
+
+        if !response.status().is_success() {
+            return Err(Self::parse_error(response).await);
+        }
+        Ok(())
+    }
+
+    // -----------------------------------------------------------------------
+    // Push rules (mute / unmute conversation)
+    // -----------------------------------------------------------------------
+
+    /// Install a room-level push rule that suppresses notifications
+    /// (`dont_notify`) via
+    /// `PUT /_matrix/client/v3/pushrules/global/room/{roomId}`.
+    ///
+    /// Matrix push rules have no native expiry; the `until` parameter from
+    /// `mute_conversation` is informational only and cannot be honoured.
+    pub async fn put_room_push_rule_mute(&self, room_id: &str) -> ClientResult<()> {
+        let path = format!("/_matrix/client/v3/pushrules/global/room/{room_id}");
+        let response = self
+            .authenticated_request(Method::PUT, &path)?
+            .json(&PushRuleRequest {
+                actions: vec![serde_json::Value::String("dont_notify".to_string())],
+                conditions: vec![],
+            })
+            .send()
+            .await
+            .map_err(Self::network_error)?;
+
+        if !response.status().is_success() {
+            return Err(Self::parse_error(response).await);
+        }
+        Ok(())
+    }
+
+    /// Remove a room-level push rule via
+    /// `DELETE /_matrix/client/v3/pushrules/global/room/{roomId}`.
+    pub async fn delete_room_push_rule(&self, room_id: &str) -> ClientResult<()> {
+        let path = format!("/_matrix/client/v3/pushrules/global/room/{room_id}");
+        let response = self
+            .authenticated_request(Method::DELETE, &path)?
+            .send()
+            .await
+            .map_err(Self::network_error)?;
+
+        // 404 is acceptable — the rule did not exist; treat as success.
+        if response.status().as_u16() == 404 {
+            return Ok(());
+        }
+        if !response.status().is_success() {
+            return Err(Self::parse_error(response).await);
+        }
+        Ok(())
+    }
+
+    // -----------------------------------------------------------------------
+    // Room membership lifecycle
+    // -----------------------------------------------------------------------
+
+    /// Leave a room via `POST /_matrix/client/v3/rooms/{roomId}/leave`.
+    pub async fn leave_room(&self, room_id: &str) -> ClientResult<()> {
+        let path = format!("/_matrix/client/v3/rooms/{room_id}/leave");
+        let response = self
+            .authenticated_request(Method::POST, &path)?
+            .json(&serde_json::Value::Object(serde_json::Map::new()))
+            .send()
+            .await
+            .map_err(Self::network_error)?;
+
+        if !response.status().is_success() {
+            return Err(Self::parse_error(response).await);
+        }
+        Ok(())
+    }
+
+    /// Forget a room via `POST /_matrix/client/v3/rooms/{roomId}/forget`.
+    ///
+    /// The caller must leave the room first; forgetting a joined room will be
+    /// rejected by the homeserver with 400.
+    pub async fn forget_room(&self, room_id: &str) -> ClientResult<()> {
+        let path = format!("/_matrix/client/v3/rooms/{room_id}/forget");
+        let response = self
+            .authenticated_request(Method::POST, &path)?
+            .json(&serde_json::Value::Object(serde_json::Map::new()))
+            .send()
+            .await
+            .map_err(Self::network_error)?;
+
+        if !response.status().is_success() {
+            return Err(Self::parse_error(response).await);
+        }
+        Ok(())
+    }
+
+    /// Invite a user to a room via
+    /// `POST /_matrix/client/v3/rooms/{roomId}/invite`.
+    pub async fn invite_to_room(&self, room_id: &str, user_id: &str) -> ClientResult<()> {
+        let path = format!("/_matrix/client/v3/rooms/{room_id}/invite");
+        let response = self
+            .authenticated_request(Method::POST, &path)?
+            .json(&InviteRequest {
+                user_id: user_id.to_string(),
+            })
+            .send()
+            .await
+            .map_err(Self::network_error)?;
+
+        if !response.status().is_success() {
+            return Err(Self::parse_error(response).await);
+        }
+        Ok(())
+    }
+
+    // -----------------------------------------------------------------------
+    // Room avatar
+    // -----------------------------------------------------------------------
+
+    /// Set a room's avatar via
+    /// `PUT /_matrix/client/v3/rooms/{roomId}/state/m.room.avatar/`.
+    pub async fn set_room_avatar(&self, room_id: &str, mxc_url: &str) -> ClientResult<()> {
+        let path = format!("/_matrix/client/v3/rooms/{room_id}/state/m.room.avatar/");
+        let response = self
+            .authenticated_request(Method::PUT, &path)?
+            .json(&RoomAvatarRequest {
+                url: mxc_url.to_string(),
+            })
+            .send()
+            .await
+            .map_err(Self::network_error)?;
+
+        if !response.status().is_success() {
+            return Err(Self::parse_error(response).await);
+        }
+        Ok(())
+    }
+
+    // -----------------------------------------------------------------------
+    // m.direct account data
+    // -----------------------------------------------------------------------
+
+    /// Fetch `m.direct` account data as a raw JSON value.
+    ///
+    /// Returns an empty JSON object if the event does not exist.
+    pub async fn fetch_m_direct(&self, user_id: &str) -> ClientResult<serde_json::Value> {
+        let path = format!("/_matrix/client/v3/user/{user_id}/account_data/m.direct");
+        let response = self
+            .authenticated_request(Method::GET, &path)?
+            .send()
+            .await
+            .map_err(Self::network_error)?;
+
+        if response.status().as_u16() == 404 {
+            return Ok(serde_json::Value::Object(serde_json::Map::new()));
+        }
+        if !response.status().is_success() {
+            return Err(Self::parse_error(response).await);
+        }
+        response.json().await.map_err(Self::network_error)
+    }
+
+    /// Write `m.direct` account data via
+    /// `PUT /_matrix/client/v3/user/{userId}/account_data/m.direct`.
+    pub async fn put_m_direct(
+        &self,
+        user_id: &str,
+        content: &serde_json::Value,
+    ) -> ClientResult<()> {
+        let path = format!("/_matrix/client/v3/user/{user_id}/account_data/m.direct");
+        let response = self
+            .authenticated_request(Method::PUT, &path)?
+            .json(content)
             .send()
             .await
             .map_err(Self::network_error)?;

@@ -70,6 +70,17 @@
     color: #fff;
 }
 
+.context-menu-item.disabled {
+    color: var(--text-muted, #6b7280);
+    cursor: default;
+    opacity: 0.6;
+}
+
+.context-menu-item.disabled:hover {
+    background: transparent;
+    color: var(--text-muted, #6b7280);
+}
+
 .context-menu-arrow {
     font-size: 1rem;
     color: var(--text-tertiary);

@@ -354,3 +354,52 @@ impl PowerLevelsContent {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Ignored users (account data)
+// ---------------------------------------------------------------------------
+
+/// Content of the `m.ignored_user_list` account data event.
+///
+/// Spec: https://spec.matrix.org/v1.8/client-server-api/#mignored_user_list
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct IgnoredUserListContent {
+    /// Map from user_id to an empty object `{}`.
+    pub ignored_users: std::collections::HashMap<String, serde_json::Value>,
+}
+
+// ---------------------------------------------------------------------------
+// Push rules (notifications / mute)
+// ---------------------------------------------------------------------------
+
+/// Request body for `PUT /_matrix/client/v3/pushrules/global/room/{roomId}`.
+///
+/// Spec: https://spec.matrix.org/v1.8/client-server-api/#put_matrixclientv3pushrulesscopekindruleid
+#[derive(Debug, Serialize)]
+pub struct PushRuleRequest {
+    /// Actions — `["dont_notify"]` to mute.
+    pub actions: Vec<serde_json::Value>,
+    /// Conditions (empty for room-level rules).
+    #[serde(default)]
+    pub conditions: Vec<serde_json::Value>,
+}
+
+// ---------------------------------------------------------------------------
+// Room invite
+// ---------------------------------------------------------------------------
+
+/// Request body for `POST /_matrix/client/v3/rooms/{roomId}/invite`.
+#[derive(Debug, Serialize)]
+pub struct InviteRequest {
+    pub user_id: String,
+}
+
+// ---------------------------------------------------------------------------
+// Room avatar
+// ---------------------------------------------------------------------------
+
+/// Request body for `PUT /_matrix/client/v3/rooms/{roomId}/state/m.room.avatar/`.
+#[derive(Debug, Serialize)]
+pub struct RoomAvatarRequest {
+    pub url: String,
+}
+
