@@ -1676,6 +1676,7 @@ fn use_pinned_messages_effect(signals: &ChatViewSignals) {
 fn use_history_state_effect(signals: &ChatViewSignals) {
     let app_state = signals.app_state;
     let chat_data = signals.chat_data;
+    let client_manager = signals.client_manager;
     let history_state = signals.history_state;
     let mut scrolled_from_bottom = signals.scrolled_from_bottom;
     let mut new_messages_while_scrolled_up = signals.new_messages_while_scrolled_up;
@@ -1753,7 +1754,15 @@ fn use_history_state_effect(signals: &ChatViewSignals) {
         let entered_with_messages =
             messages_loaded && unread_count > 0 && (is_channel_switch || !prev_messages_loaded);
         if entered_with_messages {
-            mark_channel_as_read(chat_data, &active_channel_id_for_mark);
+            let server_id = app_state.read().nav.selected_server.cloned();
+            let account_id = app_state.read().nav.active_account_id.cloned();
+            mark_channel_as_read_with_backend(
+                chat_data,
+                client_manager,
+                account_id,
+                server_id,
+                &active_channel_id_for_mark,
+            );
         }
     });
 }
