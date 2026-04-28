@@ -32,6 +32,10 @@ pub fn record_sent_message(channel_id: &str, msg: Message) {
     if let Ok(mut g) = sent_message_store().lock() {
         g.entry(channel_id.to_string()).or_default().push(msg);
     }
+    // A new message arriving means the channel is no longer "read".
+    if let Ok(mut r) = read_channel_set().lock() {
+        r.remove(channel_id);
+    }
 }
 
 pub fn extra_messages_for(channel_id: &str) -> Vec<Message> {
@@ -40,6 +44,53 @@ pub fn extra_messages_for(channel_id: &str) -> Vec<Message> {
         .ok()
         .and_then(|g| g.get(channel_id).cloned())
         .unwrap_or_default()
+}
+
+/// Set of channel ids the user has marked as read in this process.
+/// `get_channels` / `get_dm_channels` in every demo client honors this
+/// set by zeroing the `unread_count` so that switching channels in the
+/// UI doesn't get re-bumped by the next backend refetch.
+fn read_channel_set() -> &'static Mutex<std::collections::HashSet<String>> {
+    static READ: OnceLock<Mutex<std::collections::HashSet<String>>> = OnceLock::new();
+    READ.get_or_init(|| Mutex::new(std::collections::HashSet::new()))
+}
+
+/// Record that the user has read `channel_id`. Cleared when a new message
+/// arrives in that channel via `record_sent_message`.
+pub fn mark_channel_read_local(channel_id: &str) {
+    if let Ok(mut r) = read_channel_set().lock() {
+        r.insert(channel_id.to_string());
+    }
+}
+
+pub fn channel_is_read_local(channel_id: &str) -> bool {
+    read_channel_set()
+        .lock()
+        .map(|r| r.contains(channel_id))
+        .unwrap_or(false)
+}
+
+/// Zero `unread_count` / `mention_count` on any channel the user has
+/// already marked as read in this process. Demo backends call this on the
+/// way out of `get_channels` so backend refetches don't clobber local
+/// reads.
+pub fn apply_local_read_state(mut channels: Vec<Channel>) -> Vec<Channel> {
+    for c in &mut channels {
+        if channel_is_read_local(&c.id) {
+            c.unread_count = 0;
+            c.mention_count = 0;
+        }
+    }
+    channels
+}
+
+pub fn apply_local_read_state_dms(mut dms: Vec<DmChannel>) -> Vec<DmChannel> {
+    for d in &mut dms {
+        if channel_is_read_local(&d.id) {
+            d.unread_count = 0;
+        }
+    }
+    dms
 }
 
 /// Return a clone of `users[idx]`, or a placeholder user when the index is

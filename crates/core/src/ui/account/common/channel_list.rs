@@ -1241,10 +1241,13 @@ fn DMChannelItem(
                     cd.current_channel = Some(cur_chan);
                     cd.current_server = None;
                 });
-                // Clear unread immediately on click — bypasses use_history_state_effect
-                // timing races (loading=true window) so the badge always disappears.
-                crate::ui::account::common::chat_view::mark_channel_as_read(
+                // Clear unread on click + tell the backend so the next
+                // get_dm_channels refetch doesn't restore the badge.
+                crate::ui::account::common::chat_view::mark_channel_as_read_with_backend(
                     chat_data,
+                    client_manager,
+                    Some(account_id.clone()),
+                    None,
                     &channel_id,
                 );
                 app_state.batch(|st| st.nav.dm_right_sidebar_visible = false);
@@ -1389,8 +1392,11 @@ fn GroupChannelItem(
                     cd.current_channel = Some(cur_chan);
                     cd.current_server = None;
                 });
-                crate::ui::account::common::chat_view::mark_channel_as_read(
+                crate::ui::account::common::chat_view::mark_channel_as_read_with_backend(
                     chat_data,
+                    client_manager,
+                    Some(account_id.clone()),
+                    None,
                     &group_id,
                 );
                 let cid = group_id.clone();
@@ -1614,8 +1620,16 @@ fn ChannelItemRow(channel: Channel) -> Element {
                     let ch = channel_for_click.clone();
                     chat_data.batch(|cd| cd.current_channel = Some(ch));
                 }
-                // Clear unread immediately on click — same race fix as DMChannelItem.
-                crate::ui::account::common::chat_view::mark_channel_as_read(chat_data, &ch_id);
+                // Clear unread on click. Tells the backend too so the next
+                // get_channels refetch doesn't restore the unread count.
+                let server_id_for_mark = app_state.read().nav.selected_server.cloned();
+                crate::ui::account::common::chat_view::mark_channel_as_read_with_backend(
+                    chat_data,
+                    client_manager,
+                    None,
+                    server_id_for_mark,
+                    &ch_id,
+                );
                 // Persist last visited channel for this server (fire-and-forget).
                 let server_id_for_persist = channel.server_id.clone();
                 let channel_id_for_persist = ch_id.clone();

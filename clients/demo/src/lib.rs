@@ -136,7 +136,12 @@ impl ClientBackend for DemoClient {
     }
 
     async fn get_channels(&self, server_id: &str) -> ClientResult<Vec<Channel>> {
-        Ok(data::demo_channels(server_id))
+        Ok(data::apply_local_read_state(data::demo_channels(server_id)))
+    }
+
+    async fn mark_channel_read(&self, channel_id: &str) -> ClientResult<()> {
+        data::mark_channel_read_local(channel_id);
+        Ok(())
     }
 
     async fn get_channel(&self, id: &str) -> ClientResult<Channel> {
@@ -241,7 +246,7 @@ impl ClientBackend for DemoClient {
     }
 
     async fn get_dm_channels(&self) -> ClientResult<Vec<DmChannel>> {
-        Ok(data::demo_dm_channels())
+        Ok(data::apply_local_read_state_dms(data::demo_dm_channels()))
     }
 
     async fn open_direct_message_channel(&self, user_id: &str) -> ClientResult<DmChannel> {
@@ -705,7 +710,7 @@ impl ClientBackend for DemoClient2 {
     }
 
     async fn get_channels(&self, server_id: &str) -> ClientResult<Vec<Channel>> {
-        Ok(data::demo2_channels(server_id))
+        Ok(data::apply_local_read_state(data::demo2_channels(server_id)))
     }
 
     async fn get_channel(&self, id: &str) -> ClientResult<Channel> {
@@ -810,6 +815,11 @@ impl ClientBackend for DemoClient2 {
         Ok(())
     }
 
+    async fn mark_channel_read(&self, channel_id: &str) -> ClientResult<()> {
+        data::mark_channel_read_local(channel_id);
+        Ok(())
+    }
+
     async fn get_dm_channels(&self) -> ClientResult<Vec<DmChannel>> {
         // A subset of DMs from a different perspective
         let mut dms: Vec<DmChannel> = data::demo_dm_channels()
@@ -856,7 +866,7 @@ impl ClientBackend for DemoClient2 {
             account_id: data::DEMO2_ACCOUNT_ID.to_string(),
         });
 
-        Ok(dms)
+        Ok(data::apply_local_read_state_dms(dms))
     }
 
     async fn open_direct_message_channel(&self, user_id: &str) -> ClientResult<DmChannel> {
@@ -1170,7 +1180,12 @@ impl ClientBackend for DemoClient3 {
     }
 
     async fn get_channels(&self, server_id: &str) -> ClientResult<Vec<Channel>> {
-        Ok(data::demo3_channels(server_id))
+        Ok(data::apply_local_read_state(data::demo3_channels(server_id)))
+    }
+
+    async fn mark_channel_read(&self, channel_id: &str) -> ClientResult<()> {
+        data::mark_channel_read_local(channel_id);
+        Ok(())
     }
 
     async fn get_channel(&self, id: &str) -> ClientResult<Channel> {
@@ -1282,7 +1297,7 @@ impl ClientBackend for DemoClient3 {
     }
 
     async fn get_dm_channels(&self) -> ClientResult<Vec<DmChannel>> {
-        Ok(data::demo3_dm_channels())
+        Ok(data::apply_local_read_state_dms(data::demo3_dm_channels()))
     }
 
     async fn open_direct_message_channel(&self, user_id: &str) -> ClientResult<DmChannel> {

@@ -602,6 +602,36 @@ fn display_unread_count(unread_count: u32) -> String {
     unread_count.to_string()
 }
 
+pub(crate) fn mark_channel_as_read_with_backend(
+    chat_data: BatchedSignal<ChatData>,
+    client_manager: BatchedSignal<crate::client_manager::ClientManager>,
+    account_id: Option<String>,
+    server_id: Option<String>,
+    channel_id: &str,
+) -> u32 {
+    let cleared = mark_channel_as_read(chat_data, channel_id);
+    // Fire-and-forget: tell the backend so the next get_channels refetch
+    // returns unread_count=0 for this channel.
+    let cid = channel_id.to_string();
+    spawn(async move {
+        let handle = if let Some(sid) = server_id {
+            client_manager.read().get_backend_for_server(&sid).map(|(_, b)| b)
+        } else if let Some(aid) = account_id {
+            client_manager.read().get_backend(&aid)
+        } else {
+            None
+        };
+        if let Some(handle) = handle
+            && let Ok(backend) = handle
+                .read_with_timeout(std::time::Duration::from_secs(5))
+                .await
+        {
+            let _ = backend.mark_channel_read(&cid).await;
+        }
+    });
+    cleared
+}
+
 pub(crate) fn mark_channel_as_read(chat_data: BatchedSignal<ChatData>, channel_id: &str) -> u32 {
     let (unread_count, mention_count, current_server_id) = {
         let data = chat_data.read();

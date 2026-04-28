@@ -307,6 +307,17 @@ pub trait ClientBackend: Send + Sync {
         Err(ClientError::NotSupported("unblock_user".to_string()))
     }
 
+    /// Mark a channel (server channel or DM) as read on the backend.
+    ///
+    /// Hosts call this alongside the local `mark_channel_as_read` so that
+    /// the next `get_channels` / `get_dm_channels` refetch returns
+    /// `unread_count = 0` for the channel — without it, the local clear is
+    /// overwritten by the backend's stale unread snapshot.
+    async fn mark_channel_read(&self, channel_id: &str) -> ClientResult<()> {
+        let _ = channel_id;
+        Err(ClientError::NotSupported("mark_channel_read".to_string()))
+    }
+
     /// Block a user. Future messages from them are hidden and they
     /// cannot DM the calling user.
     async fn block_user(&self, user_id: &str) -> ClientResult<()> {
