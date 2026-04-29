@@ -113,4 +113,14 @@ Claude-Desktop-callback as v2. To be defended in code review.
 - 2026-04-29 17:32 — Stream C landed (`8dd9210c`).
 - 2026-04-29 17:33 — Stream D landed (`1dc378d8`).
 - 2026-04-29 17:33 — Stream E plan-file present on main (in-tree).
-- 2026-04-29 17:34 — All five streams done; consolidating into one PR.
+- 2026-04-29 17:34 — All five streams done.
+- 2026-04-29 19:30 — F1 Teams freeze, F2 Lemmy nav, F3 Forgejo+GitHub
+  issue detail — all sub-agents shipped (`a4223099`).
+- 2026-04-29 19:45 — F3's `/` separator broke URL routing (Dioxus router
+  truncates path on `/`). Switched to `~` separator (`d0b73aa0`).
+- 2026-04-29 19:55 — Smoke test sweep of all fixes:
+  - ✅ A — Catch-me-up button visible in chat header (✨), opens panel with last 20 messages + Copy summary prompt button.
+  - ✅ B — Typing-simulation toggle visible in composer toolbar (⌨️), toggles to ⏸️ when active, fires send_typing.
+  - ✅ F1 — Teams account icon click no longer freezes; URL is `/teams/localhost:9103/U001/overview` (scheme stripped).
+  - ✅ F2 — Lemmy account shows subscribed communities (Programming, Rust Programming) in left wing; DM button correctly hidden.
+  - ⚠️ F3 — Channel ID with `~` separator survives URL routing; full data round-trip needs re-login (test-forgejo binary restarted, invalidating existing session tokens — non-blocking session-refresh issue).
