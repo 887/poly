@@ -93,6 +93,36 @@ For UI-only changes (CSS / RSX), skip step 4 (unit tests) but always run step 3 
 
 ---
 
+## Plan files — checkbox + status discipline
+
+Every plan file in `docs/plans/` MUST follow these rules. No
+exceptions, no "I'll add checkboxes later".
+
+1. **Numbered phases** using typeable letters: `Phase A`, `Phase B`, …
+   No `§` characters.
+2. **Sub-step checkboxes** in each phase: `- [ ] **A.1** …`,
+   `- [ ] **A.2** …`. A phase with no sub-step checkboxes is forbidden
+   — if you can't articulate sub-steps, you don't have a plan yet.
+3. **Tick `- [x]` AS WORK LANDS** with a "shipped in commit `<id>`"
+   note on the phase header. Do not batch.
+4. **Mark plan DONE** at the top: `## Status: ✅ DONE — all phases
+   shipped (commits a, b, c)`. Obsolete plans get
+   `## Status: OBSOLETE — superseded by …`.
+5. **Repo plans live in the repo.** A plan describing work in this
+   repo MUST be at `docs/plans/`. Anything in `~/.claude/plans/` is
+   personal scratch only — move it into the repo before sub-agents
+   touch it.
+
+**Why this is non-negotiable:** sub-agents in worktrees see stale
+source, context windows compress, agents crash mid-task. A plan
+without ticked checkboxes is unreadable to any non-orchestrator agent
+and degrades into "vibes-based status" within two iterations.
+
+**Sub-agent dispatch must include**: "Tick the checkboxes for sub-steps
+you complete, AND add the commit ID to the phase header inline."
+
+---
+
 ## Priority 2 — Use Jujutsu (jj) Instead of Git
 
 - **Always use `jj` commands** for version control, never raw `git`

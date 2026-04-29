@@ -1,5 +1,7 @@
 # Orchestration Plan — 2026-04-29
 
+## Status: ✅ DONE — all five streams + three fix follow-ups shipped
+
 > Five parallel streams. Orchestrator (this agent) tracks each, dispatches
 > sub-agents at appropriate model tiers, ticks checkboxes as commits land.
 > Skipped: Blitz component snapshot tests (deferred per user).

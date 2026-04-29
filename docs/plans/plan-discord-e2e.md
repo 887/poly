@@ -1,5 +1,7 @@
 # Discord End-to-End Test Plan
 
+## Status: 🚧 IN PROGRESS — HTTP-only tests shipped; UI-level Playwright tests pending
+
 > Created: 2026-04-27
 > Scope: Playwright + mock-server E2E coverage for the poly-discord backend.
 

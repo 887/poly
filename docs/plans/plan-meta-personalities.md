@@ -1,7 +1,8 @@
 # Plan — Meta-Personalities (Personas Above Accounts)
 
+## Status: 🚧 IN PROGRESS — Phase A shipped; Phases B-H pending
+
 > **Created:** 2026-04-29
-> **Status:** DRAFT — design only, no code
 > **Depends on:** `plan-claude-desktop-agent.md` (shipped Phases A-F: memory, drafts, events, typing, style, catch-me-up)
 > **Layered above:** per-chat `chat_style` (Phase E) and per-contact `contact_facts` (Phase A) — meta-personas are a third layer that *spans* accounts and chats rather than living inside one.
 > **Owner crates:** `mcp/chat-mcp/`, `crates/core/src/ui/account/common/agent_panel.rs`, `crates/core/src/ui/agent/`
