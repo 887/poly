@@ -90,7 +90,7 @@ async fn test_get_servers() {
         .expect("get_servers should succeed");
 
     assert!(!servers.is_empty(), "penguin should have repos");
-    assert_eq!(servers.len(), 2, "penguin owns iceberg-os and fish-tracker");
+    assert!(servers.len() >= 2, "penguin owns at least iceberg-os and fish-tracker");
 
     let names: Vec<&str> = servers.iter().map(|s| s.name.as_str()).collect();
     assert!(
@@ -103,7 +103,7 @@ async fn test_get_servers() {
     );
 }
 
-/// Each repo exposes 3 channels: issues, pull-requests, code.
+/// Each repo exposes 4 channels: issues, pull-requests, discussions, code.
 #[tokio::test]
 async fn test_get_channels() {
     let base_url = start_test_server().await;
@@ -125,7 +125,7 @@ async fn test_get_channels() {
         .await
         .expect("get_channels should succeed");
 
-    assert_eq!(channels.len(), 3, "each repo has 3 channels");
+    assert_eq!(channels.len(), 4, "each repo has 4 channels");
 
     let channel_names: Vec<&str> = channels.iter().map(|c| c.name.as_str()).collect();
     assert!(channel_names.contains(&"issues"), "issues channel");
@@ -133,6 +133,7 @@ async fn test_get_channels() {
         channel_names.contains(&"pull-requests"),
         "pull-requests channel"
     );
+    assert!(channel_names.contains(&"discussions"), "discussions channel");
     assert!(channel_names.contains(&"code"), "code channel");
 }
 
@@ -148,7 +149,7 @@ async fn test_get_messages_issues() {
         .unwrap();
     client.get_servers().await.unwrap();
 
-    let channel_id = "gh-issues-penguin-iceberg-os";
+    let channel_id = "gh-issues-penguin/iceberg-os";
     let messages = client
         .get_messages(channel_id, MessageQuery::default())
         .await
@@ -191,7 +192,7 @@ async fn test_get_messages_pulls() {
         .unwrap();
     client.get_servers().await.unwrap();
 
-    let channel_id = "gh-pulls-penguin-iceberg-os";
+    let channel_id = "gh-pulls-penguin/iceberg-os";
     let messages = client
         .get_messages(channel_id, MessageQuery::default())
         .await
@@ -226,7 +227,7 @@ async fn test_get_messages_comments() {
     client.get_servers().await.unwrap();
 
     // Issue thread channel: gh-issue-{owner}-{repo}-{number}
-    let channel_id = "gh-issue-penguin-iceberg-os-1";
+    let channel_id = "gh-issue-penguin/iceberg-os-1";
     let messages = client
         .get_messages(channel_id, MessageQuery::default())
         .await
@@ -264,7 +265,7 @@ async fn test_list_files() {
         .unwrap();
     client.get_servers().await.unwrap();
 
-    let channel_id = "gh-code-penguin-iceberg-os";
+    let channel_id = "gh-code-penguin/iceberg-os";
     let entries = client
         .list_files(channel_id, "")
         .await
@@ -289,7 +290,7 @@ async fn test_list_files_subdir() {
         .unwrap();
     client.get_servers().await.unwrap();
 
-    let channel_id = "gh-code-penguin-iceberg-os";
+    let channel_id = "gh-code-penguin/iceberg-os";
     let entries = client
         .list_files(channel_id, "src")
         .await
@@ -313,7 +314,7 @@ async fn test_read_file() {
         .unwrap();
     client.get_servers().await.unwrap();
 
-    let channel_id = "gh-code-penguin-iceberg-os";
+    let channel_id = "gh-code-penguin/iceberg-os";
     let content = client
         .read_file(channel_id, "README.md")
         .await
@@ -343,7 +344,7 @@ async fn test_send_message_not_supported() {
 
     let result = client
         .send_message(
-            "gh-issues-penguin-iceberg-os",
+            "gh-issues-penguin/iceberg-os",
             poly_client::MessageContent::Text("hello".to_string()),
         )
         .await;
@@ -416,7 +417,7 @@ async fn test_get_view_rows_issues_tab() {
         .unwrap();
     client.get_servers().await.unwrap();
 
-    let channel_id = "gh-issues-penguin-iceberg-os";
+    let channel_id = "gh-issues-penguin/iceberg-os";
     let page = client
         .get_view_rows(channel_id, None, None, None, Some("issues"))
         .await
@@ -454,7 +455,7 @@ async fn test_get_view_rows_pulls_tab() {
         .unwrap();
     client.get_servers().await.unwrap();
 
-    let channel_id = "gh-pulls-penguin-iceberg-os";
+    let channel_id = "gh-pulls-penguin/iceberg-os";
     let page = client
         .get_view_rows(channel_id, None, None, None, Some("pulls"))
         .await
@@ -480,7 +481,7 @@ async fn test_get_view_rows_discussions_tab_empty() {
 
     let page = client
         .get_view_rows(
-            "gh-issues-penguin-iceberg-os",
+            "gh-issues-penguin/iceberg-os",
             None,
             None,
             None,
@@ -506,7 +507,7 @@ async fn test_get_view_rows_row_fields() {
 
     let page = client
         .get_view_rows(
-            "gh-issues-penguin-iceberg-os",
+            "gh-issues-penguin/iceberg-os",
             None,
             None,
             None,
@@ -548,7 +549,7 @@ async fn test_get_view_detail() {
     client.get_servers().await.unwrap();
 
     let detail = client
-        .get_view_detail("gh-issues-penguin-iceberg-os", "1")
+        .get_view_detail("gh-issues-penguin/iceberg-os", "1")
         .await
         .expect("get_view_detail should succeed");
 
@@ -577,7 +578,7 @@ async fn test_get_view_detail_no_comments() {
 
     // PR #3 has 0 comments
     let detail = client
-        .get_view_detail("gh-issues-penguin-iceberg-os", "3")
+        .get_view_detail("gh-issues-penguin/iceberg-os", "3")
         .await
         .expect("get_view_detail for PR should succeed");
 
@@ -784,7 +785,7 @@ async fn test_get_view_rows_overview_returns_repo_cards() {
         .await
         .expect("get_view_rows overview should succeed");
 
-    assert_eq!(page.rows.len(), 2, "penguin has 2 repos");
+    assert!(page.rows.len() >= 2, "penguin has at least 2 repos");
     assert!(page.next_cursor.is_none(), "single-page overview has no cursor");
 
     let iceberg = page

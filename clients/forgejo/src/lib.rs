@@ -811,7 +811,14 @@ impl ClientBackend for ForgejoClient {
             .parse()
             .map_err(|_| ClientError::NotFound(format!("row_id must be an issue number: {row_id}")))?;
         let issue = self.api.get_issue(&owner, &repo, index).await?;
-        Ok(mapping::issue_to_view_detail(&issue, issue.comments))
+        // Fetch comments so the split-pane detail panel shows the full thread.
+        // On failure fall back to an empty list so the issue body is still shown.
+        let comments = self
+            .api
+            .list_issue_comments(&owner, &repo, index)
+            .await
+            .unwrap_or_default();
+        Ok(mapping::issue_to_view_detail(&issue, &comments))
     }
 
     async fn get_composer_buttons(&self, _channel_id: &str) -> ClientResult<Vec<ComposerButton>> {

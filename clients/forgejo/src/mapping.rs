@@ -255,23 +255,43 @@ pub fn map_issue_to_viewrow(issue: &ForgejoIssue) -> ViewRow {
     }
 }
 
-/// Build a [`ViewDetail`] for a single issue: body as `CustomBlock` plus
-/// an optional comments section.
+/// Build a [`ViewDetail`] for a single issue: body as `CustomBlock` with
+/// comments rendered inline beneath the body.
+///
+/// Accepts the fetched comments list so the caller can show the complete
+/// thread in the split-pane detail panel without a second round-trip.
 #[must_use]
-pub fn issue_to_view_detail(issue: &ForgejoIssue, comment_count: u32) -> ViewDetail {
-    let body_html = format!(
-        "<p>{}</p>",
+pub fn issue_to_view_detail(issue: &ForgejoIssue, comments: &[ForgejoComment]) -> ViewDetail {
+    let mut html = format!(
+        "<p class=\"issue-body\">{}</p>",
         html_escape(&issue.body.clone().unwrap_or_default())
     );
+
+    if !comments.is_empty() {
+        html.push_str(&format!(
+            "<hr><p class=\"comments-heading\"><strong>{} comment{}</strong></p>",
+            comments.len(),
+            if comments.len() == 1 { "" } else { "s" }
+        ));
+        for c in comments {
+            html.push_str(&format!(
+                "<div class=\"issue-comment\"><p class=\"comment-author\"><strong>{}</strong> · {}</p><p class=\"comment-body\">{}</p></div>",
+                html_escape(&c.user.login),
+                html_escape(&humanize_age(&c.created_at)),
+                html_escape(&c.body.clone().unwrap_or_default()),
+            ));
+        }
+    }
+
     ViewDetail {
         body_block: CustomBlock {
-            sanitized_html: body_html,
+            sanitized_html: html,
             stylesheet: None,
             max_height_px: None,
         },
-        comments_section: if comment_count > 0 {
+        comments_section: if !comments.is_empty() {
             Some(TreeSpec {
-                root_page_size: comment_count,
+                root_page_size: comments.len() as u32,
                 max_depth: 1,
             })
         } else {

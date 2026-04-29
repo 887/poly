@@ -786,7 +786,15 @@ impl ClientBackend for GitHubClient {
             .get_issue(&owner, &repo, number)
             .await
             .map_err(Self::convert_err)?;
-        Ok(mapping::issue_to_view_detail(&issue, issue.comments))
+        // Fetch comments so the split-pane detail panel shows the full thread.
+        // On failure (e.g. network error) fall back to an empty comment list so
+        // the issue body is still shown rather than returning an error.
+        let comments = self
+            .cli
+            .list_issue_comments(&owner, &repo, number)
+            .await
+            .unwrap_or_default();
+        Ok(mapping::issue_to_view_detail(&issue, &comments))
     }
 
     async fn get_composer_buttons(&self, _channel_id: &str) -> ClientResult<Vec<ComposerButton>> {
@@ -917,16 +925,20 @@ fn kind_from_string(s: &str) -> FileKind {
     }
 }
 
+/// Split `"{owner}/{repo}"` at the first `/`.
+///
+/// GitHub enforces that neither owner nor repo names contain `/`, so this
+/// is unambiguous even when the names contain hyphens.
 fn split_owner_repo(s: &str) -> ClientResult<(String, String)> {
-    s.split_once('-')
+    s.split_once('/')
         .map(|(o, r)| (o.to_string(), r.to_string()))
-        .ok_or_else(|| ClientError::NotFound(format!("malformed owner-repo segment: {s}")))
+        .ok_or_else(|| ClientError::NotFound(format!("malformed owner/repo segment: {s}")))
 }
 
 /// Extract `(owner, repo)` from a forum channel ID.
 ///
-/// Handles `gh-issues-{owner}-{repo}`, `gh-pulls-{owner}-{repo}`,
-/// and `gh-discussions-{owner}-{repo}`.
+/// Handles `gh-issues-{owner}/{repo}`, `gh-pulls-{owner}/{repo}`,
+/// and `gh-discussions-{owner}/{repo}`.
 fn parse_forum_channel(channel_id: &str) -> ClientResult<(String, String)> {
     let rest = channel_id
         .strip_prefix("gh-issues-")

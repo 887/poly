@@ -162,7 +162,7 @@ async fn back_and_forth_penguin_chameleon() {
 
     let chameleon_write_result = chameleon
         .send_message(
-            "gh-issues-chameleon-color-shift",
+            "gh-issues-chameleon/color-shift",
             MessageContent::Text("chameleon tries to write".to_string()),
         )
         .await;

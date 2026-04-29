@@ -2,12 +2,17 @@
 //!
 //! Channel ID conventions used inside the github backend:
 //!
-//! | Channel kind            | ID format                          |
-//! |-------------------------|-------------------------------------|
-//! | Issues forum (per repo) | `gh-issues-{owner}-{repo}`         |
-//! | Pull requests forum     | `gh-pulls-{owner}-{repo}`          |
-//! | Code explorer           | `gh-code-{owner}-{repo}`           |
-//! | Single issue thread     | `gh-issue-{owner}-{repo}-{number}` |
+//! | Channel kind            | ID format                            |
+//! |-------------------------|---------------------------------------|
+//! | Issues forum (per repo) | `gh-issues-{owner}/{repo}`           |
+//! | Pull requests forum     | `gh-pulls-{owner}/{repo}`            |
+//! | Discussions forum       | `gh-discussions-{owner}/{repo}`      |
+//! | Code explorer           | `gh-code-{owner}/{repo}`             |
+//! | Single issue thread     | `gh-issue-{owner}/{repo}-{number}`   |
+//!
+//! The `{owner}/{repo}` portion uses `/` as the separator so that
+//! owner and repo names containing hyphens round-trip unambiguously.
+//! (GitHub enforces that neither owner nor repo names contain `/`.)
 //!
 //! Server IDs are the GitHub numeric repo ID prefixed with `gh-` so they
 //! are stable across renames.
@@ -30,21 +35,24 @@ pub fn server_id_for_repo(repo: &GhRepo) -> String {
 }
 
 /// Channel ID for the per-repo issues forum.
+///
+/// Uses `owner/repo` as the separator so that hyphenated owner or repo
+/// names round-trip unambiguously.
 #[must_use]
 pub fn issues_channel_id(owner: &str, repo: &str) -> String {
-    format!("gh-issues-{owner}-{repo}")
+    format!("gh-issues-{owner}/{repo}")
 }
 
 /// Channel ID for the per-repo pull requests forum.
 #[must_use]
 pub fn pulls_channel_id(owner: &str, repo: &str) -> String {
-    format!("gh-pulls-{owner}-{repo}")
+    format!("gh-pulls-{owner}/{repo}")
 }
 
 /// Channel ID for the per-repo code explorer.
 #[must_use]
 pub fn code_channel_id(owner: &str, repo: &str) -> String {
-    format!("gh-code-{owner}-{repo}")
+    format!("gh-code-{owner}/{repo}")
 }
 
 /// Channel ID for a single issue/PR comment thread.
@@ -53,14 +61,14 @@ pub fn code_channel_id(owner: &str, repo: &str) -> String {
 /// the future thread-open routing can use it.
 #[must_use]
 pub fn issue_thread_channel_id(owner: &str, repo: &str, number: u64) -> String {
-    format!("gh-issue-{owner}-{repo}-{number}")
+    format!("gh-issue-{owner}/{repo}-{number}")
 }
 
-/// Try to parse `(owner, repo)` out of a code-channel ID.
+/// Try to parse `(owner, repo)` out of a code-channel ID (`gh-code-{owner}/{repo}`).
 #[must_use]
 pub fn parse_code_channel(channel_id: &str) -> Option<(String, String)> {
     let rest = channel_id.strip_prefix("gh-code-")?;
-    let (owner, repo) = rest.split_once('-')?;
+    let (owner, repo) = rest.split_once('/')?;
     Some((owner.to_string(), repo.to_string()))
 }
 
@@ -179,10 +187,10 @@ pub fn channels_for_repo(repo: &GhRepo) -> Vec<Channel> {
     ]
 }
 
-/// Channel id for the Discussions forum on a repo.
+/// Channel ID for the Discussions forum on a repo.
 #[must_use]
 pub fn discussions_channel_id(owner: &str, repo: &str) -> String {
-    format!("gh-discussions-{owner}-{repo}")
+    format!("gh-discussions-{owner}/{repo}")
 }
 
 // ---------------------------------------------------------------------------
@@ -237,23 +245,43 @@ pub fn map_discussion_to_viewrow(d: &GhDiscussion) -> ViewRow {
     }
 }
 
-/// Build a [`ViewDetail`] for a single issue: body as `CustomBlock` plus
-/// a comments section describing the thread shape.
+/// Build a [`ViewDetail`] for a single issue: body as `CustomBlock` with
+/// comments rendered inline beneath the body.
+///
+/// Accepts the fetched comments list so the caller can show the complete
+/// thread in the split-pane detail panel without a second round-trip.
 #[must_use]
-pub fn issue_to_view_detail(issue: &GhIssue, comment_count: u32) -> ViewDetail {
-    let body_html = format!(
-        "<p>{}</p>",
+pub fn issue_to_view_detail(issue: &GhIssue, comments: &[GhIssueComment]) -> ViewDetail {
+    let mut html = format!(
+        "<p class=\"issue-body\">{}</p>",
         html_escape(&issue.body.clone().unwrap_or_default())
     );
+
+    if !comments.is_empty() {
+        html.push_str(&format!(
+            "<hr><p class=\"comments-heading\"><strong>{} comment{}</strong></p>",
+            comments.len(),
+            if comments.len() == 1 { "" } else { "s" }
+        ));
+        for c in comments {
+            html.push_str(&format!(
+                "<div class=\"issue-comment\"><p class=\"comment-author\"><strong>{}</strong> · {}</p><p class=\"comment-body\">{}</p></div>",
+                html_escape(&c.user.login),
+                html_escape(&humanize_age(&c.created_at)),
+                html_escape(&c.body.clone().unwrap_or_default()),
+            ));
+        }
+    }
+
     ViewDetail {
         body_block: CustomBlock {
-            sanitized_html: body_html,
+            sanitized_html: html,
             stylesheet: None,
             max_height_px: None,
         },
-        comments_section: if comment_count > 0 {
+        comments_section: if !comments.is_empty() {
             Some(poly_client::TreeSpec {
-                root_page_size: comment_count,
+                root_page_size: comments.len() as u32,
                 max_depth: 1,
             })
         } else {
@@ -347,7 +375,8 @@ mod tests {
 
     use super::*;
     use crate::types::{
-        GhActor, GhDiscussion, GhDiscussionCategory, GhDiscussionComments, GhReactions, GhUser,
+        GhActor, GhDiscussion, GhDiscussionCategory, GhDiscussionComments, GhIssueComment,
+        GhReactions, GhUser,
     };
 
     fn make_issue(number: u64, title: &str, is_pr: bool) -> crate::types::GhIssue {
@@ -427,15 +456,24 @@ mod tests {
     #[test]
     fn test_issue_to_view_detail_with_comments() {
         let issue = make_issue(1, "Title", false);
-        let detail = issue_to_view_detail(&issue, 3);
+        let comment = GhIssueComment {
+            id: 10,
+            user: GhUser { id: 2, login: "commenter".to_string(), avatar_url: None },
+            body: Some("great issue".to_string()),
+            created_at: "2026-01-01T00:00:00Z".to_string(),
+            html_url: "https://github.com/owner/repo/issues/1#issuecomment-10".to_string(),
+        };
+        let detail = issue_to_view_detail(&issue, &[comment]);
         assert!(detail.body_block.sanitized_html.contains("test body"));
+        assert!(detail.body_block.sanitized_html.contains("great issue"));
+        assert!(detail.body_block.sanitized_html.contains("commenter"));
         assert!(detail.comments_section.is_some());
     }
 
     #[test]
     fn test_issue_to_view_detail_no_comments() {
         let issue = make_issue(2, "Title", false);
-        let detail = issue_to_view_detail(&issue, 0);
+        let detail = issue_to_view_detail(&issue, &[]);
         assert!(detail.comments_section.is_none());
     }
 
@@ -443,7 +481,7 @@ mod tests {
     fn test_html_escape_in_body() {
         let mut issue = make_issue(10, "Escape test", false);
         issue.body = Some("<script>alert('xss')</script>".to_string());
-        let detail = issue_to_view_detail(&issue, 0);
+        let detail = issue_to_view_detail(&issue, &[]);
         assert!(
             !detail.body_block.sanitized_html.contains("<script>"),
             "raw <script> must be escaped"
