@@ -75,4 +75,5 @@ crates/core/src/ui/settings/media.rs:active_tab  # media settings tab
 crates/core/src/ui/settings/mod.rs:search_text  # settings search box
 crates/core/src/ui/settings/plugins.rs:disabled  # plugin enable/disable toggle
 crates/core/src/ui/settings/plugins.rs:wasm_plugins  # plugin list state
+crates/core/src/ui/settings/plugins.rs:removed_bundled  # local tombstone list for removed bundled plugins; use_signal, single subscriber
 crates/core/src/ui/signup/mod.rs:statuses2  # local signup progress statuses

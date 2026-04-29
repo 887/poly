@@ -62,10 +62,10 @@ A `BatchedSignal::peek_field<U>(|t| -> U) -> U` convenience that's the documente
 
 ### Phase 1 — Lint script
 
-- [ ] `tools/scripts/forbid-render-time-read.sh` per the spec above.
-- [ ] `tools/scripts/render-time-read-allowlist.txt`.
+- [x] `tools/scripts/forbid-render-time-read.sh` per the spec above.
+- [x] `tools/scripts/render-time-read-allowlist.txt`.
 - [ ] CI step in `.github/workflows/lint-test.yml`.
-- [ ] `continue-on-error: true` initially — pre-existing render-time `.read()` sites should be many; allowlist them in this same commit, flip the flag in a follow-up after Phase 2 migration.
+- [x] `continue-on-error: true` initially — pre-existing render-time `.read()` sites should be many; allowlist them in this same commit, flip the flag in a follow-up after Phase 2 migration.
 
 ### Phase 2 — Audit + migrate HIGH-risk sites
 
@@ -75,6 +75,18 @@ Audit subagent finds every render-time `.read()` in `crates/core/src/ui/**/*.rs`
 - **LOW** — value passed to a child component that has its own subscription. Subscribing redundant but harmless.
 
 Migrate every HIGH site to `.peek()`.
+
+Wave 1 HIGH migrations (commits before 2026-04-27):
+- [x] `thread_view.rs` — two `.read()` keys → `.peek()`
+- [x] `chat_view.rs use_search_messages_effect` → `.peek()`
+- [x] `chat_view.rs use_pinned_messages_effect` → `.peek()`
+
+Wave 2 HIGH migrations (2026-04-27):
+- [x] `forum_view.rs:205` — `app_state.read().forum_scope` → `.peek()` (comment already said use peek(); now done)
+
+Wave 2 allowlist refresh (2026-04-27):
+- [x] 464 sites re-triaged after line-number drift; all confirmed MEDIUM/false-positive and added to allowlist.
+- [x] Lint bug fixed: comment lines containing `.read()` were incorrectly flagged; added `^//` skip to awk filter.
 
 ### Phase 3 — Dev doc
 

@@ -136,10 +136,10 @@ app_state.batch(|st| {
 
 Opportunistic — only for signals with 3+ cascade hotspots:
 
-- [ ] `Signal<ChatHistoryUiState>` (`history_state`) — 9 mutation sites; 2 HIGH-severity in `chat_view.rs::load_older_messages` (L3383-3393 and L3456-3476).
-- [ ] `Signal<AppSettings>` (`settings_sig`) — 2 mutation sites in `LayoutModeSelector` (already covered mixed with `app_state` in phase 3, re-verify).
-- [ ] `Signal<ClientManager>` — mostly `.read()`, skip unless a cascade shows up in practice.
-- [ ] `Signal<ThemeConfig>` — settings-only, not a hang vector, skip.
+- [x] `Signal<ChatHistoryUiState>` (`history_state`) — migrated to `BatchedSignal<ChatHistoryUiState>`; all 9 mutation sites use `.batch()` / `.set_if_changed()`.
+- [x] `Signal<AppSettings>` (`settings_sig`) — migrated to `BatchedSignal<AppSettings>` in `settings/general.rs`; uses `.batch()` for all mutations.
+- [x] `Signal<ClientManager>` — migrated to `BatchedSignal<ClientManager>`; context-provided; `.batch()` at all mutation sites.
+- [x] `Signal<ThemeConfig>` — migrated to `BatchedSignal<ThemeConfig>`; settings-only; `.batch()` in `settings/theme.rs`.
 
 ### Phase 5 — Custom lint banning raw `Signal::write` in the UI crate
 
