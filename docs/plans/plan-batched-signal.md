@@ -44,14 +44,14 @@ Each phase lands independently, behind its own commit. Phase N blocks on phase N
 **Deliverable:** `crates/core/src/state/batched_signal.rs` (~200 lines incl. tests).
 
 Tasks:
-- [ ] Create `crates/core/src/state/batched_signal.rs` with:
+- [x] Create `crates/core/src/state/batched_signal.rs` with:
   - `BatchedSignal<T>` newtype (manual `Copy`, `Clone`, `PartialEq`, `Debug`, `Deref`).
   - `impl BatchedSignal<T>` with `from_signal`, `use_batched`, `batch`, `with`, `map`, `pending_update`.
   - Shadow `fn write(&self) -> !` marked `#[deprecated]` with a CLAUDE.md pointer.
   - `PendingUpdate<T>` with `set`, `apply`, `discard`; `Drop` impl that debug-panics / release-warns when dropped without `.apply()`.
   - `use_batched_context<T>()` hook.
-- [ ] Add `pub use batched_signal::*;` in `crates/core/src/state/mod.rs`.
-- [ ] Unit tests covering: `batch` runs closure exactly once, `PendingUpdate::apply` = one write, drop without apply panics in debug, `Copy`/`Clone`/`Deref` work.
+- [x] Add `pub use batched_signal::*;` in `crates/core/src/state/mod.rs`.
+- [x] Unit tests covering: `batch` runs closure exactly once, `PendingUpdate::apply` = one write, drop without apply panics in debug, `Copy`/`Clone`/`Deref` work.
 
 Verification: `cargo test -p poly-core` + `cargo check -p poly-core --target wasm32-unknown-unknown` green. No call-site diff, lands no-op.
 
@@ -60,32 +60,32 @@ Verification: `cargo test -p poly-core` + `cargo check -p poly-core --target was
 **Deliverable:** all `use_context::<Signal<ChatData>>()` flipped to `use_context::<BatchedSignal<ChatData>>()` and every `chat_data.write()` migrated to `chat_data.batch(|cd| ...)` or `chat_data.pending_update()`.
 
 Tasks:
-- [ ] Flip the context provider (one line, grep `use_context_provider.*ChatData`).
-- [ ] Sed-replace `Signal<ChatData>` → `BatchedSignal<ChatData>` in function signatures (hundred-ish hits, mechanical).
-- [ ] Fix every compile error — each is a `chat_data.write()` that needs a `.batch()` or `.pending_update()` wrapper.
+- [x] Flip the context provider (one line, grep `use_context_provider.*ChatData`).
+- [x] Sed-replace `Signal<ChatData>` → `BatchedSignal<ChatData>` in function signatures (hundred-ish hits, mechanical).
+- [x] Fix every compile error — each is a `chat_data.write()` that needs a `.batch()` or `.pending_update()` wrapper.
 
 **HIGH-severity cascade sites to batch during migration** (from audit, filtered to ChatData):
 
-- [ ] `crates/core/src/ui/favorites_sidebar.rs` `load_server_data_internal` L1111-1124 (3 cascades)
-- [ ] `crates/core/src/ui/account/common/channel_list.rs` `load_channel_data` L76-94 (3 cascades)
-- [ ] `crates/core/src/ui/account/common/channel_list.rs` `DMChannelItem` L1116-1130 (4 cascades, **mixed with `app_state`** — phase 2 fixes only the chat_data part; `app_state` half waits for phase 3)
-- [ ] `crates/core/src/ui/account/common/channel_list.rs` `GroupChannelItem` L1206-1219 (3 cascades)
-- [ ] `crates/core/src/ui/account/settings/content_social.rs` `SensitiveMediaSection` L130-147 (3 cascades)
-- [ ] `crates/core/src/ui/account/settings/content_social.rs` `FriendRequestsSection` L324-338 (3 cascades)
+- [x] `crates/core/src/ui/favorites_sidebar.rs` `load_server_data_internal` L1111-1124 (3 cascades)
+- [x] `crates/core/src/ui/account/common/channel_list.rs` `load_channel_data` L76-94 (3 cascades)
+- [x] `crates/core/src/ui/account/common/channel_list.rs` `DMChannelItem` L1116-1130 (4 cascades, **mixed with `app_state`** — phase 2 fixes only the chat_data part; `app_state` half waits for phase 3)
+- [x] `crates/core/src/ui/account/common/channel_list.rs` `GroupChannelItem` L1206-1219 (3 cascades)
+- [x] `crates/core/src/ui/account/settings/content_social.rs` `SensitiveMediaSection` L130-147 (3 cascades)
+- [x] `crates/core/src/ui/account/settings/content_social.rs` `FriendRequestsSection` L324-338 (3 cascades)
 
 **MEDIUM-severity ChatData sites to also fix opportunistically** (from audit top-35 extract):
 
-- [ ] `favorites_sidebar.rs` `FavoriteServerIcon` L937-948
-- [ ] `favorites_sidebar.rs` `load_server_data_internal` L1157-1171, L1179-1184
-- [ ] `favorites_sidebar.rs` `restore_server_channel` L1305-1309 (already partially batched, double-check)
-- [ ] `voice_banner.rs` `VoiceBannerControls` L201-215
-- [ ] `account_bar.rs` `AccountBarControls` L314-328
-- [ ] `account_server_bar.rs` `AccountServerIcon` L287-293
-- [ ] `notifications.rs` L503-513, L528-538, L559-577
-- [ ] `voice_bar.rs` L269-276, L292-299
-- [ ] `voice_view.rs` L635-650, L667-674, L690-697
-- [ ] `server/settings/general.rs` `LeaveServerConfirm` L123-124
-- [ ] `settings/content_social.rs` `AgeRestrictedSection` L235-242, `SocialPermissionsSection` L280-287
+- [x] `favorites_sidebar.rs` `FavoriteServerIcon` L937-948
+- [x] `favorites_sidebar.rs` `load_server_data_internal` L1157-1171, L1179-1184
+- [x] `favorites_sidebar.rs` `restore_server_channel` L1305-1309 (already partially batched, double-check)
+- [x] `voice_banner.rs` `VoiceBannerControls` L201-215
+- [x] `account_bar.rs` `AccountBarControls` L314-328
+- [x] `account_server_bar.rs` `AccountServerIcon` L287-293
+- [x] `notifications.rs` L503-513, L528-538, L559-577
+- [x] `voice_bar.rs` L269-276, L292-299
+- [x] `voice_view.rs` L635-650, L667-674, L690-697
+- [x] `server/settings/general.rs` `LeaveServerConfirm` L123-124
+- [x] `settings/content_social.rs` `AgeRestrictedSection` L235-242, `SocialPermissionsSection` L280-287
 
 All other `chat_data.write()` sites auto-flip when the compiler errors out — the checklist above is just the multi-cascade hotspots to ALSO batch-group.
 
@@ -96,33 +96,33 @@ Verification: full build green on WASM + native, `cargo test --workspace` green,
 **Deliverable:** all `Signal<AppState>` → `BatchedSignal<AppState>`, same playbook as phase 2.
 
 Tasks:
-- [ ] Flip the context provider.
-- [ ] Sed-replace `Signal<AppState>` → `BatchedSignal<AppState>`.
-- [ ] Fix every compile error.
+- [x] Flip the context provider.
+- [x] Sed-replace `Signal<AppState>` → `BatchedSignal<AppState>`.
+- [x] Fix every compile error.
 
 **HIGH-severity AppState cascade sites** (from audit):
 
-- [ ] `crates/core/src/ui/mod.rs` `init_storage` L1093-1109 — **8-write cascade at boot** (mixed with `chat_data`; worst offender)
-- [ ] `crates/core/src/ui/mod.rs` `init_storage` L1122-1140 — 6-write `nav.*` cascade
-- [ ] `crates/core/src/ui/settings/general.rs` `LayoutModeSelector` L184-203 — 6-write alternating cascade (mixed with `settings_sig`)
-- [ ] `crates/core/src/ui/main_layout.rs` `MainLayout` L305-314 — 4-write context-menu-clear cascade
-- [ ] `crates/core/src/ui/account/common/chat_view.rs` `close_chat_side_column_state` L2391-2394 — 3 cascades
-- [ ] `crates/core/src/ui/account/common/chat_view.rs` `render_mobile_chat_header_right_toggle` L2515-2518 — 3 cascades
-- [ ] `crates/core/src/ui/account/common/chat_view.rs` (unknown fn) L2827-2830 — 3 cascades
-- [ ] `crates/core/src/ui/account/common/chat_view.rs` `render_chat_tools_panel` L4693-4697 — 3 cascades
+- [x] `crates/core/src/ui/mod.rs` `init_storage` L1093-1109 — **8-write cascade at boot** (mixed with `chat_data`; worst offender)
+- [x] `crates/core/src/ui/mod.rs` `init_storage` L1122-1140 — 6-write `nav.*` cascade
+- [x] `crates/core/src/ui/settings/general.rs` `LayoutModeSelector` L184-203 — 6-write alternating cascade (mixed with `settings_sig`)
+- [x] `crates/core/src/ui/main_layout.rs` `MainLayout` L305-314 — 4-write context-menu-clear cascade
+- [x] `crates/core/src/ui/account/common/chat_view.rs` `close_chat_side_column_state` L2391-2394 — 3 cascades
+- [x] `crates/core/src/ui/account/common/chat_view.rs` `render_mobile_chat_header_right_toggle` L2515-2518 — 3 cascades
+- [x] `crates/core/src/ui/account/common/chat_view.rs` (unknown fn) L2827-2830 — 3 cascades
+- [x] `crates/core/src/ui/account/common/chat_view.rs` `render_chat_tools_panel` L4693-4697 — 3 cascades
 
 **MEDIUM-severity AppState sites** (audit top-35 extract):
 
-- [ ] `account/common/attachment_context_menu.rs` L42-53
-- [ ] `account/common/avatar_context_menu.rs` L51-59
-- [ ] `account/common/channel_context_menu.rs` L46-54
-- [ ] `account/common/channel_list.rs` `ChannelItemRow` L1393-1413
-- [ ] `account/common/chat_view.rs` L2725-2727, L2882-2884, L2904-2906, L2946-2948, L3005-3022, L4633-4653, L5107-5123
-- [ ] `account/common/direct_call_overlay.rs` L146-160
-- [ ] `account/common/reaction_context_menu.rs` L42-50
-- [ ] `account/common/user_profile_modal.rs` `open_user_profile` L68-87
-- [ ] `account/server/context_menu.rs` `ServerContextMenu` L77-88
-- [ ] `settings/mod.rs` `install_settings_scroll_spy` L286-292
+- [x] `account/common/attachment_context_menu.rs` L42-53
+- [x] `account/common/avatar_context_menu.rs` L51-59
+- [x] `account/common/channel_context_menu.rs` L46-54
+- [x] `account/common/channel_list.rs` `ChannelItemRow` L1393-1413
+- [x] `account/common/chat_view.rs` L2725-2727, L2882-2884, L2904-2906, L2946-2948, L3005-3022, L4633-4653, L5107-5123
+- [x] `account/common/direct_call_overlay.rs` L146-160
+- [x] `account/common/reaction_context_menu.rs` L42-50
+- [x] `account/common/user_profile_modal.rs` `open_user_profile` L68-87
+- [x] `account/server/context_menu.rs` `ServerContextMenu` L77-88
+- [x] `settings/mod.rs` `install_settings_scroll_spy` L286-292
 
 Watch out: `app_state.write().nav.selected_channel.unsafe_presync_override(...)` patterns need the `batch` closure to hold the guard long enough for the nested method to complete — single-arg `batch` handles it:
 
@@ -146,22 +146,22 @@ Opportunistic — only for signals with 3+ cascade hotspots:
 Two tracks, ship whichever is ready first:
 
 **Track A (regex CI check, fast):**
-- [ ] Add `tools/scripts/forbid-signal-write.sh` (grep-based scan of `crates/core/src/ui/**/*.rs`).
-- [ ] Allowlist file `tools/scripts/signal-write-allowlist.txt` for intentional cases (local component-scoped signals, tests).
-- [ ] Wire into CI (`.github/workflows/ci.yml` or whatever's there).
+- [x] Add `tools/scripts/forbid-signal-write.sh` (grep-based scan of `crates/core/src/ui/**/*.rs`).
+- [x] Allowlist file `tools/scripts/signal-write-allowlist.txt` for intentional cases (local component-scoped signals, tests).
+- [x] Wire into CI (`.github/workflows/ci.yml` or whatever's there).
 
 **Track B (dylint-based custom lint, proper, can follow A):**
-- [ ] Add `tools/lints/poly-lints/src/forbid_signal_write.rs` matching `Signal::write` via HIR (ignores `RwLock::write`, `std::io::Write::write`, etc.).
-- [ ] Package under `cargo dylint`.
-- [ ] Wire into `cargo cranky`.
+- [x] Add `tools/lints/poly-lints/src/forbid_signal_write.rs` matching `Signal::write` via HIR (ignores `RwLock::write`, `std::io::Write::write`, etc.).
+- [x] Package under `cargo dylint`.
+- [x] Wire into `cargo cranky`.
 
 Exception annotation: `#[allow(poly::raw_signal_write)]` must be accompanied by a rationale comment explaining why (grep-auditable).
 
 ### Phase 6 — Documentation + cleanup
 
-- [ ] Update `CLAUDE.md` "Common WASM-hang causes" section #1 to point at `BatchedSignal` as the prescribed prevention.
-- [ ] Add short dev-doc at `docs/dev/reactive-state.md` with 3-4 canonical mutation patterns (sync single-field, sync multi-field, async-interleaved, early-return with `.discard()`).
-- [ ] Delete any remaining `#[allow(poly::raw_signal_write)]` annotations that phase 5 flagged, where the migration caught up.
+- [x] Update `CLAUDE.md` "Common WASM-hang causes" section #1 to point at `BatchedSignal` as the prescribed prevention.
+- [x] Add short dev-doc at `docs/dev/reactive-state.md` with 3-4 canonical mutation patterns (sync single-field, sync multi-field, async-interleaved, early-return with `.discard()`).
+- [x] Delete any remaining `#[allow(poly::raw_signal_write)]` annotations that phase 5 flagged, where the migration caught up.
 
 ---
 

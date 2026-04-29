@@ -355,3 +355,79 @@ async fn test_settings_storage_round_trip() {
         .expect("get_setting_value should succeed");
     assert_eq!(got, "teams-nick");
 }
+
+// ---------------------------------------------------------------------------
+// Follow-up gaps — visual-teams.md audit
+// ---------------------------------------------------------------------------
+
+/// `search_messages` returns NotSupported.
+///
+/// Teams Graph search requires a delegated `Mail.Read` / `ChannelMessage.Read`
+/// scope that the plugin intentionally does not request. Until a dedicated
+/// `/search/query` path is wired up, the trait default (NotSupported) applies.
+#[tokio::test]
+async fn test_search_messages_returns_not_supported() {
+    use poly_client::{ClientBackend, ClientError, MessageSearchQuery};
+    let srv = TestServer::start().await;
+    let client = srv.authenticated_client("Sheep").await;
+
+    let result = client
+        .search_messages(MessageSearchQuery {
+            text: "hello".to_string(),
+            channel_id: None,
+            limit: Some(10),
+            ..Default::default()
+        })
+        .await;
+
+    assert!(
+        matches!(result, Err(ClientError::NotSupported(_))),
+        "search_messages should return NotSupported; got: {result:?}"
+    );
+}
+
+/// `timeout_member` returns NotSupported — Teams has no per-user timeout concept.
+#[tokio::test]
+async fn test_timeout_member_returns_not_supported() {
+    use poly_client::{ClientBackend, ClientError};
+    let srv = TestServer::start().await;
+    let client = srv.authenticated_client("Sheep").await;
+
+    let until = chrono::Utc::now() + chrono::Duration::hours(1);
+    let result = client.timeout_member("T001", "U002", until, Some("test")).await;
+
+    assert!(
+        matches!(result, Err(ClientError::NotSupported(_))),
+        "timeout_member should return NotSupported; got: {result:?}"
+    );
+}
+
+/// `untimeout_member` returns NotSupported — Teams has no timeout concept.
+#[tokio::test]
+async fn test_untimeout_member_returns_not_supported() {
+    use poly_client::{ClientBackend, ClientError};
+    let srv = TestServer::start().await;
+    let client = srv.authenticated_client("Sheep").await;
+
+    let result = client.untimeout_member("T001", "U002").await;
+
+    assert!(
+        matches!(result, Err(ClientError::NotSupported(_))),
+        "untimeout_member should return NotSupported; got: {result:?}"
+    );
+}
+
+/// `backend_capabilities` correctly gates ban/timeout as absent.
+///
+/// Load-bearing for the moderation UI: it reads these flags before showing
+/// ban/timeout menu items. Regression guard.
+#[test]
+fn test_backend_capabilities_no_ban_no_timeout() {
+    use poly_client::ClientBackend;
+    let client = poly_teams::TeamsClient::new();
+    let caps = client.backend_capabilities();
+    assert!(!caps.has_ban, "Teams must not claim has_ban");
+    assert!(!caps.has_timed_ban, "Teams must not claim has_timed_ban");
+    assert!(caps.has_kick, "Teams must claim has_kick (owner can remove members)");
+    assert!(!caps.has_moderation_log, "Teams must not claim has_moderation_log");
+}

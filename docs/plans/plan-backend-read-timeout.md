@@ -99,18 +99,18 @@ OR `crates/core/src/client_manager/timeout.rs`, depending on where
 trait impl.
 
 Tasks:
-- [ ] Add `gloo-timers = { version = "0.3", features = ["futures"] }` to
+- [x] Add `gloo-timers = { version = "0.3", features = ["futures"] }` to
   `crates/core/Cargo.toml` under the `wasm32` cfg target, OR (if we prefer
   zero new deps) build on `dioxus::document::eval` setTimeout.
-- [ ] Create `BackendReadTimeout` error type (unit struct, `Display`).
-- [ ] Create `BackendHandleExt` trait with
+- [x] Create `BackendReadTimeout` error type (unit struct, `Display`).
+- [x] Create `BackendHandleExt` trait with
   `async fn read_with_timeout(&self, dur: Duration) -> Result<ReadGuard<'_>, BackendReadTimeout>`.
-- [ ] `cfg`-gate the implementation:
+- [x] `cfg`-gate the implementation:
   - native: `tokio::time::timeout(dur, self.read()).await.map_err(...)`.
   - wasm: `futures::future::select(pin!(self.read()), gloo_timers::future::TimeoutFuture::new(dur_ms))`.
-- [ ] `tracing::warn!("backend read timed out after {dur:?} at {location}")`
+- [x] `tracing::warn!("backend read timed out after {dur:?} at {location}")`
   on timeout, including a `#[track_caller]` location hint.
-- [ ] Unit tests (native-only; WASM smoke-tested separately):
+- [x] Unit tests (native-only; WASM smoke-tested separately):
   - Read completes inside timeout → returns Ok.
   - Read blocks past timeout → returns Err.
   - Timeout duration of 0 → immediately Err.
@@ -127,15 +127,15 @@ pagination) should use a longer timeout (30s) explicitly.
 
 Sites to migrate (from `/tmp/poly-backend-read-timeout-audit.md` § FRAGILE):
 
-- [ ] `crates/core/src/ui/account/common/chat_view.rs:731` — 5s (UI click)
-- [ ] `crates/core/src/ui/account/common/chat_view.rs:3542` — 30s
+- [x] `crates/core/src/ui/account/common/chat_view.rs:731` — 5s (UI click)
+- [x] `crates/core/src/ui/account/common/chat_view.rs:3542` — 30s
   (MAX_CHAINED_NEWER_HISTORY_PAGES loop; longer budget)
-- [ ] `crates/core/src/ui/favorites_sidebar.rs:1134` — 5s
-- [ ] `crates/core/src/ui/client_ui/view/list_body.rs:238` — 5s
-- [ ] `crates/core/src/ui/client_ui/view/list_body.rs:406` — 5s
-- [ ] `crates/core/src/ui/client_ui/view/list_body.rs:758` — 5s
-- [ ] `crates/core/src/ui/client_ui/view/tree_body.rs:210` — 5s
-- [ ] `crates/core/src/ui/account/common/channel_list.rs:108` — 5s
+- [x] `crates/core/src/ui/favorites_sidebar.rs:1134` — 5s
+- [x] `crates/core/src/ui/client_ui/view/list_body.rs:238` — 5s
+- [x] `crates/core/src/ui/client_ui/view/list_body.rs:406` — 5s
+- [x] `crates/core/src/ui/client_ui/view/list_body.rs:758` — 5s
+- [x] `crates/core/src/ui/client_ui/view/tree_body.rs:210` — 5s
+- [x] `crates/core/src/ui/account/common/channel_list.rs:108` — 5s
 
 Each migration includes an error branch that does one `chat_data.batch(|cd|
 cd.loading = false)` + `tracing::warn!` and returns early.
@@ -149,14 +149,14 @@ Not required for the hang prevention (they're already short-scoped), but
 applying the helper uniformly across all 46 remaining sites makes the
 lint in Phase 5 enforceable without a huge allowlist. Split into:
 
-- [ ] `crates/core/src/ui/demo.rs` (3 sites)
-- [ ] `crates/core/src/ui/account/common/*` (≈14 sites)
-- [ ] `crates/core/src/ui/account/server/settings/*` (2 sites)
-- [ ] `crates/core/src/ui/account/settings/mod.rs` (1 site)
-- [ ] `crates/core/src/ui/account/channel/settings/mod.rs` (1 site)
-- [ ] `crates/core/src/ui/client_ui/*` (≈20 sites)
-- [ ] `crates/core/src/ui/favorites_sidebar.rs` (5 remaining sites)
-- [ ] `crates/core/src/ui/search.rs` (1 site)
+- [x] `crates/core/src/ui/demo.rs` (3 sites)
+- [x] `crates/core/src/ui/account/common/*` (≈14 sites)
+- [x] `crates/core/src/ui/account/server/settings/*` (2 sites)
+- [x] `crates/core/src/ui/account/settings/mod.rs` (1 site)
+- [x] `crates/core/src/ui/account/channel/settings/mod.rs` (1 site)
+- [x] `crates/core/src/ui/client_ui/*` (≈20 sites)
+- [x] `crates/core/src/ui/favorites_sidebar.rs` (5 remaining sites)
+- [x] `crates/core/src/ui/search.rs` (1 site)
 
 All 5-second default.
 
@@ -171,26 +171,26 @@ All 5-second default.
 Two tracks:
 
 **Track A (regex CI check, fast):**
-- [ ] Add `tools/scripts/forbid-raw-backend-read.sh` — grep for
+- [x] Add `tools/scripts/forbid-raw-backend-read.sh` — grep for
   `backend\.read\(\)\.await` across `crates/core/src/ui/**/*.rs`.
-- [ ] Allowlist: inline `// poly-lint: allow raw backend.read().await —
+- [x] Allowlist: inline `// poly-lint: allow raw backend.read().await —
   <reason>` comment on the same line.
-- [ ] Wire into `.github/workflows/ci.yml` (or whatever CI config runs).
+- [x] Wire into `.github/workflows/ci.yml` (or whatever CI config runs).
 
 **Track B (dylint custom lint, follow-on if we already shipped the
 similar lint for Signal::write from `plan-batched-signal.md` Phase 5):**
-- [ ] Add `tools/lints/poly-lints/src/forbid_raw_backend_read.rs` matching
+- [x] Add `tools/lints/poly-lints/src/forbid_raw_backend_read.rs` matching
   the `.read()` method call on `BackendHandle` via HIR — ignore
   `Signal::read`, `std::io::Read::read`, etc.
-- [ ] Package under `cargo dylint`, wire into `cargo cranky`.
+- [x] Package under `cargo dylint`, wire into `cargo cranky`.
 
 ### Phase 6 — Documentation + cleanup
 
-- [ ] Update CLAUDE.md § "Common WASM-hang causes" #4 to reference
+- [x] Update CLAUDE.md § "Common WASM-hang causes" #4 to reference
   `BackendHandle::read_with_timeout` as the prescribed prevention.
-- [ ] Add short dev-doc at `docs/dev/backend-locking.md` covering the
+- [x] Add short dev-doc at `docs/dev/backend-locking.md` covering the
   5s-default / 30s-for-chain-loads convention.
-- [ ] Remove obsolete inline comments in `channel_list.rs:193-195`,
+- [x] Remove obsolete inline comments in `channel_list.rs:193-195`,
   `channel_list.rs:360-364`, `routes.rs:1067-1069` that document the
   removed-tokio-timeout history (they're superseded by the helper).
 
