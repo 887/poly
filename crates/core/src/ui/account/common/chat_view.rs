@@ -209,6 +209,9 @@ enum ChatUtilityPanel {
     /// Lives in the same right wing as Search/Pinned/Threads so the user
     /// can switch between tabs without losing the agent context.
     Agent,
+    /// Catch-me-up summary panel — last 20 messages + "copy summary
+    /// prompt" hook for Claude Desktop. No LLM call from the host.
+    CatchUp,
 }
 
 #[derive(Clone, Copy)]
@@ -2838,6 +2841,24 @@ fn ChatHeaderActions(
                     "🧵"
                 }
                 button {
+                    class: if *utility_panel.read() == Some(ChatUtilityPanel::CatchUp) {
+                        "header-btn active chat-header-btn-catchup"
+                    } else {
+                        "header-btn chat-header-btn-catchup"
+                    },
+                    title: t("chat-banner-catch-me-up"),
+                    onclick: move |_| {
+                        show_search_filters.set(false);
+                        let next = if *utility_panel.read() == Some(ChatUtilityPanel::CatchUp) {
+                            None
+                        } else {
+                            Some(ChatUtilityPanel::CatchUp)
+                        };
+                        utility_panel.set(next);
+                    },
+                    "✨"
+                }
+                button {
                     class: if pinned_active { "header-btn active chat-header-btn-pinned" } else { "header-btn chat-header-btn-pinned" },
                     title: t("pinned-messages"),
                     onclick: move |_| {
@@ -4461,6 +4482,73 @@ fn render_composer_toolbar(mut show_input_emoji: Signal<bool>) -> Element {
                 },
                 "😀"
             }
+            TypingSimulationButton {}
+        }
+    }
+}
+
+/// Manual typing-simulation toggle. Spawns a fire-and-forget loop that
+/// calls `backend.send_typing(channel_id)` every 5s while active.
+/// One-click manual trigger that mirrors what chat-mcp's
+/// `start_typing_simulation` produces.
+#[ui_action(inherit)]
+#[context_menu(none)]
+#[component]
+fn TypingSimulationButton() -> Element {
+    let app_state: BatchedSignal<AppState> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
+    let mut running = use_signal(|| false);
+
+    let label = if *running.read() {
+        t("composer-simulate-typing-stop")
+    } else {
+        t("composer-simulate-typing")
+    };
+    let class = if *running.read() {
+        "toolbar-btn typing-sim-btn typing-sim-btn-active"
+    } else {
+        "toolbar-btn typing-sim-btn"
+    };
+
+    rsx! {
+        button {
+            class: "{class}",
+            title: "{label}",
+            onclick: move |_| {
+                let was_running = *running.read();
+                running.set(!was_running);
+                if was_running { return; }
+                let channel_id = app_state.read().nav.selected_channel.cloned();
+                let account_id = app_state.read().nav.active_account_id.cloned();
+                let server_id = app_state.read().nav.selected_server.cloned();
+                let Some(channel_id) = channel_id else { return };
+                let mut running_signal = running;
+                spawn(async move {
+                    for _ in 0..12 {
+                        if !*running_signal.peek() { break; }
+                        let handle = if let Some(ref sid) = server_id {
+                            client_manager.read().get_backend_for_server(sid).map(|(_, b)| b)
+                        } else if let Some(ref aid) = account_id {
+                            client_manager.read().get_backend(aid)
+                        } else {
+                            None
+                        };
+                        if let Some(handle) = handle
+                            && let Ok(backend) = handle
+                                .read_with_timeout(std::time::Duration::from_secs(2))
+                                .await
+                        {
+                            let _ = backend.send_typing(&channel_id).await;
+                        }
+                        #[cfg(target_arch = "wasm32")]
+                        gloo_timers::future::TimeoutFuture::new(5_000).await;
+                        #[cfg(not(target_arch = "wasm32"))]
+                        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                    }
+                    running_signal.set(false);
+                });
+            },
+            if *running.read() { "⏸️" } else { "⌨️" }
         }
     }
 }
@@ -5068,6 +5156,8 @@ fn ChatUtilityRail(
         t("agent-drafts-sidebar-title")
     } else if panel == ChatUtilityPanel::Agent {
         t("agent-panel-title")
+    } else if panel == ChatUtilityPanel::CatchUp {
+        t("chat-banner-catch-me-up")
     } else {
         t("threads")
     };
@@ -5232,10 +5322,84 @@ fn ChatUtilityRail(
                         }
                     }
                 }
+            } else if panel == ChatUtilityPanel::CatchUp {
+                CatchUpPanel { channel_name: current_channel_name.clone() }
             } else {
                 div { class: "chat-utility-body",
                     div { class: "utility-empty-state",
                         p { "{empty_label}" }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Catch-me-up panel — last 20 messages + clipboard "summary prompt" hook.
+#[ui_action(inherit)]
+#[context_menu(none)]
+#[component]
+fn CatchUpPanel(channel_name: String) -> Element {
+    let chat_data: BatchedSignal<ChatData> = use_context();
+    let recent: Vec<Message> = {
+        let snap = chat_data.read();
+        snap.messages.iter().rev().take(20).cloned().collect()
+    };
+    let total = recent.len();
+    let chan = channel_name.clone();
+    let prompt = {
+        let body = recent
+            .iter()
+            .rev()
+            .map(|m| {
+                let body = match &m.content {
+                    poly_client::MessageContent::Text(s) => s.clone(),
+                    poly_client::MessageContent::WithAttachments { text, .. } => text.clone(),
+                };
+                format!("- {}: {}", m.author.display_name, body)
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        format!(
+            "Summarize the recent conversation in #{chan} (last {total} messages). Pull out decisions, open questions, and action items.\n\n{body}"
+        )
+    };
+
+    rsx! {
+        div { class: "chat-utility-body catch-up-panel",
+            if total == 0 {
+                div { class: "utility-empty-state",
+                    p { "✨ {t(\"catch-up-empty\")}" }
+                }
+            } else {
+                p { class: "catch-up-meta",
+                    "{total} {t(\"catch-up-recent-messages\")}"
+                }
+                button {
+                    class: "catch-up-copy-btn",
+                    title: t("catch-up-copy-prompt-title"),
+                    onclick: {
+                        let p = prompt.clone();
+                        move |_| {
+                            let escaped = p.replace('\\', r"\\").replace('`', r"\`");
+                            let _ = document::eval(&format!(
+                                "navigator.clipboard.writeText(`{escaped}`)"
+                            ));
+                        }
+                    },
+                    "📋 {t(\"catch-up-copy-prompt\")}"
+                }
+                div { class: "catch-up-list",
+                    for m in recent.iter().rev() {
+                        div { class: "catch-up-row",
+                            span { class: "catch-up-author", "{m.author.display_name}" }
+                            span { class: "catch-up-text",
+                                {match &m.content {
+                                    poly_client::MessageContent::Text(s) => s.clone(),
+                                    poly_client::MessageContent::WithAttachments { text, .. } => text.clone(),
+                                }}
+                            }
+                        }
                     }
                 }
             }

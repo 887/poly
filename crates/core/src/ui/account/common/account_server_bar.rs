@@ -24,7 +24,7 @@
 
 use crate::state::BatchedSignal;
 use super::super::super::routes::Route;
-use crate::client_manager::ClientManager;
+use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::state::chat_data::user_color;
 use crate::state::{AppState, ChatData, ContextMenuState, DragSource, View};
@@ -159,6 +159,83 @@ pub fn AccountServerBar() -> Element {
     let show_dms = caps.should_show_dms();
     let show_friends = caps.should_show_friends();
     let show_notifs = caps.should_show_notifications();
+
+    // Forum-layout backends (Lemmy) store subscribed communities as servers in
+    // `chat_data.servers`, populated at login/restore time. If the list is empty
+    // for this account (e.g. first load before restore completes, or after
+    // subscribing to a new community), trigger a background refresh so Bar-2
+    // icons appear without requiring an app restart.
+    //
+    // Uses `use_resource` keyed on account_id so it re-fires when the user
+    // switches accounts. Runs for ALL backends so chat-style accounts also
+    // refresh on first mount (e.g. if restore was slow).
+    let _ = {
+        let account_id_res = account_id.clone();
+        let backend_slug_res = backend_slug.clone();
+        use_resource(move || {
+            let account_id = account_id_res.clone();
+            let backend_slug = backend_slug_res.clone();
+            async move {
+                let client_manager: BatchedSignal<ClientManager> =
+                    match try_consume_context() {
+                        Some(cm) => cm,
+                        None => return,
+                    };
+                let Some(backend) = client_manager.read().get_backend(&account_id) else {
+                    return;
+                };
+                let guard = match backend
+                    .read_with_timeout(std::time::Duration::from_secs(10))
+                    .await
+                {
+                    Ok(g) => g,
+                    Err(_) => {
+                        tracing::warn!(
+                            "account_server_bar: get_servers timeout for {account_id}"
+                        );
+                        return;
+                    }
+                };
+                let Ok(servers) = guard.get_servers().await else {
+                    return;
+                };
+                if servers.is_empty() {
+                    return;
+                }
+                // Only add servers not already present (avoid duplicates on
+                // repeated renders). The `account_id` field on each Server is
+                // set by the backend so the AccountServerBar filter picks them up.
+                let chat_data: BatchedSignal<ChatData> = match try_consume_context() {
+                    Some(cd) => cd,
+                    None => return,
+                };
+                let is_forum = poly_client::BackendType::from_slug(&backend_slug)
+                    .uses_forum_layout();
+                chat_data.batch(move |cd| {
+                    for srv in servers {
+                        if !cd.servers.iter().any(|s| s.id == srv.id) {
+                            cd.servers.push(srv);
+                        }
+                    }
+                    // Forum backends: ensure all servers are in favorited_server_ids
+                    // so they also appear in Bar-1 (favorites sidebar).
+                    if is_forum {
+                        for srv in cd
+                            .servers
+                            .iter()
+                            .filter(|s| s.account_id == account_id)
+                            .map(|s| s.id.clone())
+                            .collect::<Vec<_>>()
+                        {
+                            if !cd.favorited_server_ids.contains(&srv) {
+                                cd.favorited_server_ids.push(srv);
+                            }
+                        }
+                    }
+                });
+            }
+        })
+    };
 
     rsx! {
         nav { class: "account-server-bar",

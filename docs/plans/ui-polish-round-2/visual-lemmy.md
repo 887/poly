@@ -103,9 +103,23 @@ All 14 use trait defaults (NotSupported). Lemmy has no social graph, DMs, or gro
 `kick_member`, `ban_member`, `unban_member`, `timeout_member` implemented for community moderation. `get_moderation_log` not overridden (Lemmy has `/api/v3/modlog`).
 
 ### Known Gaps
-1. **[HIGH] Community list absent from sidebar** — subscribed communities don't appear in second nav. Main navigation is broken.
-2. **[HIGH] No DMs/Friends navigation** — `get_dm_channels` returns NotSupported; no DMs icon in sidebar.
-3. "+" button shows misleading "doesn't support creating servers" message.
-4. Per-account settings show Discord-style options irrelevant to Lemmy.
-5. `get_moderation_log` not implemented.
-6. `search_messages` not implemented.
+1. **[FIXED] Community list absent from sidebar** — `AccountServerBar` now calls `get_servers()` via
+   a `use_resource` on mount (keyed by `account_id`) and merges results into `chat_data.servers`.
+   Communities appear in Bar-2 immediately after login without requiring an app restart.
+   Forum-layout backends also auto-add communities to `favorited_server_ids` so they appear in Bar-1.
+2. **[FIXED] No DMs/Friends navigation** — DM icon is already hidden for Lemmy (`DmSupport::None`
+   gates `AccountBarDmsButton`). `/lemmy/.../dms` renders `FeatureUnsupportedPlaceholder`.
+   Friends button similarly hidden. No DMs icon shown; `get_dm_channels` returning private messages
+   is consistent with `DmSupport::None` since the capability flag controls UI display only.
+3. **[FIXED] "+" button** — already shows "Browse Communities →" CTA linking to the Lemmy instance
+   communities page (landed in a previous phase).
+4. **[FIXED] Per-account settings show Discord-style options** — capability-gated:
+   - "Friends join voice channels" toggle: hidden (needs `voice && friends`, both false for Lemmy).
+   - "Incoming Ring" sound toggle: hidden (needs `voice`, false for Lemmy).
+   - "Direct Messages" sound toggle: now hidden (needs `dms`, false for Lemmy).
+   - "Allow age-restricted commands in DMs": now hidden (needs `dms`, false for Lemmy).
+   - DM Spam Filter / Social Permissions / Friend Requests sections: hidden (all gated on `dms`/`friends`).
+5. **[DEFERRED] `get_moderation_log` not implemented** — Lemmy has `/api/v3/modlog` but the
+   `get_moderation_log` trait method is not yet wired. Requires a new `modlog` API helper.
+6. **[DEFERRED] `search_messages` not implemented** — Lemmy search API differs from chat-style;
+   deferred to a future phase.

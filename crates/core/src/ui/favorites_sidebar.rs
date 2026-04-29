@@ -742,6 +742,17 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                         .map(|s| s.id.clone());
                     (slug, inst, first_server)
                 };
+                // Belt-and-suspenders: strip any URL scheme that may have been
+                // persisted in session.instance_id before the fix landed
+                // (stored as backend_url which includes "http://...").
+                // Route path segments cannot contain "://" — a scheme-inclusive
+                // instance_id parses as PageNotFound and triggers an infinite
+                // redirect + app_state.write() cascade (CLAUDE.md hang class #1).
+                let instance_id = instance_id
+                    .trim_start_matches("https://")
+                    .trim_start_matches("http://")
+                    .trim_end_matches('/')
+                    .to_string();
                 let caps = poly_client::capabilities_for_slug(&backend_slug);
                 let fallback_route = match caps.landing {
                     poly_client::LandingPage::Overview => {

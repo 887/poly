@@ -854,6 +854,17 @@ account-menu-settings = Account Settings
 account-menu-sign-out = Sign Out
 account-menu-copy-id = Copy Account ID
 
+# Catch-me-up panel (✨ chat header button)
+chat-banner-catch-me-up = Catch me up
+catch-up-empty = No recent messages here yet.
+catch-up-recent-messages = recent messages
+catch-up-copy-prompt = Copy summary prompt
+catch-up-copy-prompt-title = Copy a Claude-Desktop-ready summary prompt to your clipboard
+
+# Composer-toolbar typing-simulation button
+composer-simulate-typing = Simulate typing
+composer-simulate-typing-stop = Stop simulation
+
 # Attachment (image) right-click context menu
 attachment-menu-copy-image = Copy Image
 attachment-menu-save-image = Save Image

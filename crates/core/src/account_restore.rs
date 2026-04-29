@@ -336,9 +336,23 @@ pub async fn restore_native_accounts(
                     token: token.token.clone(),
                     backend: BackendType::from(backend_slug.as_str()),
                     icon_emoji: None,
+                    // Strip the URL scheme so `instance_id` is a bare
+                    // "host:port" (e.g. "localhost:9103") not
+                    // "http://localhost:9103". Route path segments cannot
+                    // contain "://" — a scheme-inclusive instance_id causes
+                    // the Dioxus router to parse every route as PageNotFound,
+                    // triggering an unconditional app_state.write() loop on
+                    // every navigation and freezing the WASM main thread
+                    // (CLAUDE.md hang class #1 / PageNotFound redirect cascade).
                     instance_id: token
                         .instance_id
-                        .clone()
+                        .as_deref()
+                        .map(|u| {
+                            u.trim_start_matches("https://")
+                                .trim_start_matches("http://")
+                                .trim_end_matches('/')
+                                .to_string()
+                        })
                         .unwrap_or_else(|| backend_slug.clone()),
                     backend_url: token.instance_id.clone(),
                 };

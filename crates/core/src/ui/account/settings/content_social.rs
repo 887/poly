@@ -226,11 +226,14 @@ impl UiAction for AgeRestrictedSectionAction {
 }
 
 /// Age-Restricted Content section — age access toggles.
+///
+/// `show_dm_commands` gates the "Allow age-restricted commands in DMs" row.
+/// Hidden for backends without DM support (Lemmy, HackerNews, GitHub, Forgejo).
 #[rustfmt::skip]
 #[ui_action(AgeRestrictedSectionAction)]
 #[context_menu(none)]
 #[component]
-fn AgeRestrictedSection(mut chat_data: BatchedSignal<ChatData>) -> Element {
+fn AgeRestrictedSection(mut chat_data: BatchedSignal<ChatData>, show_dm_commands: bool) -> Element {
     let policy = chat_data.read().content_policy.clone();
     rsx! {
         div { class: "content-social-section",
@@ -242,12 +245,14 @@ fn AgeRestrictedSection(mut chat_data: BatchedSignal<ChatData>) -> Element {
                     chat_data.batch(|cd| cd.content_policy.allow_age_restricted_servers = val);
                 },
             }
-            ToggleRow {
-                label: t("content-social-age-restricted-commands"),
-                checked: policy.allow_age_restricted_commands_in_dms,
-                on_change: move |val| {
-                    chat_data.batch(|cd| cd.content_policy.allow_age_restricted_commands_in_dms = val);
-                },
+            if show_dm_commands {
+                ToggleRow {
+                    label: t("content-social-age-restricted-commands"),
+                    checked: policy.allow_age_restricted_commands_in_dms,
+                    on_change: move |val| {
+                        chat_data.batch(|cd| cd.content_policy.allow_age_restricted_commands_in_dms = val);
+                    },
+                }
             }
         }
     }
@@ -402,7 +407,7 @@ pub fn ContentSocialSettings(_account_id: String, backend: String) -> Element {
             if has_friends {
                 FriendRequestsSection { chat_data }
             }
-            AgeRestrictedSection { chat_data }
+            AgeRestrictedSection { chat_data, show_dm_commands: has_dms }
         }
     }
 }

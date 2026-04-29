@@ -155,6 +155,7 @@ fn AccountNotifSignalsSection(account_id: String, signals: NotifSignals, caps: p
             badge_unread: *signals.badge_unread.read(),
             show_friends_voice: caps.should_show_voice() && caps.should_show_friends(),
             show_ring_sound: caps.should_show_voice(),
+            show_dm_sound: caps.should_show_dms(),
             on_streams: {
                 let aid = account_id.clone();
                 move |v: bool| {
@@ -212,6 +213,7 @@ fn AccountNotifSignalsSection(account_id: String, signals: NotifSignals, caps: p
 ///
 /// `show_friends_voice` gates the "Friends join voice channels" toggle.
 /// `show_ring_sound` gates the "Incoming Ring" sound toggle.
+/// `show_dm_sound` gates the "Direct Messages" sound toggle (needs DM support).
 ///
 /// Split out so `NotificationsSettings` stays under the 150-line limit.
 #[ui_action(inherit)]
@@ -230,6 +232,8 @@ fn AccountNotifSectionInner(
     show_friends_voice: bool,
     /// Show the "Incoming Ring" sound toggle (needs voice).
     show_ring_sound: bool,
+    /// Show the "Direct Messages" sound toggle (needs DM support).
+    show_dm_sound: bool,
     on_streams: EventHandler<bool>,
     on_friends_voice: EventHandler<bool>,
     on_reactions: EventHandler<bool>,
@@ -267,10 +271,12 @@ fn AccountNotifSectionInner(
                     checked: sound_new_msg,
                     on_toggle: move |v| on_sound_msg.call(v),
                 }
-                NotifToggleRow {
-                    label: t("notif-sounds-dm"),
-                    checked: sound_dm,
-                    on_toggle: move |v| on_sound_dm.call(v),
+                if show_dm_sound {
+                    NotifToggleRow {
+                        label: t("notif-sounds-dm"),
+                        checked: sound_dm,
+                        on_toggle: move |v| on_sound_dm.call(v),
+                    }
                 }
                 if show_ring_sound {
                     NotifToggleRow {
