@@ -124,3 +124,62 @@ Claude-Desktop-callback as v2. To be defended in code review.
   - ✅ F1 — Teams account icon click no longer freezes; URL is `/teams/localhost:9103/U001/overview` (scheme stripped).
   - ✅ F2 — Lemmy account shows subscribed communities (Programming, Rust Programming) in left wing; DM button correctly hidden.
   - ⚠️ F3 — Channel ID with `~` separator survives URL routing; full data round-trip needs re-login (test-forgejo binary restarted, invalidating existing session tokens — non-blocking session-refresh issue).
+- 2026-04-29 21:25 — Follow-ups landed (`20ce12a0`):
+  - ✅ FU1 — Session-expired UX: `crates/core/src/ui/errors.rs` (NEW)
+    + `is_session_expired()` + `SessionExpiredCard`. Wrapped 4 view-body
+    error sites (split / list / card / tree). FTL keys for
+    `error-session-expired-{title,body,action}`.
+  - ✅ FU2 — `visual-hackernews.md` extended 80 → 227 lines.
+  - ✅ FU3 — Meta-personas Phase A: 6 SQLite tables + 4 indices + 23
+    CRUD methods + 21 unit tests in `mcp/chat-mcp/src/memory.rs`.
+
+---
+
+## Open items / known issues remaining
+
+After this orchestration, meaningful work that's still open:
+
+### Verification
+
+- Smoke-test FU1 in browser: force a 401 from any backend, confirm the
+  🔐 Session expired card renders + Re-authenticate button routes to
+  `Route::ReauthAccount`.
+- Smoke-test demo cross-account back-and-forth (Cat ↔ Dog) with the new
+  `mark_channel_read` plumbing — verify badge clearing across switches.
+
+### Discord — moved from "fully untested" to "partially tested"
+
+- Stream C delivered Playwright HTTP specs (no UI) + test-discord mock.
+  Real Discord OAuth + UI-level Playwright still pending.
+
+### Other backends — gaps documented but not fixed
+
+- HN: no live UI smoke-test; no search (would need Algolia HN API);
+  settings stub not persisted to KV. (`visual-hackernews.md`)
+- Matrix / Stoat: not re-audited since Phase 5; periodic resweep
+  recommended after big refactors.
+
+### Meta-personas — phases B → H pending
+
+- **Phase B** (chat-mcp tools wired to the schema) — ~1 session, the
+  next biggest agentic win.
+- **Phase C** (context aggregation: `PersonaContextBuilder` per the
+  plan).
+- **Phase D** (UI list/edit panels in agent_panel.rs).
+- **Phase E** (heartbeat scheduler in poly-host) — riskiest; templating-
+  summariser MVP per plan.
+- **Phase F+** (outbound allowlist, telemetry, audit UI).
+
+### Phase-5 follow-ups (from the per-backend audits)
+
+- Teams: only freeze fix shipped. Other Teams gaps still in
+  `visual-teams.md`.
+- Forgejo / GitHub: issue-detail load fixed; PR / Discussions detail
+  flows still untested.
+
+### Hang-class / lint debt — opportunistic
+
+- All 8 hang-class CI gates shipped per CLAUDE.md.
+- BatchedSignal Phase 4 (other hot-path signals) remains opportunistic.
+- `forbid-render-time-read.sh` still has 988 allowlisted pre-existing
+  sites — gradual migration as components are touched.
