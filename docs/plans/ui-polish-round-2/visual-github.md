@@ -117,3 +117,8 @@ All 14 use trait defaults (NotSupported). Comment in source: "kick/ban/timeout/c
 2. `search_messages` not implemented (GitHub `/search/issues` available).
 3. Repository cards show name only — no description, stars, language, last-update info.
 4. No moderation ops (correct for GitHub, but moderation UI items should be gated/hidden).
+
+### Phase-5 Follow-up Fixes (2026-04-27)
+- [x] PR detail (`get_view_detail` for `gh-pulls-*` channel) — confirmed working by integration test `test_get_view_detail_pull_request` (PR #3 "Implement ice crystal caching"); correct body, no spurious comments
+- [x] Discussions channel returns empty rows — mock GraphQL returns empty; confirmed by `test_get_view_rows_discussions_channel`
+- [x] Discussions detail returns `NotSupported` — `get_view_detail` for `gh-discussions-*` channels now returns `ClientError::NotSupported` immediately (not the REST issues endpoint); confirmed by `test_get_view_detail_discussions_returns_not_supported`

@@ -728,3 +728,64 @@ async fn test_context_menu_starred() {
         "starred repo should show unstar label"
     );
 }
+
+// ---------------------------------------------------------------------------
+// PR detail + Discussions channel (follow-up gaps — visual-forgejo.md audit)
+// ---------------------------------------------------------------------------
+
+/// `get_view_detail` on a pulls channel returns the PR body.
+///
+/// Forgejo stores PRs and issues in the same `/issues` endpoint; the backend
+/// routes `fj-pulls-*` through the same `get_issue` call, so PR detail works.
+#[tokio::test]
+async fn test_get_view_detail_pull_request() {
+    use poly_client::ClientBackend;
+    let base_url = start_test_server().await;
+    let token = get_test_token(&base_url, "otter").await;
+    let mut client = ForgejoClient::new(&base_url);
+    client.authenticate(AuthCredentials::Token(token)).await.unwrap();
+    client.get_servers().await.unwrap();
+
+    // PR #3 in otter/dam-builder is "Add beaver collaboration mode"
+    let detail = client
+        .get_view_detail("fj-pulls-otter~dam-builder", "3")
+        .await
+        .expect("get_view_detail for PR should succeed");
+
+    // PR body text: "Beavers should be able to collaborate on dam designs in real time."
+    assert!(
+        detail.body_block.sanitized_html.contains("Beavers should be able to collaborate"),
+        "PR body should be present in detail view; got: {}",
+        detail.body_block.sanitized_html
+    );
+    // PR #3 has 0 comments
+    assert!(
+        detail.comments_section.is_none(),
+        "PR with 0 comments should have no comments_section"
+    );
+}
+
+/// `get_view_rows` on a `fj-discussions-*` channel returns an empty page.
+///
+/// Forgejo has no discussions API. The backend returns an empty list rather
+/// than an error so the UI shows an empty state instead of "Failed to load".
+#[tokio::test]
+async fn test_get_view_rows_discussions_channel_empty() {
+    use poly_client::ClientBackend;
+    let base_url = start_test_server().await;
+    let token = get_test_token(&base_url, "otter").await;
+    let mut client = ForgejoClient::new(&base_url);
+    client.authenticate(AuthCredentials::Token(token)).await.unwrap();
+    client.get_servers().await.unwrap();
+
+    let page = client
+        .get_view_rows("fj-discussions-otter~dam-builder", None, None, None, None)
+        .await
+        .expect("discussions channel should return empty page, not an error");
+
+    assert!(
+        page.rows.is_empty(),
+        "Forgejo discussions channel must return empty rows (no discussions API)"
+    );
+    assert!(page.next_cursor.is_none());
+}

@@ -856,3 +856,89 @@ async fn test_settings_storage_round_trip() {
         .expect("get_setting_value should succeed");
     assert_eq!(got, "false");
 }
+
+// ---------------------------------------------------------------------------
+// PR detail + Discussions detail (follow-up gaps — visual-github.md audit)
+// ---------------------------------------------------------------------------
+
+/// `get_view_detail` on a pulls channel returns the PR body.
+#[tokio::test]
+async fn test_get_view_detail_pull_request() {
+    let base_url = start_test_server().await;
+    let token = get_test_token(&base_url, "penguin").await;
+    let mut client = GitHubClient::with_http(&base_url);
+    client
+        .authenticate(AuthCredentials::Token(token))
+        .await
+        .unwrap();
+    client.get_servers().await.unwrap();
+
+    // PR #3 in penguin/iceberg-os is "Implement ice crystal caching"
+    let detail = client
+        .get_view_detail("gh-pulls-penguin~iceberg-os", "3")
+        .await
+        .expect("get_view_detail for PR should succeed");
+
+    assert!(
+        detail.body_block.sanitized_html.contains("ice crystal"),
+        "PR body should be present in detail view"
+    );
+    // PR #3 has 0 comments
+    assert!(
+        detail.comments_section.is_none(),
+        "PR with 0 comments should have no comments_section"
+    );
+}
+
+/// `get_view_rows` on a `gh-discussions-*` channel returns rows via GraphQL.
+///
+/// The mock server returns an empty discussions list for any GraphQL query,
+/// so this test verifies the call succeeds and returns an empty page.
+#[tokio::test]
+async fn test_get_view_rows_discussions_channel() {
+    let base_url = start_test_server().await;
+    let token = get_test_token(&base_url, "penguin").await;
+    let mut client = GitHubClient::with_http(&base_url);
+    client
+        .authenticate(AuthCredentials::Token(token))
+        .await
+        .unwrap();
+    client.get_servers().await.unwrap();
+
+    let page = client
+        .get_view_rows("gh-discussions-penguin~iceberg-os", None, None, None, None)
+        .await
+        .expect("get_view_rows for discussions channel should succeed (empty)");
+
+    // Mock server returns empty discussions.
+    assert!(
+        page.rows.is_empty(),
+        "mock server returns empty discussions; expected no rows"
+    );
+}
+
+/// `get_view_detail` on a discussions channel returns NotSupported.
+///
+/// GitHub discussions use GraphQL and have a separate number space from
+/// issues/PRs. The backend explicitly gates this with NotSupported so the
+/// UI can show an "open in browser" fallback instead of a wrong detail pane.
+#[tokio::test]
+async fn test_get_view_detail_discussions_returns_not_supported() {
+    let base_url = start_test_server().await;
+    let token = get_test_token(&base_url, "penguin").await;
+    let mut client = GitHubClient::with_http(&base_url);
+    client
+        .authenticate(AuthCredentials::Token(token))
+        .await
+        .unwrap();
+    client.get_servers().await.unwrap();
+
+    let result = client
+        .get_view_detail("gh-discussions-penguin~iceberg-os", "1")
+        .await;
+
+    assert!(
+        matches!(result, Err(poly_client::ClientError::NotSupported(_))),
+        "discussions detail must return NotSupported; got: {result:?}"
+    );
+}

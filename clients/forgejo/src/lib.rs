@@ -768,8 +768,10 @@ impl ClientBackend for ForgejoClient {
             return Ok(ViewRowsPage { rows, next_cursor });
         }
 
-        // Pack E.4 — Discussions tab: Forgejo lacks a discussions API.
-        if tab_id == Some("discussions") {
+        // Pack E.4 — Discussions: Forgejo lacks a discussions API.
+        // Guard both the legacy tab_id path and the dedicated discussions
+        // channel (`fj-discussions-*`) that the sidebar now uses directly.
+        if tab_id == Some("discussions") || channel_id.starts_with("fj-discussions-") {
             return Ok(ViewRowsPage { rows: Vec::new(), next_cursor: None });
         }
 

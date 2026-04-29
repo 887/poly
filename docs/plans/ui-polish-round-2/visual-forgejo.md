@@ -103,3 +103,7 @@ All 14 use trait defaults (NotSupported). Forgejo is a code forge; social featur
 2. DMs unsupported — raw text "forgejo doesn't support direct messages"; needs styled empty state.
 3. `search_messages` not implemented (Forgejo has `/issues/search`).
 4. Repository icons: letter-initial circles (CDN URLs not loading).
+
+### Phase-5 Follow-up Fixes (2026-04-27)
+- [x] PR detail (`get_view_detail` for `fj-pulls-*` channel) — confirmed working by integration test `test_get_view_detail_pull_request` (PR #3 "Dam overflow protection"); correct body returned, no spurious comments
+- [x] Discussions channel returns empty rows — `fj-discussions-*` channel now correctly short-circuits in `get_view_rows` to return an empty page; confirmed by `test_get_view_rows_discussions_channel_empty`

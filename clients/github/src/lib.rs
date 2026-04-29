@@ -777,6 +777,13 @@ impl ClientBackend for GitHubClient {
         channel_id: &str,
         row_id: &str,
     ) -> ClientResult<ViewDetail> {
+        if channel_id.starts_with("gh-discussions-") {
+            return Err(ClientError::NotSupported(
+                "GitHub discussions detail is not available via the REST API; \
+                 open the discussion in your browser for the full view."
+                    .to_string(),
+            ));
+        }
         let (owner, repo) = parse_forum_channel(channel_id)?;
         let number: u64 = row_id
             .parse()

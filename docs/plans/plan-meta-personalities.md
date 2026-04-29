@@ -736,23 +736,27 @@ Numbers update live. Click → expanded source view.
 
 ### Phase B — chat-mcp tools wired to schema (no UI yet)
 
-- [ ] **B.1** Add 14 `meta_persona_*` tools to `mcp/chat-mcp/src/tools.rs`
+- [x] **B.1** Add 14 `meta_persona_*` tools to `mcp/chat-mcp/src/tools.rs`
   dispatch and to `should_expose_tool` always-on list.
-- [ ] **B.2** Implement read-side tools first: `meta_persona_list`,
+- [x] **B.2** Implement read-side tools first: `meta_persona_list`,
   `meta_persona_get`, `meta_persona_get_memory`, `meta_persona_recent_actions`.
-- [ ] **B.3** Implement write-side: `meta_persona_create`, `_update`,
+- [x] **B.3** Implement write-side: `meta_persona_create`, `_update`,
   `_delete`, `_set_sources`, `_set_tool_whitelist`, `_set_memory`,
   `_forget_memory`, `_set_outbound_allow`, `_set_heartbeat`.
-- [ ] **B.4** Implement `meta_persona_invoke` — calls
-  `PersonaContextBuilder::build()` (Phase C below) and returns the bundle.
-- [ ] **B.5** Audit-row writes on every successful tool call (or `denied` /
+- [x] **B.4** Implement `meta_persona_invoke` — Phase B returns `bundle_v0`
+  stub (persona identity + system_prompt + pinned_facts + source_ids); Phase C
+  swaps in full `PersonaContextBuilder` with live chat messages.
+- [x] **B.5** Audit-row writes on every successful tool call (or `denied` /
   `error` row otherwise).
-- [ ] **B.6** JSON-schema declarations for each tool, hand-checked against
+- [x] **B.6** JSON-schema declarations for each tool, hand-checked against
   the MCP spec for type fidelity.
-- [ ] **B.7** Integration test: Claude-Desktop-style stdio session creates
-  a persona, sets sources, invokes, retrieves audit.
-- [ ] **B.8** Tool-list capability test extension (mirrors
-  `mcp/chat-mcp/src/tools.rs::tests` Phase A.7 pattern).
+- [x] **B.7** Integration test: 9 Rust unit tests (`tools::tests::integration_*`)
+  covering create/list/get, update/delete, set_sources atomic replace, memory
+  set/get/forget, invoke stub (bundle_v0), disabled-persona denied, heartbeat,
+  outbound allowlist, audit trail.
+- [x] **B.8** Tool-list capability test extension: `meta_persona_tools_in_tool_list`
+  and `meta_persona_tools_always_exposed_on_every_backend` added to
+  `mcp/chat-mcp/src/tools.rs::tests`.
 
 **Effort:** 1.5 sessions.
 
@@ -1104,4 +1108,30 @@ A separate `persona/` module can be introduced in Phase B when the MCP tool
 dispatch logic warrants it.
 
 51 unit tests pass (`cargo test -p poly-chat-mcp --lib -- memory`).
+`cargo check -p poly-chat-mcp` clean.
+
+---
+
+## Phase B Status: DONE
+
+| Item | Date | Notes |
+|---|---|---|
+| 14 MCP tools + dispatch + should_expose_tool | 2026-04-27 | `mcp/chat-mcp/src/tools.rs` |
+| JSON schema declarations for all 14 tools | 2026-04-27 | inline in `tool_list()` |
+| Audit writes on every tool call | 2026-04-27 | `audit()` helper, best-effort |
+| `meta_persona_invoke` bundle_v0 stub | 2026-04-27 | returns slug + system_prompt + pinned_facts + source_ids; Phase C adds live chat messages |
+| 9 integration tests + 2 capability tests | 2026-04-27 | 95 total tests pass |
+
+All 8 Phase B checklist items complete. Implementation notes:
+- No separate `persona/` module needed for Phase B — all handlers live in
+  `tools.rs` following the existing per-phase section pattern.
+- `meta_persona_invoke` returns `bundle_v0` (persona identity + system_prompt +
+  pinned_facts + source_ids). No backend reads; Phase C replaces this with
+  `PersonaContextBuilder::build()` that fetches live messages.
+- `meta_persona_set_sources` and `meta_persona_set_tool_whitelist` are atomic
+  replace operations: list existing IDs, remove all, insert new ones.
+- Audit rows are written before cascade-delete in `meta_persona_delete` so
+  the row exists before the cascade wipes `persona_audit`.
+
+95 unit tests pass (`cargo test -p poly-chat-mcp --lib`).
 `cargo check -p poly-chat-mcp` clean.

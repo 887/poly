@@ -108,3 +108,8 @@ Every account activation triggers a WASM tight loop. Most likely cause: `Signal:
 2. **[HIGH] No ban/timeout** — moderation context-menus need backend-capability gating to hide ban/timeout for Teams.
 3. `search_messages` not implemented.
 4. `get_moderation_log` not implemented.
+
+### Phase-5 Follow-up Fixes (2026-04-27)
+- [x] `search_messages` returns `NotSupported` — confirmed by integration test `test_search_messages_returns_not_supported`
+- [x] `timeout_member` / `untimeout_member` return `NotSupported` — confirmed by integration tests
+- [x] `backend_capabilities` regression guard — `test_backend_capabilities_no_ban_no_timeout` asserts `has_ban=false`, `has_timed_ban=false`, `has_kick=true`, `has_moderation_log=false`

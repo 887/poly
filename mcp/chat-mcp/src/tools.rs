@@ -163,6 +163,23 @@ pub fn should_expose_tool(tool_name: &str, caps: &BackendCapabilities) -> bool {
         | "list_chat_styles"
         | "forget_chat_style" => true,
 
+        // Phase B (meta-personas) — always exposed; persona state is
+        // Poly-side only, independent of which backend a chat uses.
+        "meta_persona_list"
+        | "meta_persona_get"
+        | "meta_persona_create"
+        | "meta_persona_update"
+        | "meta_persona_delete"
+        | "meta_persona_set_sources"
+        | "meta_persona_set_tool_whitelist"
+        | "meta_persona_invoke"
+        | "meta_persona_set_heartbeat"
+        | "meta_persona_get_memory"
+        | "meta_persona_set_memory"
+        | "meta_persona_forget_memory"
+        | "meta_persona_recent_actions"
+        | "meta_persona_set_outbound_allow" => true,
+
         // Phase C — event subscription / poll (always exposed; backend-agnostic).
         "poll_events" | "subscribe_events" | "unsubscribe_events" => true,
 
@@ -937,6 +954,207 @@ pub fn tool_list() -> Vec<Value> {
             }
         }),
 
+        // ─── Phase B (meta-personas) — 14 MCP tools ─────────────────────────
+        json!({
+            "name": "meta_persona_list",
+            "description": "List all defined meta-personalities with summary fields (slug, name, avatar, enabled, proactivity, heartbeat interval).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {}
+            }
+        }),
+        json!({
+            "name": "meta_persona_get",
+            "description": "Return the full persona row for a single persona by slug.",
+            "inputSchema": {
+                "type": "object",
+                "required": ["slug"],
+                "properties": {
+                    "slug": { "type": "string", "description": "Persona slug, e.g. 'broker-bob'" }
+                }
+            }
+        }),
+        json!({
+            "name": "meta_persona_create",
+            "description": "Create a new meta-personality. Returns the slug on success.",
+            "inputSchema": {
+                "type": "object",
+                "required": ["slug", "name", "system_prompt"],
+                "properties": {
+                    "slug":                    { "type": "string", "description": "URL-safe identifier, e.g. 'broker-bob'" },
+                    "name":                    { "type": "string", "description": "Display name, e.g. 'Broker Bob'" },
+                    "avatar_emoji":            { "type": "string", "description": "Single emoji avatar (default 🤖)" },
+                    "system_prompt":           { "type": "string", "description": "The persona's system / role prompt" },
+                    "style_notes":             { "type": "string", "description": "Optional free-form voice notes" },
+                    "heartbeat_interval_secs": { "type": ["integer", "null"], "minimum": 60, "maximum": 86400 },
+                    "proactivity":             { "type": "string", "enum": ["drafts-only", "notify", "outbound-allowlisted"], "default": "drafts-only" },
+                    "rate_limit_per_hour":     { "type": "integer", "default": 4, "minimum": 0 }
+                }
+            }
+        }),
+        json!({
+            "name": "meta_persona_update",
+            "description": "Update fields on an existing persona. Only supplied fields are written.",
+            "inputSchema": {
+                "type": "object",
+                "required": ["slug"],
+                "properties": {
+                    "slug":                    { "type": "string" },
+                    "name":                    { "type": "string" },
+                    "avatar_emoji":            { "type": "string" },
+                    "system_prompt":           { "type": "string" },
+                    "style_notes":             { "type": ["string", "null"] },
+                    "heartbeat_interval_secs": { "type": ["integer", "null"], "minimum": 60, "maximum": 86400 },
+                    "proactivity":             { "type": "string", "enum": ["drafts-only", "notify", "outbound-allowlisted"] },
+                    "rate_limit_per_hour":     { "type": "integer", "minimum": 0 },
+                    "enabled":                 { "type": "boolean" }
+                }
+            }
+        }),
+        json!({
+            "name": "meta_persona_delete",
+            "description": "Delete a persona and cascade-remove all child rows (sources, facts, audit, outbound allowlist).",
+            "inputSchema": {
+                "type": "object",
+                "required": ["slug"],
+                "properties": {
+                    "slug": { "type": "string" }
+                }
+            }
+        }),
+        json!({
+            "name": "meta_persona_set_sources",
+            "description": "Atomically replace the source bindings for a persona. Each source entry specifies which account + chat set the persona may read. Deny rows (include=false) win over allow rows.",
+            "inputSchema": {
+                "type": "object",
+                "required": ["slug", "sources"],
+                "properties": {
+                    "slug": { "type": "string" },
+                    "sources": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "required": ["account_id", "selector_kind"],
+                            "properties": {
+                                "account_id":     { "type": "string" },
+                                "selector_kind":  { "type": "string", "enum": ["all", "server", "channel", "dm", "tag"] },
+                                "selector_value": { "type": "string" },
+                                "include":        { "type": "boolean", "default": true }
+                            }
+                        }
+                    }
+                }
+            }
+        }),
+        json!({
+            "name": "meta_persona_set_tool_whitelist",
+            "description": "Atomically replace the allowed-tool set for a persona. Empty list = read-only defaults.",
+            "inputSchema": {
+                "type": "object",
+                "required": ["slug", "tool_names"],
+                "properties": {
+                    "slug":       { "type": "string" },
+                    "tool_names": { "type": "array", "items": { "type": "string" } }
+                }
+            }
+        }),
+        json!({
+            "name": "meta_persona_invoke",
+            "description": "Invoke a meta-personality. Returns a context bundle (bundle_v0) containing the persona's system prompt, slug, name, source IDs, and pinned facts. Claude composes the reply using this bundle. Full context aggregation arrives in Phase C.",
+            "inputSchema": {
+                "type": "object",
+                "required": ["slug"],
+                "properties": {
+                    "slug":                  { "type": "string", "description": "Persona slug, e.g. 'broker-bob'" },
+                    "user_prompt":           { "type": "string", "description": "Freeform user instruction; optional" },
+                    "max_messages_per_chat": { "type": "integer", "default": 30, "minimum": 1, "maximum": 200 },
+                    "max_chats":             { "type": "integer", "default": 25, "minimum": 1, "maximum": 100 },
+                    "include_summaries":     { "type": "boolean", "default": true }
+                }
+            }
+        }),
+        json!({
+            "name": "meta_persona_set_heartbeat",
+            "description": "Set or clear the heartbeat interval for a persona. NULL/0 disables heartbeat.",
+            "inputSchema": {
+                "type": "object",
+                "required": ["slug"],
+                "properties": {
+                    "slug":          { "type": "string" },
+                    "interval_secs": { "type": ["integer", "null"], "minimum": 60, "maximum": 86400,
+                                       "description": "60s minimum, 24h maximum; null or 0 disables" }
+                }
+            }
+        }),
+        json!({
+            "name": "meta_persona_get_memory",
+            "description": "Read facts from a persona's private memory partition. Optionally filter to pinned-only facts.",
+            "inputSchema": {
+                "type": "object",
+                "required": ["slug"],
+                "properties": {
+                    "slug":        { "type": "string" },
+                    "pinned_only": { "type": "boolean", "default": false }
+                }
+            }
+        }),
+        json!({
+            "name": "meta_persona_set_memory",
+            "description": "Store a fact in a persona's private memory partition. Persona memory is separate from contact_facts.",
+            "inputSchema": {
+                "type": "object",
+                "required": ["slug", "fact_text"],
+                "properties": {
+                    "slug":      { "type": "string" },
+                    "category":  { "type": "string", "description": "Free-form label, e.g. 'observation', 'preference', 'reminder'" },
+                    "fact_text": { "type": "string", "maxLength": 2000 },
+                    "pinned":    { "type": "boolean", "default": false }
+                }
+            }
+        }),
+        json!({
+            "name": "meta_persona_forget_memory",
+            "description": "Delete a single fact from a persona's memory by fact_id, or wipe ALL facts for the persona when forget_all=true.",
+            "inputSchema": {
+                "type": "object",
+                "required": ["slug"],
+                "properties": {
+                    "slug":       { "type": "string" },
+                    "fact_id":    { "type": "integer", "description": "Fact ID returned by meta_persona_set_memory" },
+                    "forget_all": { "type": "boolean", "default": false,
+                                    "description": "Set true to delete ALL facts for this persona (requires typed confirmation in UI)" }
+                }
+            }
+        }),
+        json!({
+            "name": "meta_persona_recent_actions",
+            "description": "Return the most recent audit-log entries for a persona (newest first). Default limit 50.",
+            "inputSchema": {
+                "type": "object",
+                "required": ["slug"],
+                "properties": {
+                    "slug":  { "type": "string" },
+                    "limit": { "type": "integer", "default": 50, "minimum": 1, "maximum": 500 }
+                }
+            }
+        }),
+        json!({
+            "name": "meta_persona_set_outbound_allow",
+            "description": "Upsert or remove an entry in the persona's outbound allowlist. Only consulted when proactivity=outbound-allowlisted.",
+            "inputSchema": {
+                "type": "object",
+                "required": ["slug", "account_id", "chat_id"],
+                "properties": {
+                    "slug":                 { "type": "string" },
+                    "account_id":           { "type": "string" },
+                    "chat_id":              { "type": "string" },
+                    "max_messages_per_day": { "type": "integer", "default": 1, "minimum": 1, "maximum": 100 },
+                    "remove":               { "type": "boolean", "default": false,
+                                              "description": "Set true to remove this entry from the allowlist" }
+                }
+            }
+        }),
+
         // ─── Phase C — event subscription / poll ─────────────────────────────
         // Added concurrently with Phase A agent; rebase-safe insertion at end.
         json!({
@@ -1112,6 +1330,22 @@ pub async fn dispatch(tool: &str, args: &Value, pool: &mut BackendPool, mem: &Me
         "get_chat_style"    => handle_get_chat_style(args, mem),
         "list_chat_styles"  => handle_list_chat_styles(args, mem),
         "forget_chat_style" => handle_forget_chat_style(args, mem),
+
+        // Phase B (meta-personas) — always exposed.
+        "meta_persona_list"          => handle_meta_persona_list(mem),
+        "meta_persona_get"           => handle_meta_persona_get(args, mem),
+        "meta_persona_create"        => handle_meta_persona_create(args, mem),
+        "meta_persona_update"        => handle_meta_persona_update(args, mem),
+        "meta_persona_delete"        => handle_meta_persona_delete(args, mem),
+        "meta_persona_set_sources"   => handle_meta_persona_set_sources(args, mem),
+        "meta_persona_set_tool_whitelist" => handle_meta_persona_set_tool_whitelist(args, mem),
+        "meta_persona_invoke"        => handle_meta_persona_invoke(args, mem),
+        "meta_persona_set_heartbeat" => handle_meta_persona_set_heartbeat(args, mem),
+        "meta_persona_get_memory"    => handle_meta_persona_get_memory(args, mem),
+        "meta_persona_set_memory"    => handle_meta_persona_set_memory(args, mem),
+        "meta_persona_forget_memory" => handle_meta_persona_forget_memory(args, mem),
+        "meta_persona_recent_actions" => handle_meta_persona_recent_actions(args, mem),
+        "meta_persona_set_outbound_allow" => handle_meta_persona_set_outbound_allow(args, mem),
 
         // Phase C — added concurrently, rebase-safe insertion
         "poll_events" => handle_poll_events(args, pool).await,
@@ -2526,6 +2760,378 @@ async fn handle_get_unread_summary(args: &Value, pool: &BackendPool) -> Value {
     )
 }
 
+// ─── Phase B (meta-personas) — tool handlers ─────────────────────────────────
+
+/// Emit an audit row; swallows errors so failures don't break the primary
+/// return path. The tool already returns its result — audit is best-effort.
+fn audit(
+    mem: &MemoryDb,
+    slug: &str,
+    action: &str,
+    payload: Option<&str>,
+    result: &str,
+    error_msg: Option<&str>,
+) {
+    let _ = mem.record_persona_audit(slug, "claude-desktop", action, None, None, payload, result, error_msg);
+}
+
+fn handle_meta_persona_list(mem: &MemoryDb) -> Value {
+    match mem.list_personas() {
+        Ok(list) => ok_result(serde_json::to_string_pretty(&list).unwrap_or_default()),
+        Err(e)   => err_result(format!("meta_persona_list failed: {e}")),
+    }
+}
+
+fn handle_meta_persona_get(args: &Value, mem: &MemoryDb) -> Value {
+    let slug = match str_arg(args, "slug") { Some(v) => v, None => return err_result("missing 'slug'") };
+    match mem.get_persona(slug) {
+        Ok(Some(p)) => {
+            audit(mem, slug, "invoke", Some("{\"action\":\"get\"}"), "ok", None);
+            ok_result(serde_json::to_string_pretty(&p).unwrap_or_default())
+        }
+        Ok(None)    => err_result(format!("persona '{slug}' not found")),
+        Err(e)      => err_result(format!("meta_persona_get failed: {e}")),
+    }
+}
+
+fn handle_meta_persona_create(args: &Value, mem: &MemoryDb) -> Value {
+    let slug          = match str_arg(args, "slug")          { Some(v) => v, None => return err_result("missing 'slug'") };
+    let name          = match str_arg(args, "name")          { Some(v) => v, None => return err_result("missing 'name'") };
+    let system_prompt = match str_arg(args, "system_prompt") { Some(v) => v, None => return err_result("missing 'system_prompt'") };
+
+    let avatar_emoji  = str_arg(args, "avatar_emoji").unwrap_or("🤖");
+    let style_notes   = str_arg(args, "style_notes");
+    let heartbeat     = args.get("heartbeat_interval_secs").and_then(|v| v.as_i64());
+    let proactivity   = str_arg(args, "proactivity").unwrap_or("drafts-only");
+    let rate_limit    = args.get("rate_limit_per_hour").and_then(|v| v.as_i64()).unwrap_or(4);
+
+    match mem.create_persona(slug, name, avatar_emoji, system_prompt, style_notes, heartbeat, proactivity, rate_limit) {
+        Ok(s) => {
+            audit(mem, &s, "invoke", Some("{\"action\":\"create\"}"), "ok", None);
+            ok_result(format!("{{\"slug\":\"{s}\"}}"))
+        }
+        Err(e) => err_result(format!("meta_persona_create failed: {e}")),
+    }
+}
+
+fn handle_meta_persona_update(args: &Value, mem: &MemoryDb) -> Value {
+    let slug = match str_arg(args, "slug") { Some(v) => v, None => return err_result("missing 'slug'") };
+
+    let name          = str_arg(args, "name");
+    let avatar_emoji  = str_arg(args, "avatar_emoji");
+    let system_prompt = str_arg(args, "system_prompt");
+
+    // style_notes: absent = preserve; null JSON = clear; string = set.
+    let style_notes: Option<Option<&str>> = match args.get("style_notes") {
+        None => None,
+        Some(v) if v.is_null() => Some(None),
+        Some(v) => Some(v.as_str()),
+    };
+
+    // heartbeat_interval_secs: absent = preserve; null/0 JSON = clear.
+    let heartbeat: Option<Option<i64>> = match args.get("heartbeat_interval_secs") {
+        None => None,
+        Some(v) if v.is_null() => Some(None),
+        Some(v) => match v.as_i64() {
+            Some(0) | None => Some(None),
+            Some(n) => Some(Some(n)),
+        },
+    };
+
+    let proactivity   = str_arg(args, "proactivity");
+    let rate_limit    = args.get("rate_limit_per_hour").and_then(|v| v.as_i64());
+    let enabled       = args.get("enabled").and_then(|v| v.as_bool());
+
+    match mem.update_persona(slug, name, avatar_emoji, system_prompt, style_notes, heartbeat, proactivity, rate_limit, enabled, None) {
+        Ok(true)  => {
+            audit(mem, slug, "invoke", Some("{\"action\":\"update\"}"), "ok", None);
+            ok_result(format!("persona '{slug}' updated"))
+        }
+        Ok(false) => err_result(format!("persona '{slug}' not found")),
+        Err(e)    => err_result(format!("meta_persona_update failed: {e}")),
+    }
+}
+
+fn handle_meta_persona_delete(args: &Value, mem: &MemoryDb) -> Value {
+    let slug = match str_arg(args, "slug") { Some(v) => v, None => return err_result("missing 'slug'") };
+    // Write the audit row BEFORE deleting (cascade will wipe it otherwise).
+    let _ = mem.record_persona_audit(slug, "claude-desktop", "invoke", None, None,
+        Some("{\"action\":\"delete\"}"), "ok", None);
+    match mem.delete_persona(slug) {
+        Ok(()) => ok_result(format!("persona '{slug}' deleted")),
+        Err(e) => err_result(format!("meta_persona_delete failed: {e}")),
+    }
+}
+
+fn handle_meta_persona_set_sources(args: &Value, mem: &MemoryDb) -> Value {
+    let slug = match str_arg(args, "slug") { Some(v) => v, None => return err_result("missing 'slug'") };
+    let sources = match args.get("sources").and_then(|v| v.as_array()) {
+        Some(a) => a,
+        None => return err_result("missing or invalid 'sources' (must be array)"),
+    };
+
+    // Atomic replace: remove all existing sources, then insert new ones.
+    let existing = match mem.list_persona_sources(slug) {
+        Ok(v)  => v,
+        Err(e) => return err_result(format!("meta_persona_set_sources list failed: {e}")),
+    };
+    for src in &existing {
+        if let Some(id) = src.get("id").and_then(|v| v.as_i64()) {
+            if let Err(e) = mem.remove_persona_source(id) {
+                return err_result(format!("meta_persona_set_sources remove failed: {e}"));
+            }
+        }
+    }
+
+    let mut added = 0usize;
+    for src in sources {
+        let account_id    = match src.get("account_id").and_then(|v| v.as_str()) {
+            Some(v) => v,
+            None => return err_result("source missing 'account_id'"),
+        };
+        let selector_kind = match src.get("selector_kind").and_then(|v| v.as_str()) {
+            Some(v) => v,
+            None => return err_result("source missing 'selector_kind'"),
+        };
+        let selector_value = src.get("selector_value").and_then(|v| v.as_str());
+        let include        = src.get("include").and_then(|v| v.as_bool()).unwrap_or(true);
+
+        if let Err(e) = mem.add_persona_source(slug, account_id, selector_kind, selector_value, include) {
+            return err_result(format!("meta_persona_set_sources insert failed: {e}"));
+        }
+        added += 1;
+    }
+
+    audit(mem, slug, "invoke", Some(&format!("{{\"action\":\"set_sources\",\"count\":{added}}}")), "ok", None);
+    ok_result(format!("{{\"sources_set\":{added}}}"))
+}
+
+fn handle_meta_persona_set_tool_whitelist(args: &Value, mem: &MemoryDb) -> Value {
+    let slug       = match str_arg(args, "slug") { Some(v) => v, None => return err_result("missing 'slug'") };
+    let tool_names = match args.get("tool_names").and_then(|v| v.as_array()) {
+        Some(a) => a,
+        None    => return err_result("missing or invalid 'tool_names' (must be array)"),
+    };
+
+    // Atomic replace: clear existing whitelist then insert new entries.
+    let existing = match mem.list_persona_tools(slug) {
+        Ok(v)  => v,
+        Err(e) => return err_result(format!("meta_persona_set_tool_whitelist list failed: {e}")),
+    };
+    for tool in &existing {
+        if let Err(e) = mem.remove_persona_tool(slug, tool) {
+            return err_result(format!("meta_persona_set_tool_whitelist remove failed: {e}"));
+        }
+    }
+
+    let mut added = 0usize;
+    for t in tool_names {
+        let name = match t.as_str() {
+            Some(s) => s,
+            None    => return err_result("tool_names entries must be strings"),
+        };
+        if let Err(e) = mem.add_persona_tool(slug, name) {
+            return err_result(format!("meta_persona_set_tool_whitelist insert failed: {e}"));
+        }
+        added += 1;
+    }
+
+    audit(mem, slug, "invoke", Some(&format!("{{\"action\":\"set_tool_whitelist\",\"count\":{added}}}")), "ok", None);
+    ok_result(format!("{{\"tools_set\":{added}}}"))
+}
+
+/// Phase B stub for `meta_persona_invoke`.
+///
+/// Returns a `bundle_v0` JSON shape containing the persona's identity +
+/// system prompt + bound source IDs + pinned facts. Claude Desktop uses
+/// this as the prompt context and composes the reply.
+///
+/// Phase C will swap in the full `PersonaContextBuilder` that fetches
+/// actual chat messages; for now we return only what is already in the
+/// database (no backend reads required).
+fn handle_meta_persona_invoke(args: &Value, mem: &MemoryDb) -> Value {
+    let slug        = match str_arg(args, "slug") { Some(v) => v, None => return err_result("missing 'slug'") };
+    let user_prompt = str_arg(args, "user_prompt");
+
+    // Verify the persona exists and is enabled.
+    let persona = match mem.get_persona(slug) {
+        Ok(Some(p)) => p,
+        Ok(None)    => {
+            let _ = mem.record_persona_audit(slug, "claude-desktop", "invoke", None, None,
+                None, "error", Some("persona not found"));
+            return err_result(format!("persona '{slug}' not found"));
+        }
+        Err(e) => return err_result(format!("meta_persona_invoke failed: {e}")),
+    };
+
+    if persona.get("enabled").and_then(|v| v.as_bool()) == Some(false) {
+        let _ = mem.record_persona_audit(slug, "claude-desktop", "invoke", None, None,
+            None, "denied", Some("persona disabled"));
+        return err_result(format!("persona '{slug}' is disabled"));
+    }
+
+    // Collect sources and pinned facts for the bundle.
+    let sources = mem.list_persona_sources(slug).unwrap_or_default();
+    let source_ids: Vec<serde_json::Value> = sources.iter().map(|s| {
+        json!({
+            "account_id":     s.get("account_id"),
+            "selector_kind":  s.get("selector_kind"),
+            "selector_value": s.get("selector_value"),
+            "include":        s.get("include"),
+        })
+    }).collect();
+
+    let pinned_facts = mem.list_persona_facts(slug, true).unwrap_or_default();
+
+    // bundle_v0 — Phase C replaces this with the full context aggregation.
+    let bundle = json!({
+        "bundle_version": "v0",
+        "note": "Phase C will add full chat context. For now, supply persona system_prompt + pinned_facts to Claude.",
+        "persona": {
+            "slug":         persona.get("slug"),
+            "name":         persona.get("name"),
+            "avatar_emoji": persona.get("avatar_emoji"),
+        },
+        "system_prompt":  persona.get("system_prompt"),
+        "style_notes":    persona.get("style_notes"),
+        "pinned_facts":   pinned_facts,
+        "source_ids":     source_ids,
+        "user_prompt":    user_prompt,
+    });
+
+    let payload_str = format!(
+        "{{\"action\":\"invoke\",\"user_prompt\":{}}}",
+        user_prompt.map(|p| format!("{p:?}")).unwrap_or_else(|| "null".to_string()),
+    );
+    audit(mem, slug, "invoke", Some(&payload_str), "ok", None);
+
+    ok_result(serde_json::to_string_pretty(&bundle).unwrap_or_default())
+}
+
+fn handle_meta_persona_set_heartbeat(args: &Value, mem: &MemoryDb) -> Value {
+    let slug = match str_arg(args, "slug") { Some(v) => v, None => return err_result("missing 'slug'") };
+
+    // interval_secs: null or 0 → disable (None); positive integer → set.
+    let interval: Option<Option<i64>> = match args.get("interval_secs") {
+        None => None,   // absent — don't change
+        Some(v) if v.is_null() => Some(None),
+        Some(v) => {
+            let n = v.as_i64().unwrap_or(0);
+            Some(if n == 0 { None } else { Some(n) })
+        }
+    };
+
+    match mem.update_persona(slug, None, None, None, None, interval, None, None, None, None) {
+        Ok(true) => {
+            let payload = match interval {
+                Some(Some(n)) => format!("{{\"action\":\"set_heartbeat\",\"interval_secs\":{n}}}"),
+                _             => "{\"action\":\"set_heartbeat\",\"interval_secs\":null}".to_string(),
+            };
+            audit(mem, slug, "invoke", Some(&payload), "ok", None);
+            ok_result("heartbeat updated")
+        }
+        Ok(false) => err_result(format!("persona '{slug}' not found")),
+        Err(e)    => err_result(format!("meta_persona_set_heartbeat failed: {e}")),
+    }
+}
+
+fn handle_meta_persona_get_memory(args: &Value, mem: &MemoryDb) -> Value {
+    let slug        = match str_arg(args, "slug") { Some(v) => v, None => return err_result("missing 'slug'") };
+    let pinned_only = args.get("pinned_only").and_then(|v| v.as_bool()).unwrap_or(false);
+
+    match mem.list_persona_facts(slug, pinned_only) {
+        Ok(facts) => {
+            audit(mem, slug, "memory_read", Some("{\"action\":\"get_memory\"}"), "ok", None);
+            ok_result(serde_json::to_string_pretty(&facts).unwrap_or_default())
+        }
+        Err(e) => err_result(format!("meta_persona_get_memory failed: {e}")),
+    }
+}
+
+fn handle_meta_persona_set_memory(args: &Value, mem: &MemoryDb) -> Value {
+    let slug      = match str_arg(args, "slug")      { Some(v) => v, None => return err_result("missing 'slug'") };
+    let fact_text = match str_arg(args, "fact_text") { Some(v) => v, None => return err_result("missing 'fact_text'") };
+
+    let category = str_arg(args, "category");
+    let pinned   = args.get("pinned").and_then(|v| v.as_bool()).unwrap_or(false);
+
+    match mem.add_persona_fact(slug, category, fact_text, pinned) {
+        Ok(id) => {
+            audit(mem, slug, "memory_write", Some(&format!("{{\"action\":\"set_memory\",\"fact_id\":{id}}}")), "ok", None);
+            ok_result(format!("{{\"fact_id\":{id}}}"))
+        }
+        Err(e) => err_result(format!("meta_persona_set_memory failed: {e}")),
+    }
+}
+
+fn handle_meta_persona_forget_memory(args: &Value, mem: &MemoryDb) -> Value {
+    let slug       = match str_arg(args, "slug") { Some(v) => v, None => return err_result("missing 'slug'") };
+    let forget_all = args.get("forget_all").and_then(|v| v.as_bool()).unwrap_or(false);
+
+    if forget_all {
+        match mem.forget_all_persona_facts(slug) {
+            Ok(()) => {
+                audit(mem, slug, "memory_write", Some("{\"action\":\"forget_all_memory\"}"), "ok", None);
+                ok_result(format!("all facts for persona '{slug}' deleted"))
+            }
+            Err(e) => err_result(format!("meta_persona_forget_memory failed: {e}")),
+        }
+    } else {
+        let fact_id = match args.get("fact_id").and_then(|v| v.as_i64()) {
+            Some(id) => id,
+            None => return err_result("must provide 'fact_id' or set 'forget_all': true"),
+        };
+        match mem.remove_persona_fact(fact_id) {
+            Ok(()) => {
+                audit(mem, slug, "memory_write",
+                    Some(&format!("{{\"action\":\"forget_memory\",\"fact_id\":{fact_id}}}")), "ok", None);
+                ok_result(format!("fact {fact_id} deleted"))
+            }
+            Err(e) => err_result(format!("meta_persona_forget_memory failed: {e}")),
+        }
+    }
+}
+
+fn handle_meta_persona_recent_actions(args: &Value, mem: &MemoryDb) -> Value {
+    let slug  = match str_arg(args, "slug") { Some(v) => v, None => return err_result("missing 'slug'") };
+    let limit = args.get("limit").and_then(|v| v.as_i64()).unwrap_or(50).max(1).min(500);
+
+    match mem.list_persona_audit(slug, limit) {
+        Ok(rows) => ok_result(serde_json::to_string_pretty(&rows).unwrap_or_default()),
+        Err(e)   => err_result(format!("meta_persona_recent_actions failed: {e}")),
+    }
+}
+
+fn handle_meta_persona_set_outbound_allow(args: &Value, mem: &MemoryDb) -> Value {
+    let slug       = match str_arg(args, "slug")       { Some(v) => v, None => return err_result("missing 'slug'") };
+    let account_id = match str_arg(args, "account_id") { Some(v) => v, None => return err_result("missing 'account_id'") };
+    let chat_id    = match str_arg(args, "chat_id")    { Some(v) => v, None => return err_result("missing 'chat_id'") };
+    let remove     = args.get("remove").and_then(|v| v.as_bool()).unwrap_or(false);
+
+    if remove {
+        match mem.remove_persona_outbound_allow(slug, account_id, chat_id) {
+            Ok(()) => {
+                audit(mem, slug, "invoke", Some("{\"action\":\"remove_outbound_allow\"}"), "ok", None);
+                ok_result(format!("outbound allow entry removed for {account_id}/{chat_id}"))
+            }
+            Err(e) => err_result(format!("meta_persona_set_outbound_allow remove failed: {e}")),
+        }
+    } else {
+        let max_per_day = args.get("max_messages_per_day")
+            .and_then(|v| v.as_i64()).unwrap_or(1).max(1).min(100);
+        match mem.set_persona_outbound_allow(slug, account_id, chat_id, max_per_day) {
+            Ok(()) => {
+                let payload = format!(
+                    "{{\"action\":\"set_outbound_allow\",\"account_id\":\"{account_id}\",\"chat_id\":\"{chat_id}\",\"max_per_day\":{max_per_day}}}",
+                );
+                audit(mem, slug, "invoke", Some(&payload), "ok", None);
+                ok_result(format!("outbound allow set for {account_id}/{chat_id} max={max_per_day}/day"))
+            }
+            Err(e) => err_result(format!("meta_persona_set_outbound_allow failed: {e}")),
+        }
+    }
+}
+
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -2746,5 +3352,315 @@ mod tests {
                 );
             }
         }
+    }
+
+    // ── B.8 — meta-persona capability tests ──────────────────────────────────
+
+    const META_PERSONA_TOOLS: &[&str] = &[
+        "meta_persona_list",
+        "meta_persona_get",
+        "meta_persona_create",
+        "meta_persona_update",
+        "meta_persona_delete",
+        "meta_persona_set_sources",
+        "meta_persona_set_tool_whitelist",
+        "meta_persona_invoke",
+        "meta_persona_set_heartbeat",
+        "meta_persona_get_memory",
+        "meta_persona_set_memory",
+        "meta_persona_forget_memory",
+        "meta_persona_recent_actions",
+        "meta_persona_set_outbound_allow",
+    ];
+
+    #[test]
+    fn meta_persona_tools_in_tool_list() {
+        let list = tool_list();
+        let names = tool_names(&list);
+        for t in META_PERSONA_TOOLS {
+            assert!(names.contains(*t), "'{t}' missing from tool_list()");
+        }
+    }
+
+    #[test]
+    fn meta_persona_tools_always_exposed_on_every_backend() {
+        for slug in KNOWN_SLUGS {
+            let caps = poly_client::capabilities_for_slug(slug);
+            for t in META_PERSONA_TOOLS {
+                assert!(
+                    should_expose_tool(t, &caps),
+                    "'{t}' should be exposed on backend '{slug}'"
+                );
+            }
+        }
+    }
+
+    // ── B.7 — integration tests (direct dispatch against in-memory DB) ────────
+
+    fn fresh_mem() -> crate::memory::MemoryDb {
+        crate::memory::MemoryDb::open(":memory:").expect("in-memory db")
+    }
+
+    fn dispatch_sync(tool: &str, args: serde_json::Value, mem: &crate::memory::MemoryDb) -> Value {
+        // Spin up a minimal Tokio runtime so we can call the async dispatch.
+        // The persona handlers are all sync but the top-level dispatch is async.
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("tokio runtime");
+        let mut pool = crate::state::BackendPool::new();
+        rt.block_on(super::dispatch(tool, &args, &mut pool, mem))
+    }
+
+    #[test]
+    fn integration_create_list_get() {
+        let mem = fresh_mem();
+
+        // Create
+        let r = dispatch_sync("meta_persona_create", json!({
+            "slug": "test-bob",
+            "name": "Test Bob",
+            "system_prompt": "You are Test Bob."
+        }), &mem);
+        assert_eq!(r["isError"], false, "create failed: {r}");
+        let text = r["content"][0]["text"].as_str().unwrap();
+        assert!(text.contains("test-bob"), "slug not in response: {text}");
+
+        // List — should find 1 persona
+        let r = dispatch_sync("meta_persona_list", json!({}), &mem);
+        assert_eq!(r["isError"], false);
+        let text = r["content"][0]["text"].as_str().unwrap();
+        assert!(text.contains("test-bob"));
+
+        // Get
+        let r = dispatch_sync("meta_persona_get", json!({"slug": "test-bob"}), &mem);
+        assert_eq!(r["isError"], false);
+        let text = r["content"][0]["text"].as_str().unwrap();
+        assert!(text.contains("You are Test Bob."));
+    }
+
+    #[test]
+    fn integration_update_and_delete() {
+        let mem = fresh_mem();
+        dispatch_sync("meta_persona_create", json!({
+            "slug": "del-me",
+            "name": "Del Me",
+            "system_prompt": "temp"
+        }), &mem);
+
+        // Update name
+        let r = dispatch_sync("meta_persona_update", json!({
+            "slug": "del-me",
+            "name": "Del Me Renamed"
+        }), &mem);
+        assert_eq!(r["isError"], false);
+
+        let persona = mem.get_persona("del-me").unwrap().unwrap();
+        assert_eq!(persona["name"], "Del Me Renamed");
+
+        // Delete
+        let r = dispatch_sync("meta_persona_delete", json!({"slug": "del-me"}), &mem);
+        assert_eq!(r["isError"], false);
+        assert!(mem.get_persona("del-me").unwrap().is_none());
+    }
+
+    #[test]
+    fn integration_set_sources_atomic_replace() {
+        let mem = fresh_mem();
+        dispatch_sync("meta_persona_create", json!({
+            "slug": "src-test",
+            "name": "Src Test",
+            "system_prompt": "test"
+        }), &mem);
+
+        // Set two sources
+        let r = dispatch_sync("meta_persona_set_sources", json!({
+            "slug": "src-test",
+            "sources": [
+                {"account_id": "acc1", "selector_kind": "server", "selector_value": "srv1"},
+                {"account_id": "acc1", "selector_kind": "channel", "selector_value": "ch1", "include": false}
+            ]
+        }), &mem);
+        assert_eq!(r["isError"], false);
+        assert_eq!(mem.list_persona_sources("src-test").unwrap().len(), 2);
+
+        // Atomic replace with one source
+        dispatch_sync("meta_persona_set_sources", json!({
+            "slug": "src-test",
+            "sources": [
+                {"account_id": "acc2", "selector_kind": "all"}
+            ]
+        }), &mem);
+        let sources = mem.list_persona_sources("src-test").unwrap();
+        assert_eq!(sources.len(), 1);
+        assert_eq!(sources[0]["account_id"], "acc2");
+    }
+
+    #[test]
+    fn integration_memory_set_get_forget() {
+        let mem = fresh_mem();
+        dispatch_sync("meta_persona_create", json!({
+            "slug": "mem-test",
+            "name": "Mem Test",
+            "system_prompt": "test"
+        }), &mem);
+
+        // Set a fact
+        let r = dispatch_sync("meta_persona_set_memory", json!({
+            "slug": "mem-test",
+            "fact_text": "User prefers morning meetings",
+            "category": "preference",
+            "pinned": true
+        }), &mem);
+        assert_eq!(r["isError"], false);
+        let text = r["content"][0]["text"].as_str().unwrap();
+        assert!(text.contains("fact_id"));
+
+        // Get memory
+        let r = dispatch_sync("meta_persona_get_memory", json!({
+            "slug": "mem-test",
+            "pinned_only": true
+        }), &mem);
+        assert_eq!(r["isError"], false);
+        let text = r["content"][0]["text"].as_str().unwrap();
+        assert!(text.contains("morning meetings"));
+
+        // Forget all
+        let r = dispatch_sync("meta_persona_forget_memory", json!({
+            "slug": "mem-test",
+            "forget_all": true
+        }), &mem);
+        assert_eq!(r["isError"], false);
+        assert!(mem.list_persona_facts("mem-test", false).unwrap().is_empty());
+    }
+
+    #[test]
+    fn integration_invoke_stub_returns_bundle_v0() {
+        let mem = fresh_mem();
+        dispatch_sync("meta_persona_create", json!({
+            "slug": "invoke-test",
+            "name": "Invoke Test",
+            "system_prompt": "You are an invoice test persona."
+        }), &mem);
+
+        // Add a pinned fact
+        mem.add_persona_fact("invoke-test", Some("test"), "Important pinned fact", true).unwrap();
+
+        let r = dispatch_sync("meta_persona_invoke", json!({
+            "slug": "invoke-test",
+            "user_prompt": "tell me what's up"
+        }), &mem);
+        assert_eq!(r["isError"], false);
+        let text = r["content"][0]["text"].as_str().unwrap();
+        assert!(text.contains("bundle_version"), "bundle_version missing: {text}");
+        assert!(text.contains("v0"), "bundle v0 marker missing: {text}");
+        assert!(text.contains("invoke-test"), "slug missing: {text}");
+        assert!(text.contains("pinned_facts"), "pinned_facts missing: {text}");
+
+        // Audit row should have been written
+        let audit_rows = mem.list_persona_audit("invoke-test", 10).unwrap();
+        assert!(!audit_rows.is_empty(), "no audit row written");
+    }
+
+    #[test]
+    fn integration_invoke_disabled_persona_denied() {
+        let mem = fresh_mem();
+        dispatch_sync("meta_persona_create", json!({
+            "slug": "disabled-persona",
+            "name": "Disabled",
+            "system_prompt": "test"
+        }), &mem);
+        dispatch_sync("meta_persona_update", json!({
+            "slug": "disabled-persona",
+            "enabled": false
+        }), &mem);
+
+        let r = dispatch_sync("meta_persona_invoke", json!({"slug": "disabled-persona"}), &mem);
+        assert_eq!(r["isError"], true);
+        let text = r["content"][0]["text"].as_str().unwrap();
+        assert!(text.contains("disabled"), "expected disabled error: {text}");
+    }
+
+    #[test]
+    fn integration_set_heartbeat() {
+        let mem = fresh_mem();
+        dispatch_sync("meta_persona_create", json!({
+            "slug": "hb-test",
+            "name": "HB Test",
+            "system_prompt": "test"
+        }), &mem);
+
+        // Set heartbeat interval
+        let r = dispatch_sync("meta_persona_set_heartbeat", json!({
+            "slug": "hb-test",
+            "interval_secs": 3600
+        }), &mem);
+        assert_eq!(r["isError"], false);
+        let p = mem.get_persona("hb-test").unwrap().unwrap();
+        assert_eq!(p["heartbeat_interval_secs"], 3600);
+
+        // Clear heartbeat
+        let r = dispatch_sync("meta_persona_set_heartbeat", json!({
+            "slug": "hb-test",
+            "interval_secs": null
+        }), &mem);
+        assert_eq!(r["isError"], false);
+        let p = mem.get_persona("hb-test").unwrap().unwrap();
+        assert!(p["heartbeat_interval_secs"].is_null());
+    }
+
+    #[test]
+    fn integration_outbound_allow_set_and_remove() {
+        let mem = fresh_mem();
+        dispatch_sync("meta_persona_create", json!({
+            "slug": "ob-test",
+            "name": "OB Test",
+            "system_prompt": "test"
+        }), &mem);
+
+        // Set allowlist entry
+        let r = dispatch_sync("meta_persona_set_outbound_allow", json!({
+            "slug": "ob-test",
+            "account_id": "acc1",
+            "chat_id": "ch1",
+            "max_messages_per_day": 2
+        }), &mem);
+        assert_eq!(r["isError"], false);
+        let entries = mem.list_persona_outbound_allows("ob-test").unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0]["max_messages_per_day"], 2);
+
+        // Remove it
+        let r = dispatch_sync("meta_persona_set_outbound_allow", json!({
+            "slug": "ob-test",
+            "account_id": "acc1",
+            "chat_id": "ch1",
+            "remove": true
+        }), &mem);
+        assert_eq!(r["isError"], false);
+        assert!(mem.list_persona_outbound_allows("ob-test").unwrap().is_empty());
+    }
+
+    #[test]
+    fn integration_recent_actions_audit_trail() {
+        let mem = fresh_mem();
+        dispatch_sync("meta_persona_create", json!({
+            "slug": "audit-test",
+            "name": "Audit Test",
+            "system_prompt": "test"
+        }), &mem);
+        dispatch_sync("meta_persona_invoke", json!({"slug": "audit-test"}), &mem);
+        dispatch_sync("meta_persona_set_memory", json!({
+            "slug": "audit-test",
+            "fact_text": "A memory"
+        }), &mem);
+
+        let r = dispatch_sync("meta_persona_recent_actions", json!({
+            "slug": "audit-test",
+            "limit": 10
+        }), &mem);
+        assert_eq!(r["isError"], false);
+        let text = r["content"][0]["text"].as_str().unwrap();
+        // Should have at least the invoke + memory_write rows
+        assert!(text.contains("invoke") || text.contains("memory"), "no audit rows: {text}");
     }
 }

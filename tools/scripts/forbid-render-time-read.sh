@@ -72,6 +72,11 @@ while IFS= read -r -d '' f; do
         # Must contain .read()
         if (raw !~ /\.read\(\)/) { next }
 
+        # Skip pure comment lines (// or ///).
+        stripped = raw
+        sub(/^[[:space:]]+/, "", stripped)
+        if (stripped ~ /^\/\//) { next }
+
         # Skip .read().await — backend arc, covered by separate lint.
         if (raw ~ /\.read\(\)\.await/) { next }
 
