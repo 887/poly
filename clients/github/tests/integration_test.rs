@@ -149,7 +149,7 @@ async fn test_get_messages_issues() {
         .unwrap();
     client.get_servers().await.unwrap();
 
-    let channel_id = "gh-issues-penguin/iceberg-os";
+    let channel_id = "gh-issues-penguin~iceberg-os";
     let messages = client
         .get_messages(channel_id, MessageQuery::default())
         .await
@@ -192,7 +192,7 @@ async fn test_get_messages_pulls() {
         .unwrap();
     client.get_servers().await.unwrap();
 
-    let channel_id = "gh-pulls-penguin/iceberg-os";
+    let channel_id = "gh-pulls-penguin~iceberg-os";
     let messages = client
         .get_messages(channel_id, MessageQuery::default())
         .await
@@ -227,7 +227,7 @@ async fn test_get_messages_comments() {
     client.get_servers().await.unwrap();
 
     // Issue thread channel: gh-issue-{owner}-{repo}-{number}
-    let channel_id = "gh-issue-penguin/iceberg-os-1";
+    let channel_id = "gh-issue-penguin~iceberg-os-1";
     let messages = client
         .get_messages(channel_id, MessageQuery::default())
         .await
@@ -265,7 +265,7 @@ async fn test_list_files() {
         .unwrap();
     client.get_servers().await.unwrap();
 
-    let channel_id = "gh-code-penguin/iceberg-os";
+    let channel_id = "gh-code-penguin~iceberg-os";
     let entries = client
         .list_files(channel_id, "")
         .await
@@ -290,7 +290,7 @@ async fn test_list_files_subdir() {
         .unwrap();
     client.get_servers().await.unwrap();
 
-    let channel_id = "gh-code-penguin/iceberg-os";
+    let channel_id = "gh-code-penguin~iceberg-os";
     let entries = client
         .list_files(channel_id, "src")
         .await
@@ -314,7 +314,7 @@ async fn test_read_file() {
         .unwrap();
     client.get_servers().await.unwrap();
 
-    let channel_id = "gh-code-penguin/iceberg-os";
+    let channel_id = "gh-code-penguin~iceberg-os";
     let content = client
         .read_file(channel_id, "README.md")
         .await
@@ -344,7 +344,7 @@ async fn test_send_message_not_supported() {
 
     let result = client
         .send_message(
-            "gh-issues-penguin/iceberg-os",
+            "gh-issues-penguin~iceberg-os",
             poly_client::MessageContent::Text("hello".to_string()),
         )
         .await;
@@ -417,7 +417,7 @@ async fn test_get_view_rows_issues_tab() {
         .unwrap();
     client.get_servers().await.unwrap();
 
-    let channel_id = "gh-issues-penguin/iceberg-os";
+    let channel_id = "gh-issues-penguin~iceberg-os";
     let page = client
         .get_view_rows(channel_id, None, None, None, Some("issues"))
         .await
@@ -455,7 +455,7 @@ async fn test_get_view_rows_pulls_tab() {
         .unwrap();
     client.get_servers().await.unwrap();
 
-    let channel_id = "gh-pulls-penguin/iceberg-os";
+    let channel_id = "gh-pulls-penguin~iceberg-os";
     let page = client
         .get_view_rows(channel_id, None, None, None, Some("pulls"))
         .await
@@ -481,7 +481,7 @@ async fn test_get_view_rows_discussions_tab_empty() {
 
     let page = client
         .get_view_rows(
-            "gh-issues-penguin/iceberg-os",
+            "gh-issues-penguin~iceberg-os",
             None,
             None,
             None,
@@ -507,7 +507,7 @@ async fn test_get_view_rows_row_fields() {
 
     let page = client
         .get_view_rows(
-            "gh-issues-penguin/iceberg-os",
+            "gh-issues-penguin~iceberg-os",
             None,
             None,
             None,
@@ -549,7 +549,7 @@ async fn test_get_view_detail() {
     client.get_servers().await.unwrap();
 
     let detail = client
-        .get_view_detail("gh-issues-penguin/iceberg-os", "1")
+        .get_view_detail("gh-issues-penguin~iceberg-os", "1")
         .await
         .expect("get_view_detail should succeed");
 
@@ -578,7 +578,7 @@ async fn test_get_view_detail_no_comments() {
 
     // PR #3 has 0 comments
     let detail = client
-        .get_view_detail("gh-issues-penguin/iceberg-os", "3")
+        .get_view_detail("gh-issues-penguin~iceberg-os", "3")
         .await
         .expect("get_view_detail for PR should succeed");
 

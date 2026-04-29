@@ -86,7 +86,7 @@ async fn test_delete_issue_comment() {
     let client = authenticated_client(&base_url, "penguin").await;
 
     // channel_id must be an issues forum channel so owner/repo can be parsed.
-    let channel_id = "gh-issues-penguin/iceberg-os";
+    let channel_id = "gh-issues-penguin~iceberg-os";
     let message_id = "comment:42";
 
     let result = client.delete_message(channel_id, message_id).await;
@@ -102,7 +102,7 @@ async fn test_delete_pr_comment() {
     let base_url = start_test_server().await;
     let client = authenticated_client(&base_url, "penguin").await;
 
-    let channel_id = "gh-pulls-penguin/iceberg-os";
+    let channel_id = "gh-pulls-penguin~iceberg-os";
     let message_id = "pr-comment:99";
 
     let result = client.delete_message(channel_id, message_id).await;

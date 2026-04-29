@@ -237,9 +237,9 @@ impl ClientBackend for ForgejoClient {
             let pulls = self.api.list_repo_pulls(&owner, &repo).await?;
             return Ok(pulls.iter().map(mapping::issue_to_message).collect());
         }
-        // Single issue thread (`fj-issue-{owner}/{repo}-{number}`)
+        // Single issue thread (`fj-issue-{owner}~{repo}-{number}`)
         if let Some(rest) = channel_id.strip_prefix("fj-issue-") {
-            // rest = "{owner}/{repo}-{number}"; split off the trailing "-{number}"
+            // rest = "{owner}~{repo}-{number}"; split off the trailing "-{number}"
             let parts: Vec<&str> = rest.rsplitn(2, '-').collect();
             if let [number_str, rest_pair] = parts.as_slice()
                 && let Ok(number) = number_str.parse::<u64>()
@@ -950,10 +950,11 @@ fn kind_from_string(s: &str) -> FileKind {
 
 #[cfg(feature = "native")]
 fn split_owner_repo(s: &str) -> ClientResult<(String, String)> {
-    // Channel IDs embed owner/repo with '/' as separator (e.g. "flamingo/pink-css").
-    // Using '/' is unambiguous: both owner and repo names may contain hyphens,
-    // but neither may contain '/' (Forgejo enforces this in validation).
-    s.split_once('/')
+    // Channel IDs embed owner/repo with '~' as separator (e.g. "flamingo~pink-css").
+    // Cannot use '/' because the host's Dioxus router treats it as a path
+    // delimiter and truncates the channel_id segment. '~' is URL-safe and
+    // disallowed in Forgejo owner / repo names.
+    s.split_once('~')
         .map(|(o, r)| (o.to_string(), r.to_string()))
         .ok_or_else(|| ClientError::NotFound(format!("malformed owner/repo segment: {s}")))
 }

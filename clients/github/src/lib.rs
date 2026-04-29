@@ -925,12 +925,13 @@ fn kind_from_string(s: &str) -> FileKind {
     }
 }
 
-/// Split `"{owner}/{repo}"` at the first `/`.
+/// Split `"{owner}~{repo}"` at the first `~`.
 ///
-/// GitHub enforces that neither owner nor repo names contain `/`, so this
-/// is unambiguous even when the names contain hyphens.
+/// `~` is used instead of `/` because the host's Dioxus router treats `/`
+/// as a path delimiter and truncates the channel_id segment. `~` is
+/// URL-safe and disallowed in GitHub owner / repo names.
 fn split_owner_repo(s: &str) -> ClientResult<(String, String)> {
-    s.split_once('/')
+    s.split_once('~')
         .map(|(o, r)| (o.to_string(), r.to_string()))
         .ok_or_else(|| ClientError::NotFound(format!("malformed owner/repo segment: {s}")))
 }

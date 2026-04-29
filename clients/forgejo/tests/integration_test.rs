@@ -141,7 +141,7 @@ async fn test_get_messages_issues() {
         .unwrap();
     client.get_servers().await.unwrap();
 
-    let channel_id = "fj-issues-otter/dam-builder";
+    let channel_id = "fj-issues-otter~dam-builder";
     let messages = client
         .get_messages(channel_id, MessageQuery::default())
         .await
@@ -185,7 +185,7 @@ async fn test_get_messages_pulls() {
         .unwrap();
     client.get_servers().await.unwrap();
 
-    let channel_id = "fj-pulls-otter/dam-builder";
+    let channel_id = "fj-pulls-otter~dam-builder";
     let messages = client
         .get_messages(channel_id, MessageQuery::default())
         .await
@@ -220,7 +220,7 @@ async fn test_get_messages_comments() {
     client.get_servers().await.unwrap();
 
     // Issue thread channel: fj-issue-{owner}/{repo}-{number}
-    let channel_id = "fj-issue-otter/dam-builder-1";
+    let channel_id = "fj-issue-otter~dam-builder-1";
     let messages = client
         .get_messages(channel_id, MessageQuery::default())
         .await
@@ -258,7 +258,7 @@ async fn test_list_files() {
         .unwrap();
     client.get_servers().await.unwrap();
 
-    let channel_id = "fj-code-otter/dam-builder";
+    let channel_id = "fj-code-otter~dam-builder";
     let entries = client
         .list_files(channel_id, "")
         .await
@@ -283,7 +283,7 @@ async fn test_read_file() {
         .unwrap();
     client.get_servers().await.unwrap();
 
-    let channel_id = "fj-code-otter/dam-builder";
+    let channel_id = "fj-code-otter~dam-builder";
     let content = client
         .read_file(channel_id, "README.md")
         .await
@@ -310,7 +310,7 @@ async fn test_send_message_not_supported() {
 
     let result = client
         .send_message(
-            "fj-issues-otter/dam-builder",
+            "fj-issues-otter~dam-builder",
             poly_client::MessageContent::Text("hello".to_string()),
         )
         .await;
@@ -395,7 +395,7 @@ async fn test_get_view_rows_issues() {
     client.get_servers().await.unwrap();
 
     let page = client
-        .get_view_rows("fj-issues-otter/dam-builder", None, None, Some("open"), Some("issues"))
+        .get_view_rows("fj-issues-otter~dam-builder", None, None, Some("open"), Some("issues"))
         .await
         .expect("get_view_rows should succeed");
 
@@ -434,7 +434,7 @@ async fn test_get_view_rows_pulls() {
     client.get_servers().await.unwrap();
 
     let page = client
-        .get_view_rows("fj-pulls-otter/dam-builder", None, None, Some("open"), Some("pulls"))
+        .get_view_rows("fj-pulls-otter~dam-builder", None, None, Some("open"), Some("pulls"))
         .await
         .expect("get_view_rows pulls should succeed");
 
@@ -458,7 +458,7 @@ async fn test_get_view_rows_discussions_empty() {
     client.get_servers().await.unwrap();
 
     let page = client
-        .get_view_rows("fj-issues-otter/dam-builder", None, None, None, Some("discussions"))
+        .get_view_rows("fj-issues-otter~dam-builder", None, None, None, Some("discussions"))
         .await
         .expect("discussions tab should succeed (empty)");
 
@@ -476,7 +476,7 @@ async fn test_get_view_detail() {
     client.get_servers().await.unwrap();
 
     let detail = client
-        .get_view_detail("fj-issues-otter/dam-builder", "1")
+        .get_view_detail("fj-issues-otter~dam-builder", "1")
         .await
         .expect("get_view_detail should succeed");
 
@@ -511,7 +511,7 @@ async fn test_get_view_detail_not_found() {
     client.get_servers().await.unwrap();
 
     let result = client
-        .get_view_detail("fj-issues-otter/dam-builder", "9999")
+        .get_view_detail("fj-issues-otter~dam-builder", "9999")
         .await;
 
     assert!(result.is_err(), "unknown issue number should return error");
@@ -614,16 +614,16 @@ async fn test_delete_comment_via_message_id_prefix() {
     client.get_servers().await.unwrap();
 
     // Comment 1001 is on issue #1 of otter/dam-builder
-    // channel_id = fj-issue-otter/dam-builder-1, message_id = fj-comment-1001
+    // channel_id = fj-issue-otter~dam-builder-1, message_id = fj-comment-1001
     let result = client
-        .delete_message("fj-issue-otter/dam-builder-1", "fj-comment-1001")
+        .delete_message("fj-issue-otter~dam-builder-1", "fj-comment-1001")
         .await;
 
     assert!(result.is_ok(), "delete_message should succeed for owner: {:?}", result);
 
     // Confirm comment is no longer returned
     let messages = client
-        .get_messages("fj-issue-otter/dam-builder-1", MessageQuery::default())
+        .get_messages("fj-issue-otter~dam-builder-1", MessageQuery::default())
         .await
         .expect("get_messages should still work after delete");
     assert_eq!(messages.len(), 1, "one comment should remain after deleting comment 1001");
