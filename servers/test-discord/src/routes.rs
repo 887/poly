@@ -1188,6 +1188,166 @@ pub async fn get_audit_log(
 }
 
 // ---------------------------------------------------------------------------
+// Social / Relationship routes
+// ---------------------------------------------------------------------------
+
+/// `PUT /api/v10/users/@me/relationships/{user_id}` — add friend (type=1) or block (type=2).
+pub async fn put_relationship(
+    State(state): State<Arc<DiscordState>>,
+    headers: HeaderMap,
+    Path(user_id): Path<String>,
+    Json(body): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    match auth_user(&state, &headers) {
+        Err(e) => return e.into_response(),
+        Ok(_) => {}
+    }
+    // Validate the user_id parses as a known user (404 if not found).
+    let parsed = user_id
+        .parse::<u64>()
+        .ok()
+        .and_then(Id::<UserMarker>::new_checked);
+    if let Some(uid) = parsed {
+        if state.users.get(&uid).is_none() {
+            return discord_error(StatusCode::NOT_FOUND, 10013, "Unknown User").into_response();
+        }
+    }
+    let rel_type = body.get("type").and_then(|v| v.as_u64()).unwrap_or(1);
+    tracing::debug!(target: "poly_test_discord::relationships", user_id, rel_type, "PUT relationship");
+    StatusCode::NO_CONTENT.into_response()
+}
+
+/// `DELETE /api/v10/users/@me/relationships/{user_id}` — remove friend or unblock.
+pub async fn delete_relationship(
+    State(state): State<Arc<DiscordState>>,
+    headers: HeaderMap,
+    Path(user_id): Path<String>,
+) -> impl IntoResponse {
+    match auth_user(&state, &headers) {
+        Err(e) => return e.into_response(),
+        Ok(_) => {}
+    }
+    let parsed = user_id
+        .parse::<u64>()
+        .ok()
+        .and_then(Id::<UserMarker>::new_checked);
+    if let Some(uid) = parsed {
+        if state.users.get(&uid).is_none() {
+            return discord_error(StatusCode::NOT_FOUND, 10013, "Unknown User").into_response();
+        }
+    }
+    tracing::debug!(target: "poly_test_discord::relationships", user_id, "DELETE relationship");
+    StatusCode::NO_CONTENT.into_response()
+}
+
+/// `PUT /api/v10/users/@me/notes/{user_id}` — set or clear a private user note.
+pub async fn put_user_note(
+    State(state): State<Arc<DiscordState>>,
+    headers: HeaderMap,
+    Path(user_id): Path<String>,
+    Json(body): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    match auth_user(&state, &headers) {
+        Err(e) => return e.into_response(),
+        Ok(_) => {}
+    }
+    let note = body.get("note").and_then(|v| v.as_str()).unwrap_or("");
+    tracing::debug!(target: "poly_test_discord::notes", user_id, note, "PUT user note");
+    StatusCode::NO_CONTENT.into_response()
+}
+
+/// `DELETE /api/v10/channels/{channel_id}` — close a DM or leave a group DM.
+pub async fn delete_channel(
+    State(state): State<Arc<DiscordState>>,
+    headers: HeaderMap,
+    Path(channel_id): Path<String>,
+) -> impl IntoResponse {
+    match auth_user(&state, &headers) {
+        Err(e) => return e.into_response(),
+        Ok(_) => {}
+    }
+    let ch_id = match channel_id
+        .parse::<u64>()
+        .ok()
+        .and_then(Id::<ChannelMarker>::new_checked)
+    {
+        Some(id) => id,
+        None => {
+            return discord_error(StatusCode::NOT_FOUND, 10003, "Unknown Channel").into_response()
+        }
+    };
+    match state.channels.get(&ch_id) {
+        Some(ch) => {
+            let ch_type = ch.channel_type;
+            drop(ch);
+            // Only allow deleting DM / Group DM channels in the test server.
+            if ch_type == ChannelType::Private || ch_type == ChannelType::Group {
+                state.channels.remove(&ch_id);
+                state.messages.remove(&ch_id);
+            }
+        }
+        None => {
+            return discord_error(StatusCode::NOT_FOUND, 10003, "Unknown Channel").into_response()
+        }
+    }
+    StatusCode::NO_CONTENT.into_response()
+}
+
+/// `PUT /api/v10/channels/{channel_id}/recipients/{user_id}` — add user to group DM.
+pub async fn put_group_dm_recipient(
+    State(state): State<Arc<DiscordState>>,
+    headers: HeaderMap,
+    Path((channel_id, user_id)): Path<(String, String)>,
+) -> impl IntoResponse {
+    match auth_user(&state, &headers) {
+        Err(e) => return e.into_response(),
+        Ok(_) => {}
+    }
+    tracing::debug!(target: "poly_test_discord::group_dm", channel_id, user_id, "PUT group DM recipient");
+    StatusCode::NO_CONTENT.into_response()
+}
+
+/// `POST /api/v10/channels/{channel_id}/invites` — create a channel invite.
+///
+/// Returns a minimal invite object with a synthetic code.
+pub async fn create_invite(
+    State(state): State<Arc<DiscordState>>,
+    headers: HeaderMap,
+    Path(channel_id): Path<String>,
+    Json(_body): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    match auth_user(&state, &headers) {
+        Err(e) => return e.into_response(),
+        Ok(_) => {}
+    }
+    let ch_id = match channel_id
+        .parse::<u64>()
+        .ok()
+        .and_then(Id::<ChannelMarker>::new_checked)
+    {
+        Some(id) => id,
+        None => {
+            return discord_error(StatusCode::NOT_FOUND, 10003, "Unknown Channel").into_response()
+        }
+    };
+    if state.channels.get(&ch_id).is_none() {
+        return discord_error(StatusCode::NOT_FOUND, 10003, "Unknown Channel").into_response();
+    }
+    // Return a synthetic invite code based on channel ID.
+    let code = format!("test-{channel_id}");
+    Json(serde_json::json!({
+        "code": code,
+        "channel": { "id": channel_id },
+        "guild": null,
+        "inviter": { "id": "1", "username": "koala" },
+        "max_age": 86400,
+        "max_uses": 0,
+        "uses": 0,
+    }))
+    .into_response()
+}
+
+// ---------------------------------------------------------------------------
 // JSON serializers
 // ---------------------------------------------------------------------------
 

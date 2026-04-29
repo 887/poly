@@ -33,6 +33,11 @@ pub fn router(state: Arc<DiscordState>) -> Router {
         .route("/api/v10/users/@me", get(routes::get_me))
         .route("/api/v10/users/@me/guilds", get(routes::get_my_guilds))
         .route("/api/v10/users/@me/channels", get(routes::get_dms).post(routes::open_dm))
+        .route(
+            "/api/v10/users/@me/relationships/{user_id}",
+            put(routes::put_relationship).delete(routes::delete_relationship),
+        )
+        .route("/api/v10/users/@me/notes/{user_id}", put(routes::put_user_note))
         .route("/api/v10/users/{user_id}", get(routes::get_user))
         // Guilds
         .route("/api/v10/guilds/{guild_id}", get(routes::get_guild).patch(routes::patch_guild))
@@ -64,7 +69,7 @@ pub fn router(state: Arc<DiscordState>) -> Router {
         // Channels
         .route(
             "/api/v10/channels/{channel_id}",
-            get(routes::get_channel).patch(routes::patch_channel),
+            get(routes::get_channel).patch(routes::patch_channel).delete(routes::delete_channel),
         )
         .route(
             "/api/v10/channels/{channel_id}/messages",
@@ -74,6 +79,15 @@ pub fn router(state: Arc<DiscordState>) -> Router {
         .route(
             "/api/v10/channels/{channel_id}/messages/{message_id}",
             delete(routes::delete_message),
+        )
+        // Group DM recipients + invites
+        .route(
+            "/api/v10/channels/{channel_id}/recipients/{user_id}",
+            put(routes::put_group_dm_recipient),
+        )
+        .route(
+            "/api/v10/channels/{channel_id}/invites",
+            post(routes::create_invite),
         )
         // Threads
         .route("/api/v10/guilds/{guild_id}/threads/active", get(routes::get_guild_active_threads))

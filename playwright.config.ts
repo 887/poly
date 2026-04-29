@@ -35,5 +35,14 @@ export default defineConfig({
         // Electron tests use the _electron API directly, no browser/viewport needed
       },
     },
+    {
+      name: 'discord-api',
+      testMatch: /discord\/.*\.spec\.ts/,
+      use: {
+        // HTTP-only tests — no browser, no viewport.
+        // Set DISCORD_MOCK_URL to point at poly-test-discord (default: http://localhost:9200).
+        baseURL: process.env.DISCORD_MOCK_URL ?? 'http://localhost:9200',
+      },
+    },
   ],
 });
