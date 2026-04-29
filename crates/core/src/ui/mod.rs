@@ -60,6 +60,7 @@ pub mod account;
 pub mod actions;
 mod agent;
 pub mod client_ui;
+pub(crate) mod errors;
 pub use actions::{ActionCx, UiAction};
 pub(crate) mod code_explorer;
 pub mod dialogs;

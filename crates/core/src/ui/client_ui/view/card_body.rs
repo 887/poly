@@ -6,6 +6,7 @@
 use super::list_body::fetch_first_page;
 use crate::state::{AppState, BatchedSignal};
 use crate::ui::actions::{ActionCx, UiAction};
+use crate::ui::errors::{is_session_expired, SessionExpiredCard};
 use crate::ui::routes::Route;
 use dioxus::prelude::*;
 use poly_client::CardSpec;
@@ -74,9 +75,22 @@ pub fn CardBody(
         },
         Some(Err(err)) => {
             tracing::debug!("CardBody: get_view_rows failed: {err:?}");
-            rsx! {
-                div { class: "client-view-cards client-view-cards-error", role: "feed",
-                    span { "Failed to load cards" }
+            if is_session_expired(err) {
+                rsx! {
+                    div { class: "client-view-cards client-view-cards-error", role: "feed",
+                        SessionExpiredCard {
+                            backend: backend_slug.clone(),
+                            instance_id: instance_id.clone(),
+                            account_id: account_id.clone(),
+                            backend_display_name: backend_slug.clone(),
+                        }
+                    }
+                }
+            } else {
+                rsx! {
+                    div { class: "client-view-cards client-view-cards-error", role: "feed",
+                        span { "Failed to load cards" }
+                    }
                 }
             }
         }

@@ -2,9 +2,10 @@
 //! row fetches `get_view_detail` for the selected row id.
 
 use crate::client_manager::{BackendHandleExt, ClientManager};
-use crate::state::BatchedSignal;
+use crate::state::{AppState, BatchedSignal};
 use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::client_ui::CustomBlock;
+use crate::ui::errors::{is_session_expired, SessionExpiredCard};
 use dioxus::prelude::*;
 use poly_client::{ClientError, SplitSpec, ViewDetail, ViewRowsPage};
 use poly_ui_macros::{context_menu, ui_action};
@@ -31,6 +32,13 @@ impl UiAction for ClientViewSplitAction {
 pub fn SplitBody(channel_id: String, account_id: String, spec: SplitSpec) -> Element {
     let _ = spec;
     let client_manager: BatchedSignal<ClientManager> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
+    let (nav_backend, nav_instance_id) = {
+        let s = app_state.read();
+        let b = s.nav.active_backend.cloned().map(|b| b.slug().to_string()).unwrap_or_default();
+        let i = s.nav.active_instance_id.cloned().unwrap_or_default();
+        (b, i)
+    };
 
     let rows_res: Resource<Result<ViewRowsPage, ClientError>> = {
         let account_id = account_id.clone();
@@ -97,7 +105,18 @@ pub fn SplitBody(channel_id: String, account_id: String, spec: SplitSpec) -> Ele
                     None => rsx! { div { class: "client-view-split-loading", "Loading…" } },
                     Some(Err(err)) => {
                         tracing::debug!("SplitBody: get_view_rows failed: {err:?}");
-                        rsx! { div { class: "client-view-split-error", "Failed to load rows" } }
+                        if is_session_expired(err) {
+                            rsx! {
+                                SessionExpiredCard {
+                                    backend: nav_backend.clone(),
+                                    instance_id: nav_instance_id.clone(),
+                                    account_id: account_id.clone(),
+                                    backend_display_name: nav_backend.clone(),
+                                }
+                            }
+                        } else {
+                            rsx! { div { class: "client-view-split-error", "Failed to load rows" } }
+                        }
                     }
                     Some(Ok(page)) => {
                         let rows = page.rows.clone();
@@ -180,6 +199,16 @@ pub fn SplitBody(channel_id: String, account_id: String, spec: SplitSpec) -> Ele
                                         role: "status",
                                         span { class: "view-row-detail-spinner", "" }
                                         span { "Loading…" }
+                                    }
+                                }
+                            } else if is_session_expired(err) {
+                                tracing::debug!("SplitBody: get_view_detail failed (session expired): {err:?}");
+                                rsx! {
+                                    SessionExpiredCard {
+                                        backend: nav_backend.clone(),
+                                        instance_id: nav_instance_id.clone(),
+                                        account_id: account_id.clone(),
+                                        backend_display_name: nav_backend.clone(),
                                     }
                                 }
                             } else {

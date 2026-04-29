@@ -474,6 +474,9 @@ error-generic = Something went wrong. Please try again.
 error-network = Network error. Check your connection.
 error-auth-failed = Authentication failed. Please check your credentials.
 error-not-found = Not found.
+error-session-expired-title = 🔐 Session expired
+error-session-expired-body = Your { $backend } session has expired. Sign in again to continue.
+error-session-expired-action = Re-authenticate
 
 # Voice / Video
 voice-connected = Voice Connected

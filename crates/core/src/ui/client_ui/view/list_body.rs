@@ -25,6 +25,7 @@ use crate::state::{AppState, BatchedSignal};
 use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::client_ui::CustomBlock;
 use crate::ui::context_menu::menus::{forum_post_entry, ForumPostCtx};
+use crate::ui::errors::{is_session_expired, SessionExpiredCard};
 use dioxus::prelude::*;
 use poly_client::{ClientError, Cursor, ListSpec, ViewDetail, ViewRow, ViewRowsPage};
 use poly_ui_macros::{context_menu, ui_action};
@@ -116,9 +117,30 @@ pub fn ListBody(
         },
         Some(Err(err)) => {
             tracing::debug!("ListBody: get_view_rows failed: {err:?}");
-            rsx! {
-                div { class: "client-view-list client-view-list-error", role: "feed",
-                    span { "Failed to load rows" }
+            if is_session_expired(err) {
+                let app_state: BatchedSignal<AppState> = use_context();
+                let (nav_backend, nav_instance_id, nav_account_id) = {
+                    let s = app_state.read();
+                    let b = s.nav.active_backend.cloned().map(|b| b.slug().to_string()).unwrap_or_default();
+                    let i = s.nav.active_instance_id.cloned().unwrap_or_default();
+                    let a = s.nav.active_account_id.cloned().unwrap_or_else(|| account_id.clone());
+                    (b, i, a)
+                };
+                rsx! {
+                    div { class: "client-view-list client-view-list-error", role: "feed",
+                        SessionExpiredCard {
+                            backend: nav_backend.clone(),
+                            instance_id: nav_instance_id,
+                            account_id: nav_account_id,
+                            backend_display_name: nav_backend,
+                        }
+                    }
+                }
+            } else {
+                rsx! {
+                    div { class: "client-view-list client-view-list-error", role: "feed",
+                        span { "Failed to load rows" }
+                    }
                 }
             }
         }

@@ -704,22 +704,30 @@ Numbers update live. Click → expanded source view.
 
 ### Phase A — Schema + tables (no UI, no MCP)
 
-- [ ] **A.1** Add 6 new tables (`personas`, `persona_sources`,
+- [x] **A.1** Add 6 new tables (`personas`, `persona_sources`,
   `persona_tool_whitelist`, `persona_facts`, `persona_outbound_allowlist`,
   `persona_audit`) to `mcp/chat-mcp/src/memory.rs::run_migrations` after the
   Phase E `chat_style` block.
-- [ ] **A.2** New module `mcp/chat-mcp/src/persona/mod.rs` with `PersonaRow`,
-  `PersonaSourceRow`, etc. structs + serde Derive.
-- [ ] **A.3** CRUD helpers in `mcp/chat-mcp/src/persona/store.rs`:
-  `insert_persona`, `update_persona`, `delete_persona`, `get_persona`,
-  `list_personas`, plus per-table source/tool/fact/outbound/audit ops.
-- [ ] **A.4** Audit-write helper `record_audit(slug, actor, action, target,
-  payload, result, error)` — used everywhere a persona action happens.
-- [ ] **A.5** Auto-prune query: `DELETE FROM persona_audit WHERE occurred_at
-  < now-30d`. Run once per day in poly-host.
-- [ ] **A.6** Unit tests for migration + CRUD round-trip + cascade delete.
-- [ ] **A.7** Verify migration is idempotent (`IF NOT EXISTS`) — re-run on a
-  populated DB doesn't drop data.
+- [x] **A.2** Struct serialisation: types are represented as `serde_json::Value`
+  rows (matching the existing codebase pattern — no separate module needed).
+  Helper functions `read_persona_row`, `collect_persona_facts`,
+  `collect_persona_audit` added in `memory.rs`.
+- [x] **A.3** CRUD helpers on `MemoryDb` in `mcp/chat-mcp/src/memory.rs`:
+  `create_persona`, `get_persona`, `list_personas`, `update_persona`,
+  `delete_persona`, plus `add_persona_source`, `list_persona_sources`,
+  `remove_persona_source`, `add_persona_tool`, `remove_persona_tool`,
+  `list_persona_tools`, `add_persona_fact`, `list_persona_facts`,
+  `remove_persona_fact`, `forget_all_persona_facts`,
+  `set_persona_outbound_allow`, `remove_persona_outbound_allow`,
+  `list_persona_outbound_allows`.
+- [x] **A.4** Audit-write helper `record_persona_audit(slug, actor, action,
+  target_account, target_chat, payload_json, result, error_msg)`.
+- [x] **A.5** Prune helper `prune_persona_audit_before(cutoff_iso8601)`
+  returns deleted row count — ready for poly-host daily scheduler to call.
+- [x] **A.6** Unit tests for migration + CRUD round-trip + cascade delete
+  (51 tests total, all pass).
+- [x] **A.7** Migration is idempotent — all `CREATE TABLE IF NOT EXISTS` /
+  `CREATE INDEX IF NOT EXISTS`; `migration_is_idempotent` test verifies.
 
 **Effort:** 1 session. Land-able in 1 PR.
 
@@ -1077,3 +1085,22 @@ that should land before the user is encouraged to enable outbound mode.
   audit-only mode for safe testing.
 - **Bundle** — the `PersonaContextBundle` JSON returned from
   `meta_persona_invoke`.
+
+---
+
+## Phase A Status
+
+| Item | Date | Notes |
+|---|---|---|
+| Schema + CRUD + tests landed | 2026-04-27 | commit `bd80fbd7` on `worktree-agent-a6eed0ee4bde17ee2` |
+
+All 7 Phase A checklist items complete. Implementation note: the plan
+referenced a new `mcp/chat-mcp/src/persona/` module, but the existing
+codebase keeps all DB logic in `memory.rs` as a single `MemoryDb` impl block
+(no separate module for `contact_facts`, `drafts`, `chat_style` either).
+Phase A follows that pattern — schema + CRUD + tests all in `memory.rs`.
+A separate `persona/` module can be introduced in Phase B when the MCP tool
+dispatch logic warrants it.
+
+51 unit tests pass (`cargo test -p poly-chat-mcp --lib -- memory`).
+`cargo check -p poly-chat-mcp` clean.
