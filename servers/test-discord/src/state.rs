@@ -224,26 +224,29 @@ impl DiscordState {
         }
         tracing::info!("seeding Discord demo data");
 
-        // Users — IDs 1, 2, 3
+        // Users — IDs 1, 2, 3.
+        // Avatar hashes map to bundled bytes served from `/avatars/{id}/{hash}.png`
+        // (see `routes::serve_avatar`). "platypus" stands in for wallaby — no
+        // wallaby asset ships in `clients/demo/assets/`.
         self.users.insert(Id::new(1), User {
             id: Id::new(1),
             username: "koala".into(),
             discriminator: "0001".into(),
-            avatar: None,
+            avatar: Some("koala".into()),
             password: "testpass123".into(),
         });
         self.users.insert(Id::new(2), User {
             id: Id::new(2),
             username: "kangaroo".into(),
             discriminator: "0002".into(),
-            avatar: None,
+            avatar: Some("kangaroo".into()),
             password: "testpass123".into(),
         });
         self.users.insert(Id::new(3), User {
             id: Id::new(3),
             username: "wallaby".into(),
             discriminator: "0003".into(),
-            avatar: None,
+            avatar: Some("platypus".into()),
             password: "testpass123".into(),
         });
 

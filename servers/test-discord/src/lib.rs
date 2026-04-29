@@ -92,6 +92,8 @@ pub fn router(state: Arc<DiscordState>) -> Router {
         // Threads
         .route("/api/v10/guilds/{guild_id}/threads/active", get(routes::get_guild_active_threads))
         .route("/api/v10/channels/{channel_id}/threads/archived/public", get(routes::get_channel_archived_threads))
+        // CDN — serve bundled avatar bytes for fixture users
+        .route("/avatars/{user_id}/{file}", get(routes::serve_avatar))
         // Gateway WebSocket (Phase 6.5)
         .route("/gateway/ws", get(routes::gateway_ws))
         // Test-only: inject gateway events

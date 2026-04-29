@@ -208,10 +208,19 @@ impl DiscordClient {
     }
 
     fn discord_user_to_poly(&self, u: api::DiscordUser) -> User {
+        let cdn_base = self.http.cdn_base_url();
+        let avatar_url = u.avatar.as_ref().map(|hash| {
+            format!(
+                "{}/avatars/{}/{}.png?size=128",
+                cdn_base.trim_end_matches('/'),
+                u.id,
+                hash,
+            )
+        });
         User {
             id: u.id.to_string(),
             display_name: u.global_name.unwrap_or(u.username),
-            avatar_url: None,
+            avatar_url,
             presence: PresenceStatus::Online,
             backend: BackendType::from("discord"),
         }

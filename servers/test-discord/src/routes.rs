@@ -1382,6 +1382,35 @@ fn guild_to_json(g: &crate::state::Guild) -> serde_json::Value {
     })
 }
 
+/// Serves bundled demo avatar bytes for the seeded fixture users so chat
+/// avatars resolve in dev. Real Discord serves these from cdn.discordapp.com;
+/// the test server stands in by mapping the avatar hash to embedded asset
+/// bytes. The `_user_id` is part of the URL shape but not used for lookup.
+pub async fn serve_avatar(
+    Path((_user_id, file)): Path<(String, String)>,
+) -> impl IntoResponse {
+    static KOALA_PNG: &[u8] = include_bytes!("../../../clients/demo/assets/koala.png");
+    static KANGAROO_PNG: &[u8] = include_bytes!("../../../clients/demo/assets/kangaroo.png");
+    static PLATYPUS_PNG: &[u8] = include_bytes!("../../../clients/demo/assets/platypus.png");
+
+    let hash = file.trim_end_matches(".png");
+    let bytes: &[u8] = match hash {
+        "koala" => KOALA_PNG,
+        "kangaroo" => KANGAROO_PNG,
+        "platypus" => PLATYPUS_PNG,
+        _ => return (StatusCode::NOT_FOUND, "unknown avatar").into_response(),
+    };
+    (
+        StatusCode::OK,
+        [
+            (axum::http::header::CONTENT_TYPE, "image/png"),
+            (axum::http::header::CACHE_CONTROL, "public, max-age=3600"),
+        ],
+        bytes,
+    )
+        .into_response()
+}
+
 fn forum_tag_to_json(t: &ForumTag) -> serde_json::Value {
     serde_json::json!({
         "id": t.id.to_string(),
