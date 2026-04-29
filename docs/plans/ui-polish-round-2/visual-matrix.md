@@ -63,3 +63,29 @@
 
 ## Console Errors
 No critical console errors observed during Matrix backend navigation.
+
+---
+
+## Phase-5 Code Audit (2026-04-27)
+
+### Status: partial
+
+### Account Login
+`POST /_matrix/client/v3/login` with username/password or access token. Maps Matrix session to poly `Session`. Device-key bootstrapping handled in client.
+
+### Overview Page
+`get_account_overview_view()` returns `ViewKind::CardGrid` with Space list. `get_view_rows("")` fetches joined rooms mapped to card rows. `get_channel_view` returns `NotSupported` (chat-only, correct).
+
+### Messaging
+`send_message`, `send_reply_message`, `send_typing`, `delete_message` all implemented via CS API. Avatar/display name hydrated since commits `7f4dc5df` and `44636eda`. `search_messages` not overridden (NotSupported).
+
+### 14 New Backend Ops (commit 5b142e67)
+`block_user`/`ignore_user`/`unignore_user` via `m.ignored_user_list`. `close_dm_channel`/`leave_group_dm` via leave+forget+`m.direct`. `mute_conversation`/`unmute_conversation` via push rules. `edit_group_dm` via `m.room.name` + `m.room.avatar`. `add_users_to_group_dm`/`invite_user_to_server` via room invite. `add_friend`/`remove_friend`/`set_friend_nickname`/`set_user_note` return NotSupported (no Matrix friend concept).
+
+### Moderation Ops
+All implemented: `kick_member`, `ban_member`, `unban_member`, `timeout_member` (power-level reduction), `untimeout_member`, `delete_message`. `get_moderation_log` via room state events.
+
+### Known Gaps
+1. `search_messages` not implemented (Matrix `/search` endpoint available).
+2. Friends concept mismatch — People panel shows "No friends found" with no explanation.
+3. Space icons appear as letter-initial circles (image proxy/CORS).

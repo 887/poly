@@ -87,3 +87,33 @@ GitHub shows a more visual landing page (repo cards) while Forgejo drops directl
 
 ## Console Errors
 No browser console errors captured during navigation.
+
+---
+
+## Phase-5 Code Audit (2026-04-27)
+
+### Status: partial — issue detail does not load on click
+
+### Account Login
+OAuth2 PAT or app token. `authenticate()` calls `GET /user` with `Authorization: Bearer {token}`.
+
+### Overview Page
+`get_account_overview_view()` returns `ViewKind::CardGrid` (repository grid). `get_channel_view` returns `ViewKind::Split` for Issues/PRs/Discussions. `get_view_detail` — fetches issue detail; does not populate right panel in practice.
+
+### Channel Sidebar
+`get_channels(server_id)` — Issues (`gh-issues-*`), Pull Requests (`gh-pulls-*`), Discussions (`gh-discussions-*`) per repo. `get_dm_channels()` returns `NotSupported`.
+
+### Messaging
+`send_message` returns `NotSupported` — read-only. `delete_message` implemented for issue comments; `NotSupported` for PRs and discussions.
+
+### 14 New Backend Ops
+All 14 use trait defaults (NotSupported). Comment in source: "kick/ban/timeout/channel-mgmt/modlog are all NotSupported."
+
+### Moderation Ops
+`kick_member`, `ban_member`, `timeout_member` not overridden (GitHub has no server moderation). `delete_message` implemented for issue comments.
+
+### Known Gaps
+1. **[HIGH] Issue/PR detail does not load** — right panel stays at "Select an item" after clicking any issue row. Same root cause as Forgejo.
+2. `search_messages` not implemented (GitHub `/search/issues` available).
+3. Repository cards show name only — no description, stars, language, last-update info.
+4. No moderation ops (correct for GitHub, but moderation UI items should be gated/hidden).

@@ -75,3 +75,36 @@ All screenshots for Walrus could not be captured. Every attempt to click the Wal
 
 ## Console Errors
 Not capturable due to WASM freeze killing CDP connection before console messages could be retrieved.
+
+---
+
+## Phase-5 Code Audit (2026-04-27)
+
+### Status: fail (WASM crash not resolved)
+
+### Account Login
+MS Graph OAuth2 AAD token. `authenticate(Token { token })` validates via Graph. No refresh logic in client — host supplies valid token. Boot sequence shows Teams accounts as "connected".
+
+### Overview Page
+`get_account_overview_view()` returns `ViewKind::CardGrid`. `get_channel_view` returns `NotSupported`. `get_view_rows` returns `NotSupported` for non-overview channel IDs. Overview not tested in practice due to WASM crash.
+
+### Channel Sidebar
+`get_channels(server_id)` — Graph `GET /teams/{id}/channels`. Channel IDs stored as `"team_id/channel_id"` (fixed commit `e113bcb`). `get_dm_channels()` fetches Graph chats.
+
+### Messaging
+`send_message`, `send_reply_message`, `delete_message` (soft-delete) all implemented. `search_messages` not overridden (NotSupported).
+
+### Moderation Ops
+`kick_member` implemented. `ban_member`, `unban_member`, `timeout_member`, `untimeout_member`, `get_bans` all return `NotSupported("Teams has no ban/timeout concept")`. `delete_message` implemented (Graph soft-delete).
+
+### 14 New Backend Ops (commit 5b142e67)
+Per commit message: `close_dm_channel` via hideForUser, `edit_group_dm` via chat topic PATCH, `add_users_to_group_dm` via member add, `leave_group_dm` via member remove. `mute_conversation` in-memory only. All others use trait defaults (NotSupported).
+
+### Critical Bug: WASM Hard Freeze
+Every account activation triggers a WASM tight loop. Most likely cause: `Signal::write()` chain in Teams init path (hang class #1 per CLAUDE.md). BatchedSignal migration not verified for Teams activation path. Must be fixed before Teams can be considered functional.
+
+### Known Gaps
+1. **[CRITICAL] WASM freeze on activation** — both accounts crash every time.
+2. **[HIGH] No ban/timeout** — moderation context-menus need backend-capability gating to hide ban/timeout for Teams.
+3. `search_messages` not implemented.
+4. `get_moderation_log` not implemented.

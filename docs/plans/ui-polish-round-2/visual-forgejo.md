@@ -73,3 +73,33 @@ Forgejo is a code forge (Git hosting platform), not a chat platform. The Poly Fo
 
 ## Console Errors
 No browser console errors captured during navigation.
+
+---
+
+## Phase-5 Code Audit (2026-04-27)
+
+### Status: partial — issue detail fails to load
+
+### Account Login
+PAT / basic auth. `authenticate()` calls `GET /api/v1/user` with `Authorization: token {tok}` header.
+
+### Overview Page
+`get_account_overview_view()` returns `ViewKind::CardGrid` (repository grid). `get_channel_view` returns `ViewKind::Split` with open/closed filter for Issues, PRs, Discussions channels. `get_view_detail` — fetches issue detail; fails in practice.
+
+### Channel Sidebar
+`get_channels(server_id)` — Issues (`fj-issues-*`), Pull Requests (`fj-pulls-*`), Discussions (`fj-discussions-*`) channels per repo. `get_dm_channels()` returns `NotSupported`.
+
+### Messaging
+`send_message` returns `NotSupported` — read-only. `delete_message` implemented for issue comments.
+
+### 14 New Backend Ops
+All 14 use trait defaults (NotSupported). Forgejo is a code forge; social features not applicable.
+
+### Moderation Ops
+`kick_member`, `ban_member`, `unban_member`, `timeout_member` implemented via Forgejo admin API. `get_moderation_log` not overridden.
+
+### Known Gaps
+1. **[HIGH] Issue detail fails to load** — "Failed to load detail" on click; API response parsing or endpoint mismatch.
+2. DMs unsupported — raw text "forgejo doesn't support direct messages"; needs styled empty state.
+3. `search_messages` not implemented (Forgejo has `/issues/search`).
+4. Repository icons: letter-initial circles (CDN URLs not loading).

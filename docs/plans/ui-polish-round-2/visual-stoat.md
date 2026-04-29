@@ -58,3 +58,30 @@
 
 ## Console Errors
 No critical console errors observed during Stoat backend navigation.
+
+---
+
+## Phase-5 Code Audit (2026-04-27)
+
+### Status: pass
+
+### Account Login
+Revolt-fork REST: `POST /auth/session/login` with email+password. Token in `X-Session-Token` header. `is_authenticated()` checks session presence.
+
+### Overview Page
+`get_account_overview_view()` returns `ViewKind::CardGrid`. `get_channel_view` returns `NotSupported` (chat-only, correct).
+
+### Messaging
+`send_message`, `send_reply_message`, `delete_message` all implemented. Attachments uploaded to Autumn CDN. `send_typing` not overridden (trait default NotSupported). `search_messages` not overridden.
+
+### 14 New Backend Ops (commit 5b142e67)
+`block_user` via `PUT /users/{id}/block`. `add_friend`/`remove_friend` via Revolt friend API. `close_dm_channel`, `leave_group_dm`, `edit_group_dm`, `add_users_to_group_dm` via Revolt channel API. `ignore_user`/`unignore_user`, `set_friend_nickname`, `set_user_note`, `mute_conversation`/`unmute_conversation`, `invite_user_to_server` all use trait defaults (NotSupported).
+
+### Moderation Ops
+`kick_member`, `ban_member`, `unban_member`, `timeout_member`, `untimeout_member` all implemented. `get_moderation_log` — comment in code: "Stoat has no audit log endpoint → default NotSupported".
+
+### Known Gaps
+1. `search_messages` not implemented.
+2. `get_moderation_log` not available in Revolt API.
+3. `mute_conversation`, `invite_user_to_server`, social-nickname ops all NotSupported.
+4. Server icons appear as letter-initial circles (Revolt CDN URLs not loading).

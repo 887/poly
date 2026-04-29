@@ -1,113 +1,94 @@
-# Discord Backend — Phase-5 Smoke Test Report
+# Discord Backend — Visual Audit Report
 
-**Status:** partial — backend is functionally rich but overview view-rows not implemented; prior visual audit revealed intermittent plugin-sidebar load failure
 **Accounts:** Koala (account 1), Kangaroo (account 2)
-**Date (Phase-5 update):** 2026-04-27
-**Prior visual audit:** 2026-04-21 (screenshots in `screenshots/discord/`)
+**Date:** 2026-04-21
+**Screenshots:** `screenshots/discord/`
 
 ---
 
-## Account Login
+## Koala (Discord)
 
-Discord uses OAuth2 bearer token auth. `authenticate(AuthCredentials::Token { token })` calls `GET /api/v10/users/@me` to verify. Failures surface as `ClientError::AuthFailed`.
+### Landing (koala-01-landing.png)
+- Initial click on Koala showed "Plugin sidebar failed to load — showing channels" error in the channel list panel
+- This error was transient — after navigating to `/discord/discord/1/dms` directly, the UI loaded correctly
+- **Bug:** Plugin sidebar load fails intermittently on first account activation
 
-No credential storage in this client — the host KV store persists the token and restores on boot. `is_authenticated()` checks `self.session.is_some()`.
+### Server / Channel List (koala-02-server.png)
+- Second nav shows Discord server icons (colored circles with letter initials)
+- Server list panel correctly shows channels grouped by category (TEXT CHANNELS, VOICE CHANNELS)
+- Channel names shown with `#` prefix
 
----
+### Chat / Messages (koala-03-channel.png)
+- Message view renders Discord-style messages with avatar, username (with role color), timestamp
+- "You need the `VIEW_CHANNEL` permission" error shown for some channels — expected for accounts without permissions
+- Pinned messages icon visible in channel header
+- Members panel not visible by default
 
-## Overview Page (`get_account_overview_view`)
+### DMs (koala-04-dms.png)
+- DM list shows Discord friends/contacts
+- Standard "New Conversation" and "Saved Messages" items at top
+- Right panel: "Select a conversation" placeholder
 
-Returns `ViewKind::CardGrid` with `plugin-discord-overview-title` / `plugin-discord-overview-subtitle`, `CardBody(primary_field: "name")`.
+### Friends (koala-05-friends.png)
+- People panel with Friends/Ignored/Blocked Users tabs
+- Empty state: "No friends found" — Koala has no friends in the test data
 
-`get_view_rows("")` fetches joined guilds via `GET /api/v10/users/@me/guilds` and enriches each with member counts (`GET /guilds/{id}?with_counts=true`). Individual guild fetch failures degrade gracefully to `"? members"`.
+### Notifications (koala-06-notifications.png)
+- Notifications panel with categorized tabs (All, Mentions, Other)
+- Empty state: "No new notifications"
 
-`get_channel_view` returns `NotSupported("channel-view not yet implemented")`.
-`get_view_detail` returns `NotSupported("view-detail not yet implemented")`.
-
-Overview card grid is functional. Per-channel view (issues/detail split) is not applicable for Discord and correctly gated.
-
----
-
-## Channel Sidebar (`get_channels` / `get_dm_channels`)
-
-`get_channels(server_id)` — fetches Discord guild channels via REST. Returns text channels, voice channels, forum channels, and category separators.
-
-`get_dm_channels()` — fetches DM and group DM channels. Maps Discord DM objects to `DmChannel`. Friend DMs and group DMs both appear in the sidebar list.
-
----
-
-## Messaging
-
-| Op | Status |
-|----|--------|
-| `send_message` | Implemented — `POST /api/v10/channels/{id}/messages` |
-| `send_reply_message` | Implemented — uses `message_reference` field |
-| `send_typing` | Implemented — `POST /api/v10/channels/{id}/typing` |
-| `search_messages` | Not overridden — trait default `NotSupported` |
-| `delete_message` | Implemented — `DELETE /api/v10/channels/{id}/messages/{msg_id}` |
-| `get_pinned_messages` | Not overridden — trait default `NotSupported` |
-| `set_message_pinned` | Not overridden — trait default `NotSupported` |
+### Settings (koala-07-settings.png)
+- Opens global Settings (not per-account) — shows Accounts list
+- Account-specific settings accessible via ⚙ icon in account bar
 
 ---
 
-## Context-Menu Ops
+## Kangaroo (Discord)
 
-`get_context_menu_items` is fully implemented. Returns backend-declared menu items for Server, Channel, User, and Message targets.
-
-Moderation ops (all implemented via Discord REST):
-- `kick_member` — `DELETE /guilds/{id}/members/{user}` with audit reason
-- `ban_member` — `PUT /guilds/{id}/bans/{user}` with message history purge
-- `unban_member` — `DELETE /guilds/{id}/bans/{user}`
-- `timeout_member` — `PATCH /guilds/{id}/members/{user}` with `communication_disabled_until`
-- `untimeout_member` — same PATCH with null timeout
-- `get_bans` — `GET /guilds/{id}/bans`
-- `get_moderation_log` — Discord audit log endpoint
-- `delete_message` — implemented
+### All views (kangaroo-01 through 07)
+- Same layout patterns as Koala
+- kangaroo has similar empty states for Friends and Notifications
+- Discord server icons and channel list rendered correctly
+- Message view shows discord-style formatting
 
 ---
 
-## 14 New Backend Ops (commit 5b142e67)
+## Discord Backend Issues
 
-All 14 implemented via Discord REST:
-
-| Op | Implementation |
-|----|---------------|
-| `block_user` | `PUT /relationships/{user_id}` type 2 |
-| `unblock_user` | `DELETE /relationships/{user_id}` |
-| `ignore_user` | Trait default (NotSupported) |
-| `unignore_user` | Trait default (NotSupported) |
-| `add_friend` | `PUT /relationships/{user_id}` type 1 |
-| `remove_friend` | `DELETE /relationships/{user_id}` |
-| `set_friend_nickname` | `PATCH /users/@me/relationships/{user_id}` nick field |
-| `set_user_note` | `PUT /users/@me/notes/{user_id}` |
-| `close_dm_channel` | `DELETE /channels/{channel_id}` |
-| `mute_conversation` | Not overridden (trait default NotSupported) |
-| `unmute_conversation` | `PATCH /users/@me/guilds/{guild_id}/settings` or user-settings API |
-| `leave_group_dm` | `DELETE /channels/{channel_id}` with current user id |
-| `edit_group_dm` | `PATCH /channels/{channel_id}` name/icon |
-| `add_users_to_group_dm` | `PUT /channels/{channel_id}/recipients/{user_id}` |
-| `invite_user_to_server` | Uses system channel + DM fallback |
+1. **"Plugin sidebar failed to load — showing channels"** — intermittent error on account activation, likely a timing issue with plugin initialization
+2. **"You need the VIEW_CHANNEL permission"** shown inline in message area — this is a Discord permission error surfaced as a message, not a styled empty state; could be improved
+3. **Settings button in account bar opens global settings** — not account-specific; inconsistent with demo backend which opens per-account settings
+4. **Direct URL navigation to Discord routes redirects to Settings** — only sidebar clicks work; the router does not handle full page loads for Discord-specific routes
+5. **Second nav server icons** use letter-initial circles instead of server icons — Discord server icons (PNG) not loaded; may be a CORS or authentication issue
 
 ---
 
-## Visual Audit Results (2026-04-21)
-
-### Koala / Kangaroo
-- Standard 3-column Discord layout renders correctly.
-- Second nav: server icons as letter-circle fallbacks (actual PNG icons not loading — CORS/auth issue).
-- Channel list: text/voice channels grouped by category.
-- Chat: avatars, role-colored usernames, timestamps render correctly.
-- `VIEW_CHANNEL` permission error shown inline for restricted channels — expected.
-- DMs, Friends, Notifications panels all accessible from sidebar.
-- Intermittent "Plugin sidebar failed to load — showing channels" error on first account activation — timing issue.
+## Console Errors
+- "Plugin sidebar failed to load" appears in the channel list panel on first load; no browser console errors captured
 
 ---
 
-## Known Gaps / TODOs
+## Phase-5 Code Audit (2026-04-27)
 
-1. **[HIGH] Intermittent plugin sidebar load failure** on first activation — likely timing race in plugin init. Needs investigation and fix.
-2. **[MEDIUM] Server icons not loading** — Discord guild icons (PNG URLs) not rendered; only letter-initial fallback circles shown. Likely CORS or auth header missing on image fetch.
-3. **[MEDIUM] `search_messages`** — not implemented. Discord has `/channels/{id}/messages/search` endpoint available.
-4. **[MEDIUM] `get_channel_view`** — returns `NotSupported`; Discord channels are chat-only and don't need a structured view. This is correct but should be documented as intentional.
-5. **[LOW] Account settings button** opens global settings, not per-account modal, unlike demo backend.
-6. **[LOW] `mute_conversation`** — not overridden; Discord user-settings mute API is not exposed via standard bot/user token easily. Acceptable gap.
+### Status: partial
+
+### Account Login
+OAuth2 bearer token. `authenticate()` calls `GET /api/v10/users/@me`. `AuthFailed` on invalid token.
+
+### Overview Page
+`get_account_overview_view()` returns `ViewKind::CardGrid`. `get_view_rows("")` fetches guilds with member counts. `get_channel_view` returns `NotSupported` (chat-only, correct).
+
+### Messaging
+`send_message`, `send_reply_message`, `send_typing`, `delete_message` all implemented. `search_messages` not overridden (NotSupported).
+
+### 14 New Backend Ops (commit 5b142e67)
+Most complete: `block_user`, `add_friend`/`remove_friend`, `set_friend_nickname`, `set_user_note`, `close_dm_channel`, `unmute_conversation`, `leave_group_dm`, `edit_group_dm`, `add_users_to_group_dm`, `invite_user_to_server` all via REST. `ignore_user`/`unignore_user` and `mute_conversation` use trait defaults.
+
+### Moderation Ops
+All implemented: `kick_member`, `ban_member`, `unban_member`, `timeout_member`, `untimeout_member`, `get_bans`, `get_moderation_log`, `delete_message`.
+
+### Known Gaps
+1. Intermittent plugin sidebar load failure on first account activation.
+2. Server icons not loading (CORS/auth on image URL fetch).
+3. `search_messages` not implemented (Discord has `/messages/search` endpoint).
+4. `mute_conversation` uses trait default NotSupported.

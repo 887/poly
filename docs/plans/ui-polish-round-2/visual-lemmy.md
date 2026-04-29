@@ -77,3 +77,35 @@ Lemmy is a federated link aggregator (Reddit-like platform). The Poly Lemmy plug
 
 ## Console Errors
 No browser console errors captured during navigation.
+
+---
+
+## Phase-5 Code Audit (2026-04-27)
+
+### Status: partial — community list missing, DMs/Friends inaccessible
+
+### Account Login
+`POST /api/v3/user/login` with username/password. Returns JWT token. `is_authenticated()` checks session.
+
+### Overview Page
+`get_account_overview_view()` returns `ViewKind::CardGrid`. `get_channel_view` returns `ViewKind::Tree` with Hot/New/Top sort options (community post feed). `get_view_rows("")` routes to federation listing for overview.
+
+### Channel Sidebar
+`get_channels(server_id)` returns subscribed communities as channels. However, communities do NOT appear as server icons in second nav — sidebar render gap. `get_dm_channels()` returns `NotSupported`.
+
+### Messaging
+`send_message` returns `NotSupported` (posts/comments are separate via view layer). `delete_message` implemented for post/comment removal.
+
+### 14 New Backend Ops
+All 14 use trait defaults (NotSupported). Lemmy has no social graph, DMs, or group concepts.
+
+### Moderation Ops
+`kick_member`, `ban_member`, `unban_member`, `timeout_member` implemented for community moderation. `get_moderation_log` not overridden (Lemmy has `/api/v3/modlog`).
+
+### Known Gaps
+1. **[HIGH] Community list absent from sidebar** — subscribed communities don't appear in second nav. Main navigation is broken.
+2. **[HIGH] No DMs/Friends navigation** — `get_dm_channels` returns NotSupported; no DMs icon in sidebar.
+3. "+" button shows misleading "doesn't support creating servers" message.
+4. Per-account settings show Discord-style options irrelevant to Lemmy.
+5. `get_moderation_log` not implemented.
+6. `search_messages` not implemented.
