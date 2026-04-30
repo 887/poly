@@ -67,6 +67,23 @@ pub struct RemoveCommentRequest {
     pub reason: Option<String>,
 }
 
+/// `POST /api/v3/post` — create a new post in a community.
+#[derive(Debug, Clone, Serialize)]
+pub struct CreatePostRequest {
+    pub name: String,
+    pub community_id: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub body: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+}
+
+/// Response from `POST /api/v3/post` — create post.
+#[derive(Debug, Clone, Deserialize)]
+pub struct CreatePostResponse {
+    pub post_view: PostView,
+}
+
 // ── Response bodies ─────────────────────────────────────────────────────────
 
 /// Response from `POST /api/v3/user/login`.
@@ -1055,6 +1072,45 @@ impl LemmyHttpClient {
 
         resp.json::<PrivateMessageListResponse>()
             .await
+            .map_err(|e| ClientError::Network(e.to_string()))
+    }
+
+    /// `POST /api/v3/post` — create a new post in a community (C.7).
+    pub async fn create_post(
+        &self,
+        community_id: i64,
+        title: &str,
+        body: Option<&str>,
+        url: Option<&str>,
+    ) -> ClientResult<PostView> {
+        let jwt = self.jwt()?;
+        let req = CreatePostRequest {
+            name: title.to_string(),
+            community_id,
+            body: body.filter(|s| !s.is_empty()).map(str::to_string),
+            url: url.filter(|s| !s.is_empty()).map(str::to_string),
+        };
+
+        let resp = self
+            .http
+            .post(self.url("/api/v3/post"))
+            .header("User-Agent", self.ua())
+            .bearer_auth(&jwt)
+            .json(&req)
+            .send()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+
+        if !resp.status().is_success() {
+            return Err(ClientError::Network(format!(
+                "POST /api/v3/post returned HTTP {}",
+                resp.status()
+            )));
+        }
+
+        resp.json::<CreatePostResponse>()
+            .await
+            .map(|r| r.post_view)
             .map_err(|e| ClientError::Network(e.to_string()))
     }
 

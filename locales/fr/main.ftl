@@ -1039,3 +1039,5 @@ overview-stat-unread = Non lus
 overview-stat-mentions = Mentions
 
 overview-search-placeholder = Rechercher…
+
+# ── Forum composer (Phase C) — TODO(i18n)

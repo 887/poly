@@ -1289,3 +1289,18 @@ overview-stat-unread = Unread
 overview-stat-mentions = Mentions
 
 overview-search-placeholder = Search…
+
+# ── Forum composer (Phase C of plan-test-avatars-and-lemmy-forum-ux) ─────────
+
+forum-composer-new-post-heading = Create Post
+forum-composer-title-label = Title
+forum-composer-title-placeholder = Post title…
+forum-composer-url-label = URL (optional)
+forum-composer-url-placeholder = https://…
+forum-composer-body-placeholder = What's on your mind? Markdown supported.
+forum-composer-tab-write = Write
+forum-composer-tab-preview = Preview
+forum-composer-cancel = Cancel
+forum-composer-submit = Post
+forum-composer-replying-to = Replying to
+forum-comment-reply-btn = Reply

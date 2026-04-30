@@ -859,6 +859,41 @@ impl ClientBackend for LemmyClient {
         })
     }
 
+    /// C.7 — wire `create_forum_post` for Lemmy via `POST /api/v3/post`.
+    ///
+    /// `forum_channel_id` must be `lemmy-feed-{community_id}`.  Tags are
+    /// ignored (Lemmy's tag system requires community-specific tag IDs that
+    /// the UI doesn't yet expose).
+    async fn create_forum_post(
+        &self,
+        forum_channel_id: &str,
+        title: &str,
+        body: &str,
+        _tags: Vec<String>,
+    ) -> ClientResult<ForumPost> {
+        let community_id = Self::parse_feed_channel(forum_channel_id).ok_or_else(|| {
+            ClientError::NotFound(format!(
+                "create_forum_post: expected lemmy-feed-<id>, got: {forum_channel_id}"
+            ))
+        })?;
+
+        let post_view = self
+            .http
+            .create_post(community_id, title, Some(body), None)
+            .await?;
+
+        Ok(ForumPost {
+            thread: poly_client::ThreadInfo {
+                thread_id: format!("lemmy-post-{}", post_view.post.id),
+                parent_channel_id: forum_channel_id.to_string(),
+                message_count: 0,
+                member_count: 0,
+            },
+            applied_tags: vec![],
+            starter_message_id: None,
+        })
+    }
+
     async fn get_composer_buttons(&self, _channel_id: &str) -> ClientResult<Vec<ComposerButton>> {
         // Lemmy is a read/vote platform — no freeform composer beyond post creation.
         Ok(Vec::new())

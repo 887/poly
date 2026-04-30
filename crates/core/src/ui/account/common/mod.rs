@@ -54,6 +54,7 @@ pub mod direct_call_overlay;
 pub mod discord_forum_view;
 pub mod dm_user_sidebar;
 pub mod draft_banner;
+pub mod forum_composer;
 pub mod emoji_picker;
 pub mod forum_view;
 pub mod friends_panel;

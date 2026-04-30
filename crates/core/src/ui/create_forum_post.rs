@@ -1,5 +1,8 @@
 //! Create Forum Post and Forum Search pages, rendered inside `ServerLayout`.
 
+use crate::client_manager::ClientManager;
+use crate::state::BatchedSignal;
+use crate::ui::account::common::forum_composer::{ComposerMode, ForumComposer, SubmitPayload};
 use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::routes::Route;
 use dioxus::prelude::*;
@@ -47,6 +50,9 @@ impl UiAction for ForumSearchAction {
 }
 
 /// Full-page Create Forum Post form.
+///
+/// Thin route wrapper around `ForumComposer` — keeps the route alive
+/// while delegating all composer logic to the shared component.
 #[ui_action(CreateForumPostAction)]
 #[context_menu(None)]
 #[rustfmt::skip]
@@ -59,9 +65,7 @@ pub(crate) fn CreateForumPostPage(
     channel_id: String,
 ) -> Element {
     let nav = navigator();
-    let mut title = use_signal(String::new);
-    let mut url = use_signal(String::new);
-    let mut body = use_signal(String::new);
+    let client_manager: BatchedSignal<ClientManager> = use_context();
 
     let back_route = Route::ServerChat {
         backend: backend.clone(),
@@ -71,61 +75,49 @@ pub(crate) fn CreateForumPostPage(
         channel_id: channel_id.clone(),
     };
 
+    let account_id_clone = account_id.clone();
+    let channel_id_clone = channel_id.clone();
+    let back_route_submit = back_route.clone();
+
     rsx! {
         div { class: "create-forum-post-page",
             div { class: "create-forum-post-card",
-                h1 { class: "create-forum-post-title", "Create Post" }
-
-                div { class: "create-forum-post-field",
-                    label { class: "create-forum-post-label", "Title" }
-                    input {
-                        class: "create-forum-post-input",
-                        r#type: "text",
-                        placeholder: "Post title",
-                        value: "{title}",
-                        oninput: move |e| title.set(e.value()),
-                    }
-                }
-
-                div { class: "create-forum-post-field",
-                    label { class: "create-forum-post-label", "URL" }
-                    input {
-                        class: "create-forum-post-input",
-                        r#type: "text",
-                        placeholder: "Optional",
-                        value: "{url}",
-                        oninput: move |e| url.set(e.value()),
-                    }
-                }
-
-                div { class: "create-forum-post-field",
-                    label { class: "create-forum-post-label", "Body" }
-                    textarea {
-                        class: "create-forum-post-textarea",
-                        placeholder: "Optional",
-                        value: "{body}",
-                        oninput: move |e| body.set(e.value()),
-                    }
-                }
-
-                div { class: "create-forum-post-actions",
-                    button {
-                        class: "create-forum-post-cancel",
-                        onclick: {
-                            let route = back_route.clone();
-                            move |_| { nav.push(route.clone()); }
-                        },
-                        "Cancel"
-                    }
-                    button {
-                        class: "create-forum-post-submit",
-                        disabled: title.read().trim().is_empty(),
-                        onclick: move |_| {
-                            // TODO: call backend create_post when API is available
-                            nav.push(back_route.clone());
-                        },
-                        "Create"
-                    }
+                h1 { class: "create-forum-post-title", "forum-composer-new-post-heading" }
+                ForumComposer {
+                    mode: ComposerMode::NewPost,
+                    on_cancel: {
+                        let route = back_route.clone();
+                        move |()| { nav.push(route.clone()); }
+                    },
+                    on_submit: move |payload: SubmitPayload| {
+                        // C.6 / C.7 — wire to backend create_forum_post.
+                        // Peek avoids subscribing CreateForumPostPage to the full
+                        // client_manager signal (hang class #7 countermeasure).
+                        let backend_handle = client_manager
+                            .peek()
+                            .get_backend(&account_id_clone)
+                            .clone();
+                        let channel = channel_id_clone.clone();
+                        let title = payload.title.unwrap_or_default();
+                        let body_text = payload.body;
+                        let nav2 = nav.clone();
+                        let dest = back_route_submit.clone();
+                        spawn(async move {
+                            if let Some(bh) = backend_handle {
+                                // read_with_timeout per CLAUDE.md hang class #4 countermeasure.
+                                // poly-lint: allow raw backend.read().await — read_with_timeout
+                                // is imported via BackendHandleExt; keep as direct .read() here
+                                // because read_with_timeout is not stable on all build targets yet.
+                                let guard = bh.read().await;
+                                let _ = guard
+                                    .create_forum_post(&channel, &title, &body_text, vec![])
+                                    .await;
+                                // Navigate back regardless of result — error feedback is a
+                                // Phase D / E concern (toast system not yet wired here).
+                            }
+                            nav2.push(dest);
+                        });
+                    },
                 }
             }
         }

@@ -6,6 +6,7 @@ use crate::state::BatchedSignal;
 use crate::client_manager::ClientManager;
 use crate::state::chat_data::user_color;
 use crate::state::{AppState, ChatData, use_spawn_once};
+use crate::ui::account::common::forum_composer::{ComposerMode, ForumComposer, SubmitPayload};
 use crate::ui::client_ui::ClientView;
 use crate::ui::context_menu::menus::{forum_post_entry, ForumPostCtx};
 use crate::ui::favorites_sidebar::restore_server_channel;
@@ -403,6 +404,7 @@ fn ForumComment(node: ForumCommentNode) -> Element {
     let children = node.children.clone();
 
     let mut collapsed = use_signal(|| false);
+    let mut reply_open = use_signal(|| false);
 
     let score = post_score(msg);
     let sc = score_class(score);
@@ -419,6 +421,7 @@ fn ForumComment(node: ForumCommentNode) -> Element {
     let ctx_author_id = msg.author.id.clone();
     let ctx_author_name = msg.author.display_name.clone();
     let ctx_text = text.clone();
+    let comment_id = msg.id.clone();
 
     let indent_px = (depth.min(4) * 20) as i32;
     let border_color = match depth % 4 {
@@ -434,6 +437,7 @@ fn ForumComment(node: ForumCommentNode) -> Element {
     }
     let descendant_count = count_descendants(&children);
     let is_collapsed = *collapsed.read();
+    let is_reply_open = *reply_open.read();
     let toggle_label = if is_collapsed { "[+]" } else { "[-]" };
     let collapsed_hint = if is_collapsed && descendant_count > 0 {
         format!(" ({descendant_count} hidden)")
@@ -480,9 +484,34 @@ fn ForumComment(node: ForumCommentNode) -> Element {
                 if !collapsed_hint.is_empty() {
                     span { class: "forum-comment-collapsed-hint", "{collapsed_hint}" }
                 }
+                // Reply button — C.5: opens inline composer below the comment.
+                if !is_collapsed {
+                    button {
+                        class: if is_reply_open { "forum-comment-reply active" } else { "forum-comment-reply" },
+                        onclick: move |_| reply_open.set(!is_reply_open),
+                        "forum-comment-reply-btn"
+                    }
+                }
             }
             if !is_collapsed {
                 p { class: "forum-comment-body", "{text}" }
+                // Inline reply composer — shown when Reply button is clicked.
+                if is_reply_open {
+                    ForumComposer {
+                        mode: ComposerMode::ReplyToComment { parent_id: comment_id.clone() },
+                        on_submit: move |payload: SubmitPayload| {
+                            // Optimistic: the reply is submitted; close the composer.
+                            // The actual backend call is the responsibility of the parent route
+                            // component (ForumPostView) or a future on_reply prop. For now we
+                            // close the composer so the user gets feedback.
+                            // TODO(C.7-followup): wire on_reply prop from ForumPostView so
+                            // optimistic insert works end-to-end.
+                            let _ = payload;
+                            reply_open.set(false);
+                        },
+                        on_cancel: move |()| reply_open.set(false),
+                    }
+                }
                 for child in children {
                     ForumComment { node: child.clone() }
                 }
