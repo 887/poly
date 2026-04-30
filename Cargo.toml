@@ -251,3 +251,8 @@ unwrap_used = "deny"
 expect_used = "deny"
 panic = "deny"
 indexing_slicing = "deny"
+# Group-level surfacing — kept at WARN to avoid breaking CI before the
+# triage plan in `docs/plans/plan-clippy-pedantic-restriction-cleanup.md`
+# burns down. priority=-1 / -2 lets per-lint allows above override.
+pedantic = { level = "warn", priority = -1 }
+restriction = { level = "warn", priority = -2 }
