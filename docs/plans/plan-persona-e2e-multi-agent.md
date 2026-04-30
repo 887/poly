@@ -1,6 +1,6 @@
 # Plan — Persona End-to-End Multi-Agent Bash Harness
 
-## Status: 🚧 IN PROGRESS — Phases A-C + G + D + E shipped; Phase F pending
+## Status: ✅ DONE — all phases shipped (Phases A-G + F)
 
 > **Why this is its own plan, not Phase J on `plan-meta-personalities.md`:**
 > the deliverable is a **reusable bash + Playwright harness** that drives
@@ -253,23 +253,23 @@ Key design choices, captured up-front so phases don't re-litigate:
 
 **Effort:** 1.5 sessions.
 
-### Phase F — CI integration + reporting
+### Phase F — CI integration + reporting (shipped in commit see-below)
 
-- [ ] **F.1** Add `.github/workflows/persona-e2e.yml` (or extend an
+- [x] **F.1** Add `.github/workflows/persona-e2e.yml` (or extend an
   existing workflow) that runs the harness on a Linux runner. Time
   budget per run ≤ 15 minutes; if it grows, parallelise scenarios across
   jobs.
-- [ ] **F.2** Output adapter — convert per-scenario pass/fail tables to
+- [x] **F.2** Output adapter — convert per-scenario pass/fail tables to
   JUnit XML (consumed by GitHub Actions test-summary plugin) AND to a
   human-readable Markdown summary posted as a sticky comment on PRs.
-- [ ] **F.3** Flake quarantine — scenarios marked
+- [x] **F.3** Flake quarantine — scenarios marked
   `# E2E_QUARANTINE: <reason>` in `scenario.sh` run but their failure
   doesn't fail the job. Used as the escape valve for known-flaky
   Playwright timing issues. Quarantine list reviewed weekly.
-- [ ] **F.4** Local-dev convenience target: `make e2e-personas` (or
+- [x] **F.4** Local-dev convenience target: `make e2e-personas` (or
   `cargo make e2e-personas` if that crate's already in use) wraps the
   bash entry point with sane defaults.
-- [ ] **F.5** Run-artefact retention — keep `tests/e2e/.run/<run_id>/`
+- [x] **F.5** Run-artefact retention — keep `tests/e2e/.run/<run_id>/`
   for the last 5 runs locally, all runs in CI artefacts (7 day retention).
 
 **Effort:** 0.5 sessions.
@@ -470,3 +470,22 @@ Shipped in commit `<see-below>`. 6 scenario directories added:
 - `tests/e2e/scenarios/rate-limit-respected/` — E.6. `rate_limit_per_hour=2` stored; 5× back-to-back heartbeat + audit row count in real-claude mode.
 
 Each directory has: `scenario.sh`, `personas.jsonl`, `mock-actions.jsonl`, `assertions.json.tmpl`, `README.md`. All bash scripts pass `bash -n` syntax check. Playwright `--list` returns 1 test (stub mode, no manifest). All 6 scenarios runnable in mock-claude mode (no ANTHROPIC_API_KEY needed) with `cargo` + `poly-cli` as the tool invocation layer.
+
+### Phase F Status
+
+Shipped in commit see-below. Files added/modified:
+
+- `.github/workflows/persona-e2e.yml` — NEW. Sequential mock-claude workflow; 7 scenarios; JUnit + artefact upload; sticky quarantine PR comment via `peter-evans/create-or-update-comment`. Time budget ≤15 min.
+- `.github/workflows/persona-e2e-real-claude.yml` — NEW. Nightly real-claude workflow (cron 02:30 UTC); matrix over `mcp-to-ui-live-update` + `heartbeat-tick-via-mcp`; gated `if: schedule || workflow_dispatch`; budget 100k tokens.
+- `tests/e2e/lib/report.sh` — NEW. `emit_junit` + `emit_markdown_summary` + `detect_quarantine` + `record_quarantine` + `run_and_report` functions. JUnit XML compatible with `EnricoMi/publish-unit-test-result-action`. Markdown summary posted as sticky PR comment.
+- `tests/e2e/persona-multi-agent.sh` — MODIFIED. Sources `lib/report.sh`; calls `run_and_report` at scenario completion; F.5 local retention (keep last 5 runs).
+- `Makefile` — NEW. `make e2e-personas`, `make e2e-personas-noop`, `make e2e-personas-real` convenience targets (F.4).
+- `tests/e2e/README.md` — MODIFIED. Added "Matrix-parallel upgrade path" section (F.4).
+
+Key decisions:
+- Quarantine detected by `# E2E_QUARANTINE: <reason>` comment in the first 20 lines of `scenario.sh`. Quarantined failures do NOT exit non-zero from `run_and_report`.
+- JUnit XML uses `<testsuites><testsuite><testcase>` shape; one testsuite per scenario, one testcase per agent. `classname` uses dot-separated `e2e.persona.<scenario>.<slug>` namespace.
+- Nightly real-claude workflow is a separate file (`persona-e2e-real-claude.yml`) per the plan's decision; the two workflows are deliberately separate to keep PR run fast + zero-cost.
+- Local retention cap: last 5 runs deleted by mtime; CI keeps all via `upload-artifact` (7-day retention).
+
+### Phase F Status: DONE

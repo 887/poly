@@ -1,0 +1,107 @@
+# CI: Persona E2E — real-claude nightly (Phase F of plan-persona-e2e-multi-agent.md)
+#
+# Runs nightly at 02:30 UTC using the real Anthropic API.
+# Gated on github.event.schedule so it NEVER runs on PRs or manual pushes.
+#
+# Cost: ~$0.10–$1.00 per run (100k token budget, Sonnet-tier pricing).
+# Budget guard (G.3): harness exits code 2 and writes budget-exceeded.json
+# if cumulative tokens reach --budget-tokens before all scenarios finish.
+#
+# Scenarios run: mcp-to-ui-live-update (E.3, the reactive-chain headline test).
+# Add more scenarios to the matrix once the nightly budget is validated.
+
+name: Persona E2E (real-claude nightly)
+
+on:
+  schedule:
+    # 02:30 UTC daily — well outside working hours in all EU/US timezones.
+    - cron: '30 2 * * *'
+  workflow_dispatch:
+    # Allow manual trigger for debugging (still requires ANTHROPIC_API_KEY secret).
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  persona-e2e-real-claude:
+    # Gate: only run on schedule or manual dispatch — never on PR push.
+    # The `if` check below prevents accidental real-API runs on branch pushes
+    # if this workflow is ever added to push: triggers.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    name: Persona E2E (real-claude) — ${{ matrix.scenario }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario:
+          - mcp-to-ui-live-update
+          # Heartbeat has a real 65s wait in real-claude mode — keep last.
+          - heartbeat-tick-via-mcp
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q \
+            libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
+            curl
+
+      - name: Cache cargo registry & build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-e2e-real-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-e2e-
+            ${{ runner.os }}-cargo-test-
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Build poly-test-runner and poly-chat-mcp
+        run: cargo build --quiet -p poly-test-runner -p poly-chat-mcp
+
+      - name: Run scenario — ${{ matrix.scenario }} (real-claude)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          bash tests/e2e/persona-multi-agent.sh \
+            --scenario "${{ matrix.scenario }}" \
+            --mode real-claude \
+            --budget-tokens 100000
+
+      - name: Publish JUnit test results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always()
+        with:
+          files: tests/e2e/.run/*/results/junit-*.xml
+          check_name: "Persona E2E Real-Claude (${{ matrix.scenario }})"
+          comment_mode: always
+
+      - name: Upload e2e run artefacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: persona-e2e-real-claude-${{ matrix.scenario }}-${{ github.run_id }}
+          path: tests/e2e/.run/
+          retention-days: 7
+          if-no-files-found: warn

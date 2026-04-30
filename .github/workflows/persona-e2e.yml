@@ -1,0 +1,225 @@
+# CI: Persona E2E — mock-claude mode, all 6 scenarios (Phase F of plan-persona-e2e-multi-agent.md)
+#
+# Time budget: ≤15 minutes per run.
+# Mode: mock-claude (no ANTHROPIC_API_KEY needed; deterministic; zero cost).
+# Nightly real-claude run: see persona-e2e-real-claude.yml (gated on schedule).
+#
+# Parallelisation: scenarios run sequentially within one job.
+# Upgrade path to matrix-parallel: see tests/e2e/README.md §"Matrix-parallel upgrade".
+#
+# Artefacts retained for 7 days:
+#   tests/e2e/.run/<run_id>/{pids,logs,data,results,manifests}/
+#   Each results/ directory includes junit-<scenario>.xml + summary-<scenario>.md.
+#
+# Sticky PR comment: posted by the "Publish quarantine list" step using
+#   peter-evans/create-or-update-comment with marker <!-- persona-e2e-quarantine -->.
+
+name: Persona E2E (mock-claude)
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  persona-e2e:
+    name: Persona E2E scenarios (mock-claude)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      # -----------------------------------------------------------------------
+      # 1. Checkout
+      # -----------------------------------------------------------------------
+      - uses: actions/checkout@v4
+
+      # -----------------------------------------------------------------------
+      # 2. Rust toolchain
+      # -----------------------------------------------------------------------
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q \
+            libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
+            curl
+
+      - name: Cache cargo registry & build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-e2e-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-e2e-
+            ${{ runner.os }}-cargo-test-
+            ${{ runner.os }}-cargo-lint-
+
+      # -----------------------------------------------------------------------
+      # 2b. Node.js + Playwright browsers
+      #     (only needed for UI-asserting scenarios; install unconditionally
+      #      so the harness can call npx playwright without checking mode)
+      # -----------------------------------------------------------------------
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      # -----------------------------------------------------------------------
+      # 3. Build binaries (B.5 pre-warm — shared target/)
+      # -----------------------------------------------------------------------
+      - name: Build poly-test-runner and poly-chat-mcp
+        run: |
+          cargo build --quiet -p poly-test-runner -p poly-chat-mcp
+
+      # -----------------------------------------------------------------------
+      # 4. Run scenarios sequentially in mock-claude mode
+      #
+      #    Each scenario:
+      #      a. runs the harness
+      #      b. emits JUnit XML + Markdown summary (F.2)
+      #      c. quarantined failures are recorded but do NOT fail the step (F.3)
+      #
+      #    The harness itself calls emit_junit + emit_markdown_summary via
+      #    tests/e2e/lib/report.sh (sourced in persona-multi-agent.sh).
+      #    The per-step continue-on-error flags below are false: if a scenario
+      #    is truly broken (not quarantined), it must fail the build.
+      # -----------------------------------------------------------------------
+      - name: Run scenario — two-personas-handoff
+        run: |
+          bash tests/e2e/persona-multi-agent.sh \
+            --scenario two-personas-handoff \
+            --mode mock-claude
+
+      - name: Run scenario — two-personas-shared-channel
+        run: |
+          bash tests/e2e/persona-multi-agent.sh \
+            --scenario two-personas-shared-channel \
+            --mode mock-claude
+
+      - name: Run scenario — fact-handoff
+        run: |
+          bash tests/e2e/persona-multi-agent.sh \
+            --scenario fact-handoff \
+            --mode mock-claude
+
+      - name: Run scenario — mcp-to-ui-live-update
+        # Headline regression test (E.3): reactive chain SQLite→DOM.
+        # UI assertions skipped in CI unless NEEDS_POLY_WEB=true AND poly-web
+        # is available; the harness detects this automatically.
+        run: |
+          bash tests/e2e/persona-multi-agent.sh \
+            --scenario mcp-to-ui-live-update \
+            --mode mock-claude
+
+      - name: Run scenario — deny-wins-source-resolution
+        run: |
+          bash tests/e2e/persona-multi-agent.sh \
+            --scenario deny-wins-source-resolution \
+            --mode mock-claude
+
+      - name: Run scenario — heartbeat-tick-via-mcp
+        run: |
+          bash tests/e2e/persona-multi-agent.sh \
+            --scenario heartbeat-tick-via-mcp \
+            --mode mock-claude
+
+      - name: Run scenario — rate-limit-respected
+        run: |
+          bash tests/e2e/persona-multi-agent.sh \
+            --scenario rate-limit-respected \
+            --mode mock-claude
+
+      # -----------------------------------------------------------------------
+      # 5. Publish test results via GitHub Actions test-summary (JUnit XML)
+      # -----------------------------------------------------------------------
+      - name: Publish JUnit test results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always()
+        with:
+          files: tests/e2e/.run/*/results/junit-*.xml
+          check_name: "Persona E2E Results"
+          comment_mode: always
+          fail_on: "test failures"
+
+      # -----------------------------------------------------------------------
+      # 6. Collect quarantine list and post sticky PR comment (F.3)
+      # -----------------------------------------------------------------------
+      - name: Collect quarantine list
+        if: always()
+        id: quarantine
+        run: |
+          QFILE=$(ls tests/e2e/.run/*/results/quarantined.jsonl 2>/dev/null | head -1 || true)
+          if [[ -n "$QFILE" && -s "$QFILE" ]]; then
+            echo "has_quarantine=true" >> "$GITHUB_OUTPUT"
+            # Build Markdown table
+            python3 - "$QFILE" <<'PYEOF'
+          import json, os
+          qfile = os.sys.argv[1]
+          rows = []
+          with open(qfile) as f:
+              for line in f:
+                  line = line.strip()
+                  if line:
+                      try:
+                          rows.append(json.loads(line))
+                      except Exception:
+                          pass
+          if not rows:
+              print("No quarantined scenarios.")
+          else:
+              print("<!-- persona-e2e-quarantine -->")
+              print("## Persona E2E — quarantined scenarios")
+              print("")
+              print("These scenarios failed but are **quarantined** — failure does not block the build.")
+              print("Review and resolve weekly.")
+              print("")
+              print("| Scenario | Reason | Timestamp |")
+              print("|----------|--------|-----------|")
+              for r in rows:
+                  print(f"| `{r['scenario']}` | {r['reason']} | {r['timestamp']} |")
+          PYEOF
+          else
+            echo "has_quarantine=false" >> "$GITHUB_OUTPUT"
+            echo "No quarantined scenarios."
+          fi
+
+      - name: Post sticky PR comment (quarantine list)
+        uses: peter-evans/create-or-update-comment@v4
+        if: always() && github.event_name == 'pull_request' && steps.quarantine.outputs.has_quarantine == 'true'
+        with:
+          comment-id: ${{ steps.find-comment.outputs.comment-id }}
+          issue-number: ${{ github.event.pull_request.number }}
+          body-path: /dev/stdin
+          edit-mode: replace
+          body: |
+            <!-- persona-e2e-quarantine -->
+            See "Collect quarantine list" step in the [Persona E2E workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.
+
+      # -----------------------------------------------------------------------
+      # 7. Upload run artefacts (PIDs, logs, results, playwright-report)
+      #    Retain for 7 days.  F.5: keep all runs in CI artefacts.
+      # -----------------------------------------------------------------------
+      - name: Upload e2e run artefacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: persona-e2e-run-${{ github.run_id }}
+          path: tests/e2e/.run/
+          retention-days: 7
+          if-no-files-found: warn

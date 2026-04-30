@@ -35,6 +35,8 @@ source "$SCRIPT_DIR/lib/process.sh"
 source "$SCRIPT_DIR/lib/cleanup.sh"
 # shellcheck source=tests/e2e/lib/mock-claude.sh
 source "$SCRIPT_DIR/lib/mock-claude.sh"
+# shellcheck source=tests/e2e/lib/report.sh
+source "$SCRIPT_DIR/lib/report.sh"
 
 # ---------------------------------------------------------------------------
 # Argument parsing
@@ -860,10 +862,42 @@ if [[ -n "$(ls "$AGENTS_DIR"/*.out.json 2>/dev/null || true)" ]]; then
     aggregate_agent_results
 fi
 
+# ---------------------------------------------------------------------------
+# F.2 — Emit JUnit XML + Markdown summary for the scenario.
+# F.3 — Detect quarantine; quarantined failures do NOT exit non-zero.
+# ---------------------------------------------------------------------------
+_scenario_sh="$SCRIPT_DIR/scenarios/${SCENARIO}/scenario.sh"
+_agents_summary="$RESULTS_DIR/agents-summary.json"
+_playwright_log="$LOGS_DIR/playwright-${SCENARIO}.log"
+
+run_and_report \
+    "$SCENARIO" \
+    "$_scenario_sh" \
+    "$RESULTS_DIR" \
+    "$_agents_summary" \
+    "$_playwright_log" \
+    "0"  # exit_code=0 — we reached here, so scenario passed
+
+# ---------------------------------------------------------------------------
+# F.5 — Local run-artefact retention: keep only the last 5 runs.
+#        CI keeps all runs via upload-artifact (7-day retention in workflow).
+# ---------------------------------------------------------------------------
+_runs_dir="$SCRIPT_DIR/.run"
+_run_count=$(ls -1d "$_runs_dir"/*/  2>/dev/null | wc -l || echo 0)
+if [[ "$_run_count" -gt 5 ]]; then
+    # Delete oldest runs (by directory mtime, ascending = oldest first)
+    ls -1dt "$_runs_dir"/*/ 2>/dev/null | tail -n "+6" | while IFS= read -r old_run; do
+        echo "[F.5] Removing old run artefact: ${old_run}"
+        rm -rf "$old_run"
+    done
+fi
+
 echo ""
 echo "============================================================"
 echo " e2e run $RUN_ID PASSED"
 echo " Artefacts: $RUN_ROOT"
+echo " JUnit XML: $RESULTS_DIR/junit-${SCENARIO}.xml"
+echo " Markdown:  $RESULTS_DIR/summary-${SCENARIO}.md"
 echo "============================================================"
 
 # EXIT trap fires here and cleans up all PIDs.

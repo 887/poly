@@ -221,6 +221,77 @@ bash tests/e2e/persona-multi-agent.sh \
 The harness exits non-zero (code 2) if the budget is exceeded mid-run, so
 the CI job fails loudly and the `budget-exceeded.json` artefact explains why.
 
+## Matrix-parallel upgrade path (Phase F.4)
+
+The CI workflow (`.github/workflows/persona-e2e.yml`) currently runs all
+scenarios **sequentially** in one job.  Sequential is correct as long as total
+runtime stays under 15 minutes.
+
+### When to switch to matrix-parallel
+
+If `bash tests/e2e/persona-multi-agent.sh` for all 7 scenarios exceeds
+~12 minutes on CI (leaving <3 minutes of headroom), switch to
+`strategy: matrix`.
+
+### How to switch
+
+Replace the sequential scenario steps in `persona-e2e.yml` with:
+
+```yaml
+jobs:
+  persona-e2e:
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario:
+          - two-personas-handoff
+          - two-personas-shared-channel
+          - fact-handoff
+          - mcp-to-ui-live-update
+          - deny-wins-source-resolution
+          - heartbeat-tick-via-mcp
+          - rate-limit-respected
+
+    steps:
+      # ... (checkout, toolchain, cache, build are the same) ...
+
+      - name: Run scenario — ${{ matrix.scenario }}
+        run: |
+          bash tests/e2e/persona-multi-agent.sh \
+            --scenario ${{ matrix.scenario }} \
+            --mode mock-claude
+```
+
+Key considerations before switching:
+
+1. **Port collisions** — each matrix job runs on its own runner, so ports
+   (3010, 3000, 9100-9107) do not collide. No change needed.
+2. **SQLite isolation** — each job writes to its own `POLY_DATA_DIR` (per
+   run, not shared). Already correct.
+3. **Cargo cache** — parallel jobs share the `actions/cache` key. If two
+   jobs restore the same cache simultaneously, one will get a cache miss and
+   rebuild from scratch. This is safe but may add ~3 min to one job.
+   Workaround: pre-build in a separate `build` job and upload `target/` as
+   an artefact; download it in each matrix job.
+4. **JUnit aggregation** — update the `EnricoMi/publish-unit-test-result-action`
+   step to run after all matrix jobs complete using `needs: [persona-e2e]`.
+5. **Quarantine sticky comment** — move the "Collect quarantine list" and
+   "Post sticky PR comment" steps to a separate `report` job that runs
+   `needs: [persona-e2e]` with `if: always()`.
+
+The `fail-fast: false` in the matrix ensures a flaky scenario doesn't cancel
+other scenarios mid-run.
+
+### Estimated parallel speedup
+
+| Configuration | Estimated CI time |
+|---|---|
+| Sequential (current) | ~8-12 min (7 scenarios × ~90s each) |
+| Matrix-parallel (7 jobs) | ~4-6 min (longest scenario + runner startup) |
+
+Switch threshold: if sequential exceeds 12 minutes on two consecutive main
+branch runs, open a PR to convert to matrix.
+
 ## Cleanup guarantee
 
 An `EXIT` trap in `lib/cleanup.sh` reaps every process spawned by the harness,
