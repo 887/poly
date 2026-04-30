@@ -11,6 +11,7 @@ crate-type = ["cdylib", "rlib"]
 [features]
 default = ["native"]
 native = [
+    "dep:base64",
     "dep:dioxus",
     "dep:async-trait",
     "dep:futures",
@@ -39,6 +40,7 @@ poly-host-bridge = { workspace = true, optional = true }
 dioxus = { workspace = true, optional = true }
 
 # Native-only dependencies (feature-gated)
+base64 = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }

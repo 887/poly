@@ -1360,6 +1360,14 @@ impl ClientBackend for PolyServerBackend {
     ) -> ClientResult<ActionOutcome> {
         Err(ClientError::NotFound(format!("unknown message action: {action_id}")))
     }
+
+    fn get_signup_method(&self, _server_url: Option<&str>) -> SignupMethod {
+        SignupMethod::InApp("/signup/poly".into())
+    }
+
+    fn client_version(&self) -> String {
+        "poly-server/0.0.0".to_string()
+    }
 }
 
 /// Map a poly-server `ServerEvent` to a `poly_client::ClientEvent`.

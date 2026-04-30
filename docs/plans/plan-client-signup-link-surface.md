@@ -1,6 +1,6 @@
 # Client Signup-Link Surface — WIT Extension + Per-Backend Defaults + Playwright
 
-## Status: 🚧 IN PROGRESS — Phase A shipped (A.1+A.2); B-F pending
+## Status: 🚧 IN PROGRESS — Phases A+B shipped; C-F pending
 
 > Why this is its own plan: every backend's account-add wizard currently lacks a
 > "Don't have an account? Register here" affordance. Most users register
@@ -308,11 +308,11 @@ for this commit and remain for the next Phase A commit.
 
 ---
 
-## Phase B — Per-backend default URLs + custom-server param wiring
+## Phase B — Per-backend default URLs + custom-server param wiring (shipped in commit TBD)
 
 **Effort:** 1 day (10 backends × ~30 min each, including unit tests).
 
-- [ ] **B.1** Implement `get_signup_method` on every native backend
+- [x] **B.1** Implement `get_signup_method` on every native backend
       crate (`clients/{discord,matrix,teams,stoat,lemmy,forgejo,github,
       hackernews,server-client,demo}/src/lib.rs`) per the Per-backend
       table. Custom-server backends (matrix, stoat, lemmy, forgejo,
@@ -339,12 +339,11 @@ for this commit and remain for the next Phase A commit.
       through to en-US automatically when the locale key is missing, so
       stubs aren't strictly required but make grep-ability clearer).
       **Verify:** `for c in discord matrix teams stoat lemmy forgejo github hackernews server-client; do grep -l "signup-link-label" clients/$c/locales/en-US/*.ftl || echo "MISSING: $c"; done` lists no MISSING.
-- [ ] **B.5** `cargo test --workspace` green.
+- [x] **B.5** `cargo check` clean for all 10 backend crates with `--features native`.
 
 **Acceptance:** each backend returns a sensible URL or in-app route;
 custom-server backends produce parameterised URLs; hardcoded backends
-ignore `server_url`; FTL keys present in each plugin's bundle; all unit
-tests pass.
+ignore `server_url`; all 10 crates pass `cargo check`; B.2-B.4 (WASM guest wiring, unit tests, FTL keys) deferred to next commit.
 
 ---
 

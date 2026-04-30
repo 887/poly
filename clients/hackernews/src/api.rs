@@ -11,6 +11,9 @@ use futures::future;
 use poly_client::{ClientError, ClientResult};
 use poly_host_bridge::http::HttpClient;
 
+/// Default User-Agent for HN API requests.
+pub const DEFAULT_CLIENT_VERSION: &str = "poly-hackernews/0.0.0";
+
 use crate::cache::HnCache;
 use crate::types::{HnFeed, HnItem, HnUser};
 
@@ -22,6 +25,7 @@ pub struct HnApiClient {
     http: HttpClient,
     base_url: String,
     cache: Arc<Mutex<HnCache>>,
+    user_agent: Arc<Mutex<String>>,
 }
 
 impl HnApiClient {
@@ -48,7 +52,24 @@ impl HnApiClient {
             http,
             base_url,
             cache: Arc::new(Mutex::new(HnCache::new())),
+            user_agent: Arc::new(Mutex::new(DEFAULT_CLIENT_VERSION.to_string())),
         }
+    }
+
+
+    /// Update the User-Agent string.
+    pub fn set_user_agent(&self, ua: String) {
+        if let Ok(mut lock) = self.user_agent.lock() {
+            *lock = ua;
+        }
+    }
+
+    fn ua(&self) -> String {
+        self.user_agent
+            .lock()
+            .ok()
+            .map(|g| g.clone())
+            .unwrap_or_else(|| DEFAULT_CLIENT_VERSION.to_string())
     }
 
     fn item_url(&self, id: u64) -> String {
@@ -78,6 +99,7 @@ impl HnApiClient {
         let ids: Vec<u64> = self
             .http
             .get(&url)
+            .header("User-Agent", self.ua())
             .send()
             .await
             .map_err(|e| ClientError::Network(e.to_string()))?
@@ -110,6 +132,7 @@ impl HnApiClient {
         let response: Option<HnItem> = self
             .http
             .get(&url)
+            .header("User-Agent", self.ua())
             .send()
             .await
             .map_err(|e| ClientError::Network(e.to_string()))?
@@ -160,6 +183,7 @@ impl HnApiClient {
         let response: Option<HnUser> = self
             .http
             .get(&url)
+            .header("User-Agent", self.ua())
             .send()
             .await
             .map_err(|e| ClientError::Network(e.to_string()))?

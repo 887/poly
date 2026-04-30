@@ -53,6 +53,8 @@ pub struct HackerNewsClient {
     /// Pack C P18 — in-memory settings storage stub. TODO: migrate to
     /// `host-api.kv_set` once exposed to plugins for true persistence.
     settings_storage: SettingsStorageCell,
+    /// Stored version override (None = use api::DEFAULT_CLIENT_VERSION).
+    version_override: std::sync::Mutex<Option<String>>,
 }
 
 #[cfg(feature = "native")]
@@ -64,6 +66,7 @@ impl HackerNewsClient {
             api: HnApiClient::new(),
             session: None,
             settings_storage: SettingsStorageCell::new(),
+            version_override: std::sync::Mutex::new(None),
         }
     }
 
@@ -74,6 +77,7 @@ impl HackerNewsClient {
             api: HnApiClient::with_base_url(base_url.into()),
             session: None,
             settings_storage: SettingsStorageCell::new(),
+            version_override: std::sync::Mutex::new(None),
         }
     }
 
@@ -677,5 +681,32 @@ impl HackerNewsClient {
             })
             .collect();
         Ok(messages)
+    }
+
+    fn get_signup_method(&self, _server_url: Option<&str>) -> SignupMethod {
+        // HN login page serves as registration too
+        SignupMethod::External("https://news.ycombinator.com/login".into())
+    }
+
+    fn client_version(&self) -> String {
+        self.version_override
+            .lock()
+            .ok()
+            .and_then(|g| g.clone())
+            .unwrap_or_else(|| api::DEFAULT_CLIENT_VERSION.to_string())
+    }
+
+    async fn set_client_version_override(
+        &self,
+        version_override: Option<String>,
+    ) -> ClientResult<()> {
+        let new_ua = version_override
+            .clone()
+            .unwrap_or_else(|| api::DEFAULT_CLIENT_VERSION.to_string());
+        if let Ok(mut lock) = self.version_override.lock() {
+            *lock = version_override;
+        }
+        self.api.set_user_agent(new_ua);
+        Ok(())
     }
 }

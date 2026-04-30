@@ -57,6 +57,8 @@ pub struct LemmyClient {
     /// Pack C P18 — in-memory settings storage stub. TODO: migrate to
     /// `host-api.kv_set` once exposed to plugins for true persistence.
     settings_storage: SettingsStorageCell,
+    /// Stored version override (None = use api::DEFAULT_CLIENT_VERSION).
+    version_override: std::sync::Mutex<Option<String>>,
 }
 
 #[cfg(feature = "native")]
@@ -67,6 +69,7 @@ impl LemmyClient {
         Self {
             http: LemmyHttpClient::new(base_url),
             settings_storage: SettingsStorageCell::new(),
+            version_override: std::sync::Mutex::new(None),
         }
     }
 
@@ -1205,5 +1208,32 @@ impl ClientBackend for LemmyClient {
             has_moderation_log: true,
             ..BackendCapabilities::MESSAGING_NO_SOCIAL
         }
+    }
+
+    fn get_signup_method(&self, server_url: Option<&str>) -> SignupMethod {
+        let base = server_url.unwrap_or("https://lemmy.ml");
+        SignupMethod::External(format!("{}/signup", base.trim_end_matches('/')))
+    }
+
+    fn client_version(&self) -> String {
+        self.version_override
+            .lock()
+            .ok()
+            .and_then(|g| g.clone())
+            .unwrap_or_else(|| api::DEFAULT_CLIENT_VERSION.to_string())
+    }
+
+    async fn set_client_version_override(
+        &self,
+        version_override: Option<String>,
+    ) -> ClientResult<()> {
+        let new_ua = version_override
+            .clone()
+            .unwrap_or_else(|| api::DEFAULT_CLIENT_VERSION.to_string());
+        if let Ok(mut lock) = self.version_override.lock() {
+            *lock = version_override;
+        }
+        self.http.set_user_agent(new_ua);
+        Ok(())
     }
 }

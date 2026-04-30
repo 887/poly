@@ -1,7 +1,9 @@
 //! Discord REST API v10 HTTP client.
 
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
+#[cfg(feature = "native")]
+use base64::Engine as _;
 use poly_client::ClientError;
 use poly_host_bridge::http::HttpClient;
 
@@ -11,10 +13,15 @@ use crate::api::{
     DiscordUser,
 };
 
+/// Default User-Agent / client version for Discord API requests.
+pub const DEFAULT_CLIENT_VERSION: &str =
+    "poly-discord/0.0.0 (DiscordBot https://github.com/poly-app; 10)";
+
 pub struct DiscordHttpClient {
     base_url: String,
     token: Mutex<Option<String>>,
     http: HttpClient,
+    user_agent: Arc<Mutex<String>>,
 }
 
 impl DiscordHttpClient {
@@ -23,6 +30,7 @@ impl DiscordHttpClient {
             base_url,
             token: Mutex::new(None),
             http: HttpClient::new(),
+            user_agent: Arc::new(Mutex::new(DEFAULT_CLIENT_VERSION.to_string())),
         }
     }
 
@@ -45,6 +53,48 @@ impl DiscordHttpClient {
         if let Ok(mut lock) = self.token.lock() {
             *lock = Some(token);
         }
+    }
+
+
+    /// Update the User-Agent string sent with every request.
+    pub fn set_user_agent(&self, ua: String) {
+        if let Ok(mut lock) = self.user_agent.lock() {
+            *lock = ua;
+        }
+    }
+
+    fn ua(&self) -> String {
+        self.user_agent
+            .lock()
+            .ok()
+            .map(|g| g.clone())
+            .unwrap_or_else(|| DEFAULT_CLIENT_VERSION.to_string())
+    }
+
+    /// Apply version headers (User-Agent + X-Super-Properties) to a request.
+    fn apply_version_headers(
+        &self,
+        req: poly_host_bridge::http::RequestBuilder,
+    ) -> poly_host_bridge::http::RequestBuilder {
+        let ua = self.ua();
+        // X-Super-Properties is a base64-encoded JSON fingerprint Discord uses
+        // for client identification.  We send minimal safe values.
+        #[cfg(feature = "native")]
+        let x_super = {
+            let json = serde_json::json!({
+                "os": "Linux",
+                "browser": "Discord Client",
+                "release_channel": "stable",
+                "client_version": "0.0.0",
+                "system_locale": "en-US"
+            });
+            base64::engine::general_purpose::STANDARD
+                .encode(json.to_string().as_bytes())
+        };
+        #[cfg(not(feature = "native"))]
+        let x_super = String::new();
+        req.header("User-Agent", ua)
+            .header("X-Super-Properties", x_super)
     }
 
     fn token_header(&self) -> String {

@@ -79,6 +79,8 @@ pub struct TeamsClient {
     saved_messages: Mutex<HashSet<String>>,
     hidden_dms: Mutex<HashSet<String>>,
     muted_dms: Mutex<HashSet<String>>,
+    /// Stored version override (None = use http::DEFAULT_CLIENT_VERSION).
+    version_override: Mutex<Option<String>>,
 }
 
 #[cfg(feature = "native")]
@@ -100,6 +102,7 @@ impl TeamsClient {
             saved_messages: Mutex::new(HashSet::new()),
             hidden_dms: Mutex::new(HashSet::new()),
             muted_dms: Mutex::new(HashSet::new()),
+            version_override: Mutex::new(None),
         }
     }
 
@@ -1199,5 +1202,32 @@ impl ClientBackend for TeamsClient {
         _message_id: &str,
     ) -> ClientResult<ActionOutcome> {
         Err(ClientError::NotFound(format!("unknown message action: {action_id}")))
+    }
+
+    fn get_signup_method(&self, _server_url: Option<&str>) -> SignupMethod {
+        // Last verified 2026-04-30
+        SignupMethod::External("https://signup.live.com/signup?lic=1".into())
+    }
+
+    fn client_version(&self) -> String {
+        self.version_override
+            .lock()
+            .ok()
+            .and_then(|g| g.clone())
+            .unwrap_or_else(|| http::DEFAULT_CLIENT_VERSION.to_string())
+    }
+
+    async fn set_client_version_override(
+        &self,
+        version_override: Option<String>,
+    ) -> ClientResult<()> {
+        let new_ua = version_override
+            .clone()
+            .unwrap_or_else(|| http::DEFAULT_CLIENT_VERSION.to_string());
+        if let Ok(mut lock) = self.version_override.lock() {
+            *lock = version_override;
+        }
+        self.http.set_user_agent(new_ua);
+        Ok(())
     }
 }

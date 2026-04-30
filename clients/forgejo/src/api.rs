@@ -5,6 +5,9 @@
 //! that the native shell exposes.
 
 use poly_client::{ClientError, ClientResult};
+
+/// Default User-Agent for Forgejo API requests.
+pub const DEFAULT_CLIENT_VERSION: &str = "poly-forgejo/0.0.0";
 use poly_host_bridge::http::HttpClient;
 use serde::de::DeserializeOwned;
 
@@ -19,6 +22,7 @@ pub struct ForgejoApi {
     base_url: String,
     http: HttpClient,
     token: Option<String>,
+    user_agent: String,
 }
 
 impl ForgejoApi {
@@ -32,7 +36,18 @@ impl ForgejoApi {
             base_url: url,
             http: HttpClient::new(),
             token: None,
+            user_agent: DEFAULT_CLIENT_VERSION.to_string(),
         }
+    }
+
+    /// Update the User-Agent string.
+    pub fn set_user_agent(&mut self, ua: String) {
+        self.user_agent = ua;
+    }
+
+    /// The current User-Agent string.
+    pub fn user_agent(&self) -> &str {
+        &self.user_agent
     }
 
     /// Store a personal access token for authenticated requests.
@@ -58,7 +73,7 @@ impl ForgejoApi {
     /// Send an authenticated GET request and deserialize the JSON body as `T`.
     async fn get<T: DeserializeOwned>(&self, path: &str) -> ClientResult<T> {
         let url = self.url(path);
-        let mut req = self.http.get(url);
+        let mut req = self.http.get(url).header("User-Agent", self.user_agent.clone());
         if let Some(token) = &self.token {
             req = req.header("Authorization", format!("token {token}"));
         }

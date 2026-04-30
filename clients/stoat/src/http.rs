@@ -17,6 +17,9 @@ use poly_host_bridge::http::{HttpClient, HttpError, Method, RequestBuilder, Resp
 use serde_json::Value;
 use std::sync::{Arc, RwLock};
 
+/// Default User-Agent for Stoat API requests.
+pub const DEFAULT_CLIENT_VERSION: &str = "poly-stoat/0.0.0";
+
 const STOAT_SESSION_TOKEN_HEADER: &str = "x-session-token";
 
 /// Minimal authenticated Stoat session state.
@@ -41,6 +44,7 @@ pub struct StoatHttpClient {
     /// WebSocket URL obtained from the server's root config (GET /).
     /// Set after successful authentication.
     ws_url: Arc<RwLock<Option<String>>>,
+    user_agent: Arc<RwLock<String>>,
 }
 
 impl StoatHttpClient {
@@ -52,6 +56,7 @@ impl StoatHttpClient {
             http: HttpClient::new(),
             session: Arc::new(RwLock::new(None)),
             ws_url: Arc::new(RwLock::new(None)),
+            user_agent: Arc::new(RwLock::new(DEFAULT_CLIENT_VERSION.to_string())),
         }
     }
 
@@ -135,9 +140,27 @@ impl StoatHttpClient {
         Ok(())
     }
 
+
+    /// Update the User-Agent string.
+    pub fn set_user_agent(&self, ua: String) {
+        if let Ok(mut guard) = self.user_agent.write() {
+            *guard = ua;
+        }
+    }
+
+    fn ua(&self) -> String {
+        self.user_agent
+            .read()
+            .ok()
+            .map(|g| g.clone())
+            .unwrap_or_else(|| DEFAULT_CLIENT_VERSION.to_string())
+    }
+
     /// Create an unauthenticated HTTP request builder.
     pub fn request(&self, method: Method, path: &str) -> RequestBuilder {
-        self.http.request(method, self.config.rest_url(path))
+        self.http
+            .request(method, self.config.rest_url(path))
+            .header("User-Agent", self.ua())
     }
 
     /// Create an authenticated request builder using Stoat's session header.

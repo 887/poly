@@ -10,6 +10,9 @@ use poly_client::{
     Server, User, ViewRow,
 };
 use poly_host_bridge::http::{HttpClient, StatusCode};
+
+/// Default User-Agent for Lemmy API requests.
+pub const DEFAULT_CLIENT_VERSION: &str = "poly-lemmy/0.0.0";
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, RwLock};
 
@@ -642,6 +645,7 @@ pub struct LemmyHttpClient {
     base_url: String,
     http: HttpClient,
     session: Arc<RwLock<Option<LemmySession>>>,
+    user_agent: Arc<RwLock<String>>,
 }
 
 impl LemmyHttpClient {
@@ -656,6 +660,7 @@ impl LemmyHttpClient {
             base_url: url,
             http: HttpClient::new(),
             session: Arc::new(RwLock::new(None)),
+            user_agent: Arc::new(RwLock::new(DEFAULT_CLIENT_VERSION.to_string())),
         }
     }
 
@@ -691,6 +696,22 @@ impl LemmyHttpClient {
     }
 
     /// Build the full URL for an API path (e.g. `/api/v3/user/login`).
+
+    /// Update the User-Agent string.
+    pub fn set_user_agent(&self, ua: String) {
+        if let Ok(mut guard) = self.user_agent.write() {
+            *guard = ua;
+        }
+    }
+
+    fn ua(&self) -> String {
+        self.user_agent
+            .read()
+            .ok()
+            .map(|g| g.clone())
+            .unwrap_or_else(|| DEFAULT_CLIENT_VERSION.to_string())
+    }
+
     fn url(&self, path: &str) -> String {
         format!("{}{}", self.base_url, path)
     }
@@ -702,6 +723,57 @@ impl LemmyHttpClient {
             .ok_or_else(|| ClientError::AuthFailed("Lemmy client is not authenticated".to_string()))
     }
 
+
+    /// POST with UA header injected.
+    async fn http_post<B: serde::Serialize, T: serde::de::DeserializeOwned>(
+        &self,
+        path: &str,
+        body: &B,
+        auth: Option<&str>,
+    ) -> ClientResult<T> {
+        let mut req = self
+            .http
+            .post(self.url(path))
+            .header("User-Agent", self.ua())
+            .json(body);
+        if let Some(jwt) = auth {
+            req = req.header("Authorization", format!("Bearer {jwt}"));
+        }
+        let resp = req
+            .send()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            return Err(ClientError::Network(format!("{path} returned HTTP {status}")));
+        }
+        resp.json::<T>().await.map_err(|e| ClientError::Internal(e.to_string()))
+    }
+
+    /// GET with UA header injected.
+    async fn http_get<T: serde::de::DeserializeOwned>(
+        &self,
+        path: &str,
+        auth: Option<&str>,
+    ) -> ClientResult<T> {
+        let mut req = self
+            .http
+            .get(self.url(path))
+            .header("User-Agent", self.ua());
+        if let Some(jwt) = auth {
+            req = req.header("Authorization", format!("Bearer {jwt}"));
+        }
+        let resp = req
+            .send()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            return Err(ClientError::Network(format!("{path} returned HTTP {status}")));
+        }
+        resp.json::<T>().await.map_err(|e| ClientError::Internal(e.to_string()))
+    }
+
     /// `POST /api/v3/user/login`
     pub async fn login(&self, username: &str, password: &str) -> ClientResult<LoginResponse> {
         let body = LoginRequest {
@@ -711,6 +783,7 @@ impl LemmyHttpClient {
         let resp = self
             .http
             .post(self.url("/api/v3/user/login"))
+            .header("User-Agent", self.ua())
             .json(&body)
             .send()
             .await

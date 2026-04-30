@@ -8,6 +8,9 @@
 //! the caller can surface the error.
 
 use std::sync::{Arc, Mutex};
+
+/// Default User-Agent for Teams (Graph) API requests.
+pub const DEFAULT_CLIENT_VERSION: &str = "poly-teams/0.0.0";
 use std::time::Duration;
 
 use poly_client::ClientError;
@@ -65,6 +68,7 @@ pub struct TeamsHttpClient {
     base_url: String,
     token: Arc<Mutex<Option<String>>>,
     http: HttpClient,
+    user_agent: Arc<Mutex<String>>,
 }
 
 impl TeamsHttpClient {
@@ -73,6 +77,7 @@ impl TeamsHttpClient {
             base_url,
             token: Arc::new(Mutex::new(None)),
             http: HttpClient::new(),
+            user_agent: Arc::new(Mutex::new(DEFAULT_CLIENT_VERSION.to_string())),
         }
     }
 
@@ -84,6 +89,22 @@ impl TeamsHttpClient {
         if let Ok(mut lock) = self.token.lock() {
             *lock = Some(token);
         }
+    }
+
+
+    /// Update the User-Agent string.
+    pub fn set_user_agent(&self, ua: String) {
+        if let Ok(mut lock) = self.user_agent.lock() {
+            *lock = ua;
+        }
+    }
+
+    fn ua(&self) -> String {
+        self.user_agent
+            .lock()
+            .ok()
+            .map(|g| g.clone())
+            .unwrap_or_else(|| DEFAULT_CLIENT_VERSION.to_string())
     }
 
     fn auth_header(&self) -> String {
@@ -101,10 +122,12 @@ impl TeamsHttpClient {
 
     async fn get<T: serde::de::DeserializeOwned>(&self, path: &str) -> Result<T, ClientError> {
         let url = self.url(path);
+        let ua = self.ua();
         let resp = send_with_retry(|| {
             self.http
                 .get(url.clone())
                 .header("Authorization", self.auth_header())
+                .header("User-Agent", ua.clone())
         })
         .await?;
         if !resp.status().is_success() {
@@ -119,6 +142,7 @@ impl TeamsHttpClient {
         body: &B,
     ) -> Result<T, ClientError> {
         let url = self.url(path);
+        let ua = self.ua();
         let body_bytes =
             serde_json::to_vec(body).map_err(|e| ClientError::Internal(e.to_string()))?;
         let resp = send_with_retry(|| {
@@ -126,6 +150,7 @@ impl TeamsHttpClient {
                 .post(url.clone())
                 .header("Authorization", self.auth_header())
                 .header("Content-Type", "application/json")
+                .header("User-Agent", ua.clone())
                 .body(body_bytes.clone())
         })
         .await?;
@@ -141,6 +166,7 @@ impl TeamsHttpClient {
         body: &B,
     ) -> Result<T, ClientError> {
         let url = self.url(path);
+        let ua = self.ua();
         let body_bytes =
             serde_json::to_vec(body).map_err(|e| ClientError::Internal(e.to_string()))?;
         let resp = send_with_retry(|| {
@@ -148,6 +174,7 @@ impl TeamsHttpClient {
                 .patch(url.clone())
                 .header("Authorization", self.auth_header())
                 .header("Content-Type", "application/json")
+                .header("User-Agent", ua.clone())
                 .body(body_bytes.clone())
         })
         .await?;
@@ -159,10 +186,12 @@ impl TeamsHttpClient {
 
     async fn delete_unit(&self, path: &str) -> Result<(), ClientError> {
         let url = self.url(path);
+        let ua = self.ua();
         let resp = send_with_retry(|| {
             self.http
                 .delete(url.clone())
                 .header("Authorization", self.auth_header())
+                .header("User-Agent", ua.clone())
         })
         .await?;
         if !resp.status().is_success() {
@@ -177,6 +206,7 @@ impl TeamsHttpClient {
         body: &B,
     ) -> Result<(), ClientError> {
         let url = self.url(path);
+        let ua = self.ua();
         let body_bytes =
             serde_json::to_vec(body).map_err(|e| ClientError::Internal(e.to_string()))?;
         let resp = send_with_retry(|| {
@@ -184,6 +214,7 @@ impl TeamsHttpClient {
                 .post(url.clone())
                 .header("Authorization", self.auth_header())
                 .header("Content-Type", "application/json")
+                .header("User-Agent", ua.clone())
                 .body(body_bytes.clone())
         })
         .await?;
@@ -199,6 +230,7 @@ impl TeamsHttpClient {
         body: &B,
     ) -> Result<(), ClientError> {
         let url = self.url(path);
+        let ua = self.ua();
         let body_bytes =
             serde_json::to_vec(body).map_err(|e| ClientError::Internal(e.to_string()))?;
         let resp = send_with_retry(|| {
@@ -206,6 +238,7 @@ impl TeamsHttpClient {
                 .patch(url.clone())
                 .header("Authorization", self.auth_header())
                 .header("Content-Type", "application/json")
+                .header("User-Agent", ua.clone())
                 .body(body_bytes.clone())
         })
         .await?;

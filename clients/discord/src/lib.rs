@@ -158,6 +158,8 @@ pub struct DiscordClient {
     /// to this URL and forwards parsed gateway events.  When `None`, the stream
     /// is `stream::pending()` (no events).
     gateway_url: Option<String>,
+    /// Stored version override (None = use DEFAULT_CLIENT_VERSION).
+    version_override: Mutex<Option<String>>,
 }
 
 #[cfg(feature = "native")]
@@ -170,6 +172,7 @@ impl DiscordClient {
             settings_storage: SettingsStorageCell::new(),
             menu_state: Mutex::new(DiscordMenuState::default()),
             gateway_url: None,
+            version_override: Mutex::new(None),
         }
     }
 
@@ -181,6 +184,7 @@ impl DiscordClient {
             settings_storage: SettingsStorageCell::new(),
             menu_state: Mutex::new(DiscordMenuState::default()),
             gateway_url: None,
+            version_override: Mutex::new(None),
         }
     }
 
@@ -196,6 +200,7 @@ impl DiscordClient {
             settings_storage: SettingsStorageCell::new(),
             menu_state: Mutex::new(DiscordMenuState::default()),
             gateway_url: Some(gateway_ws_url),
+            version_override: Mutex::new(None),
         }
     }
 
@@ -2059,4 +2064,31 @@ impl ClientBackend for DiscordClient {
         self.http.send_message(&dm_channel_id, &invite_url).await?;
         Ok(())
     }
+
+    fn get_signup_method(&self, _server_url: Option<&str>) -> SignupMethod {
+        SignupMethod::External("https://discord.com/register".into())
+    }
+
+    fn client_version(&self) -> String {
+        self.version_override
+            .lock()
+            .ok()
+            .and_then(|g| g.clone())
+            .unwrap_or_else(|| http::DEFAULT_CLIENT_VERSION.to_string())
+    }
+
+    async fn set_client_version_override(
+        &self,
+        version_override: Option<String>,
+    ) -> ClientResult<()> {
+        let new_ua = version_override
+            .clone()
+            .unwrap_or_else(|| http::DEFAULT_CLIENT_VERSION.to_string());
+        if let Ok(mut lock) = self.version_override.lock() {
+            *lock = version_override;
+        }
+        self.http.set_user_agent(new_ua);
+        Ok(())
+    }
 }
+

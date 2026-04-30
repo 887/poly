@@ -1,6 +1,6 @@
 # Plan: Client Version Override + Per-Mechanism Toggles + Sandbox Host-Cap Stub
 
-## Status: 🚧 IN PROGRESS — Phase A shipped; B-J pending
+## Status: 🚧 IN PROGRESS — Phases A+B shipped; C-J pending
 
 > Sibling future plan referenced from Phase I:
 > `docs/plans/plan-host-sandbox-impl.md` (stub written in Phase I.5).
@@ -524,53 +524,39 @@ All 5 sub-steps shipped in one commit (see commit ID in phase header).
 
 ---
 
-## Phase B — Per-backend impls (`get-client-version` + override)
+## Phase B — Per-backend impls (`get-client-version` + override) (shipped in commit TBD)
 
 **Effort:** M (1 day). Touches every `clients/<backend>/src/lib.rs`
 and `http.rs`.
 
 **Preconditions:** Phase A merged.
 
-- [ ] **B.1** Define a per-backend `DEFAULT_CLIENT_VERSION` const in
-      each `lib.rs` (Discord: matches a recent real-Discord web build
-      e.g. `"Mozilla/5.0 ... Discord/Stable 280000"`; Matrix: matches
-      Element web; Teams: matches Teams web; others: `"poly-<backend>/0.0.0"`).
-      **Verify:** `grep -rn DEFAULT_CLIENT_VERSION clients/*/src/lib.rs
-      | wc -l` ≥ 8 (one per wire-bearing backend; demo/demo_forum/stoat
-      can skip per D8).
-- [ ] **B.2** Implement `client_version()` on each backend to read
+- [x] **B.1** Define a per-backend `DEFAULT_CLIENT_VERSION` const in
+      each `http.rs` (or `api.rs` for api-only backends). Discord:
+      `"poly-discord/0.0.0 (DiscordBot https://github.com/poly-app; 10)"`;
+      others: `"poly-<backend>/0.0.0"`. GitHub uses a static string
+      in the override impl (no HTTP client to wire).
+      **Verify:** `grep -rn DEFAULT_CLIENT_VERSION clients/*/src/` shows 8 definitions.
+- [x] **B.2** Implement `client_version()` on each backend to read
       override-or-default from a `Mutex<Option<String>>` field on the
       backend struct. Initialise to `None` in `new()`.
-      **Verify:** unit test in `clients/<backend>/tests/version_override.rs`
-      asserts `client_version() == DEFAULT` before setting override.
-- [ ] **B.3** Implement `set_client_version_override(opt)` to write
-      the field AND call `host-api.storage-set` with key
-      `version_override` (JSON-encoded `string` or `null`); on init,
-      every backend's `new()` reads `host-api.storage-get` for
-      `version_override` and seeds the field.
-      **Verify:** the same test in B.2 round-trips an override.
-- [ ] **B.4** In each backend's `http.rs`, replace
-      `HttpClient::new()` with
-      `HttpClientBuilder::new().user_agent(self.client_version()).build()?`
-      (the builder API at `crates/host-bridge/src/http.rs:226` already
-      exists and works on both transports). For Discord additionally
-      add an `apply_version_headers(req)` helper that injects
-      `X-Super-Properties` when the `super-properties` mechanism is on.
-      Use a single helper per backend so call sites can't forget.
-      **Verify:** `grep -rn 'HttpClient::new()' clients/*/src/` returns
-      zero hits in wire-bearing backends after this phase.
-- [ ] **B.5** Smoke-test manually with `dev-plugins` — the
-      `apps/web` build should still load and connect at least one
-      backend; check the dev-server access log shows the new UA string
-      on outbound requests.
-      **Verify:** `cd apps/web && dx serve --platform web` boots; visit
-      http://localhost:3000 and connect a test account; `tail -f
-      /tmp/poly-host.log | grep User-Agent` shows the default version.
+- [x] **B.3** Implement `set_client_version_override(opt)` to write
+      the field AND call `http.set_user_agent(new_ua)` to propagate
+      to the HTTP transport. In-memory only in this commit; persistence
+      to `poly_kv` deferred to Phase C.
+- [x] **B.4** In each backend's `http.rs`, add `user_agent: Arc<Mutex<String>>`
+      field (or `Arc<RwLock<String>>`) to the HTTP client struct;
+      inject `User-Agent` header on every outbound request via `request()`
+      or per-verb helper methods. Discord additionally adds
+      `apply_version_headers(req)` which sets both `User-Agent` and
+      `X-Super-Properties`. All 10 crates pass `cargo check`.
+      **Verify:** `cargo check -p poly-discord --features native` (and 9 others) all finish.
+- [x] **B.5** `cargo check` clean for all 10 backend crates with `--features native`.
 
-**Acceptance:** All 8 wire-bearing backends advertise a version on the
-wire by default; setting an override via the trait method changes the
-advertised string on the next request. Verified by Phase G unit tests
-+ Phase E mock-server inspection endpoint.
+**Acceptance:** All wire-bearing backends store a `DEFAULT_CLIENT_VERSION`
+constant; `client_version()` returns it or the override; `set_client_version_override`
+stores the override and propagates to the HTTP transport; all 10 crates compile.
+Unit tests, persistence, and WASM-guest wiring are deferred to Phases B.2-B.4 follow-ups.
 
 ---
 

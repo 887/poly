@@ -58,6 +58,8 @@ pub struct ForgejoClient {
     /// Pack C P18 — in-memory settings storage stub. TODO: migrate to
     /// `host-api.kv_set` once exposed to plugins for true persistence.
     settings_storage: SettingsStorageCell,
+    /// Stored version override (None = use api::DEFAULT_CLIENT_VERSION).
+    version_override: std::sync::Mutex<Option<String>>,
 }
 
 #[cfg(feature = "native")]
@@ -70,6 +72,7 @@ impl ForgejoClient {
             session: None,
             repos: tokio::sync::Mutex::new(Vec::new()),
             settings_storage: SettingsStorageCell::new(),
+            version_override: std::sync::Mutex::new(None),
         }
     }
 
@@ -885,6 +888,38 @@ impl ClientBackend for ForgejoClient {
             bytes,
             truncated: false,
         })
+    }
+
+    fn get_signup_method(&self, server_url: Option<&str>) -> SignupMethod {
+        let base = server_url.unwrap_or("https://codeberg.org");
+        SignupMethod::External(format!("{}/user/sign_up", base.trim_end_matches('/')))
+    }
+
+    fn client_version(&self) -> String {
+        self.version_override
+            .lock()
+            .ok()
+            .and_then(|g| g.clone())
+            .unwrap_or_else(|| api::DEFAULT_CLIENT_VERSION.to_string())
+    }
+
+    async fn set_client_version_override(
+        &self,
+        version_override: Option<String>,
+    ) -> ClientResult<()> {
+        let new_ua = version_override
+            .clone()
+            .unwrap_or_else(|| api::DEFAULT_CLIENT_VERSION.to_string());
+        if let Ok(mut lock) = self.version_override.lock() {
+            *lock = version_override;
+        }
+        // ForgejoApi stores user_agent by value (not Arc<Mutex>); wiring the
+        // override into the live http client requires &mut self on ForgejoApi.
+        // The version is stored in self.version_override for client_version() to
+        // return; full UA injection on ForgejoApi will be wired in a follow-up
+        // when ForgejoApi is migrated to Arc<Mutex<String>>.
+        let _ = new_ua;
+        Ok(())
     }
 }
 

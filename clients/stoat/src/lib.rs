@@ -111,7 +111,8 @@ pub struct StoatClient {
     /// `host-api.kv_set` once exposed to plugins for true persistence.
     settings_storage: SettingsStorageCell,
     /// F10 — in-memory state for context-menu toggle actions.
-    menu_state: Mutex<StoatMenuState>,
+    menu_state: Mutex<StoatMenuState>,    /// Stored version override (None = use http::DEFAULT_CLIENT_VERSION).
+    version_override: std::sync::Mutex<Option<String>>,
 }
 
 #[cfg(feature = "native")]
@@ -134,6 +135,7 @@ impl StoatClient {
             http: StoatHttpClient::new(config),
             settings_storage: SettingsStorageCell::new(),
             menu_state: Mutex::new(StoatMenuState::default()),
+            version_override: std::sync::Mutex::new(None),
         }
     }
 
@@ -2260,6 +2262,33 @@ mod tests {
         assert_eq!(user.display_name, "Otter Pal");
         assert_eq!(user.backend, BackendType::from("stoat"));
 
+        Ok(())
+    }
+
+    fn get_signup_method(&self, server_url: Option<&str>) -> SignupMethod {
+        let base = server_url.unwrap_or("https://app.stoat.chat");
+        SignupMethod::External(base.trim_end_matches('/').to_string())
+    }
+
+    fn client_version(&self) -> String {
+        self.version_override
+            .lock()
+            .ok()
+            .and_then(|g| g.clone())
+            .unwrap_or_else(|| http::DEFAULT_CLIENT_VERSION.to_string())
+    }
+
+    async fn set_client_version_override(
+        &self,
+        version_override: Option<String>,
+    ) -> ClientResult<()> {
+        let new_ua = version_override
+            .clone()
+            .unwrap_or_else(|| http::DEFAULT_CLIENT_VERSION.to_string());
+        if let Ok(mut lock) = self.version_override.lock() {
+            *lock = version_override;
+        }
+        self.http.set_user_agent(new_ua);
         Ok(())
     }
 }

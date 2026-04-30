@@ -921,6 +921,20 @@ impl ClientBackend for GitHubClient {
     ) -> ClientResult<ActionOutcome> {
         Err(ClientError::NotFound(format!("unknown message action: {action_id}")))
     }
+
+    fn get_signup_method(&self, server_url: Option<&str>) -> SignupMethod {
+        if let Some(url) = server_url {
+            // GitHub Enterprise — point to instance signup
+            SignupMethod::External(url.trim_end_matches('/').to_string())
+        } else {
+            SignupMethod::External("https://github.com/signup".into())
+        }
+    }
+
+    fn client_version(&self) -> String {
+        // GitHub backend uses the gh CLI; version reflects the CLI wrapper.
+        "poly-github/0.0.0".to_string()
+    }
 }
 
 fn kind_from_string(s: &str) -> FileKind {

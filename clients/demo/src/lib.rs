@@ -81,7 +81,8 @@ pub struct DemoClient {
     /// Pack C P18 — in-memory settings storage. Demo backends never persist
     /// across process restarts; this cell gives round-trip semantics within
     /// one session.
-    settings_storage: SettingsStorageCell,
+    settings_storage: SettingsStorageCell,    /// Stored version override (None = return "poly-demo/0.0.0").
+    version_override: std::sync::Mutex<Option<String>>,
 }
 
 #[cfg(feature = "native")]
@@ -92,6 +93,7 @@ impl DemoClient {
             authenticated: false,
             session: None,
             settings_storage: SettingsStorageCell::new(),
+            version_override: std::sync::Mutex::new(None),
         }
     }
 }
@@ -643,6 +645,24 @@ impl ClientBackend for DemoClient {
     ) -> Result<ActionOutcome, ClientError> {
         Err(ClientError::NotFound(format!("unknown message action: {action_id}")))
     }
+
+    fn client_version(&self) -> String {
+        self.version_override
+            .lock()
+            .ok()
+            .and_then(|g| g.clone())
+            .unwrap_or_else(|| "poly-demo/0.0.0".to_string())
+    }
+
+    async fn set_client_version_override(
+        &self,
+        version_override: Option<String>,
+    ) -> ClientResult<()> {
+        if let Ok(mut lock) = self.version_override.lock() {
+            *lock = version_override;
+        }
+        Ok(())
+    }
 }
 
 /// Second demo messenger client — the "dog" account (demo2 / 🐶).
@@ -655,7 +675,8 @@ pub struct DemoClient2 {
     authenticated: bool,
     session: Option<Session>,
     /// Pack C P18 — in-memory settings storage. See [`DemoClient`].
-    settings_storage: SettingsStorageCell,
+    settings_storage: SettingsStorageCell,    /// Stored version override (None = return "poly-demo/0.0.0").
+    version_override: std::sync::Mutex<Option<String>>,
 }
 
 #[cfg(feature = "native")]
@@ -666,6 +687,7 @@ impl DemoClient2 {
             authenticated: false,
             session: None,
             settings_storage: SettingsStorageCell::new(),
+            version_override: std::sync::Mutex::new(None),
         }
     }
 }
@@ -1113,6 +1135,24 @@ impl ClientBackend for DemoClient2 {
     ) -> Result<ActionOutcome, ClientError> {
         Err(ClientError::NotFound(format!("unknown message action: {action_id}")))
     }
+
+    fn client_version(&self) -> String {
+        self.version_override
+            .lock()
+            .ok()
+            .and_then(|g| g.clone())
+            .unwrap_or_else(|| "poly-demo/0.0.0".to_string())
+    }
+
+    async fn set_client_version_override(
+        &self,
+        version_override: Option<String>,
+    ) -> ClientResult<()> {
+        if let Ok(mut lock) = self.version_override.lock() {
+            *lock = version_override;
+        }
+        Ok(())
+    }
 }
 
 /// Third demo messenger client — the "lemming" account (demo_forum / 🐭).
@@ -1125,7 +1165,8 @@ pub struct DemoClient3 {
     authenticated: bool,
     session: Option<Session>,
     /// Pack C P18 — in-memory settings storage. See [`DemoClient`].
-    settings_storage: SettingsStorageCell,
+    settings_storage: SettingsStorageCell,    /// Stored version override (None = return "poly-demo/0.0.0").
+    version_override: std::sync::Mutex<Option<String>>,
 }
 
 #[cfg(feature = "native")]
@@ -1136,6 +1177,7 @@ impl DemoClient3 {
             authenticated: false,
             session: None,
             settings_storage: SettingsStorageCell::new(),
+            version_override: std::sync::Mutex::new(None),
         }
     }
 }
@@ -1668,6 +1710,24 @@ impl ClientBackend for DemoClient3 {
         &self, action_id: &str, _channel_id: &str, _message_id: &str,
     ) -> Result<ActionOutcome, ClientError> {
         Err(ClientError::NotFound(format!("unknown message action: {action_id}")))
+    }
+
+    fn client_version(&self) -> String {
+        self.version_override
+            .lock()
+            .ok()
+            .and_then(|g| g.clone())
+            .unwrap_or_else(|| "poly-demo/0.0.0".to_string())
+    }
+
+    async fn set_client_version_override(
+        &self,
+        version_override: Option<String>,
+    ) -> ClientResult<()> {
+        if let Ok(mut lock) = self.version_override.lock() {
+            *lock = version_override;
+        }
+        Ok(())
     }
 }
 
