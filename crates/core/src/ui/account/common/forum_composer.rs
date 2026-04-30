@@ -75,11 +75,12 @@ pub fn ComposerHeader(
 ) -> Element {
     match mode {
         ComposerMode::NewPost => rsx! {
-            div { class: "composer-header",
+            div { class: "composer-header", "data-testid": "forum-composer-header",
                 div { class: "composer-field",
                     label { class: "composer-label", "forum-composer-title-label" }
                     input {
                         class: "composer-input",
+                        "data-testid": "forum-composer-title-input",
                         r#type: "text",
                         placeholder: "forum-composer-title-placeholder",
                         value: "{title}",
@@ -90,6 +91,7 @@ pub fn ComposerHeader(
                     label { class: "composer-label", "forum-composer-url-label" }
                     input {
                         class: "composer-input",
+                        "data-testid": "forum-composer-url-input",
                         r#type: "url",
                         placeholder: "forum-composer-url-placeholder",
                         value: "{link_url}",
@@ -101,8 +103,8 @@ pub fn ComposerHeader(
         ComposerMode::ReplyToPost { ref parent_id } | ComposerMode::ReplyToComment { ref parent_id } => {
             let pid = parent_id.clone();
             rsx! {
-                div { class: "composer-header",
-                    span { class: "composer-reply-label",
+                div { class: "composer-header", "data-testid": "forum-composer-reply-header",
+                    span { class: "composer-reply-label", "data-testid": "forum-composer-reply-label",
                         "forum-composer-replying-to {pid}"
                     }
                 }
@@ -132,14 +134,16 @@ pub fn ComposerEditor(body: Signal<String>, link_url: Signal<String>) -> Element
     rsx! {
         div { class: "composer-editor",
             // Tab bar
-            div { class: "composer-tabs",
+            div { class: "composer-tabs", "data-testid": "forum-composer-tabs",
                 button {
                     class: if !*preview_active.read() { "composer-tab active" } else { "composer-tab" },
+                    "data-testid": "forum-composer-tab-write",
                     onclick: move |_| preview_active.set(false),
                     "forum-composer-tab-write"
                 }
                 button {
                     class: if *preview_active.read() { "composer-tab active" } else { "composer-tab" },
+                    "data-testid": "forum-composer-tab-preview",
                     onclick: move |_| preview_active.set(true),
                     "forum-composer-tab-preview"
                 }
@@ -148,11 +152,13 @@ pub fn ComposerEditor(body: Signal<String>, link_url: Signal<String>) -> Element
             if let Some(html) = preview_html {
                 div {
                     class: "composer-preview",
+                    "data-testid": "forum-composer-preview-pane",
                     dangerous_inner_html: "{html}",
                 }
             } else {
                 textarea {
                     class: "composer-textarea",
+                    "data-testid": "forum-composer-body-textarea",
                     placeholder: "forum-composer-body-placeholder",
                     value: "{body_text}",
                     oninput: move |e| body.set(e.value()),
@@ -192,14 +198,16 @@ pub fn ComposerActions(
     let disabled = body_empty || title_empty;
 
     rsx! {
-        div { class: "composer-actions",
+        div { class: "composer-actions", "data-testid": "forum-composer-actions",
             button {
                 class: "composer-cancel-btn",
+                "data-testid": "forum-composer-cancel-btn",
                 onclick: move |_| on_cancel.call(()),
                 "forum-composer-cancel"
             }
             button {
                 class: "composer-submit-btn",
+                "data-testid": "forum-composer-submit-btn",
                 disabled: disabled,
                 onclick: move |_| {
                     if !disabled {
@@ -268,7 +276,7 @@ pub fn ForumComposer(
     };
 
     rsx! {
-        div { class: "forum-composer",
+        div { class: "forum-composer", "data-testid": "forum-composer",
             ComposerHeader {
                 mode: mode_clone.clone(),
                 title: title,

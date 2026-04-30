@@ -840,7 +840,9 @@ case "$SCENARIO" in
     two-personas-shared-channel|\
     mcp-to-ui-live-update|\
     heartbeat-tick-via-mcp|\
-    rate-limit-respected)
+    rate-limit-respected|\
+    forum-composer-create-post|\
+    forum-composer-inline-reply)
         # Phase D+E persona scenarios that drive the WASM UI via Playwright.
         NEEDS_POLY_WEB=true
         ;;

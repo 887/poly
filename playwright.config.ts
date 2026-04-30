@@ -48,5 +48,17 @@ export default defineConfig({
         baseURL: process.env.DISCORD_MOCK_URL ?? 'http://localhost:9200',
       },
     },
+    {
+      // D.3 + D.4 — ForumComposer e2e specs driven by the persona-multi-agent harness.
+      // poly-web must be running (started by the harness) at E2E_WEB_BASE_URL.
+      name: 'forum-composer',
+      testMatch: /specs\/forum-composer.*\.spec\.ts/,
+      use: {
+        browserName: 'chromium',
+        viewport: { width: 1280, height: 800 },
+        baseURL: process.env.E2E_WEB_BASE_URL ?? 'http://127.0.0.1:3000',
+        headless: process.env.PLAYWRIGHT_HEADED !== '1',
+      },
+    },
   ],
 });

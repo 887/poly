@@ -488,6 +488,7 @@ fn ForumComment(node: ForumCommentNode) -> Element {
                 if !is_collapsed {
                     button {
                         class: if is_reply_open { "forum-comment-reply active" } else { "forum-comment-reply" },
+                        "data-testid": "forum-composer-reply-btn",
                         onclick: move |_| reply_open.set(!is_reply_open),
                         "forum-comment-reply-btn"
                     }

@@ -1034,6 +1034,7 @@ fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
                     }
                     Link {
                         class: "forum-create-post-btn",
+                        "data-testid": "forum-composer-new-post-btn",
                         to: Route::CreateForumPostRoute {
                             backend: backend_slug,
                             instance_id,
