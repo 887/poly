@@ -25,6 +25,10 @@ async fn main() -> anyhow::Result<()> {
     let state = Arc::new(state);
 
     let base = TestServerBase::bind(args.port).await?;
+    // Set the gateway URL based on the actual bound address so the
+    // `/api/v10/gateway` endpoint hands clients a working ws:// URL —
+    // the default placeholder hardcodes a fixed port and omits the path.
+    *state.gateway_url.write().await = format!("ws://{}/gateway/ws", base.addr);
     tracing::info!("poly-test-discord listening on {}", base.base_url());
 
     let app = router(state);

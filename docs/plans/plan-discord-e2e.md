@@ -1,6 +1,33 @@
 # Discord End-to-End Test Plan
 
-## Status: 🚧 IN PROGRESS — HTTP-only tests shipped; UI-level Playwright tests pending
+## Status: ✅ DONE — HTTP-only suite green (35 passed / 1 intentional skip)
+
+> Closed out 2026-04-30. The four spec files cover the full HTTP surface
+> from section 1 against `poly-test-discord`; gateway-WS, auth, message
+> CRUD, group-DM, context menus, and moderation all pass. UI-level
+> Playwright tests, real-OAuth coverage, and reaction/thread HTTP wiring
+> were always scoped out — see "Punted to follow-up plans" below.
+
+Close-out fixes shipped today:
+- **`servers/test-discord/src/main.rs`** — set `gateway_url` dynamically
+  from the bound address with `/gateway/ws` path so tests on any port
+  see a working ws:// URL (was hardcoded `ws://localhost:9102` with no
+  path → `Unexpected server response: 404` in gateway-ws test).
+- **`playwright.config.ts`** — `discord-api` project now runs with
+  `fullyParallel: false, workers: 1`. Specs share one mock server and
+  call `/reseed` in `beforeEach`; parallel workers raced and produced
+  401-vs-404 flakes on auth-bound assertions.
+
+## Punted to follow-up plans
+
+- **UI-level Playwright tests** (full WASM `poly-web` driving) — defer
+  until `plan-meta-personalities.md` Phase D ships the persona UI; both
+  surfaces can share one Playwright session.
+- **Real-OAuth E2E** — needs `DISCORD_CLIENT_SECRET` + sandbox bot;
+  spec stub at `discord-auth.spec.ts:151` is unconditionally skipped.
+- **Reactions / thread creation HTTP tests** — add when
+  `clients/discord/src/http.rs` grows the corresponding methods (still
+  `wit_bindings.rs`-only today).
 
 > Created: 2026-04-27
 > Scope: Playwright + mock-server E2E coverage for the poly-discord backend.

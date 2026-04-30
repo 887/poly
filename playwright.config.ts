@@ -38,6 +38,10 @@ export default defineConfig({
     {
       name: 'discord-api',
       testMatch: /discord\/.*\.spec\.ts/,
+      // Specs share one mock server and call /reseed in beforeEach, which
+      // wipes auth tokens for sibling workers. Run serially to avoid races.
+      fullyParallel: false,
+      workers: 1,
       use: {
         // HTTP-only tests — no browser, no viewport.
         // Set DISCORD_MOCK_URL to point at poly-test-discord (default: http://localhost:9200).
