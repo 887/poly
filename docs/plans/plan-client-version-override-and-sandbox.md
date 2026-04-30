@@ -747,7 +747,7 @@ reloads.
 
 ---
 
-### Phase F Status: F.1–F.4 shipped (commit to be appended after jj describe)
+### Phase F Status: F.1–F.4 shipped in commit df0849eb
 
 Component tree: `crates/core/src/ui/account/settings/client_settings/{mod,backend_card,version_override,mechanism_toggle,mcp}.rs`.
 Modified: `crates/core/src/ui/account/settings/mod.rs` (mount + nav item + scroll spy),
