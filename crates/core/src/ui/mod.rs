@@ -614,7 +614,11 @@ fn register_native_signup_entries(client_manager: &mut BatchedSignal<ClientManag
         name_key: "plugin-stoat-signup-name",
         desc_key: "plugin-stoat-signup-desc",
         render: poly_stoat::signup::signup_render_fn,
-        signup_method: |_| poly_client::SignupMethod::NotSupported,
+        signup_method: |server_url| {
+            poly_client::SignupMethod::External(
+                server_url.unwrap_or("https://app.stoat.chat").to_string(),
+            )
+        },
     }));
 
     // Register the Poly Server backend when compiled with the `server` feature.
@@ -626,7 +630,7 @@ fn register_native_signup_entries(client_manager: &mut BatchedSignal<ClientManag
         name_key: "plugin-poly-signup-name",
         desc_key: "plugin-poly-signup-desc",
         render: poly_server_client::signup::signup_render_fn,
-        signup_method: |_| poly_client::SignupMethod::NotSupported,
+        signup_method: |_| poly_client::SignupMethod::InApp("/signup/poly".to_string()),
     }));
 }
 
