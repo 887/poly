@@ -153,6 +153,17 @@ signup-picker-description = Choose which type of account to add.
 signup-picker-back = ← Back to Settings
 signup-stub-back = ← Choose Backend
 
+# Signup flow — RegisterLink affordance (Phase D, plan-client-signup-link-surface.md)
+# Prefix text before the "Register at <service>" action label.
+signup-register-link-prefix = Don't have an account?
+# Action label for External backends. {$service} is replaced with the host extracted
+# from the signup URL (e.g. "discord.com", "matrix.org").
+signup-register-link-action = Register at {$service}
+# Fallback label for InApp backends when a service-specific key is missing.
+signup-register-link-generic = Register
+# TODO(i18n): translate signup-register-link-prefix, signup-register-link-action,
+# signup-register-link-generic into de/es/fr locales.
+
 # ── Create server / channel ──────────────────────────────────────────────────
 create-server-btn = Create Server
 create-server-placeholder = Server name…

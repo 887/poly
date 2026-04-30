@@ -10,7 +10,7 @@
 use dioxus::prelude::{Callback, Element};
 use poly_client::{
     AccountPresence, AuthCredentials, BackendType, ClientBackend, ConnectionStatus, Server,
-    Session, SignupCompleted, SignupContext, TestAccountEntry,
+    Session, SignupCompleted, SignupContext, SignupMethod, TestAccountEntry,
 };
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -70,6 +70,15 @@ pub struct SignupEntry {
     ///
     /// Must be a static function (not a closure) so the entry is `Copy`.
     pub render: fn(Callback<SignupCompleted>, SignupContext) -> Element,
+    /// How this backend exposes account signup to users.
+    ///
+    /// Called by `RegisterLink` in the signup picker and per-backend forms to
+    /// determine which affordance to render (external link, in-app nav, or none).
+    /// `server_url` is `None` on the picker page (no URL typed yet).
+    ///
+    /// Must be a static function (not a closure) so the entry is `Copy`.
+    /// Default: return `SignupMethod::NotSupported`.
+    pub signup_method: fn(server_url: Option<&str>) -> SignupMethod,
 }
 
 /// A shared, thread-safe handle to a messenger backend.

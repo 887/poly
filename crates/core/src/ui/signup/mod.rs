@@ -30,6 +30,9 @@
 //! ## 150-line component rule
 //! Each `#[component]` fn body MUST stay under 150 lines.
 
+mod register_link;
+use register_link::RegisterLink;
+
 use crate::state::BatchedSignal;
 use crate::client_manager::{BackendHandle, ClientManager};
 use crate::i18n::t;
@@ -518,6 +521,7 @@ fn AddAccountNav(selected_slug: Option<String>) -> Element {
                 {
                     let is_active = selected_slug.as_deref() == Some(slug.as_str());
                     let class = if is_active { "signup-nav-item active" } else { "signup-nav-item" };
+                    let slug_for_link = slug.clone();
                     rsx! {
                         div {
                             class,
@@ -528,6 +532,13 @@ fn AddAccountNav(selected_slug: Option<String>) -> Element {
                             div { class: "signup-nav-item-text",
                                 span { class: "signup-nav-item-name", "{name}" }
                                 span { class: "signup-nav-item-desc", "{desc}" }
+                                // Register affordance — shown below the description when
+                                // the backend declares an External or InApp signup method.
+                                // NotSupported backends render nothing (demo, HN, etc.).
+                                RegisterLink {
+                                    backend_slug: slug_for_link,
+                                    server_url: None,
+                                }
                             }
                         }
                     }

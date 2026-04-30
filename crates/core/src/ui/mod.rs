@@ -614,6 +614,7 @@ fn register_native_signup_entries(client_manager: &mut BatchedSignal<ClientManag
         name_key: "plugin-stoat-signup-name",
         desc_key: "plugin-stoat-signup-desc",
         render: poly_stoat::signup::signup_render_fn,
+        signup_method: |_| poly_client::SignupMethod::NotSupported,
     }));
 
     // Register the Poly Server backend when compiled with the `server` feature.
@@ -625,6 +626,7 @@ fn register_native_signup_entries(client_manager: &mut BatchedSignal<ClientManag
         name_key: "plugin-poly-signup-name",
         desc_key: "plugin-poly-signup-desc",
         render: poly_server_client::signup::signup_render_fn,
+        signup_method: |_| poly_client::SignupMethod::NotSupported,
     }));
 }
 

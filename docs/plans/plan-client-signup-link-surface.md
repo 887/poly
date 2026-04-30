@@ -398,11 +398,11 @@ no new CSP / sandbox concerns introduced.
 
 ---
 
-## Phase D — UI: "Register" affordance on login screens
+## Phase D — UI: "Register" affordance on login screens — shipped in commit (see D.1/D.3/D.4)
 
 **Effort:** 1 day.
 
-- [ ] **D.1** Add `<RegisterLink backend_slug=… current_server_url=…>`
+- [x] **D.1** Add `<RegisterLink backend_slug=… current_server_url=…>`
       Dioxus component in a new file
       `crates/core/src/ui/signup/register_link.rs` (sibling of `mod.rs`).
       The component:
@@ -419,23 +419,30 @@ no new CSP / sandbox concerns introduced.
       - Returns `None` for `NotSupported`.
       Component body MUST stay under 150 lines.
       **Verify:** `wc -l crates/core/src/ui/signup/register_link.rs` < 200; `grep -c "data-testid" crates/core/src/ui/signup/register_link.rs` ≥ 1.
+      Also added `signup_method: fn(Option<&str>) -> SignupMethod` field to `SignupEntry`
+      in `client_manager.rs`; all existing entry instantiations updated with
+      `|_| SignupMethod::NotSupported` placeholder (Phase B will replace with real impls).
 - [ ] **D.2** Mount `<RegisterLink>` in every per-backend signup form's
       render fn (the `signup_render_fn` exported by each
       `clients/<backend>/src/signup.rs`). Position: below the primary
       submit button, inside a `<footer class="signup-footer">` div with
       a thin top border, using existing `.btn.btn-link` styling.
       **Verify:** `for c in discord matrix teams stoat lemmy forgejo github hackernews server-client; do grep -l "RegisterLink" clients/$c/src/signup.rs || echo "MISSING: $c"; done`.
-- [ ] **D.3** Mount `<RegisterLink>` on the `AddAccountNav` items in
+      NOTE: Blocked — `clients/<backend>/src/` is owned by concurrent Phase B agent.
+      Will be completed when Phase B lands its `signup_render_fn` changes.
+- [x] **D.3** Mount `<RegisterLink>` on the `AddAccountNav` items in
       `crates/core/src/ui/signup/mod.rs:494-554` so users browsing
       without having clicked a backend yet still see the affordance.
       Position: below the existing `signup-nav-item-desc` line, smaller
       font.
       **Verify:** `grep -n "RegisterLink" crates/core/src/ui/signup/mod.rs` shows ≥ 1 mount site.
-- [ ] **D.4** FTL strings for the link label resolved per-backend (key
+- [x] **D.4** FTL strings for the link label resolved per-backend (key
       added in Phase B.4); fallback to a core string
       `signup-register-link-generic = Register` if the plugin key is
-      missing (add to `crates/core/locales/en-US/main.ftl`).
-      **Verify:** `grep -n "signup-register-link-generic" crates/core/locales/en-US/main.ftl`.
+      missing (added to `locales/en/main.ftl`).
+      Keys added: `signup-register-link-prefix`, `signup-register-link-action`,
+      `signup-register-link-generic`. TODO(i18n) comment added for de/es/fr.
+      **Verify:** `grep -n "signup-register-link-generic" locales/en/main.ftl`.
 - [ ] **D.5** Visual smoke test in poly-web (Chromium MCP): open
       `/signup`, observe a Register link under each backend nav item.
       Click into `/signup/lemmy`, observe the Register link in the
@@ -444,6 +451,8 @@ no new CSP / sandbox concerns introduced.
       Click `/signup/demo`, observe NO Register link.
       **Verify:** dispatched via TEST_HARNESS.md haiku subagent;
       screenshots attached to PR.
+      NOTE: Will be possible after Phase B lands (currently all backends
+      return NotSupported, so no links render yet).
 
 **Acceptance:** every backend's login screen shows the link except
 demo; clicking it opens the right URL or navigates correctly; the

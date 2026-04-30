@@ -178,6 +178,7 @@ pub fn signup_entry_for_bundled_slug(slug: &str) -> Option<SignupEntry> {
             name_key: "plugin-discord-signup-name",
             desc_key: "plugin-discord-signup-desc",
             render: poly_discord::signup::signup_render_fn,
+            signup_method: |_| poly_client::SignupMethod::NotSupported,
         }),
         #[cfg(feature = "teams")]
         "teams" => Some(SignupEntry {
@@ -186,6 +187,7 @@ pub fn signup_entry_for_bundled_slug(slug: &str) -> Option<SignupEntry> {
             name_key: "plugin-teams-signup-name",
             desc_key: "plugin-teams-signup-desc",
             render: poly_teams::signup::signup_render_fn,
+            signup_method: |_| poly_client::SignupMethod::NotSupported,
         }),
         _ => None,
     }
