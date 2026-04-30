@@ -308,6 +308,111 @@ struct ResolvedChat {
     chat_name: Option<String>,
 }
 
+/// A typed representation of a single `persona_sources` row used by the
+/// deny-wins resolver and exposed for fuzz testing.
+///
+/// Field names match the SQLite column names in `persona_sources`.
+/// This struct is `pub` so `mcp/chat-mcp/fuzz` can import and derive
+/// `Arbitrary` on a mirror type without depending on the whole crate's
+/// internal query plumbing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PersonaSourceRow {
+    pub account_id: String,
+    /// Selector taxonomy: `"all"`, `"server"`, `"channel"`, `"dm"`, `"tag"`.
+    pub selector_kind: String,
+    /// The concrete ID (server/channel/dm id); `None` for `selector_kind = "all"`.
+    pub selector_value: Option<String>,
+    /// `true` = allow, `false` = deny.
+    pub include: bool,
+}
+
+/// Pure, synchronous deny-wins check: given a flat list of `PersonaSourceRow`s
+/// and a candidate `(account_id, chat_id)` pair, return `true` if the candidate
+/// is included under the deny-wins algorithm.
+///
+/// This is the fuzz-target entry point.  It implements a **subset** of the
+/// full `resolve_sources` algorithm — specifically the rules that can be
+/// evaluated without backend enumeration:
+///
+/// - `selector_kind = "channel"` or `"dm"` with `selector_value == chat_id`.
+/// - `selector_kind = "all"` (applies to every chat in the account).
+/// - `selector_kind = "server"` is treated as a wildcard match by the caller
+///   providing the channel's parent server id in `selector_value`.  Without a
+///   backend, the fuzz target supplies the server mapping directly by using
+///   `chat_id` as both channel and server id where needed.
+///
+/// Deny-wins: if ANY matching row has `include=false`, the candidate is
+/// denied regardless of allow rows.  Only if no deny matches AND at least
+/// one allow matches is the candidate included.
+///
+/// # Algorithm
+///
+/// 1. Filter rows to those whose `account_id` matches the candidate.
+/// 2. Check for any deny row whose selector matches the candidate chat.
+/// 3. If any deny matches → return `false`.
+/// 4. Check for any allow row whose selector matches → return `true`.
+/// 5. No matching rule → return `false` (default-deny).
+pub fn is_chat_included(
+    rows: &[PersonaSourceRow],
+    account_id: &str,
+    chat_id: &str,
+) -> bool {
+    let account_rows: Vec<&PersonaSourceRow> = rows
+        .iter()
+        .filter(|r| r.account_id == account_id)
+        .collect();
+
+    // Check denies first (deny-wins).
+    for row in &account_rows {
+        if row.include {
+            continue;
+        }
+        if selector_matches(row, chat_id) {
+            return false;
+        }
+    }
+
+    // Check allows.
+    for row in &account_rows {
+        if !row.include {
+            continue;
+        }
+        if selector_matches(row, chat_id) {
+            return true;
+        }
+    }
+
+    // Default-deny: no rule matched.
+    false
+}
+
+/// Returns `true` if `row`'s selector covers `chat_id`.
+///
+/// For `"server"` selectors the row's `selector_value` is compared against
+/// `chat_id` directly — the fuzz harness encodes "channel X is in server S"
+/// by using the server ID as the chat ID, which is sufficient for exercising
+/// the deny-wins logic without backend round-trips.
+fn selector_matches(row: &PersonaSourceRow, chat_id: &str) -> bool {
+    match row.selector_kind.as_str() {
+        "all" => true,
+        "channel" | "dm" => {
+            row.selector_value.as_deref() == Some(chat_id)
+        }
+        "server" => {
+            // In the fuzz context: treat a server selector as matching any
+            // chat whose id equals the server_value.  The real resolver
+            // expands server → channels via backend; here we approximate.
+            row.selector_value.as_deref() == Some(chat_id)
+        }
+        "tag" => {
+            // Tag selectors are unsupported (see context.rs warn! branch).
+            // Treat as non-matching for the purposes of the deny-wins check.
+            false
+        }
+        _ => false,
+    }
+}
+
 /// Resolve `persona_sources` rows for `slug` into a concrete list of
 /// `(account_id, chat_id)` pairs, honouring deny-wins precedence.
 ///

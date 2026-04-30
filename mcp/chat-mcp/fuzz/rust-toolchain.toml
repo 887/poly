@@ -1,0 +1,8 @@
+# cargo fuzz requires nightly to build the libfuzzer-sys instrumented binary.
+# This file is scoped to mcp/chat-mcp/fuzz/ only; the workspace itself still
+# builds on stable (see root Cargo.toml rust-version = "1.85").
+#
+# Mirrors the pattern in tools/lints/poly-lints/rust-toolchain.toml.
+[toolchain]
+channel = "nightly"
+components = ["rust-src", "llvm-tools-preview"]

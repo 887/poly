@@ -60,6 +60,10 @@ members = [
 # See `tools/lints/poly-lints/README.md` + `.github/workflows/lint-test.yml`.
 exclude = [
     "tools/lints/poly-lints",
+    # cargo fuzz requires nightly; excluded to preserve rust-version = "1.85"
+    # stable pin for the main workspace. Mirrors poly-lints exclusion pattern.
+    # See mcp/chat-mcp/fuzz/README.md for usage.
+    "mcp/chat-mcp/fuzz",
 ]
 
 [workspace.package]

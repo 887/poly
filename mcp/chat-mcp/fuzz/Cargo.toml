@@ -1,0 +1,51 @@
+# mcp/chat-mcp/fuzz — cargo-fuzz target for persona source resolution.
+#
+# This crate is DELIBERATELY EXCLUDED from the workspace root
+# (see root Cargo.toml → [workspace.exclude]). cargo fuzz requires a
+# nightly toolchain, and pulling this into the stable workspace would
+# force rust-version = "1.85" to be abandoned. The pattern mirrors
+# `tools/lints/poly-lints/` which is excluded for the same reason.
+#
+# Local usage:
+#   cargo install cargo-fuzz   # once
+#   cd mcp/chat-mcp/fuzz
+#   cargo +nightly fuzz run source_resolve
+#
+# See mcp/chat-mcp/fuzz/README.md for full invocation guide.
+
+[workspace]
+
+[package]
+name = "poly-chat-mcp-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[[bin]]
+name = "source_resolve"
+path = "fuzz_targets/source_resolve.rs"
+test = false
+doc = false
+bench = false
+
+# Seed corpus generator — run with:
+#   cargo +nightly run --bin gen_seeds
+[[bin]]
+name = "gen_seeds"
+path = "src/gen_seeds.rs"
+test = false
+doc = false
+bench = false
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
+poly-chat-mcp = { path = ".." }
+
+[profile.release]
+# Fuzzer needs debug symbols to symbolicate crashes.
+debug = "line-tables-only"
+opt-level = 3

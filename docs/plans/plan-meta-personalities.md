@@ -1,6 +1,6 @@
 # Plan — Meta-Personalities (Personas Above Accounts)
 
-## Status: 🚧 IN PROGRESS — Phases A-E + J shipped; Phases F-H pending
+## Status: 🚧 IN PROGRESS — Phases A-F + J shipped; Phases G-H pending
 
 > **Created:** 2026-04-29
 > **Depends on:** `plan-claude-desktop-agent.md` (shipped Phases A-F: memory, drafts, events, typing, style, catch-me-up)
@@ -847,25 +847,33 @@ Numbers update live. Click → expanded source view.
 
 ---
 
-### Phase F — Heartbeat scheduler
+### Phase F — Heartbeat scheduler (shipped)
 
-- [ ] **F.1** `crates/poly-host/src/persona_heartbeat.rs` — registry struct
-  + per-persona task spawn.
-- [ ] **F.2** Wall-clock-aligned `tokio::time::interval` based on
-  `last_run_at`.
-- [ ] **F.3** Heartbeat tick: build context bundle via `PersonaContextBuilder`,
-  pass through built-in summariser, emit `(notify, draft, fact)` records
-  per `proactivity` level.
-- [ ] **F.4** Built-in summariser — pure-function templating; emits one
-  notification per chat with N+ new messages, optionally a draft placeholder
-  for unanswered questions.
-- [ ] **F.5** Rate-limit check vs `persona_audit` rolling 1h window.
-- [ ] **F.6** Quiet-hours guard (22:00-08:00 local TZ) for outbound only.
-- [ ] **F.7** React to `meta_persona_set_heartbeat` calls — cancel + respawn.
-- [ ] **F.8** Integration test: start a persona with 60s heartbeat,
-  populate `test-discord` with 5 messages, verify draft placeholder appears.
+- [x] **F.1** `mcp/chat-mcp/src/persona/heartbeat.rs` — `HeartbeatRegistry`
+  struct + per-persona task spawn with oneshot cancellation.
+- [x] **F.2** Wall-clock-aligned `tokio::time::interval` based on
+  `last_run_at` (`compute_first_tick`); `MissedTickBehavior::Skip`.
+- [x] **F.3** Heartbeat tick: read persona row → build context bundle via
+  `PersonaContextBuilder::build` → summariser → emit per `proactivity` →
+  `record_persona_audit("heartbeat_run", …)` + `update_persona_last_run_at`.
+- [x] **F.4** `summarise(bundle)` — pure function; `Notification` per chat
+  with ≥1 messages, `DraftPlaceholder` for newest-msg unanswered question
+  heuristic (`?` in last 200 chars, author ≠ persona slug).
+- [x] **F.5** Rate-limit check: `count_persona_audit_since(slug, now-1h)`
+  vs `rate_limit_per_hour`; skips emission and writes `rate_limited` row.
+- [x] **F.6** `in_quiet_hours()` via `chrono::Local::now().hour()`;
+  outbound skipped 22:00–08:00, writes `quiet_hours_skipped` audit row.
+- [x] **F.7** Polling (option b): task re-reads persona row each tick, stops
+  when `enabled=0` or `heartbeat_interval_secs` cleared. `HeartbeatRegistry`
+  exposes `restart(slug, …)` for immediate reconfiguration when caller
+  wants it (e.g. after `meta_persona_set_heartbeat`). No IPC plumbing needed.
+- [x] **F.8** Integration test `mcp/chat-mcp/tests/persona_heartbeat_e2e.rs`:
+  `poly_test_discord` in-process, persona with `heartbeat_interval_secs=2`,
+  `proactivity=drafts-only`, channel 200 (3 seeded messages including `?`);
+  wait 3 s → assert ≥1 `heartbeat_run` row + ≥1 `draft_create` row + draft
+  body references the question message. Passes 3/3.
 
-**Effort:** 1.5 sessions.
+**Effort:** 1 session.
 
 ---
 

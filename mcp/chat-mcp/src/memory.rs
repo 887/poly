@@ -1222,6 +1222,67 @@ impl MemoryDb {
         collect_persona_audit(&mut stmt)
     }
 
+    /// Return all enabled personas that have a heartbeat interval configured.
+    ///
+    /// Used at host startup to seed the [`crate::persona::heartbeat::HeartbeatRegistry`].
+    /// Returns rows with the same shape as [`get_persona`].
+    pub fn list_personas_for_heartbeat(&self) -> Result<Vec<serde_json::Value>, MemoryError> {
+        let db = self.lock()?;
+        let mut stmt = db.prepare(
+            "SELECT slug,name,avatar_emoji,system_prompt,style_notes,
+                    heartbeat_interval_secs,proactivity,rate_limit_per_hour,
+                    created_at,updated_at,last_run_at,enabled
+             FROM personas
+             WHERE enabled=1 AND heartbeat_interval_secs IS NOT NULL
+             ORDER BY name"
+        )?;
+        let mut out = Vec::new();
+        while stmt.next()? == State::Row {
+            out.push(read_persona_row(&mut stmt)?);
+        }
+        Ok(out)
+    }
+
+    /// Count audit rows for `persona_slug` where `occurred_at > cutoff_iso8601`
+    /// and `action` is one of the rate-limited output actions.
+    ///
+    /// Used by the heartbeat rate-limit check (F.5).
+    pub fn count_persona_audit_since(
+        &self,
+        persona_slug: &str,
+        cutoff_iso8601: &str,
+    ) -> Result<i64, MemoryError> {
+        let db = self.lock()?;
+        let mut stmt = db.prepare(
+            "SELECT COUNT(*) FROM persona_audit
+             WHERE persona_slug=?1
+               AND occurred_at > ?2
+               AND action IN ('draft_create','notify','outbound_send')"
+        )?;
+        stmt.bind((1, persona_slug))?;
+        stmt.bind((2, cutoff_iso8601))?;
+        if stmt.next()? == State::Row {
+            Ok(stmt.read::<i64, _>(0)?)
+        } else {
+            Ok(0)
+        }
+    }
+
+    /// Update `last_run_at` for a persona to the current UTC time.
+    ///
+    /// Called at the end of every heartbeat tick, success or error,
+    /// so a broken persona doesn't burn cycles re-running immediately.
+    pub fn update_persona_last_run_at(&self, slug: &str) -> Result<(), MemoryError> {
+        let now = now_iso8601();
+        let db = self.lock()?;
+        let mut stmt = db.prepare(
+            "UPDATE personas SET last_run_at=?1 WHERE slug=?2"
+        )?;
+        stmt.bind((1, now.as_str()))?;
+        stmt.bind((2, slug))?;
+        drain(&mut stmt)
+    }
+
     /// Prune audit rows older than `cutoff_iso8601` across ALL personas.
     /// Intended to be called once per day from the poly-host scheduler.
     /// Returns the number of rows deleted.
