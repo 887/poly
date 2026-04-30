@@ -247,6 +247,7 @@ impl DiscordClient {
             reply_to: None,
             edited: m.edited_timestamp.is_some(),
             thread,
+            preview_image_url: None,
         }
     }
 
