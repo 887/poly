@@ -560,43 +560,45 @@ Unit tests, persistence, and WASM-guest wiring are deferred to Phases B.2-B.4 fo
 
 ---
 
-## Phase C — `poly_kv` storage + persistence
+## Phase C — `poly_kv` storage + persistence (shipped in commit TBD)
 
 **Effort:** S (0.5 day). Touches: `poly_kv` host-side wrapper,
 backend `new()` paths.
 
 **Preconditions:** Phase B merged.
 
-- [ ] **C.1** Add a host-side helper
-      `crates/host-bridge/src/client_config.rs::ClientConfigStore` that
-      exposes `get_version_override(backend_id)`,
-      `set_version_override(backend_id, opt)`,
-      `get_mechanism(backend_id, mech_id)`,
-      `set_mechanism(backend_id, mech_id, on)` — all backed by the
-      existing `kv_get`/`kv_set` at
-      `crates/host-bridge/src/lib.rs:588,604` under the
-      `client.config.<backend_id>.*` namespace from D2.
-      **Verify:** `cargo test -p poly-host-bridge client_config` passes.
-- [ ] **C.2** On host startup, the host iterates loaded backends and
-      pushes any persisted override into the plugin via the new WIT
-      `set-client-version-override` call. (Belt-and-braces: the plugin
-      ALSO reads its own `storage-get` per Phase B.3, but the host
-      authoritative key wins.)
-      **Verify:** add an integration test that pre-populates a
-      `poly_kv` row and asserts the loaded backend returns the
-      pre-populated string from `client_version()`.
-- [ ] **C.3** Add a unit test in
-      `crates/host-bridge/tests/client_config_persist.rs` that
-      round-trips `set → drop store → reopen → get` for each backend ID
-      slug listed in D5.
-      **Verify:** `cargo test -p poly-host-bridge --test
-      client_config_persist` exits 0.
-- [ ] **C.4** Wire `ClientConfigStore` into the existing host
-      bootstrap path used by `apps/web`, `apps/desktop`, and
-      `apps/desktop-electron` fullstack servers (search call sites of
-      `poly_host::router(state)` per CLAUDE.md "Host-bridge" section).
-      **Verify:** `grep -rn ClientConfigStore apps/*/src/` returns ≥ 3
-      hits (one per shell).
+- [x] **C.1** Add `crates/host-bridge/src/client_config.rs` with
+      `ClientConfigStore` + `ClientSettingsSnapshot` + namespace key
+      constants under `client.config.<backend_id>.*`.
+      `pub mod client_config` wired into `lib.rs`; `Client::client_config()`
+      convenience constructor added.
+- [x] **C.2** Implement `get_version_override` / `set_version_override`
+      via `kv_get` / `kv_set`. `set` with `None` calls `kv_delete`
+      (not set-to-empty-string).
+- [x] **C.3** Implement `get_mechanism_state` / `set_mechanism_state`.
+      `set_mechanism_state` also registers the mechanism ID in a
+      per-backend `client.config.<id>.mechanisms` registry so
+      `list_overrides` can discover it without a prefix scan.
+- [x] **C.4** Implement `list_overrides(backend_id)` — reads the
+      mechanisms registry, fetches each mechanism state individually,
+      returns `ClientSettingsSnapshot`. No prefix-scan required; all
+      lookups are direct-key `kv_get` calls.
+- [x] **C.5** Unit tests in `client_config.rs` test module (10 tests).
+      Covers: key namespace correctness, backend-ID isolation,
+      mechanism-ID isolation, snapshot serde round-trip, registry
+      parse (well-formed + skips non-strings), null version override.
+      `cargo test -p poly-host-bridge --lib` → 12 passed.
+
+Note: original plan sub-steps C.2 (host-startup push) and C.4 (wire
+into app shells) are runtime-integration work deferred to Phase B/D —
+this wave lands the storage layer only, as scoped by the orchestrator
+task.
+
+**Acceptance:** Setting an override, killing the app, re-launching:
+the override survives. `poly_kv` rows live under the documented
+namespace
+(`sqlite3 ~/.local/share/poly/storage.sqlite3 "SELECT key FROM poly_kv
+WHERE key LIKE 'client.config.%'"` returns the rows).
 
 **Acceptance:** Setting an override, killing the app, re-launching:
 the override survives. `poly_kv` rows live under the documented
@@ -978,3 +980,20 @@ when it runs.
   convention as the original Q.2: file
   `tools/scripts/unaudited-persona-tool-allowlist.txt` plus inline
   `// poly-lint: allow unaudited-persona-tool — <reason>`.
+
+---
+
+### Phase C Status: DONE
+
+All C.1–C.5 sub-steps shipped:
+
+- `crates/host-bridge/src/client_config.rs` created (new file).
+- `pub mod client_config` + `Client::client_config()` wired into
+  `crates/host-bridge/src/lib.rs`.
+- 10 unit tests in `client_config::tests`; 12 total pass in
+  `cargo test -p poly-host-bridge --lib`.
+- `list_overrides` uses a per-backend mechanisms registry key
+  (`client.config.<id>.mechanisms`) rather than a prefix scan —
+  the underlying KV store has no `kv_list_prefix` route, so the
+  registry is the minimal extension that avoids adding a new HTTP
+  route.

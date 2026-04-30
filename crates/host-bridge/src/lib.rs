@@ -39,6 +39,7 @@
 
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
+pub mod client_config;
 pub mod http;
 
 use serde::{Deserialize, Serialize};
@@ -714,6 +715,16 @@ impl Client {
                 resp.err.unwrap_or_else(|| "unknown backend error".into()),
             ))
         }
+    }
+
+    /// Return a [`client_config::ClientConfigStore`] backed by this client.
+    ///
+    /// The store shares the same HTTP client and bridge URL as `self`, so
+    /// there is no extra connection overhead. Callers that already hold a
+    /// [`Client`] should use this rather than constructing a new store.
+    #[must_use]
+    pub fn client_config(&self) -> client_config::ClientConfigStore {
+        client_config::ClientConfigStore::from_client(self.clone())
     }
 
     /// Convenience: run an [`HostCall::ExecCommand`] and decode the
