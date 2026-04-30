@@ -102,8 +102,12 @@ impl IncludeState {
 
 /// Parse a persona summary list from the MCP result JSON.
 pub fn parse_persona_list(json: &serde_json::Value) -> Vec<PersonaSummary> {
-    json.get("personas")
-        .and_then(|v| v.as_array())
+    // `meta_persona_list` returns a bare JSON array of persona rows. Older
+    // tool versions wrapped them as `{"personas": [...]}` — accept both.
+    let arr_opt = json
+        .as_array()
+        .or_else(|| json.get("personas").and_then(|v| v.as_array()));
+    arr_opt
         .map(|arr| {
             arr.iter()
                 .filter_map(|v| serde_json::from_value(v.clone()).ok())

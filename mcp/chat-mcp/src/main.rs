@@ -30,6 +30,7 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::Json;
+use tower_http::cors::CorsLayer;
 use clap::Parser;
 use poly_client::MessageContent;
 use serde_json::{Value, json};
@@ -94,7 +95,10 @@ async fn run_http(port: u16) -> anyhow::Result<()> {
     let app = axum::Router::new()
         .route("/mcp", post(handle_mcp_http))
         .route("/health", get(handle_health))
-        .with_state(state);
+        .with_state(state)
+        // Permissive CORS so the WASM UI (poly-web on :3000) and any
+        // other local client can POST JSON to /mcp without preflight 405s.
+        .layer(CorsLayer::very_permissive());
 
     let addr = format!("127.0.0.1:{port}");
     tracing::info!("poly-chat-mcp listening on http://{addr}");

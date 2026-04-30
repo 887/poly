@@ -77,7 +77,10 @@ pub async fn call_persona_mcp(tool: &str, args: Value) -> Result<Value, String> 
 
         let opts = RequestInit::new();
         opts.set_method("POST");
-        opts.set_mode(RequestMode::SameOrigin);
+        // poly-chat-mcp listens on its own port (3010 by default), so the
+        // request is cross-origin from poly-web (:3000). The MCP server's
+        // CorsLayer::very_permissive() handles the preflight.
+        opts.set_mode(RequestMode::Cors);
         opts.set_body(&JsValue::from_str(&body_str));
 
         let request = Request::new_with_str_and_init(&url, &opts)
