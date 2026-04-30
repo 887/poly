@@ -1903,6 +1903,33 @@ impl ClientBackend for MatrixClient {
             other => Err(ClientError::NotFound(format!("unknown message action: {other}"))),
         }
     }
+
+    fn get_signup_method(&self, server_url: Option<&str>) -> SignupMethod {
+        let base = server_url.unwrap_or("https://matrix.org");
+        SignupMethod::External(format!("{}/_matrix/client/v3/register", base.trim_end_matches('/')))
+    }
+
+    fn client_version(&self) -> String {
+        self.version_override
+            .lock()
+            .ok()
+            .and_then(|g| g.clone())
+            .unwrap_or_else(|| http::DEFAULT_CLIENT_VERSION.to_string())
+    }
+
+    async fn set_client_version_override(
+        &self,
+        version_override: Option<String>,
+    ) -> ClientResult<()> {
+        let new_ua = version_override
+            .clone()
+            .unwrap_or_else(|| http::DEFAULT_CLIENT_VERSION.to_string());
+        if let Ok(mut lock) = self.version_override.lock() {
+            *lock = version_override;
+        }
+        self.http.set_user_agent(new_ua);
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -2071,32 +2098,5 @@ mod tests {
             ftl.contains("plugin-matrix-sidebar-spaces-section"),
             "FTL must contain the sidebar section header key"
         );
-    }
-
-    fn get_signup_method(&self, server_url: Option<&str>) -> SignupMethod {
-        let base = server_url.unwrap_or("https://matrix.org");
-        SignupMethod::External(format!("{}/_matrix/client/v3/register", base.trim_end_matches('/')))
-    }
-
-    fn client_version(&self) -> String {
-        self.version_override
-            .lock()
-            .ok()
-            .and_then(|g| g.clone())
-            .unwrap_or_else(|| http::DEFAULT_CLIENT_VERSION.to_string())
-    }
-
-    async fn set_client_version_override(
-        &self,
-        version_override: Option<String>,
-    ) -> ClientResult<()> {
-        let new_ua = version_override
-            .clone()
-            .unwrap_or_else(|| http::DEFAULT_CLIENT_VERSION.to_string());
-        if let Ok(mut lock) = self.version_override.lock() {
-            *lock = version_override;
-        }
-        self.http.set_user_agent(new_ua);
-        Ok(())
     }
 }

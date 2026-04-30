@@ -1,23 +1,11 @@
 //! User-Agent override test for `poly-forgejo`.
 //!
-//! Phase G.1 of `docs/plans/plan-client-version-override-and-sandbox.md`.
+//! Phase G.1 / Phase B Fix-up of `docs/plans/plan-client-version-override-and-sandbox.md`.
 //!
-//! ## Wire-level assertion: DEFERRED
-//!
-//! `ForgejoApi` stores `user_agent` by value (`String`, not `Arc<Mutex<String>>`)
-//! so `set_user_agent` requires `&mut self`.  `ForgejoClient::set_client_version_override`
-//! stores the override in `self.version_override` (so `client_version()` returns it)
-//! but does NOT propagate it into the live `ForgejoApi`'s UA field.  A follow-up
-//! migration to `Arc<Mutex<String>>` will complete the wire-up; see the comment
-//! in `clients/forgejo/src/lib.rs::set_client_version_override`.
-//!
-//! Until then this file asserts:
-//!   1. `client_version()` returns the override string.
-//!   2. `client_version()` returns the default after clearing.
-//!   3. The mock server is reachable (authenticate succeeds).
-//!
-//! The wire-level `User-Agent` assertion is left as a `// TODO` and will be
-//! promoted to a hard assertion when the wire-up lands.
+//! `ForgejoApi` now stores `user_agent` behind `Arc<Mutex<String>>` so
+//! `set_user_agent` works via `&self`. `ForgejoClient::set_client_version_override`
+//! propagates into the live `ForgejoApi` UA field via `self.api.set_user_agent(ua)`.
+//! Every `get()` call in `ForgejoApi` reads the lock and injects the header.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -53,22 +41,37 @@ async fn get_test_token(base_url: &str, username: &str) -> String {
     body["token"].as_str().unwrap().to_string()
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
-/// `client_version()` returns the override string after `set_client_version_override`.
-///
-/// Wire-level assertion deferred — see module doc comment.
-#[tokio::test]
-async fn test_version_override_client_version() {
-    let base_url = start_server().await;
-    let token = get_test_token(&base_url, "otter").await;
-    let mut client = ForgejoClient::new(&base_url);
+async fn authenticated_client(base_url: &str) -> ForgejoClient {
+    let token = get_test_token(base_url, "otter").await;
+    let mut client = ForgejoClient::new(base_url);
     client
         .authenticate(AuthCredentials::Token(token))
         .await
         .expect("authenticate");
+    client
+}
+
+async fn captured_headers(base_url: &str) -> Vec<serde_json::Value> {
+    let body: serde_json::Value = reqwest::Client::new()
+        .get(format!("{base_url}/test/inspect/last-headers"))
+        .send()
+        .await
+        .expect("GET /test/inspect/last-headers")
+        .json()
+        .await
+        .expect("parse inspect response");
+    body.as_array().expect("array").clone()
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+/// Override reaches the wire User-Agent header.
+#[tokio::test]
+async fn test_version_override_reaches_wire() {
+    let base_url = start_server().await;
+    let client = authenticated_client(&base_url).await;
 
     client
         .set_client_version_override(Some("test-version/1.2.3".to_string()))
@@ -81,22 +84,31 @@ async fn test_version_override_client_version() {
         "client_version() must return the override string"
     );
 
-    // TODO(Phase G wire-up): When ForgejoApi is migrated to Arc<Mutex<String>>,
-    // add a wire assertion here using /test/inspect/last-headers.
+    // Trigger a request — get_servers calls list_user_repos which goes through get().
+    let _ = client.get_servers().await;
+    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+
+    let entries = captured_headers(&base_url).await;
+    let found = entries.iter().any(|e| {
+        e["headers"]["user-agent"]
+            .as_str()
+            .map(|ua| ua == "test-version/1.2.3")
+            .unwrap_or(false)
+    });
+
+    assert!(
+        found,
+        "Expected User-Agent: test-version/1.2.3 on wire. Got: {entries:#?}"
+    );
 }
 
-/// After clearing, `client_version()` returns the default.
+/// After clearing, `client_version()` returns the default and the wire UA is restored.
 #[tokio::test]
 async fn test_version_override_clear_restores_default() {
     const DEFAULT_UA: &str = "poly-forgejo/0.0.0";
 
     let base_url = start_server().await;
-    let token = get_test_token(&base_url, "otter").await;
-    let mut client = ForgejoClient::new(&base_url);
-    client
-        .authenticate(AuthCredentials::Token(token))
-        .await
-        .expect("authenticate");
+    let client = authenticated_client(&base_url).await;
 
     client
         .set_client_version_override(Some("test-version/1.2.3".to_string()))
@@ -111,5 +123,21 @@ async fn test_version_override_clear_restores_default() {
         client.client_version(),
         DEFAULT_UA,
         "client_version() must return the default after clearing"
+    );
+
+    let _ = client.get_servers().await;
+    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+
+    let entries = captured_headers(&base_url).await;
+    let found = entries.iter().any(|e| {
+        e["headers"]["user-agent"]
+            .as_str()
+            .map(|ua| ua == DEFAULT_UA)
+            .unwrap_or(false)
+    });
+
+    assert!(
+        found,
+        "Expected default User-Agent after clearing override. Got: {entries:#?}"
     );
 }

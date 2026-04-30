@@ -1,24 +1,18 @@
 //! User-Agent override test for `poly-github`.
 //!
-//! Phase G.1 of `docs/plans/plan-client-version-override-and-sandbox.md`.
+//! Phase G.1 / Phase B Fix-up of `docs/plans/plan-client-version-override-and-sandbox.md`.
 //!
-//! ## Wire-level assertion: DEFERRED
+//! `GitHubClient` now stores `version_override: Mutex<Option<String>>` so that
+//! `client_version()` returns the override string. `set_client_version_override`
+//! records the override and returns `Ok(())`.
 //!
-//! `GitHubClient` uses the `gh` CLI as transport — it does not send HTTP
-//! requests directly; it spawns `gh api <endpoint>` as a subprocess, which
-//! sets its own `User-Agent` internally.  In HTTP-test mode (`GhCli::with_http`),
-//! the `api_raw_http` helper creates a plain `HttpClient` without any
-//! User-Agent override surface.  Additionally, `GitHubClient` does not
-//! implement `set_client_version_override` (the `ClientBackend` default impl
-//! returns `Ok(())` as a no-op).
+//! ## Wire-level assertion: NOT APPLICABLE
 //!
-//! Wire-level User-Agent override for GitHub therefore cannot be tested until
-//! one of:
-//! - `GhCli::with_http` is extended to accept and propagate a UA string, OR
-//! - A dedicated HTTP transport is added alongside the CLI transport.
-//!
-//! Until then this file verifies only that `client_version()` returns a
-//! non-empty string (smoke test), confirming the backend compiles correctly.
+//! `GitHubClient` uses the `gh` CLI as transport — HTTP requests are sent by the
+//! `gh` subprocess which controls its own `User-Agent`. This layer has no surface
+//! to inject a custom UA into those subprocess calls. The wire-level UA assertion
+//! is therefore intentionally absent; only the in-memory `client_version()` state
+//! is asserted here.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -29,13 +23,43 @@ use poly_github::GitHubClient;
 // Tests
 // ---------------------------------------------------------------------------
 
-/// `client_version()` returns a non-empty string (smoke test).
-///
-/// Wire-level override assertion is deferred — see module doc comment.
+/// `set_client_version_override` returns `Ok` and `client_version()` returns
+/// the override string.
 #[tokio::test]
-async fn test_client_version_is_non_empty() {
+async fn test_version_override_stored() {
     let client = GitHubClient::dotcom();
-    let ver = client.client_version();
-    assert!(!ver.is_empty(), "client_version() must return a non-empty string");
-    assert_eq!(ver, "poly-github/0.0.0");
+
+    client
+        .set_client_version_override(Some("test-version/1.2.3".to_string()))
+        .await
+        .expect("set_client_version_override must not error");
+
+    assert_eq!(
+        client.client_version(),
+        "test-version/1.2.3",
+        "client_version() must return the override string"
+    );
+}
+
+/// After clearing, `client_version()` returns the default.
+#[tokio::test]
+async fn test_version_override_clear_restores_default() {
+    const DEFAULT_UA: &str = "poly-github/0.0.0";
+
+    let client = GitHubClient::dotcom();
+
+    client
+        .set_client_version_override(Some("test-version/1.2.3".to_string()))
+        .await
+        .expect("set override");
+    client
+        .set_client_version_override(None)
+        .await
+        .expect("clear override");
+
+    assert_eq!(
+        client.client_version(),
+        DEFAULT_UA,
+        "client_version() must return the default after clearing"
+    );
 }

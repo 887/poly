@@ -913,12 +913,7 @@ impl ClientBackend for ForgejoClient {
         if let Ok(mut lock) = self.version_override.lock() {
             *lock = version_override;
         }
-        // ForgejoApi stores user_agent by value (not Arc<Mutex>); wiring the
-        // override into the live http client requires &mut self on ForgejoApi.
-        // The version is stored in self.version_override for client_version() to
-        // return; full UA injection on ForgejoApi will be wired in a follow-up
-        // when ForgejoApi is migrated to Arc<Mutex<String>>.
-        let _ = new_ua;
+        self.api.set_user_agent(new_ua);
         Ok(())
     }
 }

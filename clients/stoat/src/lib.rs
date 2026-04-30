@@ -1747,6 +1747,33 @@ impl ClientBackend for StoatClient {
     // TODO(stoat): implement invite_user_to_server — create invite via
     // POST /channels/{channel_id}/invites, then send the link via DM.
     // Trait default (NotSupported) is inherited.
+
+    fn get_signup_method(&self, server_url: Option<&str>) -> SignupMethod {
+        let base = server_url.unwrap_or("https://app.stoat.chat");
+        SignupMethod::External(base.trim_end_matches('/').to_string())
+    }
+
+    fn client_version(&self) -> String {
+        self.version_override
+            .lock()
+            .ok()
+            .and_then(|g| g.clone())
+            .unwrap_or_else(|| http::DEFAULT_CLIENT_VERSION.to_string())
+    }
+
+    async fn set_client_version_override(
+        &self,
+        version_override: Option<String>,
+    ) -> ClientResult<()> {
+        let new_ua = version_override
+            .clone()
+            .unwrap_or_else(|| http::DEFAULT_CLIENT_VERSION.to_string());
+        if let Ok(mut lock) = self.version_override.lock() {
+            *lock = version_override;
+        }
+        self.http.set_user_agent(new_ua);
+        Ok(())
+    }
 }
 
 #[cfg(all(feature = "native", not(target_arch = "wasm32")))]
@@ -2262,33 +2289,6 @@ mod tests {
         assert_eq!(user.display_name, "Otter Pal");
         assert_eq!(user.backend, BackendType::from("stoat"));
 
-        Ok(())
-    }
-
-    fn get_signup_method(&self, server_url: Option<&str>) -> SignupMethod {
-        let base = server_url.unwrap_or("https://app.stoat.chat");
-        SignupMethod::External(base.trim_end_matches('/').to_string())
-    }
-
-    fn client_version(&self) -> String {
-        self.version_override
-            .lock()
-            .ok()
-            .and_then(|g| g.clone())
-            .unwrap_or_else(|| http::DEFAULT_CLIENT_VERSION.to_string())
-    }
-
-    async fn set_client_version_override(
-        &self,
-        version_override: Option<String>,
-    ) -> ClientResult<()> {
-        let new_ua = version_override
-            .clone()
-            .unwrap_or_else(|| http::DEFAULT_CLIENT_VERSION.to_string());
-        if let Ok(mut lock) = self.version_override.lock() {
-            *lock = version_override;
-        }
-        self.http.set_user_agent(new_ua);
         Ok(())
     }
 }

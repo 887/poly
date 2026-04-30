@@ -112,8 +112,7 @@ impl DiscordHttpClient {
 
     async fn get<T: serde::de::DeserializeOwned>(&self, path: &str) -> Result<T, ClientError> {
         let resp = self
-            .http
-            .get(self.api_url(path))
+            .apply_version_headers(self.http.get(self.api_url(path)))
             .header("Authorization", self.token_header())
             .send()
             .await
@@ -138,8 +137,7 @@ impl DiscordHttpClient {
         body: &B,
     ) -> Result<T, ClientError> {
         let resp = self
-            .http
-            .post(self.api_url(path))
+            .apply_version_headers(self.http.post(self.api_url(path)))
             .header("Authorization", self.token_header())
             .json(body)
             .send()
@@ -161,8 +159,7 @@ impl DiscordHttpClient {
             token: String,
         }
         let resp = self
-            .http
-            .post(self.api_url("/api/v10/auth/login"))
+            .apply_version_headers(self.http.post(self.api_url("/api/v10/auth/login")))
             .json(&serde_json::json!({ "login": login, "password": password }))
             .send()
             .await
@@ -277,8 +274,7 @@ impl DiscordHttpClient {
     ) -> Result<DiscordGuild, ClientError> {
         let path = format!("/api/v10/guilds/{guild_id}");
         let resp = self
-            .http
-            .patch(self.api_url(&path))
+            .apply_version_headers(self.http.patch(self.api_url(&path)))
             .header("Authorization", self.token_header())
             .json(&body)
             .send()
@@ -303,8 +299,7 @@ impl DiscordHttpClient {
     pub async fn trigger_typing(&self, channel_id: &str) -> Result<(), ClientError> {
         let path = format!("/api/v10/channels/{channel_id}/typing");
         let resp = self
-            .http
-            .post(self.api_url(&path))
+            .apply_version_headers(self.http.post(self.api_url(&path)))
             .header("Authorization", self.token_header())
             .send()
             .await
@@ -359,8 +354,7 @@ impl DiscordHttpClient {
     ) -> Result<(), ClientError> {
         let path = format!("/api/v10/guilds/{guild_id}/members/{user_id}");
         let mut req = self
-            .http
-            .delete(self.api_url(&path))
+            .apply_version_headers(self.http.delete(self.api_url(&path)))
             .header("Authorization", self.token_header());
         if let Some(r) = reason {
             req = req.header("X-Audit-Log-Reason", r);
@@ -391,8 +385,7 @@ impl DiscordHttpClient {
             body["delete_message_seconds"] = serde_json::json!(secs.min(604800));
         }
         let mut req = self
-            .http
-            .put(self.api_url(&path))
+            .apply_version_headers(self.http.put(self.api_url(&path)))
             .header("Authorization", self.token_header())
             .json(&body);
         if let Some(r) = reason {
@@ -417,8 +410,7 @@ impl DiscordHttpClient {
     ) -> Result<(), ClientError> {
         let path = format!("/api/v10/guilds/{guild_id}/bans/{user_id}");
         let resp = self
-            .http
-            .delete(self.api_url(&path))
+            .apply_version_headers(self.http.delete(self.api_url(&path)))
             .header("Authorization", self.token_header())
             .send()
             .await
@@ -448,8 +440,7 @@ impl DiscordHttpClient {
         let path = format!("/api/v10/guilds/{guild_id}/members/{user_id}");
         let body = serde_json::json!({ "communication_disabled_until": until_iso8601 });
         let resp = self
-            .http
-            .patch(self.api_url(&path))
+            .apply_version_headers(self.http.patch(self.api_url(&path)))
             .header("Authorization", self.token_header())
             .json(&body)
             .send()
@@ -475,8 +466,7 @@ impl DiscordHttpClient {
     ) -> Result<(), ClientError> {
         let path = format!("/api/v10/channels/{channel_id}/messages/{message_id}");
         let resp = self
-            .http
-            .delete(self.api_url(&path))
+            .apply_version_headers(self.http.delete(self.api_url(&path)))
             .header("Authorization", self.token_header())
             .send()
             .await
@@ -502,8 +492,7 @@ impl DiscordHttpClient {
     ) -> Result<DiscordChannel, ClientError> {
         let path = format!("/api/v10/channels/{channel_id}");
         let resp = self
-            .http
-            .patch(self.api_url(&path))
+            .apply_version_headers(self.http.patch(self.api_url(&path)))
             .header("Authorization", self.token_header())
             .json(&body)
             .send()
@@ -532,8 +521,7 @@ impl DiscordHttpClient {
     ) -> Result<(), ClientError> {
         let path = format!("/api/v10/guilds/{guild_id}/channels");
         let resp = self
-            .http
-            .patch(self.api_url(&path))
+            .apply_version_headers(self.http.patch(self.api_url(&path)))
             .header("Authorization", self.token_header())
             .json(ordering)
             .send()
@@ -582,8 +570,7 @@ impl DiscordHttpClient {
         let path = format!("/api/v10/users/@me/relationships/{user_id}");
         let body = serde_json::json!({ "type": relationship_type });
         let resp = self
-            .http
-            .put(self.api_url(&path))
+            .apply_version_headers(self.http.put(self.api_url(&path)))
             .header("Authorization", self.token_header())
             .json(&body)
             .send()
@@ -602,8 +589,7 @@ impl DiscordHttpClient {
     pub async fn delete_relationship(&self, user_id: &str) -> Result<(), ClientError> {
         let path = format!("/api/v10/users/@me/relationships/{user_id}");
         let resp = self
-            .http
-            .delete(self.api_url(&path))
+            .apply_version_headers(self.http.delete(self.api_url(&path)))
             .header("Authorization", self.token_header())
             .send()
             .await
@@ -623,8 +609,7 @@ impl DiscordHttpClient {
         let path = format!("/api/v10/users/@me/notes/{user_id}");
         let body = serde_json::json!({ "note": note });
         let resp = self
-            .http
-            .put(self.api_url(&path))
+            .apply_version_headers(self.http.put(self.api_url(&path)))
             .header("Authorization", self.token_header())
             .json(&body)
             .send()
@@ -645,8 +630,7 @@ impl DiscordHttpClient {
     pub async fn delete_channel(&self, channel_id: &str) -> Result<(), ClientError> {
         let path = format!("/api/v10/channels/{channel_id}");
         let resp = self
-            .http
-            .delete(self.api_url(&path))
+            .apply_version_headers(self.http.delete(self.api_url(&path)))
             .header("Authorization", self.token_header())
             .send()
             .await
@@ -669,8 +653,7 @@ impl DiscordHttpClient {
     ) -> Result<(), ClientError> {
         let path = format!("/api/v10/channels/{channel_id}/recipients/{user_id}");
         let resp = self
-            .http
-            .put(self.api_url(&path))
+            .apply_version_headers(self.http.put(self.api_url(&path)))
             .header("Authorization", self.token_header())
             .json(&serde_json::json!({}))
             .send()
@@ -701,8 +684,7 @@ impl DiscordHttpClient {
             "unique": true,
         });
         let resp = self
-            .http
-            .post(self.api_url(&path))
+            .apply_version_headers(self.http.post(self.api_url(&path)))
             .header("Authorization", self.token_header())
             .json(&body)
             .send()
@@ -730,8 +712,7 @@ impl DiscordHttpClient {
         let path = "/api/v10/users/@me/channels";
         let body = serde_json::json!({ "recipient_id": user_id });
         let resp = self
-            .http
-            .post(self.api_url(path))
+            .apply_version_headers(self.http.post(self.api_url(path)))
             .header("Authorization", self.token_header())
             .json(&body)
             .send()

@@ -5,6 +5,7 @@
 //! that the native shell exposes.
 
 use poly_client::{ClientError, ClientResult};
+use std::sync::{Arc, Mutex};
 
 /// Default User-Agent for Forgejo API requests.
 pub const DEFAULT_CLIENT_VERSION: &str = "poly-forgejo/0.0.0";
@@ -22,7 +23,8 @@ pub struct ForgejoApi {
     base_url: String,
     http: HttpClient,
     token: Option<String>,
-    user_agent: String,
+    /// Interior-mutable User-Agent so `set_user_agent` works via `&self`.
+    user_agent: Arc<Mutex<String>>,
 }
 
 impl ForgejoApi {
@@ -36,18 +38,28 @@ impl ForgejoApi {
             base_url: url,
             http: HttpClient::new(),
             token: None,
-            user_agent: DEFAULT_CLIENT_VERSION.to_string(),
+            user_agent: Arc::new(Mutex::new(DEFAULT_CLIENT_VERSION.to_string())),
         }
     }
 
-    /// Update the User-Agent string.
-    pub fn set_user_agent(&mut self, ua: String) {
-        self.user_agent = ua;
+    /// Update the User-Agent string (interior-mutable — callable via `&self`).
+    pub fn set_user_agent(&self, ua: String) {
+        if let Ok(mut lock) = self.user_agent.lock() {
+            *lock = ua;
+        }
     }
 
     /// The current User-Agent string.
-    pub fn user_agent(&self) -> &str {
-        &self.user_agent
+    pub fn user_agent(&self) -> String {
+        self.user_agent
+            .lock()
+            .ok()
+            .map(|g| g.clone())
+            .unwrap_or_else(|| DEFAULT_CLIENT_VERSION.to_string())
+    }
+
+    fn ua(&self) -> String {
+        self.user_agent()
     }
 
     /// Store a personal access token for authenticated requests.
@@ -73,7 +85,7 @@ impl ForgejoApi {
     /// Send an authenticated GET request and deserialize the JSON body as `T`.
     async fn get<T: DeserializeOwned>(&self, path: &str) -> ClientResult<T> {
         let url = self.url(path);
-        let mut req = self.http.get(url).header("User-Agent", self.user_agent.clone());
+        let mut req = self.http.get(url).header("User-Agent", self.ua());
         if let Some(token) = &self.token {
             req = req.header("Authorization", format!("token {token}"));
         }

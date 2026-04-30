@@ -1,27 +1,11 @@
 //! User-Agent override test for `poly-discord`.
 //!
-//! Phase G.1 of `docs/plans/plan-client-version-override-and-sandbox.md`.
+//! Phase G.1 / Phase B Fix-up of `docs/plans/plan-client-version-override-and-sandbox.md`.
 //!
-//! ## Wire-level assertion: DEFERRED
-//!
-//! `DiscordHttpClient` has an `apply_version_headers()` helper that would add
-//! `User-Agent` + `X-Super-Properties` per-request, but that helper is never
-//! invoked from the actual `get()` / `post_json()` request methods. As a result,
-//! `set_client_version_override` stores the override (so `client_version()` is
-//! correct) but the value does not reach the wire.
-//!
-//! Until `DiscordHttpClient::get` / `post_json` are updated to call
-//! `apply_version_headers`, the wire assertion stays deferred.
-//!
-//! This file asserts:
-//!   1. `set_client_version_override(Some(_))` does not error.
-//!   2. `client_version()` returns the override string.
-//!   3. `client_version()` returns the default after clearing.
-//!   4. The mock server is reachable (authenticate succeeds).
-//!
-//! The wire-level `User-Agent` assertion (including `X-Super-Properties`) is
-//! left as a `// TODO` and will be promoted to a hard assertion when the
-//! wire-up lands in `clients/discord/src/http.rs`.
+//! Verifies that `set_client_version_override` propagates the override string
+//! to the wire `User-Agent` header on every outbound request.
+//! `apply_version_headers()` is now called from all request methods in
+//! `DiscordHttpClient` — both `get()` / `post_json()` and the ad-hoc builders.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -75,18 +59,27 @@ impl TestServer {
             .expect("parse token response");
         resp["token"].as_str().expect("token field").to_string()
     }
+
+    async fn captured_headers(&self) -> Vec<serde_json::Value> {
+        let body: serde_json::Value = reqwest::Client::new()
+            .get(format!("{}/test/inspect/last-headers", self.base_url))
+            .send()
+            .await
+            .expect("GET /test/inspect/last-headers")
+            .json()
+            .await
+            .expect("parse inspect response");
+        body.as_array().expect("array").clone()
+    }
 }
 
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
-/// `set_client_version_override` succeeds and `client_version()` returns the
-/// override string.
-///
-/// Wire-level assertion deferred — see module doc comment.
+/// Override reaches the wire User-Agent header.
 #[tokio::test]
-async fn test_version_override_client_version() {
+async fn test_version_override_reaches_wire() {
     let srv = TestServer::start().await;
     let token = srv.token_for("koala").await;
     let mut client = DiscordClient::with_base_url(srv.base_url.clone());
@@ -106,9 +99,22 @@ async fn test_version_override_client_version() {
         "client_version() must return the override string"
     );
 
-    // TODO(Phase G wire-up): When DiscordHttpClient::get/post_json call
-    // apply_version_headers(), add wire assertions using /test/inspect/last-headers.
-    // Discord-specific: also assert X-Super-Properties alongside User-Agent.
+    // Trigger a request to the mock server.
+    let _ = client.get_servers().await;
+    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+
+    let entries = srv.captured_headers().await;
+    let found = entries.iter().any(|e| {
+        e["headers"]["user-agent"]
+            .as_str()
+            .map(|ua| ua == "test-version/1.2.3")
+            .unwrap_or(false)
+    });
+
+    assert!(
+        found,
+        "Expected User-Agent: test-version/1.2.3 on wire after override. Got: {entries:#?}"
+    );
 }
 
 /// After clearing, `client_version()` returns the default User-Agent.
@@ -137,5 +143,21 @@ async fn test_version_override_clear_restores_default() {
         client.client_version(),
         DEFAULT_UA,
         "client_version() must return the default after clearing"
+    );
+
+    let _ = client.get_servers().await;
+    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+
+    let entries = srv.captured_headers().await;
+    let found = entries.iter().any(|e| {
+        e["headers"]["user-agent"]
+            .as_str()
+            .map(|ua| ua == DEFAULT_UA)
+            .unwrap_or(false)
+    });
+
+    assert!(
+        found,
+        "Expected default User-Agent after clearing override. Got: {entries:#?}"
     );
 }

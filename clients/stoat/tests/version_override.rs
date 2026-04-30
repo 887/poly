@@ -1,27 +1,11 @@
 //! User-Agent override test for `poly-stoat`.
 //!
-//! Phase G.1 of `docs/plans/plan-client-version-override-and-sandbox.md`.
+//! Phase G.1 / Phase B Fix-up of `docs/plans/plan-client-version-override-and-sandbox.md`.
 //!
-//! ## Wire-level assertion: DEFERRED
-//!
-//! `client_version`, `get_signup_method`, and `set_client_version_override`
-//! are currently inside `#[cfg(all(test, feature = "native"))] mod tests { … }`
-//! in `clients/stoat/src/lib.rs` (around line 2273-2293) rather than in the
-//! `impl ClientBackend for StoatClient` block. The trait's default
-//! implementation (`Err(NotSupported("set_client_version_override"))`) therefore
-//! takes effect in non-test builds.
-//!
-//! Until those methods are moved into the correct `impl` block, the hard
-//! wire-level assertions stay deferred.
-//!
-//! This file asserts:
-//!   1. The mock server starts and authenticate succeeds.
-//!   2. `client_version()` returns a non-empty string.
-//!   3. `set_client_version_override` does not panic (result is ignored).
-//!
-//! TODO(Phase G wire-up): Promote the `// TODO` assertions to hard asserts
-//! once the source is corrected and the wire UA propagation is confirmed via
-//! /test/inspect/last-headers.
+//! `StoatHttpClient::request()` injects `User-Agent` on every outbound call.
+//! `set_client_version_override` in `impl ClientBackend for StoatClient` calls
+//! `self.http.set_user_agent(ua)` which updates the RwLock-backed field.
+//! All subsequent `request()` / `authenticated_request()` calls pick it up.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -67,40 +51,93 @@ async fn authenticated_client(base_url: &str) -> StoatClient {
     client
 }
 
+async fn captured_headers(base_url: &str) -> Vec<serde_json::Value> {
+    let body: serde_json::Value = reqwest::Client::new()
+        .get(format!("{base_url}/test/inspect/last-headers"))
+        .send()
+        .await
+        .expect("GET /test/inspect/last-headers")
+        .json()
+        .await
+        .expect("parse inspect response");
+    body.as_array().expect("array").clone()
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
-/// Authenticate succeeds and `client_version()` returns a non-empty string.
-///
-/// Full wire override assertion deferred — see module doc comment.
+/// Override reaches the wire User-Agent header.
 #[tokio::test]
-async fn test_client_version_non_empty_after_authenticate() {
+async fn test_version_override_reaches_wire() {
     let (base_url, _shutdown) = start_server().await;
     let client = authenticated_client(&base_url).await;
 
-    let ver = client.client_version();
-    assert!(!ver.is_empty(), "client_version() must return a non-empty string");
+    client
+        .set_client_version_override(Some("test-version/1.2.3".to_string()))
+        .await
+        .expect("set_client_version_override");
 
-    // TODO(Phase G wire-up): When `set_client_version_override` is moved from
-    // `mod tests` into `impl ClientBackend for StoatClient`, replace this test
-    // with full wire assertions using /test/inspect/last-headers.
+    assert_eq!(
+        client.client_version(),
+        "test-version/1.2.3",
+        "client_version() must return the override string"
+    );
+
+    // Trigger any authenticated request.
+    let _ = client.get_servers().await;
+    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+
+    let entries = captured_headers(&base_url).await;
+    let found = entries.iter().any(|e| {
+        e["headers"]["user-agent"]
+            .as_str()
+            .map(|ua| ua == "test-version/1.2.3")
+            .unwrap_or(false)
+    });
+
+    assert!(
+        found,
+        "Expected User-Agent: test-version/1.2.3 on wire. Got: {entries:#?}"
+    );
 }
 
-/// `set_client_version_override` does not panic (gap documented).
+/// After clearing, `client_version()` returns the default and the wire UA is restored.
 #[tokio::test]
-async fn test_version_override_known_gap() {
+async fn test_version_override_clear_restores_default() {
+    const DEFAULT_UA: &str = "poly-stoat/0.0.0";
+
     let (base_url, _shutdown) = start_server().await;
     let client = authenticated_client(&base_url).await;
 
-    // Currently returns NotSupported because the method is inside
-    // `#[cfg(all(test, feature = "native"))] mod tests { … }` in lib.rs.
-    let result = client
+    client
         .set_client_version_override(Some("test-version/1.2.3".to_string()))
-        .await;
+        .await
+        .expect("set override");
+    client
+        .set_client_version_override(None)
+        .await
+        .expect("clear override");
 
-    // Either Ok (fixed) or Err(NotSupported) (gap still present) — must not panic.
-    let _ = result;
+    assert_eq!(
+        client.client_version(),
+        DEFAULT_UA,
+        "client_version() must return the default after clearing"
+    );
 
-    // TODO(Phase G wire-up): Assert Ok(()) here once the source is corrected.
+    let _ = client.get_servers().await;
+    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+
+    let entries = captured_headers(&base_url).await;
+    let found = entries.iter().any(|e| {
+        e["headers"]["user-agent"]
+            .as_str()
+            .map(|ua| ua == DEFAULT_UA)
+            .unwrap_or(false)
+    });
+
+    assert!(
+        found,
+        "Expected default User-Agent after clearing override. Got: {entries:#?}"
+    );
 }

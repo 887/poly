@@ -1,27 +1,11 @@
 //! User-Agent override test for `poly-matrix`.
 //!
-//! Phase G.1 of `docs/plans/plan-client-version-override-and-sandbox.md`.
+//! Phase G.1 / Phase B Fix-up of `docs/plans/plan-client-version-override-and-sandbox.md`.
 //!
-//! ## Wire-level assertion: DEFERRED
-//!
-//! The `set_client_version_override`, `client_version`, and
-//! `get_signup_method` implementations in `clients/matrix/src/lib.rs`
-//! are currently placed inside the `#[cfg(test)] mod tests { … }` block
-//! (lines ~2076-2101) rather than inside the `impl ClientBackend for
-//! MatrixClient` block. As a result the trait's default implementation
-//! (which returns `Err(NotSupported("set_client_version_override"))`) takes
-//! effect in non-test builds.
-//!
-//! Until those methods are moved out of `mod tests` and into the trait impl,
-//! the wire-level assertion stays deferred.
-//!
-//! This file asserts:
-//!   1. The mock server starts and authenticate succeeds.
-//!   2. `client_version()` returns a non-empty string (default or override
-//!      depending on where the methods end up after the fix).
-//!
-//! The hard `set_client_version_override` / wire-UA assertions are marked
-//! `// TODO` and will be promoted once the source is corrected.
+//! `MatrixHttpClient::request()` injects `User-Agent` on every outbound call.
+//! `set_client_version_override` in `impl ClientBackend for MatrixClient` calls
+//! `self.http.set_user_agent(ua)` which updates the RwLock-backed field.
+//! All subsequent `request()` / `authenticated_request()` calls pick it up.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -77,17 +61,27 @@ impl TestServer {
             .expect("parse token");
         resp["access_token"].as_str().expect("access_token").to_string()
     }
+
+    async fn captured_headers(&self) -> Vec<serde_json::Value> {
+        let body: serde_json::Value = reqwest::Client::new()
+            .get(format!("{}/test/inspect/last-headers", self.base_url))
+            .send()
+            .await
+            .expect("GET /test/inspect/last-headers")
+            .json()
+            .await
+            .expect("parse inspect response");
+        body.as_array().expect("array").clone()
+    }
 }
 
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
-/// Authenticate succeeds and `client_version()` returns a non-empty string.
-///
-/// Full wire override assertion deferred — see module doc comment.
+/// Override reaches the wire User-Agent header.
 #[tokio::test]
-async fn test_client_version_non_empty_after_authenticate() {
+async fn test_version_override_reaches_wire() {
     let srv = TestServer::start().await;
     let token = srv.token_for("Owl").await;
 
@@ -98,23 +92,40 @@ async fn test_client_version_non_empty_after_authenticate() {
         .await
         .expect("authenticate");
 
-    let ver = client.client_version();
-    assert!(
-        !ver.is_empty(),
-        "client_version() must return a non-empty string"
+    client
+        .set_client_version_override(Some("test-version/1.2.3".to_string()))
+        .await
+        .expect("set_client_version_override");
+
+    assert_eq!(
+        client.client_version(),
+        "test-version/1.2.3",
+        "client_version() must return the override string"
     );
 
-    // TODO(Phase G wire-up): When `set_client_version_override` + `client_version`
-    // are moved from `mod tests` into `impl ClientBackend for MatrixClient`, replace
-    // this test with full wire assertions using /test/inspect/last-headers.
+    // Trigger any authenticated request.
+    let _ = client.get_servers().await;
+    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+
+    let entries = srv.captured_headers().await;
+    let found = entries.iter().any(|e| {
+        e["headers"]["user-agent"]
+            .as_str()
+            .map(|ua| ua == "test-version/1.2.3")
+            .unwrap_or(false)
+    });
+
+    assert!(
+        found,
+        "Expected User-Agent: test-version/1.2.3 on wire. Got: {entries:#?}"
+    );
 }
 
-/// `set_client_version_override` should not panic (even if it currently returns
-/// `NotSupported` due to the method being in the wrong scope).
-///
-/// This test documents the known gap and will be updated once the source is fixed.
+/// After clearing, `client_version()` returns the default and the wire UA is restored.
 #[tokio::test]
-async fn test_version_override_known_gap() {
+async fn test_version_override_clear_restores_default() {
+    const DEFAULT_UA: &str = "poly-matrix/0.0.0";
+
     let srv = TestServer::start().await;
     let token = srv.token_for("Owl").await;
 
@@ -125,16 +136,34 @@ async fn test_version_override_known_gap() {
         .await
         .expect("authenticate");
 
-    // The current implementation returns NotSupported because the override
-    // methods are inside `#[cfg(test)] mod tests { … }` in lib.rs.
-    // When that is fixed this assert should become `.expect("set override")`.
-    let result = client
+    client
         .set_client_version_override(Some("test-version/1.2.3".to_string()))
-        .await;
+        .await
+        .expect("set override");
+    client
+        .set_client_version_override(None)
+        .await
+        .expect("clear override");
 
-    // Document the current state: either Ok (fixed) or NotSupported (gap still present).
-    // Either is acceptable here; we just must not panic.
-    let _ = result; // intentionally ignored — gap documented above
+    assert_eq!(
+        client.client_version(),
+        DEFAULT_UA,
+        "client_version() must return the default after clearing"
+    );
 
-    // TODO(Phase G wire-up): Assert Ok(()) here once lib.rs methods are in the right scope.
+    let _ = client.get_servers().await;
+    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+
+    let entries = srv.captured_headers().await;
+    let found = entries.iter().any(|e| {
+        e["headers"]["user-agent"]
+            .as_str()
+            .map(|ua| ua == DEFAULT_UA)
+            .unwrap_or(false)
+    });
+
+    assert!(
+        found,
+        "Expected default User-Agent after clearing override. Got: {entries:#?}"
+    );
 }

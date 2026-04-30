@@ -612,6 +612,33 @@ impl ClientBackend for HackerNewsClient {
     ) -> ClientResult<ActionOutcome> {
         Err(ClientError::NotFound(format!("unknown message action: {action_id}")))
     }
+
+    fn get_signup_method(&self, _server_url: Option<&str>) -> SignupMethod {
+        // HN login page serves as registration too
+        SignupMethod::External("https://news.ycombinator.com/login".into())
+    }
+
+    fn client_version(&self) -> String {
+        self.version_override
+            .lock()
+            .ok()
+            .and_then(|g| g.clone())
+            .unwrap_or_else(|| api::DEFAULT_CLIENT_VERSION.to_string())
+    }
+
+    async fn set_client_version_override(
+        &self,
+        version_override: Option<String>,
+    ) -> ClientResult<()> {
+        let new_ua = version_override
+            .clone()
+            .unwrap_or_else(|| api::DEFAULT_CLIENT_VERSION.to_string());
+        if let Ok(mut lock) = self.version_override.lock() {
+            *lock = version_override;
+        }
+        self.api.set_user_agent(new_ua);
+        Ok(())
+    }
 }
 
 #[cfg(feature = "native")]
@@ -681,32 +708,5 @@ impl HackerNewsClient {
             })
             .collect();
         Ok(messages)
-    }
-
-    fn get_signup_method(&self, _server_url: Option<&str>) -> SignupMethod {
-        // HN login page serves as registration too
-        SignupMethod::External("https://news.ycombinator.com/login".into())
-    }
-
-    fn client_version(&self) -> String {
-        self.version_override
-            .lock()
-            .ok()
-            .and_then(|g| g.clone())
-            .unwrap_or_else(|| api::DEFAULT_CLIENT_VERSION.to_string())
-    }
-
-    async fn set_client_version_override(
-        &self,
-        version_override: Option<String>,
-    ) -> ClientResult<()> {
-        let new_ua = version_override
-            .clone()
-            .unwrap_or_else(|| api::DEFAULT_CLIENT_VERSION.to_string());
-        if let Ok(mut lock) = self.version_override.lock() {
-            *lock = version_override;
-        }
-        self.api.set_user_agent(new_ua);
-        Ok(())
     }
 }

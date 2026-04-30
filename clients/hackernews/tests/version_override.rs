@@ -1,29 +1,15 @@
 //! User-Agent override test for `poly-hackernews`.
 //!
-//! Phase G.1 of `docs/plans/plan-client-version-override-and-sandbox.md`.
+//! Phase G.1 / Phase B Fix-up of `docs/plans/plan-client-version-override-and-sandbox.md`.
 //!
-//! ## Wire-level assertion: DEFERRED
-//!
-//! `get_signup_method`, `client_version`, and `set_client_version_override`
-//! are in a plain `impl HackerNewsClient { … }` block (line ~617 in lib.rs)
-//! rather than in `impl ClientBackend for HackerNewsClient`. The compiler
-//! warns they are "never used" and the trait's default
-//! (`Err(NotSupported("set_client_version_override"))`) takes effect at runtime.
-//!
-//! Until those methods are moved into the `impl ClientBackend` block, the
-//! wire-level assertions stay deferred.
-//!
-//! This file asserts:
-//!   1. The mock server starts and guest authenticate succeeds.
-//!   2. Requests reachable through the wire (feed fetch) work correctly.
-//!
-//! TODO(Phase G wire-up): Promote the `// TODO` assertions to hard asserts
-//! once `set_client_version_override` is in the correct impl block and the
-//! wire UA propagation is confirmed via /test/inspect/last-headers.
+//! `client_version`, `set_client_version_override`, and `get_signup_method`
+//! are now in `impl ClientBackend for HackerNewsClient`. The UA field is
+//! stored on `HnApiClient` behind an `Arc<Mutex<String>>`; every outbound
+//! request adds `header("User-Agent", self.ua())`.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use poly_client::{AuthCredentials, ClientBackend};
+use poly_client::{AuthCredentials, ClientBackend, MessageQuery};
 use poly_hackernews::HackerNewsClient;
 use poly_test_hackernews::TestHnServer;
 
@@ -44,41 +30,94 @@ async fn authenticated_client(server: &TestHnServer) -> HackerNewsClient {
     client
 }
 
+async fn captured_headers(server: &TestHnServer) -> Vec<serde_json::Value> {
+    let body: serde_json::Value = reqwest::Client::new()
+        .get(format!("{}/test/inspect/last-headers", server.base_url))
+        .send()
+        .await
+        .expect("GET /test/inspect/last-headers")
+        .json()
+        .await
+        .expect("parse inspect response");
+    body.as_array().expect("array").clone()
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
-/// Guest authenticate succeeds and the server is reachable.
-///
-/// Full wire override assertion deferred — see module doc comment.
+/// Override reaches the wire User-Agent header.
 #[tokio::test]
-async fn test_server_reachable_after_authenticate() {
+async fn test_version_override_reaches_wire() {
     let server = TestHnServer::start().await;
     let client = authenticated_client(&server).await;
 
-    assert!(client.is_authenticated(), "should be authenticated");
+    client
+        .set_client_version_override(Some("test-version/1.2.3".to_string()))
+        .await
+        .expect("set_client_version_override");
 
-    // TODO(Phase G wire-up): When `set_client_version_override` is moved into
-    // `impl ClientBackend for HackerNewsClient`, add:
-    //   client.set_client_version_override(Some("test-version/1.2.3".to_string())).await.expect("set");
-    //   let _ = client.get_servers().await;
-    //   // assert /test/inspect/last-headers shows User-Agent: test-version/1.2.3
+    assert_eq!(
+        client.client_version(),
+        "test-version/1.2.3",
+        "client_version() must return the override string"
+    );
+
+    // Trigger a request to the mock server.
+    // get_servers() is in-memory; get_messages() with "hn-top" fires get_feed_ids() via HTTP.
+    let _ = client.get_messages("hn-top", MessageQuery::default()).await;
+    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+
+    let entries = captured_headers(&server).await;
+    let found = entries.iter().any(|e| {
+        e["headers"]["user-agent"]
+            .as_str()
+            .map(|ua| ua == "test-version/1.2.3")
+            .unwrap_or(false)
+    });
+
+    assert!(
+        found,
+        "Expected User-Agent: test-version/1.2.3 on wire. Got: {entries:#?}"
+    );
 }
 
-/// `set_client_version_override` does not panic (gap documented).
+/// After clearing, `client_version()` returns the default and the wire UA is restored.
 #[tokio::test]
-async fn test_version_override_known_gap() {
+async fn test_version_override_clear_restores_default() {
+    const DEFAULT_UA: &str = "poly-hackernews/0.0.0";
+
     let server = TestHnServer::start().await;
     let client = authenticated_client(&server).await;
 
-    // Currently returns NotSupported because the method is in a plain
-    // `impl HackerNewsClient` block rather than `impl ClientBackend`.
-    let result = client
+    client
         .set_client_version_override(Some("test-version/1.2.3".to_string()))
-        .await;
+        .await
+        .expect("set override");
+    client
+        .set_client_version_override(None)
+        .await
+        .expect("clear override");
 
-    // Either Ok (fixed) or Err(NotSupported) (gap still present) — must not panic.
-    let _ = result;
+    assert_eq!(
+        client.client_version(),
+        DEFAULT_UA,
+        "client_version() must return the default after clearing"
+    );
 
-    // TODO(Phase G wire-up): Assert Ok(()) once the source is corrected.
+    let _ = client.get_messages("hn-top", MessageQuery::default()).await;
+    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+
+    let entries = captured_headers(&server).await;
+    let found = entries.iter().any(|e| {
+        e["headers"]["user-agent"]
+            .as_str()
+            .map(|ua| ua == DEFAULT_UA)
+            .unwrap_or(false)
+    });
+
+    assert!(
+        found,
+        "Expected default User-Agent after clearing override. Got: {entries:#?}"
+    );
 }

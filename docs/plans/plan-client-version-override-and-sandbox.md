@@ -808,6 +808,55 @@ provided the same assertion capability without adding a new dependency.
 
 ---
 
+### Phase B Fix-up — wire-level override propagation (shipped in commit `<pending>`)
+
+All Phase G deferred wire gaps are now fixed. Every backend injects the correct
+`User-Agent` on every outbound HTTP request, and `cargo test --test version_override`
+passes for all 7 backends with full wire assertions.
+
+- [x] **B-fix.1** `discord` — wired `apply_version_headers()` into every
+      `get()`/`post_json()`/etc. call in `clients/discord/src/http.rs`.
+      Test updated with wire assertion via `/test/inspect/last-headers`.
+- [x] **B-fix.2** `matrix` — moved `get_signup_method`, `client_version`,
+      `set_client_version_override` from `mod tests` into
+      `impl ClientBackend for MatrixClient` in `clients/matrix/src/lib.rs`.
+      Test updated with wire assertion.
+- [x] **B-fix.3** `stoat` — same mod-tests-vs-impl bug as Matrix. Moved
+      all three methods into `impl ClientBackend for StoatClient` in
+      `clients/stoat/src/lib.rs`. Test updated with wire assertion.
+- [x] **B-fix.4** `hackernews` — moved `client_version`,
+      `set_client_version_override`, `get_signup_method` from plain
+      `impl HackerNewsClient` into `impl ClientBackend for HackerNewsClient`
+      in `clients/hackernews/src/lib.rs`. Test updated with wire assertion
+      via `get_messages("hn-top", ...)` (the only public ClientBackend
+      method that fires an HTTP call).
+- [x] **B-fix.5** `lemmy` — added `.header("User-Agent", self.ua())` to all
+      methods in `clients/lemmy/src/api.rs` that called `self.http.get/post`
+      directly instead of going through the `http_get`/`http_post` helpers.
+      Test updated with wire assertion.
+- [x] **B-fix.6** `forgejo` — migrated `ForgejoApi.user_agent` from
+      `String` to `Arc<Mutex<String>>`, changed `set_user_agent` to take
+      `&self`, added `fn ua()` helper, updated `get()` to read the lock.
+      Wired propagation in `ForgejoClient::set_client_version_override` via
+      `self.api.set_user_agent(new_ua)`. Test updated with wire assertion.
+- [x] **B-fix.7** `github` — added `version_override: Mutex<Option<String>>`
+      to `GitHubClient`, implemented `set_client_version_override` and
+      `client_version` to read from it. Wire assertion not applicable (gh CLI
+      controls outbound HTTP UA). Test updated to assert stored override value.
+
+| Backend | set_client_version_override | Wire UA | Status |
+|---------|----------------------------|---------|--------|
+| teams | OK | WIRE TESTED | unchanged (reference impl) |
+| discord | OK | WIRE TESTED | B-fix.1 |
+| matrix | OK | WIRE TESTED | B-fix.2 |
+| stoat | OK | WIRE TESTED | B-fix.3 |
+| hackernews | OK | WIRE TESTED | B-fix.4 |
+| lemmy | OK | WIRE TESTED | B-fix.5 |
+| forgejo | OK | WIRE TESTED | B-fix.6 |
+| github | OK | N/A (gh CLI) | B-fix.7 |
+
+---
+
 ## Phase H — Playwright spec + e2e harness scenario
 
 **Effort:** M (1 day).

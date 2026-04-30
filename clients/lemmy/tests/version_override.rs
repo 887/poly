@@ -1,23 +1,10 @@
 //! User-Agent override test for `poly-lemmy`.
 //!
-//! Phase G.1 of `docs/plans/plan-client-version-override-and-sandbox.md`.
+//! Phase G.1 / Phase B Fix-up of `docs/plans/plan-client-version-override-and-sandbox.md`.
 //!
-//! ## Wire-level assertion: PARTIALLY DEFERRED
-//!
-//! `set_client_version_override` is correctly implemented and `client_version()`
-//! returns the override string. However, the fetch methods in `LemmyApi`
-//! (`fetch_subscribed_communities`, `fetch_community`, etc.) call
-//! `self.http.get(...)` directly instead of the `http_get` / `http_post`
-//! helpers that inject the `User-Agent` header. As a result the override does
-//! not appear in the wire headers for `get_servers()` or similar calls.
-//!
-//! The test below asserts the client-level behaviour (`client_version()`)
-//! and documents the wire-level gap as a TODO.
-//!
-//! TODO(Phase G wire-up): When `LemmyApi::fetch_subscribed_communities` and
-//! related methods are updated to call `self.http_get(...)` / `self.http_post(...)`,
-//! promote the TODO assertions below to hard wire assertions using
-//! /test/inspect/last-headers.
+//! All fetch methods in `LemmyHttpClient` now inject `User-Agent` from the
+//! `Arc<RwLock<String>>` field. `set_client_version_override` propagates to the
+//! field via `self.http.set_user_agent(ua)`.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -52,18 +39,27 @@ async fn authenticated_client(base_url: &str) -> LemmyClient {
     client
 }
 
+async fn captured_headers(base_url: &str) -> Vec<serde_json::Value> {
+    let body: serde_json::Value = reqwest::Client::new()
+        .get(format!("{base_url}/test/inspect/last-headers"))
+        .send()
+        .await
+        .expect("GET /test/inspect/last-headers")
+        .json()
+        .await
+        .expect("parse inspect response");
+    body.as_array().expect("array").clone()
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
-/// `set_client_version_override` succeeds and `client_version()` returns the
-/// override string.
-///
-/// Wire-level assertion partially deferred — see module doc comment.
+/// Override reaches the wire User-Agent header.
 #[tokio::test]
-async fn test_version_override_client_version() {
+async fn test_version_override_reaches_wire() {
     let base_url = start_server().await;
-    let mut client = authenticated_client(&base_url).await;
+    let client = authenticated_client(&base_url).await;
 
     client
         .set_client_version_override(Some("test-version/1.2.3".to_string()))
@@ -76,19 +72,30 @@ async fn test_version_override_client_version() {
         "client_version() must return the override string"
     );
 
-    // TODO(Phase G wire-up): When LemmyApi fetch methods use http_get/http_post,
-    // add wire assertion via /test/inspect/last-headers:
-    //   let _ = client.get_servers().await;
-    //   // assert captured headers include User-Agent: test-version/1.2.3
+    let _ = client.get_servers().await;
+    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+
+    let entries = captured_headers(&base_url).await;
+    let found = entries.iter().any(|e| {
+        e["headers"]["user-agent"]
+            .as_str()
+            .map(|ua| ua == "test-version/1.2.3")
+            .unwrap_or(false)
+    });
+
+    assert!(
+        found,
+        "Expected User-Agent: test-version/1.2.3 on wire. Got: {entries:#?}"
+    );
 }
 
-/// After clearing, `client_version()` returns the default.
+/// After clearing, `client_version()` returns the default and the wire UA is restored.
 #[tokio::test]
 async fn test_version_override_clear_restores_default() {
     const DEFAULT_UA: &str = "poly-lemmy/0.0.0";
 
     let base_url = start_server().await;
-    let mut client = authenticated_client(&base_url).await;
+    let client = authenticated_client(&base_url).await;
 
     client
         .set_client_version_override(Some("test-version/1.2.3".to_string()))
@@ -103,5 +110,21 @@ async fn test_version_override_clear_restores_default() {
         client.client_version(),
         DEFAULT_UA,
         "client_version() must return the default after clearing"
+    );
+
+    let _ = client.get_servers().await;
+    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+
+    let entries = captured_headers(&base_url).await;
+    let found = entries.iter().any(|e| {
+        e["headers"]["user-agent"]
+            .as_str()
+            .map(|ua| ua == DEFAULT_UA)
+            .unwrap_or(false)
+    });
+
+    assert!(
+        found,
+        "Expected default User-Agent after clearing override. Got: {entries:#?}"
     );
 }

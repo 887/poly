@@ -64,6 +64,13 @@ pub struct GitHubClient {
     /// Pack C P18 — in-memory settings storage stub. TODO: migrate to
     /// `host-api.kv_set` once exposed to plugins for true persistence.
     settings_storage: SettingsStorageCell,
+    /// Stored version override (None = use DEFAULT_CLIENT_VERSION).
+    ///
+    /// Note: the gh CLI controls the wire-level User-Agent for all HTTP
+    /// requests. This field records the override for `client_version()` to
+    /// return; it does NOT propagate to the wire because `GhCli` owns the
+    /// transport and does not expose a User-Agent override surface.
+    version_override: std::sync::Mutex<Option<String>>,
 }
 
 impl GitHubClient {
@@ -75,6 +82,7 @@ impl GitHubClient {
             session: None,
             repos: tokio::sync::Mutex::new(Vec::new()),
             settings_storage: SettingsStorageCell::new(),
+            version_override: std::sync::Mutex::new(None),
         }
     }
 
@@ -85,6 +93,7 @@ impl GitHubClient {
             session: None,
             repos: tokio::sync::Mutex::new(Vec::new()),
             settings_storage: SettingsStorageCell::new(),
+            version_override: std::sync::Mutex::new(None),
         }
     }
 
@@ -95,6 +104,7 @@ impl GitHubClient {
             session: None,
             repos: tokio::sync::Mutex::new(Vec::new()),
             settings_storage: SettingsStorageCell::new(),
+            version_override: std::sync::Mutex::new(None),
         }
     }
 
@@ -932,8 +942,24 @@ impl ClientBackend for GitHubClient {
     }
 
     fn client_version(&self) -> String {
-        // GitHub backend uses the gh CLI; version reflects the CLI wrapper.
-        "poly-github/0.0.0".to_string()
+        self.version_override
+            .lock()
+            .ok()
+            .and_then(|g| g.clone())
+            .unwrap_or_else(|| "poly-github/0.0.0".to_string())
+    }
+
+    async fn set_client_version_override(
+        &self,
+        version_override: Option<String>,
+    ) -> ClientResult<()> {
+        if let Ok(mut lock) = self.version_override.lock() {
+            *lock = version_override;
+        }
+        // Note: the wire-level User-Agent is controlled by the gh CLI subprocess
+        // and cannot be overridden from this layer. This method records the value
+        // so client_version() returns it, but outbound HTTP UA is unaffected.
+        Ok(())
     }
 }
 

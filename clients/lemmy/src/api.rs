@@ -807,6 +807,7 @@ impl LemmyHttpClient {
         let resp = self
             .http
             .get(self.url("/api/v3/site"))
+            .header("User-Agent", self.ua())
             .bearer_auth(&jwt)
             .send()
             .await
@@ -830,6 +831,7 @@ impl LemmyHttpClient {
         let resp = self
             .http
             .get(self.url("/api/v3/community/list?type_=Subscribed&limit=50"))
+            .header("User-Agent", self.ua())
             .bearer_auth(&jwt)
             .send()
             .await
@@ -854,6 +856,7 @@ impl LemmyHttpClient {
         let resp = self
             .http
             .get(url)
+            .header("User-Agent", self.ua())
             .bearer_auth(&jwt)
             .send()
             .await
@@ -908,6 +911,7 @@ impl LemmyHttpClient {
         let resp = self
             .http
             .get(url)
+            .header("User-Agent", self.ua())
             .bearer_auth(&jwt)
             .send()
             .await
@@ -932,6 +936,7 @@ impl LemmyHttpClient {
         let resp = self
             .http
             .get(url)
+            .header("User-Agent", self.ua())
             .bearer_auth(&jwt)
             .send()
             .await
@@ -967,6 +972,7 @@ impl LemmyHttpClient {
         let resp = self
             .http
             .get(url)
+            .header("User-Agent", self.ua())
             .bearer_auth(&jwt)
             .send()
             .await
@@ -993,6 +999,7 @@ impl LemmyHttpClient {
         let resp = self
             .http
             .get(url)
+            .header("User-Agent", self.ua())
             .bearer_auth(&jwt)
             .send()
             .await
@@ -1016,6 +1023,7 @@ impl LemmyHttpClient {
         let resp = self
             .http
             .get(self.url("/api/v3/private_message/list?limit=50"))
+            .header("User-Agent", self.ua())
             .bearer_auth(&jwt)
             .send()
             .await
@@ -1050,6 +1058,7 @@ impl LemmyHttpClient {
         let resp = self
             .http
             .post(self.url("/api/v3/comment"))
+            .header("User-Agent", self.ua())
             .bearer_auth(&jwt)
             .json(&body)
             .send()
@@ -1083,6 +1092,7 @@ impl LemmyHttpClient {
         let resp = self
             .http
             .post(self.url("/api/v3/community/ban_user"))
+            .header("User-Agent", self.ua())
             .bearer_auth(&jwt)
             .json(&req)
             .send()
@@ -1121,6 +1131,7 @@ impl LemmyHttpClient {
         let resp = self
             .http
             .post(self.url("/api/v3/post/remove"))
+            .header("User-Agent", self.ua())
             .bearer_auth(&jwt)
             .json(&body)
             .send()
@@ -1156,6 +1167,7 @@ impl LemmyHttpClient {
         let resp = self
             .http
             .post(self.url("/api/v3/comment/remove"))
+            .header("User-Agent", self.ua())
             .bearer_auth(&jwt)
             .json(&body)
             .send()
@@ -1188,6 +1200,7 @@ impl LemmyHttpClient {
         let resp = self
             .http
             .get(url)
+            .header("User-Agent", self.ua())
             .bearer_auth(&jwt)
             .send()
             .await
@@ -1215,6 +1228,7 @@ impl LemmyHttpClient {
         let resp = self
             .http
             .get(url)
+            .header("User-Agent", self.ua())
             .bearer_auth(&jwt)
             .send()
             .await
@@ -1250,6 +1264,7 @@ impl LemmyHttpClient {
         let resp = self
             .http
             .put(self.url("/api/v3/community"))
+            .header("User-Agent", self.ua())
             .bearer_auth(&jwt)
             .json(&body)
             .send()
