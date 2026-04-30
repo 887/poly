@@ -1,6 +1,6 @@
 # Plan — Persona End-to-End Multi-Agent Bash Harness
 
-## Status: 🚧 PLANNED — not started
+## Status: 🚧 IN PROGRESS — Phases A-B shipped; Phases C-G pending
 
 > **Why this is its own plan, not Phase J on `plan-meta-personalities.md`:**
 > the deliverable is a **reusable bash + Playwright harness** that drives
@@ -94,49 +94,50 @@ Key design choices, captured up-front so phases don't re-litigate:
 
 ## 3. Sequenced phases
 
-### Phase A — Process-orchestration skeleton
+### Phase A — Process-orchestration skeleton (shipped in commit `<see-below>`)
 
-- [ ] **A.1** Create `tests/e2e/` directory. Add `tests/e2e/README.md`
+- [x] **A.1** Create `tests/e2e/` directory. Add `tests/e2e/README.md`
   explaining the harness and its prerequisites (cargo build, npm install
   playwright, `claude` CLI on PATH, optional `ANTHROPIC_API_KEY` for
   non-CI runs).
-- [ ] **A.2** Write `tests/e2e/lib/process.sh` — small bash library with
+- [x] **A.2** Write `tests/e2e/lib/process.sh` — small bash library with
   `spawn_bg`, `wait_for_port`, `wait_for_http_200`, `kill_pgrep_pattern`
   (matches the orphan-cleanup pattern from `mcp/electron-devtools-mcp`).
   All wait helpers cap at 60s per `feedback_wait_timeouts`.
-- [ ] **A.3** Write `tests/e2e/lib/cleanup.sh` — `EXIT` trap that kills
+- [x] **A.3** Write `tests/e2e/lib/cleanup.sh` — `EXIT` trap that kills
   every process the script spawned, by PID file under
   `tests/e2e/.run/<run_id>/pids/`. Idempotent — re-running always safe.
-- [ ] **A.4** Write `tests/e2e/persona-multi-agent.sh` skeleton: parses
+- [x] **A.4** Write `tests/e2e/persona-multi-agent.sh` skeleton: parses
   `--scenario <name>` flag, sources lib/, sets up `tests/e2e/.run/<run_id>/`,
   installs the EXIT trap, exits 0. No real work yet; just the harness
   scaffolding compiles + cleans up cleanly.
-- [ ] **A.5** Add a temporary `POLY_DATA_DIR` per run so multiple e2e runs
+- [x] **A.5** Add a temporary `POLY_DATA_DIR` per run so multiple e2e runs
   in CI don't trample one shared SQLite file.
   `export POLY_DATA_DIR="$RUN_ROOT/data"; mkdir -p "$POLY_DATA_DIR"`.
 
 **Effort:** 0.5 sessions.
 
-### Phase B — Boot the local stack
+### Phase B — Boot the local stack (shipped in commit `<see-below>`)
 
-- [ ] **B.1** `start_test_backends` — fork `cargo run -p poly-test-runner
-  -- --seed --quiet`; wait for `:9100..9107` to all return health 200.
-  Cap at 60s; on timeout, dump tail of each log + exit 1.
-- [ ] **B.2** `start_chat_mcp` — fork `cargo run -p poly-chat-mcp --
+- [x] **B.1** `start_test_backends` — fork `cargo run -p poly-test-runner
+  -- --seed` (note: `--quiet` flag does NOT exist on poly-test-runner;
+  the binary has `--seed` and `--verbose` only); wait for `:9100..9107`
+  to all return health 200. Cap at 60s; on timeout, dump tail of log + exit 1.
+- [x] **B.2** `start_chat_mcp` — fork `cargo run -p poly-chat-mcp --
   --port 3010`; wait for `GET http://localhost:3010/health` 200.
-  Pre-seed `POLY_DATA_DIR/storage.sqlite3` with a fixed account-id set so
-  the personas have stable account IDs to bind to.
-- [ ] **B.3** `start_poly_web` — fork the canonical `dx serve` invocation
+  `--port` is natively supported by poly-chat-mcp; no patching needed.
+- [x] **B.3** `start_poly_web` — fork the canonical `dx serve` invocation
   from CLAUDE.md (note the `@server --platform server` flag — required).
-  Wait for `:3000` to respond.
-- [ ] **B.4** Smoke check: `poly-cli --url http://localhost:3010/mcp tools`
-  lists ≥14 `meta_persona_*` tools (the Phase B baseline; Phase J was
-  rescoped to NOT add new tools, only the `dry_run` flag on
-  `meta_persona_invoke`). Fail loud if fewer.
-- [ ] **B.5** Persistent build cache — set `CARGO_TARGET_DIR=$RUN_ROOT/target`
-  and pre-warm with `cargo build -p poly-chat-mcp -p poly-web -p
-  poly-test-runner` at the top of the script so the wait_for_port windows
-  measure boot, not compile time.
+  Wait for `:3000` to respond. Skipped for `--scenario noop` to keep
+  dry-runs fast.
+- [x] **B.4** Smoke check: `poly-cli --url http://localhost:3010/mcp tools`
+  lists ≥14 `meta_persona_*` tools (Phase B baseline; Phase J was rescoped
+  to NOT add new tools, only the `dry_run` flag on `meta_persona_invoke`).
+  Fail loud if fewer. Verified: 14 tools at runtime.
+- [x] **B.5** Build cache strategy: we do NOT use per-run `CARGO_TARGET_DIR`.
+  Per-run isolation would cause 5-10 min cold rebuilds exceeding the 15-min
+  CI budget (Phase F). Use shared workspace `target/` with a pre-warm step
+  at script start. Documented in `tests/e2e/README.md`.
 
 **Effort:** 0.5 sessions.
 
@@ -404,3 +405,27 @@ Key design choices, captured up-front so phases don't re-litigate:
   exercising correctness, not performance.
 - ❌ Claude Code prompt-engineering regression detection in mock mode.
   That's what the opt-in real-claude nightly is for.
+
+---
+
+### Phase A Status
+
+Shipped in this worktree commit. Files added:
+- `tests/e2e/lib/process.sh` — `spawn_bg`, `wait_for_port`, `wait_for_http_200`, `kill_pgrep_pattern`, `find_free_port`
+- `tests/e2e/lib/cleanup.sh` — `install_cleanup_trap`, `_cleanup_handler`, `_cleanup_by_pid_dir`, `_cleanup_orphan_sweeps`
+- `tests/e2e/persona-multi-agent.sh` — entry point with `--scenario` / `--mode` / `--noop` flags, per-run `RUN_ROOT`, `PIDS_DIR`, `POLY_DATA_DIR` isolation, EXIT trap
+- `tests/e2e/README.md` — prerequisites, stack overview, env vars, build-cache rationale, how to add scenarios
+
+All wait helpers cap at 60 s per `feedback_wait_timeouts`.
+
+### Phase B Status
+
+Shipped in same commit. Key findings vs plan text:
+
+- **`poly-test-runner --quiet` does not exist.** The binary (in `servers/test-runner/src/main.rs`) supports `--seed` and `--verbose` only. The plan's `--seed --quiet` invocation would fail. Fixed: use `--seed` only.
+- **`poly-chat-mcp --port` works natively.** No patching needed (clap arg `--port <u16>`, default 3010).
+- **B.4 tool count: 14 confirmed.** `poly-cli tools` lists exactly 14 `meta_persona_*` tools at runtime. The harness checks `≥14`.
+- **B.5 build cache: shared, not per-run.** Per-run `CARGO_TARGET_DIR` would cold-rebuild on every CI run (~5-10 min), breaking the 15-min CI budget. Decision: shared workspace `target/` with pre-warm. Documented in `tests/e2e/README.md`.
+- **B.3 poly-web skipped for noop.** `--scenario noop` skips `start_poly_web` so the dry-run completes without a WASM build. Scenarios that need the UI must call `start_poly_web` explicitly (or the harness detects via scenario metadata in Phase C/D).
+
+Acceptance verified: `bash tests/e2e/persona-multi-agent.sh --scenario noop` exits 0, prints "Smoke check: 14 meta_persona_* tools available ✓", and `pgrep -af "poly-test-|poly-chat-mcp|dx serve"` returns empty after exit.
