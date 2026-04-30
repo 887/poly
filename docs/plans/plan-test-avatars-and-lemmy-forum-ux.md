@@ -1,4 +1,4 @@
-## Status: 🚧 Phases A+B DONE — Phases C-E pending
+## Status: 🚧 IN PROGRESS — Phases A-C + E shipped; D pending; E.2 screenshot capture deferred
 
 # Test-account avatars + Lemmy preview-image + Forum-composer UX overhaul
 
@@ -278,22 +278,23 @@ Depends on: D green.
 Acceptance: docs land in the repo, no broken links, screenshots
 captured on real test backends.
 
-- [ ] **E.1 — Update CLAUDE.md "MCP Workflow" section**
-  - Add a one-paragraph note about the new `/avatars/...` and
-    `/pictrs/image/...` and `/v1.0/users/.../photo/$value` patterns
-    so future agents know which backend uses which convention.
-- [ ] **E.2 — Capture screenshots**
-  - Drive test-lemmy via Playwright → take screenshots of: forum
-    list with previews on, forum list with previews off (toggle),
-    new-post composer with markdown preview tab active, inline reply
-    composer expanded under a comment.
-  - Save under `docs/screenshots/forum-composer/` and reference from
-    this plan + from any user-facing release note.
-- [ ] **E.3 — CLI recipe in `docs/dev/test-backends.md`**
-  - If that file exists, add a per-backend `curl` one-liner for
-    fetching an avatar so devs can sanity-check from the shell.
-    Otherwise create the file with the recipe + a one-liner per
-    backend port.
+- [x] **E.1 — Update CLAUDE.md "Test-server Avatar URL Conventions" section** (shipped in Phase E commit)
+  - Added table of per-backend avatar URL patterns under a new "Test-server Avatar URL Conventions"
+    section immediately before "MCP Workflow" in CLAUDE.md.
+  - Notes `servers/test-common::avatars::serve_animal()` as the shared helper.
+  - Cross-links to this plan + `docs/dev/test-backends.md`.
+- [~] **E.2 — Capture screenshots** — DEFERRED
+  - Real screenshot capture requires a running poly-web instance + active Playwright session.
+  - Screenshots needed (for future "screenshots refresh" pass):
+    1. Forum list with "Render previews" toggle ON (test-lemmy, community view, thumbnail visible).
+    2. Forum list with "Render previews" toggle OFF (same view, thumbnail hidden).
+    3. New-post composer with markdown preview tab active (rendered HTML visible).
+    4. Inline reply composer expanded under a comment (nested composer visible).
+  - TODO tracked in `docs/screenshots/README.md`.
+- [x] **E.3 — Create `docs/dev/test-backends.md`** (shipped in Phase E commit)
+  - New file with per-backend sections for all 7 wire-bearing backends + shared helpers intro.
+  - Each section: port, health endpoint, sample seeded user, avatar curl one-liner, sample
+    post/message fetch, reset/reseed endpoints.
 
 ## Acceptance summary
 
@@ -322,3 +323,5 @@ captured on real test backends.
   flows. Worth scoping down to "Lemmy only" for the first cut.
 
 ### Phase B Status: DONE — all 5 sub-steps shipped
+
+### Phase E Status: PARTIAL — E.1+E.3 shipped; E.2 (screenshots) deferred to follow-up

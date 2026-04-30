@@ -273,6 +273,31 @@ cargo build -p poly-desktop-web
 cd apps/desktop && dx build --platform web
 ```
 
+## Test-server Avatar URL Conventions
+
+Each mock backend serves avatar images via its own URL convention. These are the
+stable patterns — use them when writing agent scripts, integration tests, or curl
+one-liners that need to verify avatar bytes. All routes delegate to
+`servers/test-common::avatars::serve_animal(name)`, the shared helper that maps
+bare animal names to bundled PNG/SVG bytes from `clients/demo/assets/`. See
+`docs/plans/plan-test-avatars-and-lemmy-forum-ux.md` for the full per-backend
+animal mapping rationale (Phase A).
+
+| Backend         | Port | Avatar URL pattern                                    | Example                                              |
+|-----------------|------|-------------------------------------------------------|------------------------------------------------------|
+| test-matrix     | 9100 | `/_matrix/media/v3/thumbnail/{server}/{media_id}`     | `/_matrix/media/v3/thumbnail/localhost/owl_avatar`   |
+| test-stoat      | 9101 | `/avatars/{av_id}` (id is `av_{USER_ID}`)             | `/avatars/av_STOAT01`                                |
+| test-discord    | 9102 | `/avatars/{user_id}/{file}.png`                       | `/avatars/1/koala.png`                               |
+| test-teams      | 9103 | `/v1.0/users/{user_id}/photo/$value`                  | `/v1.0/users/U001/photo/$value`                      |
+| test-lemmy      | 9104 | `/pictrs/image/{filename}` (extension included)       | `/pictrs/image/beaver.svg`                           |
+| test-hackernews | 9105 | N/A — HN has no user avatars; UI falls back to initial| —                                                    |
+| test-forgejo    | 9106 | `/avatars/{name}` (bare animal name, no extension)    | `/avatars/otter`                                     |
+| test-github     | 9107 | `/avatars/{login}.png`                                | `/avatars/penguin.png`                               |
+
+All backends are started by `poly-test-runner` (see `servers/test-runner/`). For
+detailed per-backend curl recipes, seed users, and reset endpoints, see
+`docs/dev/test-backends.md`.
+
 ## MCP Workflow
 
 ```
