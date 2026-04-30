@@ -141,7 +141,7 @@ Key design choices, captured up-front so phases don't re-litigate:
 
 **Effort:** 0.5 sessions.
 
-### Phase C — Spawn parallel `claude -p` persona agents (shipped in commit `<see-Phase-C-Status>`)
+### Phase C — Spawn parallel `claude -p` persona agents (shipped in commit `983616b8`)
 
 - [x] **C.1** Generate per-persona `.mcp.json` template in
   `tests/e2e/scenarios/<name>/persona-<slug>.mcp.json`.
