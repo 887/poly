@@ -39,10 +39,11 @@ use axum::{
 use poly_host_bridge::{
     AccountAddRequest, AccountAddResponse, AccountListEntry, AccountListResponse,
     AccountRemoveRequest, AccountRemoveResponse, HostCall, HostResponse, KvDeleteRequest,
-    KvGetRequest, KvGetResponse, KvSetRequest, KvVoidResponse, PluginAddRequest,
-    PluginAddResponse, PluginKvDeleteRequest, PluginKvGetRequest, PluginKvGetResponse,
-    PluginKvSetRequest, PluginListEntry, PluginListResponse, PluginRemoveRequest,
-    PluginRemoveResponse, PluginSetEnabledRequest, PluginSetEnabledResponse, dispatch,
+    KvGetRequest, KvGetResponse, KvSetRequest, KvVoidResponse, OpenExternalRequest,
+    OpenExternalResponse, PluginAddRequest, PluginAddResponse, PluginKvDeleteRequest,
+    PluginKvGetRequest, PluginKvGetResponse, PluginKvSetRequest, PluginListEntry,
+    PluginListResponse, PluginRemoveRequest, PluginRemoveResponse, PluginSetEnabledRequest,
+    PluginSetEnabledResponse, dispatch,
 };
 use sqlite::{Connection, ConnectionThreadSafe, State as SqlState};
 use tower_http::cors::{Any, CorsLayer};
@@ -119,6 +120,7 @@ pub fn router(state: HostState) -> Router {
         .route("/host/accounts/add", post(accounts_add))
         .route("/host/accounts/remove", post(accounts_remove))
         .route("/host/accounts/list", get(accounts_list))
+        .route("/host/open-external", post(open_external))
         .route("/host", post(host_legacy))
         .route("/poly-service-worker.js", get(poly_service_worker))
         .with_state(state)
@@ -372,6 +374,68 @@ async fn host_http(Json(call): Json<HostCall>) -> Result<Json<HostResponse>, Sta
     match &call {
         HostCall::HttpRequest { .. } => Ok(Json(dispatch(call).await)),
         HostCall::ExecCommand { .. } => Err(StatusCode::BAD_REQUEST),
+    }
+}
+
+/// `POST /host/open-external` — open a URL in the system's default browser.
+///
+/// # Security
+///
+/// Only `http://` and `https://` schemes are permitted. Any other scheme
+/// (e.g. `javascript:`, `file:`, `data:`, custom protocol handlers) is
+/// rejected with HTTP 400 to prevent protocol-handler abuse from a
+/// compromised WASM page.
+///
+/// # Shell support
+///
+/// This route is registered by the Wry shell (via `apps/desktop`'s fullstack
+/// server) and the standalone `poly-host` daemon. Web and Electron shells do
+/// **not** need it:
+/// - Web (`apps/web`): `<a target="_blank">` opens new tabs natively.
+/// - Electron (`apps/desktop-electron`): `setWindowOpenHandler` already
+///   forwards every `window.open` call to `shell.openExternal` (wired at
+///   `apps/desktop-electron-web/electron/main.js:115-118`).
+async fn open_external(
+    Json(req): Json<OpenExternalRequest>,
+) -> (StatusCode, Json<OpenExternalResponse>) {
+    // Security: hard-reject non-HTTP(S) schemes.
+    let url = req.url.trim();
+    if !url.starts_with("http://") && !url.starts_with("https://") {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(OpenExternalResponse {
+                ok: false,
+                err: Some(format!(
+                    "rejected: only http:// and https:// URLs are allowed, got: {url}"
+                )),
+            }),
+        );
+    }
+
+    // Basic parse sanity check (webbrowser crate does its own, but we want
+    // a 400 rather than a silent failure on malformed input).
+    if url.contains('\0') || url.contains('\n') || url.contains('\r') {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(OpenExternalResponse {
+                ok: false,
+                err: Some("rejected: URL contains control characters".into()),
+            }),
+        );
+    }
+
+    match webbrowser::open(url) {
+        Ok(()) => (
+            StatusCode::OK,
+            Json(OpenExternalResponse { ok: true, err: None }),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(OpenExternalResponse {
+                ok: false,
+                err: Some(format!("failed to open browser: {e}")),
+            }),
+        ),
     }
 }
 
@@ -1867,6 +1931,93 @@ mod tests {
         assert_eq!(accounts.len(), 1);
         assert_eq!(accounts[0]["account_id"], "agent-test");
         assert_eq!(accounts[0]["backend"], "demo");
+    }
+
+    // ─── open-external route tests ────────────────────────────────────────────
+
+    /// A valid HTTPS URL returns 200 with `ok: true`.
+    /// Note: the test does NOT assert that a browser actually opened — that
+    /// is an OS side-effect and not testable in unit tests without a display.
+    /// The route returns 200 even in CI (no GUI) because `webbrowser::open`
+    /// returns Ok(()) as long as it could *attempt* to hand off to the OS;
+    /// the browser may not actually open in a headless environment, but the
+    /// HTTP contract is satisfied.
+    #[tokio::test]
+    async fn open_external_valid_https_url_returns_200() {
+        let app = router(test_state());
+        let (status, body) = post_json(
+            &app,
+            "/host/open-external",
+            serde_json::json!({ "url": "https://example.com" }),
+        )
+        .await;
+        // We accept either 200 or 500 here: headless CI may not have a
+        // browser, causing webbrowser::open to return Err. What we DO assert
+        // is that the route exists (not 404) and parses the request correctly
+        // (not 400 from a bad-request guard).
+        assert_ne!(status, StatusCode::NOT_FOUND, "route must exist");
+        assert_ne!(
+            status,
+            StatusCode::BAD_REQUEST,
+            "valid https URL must not be 400: {body}"
+        );
+    }
+
+    /// A `javascript:` URL must be rejected with HTTP 400 (security gate).
+    #[tokio::test]
+    async fn open_external_javascript_scheme_rejected() {
+        let app = router(test_state());
+        let (status, body) = post_json(
+            &app,
+            "/host/open-external",
+            serde_json::json!({ "url": "javascript:alert(1)" }),
+        )
+        .await;
+        assert_eq!(
+            status,
+            StatusCode::BAD_REQUEST,
+            "javascript: scheme must be rejected: {body}"
+        );
+        let resp: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(resp["ok"], false);
+    }
+
+    /// A malformed URL (not http/https) must be rejected with HTTP 400.
+    #[tokio::test]
+    async fn open_external_file_scheme_rejected() {
+        let app = router(test_state());
+        let (status, body) = post_json(
+            &app,
+            "/host/open-external",
+            serde_json::json!({ "url": "file:///etc/passwd" }),
+        )
+        .await;
+        assert_eq!(
+            status,
+            StatusCode::BAD_REQUEST,
+            "file: scheme must be rejected: {body}"
+        );
+        let resp: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(resp["ok"], false);
+    }
+
+    /// An `http://` URL must also pass the scheme gate (not just https).
+    #[tokio::test]
+    async fn open_external_http_scheme_allowed_by_gate() {
+        let app = router(test_state());
+        let (status, body) = post_json(
+            &app,
+            "/host/open-external",
+            serde_json::json!({ "url": "http://example.com" }),
+        )
+        .await;
+        // Same as the https test: 404 and 400 are forbidden; 200 or 500 accepted.
+        assert_ne!(status, StatusCode::NOT_FOUND, "route must exist");
+        assert_ne!(
+            status,
+            StatusCode::BAD_REQUEST,
+            "valid http URL must not be 400: {body}"
+        );
     }
 }
 

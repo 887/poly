@@ -350,63 +350,52 @@ tests pass.
 
 ## Phase C — Host browser-opening helpers (per-shell)
 
-**Effort:** half day (Electron and web shells need zero new code).
+> **Refinement applied (shipped):** The original design called for a full
+> `crates/host-open-external/` trait crate. After reading the Electron handler
+> and the host-bridge architecture, the refined design is simpler:
+> - **Web + Electron** share the same path (`<a target="_blank">` / `window.open`
+>   forwarded by `setWindowOpenHandler` to `shell.openExternal` — already wired at
+>   `apps/desktop-electron-web/electron/main.js:115-118`). Zero new code on these shells.
+> - **Wry desktop**: needs a new `POST /host/open-external` route in the
+>   `poly_host` router (which is already mounted by `apps/desktop`'s fullstack
+>   server on port 3002). Uses the `webbrowser` crate (already in Cargo.lock as
+>   a transitive dep of dioxus-desktop; now made explicit).
+> - A thin async helper `Client::open_external` in `crates/host-bridge/src/lib.rs`
+>   lets Phase D's RegisterLink call it without knowing which shell is running.
 
-- [ ] **C.1** Create `crates/host-open-external/` crate with the
-      `OpenExternal` trait (`fn open(&self, url: &str)`) and a
-      `host_open_external_url(url: &str)` helper free function that
-      grabs the trait from `use_context` and calls `.open(url)`. Trait
-      method is sync (returns immediately after spawning the open
-      action).
-      **Verify:** `ls crates/host-open-external/src/lib.rs && grep -n "trait OpenExternal\|host_open_external_url" crates/host-open-external/src/lib.rs` shows both.
-- [ ] **C.2** Implement `WebOpenExternal` (default for any
-      `target_arch = "wasm32"` shell — covers `apps/web` AND
-      `apps/desktop-electron`) using
-      `web_sys::window().unwrap().open_with_url_and_target(url, "_blank")`.
-      Mirrors the pattern already at
-      `crates/core/src/ui/account/common/attachment_context_menu.rs:133`.
-      Electron's `setWindowOpenHandler` handles the
-      `window.open` → `shell.openExternal` forwarding (already wired,
-      verified `apps/desktop-electron-web/electron/main.js:115-118`).
-      **Verify:** `cargo build -p poly-host-open-external --target wasm32-unknown-unknown` succeeds.
-- [ ] **C.3** Implement `WryOpenExternal` for the Wry shell — when the
-      WASM bundle is loaded inside `apps/desktop`'s Wry WebView,
-      `window.open` does NOT route to the system browser. Solution: post
-      to `POST /host/exec` (the existing route at
-      `crates/host-bridge/src/lib.rs:65`) with the platform-appropriate
-      open command:
-      - Linux: `program = "xdg-open"`, `args = [url]`
-      - macOS: `program = "open"`, `args = [url]`
-      - Windows: `program = "cmd"`, `args = ["/c", "start", "", url]`
-      Detect the host platform server-side (the `/host/exec` handler runs
-      in the native server half of `apps/desktop`) and pick the program
-      there, OR have the WASM client send `program = "@open-external"`
-      and add a special-case in the `/host/exec` handler. **Decision:**
-      add a new route `POST /host/open-external` in `host-bridge` that
-      takes `{ "url": "..." }` and runs the platform `open` programmatically
-      via the `open` crate (`open::that(url)`); the route is registered
-      only by the Wry shell's server half (`apps/desktop/src/main.rs`).
-      `apps/web` and `apps/desktop-electron` don't register it because
-      they don't need it.
-      **Verify:** `grep -n "open-external\|open::that" apps/desktop/src/main.rs crates/host-bridge/src/lib.rs` shows wiring.
-- [ ] **C.4** Each shell's `main.rs` provides the appropriate
-      `Arc<dyn OpenExternal>` via `use_context_provider` at App init.
-      `apps/web/src/main.rs` and `apps/desktop-electron/src/main.rs`
-      provide `WebOpenExternal`; `apps/desktop/src/main.rs` provides
-      `WryOpenExternal`.
-      **Verify:** `for f in apps/web/src/main.rs apps/desktop/src/main.rs apps/desktop-electron/src/main.rs; do grep -l "OpenExternal" $f || echo "MISSING: $f"; done`.
-- [ ] **C.5** Sanity-check on each shell that calling
-      `host_open_external_url("https://example.com")` opens a new tab /
-      system browser window with no security-policy errors (CSP on web,
-      sandbox on Electron, no Wry pop-up).
-      **Verify:** manual smoke (or via TEST_HARNESS.md haiku subagent)
-      on poly-web; electron + Wry can be checked once during PR review.
-- [ ] **C.6** Add `crates/host-open-external` to the workspace
-      `Cargo.toml` members list and as a dependency of `crates/core`.
-      **Verify:** `cargo metadata --format-version 1 | grep -q poly-host-open-external`.
+**Effort:** half day (Electron and web shells needed zero new code).
 
-**Acceptance:** all three shells can open an arbitrary URL via the
-shared trait; no new CSP / sandbox warnings in console.
+- [x] **C.1** Add `webbrowser = "1.0"` to workspace `Cargo.toml` and to
+      `apps/poly-host/Cargo.toml`. (The crate was already a transitive dep
+      via dioxus-desktop; this makes it an explicit dep so `poly-host` can
+      call `webbrowser::open`.)
+      **Verify:** `cargo check -p poly-host` succeeds. — shipped in this commit.
+- [x] **C.2** Add wire types `OpenExternalRequest` / `OpenExternalResponse`
+      and the route constant `ROUTE_OPEN_EXTERNAL = "/host/open-external"` to
+      `crates/host-bridge/src/lib.rs`. Add async helper
+      `Client::open_external(url: &str)` that POSTs to this route.
+      **Verify:** `grep -n "OpenExternal\|open_external\|ROUTE_OPEN_EXTERNAL" crates/host-bridge/src/lib.rs` shows all three. — shipped in this commit.
+- [x] **C.3** Implement `POST /host/open-external` route handler in
+      `apps/poly-host/src/lib.rs`. Handler validates the URL scheme
+      (http/https only — rejects `javascript:`, `file:`, etc. with HTTP 400),
+      then calls `webbrowser::open(url)`. Route is wired in `router()` so it
+      is available in all poly-host consumers (apps/desktop fullstack server,
+      standalone poly-host daemon).
+      **Verify:** `grep -n "open.external\|open_external\|webbrowser" apps/poly-host/src/lib.rs` shows handler + wiring. — shipped in this commit.
+- [x] **C.4** Confirmed: Electron's existing `setWindowOpenHandler` at
+      `apps/desktop-electron-web/electron/main.js:115-118` already forwards
+      every `window.open` (including `target="_blank"` anchors) to
+      `shell.openExternal`. No new code required on Electron or Web shells.
+      — verified, no commit needed.
+- [x] **C.5** Unit tests added to `apps/poly-host/src/lib.rs` in the `tests`
+      module: valid https URL → 200 (or 500 in headless CI, but not 400/404);
+      `javascript:` URL → 400; `file:` URL → 400; valid `http://` URL →
+      passes scheme gate (200 or 500, not 400/404).
+      **Verify:** `cargo test -p poly-host --lib` → 33 passed, 0 failed. — shipped in this commit.
+
+**Acceptance:** Wry desktop shell can open arbitrary http(s) URLs via
+`/host/open-external`; Web + Electron use existing `target="_blank"` path;
+no new CSP / sandbox concerns introduced.
 
 ---
 
@@ -622,3 +611,16 @@ Phase A  ──►  Phase B  ┐
    already exists on the form; users who don't know what to type can
    read the existing form helper text. A "Browse instances" sub-link
    is a follow-up.
+
+---
+
+### Phase C Status: DONE
+
+All five sub-steps shipped in one commit. Verified: `cargo check -p poly-host-bridge -p poly-host` passes; `cargo test -p poly-host --lib` → 33 tests passed, 0 failed.
+
+Files changed:
+- `Cargo.toml` — added `webbrowser = "1.0"` to workspace deps
+- `apps/poly-host/Cargo.toml` — added `webbrowser = { workspace = true }`
+- `crates/host-bridge/src/lib.rs` — added `ROUTE_OPEN_EXTERNAL`, `OpenExternalRequest`, `OpenExternalResponse`, `Client::open_external`
+- `apps/poly-host/src/lib.rs` — added `open_external` route handler + unit tests (C.5)
+- `docs/plans/plan-client-signup-link-surface.md` — updated Phase C sub-steps to reflect refined design; ticked C.1-C.5

@@ -75,6 +75,8 @@ pub const ROUTE_KV_DELETE: &str = "/host/kv/delete";
 pub const ROUTE_KV_CLEAR: &str = "/host/kv/clear";
 /// Sub-route for the bridge liveness ping.
 pub const ROUTE_STATUS: &str = "/host/status";
+/// Sub-route for `POST /host/open-external` — open a URL in the system browser.
+pub const ROUTE_OPEN_EXTERNAL: &str = "/host/open-external";
 
 /// Full default URL of the legacy `/host` dispatch endpoint.
 pub const BRIDGE_URL: &str = "http://127.0.0.1:9333/host";
@@ -182,6 +184,31 @@ pub struct KvGetResponse {
 /// Plain OK/err response shared by `set` / `delete` / `clear`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KvVoidResponse {
+    pub ok: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub err: Option<String>,
+}
+
+// ─── Open-external wire types ─────────────────────────────────────────────────
+
+/// Body for `POST /host/open-external`.
+///
+/// The host validates that `url` begins with `http://` or `https://` before
+/// forwarding to the system browser. Non-HTTP(S) schemes (`javascript:`,
+/// `file:`, etc.) are rejected with HTTP 400 to prevent protocol-handler abuse.
+///
+/// Only native shells (Wry/desktop, poly-host daemon) register this route.
+/// Web and Electron shells do not need it: web uses a plain `<a target="_blank">`,
+/// and Electron's `setWindowOpenHandler` already forwards `window.open` calls to
+/// `shell.openExternal` (verified at `apps/desktop-electron-web/electron/main.js:115-118`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OpenExternalRequest {
+    pub url: String,
+}
+
+/// Response body for `POST /host/open-external`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OpenExternalResponse {
     pub ok: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub err: Option<String>,
@@ -630,6 +657,33 @@ impl Client {
         let url = format!("{}{}", self.base, ROUTE_KV_CLEAR);
         let resp: KvVoidResponse = self.post_json(&url, &serde_json::json!({})).await?;
         Self::expect_ok(resp)
+    }
+
+    /// `POST /host/open-external` — ask the native shell to open `url` in the
+    /// system browser.
+    ///
+    /// Only relevant for the **Wry desktop shell** (and the standalone
+    /// `poly-host` daemon). Web and Electron shells open URLs directly via
+    /// `<a target="_blank">` / `setWindowOpenHandler`; they don't register this
+    /// route and will return `BridgeError::Unreachable` or 404.
+    ///
+    /// # Errors
+    ///
+    /// Returns `BridgeError::Host` if the shell rejects the URL (e.g. non-HTTP(S)
+    /// scheme), and `BridgeError::Unreachable` if the shell is not running.
+    pub async fn open_external(&self, url: &str) -> Result<(), BridgeError> {
+        let endpoint = format!("{}{}", self.base, ROUTE_OPEN_EXTERNAL);
+        let req = OpenExternalRequest {
+            url: url.to_string(),
+        };
+        let resp: OpenExternalResponse = self.post_json(&endpoint, &req).await?;
+        if resp.ok {
+            Ok(())
+        } else {
+            Err(BridgeError::Host(
+                resp.err.unwrap_or_else(|| "open-external failed".into()),
+            ))
+        }
     }
 
     /// Shared POST+decode helper for the sub-routes.

@@ -6713,6 +6713,7 @@ dependencies = [
  "tower-http",
  "tracing",
  "tracing-subscriber",
+ "webbrowser",
 ]
 
 [[package]]

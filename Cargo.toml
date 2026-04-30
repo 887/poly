@@ -190,6 +190,7 @@ tokio-tungstenite = { version = "0.26", features = ["native-tls"] }
 futures-util = "0.3"
 tempfile = "3"
 webkit2gtk = { version = "2.0", features = [] }
+webbrowser = "1.0"
 
 # Audio / Noise
 # nnnoiseless: pure-Rust port of Mozilla RNNoise for real-time noise cancellation.
