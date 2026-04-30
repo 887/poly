@@ -1,6 +1,6 @@
 # Plan — Persona Quality Gates (Lints, Fuzz, Audit Surface)
 
-## Status: 🚧 PLANNED — not started
+## Status: 🚧 IN PROGRESS — Phase Q shipped (3 lints + stub); Phases R-T pending
 
 > **Why this is its own plan, not extra phases on `plan-meta-personalities.md`:**
 > the work is **CI infrastructure** — `tools/scripts/forbid-*.sh` lints,
@@ -68,50 +68,55 @@ the mechanism (allowlisted regex grep that fails CI) is identical.
 
 ### Phase Q — Lints
 
-- [ ] **Q.1** `tools/scripts/forbid-cross-persona-memory.sh` — greps
+- [x] **Q.1** `tools/scripts/forbid-cross-persona-memory.sh` — greps
   `mcp/chat-mcp/src/` for any `SELECT … FROM persona_facts` not followed
   within N lines by `WHERE persona_slug` (or `persona_slug = ?` bound
   param). Allowlisted exceptions live in
   `tools/scripts/cross-persona-memory-allowlist.txt` with rationale
   comments. Inline form: `// poly-lint: allow cross-persona-memory —
   <reason>`. Acceptance: 0 unallowlisted hits at the time of landing.
+  Shipped in Phase Q commit.
 
-- [ ] **Q.2** `tools/scripts/forbid-unaudited-persona-tool.sh` — greps
+- [x] **Q.2** `tools/scripts/forbid-unaudited-persona-tool.sh` — greps
   `mcp/chat-mcp/src/tools.rs` for every `fn handle_meta_persona_*`
   function and asserts each calls `audit(` or `record_persona_audit(`
   at least once on the success path. Skips read-only tools (allowlisted:
-  `_list`, `_get`, `_get_memory`, `_recent_actions`, `_list_sources`,
-  `_list_tool_whitelist`, `_list_outbound_allows`, `_invocation_history`,
-  `_export_memory`). Acceptance: ALL state-changing handlers either
-  audit or are in the allowlist with a written reason.
+  `_list`, `_recent_actions`; `_get` and `_get_memory` already audit).
+  Acceptance: ALL state-changing handlers either audit or are in the
+  allowlist with a written reason.
+  Shipped in Phase Q commit.
 
-- [ ] **Q.3** `tools/scripts/forbid-ui-only-persona-action.sh` — for every
-  `onclick`/`onsubmit` handler in `crates/core/src/ui/agent/persona/`
-  that mutates persona state, asserts the handler call-graph reaches a
-  `tools::dispatch_persona_*` or MCP RPC call (i.e. doesn't bypass the
-  audit-emitting MCP path by writing SQLite directly from the UI
-  process). Mechanically: grep for direct `MemoryDb::` calls in the
-  persona UI dir — these are forbidden; UI must always go via the local
-  MCP. Acceptance: 0 unallowlisted hits; allowlist documents
-  read-only convenience hits if any.
+- [x] **Q.3** `tools/scripts/forbid-ui-only-persona-action.sh` — stub —
+  runs as no-op until Phase D lands; full impl deferred to follow-up
+  commit. The stub exits 0 with a one-line notice so the CI matrix stays
+  consistent without lying about coverage. Phase D UI not landed yet
+  (`crates/core/src/ui/agent/persona/` does not exist); the full
+  grep-for-MemoryDb-in-UI implementation will be added when Phase D
+  ships. See plan-persona-quality-gates.md Q.3 comment.
+  Shipped (stub) in Phase Q commit.
 
-- [ ] **Q.4** Extend the scope of the EXISTING
+- [x] **Q.4** Extend the scope of the EXISTING
   `tools/scripts/forbid-raw-backend-read.sh` to cover
   `mcp/chat-mcp/src/persona/` (currently it gates `crates/core/src/ui/`).
   No new script, just edit the path glob in the existing one + sweep
   any new violations. Acceptance: persona/context.rs uses
-  `read_with_timeout` everywhere it talks to a backend pool.
+  `tokio::time::timeout` (BACKEND_TIMEOUT constant) everywhere it talks
+  to a backend — verified clean (0 new violations after path extension).
+  Shipped in Phase Q commit.
 
-- [ ] **Q.5** Add all 4 lints to `.github/workflows/lint-test.yml`
+- [x] **Q.5** Add all 4 lints to `.github/workflows/lint-test.yml`
   alongside the existing eight. Set `continue-on-error: false` from day
   one — these ship clean (the persona code is brand-new, no legacy debt
   to grandfather). Acceptance: CI red on any unallowlisted violation.
+  Shipped in Phase Q commit.
 
-- [ ] **Q.6** Document the four classes in `CLAUDE.md` (under a new
-  "Persona-subsystem footguns" subsection inside the existing "Common
-  WASM-hang causes" section, OR a new sibling section — author's
-  call). Each class gets the same template the hang classes use:
-  symptom + countermeasure + commit ID + lint script path.
+- [x] **Q.6** Document the four classes in `CLAUDE.md` under a new
+  "Persona-subsystem footguns" sibling section to "Common WASM-hang
+  causes" (separate section chosen because these are privacy/contract
+  bugs, not WASM concurrency bugs). Three real classes documented
+  (P1, P2, P4); P3 stub noted in Q.3 above. Each class follows the
+  hang-class template: symptom + countermeasure + lint script path.
+  Shipped in Phase Q commit.
 
 **Effort:** 1 session.
 
@@ -282,3 +287,22 @@ the mechanism (allowlisted regex grep that fails CI) is identical.
   search is over-engineering for 30 days × 1 user × ~hundreds of rows.
 - ❌ Sentry / external telemetry exfil of audit data. Privacy-first —
   audit stays local.
+
+---
+
+### Phase Q Status
+
+Phase Q shipped in a single commit. All Q.1–Q.6 sub-steps complete.
+
+| Sub-step | Status | Notes |
+|---|---|---|
+| Q.1 `forbid-cross-persona-memory.sh` | shipped | 1 allowlisted entry: `prune_persona_audit_before` (time-based housekeeping, intentional) |
+| Q.2 `forbid-unaudited-persona-tool.sh` | shipped | Allowlisted: `_list`, `_recent_actions` (read-only); `_get`/`_get_memory` already audit |
+| Q.3 `forbid-ui-only-persona-action.sh` | stub — deferred | Exits 0 with notice; full impl deferred until Phase D UI lands |
+| Q.4 `forbid-raw-backend-read.sh` extended | shipped | 0 new violations; `context.rs` already uses `timeout(BACKEND_TIMEOUT, …)` throughout |
+| Q.5 CI wiring | shipped | All 4 steps in `lint-test.yml`, `continue-on-error: false` |
+| Q.6 CLAUDE.md footguns section | shipped | New sibling section "Persona-subsystem footguns" with P1/P2/P4 classes |
+
+**Decision logged:** `persona_invocation_history` table does not exist in
+`memory.rs` schema as of Phase Q (Phase E not yet shipped). Omitted from
+Q.1 grep set. Re-extend Q.1 when Phase E lands and the table is added.

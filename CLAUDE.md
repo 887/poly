@@ -605,3 +605,69 @@ When the bug doesn't match classes #1–#5, the freeze is likely in
 generated code (Dioxus interpreter, `wit_bindgen` bridge) and you'll
 need a real DevTools session — `chrome-devtools-mcp` if it's loaded,
 or ask the user to paste a stack trace from the Sources panel.
+
+## Persona-subsystem footguns
+
+The persona subsystem (`mcp/chat-mcp/src/persona/`, `mcp/chat-mcp/src/tools.rs`)
+has its own class of footguns analogous to the WASM hang classes above.
+These are **privacy and contract bugs**, not concurrency bugs, but the
+countermeasure pattern is identical: allowlisted regex lints that hard-fail CI.
+All three lints ship with `continue-on-error: false` — the code is new,
+no legacy debt to grandfather.
+
+### P1 — Cross-persona memory leak
+
+**Symptom:** A `SELECT`, `DELETE`, or `UPDATE` against a persona-scoped
+table (`persona_facts`, `persona_audit`, `persona_sources`,
+`persona_tool_whitelist`, `persona_outbound_allowlist`) without a
+`WHERE persona_slug = ?` binding returns or mutates rows belonging to a
+different persona. Silent data corruption — no error, wrong persona gets
+the facts / audit rows.
+
+**Countermeasure (shipped with CI gate, Phase Q.1 of
+`docs/plans/plan-persona-quality-gates.md`):**
+`tools/scripts/forbid-cross-persona-memory.sh` scans
+`mcp/chat-mcp/src/` for DML targeting persona-scoped tables and
+fails CI if no `persona_slug` binding appears within 10 lines.
+Intentional exceptions (e.g. time-based audit pruning) live in
+`tools/scripts/cross-persona-memory-allowlist.txt` with rationale
+comments. Inline escape: `// poly-lint: allow cross-persona-memory — <reason>`.
+
+### P2 — Unaudited persona handler
+
+**Symptom:** A new `fn handle_meta_persona_*` function in
+`mcp/chat-mcp/src/tools.rs` mutates persona state but does not call
+`audit()` or `record_persona_audit()` on the success path. The
+`persona_audit` table is the forensic trail for "who did what to which
+persona when"; a missing row silently drops an event and makes the
+audit trail incomplete. No runtime error — the call succeeds, data
+changes, audit is dark.
+
+**Countermeasure (shipped with CI gate, Phase Q.2 of
+`docs/plans/plan-persona-quality-gates.md`):**
+`tools/scripts/forbid-unaudited-persona-tool.sh` extracts every
+`handle_meta_persona_*` function body and fails CI if none of
+`audit(mem,` or `record_persona_audit(` appears inside it.
+Read-only handlers that genuinely need no audit row (`_list`,
+`_recent_actions`) are explicitly allowlisted in
+`tools/scripts/unaudited-persona-tool-allowlist.txt` with rationale.
+Inline escape: `// poly-lint: allow unaudited-persona-tool — <reason>`.
+
+### P4 — Raw backend read in persona builder
+
+**Symptom:** `BackendPoolProvider` in `mcp/chat-mcp/src/persona/context.rs`
+calls a chat backend method (e.g. `get_messages`, `get_channels`) without
+wrapping the call in `tokio::time::timeout`. The chat-mcp server is
+native (not WASM), so there is no single-thread scheduler to wedge — but
+an unresponsive backend still blocks the async runtime thread indefinitely,
+hanging the MCP tool call and preventing any further persona invocations.
+
+**Countermeasure (shipped with CI gate, Phase Q.4 of
+`docs/plans/plan-persona-quality-gates.md`):**
+`tools/scripts/forbid-raw-backend-read.sh` now scans BOTH
+`crates/core/src/ui/` (original WASM-hang gate, hang class #4) AND
+`mcp/chat-mcp/src/persona/` (Q.4 extension). All backend calls in
+`BackendPoolProvider` already use `tokio::time::timeout(BACKEND_TIMEOUT,
+…)` (5-second cap). The existing allowlist
+`tools/scripts/raw-backend-read-allowlist.txt` covers both scopes.
+Inline escape: `// poly-lint: allow raw backend.read().await — <reason>`.

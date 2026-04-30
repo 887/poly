@@ -1,0 +1,27 @@
+# unaudited-persona-tool-allowlist.txt — Phase Q.2 of plan-persona-quality-gates.md.
+#
+# Handler suffixes (the part after `handle_meta_persona`) that are
+# intentionally exempt from the audit-call requirement because they are
+# pure read operations that do not mutate persona state.
+#
+# Format: one entry per line.
+#   _suffix    (leading underscore or bare suffix both match)
+# Blank lines and lines starting with `#` are ignored.
+#
+# Every entry MUST carry a preceding `#`-comment block explaining
+# WHY auditing is not required. If you cannot explain it, the handler
+# probably needs to emit an audit row.
+#
+# The preferred alternative for individual lines is the inline comment:
+#   // poly-lint: allow unaudited-persona-tool — <reason>
+
+# meta_persona_list — returns the list of all personas. No state mutation.
+# Auditing every list call would generate noise with no forensic value;
+# the interesting events are creates, updates, and deletes (all audited).
+_list
+
+# meta_persona_recent_actions — queries the persona_audit table and returns
+# rows. This IS a read of the audit trail itself; emitting a second audit
+# row for the read would be circular and would inflate the audit log with
+# O(N) observer entries per N action rows read. Read-only; no audit needed.
+_recent_actions

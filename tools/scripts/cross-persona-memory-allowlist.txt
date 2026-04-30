@@ -1,0 +1,27 @@
+# cross-persona-memory-allowlist.txt — Phase Q.1 of plan-persona-quality-gates.md.
+#
+# File-level fallback allowlist for `forbid-cross-persona-memory.sh`.
+# Use this when a cross-persona-scoped query is intentional and safe —
+# e.g. administrative housekeeping or primary-key targeted deletes whose
+# callers already scoped the IDs to the correct persona.
+#
+# Formats (first match wins):
+#   path                      whole-file allow (use sparingly)
+#   path:N                    pin a single line (line-drift risk)
+#   path:start-end            range allow (preferred)
+#
+# Every entry MUST carry a trailing `# rationale` or a preceding
+# `#`-comment block explaining WHY the cross-persona access is safe.
+# Adding an entry without rationale will be rejected in code review.
+#
+# The preferred mechanism is an inline comment on the offending line:
+#   // poly-lint: allow cross-persona-memory — <reason>
+
+# `prune_persona_audit_before` — time-based housekeeping delete.  This
+# intentionally removes audit rows across ALL personas older than a
+# cutoff ISO-8601 timestamp.  It is not a data-leak: it is a
+# storage-management operation (equivalent to log rotation).  The
+# caller is expected to be an admin / scheduled task, not user-facing.
+# No persona_slug binding is appropriate here — the prune is by time,
+# not by persona identity.
+mcp/chat-mcp/src/memory.rs:1231

@@ -125,6 +125,46 @@ jobs:
         run: ./tools/scripts/forbid-effect-self-write.sh
         continue-on-error: true
 
+      # ── Persona quality gates (Phase Q of plan-persona-quality-gates.md) ───
+      #
+      # These four lints gate the persona subsystem (mcp/chat-mcp). All ship
+      # continue-on-error: false from day one — the persona code is brand-new
+      # with no legacy debt to grandfather.
+
+      # Q.1 — cross-persona memory leak: SELECT/DELETE/UPDATE on persona-scoped
+      # tables without a nearby persona_slug binding leaks rows across personas.
+      # Allowlist: tools/scripts/cross-persona-memory-allowlist.txt
+      # Inline-allowlist: // poly-lint: allow cross-persona-memory — <reason>
+      # See: CLAUDE.md "Persona-subsystem footguns" class P1.
+      - name: Check for cross-persona memory access (persona class P1)
+        run: bash tools/scripts/forbid-cross-persona-memory.sh
+
+      # Q.2 — unaudited persona handler: every state-changing handle_meta_persona_*
+      # function in tools.rs must call audit() or record_persona_audit(). Omitting
+      # the audit row silently drops entries from the forensic audit trail.
+      # Allowlist: tools/scripts/unaudited-persona-tool-allowlist.txt
+      # Inline-allowlist: // poly-lint: allow unaudited-persona-tool — <reason>
+      # See: CLAUDE.md "Persona-subsystem footguns" class P2.
+      - name: Check for unaudited persona tool handlers (persona class P2)
+        run: bash tools/scripts/forbid-unaudited-persona-tool.sh
+
+      # Q.3 — UI-only persona action: stub until Phase D UI lands.
+      # When Phase D ships, replace with a real grep for MemoryDb:: calls
+      # in crates/core/src/ui/agent/persona/. Currently exits 0 immediately.
+      # See: docs/plans/plan-persona-quality-gates.md Q.3.
+      - name: Check for UI-only persona actions (persona class P3 — stub)
+        run: bash tools/scripts/forbid-ui-only-persona-action.sh
+
+      # Q.4 — raw backend read in persona builder: extends the existing
+      # forbid-raw-backend-read.sh to also scan mcp/chat-mcp/src/persona/.
+      # BackendPoolProvider in context.rs already wraps all backend calls in
+      # tokio::time::timeout; this lint prevents future regressions.
+      # Allowlist: tools/scripts/raw-backend-read-allowlist.txt (shared)
+      # Inline-allowlist: // poly-lint: allow raw backend.read().await — <reason>
+      # See: CLAUDE.md "Persona-subsystem footguns" class P4.
+      - name: Check for raw backend.read().await in persona builder (persona class P4)
+        run: bash tools/scripts/forbid-raw-backend-read.sh
+
   dylint:
     # Phase 5 Track B of plan-batched-signal.md + plan-use-spawn-once.md —
     # HIR-precise alternative to the regex scripts above. Belt-and-suspenders:

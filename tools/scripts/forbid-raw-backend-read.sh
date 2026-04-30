@@ -34,6 +34,10 @@ set -euo pipefail
 
 ROOT="${ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 SCAN_DIR="${ROOT}/crates/core/src/ui"
+# Phase Q.4 of plan-persona-quality-gates.md: also scan the persona builder
+# in chat-mcp, which issues backend calls on persona's behalf and must use
+# the same timeout discipline as the UI crate.
+SCAN_DIR_PERSONA="${ROOT}/mcp/chat-mcp/src/persona"
 ALLOWLIST="${ROOT}/tools/scripts/raw-backend-read-allowlist.txt"
 
 if [[ ! -d "$SCAN_DIR" ]]; then
@@ -61,7 +65,12 @@ while IFS= read -r -d '' f; do
         | while IFS=: read -r lineno content; do
             printf '%s\t%s\t%s\n' "$f" "$lineno" "$content"
           done >> "$hits_file" || true
-done < <(find "$SCAN_DIR" -type f -name '*.rs' -print0)
+done < <(
+    find "$SCAN_DIR" -type f -name '*.rs' -print0
+    if [[ -d "$SCAN_DIR_PERSONA" ]]; then
+        find "$SCAN_DIR_PERSONA" -type f -name '*.rs' -print0
+    fi
+)
 
 # Allowlist check against file-level entries.
 unallowed=0
@@ -115,5 +124,5 @@ to the end of the line.
 EOF
 done < "$flagged_file"
 
-echo "error: ${unallowed} unallowlisted raw backend.read().await hit(s) in crates/core/src/ui" >&2
+echo "error: ${unallowed} unallowlisted raw backend.read().await hit(s) in crates/core/src/ui + mcp/chat-mcp/src/persona" >&2
 exit 1
