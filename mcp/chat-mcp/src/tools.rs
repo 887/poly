@@ -3302,6 +3302,62 @@ fn handle_meta_persona_set_outbound_allow(args: &Value, mem: &MemoryDb) -> Value
     }
 }
 
+// ─── Phase T — audit surface handlers ────────────────────────────────────────
+
+/// `meta_persona_audit_query` — filtered query over persona_audit.
+///
+/// Read-only; no audit row emitted (auditing a read of the audit log would be
+/// circular).  Listed in `unaudited-persona-tool-allowlist.txt`.
+fn handle_meta_persona_audit_query(args: &Value, mem: &MemoryDb) -> Value {
+    let slug           = str_arg(args, "slug");
+    let action         = str_arg(args, "action");
+    let actor          = str_arg(args, "actor");
+    let since          = str_arg(args, "since");
+    let until          = str_arg(args, "until");
+    let target_account = str_arg(args, "target_account");
+    let target_chat    = str_arg(args, "target_chat");
+    let result         = str_arg(args, "result");
+    let limit          = args.get("limit").and_then(|v| v.as_i64()).unwrap_or(100).max(1).min(500);
+
+    match mem.query_persona_audit(
+        slug.as_deref(),
+        action.as_deref(),
+        actor.as_deref(),
+        since.as_deref(),
+        until.as_deref(),
+        target_account.as_deref(),
+        target_chat.as_deref(),
+        result.as_deref(),
+        limit,
+    ) {
+        Ok(rows) => ok_result(serde_json::to_string_pretty(&rows).unwrap_or_default()),
+        Err(e)   => err_result(format!("meta_persona_audit_query failed: {e}")),
+    }
+}
+
+/// `meta_persona_audit_export` — full audit history for a persona as JSONL.
+///
+/// Read-only; no audit row emitted.  Listed in `unaudited-persona-tool-allowlist.txt`.
+fn handle_meta_persona_audit_export(args: &Value, mem: &MemoryDb) -> Value {
+    let slug = match str_arg(args, "slug") {
+        Some(v) => v,
+        None    => return err_result("missing 'slug'"),
+    };
+
+    match mem.export_persona_audit(slug) {
+        Ok(rows) => {
+            // Serialise as JSONL (one JSON object per line).
+            let jsonl: String = rows
+                .iter()
+                .filter_map(|r| serde_json::to_string(r).ok())
+                .collect::<Vec<_>>()
+                .join("\n");
+            ok_result(jsonl)
+        }
+        Err(e) => err_result(format!("meta_persona_audit_export failed: {e}")),
+    }
+}
+
 // ─── Phase D (client-version plan) — client settings handlers ────────────────
 //
 // These handlers use `ClientConfigStore` from `poly_host_bridge`, which wraps

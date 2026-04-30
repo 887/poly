@@ -1354,11 +1354,10 @@ impl MemoryDb {
 
         // The LIMIT param comes after all filter vals.
         let limit_pos = vals.len() + 1;
+        let cols = "id,persona_slug,occurred_at,actor,action,\
+                    target_account,target_chat,payload_json,result,error_msg";
         let sql = format!(
-            "SELECT id,persona_slug,occurred_at,actor,action,\
-                    target_account,target_chat,payload_json,result,error_msg\
-             FROM persona_audit {where_sql}\
-             ORDER BY occurred_at DESC LIMIT ?{limit_pos}"
+            "SELECT {cols} FROM persona_audit {where_sql} ORDER BY occurred_at DESC LIMIT ?{limit_pos}"
         );
 
         let db = self.lock()?;
@@ -1380,8 +1379,8 @@ impl MemoryDb {
         let db = self.lock()?;
         let mut stmt = db.prepare(
             "SELECT id,persona_slug,occurred_at,actor,action,\
-                    target_account,target_chat,payload_json,result,error_msg\
-             FROM persona_audit WHERE persona_slug=?1\
+             target_account,target_chat,payload_json,result,error_msg \
+             FROM persona_audit WHERE persona_slug=?1 \
              ORDER BY occurred_at ASC"
         )?;
         stmt.bind((1, slug))?;

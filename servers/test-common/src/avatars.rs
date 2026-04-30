@@ -10,13 +10,14 @@
 //!        cockatoo, sheep, walrus, cat, dog
 
 use axum::http::StatusCode;
-use axum::response::IntoResponse;
+use axum::response::{IntoResponse, Response};
 
 /// Serve a bundled animal image by name.
 ///
 /// `name` is the bare animal name without extension (e.g. `"sheep"`).
-/// The function tries PNG first, then SVG. Returns 404 for unknown names.
-pub fn serve_animal(name: &str) -> impl IntoResponse {
+/// Returns PNG for animals that have a PNG asset, SVG for SVG-only animals.
+/// Returns 404 for unknown names.
+pub fn serve_animal(name: &str) -> Response {
     // PNG assets
     static KOALA_PNG: &[u8] = include_bytes!("../../../clients/demo/assets/koala.png");
     static KANGAROO_PNG: &[u8] = include_bytes!("../../../clients/demo/assets/kangaroo.png");

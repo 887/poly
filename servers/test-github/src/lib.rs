@@ -74,6 +74,7 @@ pub fn router_with_state(state: Arc<GitHubState>) -> Router {
             get(routes::get_contents),
         )
         .route("/graphql", post(routes::graphql))
+        .route("/avatars/{filename}", get(routes::serve_avatar))
         .route("/test/auth/token", post(routes::test_auth_token))
         // Inspection endpoints (Phase E)
         .route(

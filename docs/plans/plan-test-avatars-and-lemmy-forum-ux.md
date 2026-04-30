@@ -1,4 +1,4 @@
-## Status: 🚧 PLANNED — not started
+## Status: 🚧 Phase A DONE — Phases B-E pending
 
 # Test-account avatars + Lemmy preview-image + Forum-composer UX overhaul
 

@@ -72,6 +72,11 @@ pub fn router(state: Arc<TeamsState>) -> Router {
             "/v1.0/teams/{team_id}/members/{membership_id}",
             delete(routes::delete_team_member),
         )
+        // Profile photos (Graph profile-photo path used by poly-teams avatar fetch)
+        .route(
+            "/v1.0/users/{user_id}/photo/$value",
+            get(routes::serve_user_photo),
+        )
         // Chats / DMs
         .route("/v1.0/me/chats", get(routes::get_chats))
         .route(

@@ -151,22 +151,30 @@ pub fn PersonaAuditPanel(props: PersonaAuditPanelProps) -> Element {
     let mut page = use_signal(|| 0_usize);
 
     // Load rows when slug or filters change.
+    // Uses `meta_persona_audit_query` (Phase T.4) so action / target_account
+    // filtering happens server-side — no full-table fetch on panel open.
     let slug_dep = persona_slug.clone();
     use_reactive_effect((slug_dep, filters.read().clone()), move |(slug_load, f)| {
         spawn(async move {
             loading.set(true);
             load_error.set(None);
-            match call_persona_mcp(
-                "meta_persona_list_audit",
-                serde_json::json!({
-                    "slug": slug_load,
-                    "limit": f.time_range.limit(),
-                }),
-            )
-            .await
-            {
+
+            // Build args — pass filter values only when the user has typed
+            // something, so the server omits the WHERE clause for empty fields.
+            let mut qargs = serde_json::json!({
+                "slug":  slug_load,
+                "limit": f.time_range.limit(),
+            });
+            if !f.action.is_empty() {
+                qargs["action"] = serde_json::Value::String(f.action.clone());
+            }
+            if !f.target_account.is_empty() {
+                qargs["target_account"] = serde_json::Value::String(f.target_account.clone());
+            }
+
+            match call_persona_mcp("meta_persona_audit_query", qargs).await {
                 Ok(json) => {
-                    let all: Vec<AuditRow> = json
+                    let filtered: Vec<AuditRow> = json
                         .as_array()
                         .map(|arr| {
                             arr.iter()
@@ -174,23 +182,11 @@ pub fn PersonaAuditPanel(props: PersonaAuditPanelProps) -> Element {
                                 .collect()
                         })
                         .unwrap_or_default();
-                    // Apply client-side action + account filters.
-                    let filtered: Vec<AuditRow> = all
-                        .into_iter()
-                        .filter(|r| {
-                            (f.action.is_empty() || r.action.contains(f.action.as_str()))
-                                && (f.target_account.is_empty()
-                                    || r.target_account
-                                        .as_deref()
-                                        .unwrap_or("")
-                                        .contains(f.target_account.as_str()))
-                        })
-                        .collect();
                     rows.set(filtered);
                     page.set(0);
                 }
                 Err(e) => {
-                    tracing::warn!("list_audit failed: {e}");
+                    tracing::warn!("audit_query failed: {e}");
                     load_error.set(Some(e));
                 }
             }

@@ -120,8 +120,10 @@ impl MatrixState {
 
         let owl_id = "@owl:localhost".to_string();
         let axolotl_id = "@axolotl:localhost".to_string();
+        let cat_id = "@cat:localhost".to_string();
+        let dog_id = "@dog:localhost".to_string();
 
-        // Users
+        // Users — mxc URIs map to /_matrix/media/v3/thumbnail/localhost/{media_id}
         self.users.insert(
             owl_id.clone(),
             UserProfile {
@@ -142,16 +144,36 @@ impl MatrixState {
                 device_id: "AXOLDEVICE01".into(),
             },
         );
+        self.users.insert(
+            cat_id.clone(),
+            UserProfile {
+                user_id: cat_id.clone(),
+                displayname: "Cat".into(),
+                avatar_url: Some("mxc://localhost/cat_avatar".into()),
+                password: "testpass123".into(),
+                device_id: "CATDEVICE01".into(),
+            },
+        );
+        self.users.insert(
+            dog_id.clone(),
+            UserProfile {
+                user_id: dog_id.clone(),
+                displayname: "Dog".into(),
+                avatar_url: Some("mxc://localhost/dog_avatar".into()),
+                password: "testpass123".into(),
+                device_id: "DOGDEVICE01".into(),
+            },
+        );
 
-        // Space 1: The Hollow Tree
+        // Space 1: The Hollow Tree — Owl + Axolotl + Cat + Dog all member
         let space1_id = "!space1:localhost".to_string();
         let gen1_id = "!general1:localhost".to_string();
         let random1_id = "!random1:localhost".to_string();
         let announce1_id = "!announce1:localhost".to_string();
 
-        self.create_room(&space1_id, "The Hollow Tree", None, true, None, &[&owl_id, &axolotl_id]);
-        self.create_room(&gen1_id, "general", Some("General discussion"), false, Some(&space1_id), &[&owl_id, &axolotl_id]);
-        self.create_room(&random1_id, "random", Some("Off-topic chat"), false, Some(&space1_id), &[&owl_id, &axolotl_id]);
+        self.create_room(&space1_id, "The Hollow Tree", None, true, None, &[&owl_id, &axolotl_id, &cat_id, &dog_id]);
+        self.create_room(&gen1_id, "general", Some("General discussion"), false, Some(&space1_id), &[&owl_id, &axolotl_id, &cat_id, &dog_id]);
+        self.create_room(&random1_id, "random", Some("Off-topic chat"), false, Some(&space1_id), &[&owl_id, &axolotl_id, &cat_id, &dog_id]);
         self.create_room(&announce1_id, "announcements", Some("Important updates"), false, Some(&space1_id), &[&owl_id, &axolotl_id]);
 
         // Power levels for Space 1: Owl is admin (100), Axolotl is moderator (50).

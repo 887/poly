@@ -13,12 +13,29 @@
 //! poly-cli call list_servers --backend matrix       # call another tool
 //! poly-cli --url http://localhost:3001/mcp call ... # target different server
 //! ```
+//!
+//! ## Watch mode
+//!
+//! ```bash
+//! poly-cli --watch 5 call meta_persona_audit_query --slug broker-bob --since auto
+//! ```
+//!
+//! `--watch <N>` re-runs the call every N seconds. When the result is an
+//! array of objects, only rows with an `id` field not seen before are printed.
+//!
+//! `--since auto` (only meaningful with `--watch`) initialises the `since`
+//! argument to the current UTC timestamp and advances it to the latest
+//! `occurred_at` value seen after each poll. This makes the tool behave like
+//! a live-tail: you see only rows that arrive after the watch started.
+//!
+//! Exit cleanly with Ctrl+C.
 
 mod mcp_client;
 
 use clap::{Parser, Subcommand};
 use mcp_client::McpClient;
 use serde_json::{Value, json};
+use std::collections::HashSet;
 
 #[derive(Parser)]
 #[command(name = "poly-cli", about = "Poly MCP CLI — dynamic tool interface")]
@@ -30,6 +47,12 @@ struct Cli {
     /// Output format
     #[arg(long, default_value = "pretty")]
     format: OutputFormat,
+
+    /// Watch mode: re-run the call every N seconds and print only new rows.
+    /// Requires the tool to return a JSON array of objects with an `id` field.
+    /// Exit with Ctrl+C.
+    #[arg(long, value_name = "SECONDS")]
+    watch: Option<u64>,
 
     #[command(subcommand)]
     command: Command,
@@ -53,6 +76,8 @@ enum Command {
 
         /// Tool arguments as --key value pairs. Values are passed as strings
         /// unless they look like JSON (start with { or [).
+        /// Special value: --since auto (with --watch) sets since to the current
+        /// UTC timestamp and advances it after each poll.
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
     },
@@ -108,40 +133,188 @@ async fn main() -> anyhow::Result<()> {
                 return show_tool_help(&client, &tool).await;
             }
 
-            let arguments = parse_tool_args(&args)?;
-            let result = client.call_tool(&tool, arguments).await?;
+            match cli.watch {
+                None => {
+                    // Normal one-shot call.
+                    let arguments = parse_tool_args(&args)?;
+                    let result = client.call_tool(&tool, arguments).await?;
+                    let text = extract_tool_result(&result);
+                    print_result_text(&text, cli.format);
 
-            // Extract the text content from MCP response
-            let text = extract_tool_result(&result);
-            match cli.format {
-                OutputFormat::Pretty => {
-                    // Try to parse as JSON and pretty-print
-                    if let Ok(parsed) = serde_json::from_str::<Value>(&text) {
-                        println!(
-                            "{}",
-                            serde_json::to_string_pretty(&parsed).unwrap_or(text)
-                        );
-                    } else {
-                        println!("{text}");
+                    if result
+                        .get("isError")
+                        .and_then(|e| e.as_bool())
+                        .unwrap_or(false)
+                    {
+                        std::process::exit(1);
                     }
                 }
-                OutputFormat::Json => {
-                    println!("{text}");
-                }
-            }
 
-            // Check for error
-            if result
-                .get("isError")
-                .and_then(|e| e.as_bool())
-                .unwrap_or(false)
-            {
-                std::process::exit(1);
+                Some(interval_secs) => {
+                    // Watch mode: poll every interval_secs seconds, dedupe by id.
+                    run_watch(&client, &tool, &args, interval_secs, cli.format).await?;
+                }
             }
         }
     }
 
     Ok(())
+}
+
+/// Watch-mode loop.
+///
+/// Behaviour:
+/// - Polls the tool every `interval_secs` seconds.
+/// - Deduplicates rows by their `id` field; only prints rows not seen before.
+/// - If `--since auto` is in `raw_args`, replaces the `since` value with the
+///   current UTC timestamp on the first call, then advances it to the latest
+///   `occurred_at` seen after each successful poll.
+/// - Runs until SIGINT (Ctrl+C).
+async fn run_watch(
+    client: &McpClient,
+    tool: &str,
+    raw_args: &[String],
+    interval_secs: u64,
+    fmt: OutputFormat,
+) -> anyhow::Result<()> {
+    use tokio::signal;
+
+    // Detect `--since auto` in the raw args.
+    let has_since_auto = raw_args.windows(2).any(|w| w[0] == "--since" && w[1] == "auto");
+
+    // Start `since` at the current UTC timestamp.
+    let mut since_value: String = current_utc_iso8601();
+
+    let mut seen_ids: HashSet<i64> = HashSet::new();
+
+    eprintln!("[watch] Polling '{tool}' every {interval_secs}s. Press Ctrl+C to stop.");
+
+    let ctrl_c = signal::ctrl_c();
+    tokio::pin!(ctrl_c);
+
+    loop {
+        // Build arguments, substituting `since auto` if present.
+        let call_args = if has_since_auto {
+            replace_since_auto(raw_args, &since_value)
+        } else {
+            raw_args.to_vec()
+        };
+
+        let arguments = parse_tool_args(&call_args)?;
+
+        match client.call_tool(tool, arguments).await {
+            Ok(result) => {
+                let text = extract_tool_result(&result);
+                // Try to parse as a JSON array of objects.
+                match serde_json::from_str::<Value>(&text) {
+                    Ok(Value::Array(rows)) => {
+                        let mut latest_occurred_at: Option<String> = None;
+
+                        for row in &rows {
+                            // Dedupe by id field.
+                            let id = row.get("id").and_then(|v| v.as_i64());
+                            if let Some(id_val) = id {
+                                if seen_ids.contains(&id_val) {
+                                    continue;
+                                }
+                                seen_ids.insert(id_val);
+                            }
+
+                            // Track latest occurred_at for --since auto advance.
+                            if let Some(oa) = row.get("occurred_at").and_then(|v| v.as_str()) {
+                                match &latest_occurred_at {
+                                    None => latest_occurred_at = Some(oa.to_string()),
+                                    Some(prev) if oa > prev.as_str() => {
+                                        latest_occurred_at = Some(oa.to_string());
+                                    }
+                                    _ => {}
+                                }
+                            }
+
+                            // Print the new row.
+                            print_result_text(
+                                &serde_json::to_string_pretty(row).unwrap_or_default(),
+                                fmt,
+                            );
+                        }
+
+                        // Advance `since` to the latest occurred_at seen.
+                        if has_since_auto {
+                            if let Some(lat) = latest_occurred_at {
+                                since_value = lat;
+                            }
+                        }
+                    }
+                    _ => {
+                        // Non-array result: print as-is (first time only if
+                        // it looks like an error).
+                        print_result_text(&text, fmt);
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!("[watch] call failed: {e}");
+            }
+        }
+
+        // Wait for either the interval or Ctrl+C.
+        tokio::select! {
+            _ = tokio::time::sleep(std::time::Duration::from_secs(interval_secs)) => {},
+            _ = &mut ctrl_c => {
+                eprintln!("[watch] interrupted.");
+                break;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Replace the value of `--since auto` with `replacement` in a raw arg list.
+fn replace_since_auto(args: &[String], replacement: &str) -> Vec<String> {
+    let mut out = Vec::with_capacity(args.len());
+    let mut i = 0;
+    while i < args.len() {
+        if args[i] == "--since" && args.get(i + 1).map(|s| s.as_str()) == Some("auto") {
+            out.push("--since".to_string());
+            out.push(replacement.to_string());
+            i += 2;
+        } else {
+            out.push(args[i].clone());
+            i += 1;
+        }
+    }
+    out
+}
+
+/// Return the current UTC time as an ISO-8601 string (seconds precision).
+fn current_utc_iso8601() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let s  = secs % 60;
+    let m  = (secs / 60) % 60;
+    let h  = (secs / 3600) % 24;
+    let days = secs / 86400;
+    let (y, mo, d) = days_to_ymd(days);
+    format!("{y:04}-{mo:02}-{d:02}T{h:02}:{m:02}:{s:02}Z")
+}
+
+/// Integer-arithmetic Gregorian calendar conversion (same algorithm as memory.rs).
+fn days_to_ymd(days: u64) -> (u64, u64, u64) {
+    let z   = days + 719_468;
+    let era = z / 146_097;
+    let doe = z % 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146_096) / 365;
+    let y   = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp  = (5 * doy + 2) / 153;
+    let d   = doy - (153 * mp + 2) / 5 + 1;
+    let mo  = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y   = if mo <= 2 { y + 1 } else { y };
+    (y, mo, d)
 }
 
 /// Parse --key value pairs into a JSON object.
@@ -251,6 +424,25 @@ async fn show_tool_help(client: &McpClient, tool_name: &str) -> anyhow::Result<(
     }
 
     Ok(())
+}
+
+fn print_result_text(text: &str, fmt: OutputFormat) {
+    match fmt {
+        OutputFormat::Pretty => {
+            // Try to parse as JSON and pretty-print
+            if let Ok(parsed) = serde_json::from_str::<Value>(text) {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&parsed).unwrap_or_else(|_| text.to_string())
+                );
+            } else {
+                println!("{text}");
+            }
+        }
+        OutputFormat::Json => {
+            println!("{text}");
+        }
+    }
 }
 
 fn print_value(value: &Value, fmt: OutputFormat) {

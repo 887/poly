@@ -136,15 +136,20 @@ impl GitHubState {
         }
 
         // --- Users ---
+        // Avatar URLs point to the test server's /avatars/{login}.png route.
+        // No penguin/chameleon assets exist in clients/demo/assets/ so we alias:
+        //   penguin → koala.png (closest available warm-climate bird stand-in)
+        //   chameleon → parrot.png (closest brightly-coloured reptile/bird stand-in)
+        // The route serves real bytes; only the mapping is an alias, not the URL shape.
         let penguin = User {
             id: 1,
             login: "penguin".to_string(),
-            avatar_url: "https://github.com/penguin.png".to_string(),
+            avatar_url: "http://localhost:9107/avatars/penguin.png".to_string(),
         };
         let chameleon = User {
             id: 2,
             login: "chameleon".to_string(),
-            avatar_url: "https://github.com/chameleon.png".to_string(),
+            avatar_url: "http://localhost:9107/avatars/chameleon.png".to_string(),
         };
 
         self.users.insert("penguin".to_string(), penguin.clone());

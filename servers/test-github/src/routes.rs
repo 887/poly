@@ -444,3 +444,26 @@ pub async fn test_auth_token(
     let token = state.auth.create_token(&body.username);
     Json(json!({ "token": token })).into_response()
 }
+
+// ---------------------------------------------------------------------------
+// GET /avatars/{login}.png — serve demo avatar bytes for seeded users
+// ---------------------------------------------------------------------------
+//
+// Real GitHub serves avatars from https://avatars.githubusercontent.com/u/{id}.
+// The test server mirrors that concept under its own host. No penguin/chameleon
+// PNG assets ship in clients/demo/assets/, so:
+//   penguin  → aliased to koala.png
+//   chameleon → aliased to parrot.png
+// The URL shape is stable; only the backing bytes are aliased.
+
+pub async fn serve_avatar(Path(filename): Path<String>) -> impl IntoResponse {
+    // Strip ".png" suffix if present — serve_animal takes bare names.
+    let name = filename.trim_end_matches(".png");
+    // Alias users whose animal names have no asset to the closest available stand-in.
+    let resolved = match name {
+        "penguin" => "koala",    // alias: no penguin asset; koala used as stand-in
+        "chameleon" => "parrot", // alias: no chameleon asset; parrot used as stand-in
+        other => other,
+    };
+    poly_test_common::serve_animal(resolved)
+}

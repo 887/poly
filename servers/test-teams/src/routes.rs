@@ -705,7 +705,7 @@ pub async fn serve_user_photo(
         None => (axum::http::StatusCode::NOT_FOUND, "user not found").into_response(),
         Some(user) => match &user.avatar_url {
             None => (axum::http::StatusCode::NOT_FOUND, "no photo").into_response(),
-            Some(animal) => poly_test_common::serve_animal(animal),
+            Some(animal) => poly_test_common::serve_animal(animal).into_response(),
         },
     }
 }

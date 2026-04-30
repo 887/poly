@@ -883,23 +883,21 @@ pub async fn sync_unreads(
 // Lifecycle endpoints
 // ---------------------------------------------------------------------------
 
-/// GET /avatars/:id — serve PNG avatar for test users
+/// GET /avatars/:id — serve PNG avatar for test users.
+///
+/// The Stoat backend uses `av_{user_id}` as the Revolt avatar _id.
+/// We strip the `av_` prefix and lowercase the rest to get the animal name,
+/// then delegate to the shared test-common helper.
 pub async fn serve_avatar(Path(id): Path<String>) -> impl IntoResponse {
-    static STOAT_PNG: &[u8] = include_bytes!("../../../clients/demo/assets/stoat.png");
-    static RACCOON_PNG: &[u8] = include_bytes!("../../../clients/demo/assets/raccoon.png");
-    static LEMMING_PNG: &[u8] = include_bytes!("../../../clients/demo/assets/lemming.png");
-
-    let bytes: &[u8] = match id.as_str() {
-        "av_STOAT01" => STOAT_PNG,
-        "av_RACCOON01" => RACCOON_PNG,
-        "av_LEMMING01" => LEMMING_PNG,
-        _ => return (StatusCode::NOT_FOUND, "not found").into_response(),
-    };
-    (
-        StatusCode::OK,
-        [("content-type", "image/png")],
-        bytes,
-    ).into_response()
+    // Map av_STOAT01 → "stoat", av_RACCOON01 → "raccoon", etc.
+    let name = id
+        .strip_prefix("av_")
+        .unwrap_or(&id)
+        .split(|c: char| c.is_ascii_digit())
+        .next()
+        .unwrap_or(&id)
+        .to_lowercase();
+    poly_test_common::serve_animal(&name)
 }
 
 // ---------------------------------------------------------------------------

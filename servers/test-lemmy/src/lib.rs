@@ -62,6 +62,8 @@ pub fn router_with_state(state: Arc<LemmyState>) -> Router {
         .route("/api/v3/post/remove", post(routes::post_remove))
         .route("/api/v3/comment/remove", post(routes::comment_remove))
         .route("/api/v3/modlog", get(routes::get_modlog))
+        // pict-rs image serving — Lemmy's convention for avatar/image URLs
+        .route("/pictrs/image/{filename}", get(routes::serve_pictrs_image))
         // Test-only bypass: get a token without a password
         .route("/test/auth/token", post(routes::test_auth_token))
         // Inspection endpoints (Phase E)

@@ -25,3 +25,13 @@ _list
 # row for the read would be circular and would inflate the audit log with
 # O(N) observer entries per N action rows read. Read-only; no audit needed.
 _recent_actions
+
+# meta_persona_audit_query — filtered read of persona_audit. Same rationale
+# as _recent_actions above: a read-of-the-audit-log that self-audits would
+# inflate the log with O(N) observer entries. Read-only; no state mutation.
+_audit_query
+
+# meta_persona_audit_export — full dump of persona_audit for a single slug.
+# Read-only takeout path; same circular-audit rationale as _recent_actions
+# and _audit_query. No state mutation; no audit row needed.
+_audit_export

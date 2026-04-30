@@ -131,13 +131,15 @@ impl LemmyState {
 
         // Users — testuser for legacy integration tests; beaver/hedgehog are
         // the "animal" accounts exposed to poly-web via signup::get_test_accounts().
+        // Avatar URLs use Lemmy's pict-rs path convention: /pictrs/image/{filename}.
+        // axolotl for testuser matches the forgejo testuser for cross-backend recognition.
         self.users.insert(
             "testuser".to_string(),
             User {
                 id: 1,
                 name: "testuser".to_string(),
                 display_name: Some("Test User".to_string()),
-                avatar: None,
+                avatar: Some("http://localhost:9108/pictrs/image/axolotl.svg".to_string()),
                 actor_id: "https://lemmy.example.com/u/testuser".to_string(),
             },
         );
@@ -149,7 +151,7 @@ impl LemmyState {
                 id: 2,
                 name: "beaver".to_string(),
                 display_name: Some("Beaver".to_string()),
-                avatar: None,
+                avatar: Some("http://localhost:9108/pictrs/image/beaver.svg".to_string()),
                 actor_id: "https://lemmy.example.com/u/beaver".to_string(),
             },
         );
@@ -161,7 +163,7 @@ impl LemmyState {
                 id: 3,
                 name: "hedgehog".to_string(),
                 display_name: Some("Hedgehog".to_string()),
-                avatar: None,
+                avatar: Some("http://localhost:9108/pictrs/image/hedgehog.svg".to_string()),
                 actor_id: "https://lemmy.example.com/u/hedgehog".to_string(),
             },
         );

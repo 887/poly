@@ -230,6 +230,85 @@ poly-cli call meta_persona_set_heartbeat --slug broker-bob --interval_secs 0
 
 ---
 
+## 13. Audit recipes
+
+The `meta_persona_audit_query` tool provides server-side filtering over the
+persona audit log.  All arguments are optional; combine them freely.
+
+### What did broker-bob do today?
+
+```bash
+poly-cli call meta_persona_audit_query \
+  --slug broker-bob \
+  --since 2026-04-30T00:00:00Z
+```
+
+### All denied outbound attempts (any persona)
+
+```bash
+poly-cli call meta_persona_audit_query \
+  --result denied \
+  --action outbound_send
+```
+
+### Rate-limit-exceeded rows in the last hour
+
+```bash
+poly-cli call meta_persona_audit_query \
+  --action rate_limited \
+  --since $(date -u -d '1 hour ago' --iso-8601=seconds)
+```
+
+_(On macOS use `date -u -v-1H +%Y-%m-%dT%H:%M:%SZ` instead.)_
+
+### Export full audit before deleting a persona
+
+```bash
+poly-cli call meta_persona_audit_export --slug broker-bob > audit.jsonl
+poly-cli call meta_persona_delete --slug broker-bob
+```
+
+`meta_persona_audit_export` returns the complete history as JSONL (one JSON
+object per line, oldest-first).  Redirect to a file before deleting — the
+delete permanently removes all associated audit rows.
+
+### Diff today's vs yesterday's action counts
+
+```bash
+TODAY=$(date -u +%Y-%m-%dT00:00:00Z)
+YEST=$(date -u -d 'yesterday' +%Y-%m-%dT00:00:00Z 2>/dev/null \
+  || date -u -v-1d +%Y-%m-%dT00:00:00Z)
+
+echo "Today:"
+poly-cli --format json call meta_persona_audit_query \
+  --slug broker-bob --since "$TODAY" --limit 500 \
+  | jq '[.[].action] | group_by(.) | map({action: .[0], count: length})'
+
+echo "Yesterday:"
+poly-cli --format json call meta_persona_audit_query \
+  --slug broker-bob --since "$YEST" --until "$TODAY" --limit 500 \
+  | jq '[.[].action] | group_by(.) | map({action: .[0], count: length})'
+```
+
+### Live-tail audit rows with `--watch`
+
+The `--watch <N>` flag re-runs a `call` every N seconds, printing only new
+rows (deduplicated by `id`).  Combine with `--since auto` to start from the
+current moment and stream deltas:
+
+```bash
+poly-cli --watch 5 call meta_persona_audit_query \
+  --slug broker-bob \
+  --since auto \
+  --limit 100
+```
+
+`--since auto` tells `poly-cli` to initialise `since` to the current UTC
+timestamp and advance it to the latest row's `occurred_at` after each poll.
+Exit cleanly with **Ctrl+C**.
+
+---
+
 ## See also
 
 - `docs/client-settings.md` — CLI recipe book for `client_settings_*` tools:

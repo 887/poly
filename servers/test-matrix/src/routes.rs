@@ -1088,29 +1088,34 @@ pub async fn reseed(State(state): State<std::sync::Arc<MatrixState>>) -> impl In
 pub async fn media_thumbnail(
     Path((_server, media_id)): Path<(String, String)>,
 ) -> impl IntoResponse {
-    static OWL_PNG: &[u8] = include_bytes!("../../../clients/demo/assets/owl.png");
-    static AXOLOTL_SVG: &[u8] = include_bytes!("../../../clients/demo/assets/axolotl.svg");
-    // Distinct assets for the seeded rooms so the server-bar icons are
-    // visually distinguishable from the user's account icons. (Otherwise
-    // both rooms render with the same owl/axolotl artwork as the user
-    // avatars and look like duplicates of the accounts.)
+    // Strip "_avatar" suffix to get bare animal name, then delegate to shared helper.
+    // Room avatar media IDs use "_avatar" suffix convention (e.g. "hollow_tree_avatar").
+    // We keep those mapped here since they use compound names the shared helper doesn't know.
     static HOLLOW_TREE_SVG: &[u8] = include_bytes!("../../../clients/demo/assets/hedgehog.svg");
     static NEON_REEF_SVG: &[u8] = include_bytes!("../../../clients/demo/assets/parrot.svg");
 
-    let (bytes, mime): (&[u8], &str) = match media_id.as_str() {
-        "owl_avatar" => (OWL_PNG, "image/png"),
-        "axolotl_avatar" => (AXOLOTL_SVG, "image/svg+xml"),
-        "hollow_tree_avatar" => (HOLLOW_TREE_SVG, "image/svg+xml"),
-        "neon_reef_avatar" => (NEON_REEF_SVG, "image/svg+xml"),
-        _ => return (StatusCode::NOT_FOUND, "unknown media id").into_response(),
-    };
-    (
-        StatusCode::OK,
-        [
-            (axum::http::header::CONTENT_TYPE, mime),
-            (axum::http::header::CACHE_CONTROL, "public, max-age=3600"),
-        ],
-        bytes,
-    )
-        .into_response()
+    match media_id.as_str() {
+        // Room avatars — compound names served inline
+        "hollow_tree_avatar" => (
+            StatusCode::OK,
+            [
+                (axum::http::header::CONTENT_TYPE, "image/svg+xml"),
+                (axum::http::header::CACHE_CONTROL, "public, max-age=3600"),
+            ],
+            HOLLOW_TREE_SVG,
+        ).into_response(),
+        "neon_reef_avatar" => (
+            StatusCode::OK,
+            [
+                (axum::http::header::CONTENT_TYPE, "image/svg+xml"),
+                (axum::http::header::CACHE_CONTROL, "public, max-age=3600"),
+            ],
+            NEON_REEF_SVG,
+        ).into_response(),
+        // User avatars — strip "_avatar" suffix and delegate to shared helper
+        other => {
+            let name = other.trim_end_matches("_avatar");
+            poly_test_common::serve_animal(name)
+        }
+    }
 }

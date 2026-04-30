@@ -1,6 +1,6 @@
 //! Lemmy API route handlers for the mock test server.
 
-use axum::extract::{Query, State};
+use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
 use axum::Json;
@@ -1299,4 +1299,21 @@ pub async fn test_auth_token(
     }
     let token = state.auth.create_token(&body.username);
     Json(json!({ "jwt": token })).into_response()
+}
+
+// ---------------------------------------------------------------------------
+// GET /pictrs/image/{filename} — pict-rs-style image serving
+// ---------------------------------------------------------------------------
+//
+// Real Lemmy uses pict-rs (https://git.asonix.dog/asonix/pict-rs) for its
+// image upload service, serving files at /pictrs/image/{filename}. The test
+// server mocks this path so that avatar URLs seeded in state.rs are reachable
+// from the same host without any external dependency.
+
+pub async fn serve_pictrs_image(Path(filename): Path<String>) -> impl IntoResponse {
+    // Strip extension for serve_animal lookup — it handles .svg/.png internally.
+    let name = filename
+        .trim_end_matches(".svg")
+        .trim_end_matches(".png");
+    poly_test_common::serve_animal(name)
 }
