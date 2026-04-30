@@ -1,0 +1,3 @@
+# No personas needed — this scenario drives the UI directly via Playwright
+# and asserts wire-level headers via the test-discord /test/inspect/last-headers
+# endpoint. No claude/persona orchestration is required.

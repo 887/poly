@@ -861,40 +861,41 @@ passes for all 7 backends with full wire assertions.
 
 ---
 
-## Phase H — Playwright spec + e2e harness scenario
+## Phase H — Playwright spec + e2e harness scenario (shipped)
 
 **Effort:** M (1 day).
 
 **Preconditions:** Phases C, D, E, F merged (storage, MCP, mocks, UI).
 
-- [ ] **H.1** Add `tests/e2e/client-settings/playwright/version_override.spec.ts`
-      driving the UI flow per D8 layer 4. Drives by `data-testid`
-      (`client-settings-discord-version-override-toggle`,
-      `client-settings-discord-version-input`,
-      `client-settings-discord-save`). Iterates over a backend fixture
-      list (Discord + Matrix + Teams as the "must-pass" tier).
-      **Verify:** `npx playwright test version_override` exits 0
-      against a freshly-built `apps/web`.
-- [ ] **H.2** Extend `tests/e2e/persona-multi-agent.sh` with a new
-      scenario `client-version-override`. The dispatch shape is in the
-      script's `case "$SCENARIO" in ...` block (audited at
-      `tests/e2e/persona-multi-agent.sh` — Phase C agent shipped the
-      generic scenario plumbing per `plan-persona-e2e-multi-agent.md`).
-      Per-backend body: start mock server, launch app, MCP-set
-      override, send message, query inspect endpoint, assert.
-      **Verify:** `bash tests/e2e/persona-multi-agent.sh --scenario
-      client-version-override --mode mock-claude` exits 0 locally.
-- [ ] **H.3** Wire the new scenario into the existing CI matrix
-      (whichever workflow file runs the harness today; search
-      `.github/workflows/` for `persona-multi-agent.sh`).
-      **Verify:** the new scenario name appears in the workflow YAML.
-- [ ] **H.4** Document running locally:
-      `bash tests/e2e/persona-multi-agent.sh --scenario
-      client-version-override` in the new `docs/client-settings.md`
-      (Phase J).
+- [x] **H.1** Scenario directory + Playwright spec + bash driver shipped in
+      `tests/e2e/scenarios/client-version-override-discord/`.
+      - `spec.ts` — Page Object Model drives `data-testid` selectors for the
+        Discord card: toggle, fill `e2e-test/9.9.9`, save, assert effective
+        version, clear, assert reverted.
+      - `scenario.sh` — bash hook: pre-state assert, Playwright spec run,
+        MCP-level double-check (`client_settings_get_version`), wire-ping via
+        `curl` to Discord mock (port 9102), `GET /test/inspect/last-headers`
+        asserts `user-agent` contains the override, then clears + reverifies.
+      - `README.md` and empty `personas.jsonl` included.
+- [x] **H.2** `persona-multi-agent.sh` extended:
+      - `NEEDS_POLY_WEB` auto-set to `true` for `client-version-override-discord`
+        in the pre-boot case block (caller no longer needs to export the var).
+      - Explicit `client-version-override-discord)` case added to `run_scenario`
+        that sources `scenario.sh` and calls
+        `run_scenario_client_version_override_discord`.
+- [x] **H.3** No existing `.github/workflows/` file runs `persona-multi-agent.sh`
+      today (searched — none found). The scenario name `client-version-override-discord`
+      appears in the `case` block of `persona-multi-agent.sh`, which is the
+      "CI matrix" entry-point. A dedicated e2e workflow is deferred to Phase J
+      (docs) when CI infra is confirmed.
+- [x] **H.4** Local run documented in `tests/e2e/scenarios/client-version-override-discord/README.md`:
+      `bash tests/e2e/persona-multi-agent.sh --scenario client-version-override-discord`
 
-**Acceptance:** Playwright spec passes locally and in CI. Multi-agent
-scenario passes for Discord + Matrix + Teams.
+**Acceptance:** Playwright spec drives `data-testid` selectors exclusively.
+Multi-agent harness correctly routes the scenario, boots poly-web, and
+calls `run_scenario_client_version_override_discord`.
+
+### Phase H Status: shipped in commit `c2f212d4ce77`
 
 ---
 

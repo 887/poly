@@ -546,6 +546,17 @@ run_scenario() {
             source "$scenario_script"
             run_scenario_two_personas_handoff
             ;;
+        client-version-override-discord)
+            # H.3 — Wire client-version-override-discord into the dispatcher
+            local scenario_script="$SCRIPT_DIR/scenarios/client-version-override-discord/scenario.sh"
+            if [[ ! -f "$scenario_script" ]]; then
+                echo "[scenario] ERROR: no scenario script at ${scenario_script}" >&2
+                exit 1
+            fi
+            # shellcheck disable=SC1090
+            source "$scenario_script"
+            run_scenario_client_version_override_discord
+            ;;
         *)
             local scenario_script="$SCRIPT_DIR/scenarios/${scenario}/scenario.sh"
             if [[ ! -f "$scenario_script" ]]; then
@@ -568,6 +579,28 @@ start_chat_mcp
 # Scenarios that need the UI must declare: NEEDS_POLY_WEB=true
 # Scenarios that don't (agent-only, no DOM assertions) leave it unset.
 # This keeps the harness fast for CI runs that don't require a WASM build.
+#
+# UI-requiring scenarios are also auto-detected here so callers do not need
+# to export NEEDS_POLY_WEB before invoking the harness.
+case "$SCENARIO" in
+    client-version-override-discord)
+        NEEDS_POLY_WEB=true
+        ;;
+    signup-link-discord|\
+    signup-link-matrix|\
+    signup-link-teams|\
+    signup-link-stoat|\
+    signup-link-lemmy|\
+    signup-link-forgejo|\
+    signup-link-github|\
+    signup-link-hackernews|\
+    signup-link-poly-server|\
+    signup-link-demo)
+        # Phase E of plan-client-signup-link-surface.md: all signup-link scenarios
+        # drive the WASM UI (poly-web on port 3000) via Playwright.
+        NEEDS_POLY_WEB=true
+        ;;
+esac
 NEEDS_POLY_WEB="${NEEDS_POLY_WEB:-false}"
 
 if [[ "$SCENARIO" != "noop" && "$NEEDS_POLY_WEB" == "true" ]]; then
