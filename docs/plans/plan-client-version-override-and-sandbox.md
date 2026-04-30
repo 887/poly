@@ -674,7 +674,7 @@ pattern still works via `meta_persona_recent_actions`).
 
 ---
 
-## Phase E — Mock-server inspection endpoints (shipped in commit TBD)
+## Phase E — Mock-server inspection endpoints (shipped in commit `c305db0d`)
 
 **Effort:** M (1 day). Touches every `servers/test-<backend>/`.
 
