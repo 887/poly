@@ -102,6 +102,11 @@ without it, dx tries to build the server half for `wasm32-unknown-unknown`.
 | `ANTHROPIC_API_KEY` | — | Required for `--mode real-claude` only |
 | `E2E_LIVE_UPDATE_BUDGET_MS` | `5000` | Playwright live-update timing budget (Phase D) |
 
+For `--mode real-claude`, pass `--budget-tokens N` on the command line (not an
+env var) — the harness refuses to start without it.  See the
+[Mock-claude vs real-claude](#mock-claude-vs-real-claude-trade-offs-and-cost-phase-g)
+section for cost guidance.
+
 ## Build cache strategy (B.5)
 
 The harness does NOT isolate `CARGO_TARGET_DIR` per run.  Per-run isolation
@@ -138,6 +143,83 @@ verbose).
 2. Add `personas.jsonl`, `assertions.json.tmpl`, and a one-paragraph `README.md`
    explaining what regression the scenario catches.
 3. Test: `bash tests/e2e/persona-multi-agent.sh --scenario <name>`.
+
+## Mock-claude vs real-claude: trade-offs and cost (Phase G)
+
+The harness supports two modes selectable via `--mode`:
+
+### `--mode mock-claude` (default — use for every PR)
+
+Replaces `claude -p` with `tests/e2e/lib/mock-claude.sh`.  No Anthropic API
+call is made; no `ANTHROPIC_API_KEY` is required.
+
+Each scenario ships a `mock-actions.jsonl` file listing the exact
+`(slug, tool, args, result_grep)` triples the stub fires.  The stub calls
+those tools via `poly-cli` and asserts each response contains the expected
+substring.
+
+**What mock catches:**
+- Integration glue: are the MCP tools wired to the right handlers?
+- Scenario-level workflow: does agent A's write show up in agent B's read?
+- UI live-update regressions (when combined with Phase D Playwright assertions):
+  does the WASM reactive chain propagate MCP-driven state changes to the DOM?
+- Deterministic regression: the same tool calls, same assertions, every run.
+
+**What mock does NOT catch:**
+- Claude prompt-engineering quality (does the LLM choose the right tool?).
+- Tool-choice correctness under ambiguous user prompts.
+- Latency-sensitive flows where Claude's planning latency matters.
+
+**Cost:** ~$0 per run.
+
+### `--mode real-claude` (opt-in — nightly CI or manual QA only)
+
+Invokes `claude -p` with the real Anthropic API.  Requires:
+1. `ANTHROPIC_API_KEY` set in the environment.
+2. `--budget-tokens N` flag (hard requirement — the harness refuses to start
+   without it, preventing runaway API cost from a misconfigured CI run).
+
+**What real-claude adds:**
+- Validates that Claude actually picks `meta_persona_invoke` unprompted.
+- Catches prompt-engineering regressions when persona system prompts change.
+- Exercises tool-choice correctness on the full Claude model surface.
+- Validates latency-sensitive flows end-to-end.
+
+**Budget guard (G.3):**
+After each agent call, the harness parses `claude --output-format json`'s
+`usage.input_tokens + usage.output_tokens` and accumulates the total.  If
+the cumulative total reaches or exceeds `--budget-tokens`, the harness:
+1. Kills all remaining processes via the EXIT trap.
+2. Writes `tests/e2e/.run/<run_id>/results/budget-exceeded.json`.
+3. Exits with code 2 (distinct from code 1 for scenario failures).
+
+Running total is also persisted to `results/token-usage.json` after each
+agent so post-mortem analysis is possible.
+
+**Cost:** approximately $0.10–$1.00 per run, depending on scenario size and
+model tier.  With `--budget-tokens 100000` the worst-case cost is roughly
+$0.30 using Sonnet-tier pricing (input + output combined).
+
+### Recommendation
+
+| Context | Mode | Why |
+|---------|------|-----|
+| Every PR | `mock-claude` (default) | Zero cost, deterministic, fast |
+| Nightly CI | `real-claude --budget-tokens 100000` | Catches prompt regressions |
+| Local QA after persona prompt changes | `real-claude --budget-tokens 50000` | Quick sanity check |
+| Cost estimation without running | Review `mock-actions.jsonl` | No API call needed |
+
+Example nightly invocation:
+
+```bash
+bash tests/e2e/persona-multi-agent.sh \
+  --scenario two-personas-handoff \
+  --mode real-claude \
+  --budget-tokens 100000
+```
+
+The harness exits non-zero (code 2) if the budget is exceeded mid-run, so
+the CI job fails loudly and the `budget-exceeded.json` artefact explains why.
 
 ## Cleanup guarantee
 

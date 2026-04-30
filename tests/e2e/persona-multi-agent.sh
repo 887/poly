@@ -41,6 +41,9 @@ source "$SCRIPT_DIR/lib/mock-claude.sh"
 # ---------------------------------------------------------------------------
 SCENARIO=""
 MODE="mock-claude"
+# G.3 — budget guard: default 100k tokens. Must be set explicitly for real-claude.
+BUDGET_TOKENS=""
+BUDGET_TOKENS_DEFAULT=100000
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -50,6 +53,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --mode)
             MODE="$2"
+            shift 2
+            ;;
+        --budget-tokens)
+            BUDGET_TOKENS="$2"
             shift 2
             ;;
         --noop)
@@ -74,6 +81,28 @@ if [[ -z "$SCENARIO" ]]; then
     exit 1
 fi
 
+# G.1 / G.3 — real-claude mode requires BOTH an API key AND an explicit --budget-tokens.
+# Refusing to start without a budget cap prevents runaway API cost from a misconfigured CI run.
+if [[ "$MODE" == "real-claude" ]]; then
+    if [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
+        echo "ERROR: --mode real-claude requires ANTHROPIC_API_KEY to be set" >&2
+        exit 1
+    fi
+    if [[ -z "$BUDGET_TOKENS" ]]; then
+        echo "ERROR: --mode real-claude requires --budget-tokens N (e.g. --budget-tokens 100000)" >&2
+        echo "  This guard prevents accidental Anthropic API cost explosion." >&2
+        echo "  Recommended: 100000 tokens ≈ \$0.10-\$1.00 per run depending on scenario." >&2
+        echo "  Example: $0 --scenario two-personas-handoff --mode real-claude --budget-tokens 100000" >&2
+        exit 1
+    fi
+    # Validate budget is a positive integer
+    if ! [[ "$BUDGET_TOKENS" =~ ^[1-9][0-9]*$ ]]; then
+        echo "ERROR: --budget-tokens must be a positive integer, got: ${BUDGET_TOKENS}" >&2
+        exit 1
+    fi
+    echo "[G.3] real-claude mode: budget cap = ${BUDGET_TOKENS} tokens"
+fi
+
 # ---------------------------------------------------------------------------
 # Per-run isolation (A.4, A.5)
 # ---------------------------------------------------------------------------
@@ -90,6 +119,10 @@ mkdir -p "$PIDS_DIR" "$LOGS_DIR" "$DATA_DIR" "$RESULTS_DIR" "$AGENTS_DIR"
 
 # A.5 — isolated SQLite per run
 export POLY_DATA_DIR="$DATA_DIR"
+
+# G.3 — cumulative token counter (real-claude mode only)
+# Written to $RESULTS_DIR/token-usage.json after each agent call.
+_TOKENS_USED=0
 
 # ---------------------------------------------------------------------------
 # Install EXIT trap (must come AFTER PIDS_DIR is set)
@@ -108,6 +141,9 @@ echo "============================================================"
 echo " Poly e2e harness — run $RUN_ID"
 echo "   scenario: $SCENARIO"
 echo "   mode:     $MODE"
+if [[ "$MODE" == "real-claude" ]]; then
+echo "   budget:   ${BUDGET_TOKENS} tokens (--budget-tokens)"
+fi
 echo "   RUN_ROOT: $RUN_ROOT"
 echo "   DATA_DIR: $POLY_DATA_DIR"
 echo "   MCP port: $E2E_MCP_PORT"
@@ -354,10 +390,8 @@ spawn_persona_agent() {
     local full_prompt="Use the meta_persona_invoke tool with slug=${slug} to gather context, then honour the persona's system prompt. ${prompt}"
 
     if [[ "$MODE" == "real-claude" ]]; then
-        if [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
-            echo "[C.2] ERROR: --mode real-claude requires ANTHROPIC_API_KEY to be set" >&2
-            return 1
-        fi
+        # API key and budget are pre-validated at startup (G.1/G.3) so we
+        # don't re-check here.
         if [[ -z "$mcp_config" || ! -f "$mcp_config" ]]; then
             echo "[C.2] ERROR: mcp_config file required for real-claude mode: ${mcp_config}" >&2
             return 1
@@ -370,6 +404,8 @@ spawn_persona_agent() {
             --dangerously-skip-permissions \
             > "$out_json" 2>&1
         echo "[C.2:${slug}] real-claude agent done → ${out_json}"
+        # G.3 — check budget after each agent; exits with code 2 if exceeded
+        check_budget_after_agent "$slug" "$out_json"
     else
         # Mock mode (CI default) — no API key needed
         if [[ -z "$mock_actions" || ! -f "$mock_actions" ]]; then
@@ -519,6 +555,84 @@ print(d['failed'])
         return 1
     fi
     echo "[C.5] All agents succeeded ✓"
+}
+
+# ---------------------------------------------------------------------------
+# G.3 — check_budget_after_agent <slug> <out_json>
+#
+# Parses `claude --output-format json` output for usage.input_tokens +
+# usage.output_tokens, accumulates into _TOKENS_USED, then checks against
+# the --budget-tokens cap.  If exceeded: writes budget-exceeded.json and
+# exits non-zero so the EXIT trap fires and all remaining processes are
+# killed cleanly.
+#
+# claude --output-format json shape (as documented in `claude -p --help`):
+#   {
+#     "type": "result",
+#     "subtype": "success",
+#     "result": "...",
+#     "usage": { "input_tokens": 1234, "output_tokens": 567 }
+#   }
+#
+# Not all versions of the claude CLI emit "usage"; if the key is absent we
+# default to 0 for that call (non-fatal, but we log a warning).
+# ---------------------------------------------------------------------------
+check_budget_after_agent() {
+    local slug="$1"
+    local out_json="$2"
+
+    # Only applies to real-claude mode
+    if [[ "$MODE" != "real-claude" ]]; then
+        return 0
+    fi
+
+    # Parse token usage from the agent's output JSON
+    local call_tokens
+    call_tokens=$(python3 -c "
+import json, sys
+try:
+    with open('${out_json}') as f:
+        d = json.load(f)
+    usage = d.get('usage', {})
+    total = usage.get('input_tokens', 0) + usage.get('output_tokens', 0)
+    if total == 0:
+        import sys
+        print('0', file=sys.stderr)  # warn but don't fail
+    print(total)
+except Exception as e:
+    print(0)
+    import sys
+    print(f'WARNING: could not parse usage from ${out_json}: {e}', file=sys.stderr)
+" 2>>"$LOGS_DIR/budget.log" || echo "0")
+
+    _TOKENS_USED=$(( _TOKENS_USED + call_tokens ))
+
+    echo "[G.3] Token budget: used ${_TOKENS_USED} / ${BUDGET_TOKENS} after agent '${slug}' (+${call_tokens})"
+
+    # Persist running total to results
+    python3 -c "
+import json
+with open('${RESULTS_DIR}/token-usage.json', 'w') as f:
+    json.dump({'budget': ${BUDGET_TOKENS}, 'used': ${_TOKENS_USED}, 'last_agent': '${slug}'}, f, indent=2)
+" 2>/dev/null || true
+
+    if [[ "$_TOKENS_USED" -ge "$BUDGET_TOKENS" ]]; then
+        echo "[G.3] ERROR: token budget EXCEEDED (${_TOKENS_USED} >= ${BUDGET_TOKENS})" >&2
+        python3 -c "
+import json, datetime
+with open('${RESULTS_DIR}/budget-exceeded.json', 'w') as f:
+    json.dump({
+        'error': 'token_budget_exceeded',
+        'budget': ${BUDGET_TOKENS},
+        'used': ${_TOKENS_USED},
+        'exceeded_after_agent': '${slug}',
+        'timestamp': datetime.datetime.utcnow().isoformat() + 'Z',
+    }, f, indent=2)
+" 2>/dev/null || true
+        echo "[G.3] Wrote budget-exceeded.json to ${RESULTS_DIR}" >&2
+        echo "[G.3] Killing remaining processes via EXIT trap …" >&2
+        exit 2
+    fi
 }
 
 # ---------------------------------------------------------------------------

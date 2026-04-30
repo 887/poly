@@ -1,6 +1,6 @@
 # Plan — Persona End-to-End Multi-Agent Bash Harness
 
-## Status: 🚧 IN PROGRESS — Phases A-C shipped; Phases D-G pending
+## Status: 🚧 IN PROGRESS — Phases A-C + G shipped; Phases D-F pending
 
 > **Why this is its own plan, not Phase J on `plan-meta-personalities.md`:**
 > the deliverable is a **reusable bash + Playwright harness** that drives
@@ -293,27 +293,36 @@ Key design choices, captured up-front so phases don't re-litigate:
 
 **Effort:** 0.5 sessions.
 
-### Phase G — Cost / Anthropic-API guard
+### Phase G — Cost / Anthropic-API guard (shipped in commit `<see-below>`)
 
-- [ ] **G.1** The bash script supports two modes:
+- [x] **G.1** The bash script supports two modes:
   `--mode mock-claude` (default, for CI) — replaces `claude -p` with a
   small shell stub `tests/e2e/lib/mock-claude.sh` that reads the prompt,
   decides which MCP tools to call by pattern-matching, and exits. No
   real Claude API hit. The "intelligence" is hard-coded per scenario.
   `--mode real-claude` (opt-in, requires `ANTHROPIC_API_KEY`) —
   actually invokes `claude -p` for full E2E. Run nightly only, not on
-  every PR.
-- [ ] **G.2** Mock-claude stub vocabulary: per-scenario
-  `mock-actions.jsonl` lists the exact `(prompt_substring, mcp_tool,
-  args)` triples the stub fires. Keeps CI deterministic AND cheap.
-- [ ] **G.3** Real-claude budget guard — `--mode real-claude` refuses
-  to start if `--budget-tokens` not set; tracks cumulative tokens via
-  the trace JSON; aborts with audit row if exceeded. Default budget
-  100k tokens per run.
-- [ ] **G.4** Document the mock-vs-real trade-off in `tests/e2e/README.md`.
-  Mock catches integration glue + UI live-update regressions but not
-  Claude-prompt-engineering regressions; real catches the latter at
-  Anthropic-API cost.
+  every PR. Formalized: `--mode real-claude` without `ANTHROPIC_API_KEY`
+  or without `--budget-tokens` both fail immediately with clear error + example.
+- [x] **G.2** Mock-claude stub vocabulary: per-scenario
+  `mock-actions.jsonl` lists the exact `(slug, tool, args, result_grep)`
+  triples the stub fires. Format documented in `lib/mock-claude.sh` header.
+  Canonical example: `scenarios/two-personas-handoff/mock-actions.jsonl` (4
+  actions across 2 agents). All new scenarios must ship their own
+  `mock-actions.jsonl`.
+- [x] **G.3** Real-claude budget guard — `--mode real-claude` refuses
+  to start if `--budget-tokens` not set (exits code 1 with actionable
+  error). After each agent call, parses `claude --output-format json`
+  `usage.input_tokens + usage.output_tokens`, accumulates into
+  `_TOKENS_USED`. If `_TOKENS_USED >= BUDGET_TOKENS`: kills all processes
+  via EXIT trap, writes `$RESULTS_DIR/budget-exceeded.json`, exits code 2.
+  Running total persisted to `$RESULTS_DIR/token-usage.json` after each
+  agent. Default budget: 100k tokens per run (documented in README + flag
+  error message).
+- [x] **G.4** Documented mock-vs-real trade-off in `tests/e2e/README.md`
+  under "Mock-claude vs real-claude: trade-offs and cost (Phase G)" section.
+  Covers: what each mode catches, cost (~$0 mock / ~$0.10–$1 real), and
+  the recommendation table (mock every PR; real nightly with budget cap).
 
 **Effort:** 0.5 sessions.
 
