@@ -1060,7 +1060,7 @@ pub fn tool_list() -> Vec<Value> {
         }),
         json!({
             "name": "meta_persona_invoke",
-            "description": "Invoke a meta-personality. Returns a context bundle (bundle_v0) containing the persona's system prompt, slug, name, source IDs, and pinned facts. Claude composes the reply using this bundle. Full context aggregation arrives in Phase C.",
+            "description": "Invoke a meta-personality. Returns a context bundle (bundle_v1) containing the persona's system prompt, slug, name, source IDs, pinned facts, and recent chat messages. Claude composes the reply using this bundle. When dry_run=true the bundle is built identically but memory_read audit rows are suppressed; use this for bundle-shape inspection without polluting audit history.",
             "inputSchema": {
                 "type": "object",
                 "required": ["slug"],
@@ -1069,7 +1069,8 @@ pub fn tool_list() -> Vec<Value> {
                     "user_prompt":           { "type": "string", "description": "Freeform user instruction; optional" },
                     "max_messages_per_chat": { "type": "integer", "default": 30, "minimum": 1, "maximum": 200 },
                     "max_chats":             { "type": "integer", "default": 25, "minimum": 1, "maximum": 100 },
-                    "include_summaries":     { "type": "boolean", "default": true }
+                    "include_summaries":     { "type": "boolean", "default": true },
+                    "dry_run":               { "type": "boolean", "default": false, "description": "When true: build the full bundle_v1 but skip memory_read audit-row writes. The user-initiated invoke audit row still fires. Returns bundle with top-level dry_run=true field." }
                 }
             }
         }),
@@ -2945,6 +2946,19 @@ fn handle_meta_persona_set_tool_whitelist(args: &Value, mem: &MemoryDb) -> Value
 /// Builds a full `bundle_v1` via `PersonaContextBuilder::build()` which
 /// fetches live chat messages from the backend.  Pre-validation (persona
 /// exists, enabled) still happens here before handing off to the builder.
+///
+/// ## dry_run semantics
+///
+/// When `dry_run=true` the bundle is built identically — same source
+/// resolution, same message fetching, same size-cap degradation — but the
+/// implicit `memory_read` audit rows written per chat are suppressed.  The
+/// explicit **invoke** audit row (this call, user-initiated) still fires
+/// regardless; suppressing it would remove the only record that the user
+/// asked the persona to run, which is always useful for audit purposes.
+///
+/// Use `dry_run=true` when you want to inspect the bundle shape (e.g. from
+/// the e2e harness or a future "preview bundle" UI button) without polluting
+/// the persona's audit history with phantom memory reads.
 async fn handle_meta_persona_invoke(args: &Value, pool: &BackendPool, mem: &MemoryDb) -> Value {
     use crate::persona::{PersonaContextRequest, build};
     use crate::persona::context::BackendPoolProvider;
@@ -2954,6 +2968,11 @@ async fn handle_meta_persona_invoke(args: &Value, pool: &BackendPool, mem: &Memo
         None    => return err_result("missing 'slug'"),
     };
     let user_prompt = str_arg(args, "user_prompt").map(|s| s.to_string());
+
+    // Parse the dry_run flag (default: false).
+    let dry_run = args.get("dry_run")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
 
     // Verify the persona exists and is enabled.
     let persona = match mem.get_persona(slug) {
@@ -2991,6 +3010,7 @@ async fn handle_meta_persona_invoke(args: &Value, pool: &BackendPool, mem: &Memo
         max_messages_per_chat,
         max_chats,
         include_summaries,
+        dry_run,
     };
 
     let provider = BackendPoolProvider { pool };
@@ -2998,12 +3018,17 @@ async fn handle_meta_persona_invoke(args: &Value, pool: &BackendPool, mem: &Memo
     match build(req, mem, &provider).await {
         Ok(bundle) => {
             let payload_str = format!(
-                "{{\"action\":\"invoke\",\"user_prompt\":{}}}",
+                "{{\"action\":\"invoke\",\"user_prompt\":{},\"dry_run\":{dry_run}}}",
                 user_prompt
                     .as_deref()
                     .map(|p| format!("{p:?}"))
                     .unwrap_or_else(|| "null".to_string()),
             );
+            // The invoke audit row fires unconditionally — even in dry_run mode.
+            // This is intentional: the invoke row records that the user asked the
+            // persona to run, which is always relevant.  Only the per-chat
+            // memory_read rows (written by PersonaContextBuilder::build()) are
+            // suppressed when dry_run=true.
             audit(mem, slug, "invoke", Some(&payload_str), "ok", None);
             ok_result(serde_json::to_string_pretty(&bundle).unwrap_or_default())
         }

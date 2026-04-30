@@ -173,9 +173,11 @@ pub fn PersonaSourcesEditor(props: PersonaSourcesEditorProps) -> Element {
                                 denied_by_ancestor: denied,
                                 on_toggle: move |key: String| {
                                     let mut ns = nodes;
-                                    if let Some(n) = ns.write().iter_mut().find(|n| n.key == key) {
+                                    let mut updated = ns.peek().clone();
+                                    if let Some(n) = updated.iter_mut().find(|n| n.key == key) {
                                         n.state = n.state.cycle();
                                     }
+                                    ns.set(updated);
                                 },
                             }
                         }

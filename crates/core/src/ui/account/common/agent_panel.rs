@@ -4,8 +4,15 @@
 //! - Access toggle: whether Claude can see/act on this chat.
 //! - Memory: facts stored for this contact/chat, with forget buttons.
 //! - Drafts: pending drafts for this chat (Phase B stub).
-//! - Style: ChatStyleEditor mount (Phase E — stubbed until available).
-//! - Activity: last N agent actions on this chat (nice-to-have stub).
+//! - Personas: PersonaListPanel — list of personas with "Talk to" buttons (Phase E).
+//! - Style: ChatStyleEditor mount (stub).
+//!
+//! ## Phase E wiring
+//!
+//! `talk_session: Signal<Option<TalkSession>>` is mounted here (natural scope:
+//! AgentPanel is the root of the persona UI subtree). When the user clicks "Talk
+//! to" on a persona row, `PersonaListPanel.on_talk` fires → we generate a UUID
+//! session_id → set `talk_session` → `PersonaTalkToOverlay` mounts.
 //!
 //! ## Data access
 //! KV reads/writes go through `crate::STORAGE` (same DB as the MCP server).
@@ -18,7 +25,8 @@
 
 use crate::i18n::{t, t_args};
 use crate::state::{AppState, BatchedSignal, ChatData};
-use crate::ui::agent::persona::PersonaListPanel;
+use crate::ui::agent::persona::talk_to_overlay::{PersonaTalkToOverlay, TalkSession};
+use crate::ui::agent::persona::{PersonaListPanel, PersonaSummary};
 use dioxus::prelude::*;
 use poly_ui_macros::{context_menu, ui_action};
 
@@ -40,6 +48,40 @@ pub struct AgentFact {
     pub id: i64,
     pub content: String,
     pub created_at: String,
+}
+
+// ---------------------------------------------------------------------------
+// Session ID generation
+// ---------------------------------------------------------------------------
+
+/// Generate a short UUID-like session ID without external crate dependencies.
+/// Uses the platform timestamp + a simple random fallback for WASM.
+fn new_session_id() -> String {
+    #[cfg(target_arch = "wasm32")]
+    {
+        // On WASM use Math.random via js_sys for randomness.
+        let r1 = (js_sys::Math::random() * u32::MAX as f64) as u32;
+        let r2 = (js_sys::Math::random() * u32::MAX as f64) as u32;
+        let ts = web_sys::window()
+            .and_then(|w| w.performance())
+            .map(|p| p.now() as u64)
+            .unwrap_or(0);
+        format!("{ts:016x}-{r1:08x}-{r2:08x}")
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let ts = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        // Mix in the thread ID for pseudo-uniqueness.
+        let tid = format!("{:?}", std::thread::current().id());
+        let hash: u64 = tid.bytes().fold(ts as u64, |acc, b| {
+            acc.wrapping_mul(31).wrapping_add(b as u64)
+        });
+        format!("{ts:032x}-{hash:016x}")
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -125,11 +167,6 @@ fn AgentMemorySection(
                                             let chat_id_inner = chat_id_c.clone();
                                             spawn(async move {
                                                 let Some(storage) = crate::STORAGE.get() else { return };
-                                                // Attempt to delete from contact_facts table.
-                                                // We pass the fact id as a KV delete keyed by a
-                                                // sentinel so the host bridge can identify it.
-                                                // For now we just clear via KV convention and
-                                                // rely on the MCP to clean up on next sync.
                                                 let key = format!(
                                                     "agent.fact.{account_id_inner}.{chat_id_inner}.{fact_id}"
                                                 );
@@ -170,7 +207,6 @@ fn AgentDraftsSection(access_enabled: bool) -> Element {
                 div { class: "agent-panel-disabled-state", {t("agent-panel-disabled-state")} }
             } else {
                 // Phase B: when DraftsSidebar component is available, mount it here.
-                // For now show an empty state.
                 div { class: "agent-panel-empty-state", {t("agent-panel-drafts-empty")} }
             }
         }
@@ -178,7 +214,7 @@ fn AgentDraftsSection(access_enabled: bool) -> Element {
 }
 
 // ---------------------------------------------------------------------------
-// Section: Style — Phase E ChatStyleEditor (stub)
+// Section: Style (stub)
 // ---------------------------------------------------------------------------
 
 #[rustfmt::skip]
@@ -192,11 +228,8 @@ fn AgentStyleSection(access_enabled: bool) -> Element {
             if !access_enabled {
                 div { class: "agent-panel-disabled-state", {t("agent-panel-disabled-state")} }
             } else {
-                // Phase E: mount ChatStyleEditor here once
-                // crates/core/src/ui/agent/chat_style_editor.rs lands.
-                // TODO(phase-e): replace stub with: rsx! { ChatStyleEditor { account_id, chat_id } }
                 div { class: "agent-panel-empty-state agent-panel-style-stub",
-                    "Style editor coming soon (Phase E)."
+                    "Style editor coming soon."
                 }
             }
         }
@@ -239,20 +272,20 @@ pub fn AgentPanel(
         }
     });
 
-    // Facts — load from KV namespace (Phase A's MCP stores facts under
-    // `agent.facts.<account>.<chat>.*`). We enumerate a prefix and deserialise.
-    // For now the list starts empty; we'll show the empty state.
+    // Facts — starts empty; shown as empty state.
     let facts: Signal<Vec<AgentFact>> = use_signal(Vec::new);
 
-    // Header dropped — the agent panel now lives inside the utility-rail
-    // tab system, which renders its own consistent header. Re-clicking the
-    // 🤖 button in the chat header closes the tab. Old `chat_name` arg
-    // kept on the prop signature so callers don't need to change.
+    // Phase E — TalkSession signal.  `None` = overlay closed; `Some(s)` = overlay open.
+    let mut talk_session: Signal<Option<TalkSession>> = use_signal(|| None);
+
+    // Snapshot for overlay render — peek avoids subscribing AgentPanel to talk_session
+    // on every render (hang class #7 countermeasure).
+    let current_talk = talk_session.peek().clone();
+
     let _ = (&chat_name, &mut app_state);
 
     rsx! {
         aside { class: "user-sidebar agent-panel-sidebar",
-
             div { class: "agent-panel-body",
                 AgentAccessToggle {
                     account_id: account_id.clone(),
@@ -268,9 +301,30 @@ pub fn AgentPanel(
                 AgentDraftsSection {
                     access_enabled: *access_enabled.read(),
                 }
-                PersonaListPanel {}
+
+                // Phase E.4: PersonaListPanel with on_talk wired to open overlay.
+                PersonaListPanel {
+                    on_talk: move |summary: PersonaSummary| {
+                        let session = TalkSession {
+                            persona_slug: summary.slug.clone(),
+                            persona_name: summary.name.clone(),
+                            persona_avatar: summary.avatar_emoji.clone(),
+                            session_id: new_session_id(),
+                        };
+                        talk_session.set(Some(session));
+                    },
+                }
+
                 AgentStyleSection {
                     access_enabled: *access_enabled.read(),
+                }
+            }
+
+            // Phase E.1: PersonaTalkToOverlay — mounted over the panel when active.
+            if let Some(session) = current_talk {
+                PersonaTalkToOverlay {
+                    session,
+                    on_close: move |_| talk_session.set(None),
                 }
             }
         }

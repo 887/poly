@@ -85,6 +85,14 @@ pub struct PersonaContextRequest {
     pub max_chats: usize,
     /// Whether to prefer `chat_summaries` over raw messages.
     pub include_summaries: bool,
+    /// When true, skip writing `memory_read` audit rows for each chat read.
+    ///
+    /// The bundle shape is identical to a normal invocation; only the implicit
+    /// per-chat audit rows are suppressed.  The user-initiated `invoke` audit
+    /// row is written by `handle_meta_persona_invoke` in `tools.rs` regardless
+    /// of this flag — suppressing it here would remove the only record that the
+    /// user requested the persona, which is always useful.
+    pub dry_run: bool,
 }
 
 impl Default for PersonaContextRequest {
@@ -95,13 +103,14 @@ impl Default for PersonaContextRequest {
             max_messages_per_chat: 30,
             max_chats: 25,
             include_summaries: true,
+            dry_run: false,
         }
     }
 }
 
 /// The full context bundle returned from `meta_persona_invoke`.
 ///
-/// JSON shape (v1):
+/// JSON shape (v1, normal invocation):
 /// ```json
 /// {
 ///   "bundle_version": "v1",
@@ -122,6 +131,10 @@ impl Default for PersonaContextRequest {
 ///   "recent_facts": [ … ]
 /// }
 /// ```
+///
+/// When `dry_run=true` an additional top-level field is added:
+/// `"dry_run": true` — signals to consumers (e2e harness, future UI preview)
+/// that this bundle was built without writing per-chat audit rows.
 #[derive(Debug, serde::Serialize)]
 pub struct PersonaContextBundle {
     pub bundle_version: String,
@@ -132,6 +145,11 @@ pub struct PersonaContextBundle {
     pub user_prompt: Option<String>,
     pub chats: Vec<ChatEntry>,
     pub recent_facts: Vec<Value>,
+    /// Present and `true` only when `PersonaContextRequest::dry_run` was set.
+    /// Omitted from the JSON entirely in normal (non-dry-run) invocations via
+    /// `#[serde(skip_serializing_if)]`.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub dry_run: bool,
 }
 
 // ─── Backend provider trait ──────────────────────────────────────────────────
@@ -637,48 +655,57 @@ pub async fn build(
             {
                 Ok(Ok(messages)) => {
                     // C.6 — audit successful read.
-                    let payload = format!(
-                        "{{\"message_count\":{}}}",
-                        messages.len()
-                    );
-                    let _ = mem.record_persona_audit(
-                        slug,
-                        "claude-desktop",
-                        "memory_read",
-                        Some(account_id.as_str()),
-                        Some(chat_id.as_str()),
-                        Some(&payload),
-                        "ok",
-                        None,
-                    );
+                    // Suppressed when dry_run=true: the caller (handle_meta_persona_invoke)
+                    // writes the user-initiated invoke row unconditionally; only the
+                    // implicit per-chat memory_read rows are skipped here.
+                    if !req.dry_run {
+                        let payload = format!(
+                            "{{\"message_count\":{}}}",
+                            messages.len()
+                        );
+                        let _ = mem.record_persona_audit(
+                            slug,
+                            "claude-desktop",
+                            "memory_read",
+                            Some(account_id.as_str()),
+                            Some(chat_id.as_str()),
+                            Some(&payload),
+                            "ok",
+                            None,
+                        );
+                    }
                     messages
                 }
                 Ok(Err(e)) => {
                     warn!(slug, %account_id, %chat_id, "fetch_messages error: {e}");
-                    let _ = mem.record_persona_audit(
-                        slug,
-                        "claude-desktop",
-                        "memory_read",
-                        Some(account_id.as_str()),
-                        Some(chat_id.as_str()),
-                        None,
-                        "error",
-                        Some(&e.to_string()),
-                    );
+                    if !req.dry_run {
+                        let _ = mem.record_persona_audit(
+                            slug,
+                            "claude-desktop",
+                            "memory_read",
+                            Some(account_id.as_str()),
+                            Some(chat_id.as_str()),
+                            None,
+                            "error",
+                            Some(&e.to_string()),
+                        );
+                    }
                     vec![]
                 }
                 Err(_) => {
                     warn!(slug, %account_id, %chat_id, "fetch_messages timed out");
-                    let _ = mem.record_persona_audit(
-                        slug,
-                        "claude-desktop",
-                        "memory_read",
-                        Some(account_id.as_str()),
-                        Some(chat_id.as_str()),
-                        None,
-                        "error",
-                        Some("timeout"),
-                    );
+                    if !req.dry_run {
+                        let _ = mem.record_persona_audit(
+                            slug,
+                            "claude-desktop",
+                            "memory_read",
+                            Some(account_id.as_str()),
+                            Some(chat_id.as_str()),
+                            None,
+                            "error",
+                            Some("timeout"),
+                        );
+                    }
                     vec![]
                 }
             };
@@ -686,7 +713,8 @@ pub async fn build(
         };
 
         // Also write an audit row when we used a stored summary.
-        if summary.is_some() {
+        // Suppressed in dry_run mode for the same reason as above.
+        if summary.is_some() && !req.dry_run {
             let _ = mem.record_persona_audit(
                 slug,
                 "claude-desktop",
@@ -720,6 +748,7 @@ pub async fn build(
         user_prompt: req.user_prompt,
         chats: chat_entries,
         recent_facts,
+        dry_run: req.dry_run,
     })
 }
 
@@ -869,6 +898,7 @@ mod tests {
             max_messages_per_chat: 30,
             max_chats: 25,
             include_summaries: true,
+            dry_run: false,
         };
 
         let bundle = build(req, &mem, &provider).await.expect("build");

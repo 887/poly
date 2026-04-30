@@ -1,7 +1,10 @@
 //! PersonaListPanel — compact list of all personas shown inside AgentPanel.
 //!
-//! Each row: avatar emoji, name, enabled/disabled status dot, "Talk to" stub button,
+//! Each row: avatar emoji, name, enabled/disabled status dot, "Talk to" button,
 //! and a gear icon that opens PersonaEditModal.
+//!
+//! Phase E (E.4): "Talk to" button fires `on_talk(PersonaSummary)` instead of
+//! the Phase D `tracing::info!` stub.
 //!
 //! Reactive hygiene:
 //! - `use_future` for one-shot load on mount (no stale-capture risk; no deps).
@@ -40,9 +43,11 @@ fn PersonaStatusDot(enabled: bool) -> Element {
 fn PersonaListRow(
     persona: PersonaSummary,
     on_edit: EventHandler<String>,
+    /// E.4: fires with the selected PersonaSummary to open the talk overlay.
+    on_talk: EventHandler<PersonaSummary>,
 ) -> Element {
     let slug = persona.slug.clone();
-    let slug_talk = persona.slug.clone();
+    let persona_talk = persona.clone();
     rsx! {
         div { class: "persona-list-row",
             span { class: "persona-avatar", "{persona.avatar_emoji}" }
@@ -54,9 +59,7 @@ fn PersonaListRow(
                 button {
                     class: "btn btn-sm btn-secondary persona-talk-btn",
                     title: t("persona-action-talk-to"),
-                    onclick: move |_| {
-                        tracing::info!("talk_to_clicked: {}", slug_talk);
-                    },
+                    onclick: move |_| on_talk.call(persona_talk.clone()),
                     {t("persona-action-talk-to")}
                 }
                 button {
@@ -73,11 +76,19 @@ fn PersonaListRow(
 // ─── PersonaListPanel ────────────────────────────────────────────────────────
 
 /// Compact list of personas — mounts inside AgentPanel between Drafts and Style.
+///
+/// Props:
+/// - `on_talk`: called when the user clicks "Talk to" on a persona row.
+///              The caller should set a `Signal<Option<TalkSession>>` to open
+///              the overlay (Phase E wire-up).
 #[rustfmt::skip]
 #[ui_action(inherit)]
 #[context_menu(inherit)]
 #[component]
-pub fn PersonaListPanel() -> Element {
+pub fn PersonaListPanel(
+    /// E.4: callback fired with the chosen PersonaSummary.
+    on_talk: EventHandler<PersonaSummary>,
+) -> Element {
     let mut personas: Signal<Vec<PersonaSummary>> = use_signal(Vec::new);
     let mut loading = use_signal(|| true);
     let mut error: Signal<Option<String>> = use_signal(|| None);
@@ -127,8 +138,9 @@ pub fn PersonaListPanel() -> Element {
                     for persona in personas.read().clone() {
                         PersonaListRow {
                             key: "{persona.slug}",
-                            persona,
+                            persona: persona.clone(),
                             on_edit: move |slug: String| edit_slug.set(Some(slug)),
+                            on_talk: move |p: PersonaSummary| on_talk.call(p),
                         }
                     }
                 }

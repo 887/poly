@@ -205,3 +205,143 @@ async fn persona_invoke_e2e_discord_bundle_v1() {
         "expected memory_read audit rows, got: {audit:?}"
     );
 }
+
+// ── dry_run integration test ─────────────────────────────────────────────────
+
+/// Verify that `meta_persona_invoke` with `dry_run=true`:
+///   1. Returns a valid `bundle_v1` (same shape as a normal invocation).
+///   2. Sets `dry_run: true` at the top level of the bundle JSON.
+///   3. Writes exactly 1 new audit row (the user-initiated `invoke` row),
+///      NOT 1 + N (invoke + one `memory_read` per chat).
+///
+/// This test runs against the same Discord test server as the non-dry-run
+/// test — channel 200 has 3 seeded messages, so a normal invoke would write
+/// 1 invoke row + 1 memory_read row = 2 rows.  With dry_run=true we expect
+/// exactly 1 new row (only the invoke row).
+#[tokio::test]
+async fn persona_invoke_dry_run_skips_memory_audit() {
+    // ── 1. Start the Discord test server.
+    let srv = TestSrv::discord().await;
+
+    // ── 2. Authenticate a DiscordClient.
+    let http_client = reqwest::Client::new();
+    let token_resp = http_client
+        .post(format!("{}/test/auth/token", srv.base_url))
+        .json(&json!({ "username": "koala" }))
+        .send()
+        .await
+        .expect("token request");
+    let token_body: Value = token_resp.json().await.expect("token body");
+    let token = token_body["token"].as_str().expect("token field").to_string();
+
+    let mut discord = DiscordClient::with_base_url(srv.base_url.clone());
+    let session = discord
+        .authenticate(AuthCredentials::Token(token))
+        .await
+        .expect("authenticate");
+    let account_id = session.user.id.clone();
+
+    let mut pool = BackendPool::new();
+    pool.insert(session, Box::new(discord));
+
+    // ── 3. Create in-memory DB + persona + source binding.
+    let mem = test_mem();
+    let create = call(&mut pool, &mem, "meta_persona_create", json!({
+        "slug": "dry-run-watcher",
+        "name": "Dry Run Watcher",
+        "system_prompt": "You watch and report without recording.",
+    })).await;
+    assert_ok(&create);
+
+    let set_src = call(&mut pool, &mem, "meta_persona_set_sources", json!({
+        "slug": "dry-run-watcher",
+        "sources": [
+            {
+                "account_id": account_id,
+                "selector_kind": "channel",
+                "selector_value": "200",
+                "include": true
+            }
+        ]
+    })).await;
+    assert_ok(&set_src);
+
+    // ── 4. Snapshot audit row count BEFORE the dry-run invoke.
+    let before_rows = mem
+        .list_persona_audit("dry-run-watcher", 500)
+        .expect("list audit before")
+        .len();
+
+    // ── 5. Invoke with dry_run=true.
+    let invoke = call(&mut pool, &mem, "meta_persona_invoke", json!({
+        "slug": "dry-run-watcher",
+        "user_prompt": "Preview bundle — no audit please.",
+        "include_summaries": false,
+        "dry_run": true
+    })).await;
+    assert_ok(&invoke);
+
+    // ── 6. Parse the bundle and verify it is well-formed v1.
+    let text = text_of(&invoke);
+    let json_start = text.find('{').unwrap_or(0);
+    let bundle: Value = serde_json::from_str(&text[json_start..])
+        .unwrap_or_else(|e| panic!("bundle not valid JSON: {e}\nraw: {text}"));
+
+    assert_eq!(
+        bundle["bundle_version"].as_str().unwrap_or(""),
+        "v1",
+        "expected bundle_version v1 in dry-run bundle"
+    );
+    assert_eq!(
+        bundle["persona"]["slug"].as_str().unwrap_or(""),
+        "dry-run-watcher"
+    );
+
+    // dry_run field must be present and true in the returned JSON.
+    assert_eq!(
+        bundle["dry_run"].as_bool(),
+        Some(true),
+        "expected dry_run=true in bundle JSON"
+    );
+
+    // chats must be non-empty (source is bound — bundle shape is unchanged).
+    let chats = bundle["chats"].as_array().expect("chats array");
+    assert!(!chats.is_empty(), "expected chats in dry-run bundle (same shape as normal)");
+
+    // ── 7. Verify audit row count increased by exactly 1 (the invoke row only).
+    //
+    // The rows written BEFORE the dry-run call include the create and set_sources
+    // audit entries (which both use action="invoke" in the audit schema).  We
+    // therefore use the before/after delta rather than filtering by action name.
+    let all_rows_after = mem
+        .list_persona_audit("dry-run-watcher", 500)
+        .expect("list audit after");
+    let after_rows = all_rows_after.len();
+
+    let new_rows = after_rows - before_rows;
+    assert_eq!(
+        new_rows, 1,
+        "dry_run=true should add exactly 1 audit row (the invoke row), got {new_rows}. \
+         New rows: {:?}",
+        &all_rows_after[before_rows..]
+    );
+
+    // ── 8. No memory_read rows exist for this persona at all (we never ran
+    //       a non-dry-run invoke, so there are zero memory_read rows).
+    let memory_reads: Vec<&Value> = all_rows_after
+        .iter()
+        .filter(|r| r["action"].as_str() == Some("memory_read"))
+        .collect();
+    assert!(
+        memory_reads.is_empty(),
+        "dry_run=true should suppress memory_read audit rows, found: {memory_reads:?}"
+    );
+
+    // ── 9. Confirm the one new row is the invoke row (payload contains dry_run).
+    let new_row = &all_rows_after[before_rows];
+    let payload = new_row["payload_json"].as_str().unwrap_or("");
+    assert!(
+        payload.contains("dry_run"),
+        "new audit row payload should mention dry_run, got: {payload}"
+    );
+}

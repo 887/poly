@@ -1,6 +1,6 @@
 # Plan — Meta-Personalities (Personas Above Accounts)
 
-## Status: 🚧 IN PROGRESS — Phases A-D shipped; Phases E-H pending
+## Status: 🚧 IN PROGRESS — Phases A-E + J shipped; Phases F-H pending
 
 > **Created:** 2026-04-29
 > **Depends on:** `plan-claude-desktop-agent.md` (shipped Phases A-F: memory, drafts, events, typing, style, catch-me-up)
@@ -812,21 +812,36 @@ Numbers update live. Click → expanded source view.
 
 ---
 
-### Phase E — `PersonaTalkToOverlay` + invoke from UI
+### Phase E — `PersonaTalkToOverlay` + invoke from UI (shipped in commit `834553ab`)
 
-- [ ] **E.1** `PersonaTalkToOverlay` component — slide-in over utility rail.
-- [ ] **E.2** Composer + transcript scroller; transcript stored in a
+- [x] **E.1** `PersonaTalkToOverlay` component — slide-in over utility rail.
+  Mounted in `AgentPanel` and `PersonaManagementRoute` when `Signal<Option<TalkSession>>`
+  is `Some`. CSS class `persona-talk-overlay`. Header has avatar/name, DEV/NORMAL toggle,
+  close button.
+- [x] **E.2** Composer + transcript scroller; transcript stored in a
   `Signal<Vec<TalkLine>>` keyed to `(persona_slug, session_id)`.
-- [ ] **E.3** "Send" → call `meta_persona_invoke` via the local MCP, render
-  the returned bundle (dev mode) or the Claude Desktop follow-up content
-  (normal mode).
-- [ ] **E.4** Wire "Talk to" button in `PersonaListPanel` to open the
-  overlay.
-- [ ] **E.5** Persist transcript history in KV (`persona.talk.<slug>.<session>`)
+  `TalkLine { kind: User|Assistant, content: String, timestamp_ms: u64 }`.
+  Session picker shows prior sessions and "New session" button.
+- [x] **E.3** "Send" → call `meta_persona_invoke` via the local MCP, render
+  the returned bundle (dev mode: raw JSON `<pre>`; normal mode: system_prompt
+  excerpt + pinned_facts count + per-source message count summary).
+  Toggle persisted via KV `persona.talk.dev_mode`. Default: dev mode.
+- [x] **E.4** Wire "Talk to" button in `PersonaListPanel` to open the
+  overlay. `PersonaListPanel` now accepts `on_talk: EventHandler<PersonaSummary>`.
+  `AgentPanel` and `PersonaManagementRoute` mount `Signal<Option<TalkSession>>`
+  and pass the handler. `session_id` generated via timestamp+random at click time.
+- [x] **E.5** Persist transcript history in KV (`persona.talk.<slug>.<session>`)
   for the last 5 sessions per persona — older sessions auto-pruned.
-- [ ] **E.6** Loading state + error state with retry button.
-- [ ] **E.7** Integration test against `test-discord`: open overlay, send
-  prompt, see context bundle returned.
+  Session index at `persona.talk.<slug>.__index__`. Pruning: drop oldest by
+  insertion order when count reaches `MAX_SESSIONS` (5) on new-session creation.
+- [x] **E.6** Loading state + error state with retry button.
+  Spinner while `meta_persona_invoke` in flight; error toast with retry (re-sends
+  last user message) + dismiss. User message shown optimistically before result.
+- [x] **E.7** Integration test against `test-discord`:
+  `mcp/chat-mcp/tests/persona_talk_e2e.rs::persona_talk_e2e_overlay_send_flow` —
+  spins up `poly_test_discord` in-process, creates persona with channel 200 source,
+  invokes via `tools::dispatch`, asserts bundle v1 + seeded messages + audit rows.
+  1 test, passes.
 
 **Effort:** 1 session.
 
@@ -1168,7 +1183,7 @@ All 8 Phase B checklist items complete. Implementation notes:
 > subcommands from the MCP tool list. Tightly coupled to persona schema
 > and dispatch.
 
-**Status:** 🚧 PLANNED — not started.
+**Status:** DONE — shipped in Phase J commit (see below).
 
 **Depends on:** Phase D shipped (the UI surface defines what "parity"
 means — every gear-icon action must be reachable from MCP/CLI without
@@ -1204,7 +1219,7 @@ e2e harness needs), and CLI recipe docs.
 
 ### Sub-step checkboxes
 
-- [ ] **J.1** Audit pass — once Phase D lands, diff the Phase D UI
+- [x] **J.1** Audit pass — once Phase D lands, diff the Phase D UI
   surface (gear menu, edit-modal fields, list-row actions) against the
   14 existing tools. Produce `docs/plans/plan-meta-personalities-mcp-gap
   -audit.md` (short table: UI action → tool that supports it /
@@ -1215,7 +1230,7 @@ e2e harness needs), and CLI recipe docs.
   tool, has an explicit composed-call recipe in `docs/personas-cli.md`,
   or is logged as a real GAP with an owner.
 
-- [ ] **J.4** Add `dry_run: bool` flag to `meta_persona_invoke`.
+- [x] **J.4** Add `dry_run: bool` flag to `meta_persona_invoke`.
   - When `dry_run=true`: build the `bundle_v1` exactly as today, BUT
     skip the `memory_read` audit-row writes AND tag the output JSON as
     `"dry_run": true`.
@@ -1228,7 +1243,7 @@ e2e harness needs), and CLI recipe docs.
     slug is unchanged afterwards. Existing non-dry-run integration test
     must keep passing.
 
-- [ ] **J.8** `docs/personas-cli.md` — bash-friendly recipe page
+- [x] **J.8** `docs/personas-cli.md` — bash-friendly recipe page
   showing the 8 most-common flows as `poly-cli call …` invocations
   (create, set sources, set tools, invoke, dry-run invoke, pin a fact
   via composed update, pause via `_update enabled=false`, delete).
@@ -1269,3 +1284,40 @@ e2e harness needs), and CLI recipe docs.
 | Reactive hygiene: `use_future` + `use_reactive_effect`, no `Signal::write()` | 2026-04-30 | mcp.rs for MCP call path |
 
 `cargo check -p poly-core` clean. `dx build --platform web` (desktop WASM) clean.
+
+---
+
+## Phase J Status: DONE
+
+| Item | Date | Notes |
+|---|---|---|
+| `docs/plans/plan-meta-personalities-mcp-gap-audit.md` | 2026-04-30 | 24 UI actions audited: 20 OK, 1 RECIPE, 3 GAP-with-owner |
+| `dry_run: bool` field on `PersonaContextRequest` | 2026-04-30 | `mcp/chat-mcp/src/persona/context.rs` |
+| `dry_run` in `meta_persona_invoke` JSON schema | 2026-04-30 | `mcp/chat-mcp/src/tools.rs` |
+| `dry_run` suppresses `memory_read` audit rows in `build()` | 2026-04-30 | `context.rs` — invoke row still fires unconditionally |
+| `PersonaContextBundle::dry_run` field (serde skip when false) | 2026-04-30 | `context.rs` |
+| `persona_invoke_dry_run_skips_memory_audit` integration test | 2026-04-30 | `mcp/chat-mcp/tests/persona_invoke_e2e.rs` |
+| `docs/personas-cli.md` — 12-recipe CLI reference | 2026-04-30 | Includes dry-run section + "no typed subcommands" rationale |
+| `tools/poly-cli/README.md` | 2026-04-30 | Created; links to `docs/personas-cli.md` |
+
+`cargo check -p poly-chat-mcp` clean. `cargo test -p poly-chat-mcp --lib` — 103 passed. `cargo test -p poly-chat-mcp --test persona_invoke_e2e` — 2 passed.
+
+---
+
+## Phase E Status: DONE
+
+| Item | Commit | Notes |
+|---|---|---|
+| `PersonaTalkToOverlay` slide-in overlay | E commit | `crates/core/src/ui/agent/persona/talk_to_overlay.rs` |
+| `TalkSession`, `TalkLine`, `TalkLineKind` types | E commit | Same file — pub from `talk_to_overlay` module |
+| Composer + transcript scroller (dev/normal mode) | E commit | Dev: raw JSON `<pre>`; normal: bundle summary |
+| DEV/NORMAL mode toggle (KV-persisted) | E commit | Key `persona.talk.dev_mode` |
+| `PersonaListPanel.on_talk` wired | E commit | Replaces `tracing::info!` stub from Phase D |
+| `AgentPanel` mounts `TalkSession` signal + overlay | E commit | `crates/core/src/ui/account/common/agent_panel.rs` |
+| `PersonaManagementRoute` mounts overlay too | E commit | `route.rs` |
+| KV transcript persist + session index | E commit | `persona.talk.<slug>.<sid>` + `.__index__` |
+| Session picker (resume or new) | E commit | Auto-prune to 5 sessions oldest-first |
+| Loading spinner + error toast + retry | E commit | Retry re-sends last user message |
+| `persona_talk_e2e.rs` integration test | E commit | 1 test, passes against `test-discord` |
+
+`cargo check -p poly-core` clean. `cargo test -p poly-chat-mcp --test persona_talk_e2e` — 1 passed.

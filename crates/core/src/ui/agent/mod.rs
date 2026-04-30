@@ -255,7 +255,7 @@ pub fn AgentPage() -> Element {
     let mut active_section = use_signal(|| AgentSection::Integrations);
     let nav = use_navigator();
 
-    use_effect(move || {
+    use_effect(move || { // poly-lint: allow stale-effect-capture — body reads search_text via signal.read(), no captured local
         let q = search_text.read().to_lowercase();
         if q.is_empty() {
             return;
@@ -265,7 +265,7 @@ pub fn AgentPage() -> Element {
         );
     });
 
-    use_effect(move || {
+    use_effect(move || { // poly-lint: allow stale-effect-capture — body reads active_section via signal.read(), no captured local
         let slug = active_section.read().to_slug().to_string();
         let js = format!(
             "setTimeout(() => {{ \
