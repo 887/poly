@@ -81,7 +81,7 @@ use super::client_ui::ClientSidebar;
 use super::create_forum_post::{CreateForumPostPage, ForumSearchPage};
 use super::main_layout::MainLayout;
 use super::client_ui::view::AccountOverviewView;
-use super::agent::AgentPage;
+use super::agent::{AgentPage, PersonaManagementRoute as PersonaManagementRouteComponent};
 use super::settings::SettingsPage;
 use super::split_shell::SplitMenuShell;
 use crate::client_manager::ClientManager;
@@ -137,6 +137,7 @@ pub fn route_account_id(route: &Route) -> Option<&str> {
         | Route::SettingsSectionRoute { .. }
         | Route::AgentRoute
         | Route::AgentSectionRoute { .. }
+        | Route::PersonasRoute
         | Route::SearchRoute
         | Route::SignupPicker
         | Route::ClientSignup { .. }
@@ -386,6 +387,10 @@ pub enum Route {
         #[connected(linked)]
         #[route("/agent")]
         AgentRoute,
+
+        #[connected(linked)]
+        #[route("/agent/personas")]
+        PersonasRoute,
 
         #[connected(linked)]
         #[route("/agent/:section")]
@@ -805,6 +810,14 @@ pub fn sync_route_to_app_state(route: &Route, app_state: BatchedSignal<AppState>
             s.nav.selected_channel.set(None);
         }
         Route::AgentSectionRoute { .. } => {
+            s.nav.view.set(View::Agent);
+            s.nav.active_account_id.set(None);
+            s.nav.active_instance_id.set(None);
+            s.nav.active_backend.set(None);
+            s.nav.selected_server.set(None);
+            s.nav.selected_channel.set(None);
+        }
+        Route::PersonasRoute => {
             s.nav.view.set(View::Agent);
             s.nav.active_account_id.set(None);
             s.nav.active_instance_id.set(None);
@@ -1982,6 +1995,17 @@ fn AgentSectionRoute(section: String) -> Element {
     }
 }
 
+/// Persona management page at `/agent/personas`.
+#[context_menu(None)]
+#[rustfmt::skip]
+#[ui_action(inherit)]
+#[component]
+fn PersonasRoute() -> Element {
+    rsx! {
+        PersonaManagementRouteComponent {}
+    }
+}
+
 /// Global search page — browse the full node tree of all accounts.
 #[context_menu(None)]
 #[rustfmt::skip]
@@ -2403,6 +2427,7 @@ fn route_variant_name(route: &Route) -> &'static str {
         Route::SettingsSectionRoute { .. } => "SettingsSectionRoute",
         Route::AgentRoute => "AgentRoute",
         Route::AgentSectionRoute { .. } => "AgentSectionRoute",
+        Route::PersonasRoute => "PersonasRoute",
         Route::SearchRoute => "SearchRoute",
         Route::AccountSettingsRoute { .. } => "AccountSettingsRoute",
         Route::ThreadView { .. } => "ThreadView",

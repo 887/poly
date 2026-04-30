@@ -1,6 +1,6 @@
 # Plan — Meta-Personalities (Personas Above Accounts)
 
-## Status: 🚧 IN PROGRESS — Phases A-C shipped; Phases D-H pending
+## Status: 🚧 IN PROGRESS — Phases A-D shipped; Phases E-H pending
 
 > **Created:** 2026-04-29
 > **Depends on:** `plan-claude-desktop-agent.md` (shipped Phases A-F: memory, drafts, events, typing, style, catch-me-up)
@@ -786,26 +786,26 @@ Numbers update live. Click → expanded source view.
 
 ---
 
-### Phase D — `PersonaListPanel` + `PersonaEditModal` UI
+### Phase D — `PersonaListPanel` + `PersonaEditModal` UI (shipped in commit `a0cdae3c`)
 
-- [ ] **D.1** New directory `crates/core/src/ui/agent/persona/`. Add
+- [x] **D.1** New directory `crates/core/src/ui/agent/persona/`. Add
   `pub mod persona;` to `crates/core/src/ui/agent/mod.rs`.
-- [ ] **D.2** `PersonaListPanel` — fetches via `meta_persona_list`, renders
+- [x] **D.2** `PersonaListPanel` — fetches via `meta_persona_list`, renders
   rows with status indicator, "Talk to", gear → edit modal.
-- [ ] **D.3** Mount `PersonaListPanel` inside `AgentPanel`
+- [x] **D.3** Mount `PersonaListPanel` inside `AgentPanel`
   (`agent_panel.rs:252-273`) between Drafts and Style sections.
-- [ ] **D.4** `PersonaEditModal` skeleton with collapsible sections
+- [x] **D.4** `PersonaEditModal` skeleton with collapsible sections
   (Identity / Sources / Tools / Behaviour / Outbound / Memory / Audit).
-- [ ] **D.5** `PersonaSourcesEditor` — per-account tabs, server/channel tree,
+- [x] **D.5** `PersonaSourcesEditor` — per-account tabs, server/channel tree,
   three-state allow/inherit/deny, deny-wins visual.
-- [ ] **D.6** `PersonaToolWhitelistEditor` — checkbox grid grouped by
+- [x] **D.6** `PersonaToolWhitelistEditor` — checkbox grid grouped by
   category (read / memory / draft / outbound).
-- [ ] **D.7** New route `/agent/personas` → `PersonaManagementRoute`.
-- [ ] **D.8** FTL keys for all persona UI strings in
+- [x] **D.7** New route `/agent/personas` → `PersonaManagementRoute`.
+- [x] **D.8** FTL keys for all persona UI strings in
   `locales/{en,de,es,fr}/main.ftl`.
-- [ ] **D.9** Component-lint compliance (each component < 150 lines per
+- [x] **D.9** Component-lint compliance (each component < 150 lines per
   CLAUDE.md design principles + `plan-component-lints.md`).
-- [ ] **D.10** Use `BatchedSignal<T>` and `use_reactive_effect` exclusively
+- [x] **D.10** Use `BatchedSignal<T>` and `use_reactive_effect` exclusively
   per CLAUDE.md hang-class countermeasures #1 / #6 / #7.
 
 **Effort:** 2.5 sessions — UI-heavy.
@@ -1155,6 +1155,8 @@ All 8 Phase B checklist items complete. Implementation notes:
 103 unit tests pass (`cargo test -p poly-chat-mcp --lib`).
 +1 integration test (`cargo test -p poly-chat-mcp --test persona_invoke_e2e`).
 `cargo check -p poly-chat-mcp` clean.
+<<<<<<< conflict 1 of 1
++++++++ kupyolzv 76292b2c "feat(composer): 3-state typing toggle + drop redundant Discord stickers button" (rebase destination)
 
 ---
 
@@ -1247,3 +1249,23 @@ e2e harness needs), and CLI recipe docs.
 - `tools/scripts/forbid-ui-only-persona-action.sh` (added in
   `plan-persona-quality-gates.md` Phase Q) passes against the audit
   output.
+
+---
+
+## Phase D Status: DONE
+
+| Item | Date | Notes |
+|---|---|---|
+| `crates/core/src/ui/agent/persona/` directory (7 files) | 2026-04-30 | mod.rs, mcp.rs, types.rs, list_panel.rs, edit_modal.rs, sources_editor.rs, tool_whitelist_editor.rs, route.rs |
+| `pub mod persona;` wired into `agent/mod.rs` | 2026-04-30 | + `PersonasRoute` nav item |
+| `PersonaListPanel` + `PersonaListRow` + `PersonaStatusDot` | 2026-04-30 | `list_panel.rs` |
+| `PersonaListPanel` mounted in `AgentPanel` (between Drafts + Style) | 2026-04-30 | `agent_panel.rs` |
+| `PersonaEditModal` (7 collapsible sections) | 2026-04-30 | `edit_modal.rs` |
+| `PersonaSourcesEditor` (3-state pill, deny-wins visual) | 2026-04-30 | `sources_editor.rs` |
+| `PersonaToolWhitelistEditor` (checkbox grid by category) | 2026-04-30 | `tool_whitelist_editor.rs` |
+| Route `/agent/personas` → `PersonaManagementRoute` | 2026-04-30 | `route.rs` + `routes.rs` |
+| FTL keys in en/de/es/fr | 2026-04-30 | `locales/*/main.ftl` — de/es/fr marked `# TODO(i18n)` |
+| Component-lint compliance (all components < 150 lines) | 2026-04-30 | sub-components for each section |
+| Reactive hygiene: `use_future` + `use_reactive_effect`, no `Signal::write()` | 2026-04-30 | mcp.rs for MCP call path |
+
+`cargo check -p poly-core` clean. `dx build --platform web` (desktop WASM) clean.

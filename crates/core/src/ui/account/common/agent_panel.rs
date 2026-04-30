@@ -18,6 +18,7 @@
 
 use crate::i18n::{t, t_args};
 use crate::state::{AppState, BatchedSignal, ChatData};
+use crate::ui::agent::persona::PersonaListPanel;
 use dioxus::prelude::*;
 use poly_ui_macros::{context_menu, ui_action};
 
@@ -267,6 +268,7 @@ pub fn AgentPanel(
                 AgentDraftsSection {
                     access_enabled: *access_enabled.read(),
                 }
+                PersonaListPanel {}
                 AgentStyleSection {
                     access_enabled: *access_enabled.read(),
                 }

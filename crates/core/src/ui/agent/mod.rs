@@ -10,9 +10,11 @@
 
 mod chat_style_editor;
 mod integrations;
+pub mod persona;
 mod profile;
 
 pub use chat_style_editor::ChatStyleEditor;
+pub use persona::PersonaManagementRoute;
 
 use crate::i18n::t;
 use crate::ui::routes::Route;
@@ -161,6 +163,7 @@ fn AgentNavigation(
     on_select: EventHandler<AgentSection>,
 ) -> Element {
     let filter = search_text.read().to_lowercase();
+    let nav_for_personas = use_navigator();
 
     rsx! {
         nav { class: "settings-nav",
@@ -193,6 +196,14 @@ fn AgentNavigation(
                         }
                     }
                 }
+            }
+            // Personas — full-page management route.
+            div {
+                class: "settings-nav-item",
+                onclick: move |_| {
+                    nav_for_personas.push(Route::PersonasRoute);
+                },
+                {t("persona-panel-title")}
             }
         }
     }
