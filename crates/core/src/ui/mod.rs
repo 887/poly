@@ -672,6 +672,62 @@ fn register_native_plugin_settings(client_manager: &mut BatchedSignal<ClientMana
         nav_icon: "🔷",
         render: poly_settings_render_fn,
     }));
+
+    #[cfg(feature = "matrix")]
+    client_manager.batch(|cm| cm.register_plugin_settings(PluginSettingsEntry {
+        slug: "matrix",
+        nav_label_key: "plugin-matrix-title",
+        nav_icon: "🟩",
+        render: settings::matrix_settings_render_fn,
+    }));
+
+    #[cfg(feature = "lemmy")]
+    client_manager.batch(|cm| cm.register_plugin_settings(PluginSettingsEntry {
+        slug: "lemmy",
+        nav_label_key: "plugin-lemmy-title",
+        nav_icon: "🦫",
+        render: settings::lemmy_settings_render_fn,
+    }));
+
+    #[cfg(feature = "hackernews")]
+    client_manager.batch(|cm| cm.register_plugin_settings(PluginSettingsEntry {
+        slug: "hackernews",
+        nav_label_key: "plugin-hackernews-title",
+        nav_icon: "📰",
+        render: settings::hackernews_settings_render_fn,
+    }));
+
+    #[cfg(feature = "discord")]
+    client_manager.batch(|cm| cm.register_plugin_settings(PluginSettingsEntry {
+        slug: "discord",
+        nav_label_key: "plugin-discord-title",
+        nav_icon: "🟣",
+        render: settings::discord_settings_render_fn,
+    }));
+
+    #[cfg(feature = "teams")]
+    client_manager.batch(|cm| cm.register_plugin_settings(PluginSettingsEntry {
+        slug: "teams",
+        nav_label_key: "plugin-teams-title",
+        nav_icon: "🟦",
+        render: settings::teams_settings_render_fn,
+    }));
+
+    #[cfg(feature = "github")]
+    client_manager.batch(|cm| cm.register_plugin_settings(PluginSettingsEntry {
+        slug: "github",
+        nav_label_key: "plugin-github-title",
+        nav_icon: "🐙",
+        render: settings::github_settings_render_fn,
+    }));
+
+    #[cfg(feature = "forgejo")]
+    client_manager.batch(|cm| cm.register_plugin_settings(PluginSettingsEntry {
+        slug: "forgejo",
+        nav_label_key: "plugin-forgejo-title",
+        nav_icon: "🦊",
+        render: settings::forgejo_settings_render_fn,
+    }));
 }
 
 /// Register test accounts from each compiled-in native plugin into `ClientManager`.

@@ -17,6 +17,7 @@
 use crate::state::BatchedSignal;
 use crate::i18n::t;
 use crate::ui::actions::{ActionCx, UiAction};
+use crate::ui::settings::client_settings::ClientSettingsForBackend;
 use dioxus::prelude::*;
 use poly_ui_macros::{context_menu, ui_action};
 
@@ -98,6 +99,7 @@ pub fn DemoPluginSettings() -> Element {
                     span { class: "toggle-slider" }
                 }
             }
+            ClientSettingsForBackend { backend_id: "demo".to_string() }
         }
     }
 }
@@ -135,6 +137,7 @@ pub fn StoatPluginSettings() -> Element {
             p { class: "settings-section-description",
                 "{t(\"plugin-stoat-settings-description\")}"
             }
+            ClientSettingsForBackend { backend_id: "stoat".to_string() }
         }
     }
 }
@@ -251,6 +254,7 @@ pub fn PolyServerPluginSettings() -> Element {
                     span { class: "toggle-slider" }
                 }
             }
+            ClientSettingsForBackend { backend_id: "poly".to_string() }
         }
     }
 }
@@ -279,6 +283,7 @@ pub fn HackerNewsPluginSettings() -> Element {
             p { class: "plugin-settings-desc",
                 "Read-only Hacker News client. Browse top stories, Ask HN, Show HN, and job posts. No write access."
             }
+            ClientSettingsForBackend { backend_id: "hackernews".to_string() }
         }
     }
 }
@@ -287,6 +292,31 @@ pub fn HackerNewsPluginSettings() -> Element {
 pub fn hackernews_settings_render_fn() -> Element {
     rsx! {
         HackerNewsPluginSettings {}
+    }
+}
+
+// ── Matrix plugin settings ────────────────────────────────────────────────────
+
+#[context_menu(None)]
+#[cfg(feature = "matrix")]
+#[ui_action(None)]
+#[component]
+pub fn MatrixPluginSettings() -> Element {
+    rsx! {
+        div { class: "plugin-settings-section",
+            h3 { class: "plugin-settings-title", "Matrix" }
+            p { class: "plugin-settings-desc",
+                "Federated, end-to-end-encrypted messaging via the Matrix protocol. Connect to matrix.org or any homeserver."
+            }
+            ClientSettingsForBackend { backend_id: "matrix".to_string() }
+        }
+    }
+}
+
+#[cfg(feature = "matrix")]
+pub fn matrix_settings_render_fn() -> Element {
+    rsx! {
+        MatrixPluginSettings {}
     }
 }
 
@@ -303,6 +333,7 @@ pub fn LemmyPluginSettings() -> Element {
             p { class: "plugin-settings-desc",
                 "Federated link aggregator. Connect to any Lemmy instance with your credentials."
             }
+            ClientSettingsForBackend { backend_id: "lemmy".to_string() }
         }
     }
 }
@@ -341,6 +372,7 @@ pub fn DiscordPluginSettings() -> Element {
                 "Popular gaming and community chat platform. Dev-only — not shipped in release builds."
             }
             PluginManifestPanel { manifest }
+            ClientSettingsForBackend { backend_id: "discord".to_string() }
         }
     }
 }
@@ -375,6 +407,7 @@ pub fn TeamsPluginSettings() -> Element {
                 "Enterprise communication platform by Microsoft. Dev-only — not shipped in release builds."
             }
             PluginManifestPanel { manifest }
+            ClientSettingsForBackend { backend_id: "teams".to_string() }
         }
     }
 }
@@ -407,6 +440,7 @@ pub fn GitHubPluginSettings() -> Element {
                 "Read-only GitHub / GHE client. Browses repos, issues, pull requests, and source code through your local gh CLI."
             }
             PluginManifestPanel { manifest }
+            ClientSettingsForBackend { backend_id: "github".to_string() }
         }
     }
 }
@@ -440,6 +474,7 @@ pub fn ForgejoPluginSettings() -> Element {
                 "Forge backend for Forgejo, Gitea, and Codeberg instances. Browse repos, issues, pull requests, and source code via the Forgejo REST API."
             }
             PluginManifestPanel { manifest }
+            ClientSettingsForBackend { backend_id: "forgejo".to_string() }
         }
     }
 }

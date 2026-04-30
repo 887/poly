@@ -55,6 +55,8 @@ pub(crate) use plugin_settings::forgejo_settings_render_fn;
 pub(crate) use plugin_settings::discord_settings_render_fn;
 #[cfg(feature = "teams")]
 pub(crate) use plugin_settings::teams_settings_render_fn;
+#[cfg(feature = "matrix")]
+pub(crate) use plugin_settings::matrix_settings_render_fn;
 pub(crate) mod plugins;
 mod theme;
 mod translation;
@@ -80,7 +82,11 @@ use identity::IdentitySettings;
 use language::LanguageSettings;
 use media::MediaSettings;
 use plugins::PluginsSettings;
-use client_settings::ClientSettingsSection;
+// `ClientSettingsSection` was the standalone aggregate view. The same
+// per-backend BackendCard now lives inside each per-plugin section via
+// `client_settings::ClientSettingsForBackend`, so we don't import the
+// aggregate here. The component is still defined in `client_settings/mod.rs`
+// for future reuse (e.g. an admin "all backends at a glance" page).
 use theme::ThemeSettings;
 use translation::TranslationSettings;
 use voice_video::VoiceVideoSettings;
@@ -400,7 +406,12 @@ fn SettingsNavigation(
                             "data-settings-slug": "plugin-{slug}",
                             onclick: move |_| {
                                 active_plugin_slug.set(Some(slug.to_string()));
-                                app_state.batch(|st| st.settings_section = SettingsSection::Plugins);
+                                // Do NOT also set settings_section = Plugins here —
+                                // that would trigger a reactive scroll to the
+                                // generic "Plugins" section header above, racing
+                                // with our scroll to `plugin-{slug}` and winning.
+                                // The scroll-spy effect updates active state from
+                                // viewport position once the user is scrolled in.
                                 scroll_to_section_anchor(&format!("plugin-{slug}"));
                                 close_mobile_drawer();
                             },
@@ -498,14 +509,9 @@ fn SettingsAllSections(search_query: String) -> Element {
                 }
             }
         }
-        // Client settings (per-backend version override + mechanism toggles)
-        // — global, not per-account. Lives next to the per-plugin sections
-        // since both are about plugins-as-backends. Sits BEFORE the divider
-        // so it appears at the top of the plugin-related area.
-        div { id: "settings-section-client-config",
-              class: if q.is_empty() { "settings-section-block" } else { "settings-section-block settings-section-hidden" },
-            ClientSettingsSection {}
-        }
+        // (The standalone Client Settings aggregate view used to live here.
+        // It now lives EMBEDDED in each per-plugin section as a BackendCard
+        // — see `plugin_settings::*PluginSettings` components.)
         // Dynamic plugin settings pages — appended after the last built-in section.
         // Divider is shown only when search is not active.
         if !plugin_entries.is_empty() && q.is_empty() {

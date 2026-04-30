@@ -22,10 +22,10 @@ pub mod mechanism_toggle;
 pub mod mcp;
 pub mod version_override;
 
-use backend_card::BackendCard;
+pub use backend_card::BackendCard;
 use crate::i18n::t;
 use dioxus::prelude::*;
-use mcp::client_settings_list;
+use mcp::{client_settings_list, client_settings_get_version};
 use poly_ui_macros::{context_menu, ui_action};
 use serde_json::Value;
 
@@ -52,6 +52,65 @@ fn parse_backend_list(json: &Value) -> Vec<(String, String, Option<String>)> {
             Some((id, effective, version_override))
         })
         .collect()
+}
+
+/// Embed a single backend's version-override + mechanism-toggles inside an
+/// existing per-plugin settings section. Self-fetches its own snapshot — no
+/// shared parent state needed. Used by every `<plugin>_settings_render_fn` so
+/// the version override lives next to the plugin's own settings (one section
+/// per plugin, no duplication).
+#[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(none)]
+#[component]
+pub fn ClientSettingsForBackend(backend_id: String) -> Element {
+    let mut effective_version: Signal<Option<String>> = use_signal(|| None);
+    let mut version_override_state: Signal<Option<String>> = use_signal(|| None);
+    let mut error: Signal<Option<String>> = use_signal(|| None);
+
+    let bid_load = backend_id.clone();
+    use_future(move || {
+        let bid = bid_load.clone();
+        async move {
+            // get_version returns: { effective_version, override }
+            match client_settings_get_version(&bid).await {
+                Ok(json) => {
+                    let eff = json
+                        .get("effective_version")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_owned())
+                        .unwrap_or_else(|| "default".to_owned());
+                    let over = json
+                        .get("override")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_owned());
+                    effective_version.set(Some(eff));
+                    version_override_state.set(over);
+                }
+                Err(e) => {
+                    tracing::warn!("ClientSettingsForBackend({bid}): get_version failed: {e}");
+                    error.set(Some(e));
+                }
+            }
+        }
+    });
+
+    let bid_card = backend_id.clone();
+    rsx! {
+        div { class: "settings-toggle-row settings-client-config-row",
+            if let Some(err) = error.read().clone() {
+                p { class: "settings-toggle-desc", "Client-config load failed: {err}" }
+            } else if let Some(eff) = effective_version.read().clone() {
+                BackendCard {
+                    backend_id: bid_card.clone(),
+                    effective_version: eff,
+                    version_override: version_override_state.read().clone(),
+                }
+            } else {
+                p { class: "settings-toggle-desc", "Loading client config…" }
+            }
+        }
+    }
 }
 
 /// Top-level client settings section.
