@@ -1,6 +1,6 @@
 # Plan — Persona End-to-End Multi-Agent Bash Harness
 
-## Status: 🚧 IN PROGRESS — Phases A-B shipped; Phases C-G pending
+## Status: 🚧 IN PROGRESS — Phases A-C shipped; Phases D-G pending
 
 > **Why this is its own plan, not Phase J on `plan-meta-personalities.md`:**
 > the deliverable is a **reusable bash + Playwright harness** that drives
@@ -141,42 +141,45 @@ Key design choices, captured up-front so phases don't re-litigate:
 
 **Effort:** 0.5 sessions.
 
-### Phase C — Spawn parallel `claude -p` persona agents
+### Phase C — Spawn parallel `claude -p` persona agents (shipped in commit `<see-Phase-C-Status>`)
 
-- [ ] **C.1** Generate per-persona `.mcp.json` template in
-  `tests/e2e/scenarios/<name>/persona-<slug>.mcp.json`:
-  ```json
-  {
-    "mcpServers": {
-      "poly-chat": { "command": "/abs/path/poly-chat-mcp", "args": ["--stdio"] },
-      "poly-memory": { "command": "/abs/path/poly-memory-mcp", "args": ["mcp"] }
-    }
-  }
-  ```
-  Note: the e2e script must point Claude Code at `--stdio`-mode chat-mcp
-  bound to the SAME `POLY_DATA_DIR`, so all agents share the persona DB.
-- [ ] **C.2** `spawn_persona_agent <slug> "<prompt>"` helper:
-  ```
-  claude -p "$prompt" \
-    --mcp-config "$persona_config" \
-    --output-format json \
-    > "$RUN_ROOT/agents/$slug.out.json" 2>&1 &
-  ```
-  Each agent's prompt MUST start with the directive "Use the
-  `meta_persona_invoke` tool with slug=$slug to gather context, then
-  honour the persona's system prompt." This forces the agent through the
-  persona surface rather than freelancing.
-- [ ] **C.3** Pre-seed personas via `poly-cli`:
-  for each scenario, the script calls `poly-cli call meta_persona_create
-  …` and `meta_persona_set_sources …` before launching agents. Idempotent
-  — checks `meta_persona_get` first.
-- [ ] **C.4** Decide concurrency model: agents run sequentially within a
-  scenario (deterministic), parallel only across distinct scenarios. The
-  parallel-claude story is "Persona A finishes its work, Persona B runs,
-  asserts what A left behind." Document the rationale in the README.
-- [ ] **C.5** Capture the JSON tool-call trace from each agent (Claude
-  Code's `--output-format json` includes tool calls); save to
-  `$RUN_ROOT/agents/$slug.trace.json` for post-hoc analysis.
+- [x] **C.1** Generate per-persona `.mcp.json` template in
+  `tests/e2e/scenarios/<name>/persona-<slug>.mcp.json`.
+  Decision: stdio transport (not HTTP). Each `claude -p` gets its own
+  `poly-chat-mcp --stdio` process (spawned by claude as per mcp.json).
+  All share `POLY_DATA_DIR` → same SQLite → persona writes from agent A
+  are visible to agent B. SQLite WAL handles concurrent readers safely.
+  The `generate_persona_mcp_config` function in `persona-multi-agent.sh`
+  writes the config; falls back to `cargo run` if binary not pre-built.
+- [x] **C.2** `spawn_persona_agent <slug> "<prompt>" <mcp_config> <mock_actions>` helper in
+  `persona-multi-agent.sh`. In real-claude mode invokes `claude -p`
+  synchronously with `--mcp-config`/`--output-format json`/`--dangerously-skip-permissions`.
+  In mock mode calls `run_mock_claude` from `lib/mock-claude.sh`.
+  Prompt always starts with the mandatory `meta_persona_invoke` directive.
+- [x] **C.3** Pre-seed personas via `poly-cli` in `seed_persona` helper.
+  Idempotent: checks `meta_persona_get` first, only creates if not found.
+  `seed_persona <slug> <name> <system_prompt> <sources_json>` call signature.
+  Sources use correct `selector_kind`/`selector_value` schema (not `kind`/`value`).
+- [x] **C.4** Concurrency model: agents run SEQUENTIALLY within a scenario.
+  Rationale: single SQLite writer, deterministic assertion order (A writes,
+  then B reads). Documented in `scenario.sh` comments.
+- [x] **C.5** Per-agent `$RUN_ROOT/agents/$slug.out.json` + aggregation via
+  `aggregate_agent_results` writing `$RESULTS_DIR/agents-summary.json`.
+  Runs automatically after any scenario that produced `.out.json` files.
+  Format: `{"total":N,"passed":N,"failed":N,"agents":[...]}`.
+
+**Phase C also includes:**
+
+- [x] **C.6** New scenario `tests/e2e/scenarios/two-personas-handoff/`.
+  Two personas sharing the same channel; beta-receiver's mock call to
+  `meta_persona_list` asserts alpha-sender is visible in the shared DB.
+  In mock mode the "handoff" is DB-level (both personas in same SQLite);
+  in real-claude mode the assertion greps for actual message content.
+  Includes `personas.jsonl`, `mock-actions.jsonl`, `scenario.sh`, `README.md`.
+- [x] **C.7** `two-personas-handoff` wired into the `case "$scenario"` dispatcher
+  in `persona-multi-agent.sh`. Also added `NEEDS_POLY_WEB` opt-in flag
+  so agent-only scenarios (no DOM assertions) skip the WASM build.
+  Also added `lib/mock-claude.sh` sourced at startup.
 
 **Effort:** 1 session.
 
@@ -429,3 +432,24 @@ Shipped in same commit. Key findings vs plan text:
 - **B.3 poly-web skipped for noop.** `--scenario noop` skips `start_poly_web` so the dry-run completes without a WASM build. Scenarios that need the UI must call `start_poly_web` explicitly (or the harness detects via scenario metadata in Phase C/D).
 
 Acceptance verified: `bash tests/e2e/persona-multi-agent.sh --scenario noop` exits 0, prints "Smoke check: 14 meta_persona_* tools available ✓", and `pgrep -af "poly-test-|poly-chat-mcp|dx serve"` returns empty after exit.
+
+### Phase C Status
+
+Shipped in this worktree commit. Files added/modified:
+
+- `tests/e2e/lib/mock-claude.sh` — NEW. `run_mock_claude <slug> <actions> <mcp_url> <out_json>` stub that replays `mock-actions.jsonl` via `poly-cli` and writes a synthetic `--output-format json`-shaped result. No ANTHROPIC_API_KEY required.
+- `tests/e2e/persona-multi-agent.sh` — MODIFIED. Added: `source lib/mock-claude.sh`, `AGENTS_DIR`, `generate_persona_mcp_config`, `spawn_persona_agent`, `seed_persona`, `aggregate_agent_results`, `NEEDS_POLY_WEB` opt-in flag, `two-personas-handoff` case in dispatcher.
+- `tests/e2e/scenarios/two-personas-handoff/scenario.sh` — NEW. Defines `run_scenario_two_personas_handoff` that seeds personas, runs agents sequentially, and asserts shared DB visibility.
+- `tests/e2e/scenarios/two-personas-handoff/personas.jsonl` — NEW. Seed data for alpha-sender and beta-receiver with correct `selector_kind`/`selector_value` schema.
+- `tests/e2e/scenarios/two-personas-handoff/mock-actions.jsonl` — NEW. 4 deterministic tool calls (2 per agent).
+- `tests/e2e/scenarios/two-personas-handoff/README.md` — NEW.
+
+Key decisions vs plan:
+
+- **stdio transport chosen.** `poly-chat-mcp --stdio` is supported natively (confirmed in `mcp/chat-mcp/src/main.rs`). Each `claude -p` gets its own stdio process; all share POLY_DATA_DIR SQLite. HTTP transport also works (already running on 3010) but stdio avoids needing an http-to-mcp bridge.
+- **`NEEDS_POLY_WEB` opt-in.** Rather than defaulting poly-web for all non-noop scenarios, scenarios that need DOM assertions set `NEEDS_POLY_WEB=true`. Agent-only scenarios (C.6) skip the WASM build.
+- **`meta_persona_set_sources` uses `selector_kind`/`selector_value`**, not `kind`/`value`. Corrected in personas.jsonl after first run failure.
+- **Mock mode asserts DB-level handoff** (both personas visible in shared SQLite via `meta_persona_list`). Real-claude mode would additionally grep message content. This split is documented in `scenario.sh`.
+- **shellcheck not installed** in this environment — bash -n verified instead.
+
+Acceptance verified: `bash tests/e2e/persona-multi-agent.sh --scenario two-personas-handoff` exits 0, both agents PASS (2 tool calls each), `pgrep -af "poly-test-|poly-chat-mcp|dx serve|claude -p"` returns empty after exit.

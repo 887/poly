@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "poly-chat": {
+      "command": "/home/laragana/workspcacemsg/.claude/worktrees/agent-a02896ed2ebe7acf4/target/debug/poly-chat-mcp",
+      "args": ["--stdio"],
+      "env": {
+        "POLY_DATA_DIR": "/home/laragana/workspcacemsg/.claude/worktrees/agent-a02896ed2ebe7acf4/tests/e2e/.run/20260430T183251-123234/data"
+      }
+    }
+  }
+}

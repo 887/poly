@@ -1,0 +1,23 @@
+# mock-actions.jsonl — deterministic tool calls for two-personas-handoff scenario.
+# Format: one JSON object per line. Blank lines and # comments are ignored.
+# slug: which agent fires this action
+# tool: poly-chat MCP tool name
+# args: JSON object of tool arguments
+# result_grep: substring that must appear in the poly-cli output (assertion)
+#
+# Note on send_message: in mock mode, no discord account is logged in, so
+# send_message would fail. Mock mode validates the persona seeding + invocation
+# pipeline only. Real-claude mode (E2E_USE_REAL_CLAUDE=1) would additionally
+# log in and call send_message to prove the actual handoff path.
+
+# Agent A: invoke its persona with dry_run to confirm persona surface works
+{"slug":"alpha-sender","tool":"meta_persona_invoke","args":{"slug":"alpha-sender","user_prompt":"prepare standup","dry_run":true},"result_grep":"alpha-sender"}
+
+# Agent A: get persona details to confirm seeding was successful
+{"slug":"alpha-sender","tool":"meta_persona_get","args":{"slug":"alpha-sender"},"result_grep":"alpha-sender"}
+
+# Agent B: invoke its persona — confirms beta persona is also functional
+{"slug":"beta-receiver","tool":"meta_persona_invoke","args":{"slug":"beta-receiver","user_prompt":"what is the standup time?","dry_run":true},"result_grep":"beta-receiver"}
+
+# Agent B: list personas to confirm both are registered in the shared DB
+{"slug":"beta-receiver","tool":"meta_persona_list","args":{},"result_grep":"alpha-sender"}
