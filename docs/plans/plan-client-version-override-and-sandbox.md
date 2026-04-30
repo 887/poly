@@ -560,7 +560,7 @@ Unit tests, persistence, and WASM-guest wiring are deferred to Phases B.2-B.4 fo
 
 ---
 
-## Phase C — `poly_kv` storage + persistence (shipped in commit TBD)
+## Phase C — `poly_kv` storage + persistence (shipped in commit `7dd7dab1`)
 
 **Effort:** S (0.5 day). Touches: `poly_kv` host-side wrapper,
 backend `new()` paths.
