@@ -3,6 +3,21 @@
 //! Poly runs as an MCP server so any AI client can connect to all your chat
 //! backends without needing API keys. The toggle and port are persisted via
 //! the host KV bridge under the `agent.mcp.*` key namespace.
+//!
+//! # TODO H.7 — /agent/access nuclear wipe (deferred)
+//!
+//! Phase H.7 requires a `/agent/access` nuclear-wipe page that clears all four
+//! persona tables (personas, persona_sources, persona_facts, persona_audit) in
+//! addition to the existing contact_facts / chat_notes / drafts wipe.  The page
+//! does not exist yet — it was never created by Phases A–F.  When it is added,
+//! wire the following MCP calls into the "Wipe all agent data" action:
+//!
+//!   - `meta_persona_delete` for each slug returned by `meta_persona_list`
+//!   - OR a new `meta_persona_wipe_all` tool (single-call bulk delete)
+//!
+//! Blocked on: the access page itself does not exist (search for "AgentAccess"
+//! or "/agent/access" in routes.rs).  Logging as deferred so it doesn't block
+//! Phases G + H ship.
 
 use crate::i18n::t;
 use crate::ui::actions::{ActionCx, UiAction};

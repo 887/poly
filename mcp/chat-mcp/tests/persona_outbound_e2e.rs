@@ -15,13 +15,13 @@ fn setup_db() -> MemoryDb {
     MemoryDb::open(":memory:").expect("in-memory db")
 }
 
+fn make_persona(mem: &MemoryDb, slug: &str, proactivity: &str) {
+    mem.create_persona(slug, slug, "🤖", "prompt", None, None, proactivity, 4)
+        .expect("create persona");
+}
+
 /// Insert a today-dated `outbound_send` audit row manually for testing.
-fn insert_outbound_send(
-    mem: &MemoryDb,
-    persona_slug: &str,
-    account_id: &str,
-    chat_id: &str,
-) {
+fn insert_outbound_send(mem: &MemoryDb, persona_slug: &str, account_id: &str, chat_id: &str) {
     mem.record_persona_audit(
         persona_slug,
         "heartbeat",
@@ -38,29 +38,17 @@ fn insert_outbound_send(
 #[test]
 fn outbound_cap_not_exceeded_initially() {
     let mem = setup_db();
-
-    // Create persona with outbound-allowlisted proactivity.
-    mem.create_persona(
-        "test-outbound",
-        "Test Outbound",
-        "🤖",
-        "You are a test agent.",
-        None,
-        None,
-        "outbound-allowlisted",
-        4,
-    )
-    .expect("create persona");
+    make_persona(&mem, "test-outbound", "outbound-allowlisted");
 
     // Add chat to allowlist with cap = 2.
     mem.set_persona_outbound_allow("test-outbound", "acc1", "chat1", 2)
         .expect("set allow");
 
     // No sends yet — cap check should return Some((2, 0)).
-    let result = mem
+    let (max_per_day, sends_today) = mem
         .check_persona_outbound_cap("test-outbound", "acc1", "chat1")
-        .expect("cap check");
-    let (max_per_day, sends_today) = result.expect("entry exists");
+        .expect("cap check")
+        .expect("entry exists");
     assert_eq!(max_per_day, 2);
     assert_eq!(sends_today, 0);
     assert!(sends_today < max_per_day, "cap not exceeded yet");
@@ -69,18 +57,7 @@ fn outbound_cap_not_exceeded_initially() {
 #[test]
 fn outbound_cap_exceeded_after_limit_sends() {
     let mem = setup_db();
-
-    mem.create_persona(
-        "cap-test",
-        "Cap Test",
-        "🤖",
-        "system prompt",
-        None,
-        None,
-        "outbound-allowlisted",
-        4,
-    )
-    .expect("create persona");
+    make_persona(&mem, "cap-test", "outbound-allowlisted");
 
     // max_messages_per_day = 2.
     mem.set_persona_outbound_allow("cap-test", "acc1", "chat1", 2)
@@ -115,19 +92,7 @@ fn outbound_cap_exceeded_after_limit_sends() {
 #[test]
 fn outbound_blocked_when_chat_not_in_allowlist() {
     let mem = setup_db();
-
-    mem.create_persona(
-        "allowlist-test",
-        "Allowlist Test",
-        "🤖",
-        "prompt",
-        None,
-        None,
-        "outbound-allowlisted",
-        4,
-        true,
-    )
-    .expect("create persona");
+    make_persona(&mem, "allowlist-test", "outbound-allowlisted");
 
     // Chat not added to allowlist.
     let result = mem
@@ -140,19 +105,7 @@ fn outbound_blocked_when_chat_not_in_allowlist() {
 #[test]
 fn outbound_prune_audit_before_cutoff() {
     let mem = setup_db();
-
-    mem.create_persona(
-        "prune-test",
-        "Prune Test",
-        "🤖",
-        "prompt",
-        None,
-        None,
-        "drafts-only",
-        4,
-        true,
-    )
-    .expect("create persona");
+    make_persona(&mem, "prune-test", "drafts-only");
 
     // Write 3 audit rows.
     for _ in 0..3 {
@@ -172,19 +125,7 @@ fn outbound_prune_audit_before_cutoff() {
 #[test]
 fn quiet_hours_disabled_persisted() {
     let mem = setup_db();
-
-    mem.create_persona(
-        "qh-test",
-        "QH Test",
-        "🤖",
-        "prompt",
-        None,
-        None,
-        "outbound-allowlisted",
-        4,
-        true,
-    )
-    .expect("create persona");
+    make_persona(&mem, "qh-test", "outbound-allowlisted");
 
     // Default is false (quiet hours active).
     let p = mem.get_persona("qh-test").unwrap().unwrap();
