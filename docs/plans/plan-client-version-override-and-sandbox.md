@@ -1,6 +1,6 @@
 # Plan: Client Version Override + Per-Mechanism Toggles + Sandbox Host-Cap Stub
 
-## Status: 🚧 IN PROGRESS — Phases A+B shipped; C-J pending
+## Status: 🚧 IN PROGRESS — Phases A+B shipped; C-J pending + J shipped
 
 > Sibling future plan referenced from Phase I:
 > `docs/plans/plan-host-sandbox-impl.md` (stub written in Phase I.5).
@@ -950,17 +950,17 @@ referenced.
 
 **Preconditions:** Phases A–I merged.
 
-- [ ] **J.1** New `docs/client-settings.md` covering: the WIT
+- [x] **J.1** New `docs/client-settings.md` covering: the WIT
       `client-config` interface, the `poly_kv` namespace, the MCP
       tool family with example invocations, and the
       "Claude fix Discord" recipe.
       **Verify:** `wc -l docs/client-settings.md` ≥ 80.
-- [ ] **J.2** Cross-link from `docs/personas-cli.md` and
+- [x] **J.2** Cross-link from `docs/personas-cli.md` and
       `docs/plans/plan-host-sandbox-impl.md`.
-- [ ] **J.3** Update `CLAUDE.md` "Critical Implementation Notes"
+- [x] **J.3** Update `CLAUDE.md` "Critical Implementation Notes"
       with a one-line pointer to the new client-config namespace
       so future agents grep-find it.
-- [ ] **J.4** **Rollback recipe** (mandatory section). If the user
+- [x] **J.4** **Rollback recipe** (mandatory section). If the user
       sets a bad version string and the backend fails to authenticate:
       ```bash
       # Clear the override (per-backend, takes effect on next request):
@@ -1090,3 +1090,14 @@ All I.1–I.5 sub-steps shipped in commit `6aff08a044ed`:
 - `crates/host-sandbox` added to workspace `members` in root `Cargo.toml`.
 - `cargo check -p poly-host-sandbox`: exit 0.
 - `cargo test -p poly-host-sandbox --lib`: 2/2 pass.
+
+---
+
+### Phase J Status: DONE
+
+All four sub-steps shipped in one commit:
+- J.1: `docs/client-settings.md` created (overview, CLI recipes, KV namespace reference).
+- J.2: Cross-linked from `docs/personas-cli.md` ("See also" block) and `docs/plans/plan-host-sandbox-impl.md`.
+- J.3: `CLAUDE.md` "Critical Implementation Notes" updated with client-config namespace pointer.
+- J.4: Rollback story in `docs/client-settings.md` "Recovery" section — both CLI (`--override=null`) and direct SQLite (`DELETE FROM poly_kv …`) paths documented.
+- `tools/poly-cli/README.md` updated with "Client-settings recipes" see-also link.

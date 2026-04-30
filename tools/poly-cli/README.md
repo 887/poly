@@ -65,6 +65,11 @@ poly-cli call meta_persona_set_sources \
   --sources '[{"account_id":"discord:123","selector_kind":"server","selector_value":"guild-id","include":true}]'
 ```
 
+## Client-settings recipes
+
+See `docs/client-settings.md` for the canonical recipe book covering version
+overrides, mechanism toggles, and the rollback story for all backends.
+
 ## Persona recipes
 
 See `docs/personas-cli.md` for the canonical recipe book covering all persona

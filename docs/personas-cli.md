@@ -230,6 +230,13 @@ poly-cli call meta_persona_set_heartbeat --slug broker-bob --interval_secs 0
 
 ---
 
+## See also
+
+- `docs/client-settings.md` — CLI recipe book for `client_settings_*` tools:
+  version overrides, mechanism toggles, and the rollback story.
+
+---
+
 ## No typed `poly-cli persona <verb>` subcommands — and why
 
 **Decision (codified 2026-04-30, Phase J rescope).**

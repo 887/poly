@@ -222,6 +222,11 @@ All three platforms use the same pattern:
 
 ## Critical Implementation Notes
 
+### Client-config KV namespace
+Per-backend client settings (version overrides, mechanism toggles) live under
+`client.config.<backend_id>.*` in `poly_kv`.  CLI recipes and the rollback
+story: `docs/client-settings.md`.  Code: `crates/host-bridge/src/client_config.rs`.
+
 ### ELECTRON_RUN_AS_NODE
 VS Code and Claude Code terminals set `ELECTRON_RUN_AS_NODE=1`. This causes Electron
 to run as plain Node.js where `require('electron')` fails. The MCPs strip this env var

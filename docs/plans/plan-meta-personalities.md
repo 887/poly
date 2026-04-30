@@ -1187,9 +1187,6 @@ All 8 Phase B checklist items complete. Implementation notes:
 103 unit tests pass (`cargo test -p poly-chat-mcp --lib`).
 +1 integration test (`cargo test -p poly-chat-mcp --test persona_invoke_e2e`).
 `cargo check -p poly-chat-mcp` clean.
-<<<<<<< conflict 1 of 1
-+++++++ kupyolzv 76292b2c "feat(composer): 3-state typing toggle + drop redundant Discord stickers button" (rebase destination)
-
 ---
 
 ## Phase J — MCP completeness audit + CLI ergonomics

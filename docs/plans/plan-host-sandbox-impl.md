@@ -4,6 +4,8 @@
 
 Cross-reference: `docs/plans/plan-client-version-override-and-sandbox.md` Phase I.
 
+Client-settings CLI reference (including the `captcha-sandbox` mechanism): `docs/client-settings.md`.
+
 The `poly-host-sandbox` crate currently ships a `StubSandbox` that returns
 `Err(SandboxError::NotImplemented)` for every call. This plan covers the real
 plumbing that makes the `host-cap::sandbox-browser` mechanism functional.

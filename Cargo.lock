@@ -6345,6 +6345,7 @@ dependencies = [
  "poly-discord",
  "poly-github",
  "poly-hackernews",
+ "poly-host-bridge",
  "poly-lemmy",
  "poly-matrix",
  "poly-server-client",
