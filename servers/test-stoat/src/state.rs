@@ -3,7 +3,8 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use dashmap::DashMap;
-use poly_test_common::{AuthState, EventBus};
+use poly_test_common::{AuthState, EventBus, HeaderInspectBuffer};
+use std::sync::Arc as StdArc;
 
 /// Events broadcast to Bonfire WebSocket clients.
 ///
@@ -76,6 +77,8 @@ pub struct StoatState {
     pub bans: DashMap<String, BanRecord>,
     /// "server_id/user_id" → MemberModState
     pub member_mod: DashMap<String, MemberModState>,
+    /// Ring buffer of recent inbound request headers (Phase E inspection endpoint).
+    pub inspect: StdArc<HeaderInspectBuffer>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -167,6 +170,7 @@ impl StoatState {
             msg_counter: std::sync::Arc::new(AtomicU64::new(1)),
             bans: DashMap::new(),
             member_mod: DashMap::new(),
+            inspect: StdArc::new(HeaderInspectBuffer::new()),
         }
     }
 
@@ -410,6 +414,7 @@ impl StoatState {
         self.unreads.clear();
         self.bans.clear();
         self.member_mod.clear();
+        self.inspect.clear();
         tracing::info!("reset Stoat state to empty");
     }
 

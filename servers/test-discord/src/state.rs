@@ -5,7 +5,7 @@
 //! numbers (1, 2, 100, 200…) for readability — not real snowflakes.
 
 use dashmap::DashMap;
-use poly_test_common::{AuthState, EventBus};
+use poly_test_common::{AuthState, EventBus, HeaderInspectBuffer};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use twilight_model::channel::ChannelType;
@@ -131,6 +131,8 @@ pub struct DiscordState {
     pub audit_log: DashMap<Id<GuildMarker>, Vec<AuditLogEntry>>,
     /// Next audit log entry ID (incrementing counter).
     pub next_audit_id: Arc<std::sync::atomic::AtomicU64>,
+    /// Ring buffer of recent inbound request headers (Phase E inspection endpoint).
+    pub inspect: Arc<HeaderInspectBuffer>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -213,6 +215,7 @@ impl DiscordState {
             bans: DashMap::new(),
             audit_log: DashMap::new(),
             next_audit_id: Arc::new(std::sync::atomic::AtomicU64::new(1)),
+            inspect: Arc::new(HeaderInspectBuffer::new()),
         }
     }
 
@@ -779,6 +782,7 @@ impl DiscordState {
         self.bans.clear();
         self.audit_log.clear();
         self.next_audit_id.store(1, std::sync::atomic::Ordering::Relaxed);
+        self.inspect.clear();
         tracing::info!("reset Discord state to empty");
     }
 

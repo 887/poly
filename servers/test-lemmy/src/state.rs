@@ -1,7 +1,7 @@
 //! In-memory state for the mock Lemmy server.
 
 use dashmap::DashMap;
-use poly_test_common::AuthState;
+use poly_test_common::{AuthState, HeaderInspectBuffer};
 use std::sync::Arc;
 
 /// All mock Lemmy state: users, communities, posts, tokens.
@@ -23,6 +23,8 @@ pub struct LemmyState {
     pub modlog_seq: Arc<std::sync::atomic::AtomicI64>,
     /// username → password
     pub passwords: DashMap<String, String>,
+    /// Ring buffer of recent inbound request headers (Phase E inspection endpoint).
+    pub inspect: Arc<HeaderInspectBuffer>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -117,6 +119,7 @@ impl LemmyState {
             modlog: DashMap::new(),
             modlog_seq: Arc::new(std::sync::atomic::AtomicI64::new(1)),
             passwords: DashMap::new(),
+            inspect: Arc::new(HeaderInspectBuffer::new()),
         }
     }
 
@@ -298,6 +301,7 @@ impl LemmyState {
         self.modlog_seq.store(1, std::sync::atomic::Ordering::Relaxed);
 
         self.passwords.clear();
+        self.inspect.clear();
     }
 }
 

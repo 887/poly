@@ -30,11 +30,16 @@
 mod auth;
 mod broadcast;
 mod cli;
+pub mod inspect;
 mod server;
 
 pub use auth::{AuthState, TokenAuth, wipe_persisted};
 pub use broadcast::EventBus;
 pub use cli::CliArgs;
+pub use inspect::{
+    HEADER_INSPECT_CAP, HeaderEntry, HeaderInspectBuffer, handle_inspect_last_headers,
+    header_inspect_middleware,
+};
 pub use server::TestServerBase;
 
 use axum::response::IntoResponse;

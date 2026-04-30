@@ -3,7 +3,8 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use dashmap::DashMap;
-use poly_test_common::{AuthState, EventBus};
+use poly_test_common::{AuthState, EventBus, HeaderInspectBuffer};
+use std::sync::Arc as StdArc;
 
 /// Events broadcast to `/sync` long-poll waiters.
 #[derive(Clone, Debug)]
@@ -43,6 +44,8 @@ pub struct MatrixState {
     /// room_id → Vec<banned user_ids>  (tracked separately from state_events for
     /// easy membership=ban filter in the /members?membership=ban route).
     pub banned_members: DashMap<String, Vec<BannedEntry>>,
+    /// Ring buffer of recent inbound request headers (Phase E inspection endpoint).
+    pub inspect: StdArc<HeaderInspectBuffer>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -92,6 +95,7 @@ impl MatrixState {
             event_counter: std::sync::Arc::new(AtomicU64::new(1)),
             power_levels: DashMap::new(),
             banned_members: DashMap::new(),
+            inspect: StdArc::new(HeaderInspectBuffer::new()),
         }
     }
 
@@ -265,6 +269,7 @@ impl MatrixState {
         self.account_data.clear();
         self.power_levels.clear();
         self.banned_members.clear();
+        self.inspect.clear();
         tracing::info!("reset Matrix state to empty");
     }
 

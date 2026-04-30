@@ -18,9 +18,13 @@
 //! - `GET /v0/jobstories.json`
 //! - `GET /v0/item/{id}.json`
 
+use axum::middleware;
 use axum::Router;
 use axum::routing::get;
-use poly_test_common::{health_handler, TestServerBase};
+use poly_test_common::{
+    handle_inspect_last_headers, header_inspect_middleware, health_handler, HeaderInspectBuffer,
+    TestServerBase,
+};
 use serde_json::{Value, json};
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
@@ -133,6 +137,8 @@ pub struct HnState {
     pub items: Arc<dashmap::DashMap<u64, Value>>,
     /// Feed lists, keyed by feed name (e.g. "top", "new", etc.).
     pub feeds: Arc<dashmap::DashMap<String, Vec<u64>>>,
+    /// Ring buffer of recent inbound request headers (Phase E inspection endpoint).
+    pub inspect: Arc<HeaderInspectBuffer>,
 }
 
 impl HnState {
@@ -141,6 +147,7 @@ impl HnState {
         Self {
             items: Arc::new(dashmap::DashMap::new()),
             feeds: Arc::new(dashmap::DashMap::new()),
+            inspect: Arc::new(HeaderInspectBuffer::new()),
         }
     }
 
@@ -243,6 +250,7 @@ async fn test_auth_token_handler() -> axum::response::Json<Value> {
 
 /// Build the axum router for the mock HN server.
 pub fn router(state: Arc<HnState>) -> Router {
+    let inspect = Arc::clone(&state.inspect);
     Router::new()
         .route(
             "/health",
@@ -297,7 +305,16 @@ pub fn router(state: Arc<HnState>) -> Router {
         .route("/v0/user/{user_json}", get(user_handler))
         // Test-only bypass: guest auth token
         .route("/test/auth/token", axum::routing::post(test_auth_token_handler))
+        // Inspection endpoints (Phase E)
+        .route(
+            "/test/inspect/last-headers",
+            get(handle_inspect_last_headers).with_state(Arc::clone(&inspect)),
+        )
         .with_state(state)
+        .layer(middleware::from_fn_with_state(
+            Arc::clone(&inspect),
+            header_inspect_middleware,
+        ))
         .layer(CorsLayer::very_permissive())
 }
 

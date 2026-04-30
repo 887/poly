@@ -13,9 +13,10 @@
 pub mod routes;
 pub mod state;
 
+use axum::middleware;
 use axum::Router;
 use axum::routing::{get, post, put};
-use poly_test_common::health_handler;
+use poly_test_common::{handle_inspect_last_headers, header_inspect_middleware, health_handler};
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 
@@ -24,6 +25,7 @@ pub use state::MatrixState;
 
 /// Build the Matrix mock server router wired to the given state.
 pub fn router(state: Arc<MatrixState>) -> Router {
+    let inspect = Arc::clone(&state.inspect);
     Router::new()
         .route(
             "/health",
@@ -67,6 +69,15 @@ pub fn router(state: Arc<MatrixState>) -> Router {
         .route("/reseed", post(routes::reseed))
         // Test helpers
         .route("/test/auth/token", post(routes::test_auth_token))
+        // Inspection endpoints (Phase E)
+        .route(
+            "/test/inspect/last-headers",
+            get(handle_inspect_last_headers).with_state(Arc::clone(&inspect)),
+        )
         .with_state(state)
+        .layer(middleware::from_fn_with_state(
+            Arc::clone(&inspect),
+            header_inspect_middleware,
+        ))
         .layer(CorsLayer::very_permissive())
 }

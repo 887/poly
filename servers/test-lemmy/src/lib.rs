@@ -9,6 +9,7 @@
 //!
 //! Exposes [`router`] so integration tests can spin up the server in-process.
 
+use axum::middleware;
 use axum::Router;
 use axum::routing::{get, post};
 use tower_http::cors::CorsLayer;
@@ -18,6 +19,7 @@ mod state;
 
 pub use state::LemmyState;
 
+use poly_test_common::{handle_inspect_last_headers, header_inspect_middleware};
 use std::sync::Arc;
 
 /// Build the Axum router for the mock Lemmy server.
@@ -33,6 +35,7 @@ pub fn router() -> Router {
 
 /// Build the router with explicit state (used by `main.rs` for seeded startup).
 pub fn router_with_state(state: Arc<LemmyState>) -> Router {
+    let inspect = Arc::clone(&state.inspect);
     Router::new()
         .route("/health", get(routes::health))
         // Auth
@@ -61,6 +64,15 @@ pub fn router_with_state(state: Arc<LemmyState>) -> Router {
         .route("/api/v3/modlog", get(routes::get_modlog))
         // Test-only bypass: get a token without a password
         .route("/test/auth/token", post(routes::test_auth_token))
+        // Inspection endpoints (Phase E)
+        .route(
+            "/test/inspect/last-headers",
+            get(handle_inspect_last_headers).with_state(Arc::clone(&inspect)),
+        )
         .with_state(state)
+        .layer(middleware::from_fn_with_state(
+            Arc::clone(&inspect),
+            header_inspect_middleware,
+        ))
         .layer(CorsLayer::very_permissive())
 }

@@ -1,7 +1,8 @@
 //! In-memory state for the mock Teams/Graph API server.
 
 use dashmap::DashMap;
-use poly_test_common::{AuthState, EventBus};
+use poly_test_common::{AuthState, EventBus, HeaderInspectBuffer};
+use std::sync::Arc;
 
 /// Events delivered to subscribed clients via change notifications.
 ///
@@ -48,6 +49,8 @@ pub struct TeamsState {
     pub messages: DashMap<String, Vec<Message>>,
     /// Event bus for real-time delivery via change notifications.
     pub events: EventBus<TeamsEvent>,
+    /// Ring buffer of recent inbound request headers (Phase E inspection endpoint).
+    pub inspect: Arc<HeaderInspectBuffer>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -135,6 +138,7 @@ impl TeamsState {
             chats: DashMap::new(),
             messages: DashMap::new(),
             events: EventBus::new(),
+            inspect: Arc::new(HeaderInspectBuffer::new()),
         }
     }
 
@@ -264,6 +268,7 @@ impl TeamsState {
         self.channels.clear();
         self.chats.clear();
         self.messages.clear();
+        self.inspect.clear();
         tracing::info!("reset Teams state to empty");
     }
 

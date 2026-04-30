@@ -15,13 +15,15 @@ pub mod state;
 
 pub use state::DiscordState;
 
+use axum::middleware;
 use axum::routing::{delete, get, post, put};
 use axum::Router;
-use poly_test_common::health_handler;
+use poly_test_common::{handle_inspect_last_headers, header_inspect_middleware, health_handler};
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 
 pub fn router(state: Arc<DiscordState>) -> Router {
+    let inspect = Arc::clone(&state.inspect);
     Router::new()
         .route("/health", get(|| async { health_handler("discord").await }))
         // Auth — Spacebar-compatible password login + Gateway discovery
@@ -102,6 +104,15 @@ pub fn router(state: Arc<DiscordState>) -> Router {
         .route("/seed", post(routes::seed))
         .route("/reset", post(routes::reset))
         .route("/reseed", post(routes::reseed))
+        // Inspection endpoints (Phase E)
+        .route(
+            "/test/inspect/last-headers",
+            get(handle_inspect_last_headers).with_state(Arc::clone(&inspect)),
+        )
         .with_state(state)
+        .layer(middleware::from_fn_with_state(
+            Arc::clone(&inspect),
+            header_inspect_middleware,
+        ))
         .layer(CorsLayer::very_permissive())
 }

@@ -9,8 +9,10 @@
 //!
 //! Exposes [`router`] so integration tests can spin up the server in-process.
 
+use axum::middleware;
 use axum::Router;
 use axum::routing::{get, post};
+use poly_test_common::{handle_inspect_last_headers, header_inspect_middleware};
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 
@@ -30,6 +32,7 @@ pub fn router() -> Router {
 pub fn router_with_state(state: Arc<GitHubState>) -> Router {
     use axum::routing::delete;
 
+    let inspect = Arc::clone(&state.inspect);
     Router::new()
         .route("/health", get(routes::health))
         .route("/user", get(routes::get_user))
@@ -72,6 +75,15 @@ pub fn router_with_state(state: Arc<GitHubState>) -> Router {
         )
         .route("/graphql", post(routes::graphql))
         .route("/test/auth/token", post(routes::test_auth_token))
+        // Inspection endpoints (Phase E)
+        .route(
+            "/test/inspect/last-headers",
+            get(handle_inspect_last_headers).with_state(Arc::clone(&inspect)),
+        )
         .with_state(state)
+        .layer(middleware::from_fn_with_state(
+            Arc::clone(&inspect),
+            header_inspect_middleware,
+        ))
         .layer(CorsLayer::very_permissive())
 }

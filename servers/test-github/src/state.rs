@@ -2,7 +2,8 @@
 
 use base64::Engine as _;
 use dashmap::DashMap;
-use poly_test_common::AuthState;
+use poly_test_common::{AuthState, HeaderInspectBuffer};
+use std::sync::Arc;
 
 /// Permission flags for a repo as seen by the authenticated user.
 ///
@@ -40,6 +41,8 @@ pub struct GitHubState {
     pub deleted_issue_comments: dashmap::DashSet<String>,
     /// "owner/repo/pulls/comments/{id}" → deleted flag
     pub deleted_pr_comments: dashmap::DashSet<String>,
+    /// Ring buffer of recent inbound request headers (Phase E inspection endpoint).
+    pub inspect: Arc<HeaderInspectBuffer>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -122,6 +125,7 @@ impl GitHubState {
             repo_permissions: DashMap::new(),
             deleted_issue_comments: dashmap::DashSet::new(),
             deleted_pr_comments: dashmap::DashSet::new(),
+            inspect: Arc::new(HeaderInspectBuffer::new()),
         }
     }
 
@@ -464,6 +468,7 @@ impl GitHubState {
         self.repo_permissions.clear();
         self.deleted_issue_comments.clear();
         self.deleted_pr_comments.clear();
+        self.inspect.clear();
     }
 }
 

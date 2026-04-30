@@ -2,7 +2,8 @@
 
 use base64::Engine as _;
 use dashmap::DashMap;
-use poly_test_common::AuthState;
+use poly_test_common::{AuthState, HeaderInspectBuffer};
+use std::sync::Arc;
 
 /// All mock Forgejo state: users, repos, issues, comments, contents.
 pub struct ForgejoState {
@@ -21,6 +22,8 @@ pub struct ForgejoState {
     pub file_contents: DashMap<String, ContentEntry>,
     /// username → Set of starred repo full_names
     pub starred: DashMap<String, std::collections::HashSet<String>>,
+    /// Ring buffer of recent inbound request headers (Phase E inspection endpoint).
+    pub inspect: Arc<HeaderInspectBuffer>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -100,6 +103,7 @@ impl ForgejoState {
             contents: DashMap::new(),
             file_contents: DashMap::new(),
             starred: DashMap::new(),
+            inspect: Arc::new(HeaderInspectBuffer::new()),
         }
     }
 
@@ -360,6 +364,7 @@ impl ForgejoState {
         self.contents.clear();
         self.file_contents.clear();
         self.starred.clear();
+        self.inspect.clear();
     }
 }
 

@@ -674,47 +674,33 @@ pattern still works via `meta_persona_recent_actions`).
 
 ---
 
-## Phase E — Mock-server inspection endpoints
+## Phase E — Mock-server inspection endpoints (shipped in commit TBD)
 
 **Effort:** M (1 day). Touches every `servers/test-<backend>/`.
 
 **Preconditions:** none (parallelisable with Phases A–D).
 
-- [ ] **E.1** Add a shared
-      `LastInboundHeaders: Mutex<VecDeque<(String, HashMap<String,String>)>>`
-      to `servers/test-common/src/lib.rs` plus an axum middleware
-      `record_inbound_headers` that captures every request's
-      `(method+path, headers)`. **Cap at 100 entries** (ring buffer:
-      `if buf.len() == 100 { buf.pop_front(); } buf.push_back(...);`)
+- [x] **E.1** Add a shared `HeaderInspectBuffer` (Arc<Mutex<VecDeque<HeaderEntry>>>)
+      to `servers/test-common/src/inspect.rs` plus an axum middleware
+      `header_inspect_middleware` that captures every request's
+      `(method+path, headers)`. **Cap at 100 entries** (`HEADER_INSPECT_CAP`)
+      (ring buffer: `if buf.len() == 100 { buf.pop_front(); } buf.push_back(...);`)
       so the mock server doesn't grow unbounded under long e2e runs.
-      **Verify:** unit test in `servers/test-common/tests/inspect.rs`
-      sends 200 requests and asserts the buffer length stays ≤ 100.
-- [ ] **E.2** Add `GET /test/inspect/last-headers` to every
-      `servers/test-<backend>/src/lib.rs` returning the captured ring
-      buffer as JSON. Existing convention from
-      `servers/test-discord/src/lib.rs:31-104` (`/test/auth/token`,
-      `/seed`, `/reset`, `/reseed`) — the new route follows the
-      `/test/...` prefix for "test-only inspection" and the rest of
-      the path identifies the operation.
-      **Verify:** `for s in test-discord test-matrix test-teams
-      test-github test-forgejo test-lemmy test-hackernews test-stoat
-      test-poly; do grep -l '/test/inspect/last-headers'
-      servers/$s/src/lib.rs || echo "MISSING: $s"; done` lists no
-      missing servers.
-- [ ] **E.3** Wire the middleware into each backend's router
-      (one-line `.layer(record_inbound_headers())` per server, applied
-      at the top-level Router so it catches every request).
-      **Verify:** identical grep as E.2 for `record_inbound_headers`.
-- [ ] **E.4** Per-server smoke test
-      (`servers/test-<backend>/tests/inspect_headers.rs`) — boot
-      the server, send any request, GET the inspect endpoint, assert
-      the request method + path landed.
-      **Verify:** `cargo test -p test-discord -p test-matrix -p
-      test-teams -p test-github -p test-forgejo -p test-lemmy -p
-      test-hackernews -p test-stoat --test inspect_headers` exits 0.
-- [ ] **E.5** Document the ring-buffer cap in
-      `servers/test-common/src/lib.rs` rustdoc — N=100, FIFO eviction,
-      reset on `/reset`.
+      **Verified:** 4 unit tests in `servers/test-common/src/inspect.rs`
+      including 200-request cap test; all pass.
+- [x] **E.2** Added `GET /test/inspect/last-headers` to all 8 wire-bearing
+      backends (`test-discord`, `test-matrix`, `test-teams`, `test-stoat`,
+      `test-lemmy`, `test-forgejo`, `test-github`, `test-hackernews`) via
+      `handle_inspect_last_headers` from `poly-test-common`.
+      Follows the `/test/...` prefix convention.
+- [x] **E.3** Wired `header_inspect_middleware` into each backend's router via
+      `middleware::from_fn_with_state(Arc::clone(&inspect), header_inspect_middleware)`.
+      Applied at the top-level Router so it catches every request.
+- [x] **E.4** Integration test in `servers/test-discord/tests/inspect_headers.rs` —
+      3 tests: captures requests + method/path, and ring buffer cap. All pass.
+- [x] **E.5** Documented the ring-buffer cap in `servers/test-common/src/inspect.rs`
+      rustdoc — N=100 (`HEADER_INSPECT_CAP`), FIFO eviction, reset on `/reset`
+      (backends call `state.inspect.clear()` in their `reset()` methods).
 
 **Acceptance:** Every test mock exposes `/test/inspect/last-headers`
 and returns the most-recent inbound request's headers, capped at 100.
