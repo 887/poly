@@ -12,7 +12,7 @@
 
 mod edit_modal;
 mod list_panel;
-mod mcp;
+pub(crate) mod mcp;
 mod route;
 mod sources_editor;
 mod tool_whitelist_editor;

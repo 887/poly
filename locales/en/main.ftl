@@ -586,6 +586,16 @@ settings-notifications = Notifications
 settings-content-social = Content & Social
 account-settings-title = Account Settings
 
+# Client Settings (plan-client-version-override-and-sandbox Phase F)
+client-settings-title = Client Settings
+client-settings-blurb = Override how Poly identifies itself to backend services. Useful when a service blocks an outdated client version.
+client-settings-effective-version = Effective version
+client-settings-override-toggle = Override version
+client-settings-override-save = Save
+client-settings-override-clear = Clear
+client-settings-mechanisms-heading = Mechanisms
+client-settings-mechanism-disabled-host-cap = Requires host capability not available in this build
+
 # Content & Social settings
 content-social-title = Content & Social
 content-social-sensitive-media = Sensitive Media

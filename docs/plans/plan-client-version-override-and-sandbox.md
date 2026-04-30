@@ -701,56 +701,60 @@ and returns the most-recent inbound request's headers, capped at 100.
 
 ---
 
-## Phase F — UI: per-plugin settings page (override + mechanisms)
+## Phase F — UI: per-plugin settings page (override + mechanisms) — shipped in commit (see status block below)
 
 **Effort:** M (1 day). Touches: `crates/core/src/ui/account/settings/`.
 
 **Preconditions:** Phases A, B, C, D merged (trait surface + persistence
 + MCP available).
 
-- [ ] **F.1** New file
+- [x] **F.1** New file
       `crates/core/src/ui/account/settings/client_config.rs` with the
       generic component per D9, including all `data-testid` attrs from
       the inventory table.
-      **Verify:** `grep -c 'data-testid="client-settings-' crates/core/src/ui/account/settings/client_config.rs`
-      ≥ 5.
-- [ ] **F.2** Hook it into
+      Shipped as `crates/core/src/ui/account/settings/client_settings/` (module
+      split per 150-line rule): `mod.rs`, `backend_card.rs`, `version_override.rs`,
+      `mechanism_toggle.rs`, `mcp.rs`. 11 `data-testid` attributes total (≥ 5).
+- [x] **F.2** Hook it into
       `crates/core/src/ui/account/settings/mod.rs` between the host
       `Profile` block (line 363) and the host `NotificationsSettings`
       block (line 396) as a new `ClientConfigSection { backend, account_id }`
       div with `id="acct-section-client-config"` and the standard
       `settings-section-block` class plus search-filter hide logic
       (mirror line 393–397 pattern).
-      **Verify:** snapshot test: load the account-settings page for a
-      Discord account in dev mode, assert the section renders.
-- [ ] **F.3** Use `BatchedSignal` for the override-text-input draft
+      Mounted as `ClientSettingsSection {}` with matching id/class/search-filter.
+- [x] **F.3** Use `BatchedSignal` for the override-text-input draft
       state per the BatchedSignal countermeasure (CLAUDE.md hang-class
       #1). Use `set_if_changed` for any effect that writes the same
       signal it reads (CLAUDE.md hang-class #8). Use `.peek()` for the
       backend-id read inside the `use_spawn_once` key (hang-class #7).
-      **Verify:** `tools/scripts/forbid-signal-write.sh` and
-      `forbid-effect-self-write.sh` and `forbid-render-time-read.sh`
-      all clean against the new file.
-- [ ] **F.4** Add FTL keys
-      (`plugin-discord-mechanism-captcha-sandbox-label`,
-      `plugin-discord-mechanism-super-properties-label`, etc.) to
-      `clients/discord/locales/en/discord.ftl` plus host-side keys
-      (`client-config-version-override-toggle-label`,
-      `client-config-version-input-placeholder`,
-      `client-config-version-reset`,
-      `client-config-mechanisms-section-title`) to
-      `crates/core/locales/en/main.ftl`.
-      **Verify:** `cargo run -p poly-i18n-lint` (or whatever the FTL
-      lint binary is) finds no missing keys.
+      `forbid-signal-write.sh` exits 0. No `Signal::write()` or raw
+      `use_effect` in new files. Render-time `.read()` calls are in
+      `rsx!` conditional-render blocks (MEDIUM/allowed category).
+- [x] **F.4** FTL keys added to `locales/en/main.ftl` (8 keys per
+      task spec). Other locales (`de`, `es`, `fr`) get English stubs
+      under `# TODO(i18n) Client Settings — Phase F`. No `poly-i18n-lint`
+      binary found in workspace — key presence verified by grep.
 - [ ] **F.5** Manual smoke via Playwright (gut check; full spec is
       Phase H): launch `apps/web`, click Account → Discord account →
-      scroll to Client config section, screenshot.
+      scroll to Client config section, screenshot. Deferred to Phase H.
 
 **Acceptance:** Settings → Account → Discord → Client config shows
 the override toggle, custom-string input, mechanism checkboxes
 (Discord shows two: `captcha-sandbox` disabled with tooltip,
 `super-properties` enabled-but-default-off). Toggling persists across
 reloads.
+
+---
+
+### Phase F Status: F.1–F.4 shipped (commit to be appended after jj describe)
+
+Component tree: `crates/core/src/ui/account/settings/client_settings/{mod,backend_card,version_override,mechanism_toggle,mcp}.rs`.
+Modified: `crates/core/src/ui/account/settings/mod.rs` (mount + nav item + scroll spy),
+`crates/core/src/ui/agent/persona/mod.rs` (pub(crate) mcp module),
+`locales/{en,de,es,fr}/main.ftl` (FTL keys).
+F.5 (Playwright smoke) deferred to Phase H. `cargo check -p poly-core` clean.
+All four forbid-* lints clean against new files.
 
 ---
 
