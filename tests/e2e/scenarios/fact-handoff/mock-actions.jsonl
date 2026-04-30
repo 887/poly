@@ -1,0 +1,18 @@
+# mock-actions.jsonl — fact-handoff
+# fact-alice: pins a fact via meta_persona_set_memory
+# fact-bob: reads alice's memory via meta_persona_get_memory with slug=fact-alice
+#
+# Cross-persona reads are deliberately allowed at v1 schema. This scenario
+# documents that invariant and fails loud if a future ACL breaks it.
+
+# Agent A: set a pinned fact
+{"slug":"fact-alice","tool":"meta_persona_set_memory","args":{"slug":"fact-alice","fact":"AI chip exports restricted to 12 countries as of Q2 2026","pinned":true},"result_grep":"fact_id"}
+
+# Agent A: verify the fact was stored
+{"slug":"fact-alice","tool":"meta_persona_get_memory","args":{"slug":"fact-alice"},"result_grep":"AI chip"}
+
+# Agent B: read fact-alice's memory (cross-persona read — allowed at v1)
+{"slug":"fact-bob","tool":"meta_persona_get_memory","args":{"slug":"fact-alice"},"result_grep":"AI chip"}
+
+# Agent B: invoke its own persona to verify it's functional
+{"slug":"fact-bob","tool":"meta_persona_invoke","args":{"slug":"fact-bob","user_prompt":"incorporate the pinned fact from fact-alice","dry_run":true},"result_grep":"fact-bob"}

@@ -1,0 +1,1 @@
+{"slug":"live-update-test","name":"Live Update Test","system_prompt":"You are a test persona used to validate MCP-to-UI live update propagation. You create personas via MCP tools and observe DOM updates.","sources":[]}

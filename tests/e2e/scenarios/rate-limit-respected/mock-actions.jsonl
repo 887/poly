@@ -1,0 +1,13 @@
+# mock-actions.jsonl — rate-limit-respected
+#
+# Mock mode: sets rate_limit_per_hour=2, then queries recent_actions to verify
+# the rate limit configuration was stored. Actual 5× heartbeat back-to-back and
+# the resulting 2 draft_create + 3 rate_limited audit rows are validated in
+# real-claude mode (nightly) — mock mode can only verify the setup surface.
+#
+# The scenario.sh does the direct poly-cli assertion for rate limit configuration
+# and uses meta_persona_recent_actions to verify the audit mechanism works.
+
+{"slug":"rate-limited-persona","tool":"meta_persona_update","args":{"slug":"rate-limited-persona","rate_limit_per_hour":2},"result_grep":"rate-limited-persona"}
+{"slug":"rate-limited-persona","tool":"meta_persona_get","args":{"slug":"rate-limited-persona"},"result_grep":"rate_limit_per_hour"}
+{"slug":"rate-limited-persona","tool":"meta_persona_recent_actions","args":{"slug":"rate-limited-persona","limit":20},"result_grep":"rate-limited-persona"}

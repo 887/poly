@@ -1,0 +1,15 @@
+{
+  "base_url": "http://127.0.0.1:@@WEB_PORT@@",
+  "scenario": "mcp-to-ui-live-update",
+  "assertions": [
+    {
+      "kind": "wait_for_visible",
+      "locator": "[data-testid='persona-row-live-probe-xyz']",
+      "timeout_ms": 5000
+    },
+    {
+      "kind": "no_full_reload",
+      "since_ts": "@@SINCE_TS@@"
+    }
+  ]
+}

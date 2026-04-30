@@ -1,0 +1,20 @@
+# mock-actions.jsonl — heartbeat-tick-via-mcp
+#
+# Mock mode: simulate heartbeat trigger by:
+#   1. Setting the persona proactivity to "drafts-only" via meta_persona_update
+#   2. Setting a heartbeat interval via meta_persona_set_heartbeat (min=60s)
+#   3. Invoking the persona with dry_run=false to exercise the draft path
+#   4. Checking recent actions for heartbeat_run
+#
+# In real-claude mode, the heartbeat would actually fire after ~60s.
+# In mock mode, we use meta_persona_invoke (non-dry-run) to trigger draft
+# creation path and meta_persona_recent_actions to verify audit rows.
+#
+# Note: meta_persona_set_heartbeat minimum is 60s per schema validation.
+# The mock mode exercises the setup surface and audit query; real heartbeat
+# firing is validated in real-claude mode (nightly) where wait time is acceptable.
+
+{"slug":"heartbeat-drafter","tool":"meta_persona_update","args":{"slug":"heartbeat-drafter","proactivity":"drafts-only"},"result_grep":"heartbeat-drafter"}
+{"slug":"heartbeat-drafter","tool":"meta_persona_set_heartbeat","args":{"slug":"heartbeat-drafter","interval_secs":60},"result_grep":"set_heartbeat"}
+{"slug":"heartbeat-drafter","tool":"meta_persona_recent_actions","args":{"slug":"heartbeat-drafter","limit":10},"result_grep":"heartbeat-drafter"}
+{"slug":"heartbeat-drafter","tool":"meta_persona_invoke","args":{"slug":"heartbeat-drafter","user_prompt":"Draft a response to recent activity in ch-beats","dry_run":false},"result_grep":"heartbeat-drafter"}

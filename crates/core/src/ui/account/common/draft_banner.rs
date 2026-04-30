@@ -259,7 +259,9 @@ fn DraftBannerRow(props: DraftBannerRowProps) -> Element {
     let label = t_args("agent-draft-claude-suggests", &[("suggested_by", &draft.suggested_by)]);
 
     rsx! {
-        div { class: "draft-banner-row",
+        div {
+            class: "draft-banner-row",
+            "data-testid": "draft-row-{draft_id}",
             div { class: "draft-banner-header",
                 span { class: "draft-banner-label", "{label}" }
                 if let Some(secs) = countdown_secs {
@@ -457,12 +459,14 @@ struct DraftsSidebarRowProps {
 #[component]
 fn DraftsSidebarRow(props: DraftsSidebarRowProps) -> Element {
     let draft = props.draft.clone();
+    let draft_id = draft.id;
     let preview: String = draft.body.chars().take(120).collect();
     let has_autosend = draft.auto_send_at.is_some();
 
     rsx! {
         button {
             class: "drafts-sidebar-row",
+            "data-testid": "draft-row-{draft_id}",
             onclick: move |_| props.on_open.call(()),
             div { class: "drafts-sidebar-row-meta",
                 span { class: "drafts-sidebar-row-chat", "{draft.chat_id}" }

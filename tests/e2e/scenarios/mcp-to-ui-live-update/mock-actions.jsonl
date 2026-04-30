@@ -1,0 +1,12 @@
+# mock-actions.jsonl — mcp-to-ui-live-update
+#
+# This scenario creates a new persona via MCP tool, then Playwright asserts
+# the persona row appears in the PersonaListPanel within 5s without any
+# page reload. This is the headline regression test for the reactive chain:
+#   SQLite INSERT → backend events → poll_events → app_state → rsx!
+#
+# The new persona slug "live-probe-xyz" is unique per run via the bash script
+# (it's created fresh each time since DATA_DIR is isolated per run).
+
+{"slug":"live-update-test","tool":"meta_persona_create","args":{"slug":"live-probe-xyz","name":"Live Probe XYZ","system_prompt":"Test persona for MCP-to-UI live update validation"},"result_grep":"live-probe-xyz"}
+{"slug":"live-update-test","tool":"meta_persona_get","args":{"slug":"live-probe-xyz"},"result_grep":"live-probe-xyz"}

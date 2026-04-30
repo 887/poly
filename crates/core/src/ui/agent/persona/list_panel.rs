@@ -50,7 +50,9 @@ fn PersonaListRow(
     let slug = persona.slug.clone();
     let persona_talk = persona.clone();
     rsx! {
-        div { class: "persona-list-row",
+        div {
+            class: "persona-list-row",
+            "data-testid": "persona-row-{persona.slug}",
             span { class: "persona-avatar", "{persona.avatar_emoji}" }
             div { class: "persona-row-info",
                 span { class: "persona-row-name", "{persona.name}" }

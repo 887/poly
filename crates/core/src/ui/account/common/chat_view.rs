@@ -4015,6 +4015,7 @@ fn render_message_row(ctx: ChatViewMarkupCtx, msg: Message, prev_msg: Option<Mes
         }
         div {
             id: "message-{msg_id}",
+            "data-testid": "message-row-{msg_id}",
             class: {
                 let base = if is_grouped { "message message-grouped" } else { "message message-full" };
                 if is_editing { format!("{base} message-editing") } else { base.to_string() }

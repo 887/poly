@@ -1,0 +1,1 @@
+{"slug":"rate-limited-persona","name":"Rate Limited Persona","system_prompt":"You are a rate-limited test persona. You have a rate limit of 2 actions per hour. This tests that the rate-limit enforcement works correctly.","sources":[{"account_id":"test-discord","selector_kind":"channel","selector_value":"ch-rate-test","include":true}]}

@@ -1,0 +1,16 @@
+{
+  "base_url": "http://127.0.0.1:@@WEB_PORT@@",
+  "scenario": "fact-handoff",
+  "assertions": [
+    {
+      "kind": "wait_for_visible",
+      "locator": "[data-testid='persona-row-fact-alice']",
+      "timeout_ms": 5000
+    },
+    {
+      "kind": "wait_for_visible",
+      "locator": "[data-testid='persona-row-fact-bob']",
+      "timeout_ms": 5000
+    }
+  ]
+}

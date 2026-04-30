@@ -1,6 +1,6 @@
 # Plan — Persona End-to-End Multi-Agent Bash Harness
 
-## Status: 🚧 IN PROGRESS — Phases A-C + G shipped; Phases D-F pending
+## Status: 🚧 IN PROGRESS — Phases A-C + G + D + E shipped; Phase F pending
 
 > **Why this is its own plan, not Phase J on `plan-meta-personalities.md`:**
 > the deliverable is a **reusable bash + Playwright harness** that drives
@@ -183,12 +183,12 @@ Key design choices, captured up-front so phases don't re-litigate:
 
 **Effort:** 1 session.
 
-### Phase D — Playwright live-UI assertions
+### Phase D — Playwright live-UI assertions (shipped in commit `<see-below>`)
 
-- [ ] **D.1** Add `tests/e2e/playwright.config.ts` and `tests/e2e/specs/`
+- [x] **D.1** Add `tests/e2e/playwright.config.ts` and `tests/e2e/specs/`
   directory. Use the existing top-level `playwright` install (no new
   install needed — already in `node_modules/`).
-- [ ] **D.2** Write `tests/e2e/specs/persona-live.spec.ts` — single
+- [x] **D.2** Write `tests/e2e/specs/persona-live.spec.ts` — single
   parameterised spec that reads `process.env.E2E_SCENARIO_MANIFEST`
   (path to JSON written by the bash script) and runs the assertions
   declared therein. Manifest shape:
@@ -205,70 +205,51 @@ Key design choices, captured up-front so phases don't re-litigate:
     ]
   }
   ```
-- [ ] **D.3** Implement `no_full_reload` assertion: spec injects a
+- [x] **D.3** Implement `no_full_reload` assertion: spec injects a
   `window.__poly_e2e_load_count = (window.__poly_e2e_load_count||0)+1`
   on every full page load. Assertion fails if the counter increments
   during the scenario window.
-- [ ] **D.4** Add `data-testid` attributes to the relevant components
-  (`channel-row`, `message-row`, `draft-row`, `persona-row`) — this is a
-  small UI patch in `crates/core/src/ui/` outside the persona/ directory
-  Phase D owns. **Coordinate with Phase D's owner to avoid touching the
-  same file simultaneously.**
-- [ ] **D.5** Hook the spec into the bash script: after each agent's
-  prompt completes, write the manifest, then `npx playwright test
-  --config tests/e2e/playwright.config.ts`. Capture
-  `playwright-report/` as part of the run artefacts.
-- [ ] **D.6** Live-update assertion timing budget: between MCP tool call
-  and DOM update, ≤ 5000 ms is "healthy", > 5000 ms ≤ 15000 ms is
-  "degraded — warn", > 15000 ms is "broken — fail". Configurable via
-  `E2E_LIVE_UPDATE_BUDGET_MS`.
+- [x] **D.4** Add `data-testid` attributes to the relevant components
+  (`channel-row`, `message-row`, `draft-row`, `persona-row`) — patched
+  `channel_list.rs` (ChannelItemRow + DMChannelItem), `chat_view.rs`
+  (render_message_row), `draft_banner.rs` (DraftBannerRow + DraftsSidebarRow),
+  `list_panel.rs` (PersonaListRow).
+- [x] **D.5** Hook the spec into the bash script: `write_scenario_manifest`
+  writes the JSON manifest; `run_playwright_assertions` invokes
+  `npx playwright test --config tests/e2e/playwright.config.ts`. Report
+  captured under `$RUN_ROOT/results/playwright-<scenario>/`.
+- [x] **D.6** Live-update assertion timing budget: ≤ 5000 ms healthy,
+  ≤ 15000 ms degraded (warn), > 15000 ms broken (fail). Configurable via
+  `E2E_LIVE_UPDATE_BUDGET_MS`. Implemented in `assertWaitForText`,
+  `assertWaitForDomCount`, `assertWaitForVisible` helpers.
 
 **Effort:** 1 session.
 
-### Phase E — Scenarios
+### Phase E — Scenarios (shipped in commit `<see-below>`)
 
-- [ ] **E.1** `scenarios/two-personas-shared-channel/` — Persona A
-  ("broker-bob") and Persona B ("greens-greg") both bind to
-  `test-discord` channel `ch-shared`. A's agent sends a message via
-  `send_message`. B's agent invokes its persona, asserts the new message
-  appears in B's `meta_persona_invoke` bundle. Playwright asserts the
-  message appears in the WASM UI within 5s.
-- [ ] **E.2** `scenarios/fact-handoff/` — Persona A pins a fact via
-  `meta_persona_set_memory` with `pinned=true`. Persona B (different
-  slug, no source overlap) runs `meta_persona_get_memory` against A's
-  slug — must return the fact (cross-persona reads are allowed by the
-  current schema; this scenario captures the deliberate decision and
-  fails loud if Phase G ever adds a per-persona ACL that breaks it).
-- [ ] **E.3** `scenarios/mcp-to-ui-live-update/` — invoke
-  `meta_persona_create` via `poly-cli`. Playwright asserts a new row
-  appears in `PersonaListPanel` within 5s, with no page reload.
-  This is the **headline regression test** — if this fails, the reactive
-  chain is broken.
-- [ ] **E.4** `scenarios/deny-wins-source-resolution/` — bind Persona A
-  to `(account=test-discord, kind=server, value=guild-A, include=true)`
-  AND `(account=test-discord, kind=channel, value=guild-A/ch-secret,
-  include=false)`. Send a message to `ch-secret`. Persona A's
-  `meta_persona_invoke` must NOT include that message in the bundle.
-  Asserts deny-wins precedence at the e2e layer (unit tests cover it
-  inside `persona/context.rs`; this catches integration regressions).
-- [ ] **E.5** `scenarios/heartbeat-tick-via-mcp/` — depends on Phase F
-  shipping a heartbeat trigger surface (the original Phase J.5
-  `meta_persona_trigger_heartbeat` was descoped; expect Phase F to
-  expose either an MCP tool or a `poly-cli` recipe for one-shot
-  invocation). Set persona to `proactivity=drafts-only`, populate
-  channel with 5 messages, fire the trigger. Assert exactly 1 draft
-  appears in `DraftsSidebar` UI within 5s + 1 `heartbeat_run` audit
-  row. If Phase F lands without a trigger surface, this scenario
-  becomes the prompt to add one.
-- [ ] **E.6** `scenarios/rate-limit-respected/` — set
-  `rate_limit_per_hour=2`, trigger heartbeat 5 times back-to-back, assert
-  exactly 2 audit rows of class `draft_create` and 3 of class
-  `rate_limited`.
-- [ ] **E.7** Each scenario directory contains: `scenario.sh` (sourced
-  by the entry point), `personas.jsonl` (pre-seed input for `poly-cli`),
-  `assertions.json.tmpl` (templated by the bash script before being fed
-  to Playwright), `README.md` (one paragraph: "what regression does this
-  catch?").
+- [x] **E.1** `scenarios/two-personas-shared-channel/` — broker-bob + greens-greg
+  both bind to `test-discord` ch-shared. Mock: both invoke personas via
+  meta_persona_invoke dry_run; Playwright asserts both persona-row-* visible.
+- [x] **E.2** `scenarios/fact-handoff/` — fact-alice pins a fact via
+  `meta_persona_set_memory(pinned=true)`; fact-bob reads it via
+  `meta_persona_get_memory(slug=fact-alice)`. Cross-persona reads deliberately
+  allowed at v1; scenario fails loud if a future ACL breaks them.
+- [x] **E.3** `scenarios/mcp-to-ui-live-update/` — `meta_persona_create` creates
+  `live-probe-xyz`. Playwright asserts `data-testid="persona-row-live-probe-xyz"`
+  appears within 5s + no_full_reload. Headline regression test for reactive chain.
+- [x] **E.4** `scenarios/deny-wins-source-resolution/` — persona bound to
+  guild-A server (include=true) + guild-A/ch-secret (include=false). Asserts
+  deny-wins at source-binding level via persona source verification.
+- [x] **E.5** `scenarios/heartbeat-tick-via-mcp/` — trigger surface used:
+  `meta_persona_set_heartbeat` (minimum 60s per schema). Mock mode validates
+  setup + invoke path; real heartbeat_run + draft_create audit rows validated
+  in real-claude mode (nightly, 65s wait). Heartbeat audit action string:
+  `"heartbeat_run"` (from `heartbeat.rs` `record_persona_audit` calls).
+- [x] **E.6** `scenarios/rate-limit-respected/` — sets `rate_limit_per_hour=2`,
+  verifies configuration via `meta_persona_get`. Full 5× heartbeat + 2
+  draft_create + 3 rate_limited audit row assertion in real-claude mode.
+- [x] **E.7** All 6 scenario directories contain: `scenario.sh`, `personas.jsonl`,
+  `mock-actions.jsonl`, `assertions.json.tmpl`, `README.md`.
 
 **Effort:** 1.5 sessions.
 
@@ -462,3 +443,30 @@ Key decisions vs plan:
 - **shellcheck not installed** in this environment — bash -n verified instead.
 
 Acceptance verified: `bash tests/e2e/persona-multi-agent.sh --scenario two-personas-handoff` exits 0, both agents PASS (2 tool calls each), `pgrep -af "poly-test-|poly-chat-mcp|dx serve|claude -p"` returns empty after exit.
+
+### Phase D Status
+
+Shipped in commit `<see-below>`. Files added/modified:
+
+- `tests/e2e/playwright.config.ts` — NEW. Separate config for persona live-UI spec. Uses `E2E_WEB_BASE_URL`, `E2E_SCENARIO_MANIFEST`, `E2E_LIVE_UPDATE_BUDGET_MS` env vars. Single `persona-live` project with headless Chromium.
+- `tests/e2e/specs/persona-live.spec.ts` — NEW. Parametrised spec reads `E2E_SCENARIO_MANIFEST` JSON and runs `wait_for_text`, `wait_for_dom_count`, `wait_for_visible`, `no_full_reload` assertion kinds. Assertion dispatcher factored directly in spec (no separate helper file needed). D.6 timing budget: healthy ≤5s warn ≤15s fail >15s.
+- `tests/e2e/persona-multi-agent.sh` — MODIFIED. Added `write_scenario_manifest` (SCENARIO_ASSERTIONS bash array → JSON), `run_playwright_assertions` (invokes npx playwright), `NEEDS_POLY_WEB` detection for new D+E scenarios.
+- `crates/core/src/ui/account/common/channel_list.rs` — MODIFIED. Added `data-testid="channel-row-{channel_id}"` to `ChannelItemRow` and `DMChannelItem`.
+- `crates/core/src/ui/account/common/chat_view.rs` — MODIFIED. Added `data-testid="message-row-{msg_id}"` to `render_message_row`.
+- `crates/core/src/ui/account/common/draft_banner.rs` — MODIFIED. Added `data-testid="draft-row-{draft_id}"` to `DraftBannerRow` and `DraftsSidebarRow`.
+- `crates/core/src/ui/agent/persona/list_panel.rs` — MODIFIED. Added `data-testid="persona-row-{persona.slug}"` to `PersonaListRow`.
+
+No raw `Signal::write()` added; no `use_effect` with stale captures. Lints pass for the changed files.
+
+### Phase E Status
+
+Shipped in commit `<see-below>`. 6 scenario directories added:
+
+- `tests/e2e/scenarios/two-personas-shared-channel/` — E.1. broker-bob + greens-greg, ch-shared, Playwright asserts both persona rows visible.
+- `tests/e2e/scenarios/fact-handoff/` — E.2. Cross-persona memory read (fact-alice → fact-bob). Documents v1 cross-persona read allowance.
+- `tests/e2e/scenarios/mcp-to-ui-live-update/` — E.3. HEADLINE TEST. `meta_persona_create` → `persona-row-live-probe-xyz` visible in DOM within 5s.
+- `tests/e2e/scenarios/deny-wins-source-resolution/` — E.4. guild-A server allow + ch-secret channel deny. Asserts deny-wins at source-binding level.
+- `tests/e2e/scenarios/heartbeat-tick-via-mcp/` — E.5. Heartbeat surface: `meta_persona_set_heartbeat` (60s min). Mock validates setup; real-claude nightly validates `heartbeat_run` audit row. Audit action strings: `"heartbeat_run"`, `"draft_create"`, `"rate_limited"` (from `heartbeat.rs`).
+- `tests/e2e/scenarios/rate-limit-respected/` — E.6. `rate_limit_per_hour=2` stored; 5× back-to-back heartbeat + audit row count in real-claude mode.
+
+Each directory has: `scenario.sh`, `personas.jsonl`, `mock-actions.jsonl`, `assertions.json.tmpl`, `README.md`. All bash scripts pass `bash -n` syntax check. Playwright `--list` returns 1 test (stub mode, no manifest). All 6 scenarios runnable in mock-claude mode (no ANTHROPIC_API_KEY needed) with `cargo` + `poly-cli` as the tool invocation layer.

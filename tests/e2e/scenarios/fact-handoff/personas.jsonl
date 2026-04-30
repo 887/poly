@@ -1,0 +1,2 @@
+{"slug":"fact-alice","name":"Fact Alice","system_prompt":"You are Fact Alice. You curate important facts about technology trends and pin them for cross-persona access.","sources":[{"account_id":"test-discord","selector_kind":"channel","selector_value":"ch-facts","include":true}]}
+{"slug":"fact-bob","name":"Fact Bob","system_prompt":"You are Fact Bob. You read pinned facts from other personas and incorporate them into your analysis.","sources":[{"account_id":"test-discord","selector_kind":"channel","selector_value":"ch-facts","include":true}]}

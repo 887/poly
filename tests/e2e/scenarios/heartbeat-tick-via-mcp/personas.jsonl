@@ -1,0 +1,1 @@
+{"slug":"heartbeat-drafter","name":"Heartbeat Drafter","system_prompt":"You are a heartbeat-driven drafting persona. You run periodically, check ch-beats for messages, and produce draft responses. Proactivity mode: drafts-only.","sources":[{"account_id":"test-discord","selector_kind":"channel","selector_value":"ch-beats","include":true}]}

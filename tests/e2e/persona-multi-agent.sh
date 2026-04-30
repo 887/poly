@@ -638,6 +638,127 @@ with open('${RESULTS_DIR}/budget-exceeded.json', 'w') as f:
 # ---------------------------------------------------------------------------
 # Dispatch to scenario
 # ---------------------------------------------------------------------------
+# D.5 — write_scenario_manifest <scenario_name>
+#
+# Writes the Playwright assertion manifest for the current scenario to
+# $RUN_ROOT/manifests/<scenario>.json and exports E2E_SCENARIO_MANIFEST.
+#
+# Scenarios populate SCENARIO_ASSERTIONS (a bash array of JSON strings) before
+# calling write_scenario_manifest.  If not set, an empty assertions array is
+# used (useful for agent-only scenarios that don't need DOM assertions).
+#
+# Manifest shape mirrors the TypeScript type in persona-live.spec.ts:
+#   { "base_url": "...", "scenario": "...", "assertions": [...] }
+# ---------------------------------------------------------------------------
+declare -a SCENARIO_ASSERTIONS=()
+_SCENARIO_MANIFEST_PATH=""
+
+write_scenario_manifest() {
+    local scenario_name="$1"
+    local manifests_dir="$RUN_ROOT/manifests"
+    mkdir -p "$manifests_dir"
+    local manifest_path="${manifests_dir}/${scenario_name}.json"
+
+    # Capture unix-ms timestamp for no_full_reload assertions.
+    local since_ts
+    since_ts=$(python3 -c "import time; print(int(time.time()*1000))")
+
+    # Substitute @@SINCE_TS@@ placeholder in any assertion that uses it.
+    local assertions_json="[]"
+    if [[ "${#SCENARIO_ASSERTIONS[@]}" -gt 0 ]]; then
+        # Build JSON array from SCENARIO_ASSERTIONS, substituting timestamp.
+        assertions_json=$(python3 - "${SCENARIO_ASSERTIONS[@]}" <<'PYEOF'
+import sys, json
+items = []
+for raw in sys.argv[1:]:
+    d = json.loads(raw)
+    # Substitute timestamp placeholder
+    if d.get("kind") == "no_full_reload" and d.get("since_ts") == "@@SINCE_TS@@":
+        import time
+        d["since_ts"] = int(time.time() * 1000)
+    items.append(d)
+print(json.dumps(items))
+PYEOF
+)
+    fi
+
+    python3 -c "
+import json
+manifest = {
+    'base_url': 'http://127.0.0.1:${E2E_WEB_PORT}',
+    'scenario': '${scenario_name}',
+    'assertions': ${assertions_json}
+}
+with open('${manifest_path}', 'w') as f:
+    json.dump(manifest, f, indent=2)
+print('[D.5] Wrote manifest: ${manifest_path}')
+" 2>&1
+
+    _SCENARIO_MANIFEST_PATH="$manifest_path"
+    export E2E_SCENARIO_MANIFEST="$manifest_path"
+    echo "[D.5] E2E_SCENARIO_MANIFEST=${manifest_path}"
+}
+
+# ---------------------------------------------------------------------------
+# D.5 — run_playwright_assertions <scenario_name>
+#
+# Runs the Playwright spec against the manifest written by write_scenario_manifest.
+# Captures playwright-report/ into $RUN_ROOT/results/playwright-<scenario>/.
+# Respects E2E_LIVE_UPDATE_BUDGET_MS env var (default 5000ms per D.6).
+#
+# Called after all persona agents have completed for scenarios that need
+# DOM-level assertions (NEEDS_POLY_WEB=true + manifest assertions present).
+# ---------------------------------------------------------------------------
+run_playwright_assertions() {
+    local scenario_name="$1"
+
+    if [[ -z "$_SCENARIO_MANIFEST_PATH" ]]; then
+        echo "[D.5] No manifest written — skipping Playwright assertions"
+        return 0
+    fi
+
+    if [[ "${NEEDS_POLY_WEB:-false}" != "true" ]]; then
+        echo "[D.5] NEEDS_POLY_WEB not set — skipping Playwright assertions"
+        return 0
+    fi
+
+    echo ""
+    echo "[D.5] Running Playwright assertions for scenario: ${scenario_name}"
+    echo "[D.5] Manifest: ${_SCENARIO_MANIFEST_PATH}"
+
+    local playwright_report_dir="$RUN_ROOT/results/playwright-${scenario_name}"
+    mkdir -p "$playwright_report_dir"
+
+    # D.6 — Pass timing budget env var to the spec.
+    local budget_ms="${E2E_LIVE_UPDATE_BUDGET_MS:-5000}"
+
+    # Run from the REPO_ROOT so the playwright.config.ts path resolves correctly.
+    local playwright_exit=0
+    E2E_SCENARIO_MANIFEST="$_SCENARIO_MANIFEST_PATH" \
+    E2E_WEB_BASE_URL="http://127.0.0.1:${E2E_WEB_PORT}" \
+    E2E_LIVE_UPDATE_BUDGET_MS="$budget_ms" \
+    PLAYWRIGHT_HTML_REPORT="$playwright_report_dir" \
+    npx playwright test \
+        --config "$SCRIPT_DIR/playwright.config.ts" \
+        --output "$playwright_report_dir" \
+        2>&1 | tee "$LOGS_DIR/playwright-${scenario_name}.log" || playwright_exit=$?
+
+    # Copy report into results artefacts.
+    if [[ -d "$SCRIPT_DIR/playwright-report" ]]; then
+        cp -r "$SCRIPT_DIR/playwright-report/." "$playwright_report_dir/" 2>/dev/null || true
+    fi
+
+    if [[ "$playwright_exit" -ne 0 ]]; then
+        echo "[D.5] FAIL: Playwright assertions failed for scenario ${scenario_name}" >&2
+        echo "[D.5] Report: ${playwright_report_dir}" >&2
+        return 1
+    fi
+
+    echo "[D.5] Playwright assertions PASSED for scenario ${scenario_name} ✓"
+    return 0
+}
+
+# ---------------------------------------------------------------------------
 run_scenario() {
     local scenario="$1"
     echo ""
@@ -714,6 +835,13 @@ case "$SCENARIO" in
         # drive the WASM UI (poly-web on port 3000) via Playwright.
         NEEDS_POLY_WEB=true
         ;;
+    two-personas-shared-channel|\
+    mcp-to-ui-live-update|\
+    heartbeat-tick-via-mcp|\
+    rate-limit-respected)
+        # Phase D+E persona scenarios that drive the WASM UI via Playwright.
+        NEEDS_POLY_WEB=true
+        ;;
 esac
 NEEDS_POLY_WEB="${NEEDS_POLY_WEB:-false}"
 
@@ -723,6 +851,9 @@ fi
 
 smoke_check_tools
 run_scenario "$SCENARIO"
+
+# D.5 — Run Playwright assertions (only for UI scenarios with a manifest)
+run_playwright_assertions "$SCENARIO"
 
 # C.5 — Aggregate agent results (only when agents were spawned)
 if [[ -n "$(ls "$AGENTS_DIR"/*.out.json 2>/dev/null || true)" ]]; then

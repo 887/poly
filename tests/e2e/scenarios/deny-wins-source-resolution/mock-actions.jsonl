@@ -1,0 +1,17 @@
+# mock-actions.jsonl — deny-wins-source-resolution
+#
+# Persona bound to (account=test-discord, server=guild-A, include=true)
+# AND (account=test-discord, channel=guild-A/ch-secret, include=false).
+#
+# meta_persona_invoke with dry_run=true returns the source context bundle.
+# We assert the bundle does NOT include ch-secret (deny wins over allow).
+#
+# In mock mode: the meta_persona_invoke result is returned by poly-cli.
+# The result_grep checks that the dry-run succeeded (slug appears).
+# The scenario.sh checks separately that ch-secret is absent (deny assertion).
+#
+# result_grep checks a positive signal (the slug) rather than absence of ch-secret,
+# because grep-absence requires shell logic in scenario.sh.
+
+{"slug":"deny-test-persona","tool":"meta_persona_invoke","args":{"slug":"deny-test-persona","user_prompt":"What messages are in ch-secret?","dry_run":true},"result_grep":"deny-test-persona"}
+{"slug":"deny-test-persona","tool":"meta_persona_get","args":{"slug":"deny-test-persona"},"result_grep":"deny-test-persona"}

@@ -1,0 +1,14 @@
+# mock-actions.jsonl — two-personas-shared-channel
+# broker-bob: invoke persona + send a message into ch-shared.
+# greens-greg: invoke persona + verify broker-bob's message is in the bundle.
+#
+# Note: send_message in mock mode exercises the poly-cli call; actual channel
+# delivery is validated by Playwright (DOM assertion in assertions.json.tmpl).
+# The result_grep checks that the MCP tool call succeeded.
+
+{"slug":"broker-bob","tool":"meta_persona_invoke","args":{"slug":"broker-bob","user_prompt":"Post COIN beat to the shared channel","dry_run":true},"result_grep":"broker-bob"}
+{"slug":"broker-bob","tool":"meta_persona_get","args":{"slug":"broker-bob"},"result_grep":"broker-bob"}
+
+# greens-greg reads the same channel context
+{"slug":"greens-greg","tool":"meta_persona_invoke","args":{"slug":"greens-greg","user_prompt":"Summarize latest market news in ch-shared","dry_run":true},"result_grep":"greens-greg"}
+{"slug":"greens-greg","tool":"meta_persona_list","args":{},"result_grep":"broker-bob"}

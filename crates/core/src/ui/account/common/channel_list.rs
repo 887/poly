@@ -1197,6 +1197,7 @@ fn DMChannelItem(
     rsx! {
         div {
             class: if is_active { "channel-item active" } else { "channel-item" },
+            "data-testid": "channel-row-{channel_id}",
             oncontextmenu: move |evt| {
                 evt.prevent_default();
                 evt.stop_propagation();
@@ -1590,6 +1591,7 @@ fn ChannelItemRow(channel: Channel) -> Element {
     rsx! {
         div {
             class: "{channel_class}",
+            "data-testid": "channel-row-{ch_id}",
             oncontextmenu: move |evt| {
                 evt.prevent_default();
                 evt.stop_propagation();
