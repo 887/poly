@@ -829,7 +829,7 @@ scenario passes for Discord + Matrix + Teams.
 
 ---
 
-## Phase I — Sandbox host-cap stub (shipped in commit below)
+## Phase I — Sandbox host-cap stub (shipped in commit `6aff08a044ed`)
 
 **Effort:** S (0.5 day).
 
@@ -1003,3 +1003,21 @@ All C.1–C.5 sub-steps shipped:
   the underlying KV store has no `kv_list_prefix` route, so the
   registry is the minimal extension that avoids adding a new HTTP
   route.
+
+---
+
+### Phase I Status: DONE
+
+All I.1–I.5 sub-steps shipped in commit `6aff08a044ed`:
+
+- `crates/host-sandbox/Cargo.toml` + `src/lib.rs` created.
+- `HostSandbox` trait + `SandboxError` enum + `SandboxResult` struct defined.
+- `StubSandbox` impl returns `Err(SandboxError::NotImplemented)` immediately.
+- `advertised_host_caps()` returns `&[]` — no caps advertised in v1.
+- `// FUTURE: docs/plans/plan-host-sandbox-impl.md` cross-reference at top of lib.rs.
+- `docs/plans/plan-host-sandbox-impl.md` stub created with Status, problem statement,
+  and phase outline (Wry / Electron / Web popup; navigation interception; cancel UX).
+- 2 unit tests pass: `stub_returns_not_implemented`, `v1_advertises_empty_host_caps`.
+- `crates/host-sandbox` added to workspace `members` in root `Cargo.toml`.
+- `cargo check -p poly-host-sandbox`: exit 0.
+- `cargo test -p poly-host-sandbox --lib`: 2/2 pass.
