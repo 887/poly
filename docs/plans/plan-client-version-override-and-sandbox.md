@@ -3,25 +3,32 @@
 ## Status: 🚧 PLANNED — not started
 
 > Sibling future plan referenced from Phase I:
-> `docs/plans/plan-host-sandbox-impl.md` (NOT YET WRITTEN — captures the
-> actual sub-browser plumbing for Discord captcha-style challenges).
+> `docs/plans/plan-host-sandbox-impl.md` (stub written in Phase I.5).
 
 ---
 
 ## Problem
 
 When a backend's wire protocol checks an "advertised client version"
-(Discord User-Agent + `X-Discord-Locale` + super-properties; Matrix
-`User-Agent`; Teams `client-version`/`x-ms-client-version` headers;
-GitHub `User-Agent`; Forgejo `User-Agent`) and the upstream tightens
-the accepted set, our plugins break until the next plugin/app release.
-A user reporting "Discord stopped working" has no way to bump the
-advertised string themselves; they must wait for us to ship.
+(Discord User-Agent + super-properties; Matrix `User-Agent`; Teams
+client-version headers; GitHub `User-Agent`; Forgejo `User-Agent`) and
+the upstream tightens the accepted set, our plugins break until the
+next plugin/app release. A user reporting "Discord stopped working"
+has no way to bump the advertised string themselves; they must wait for
+us to ship.
+
+**Codebase reality check (audited 2026-04-30):** today *no* backend
+sends a User-Agent or any version-advertising header
+(`grep -rn "User-Agent" clients/*/src/` returns zero hits across all
+ten plugins). The `poly_host_bridge::http::HttpClientBuilder`
+**already** supports `.user_agent(ua)` — it just isn't called. So
+Phase B is the first time these headers exist on the wire, *and* the
+override is wired the same day.
 
 Likewise, mechanisms inside a backend that the upstream gates on
-(Discord captcha-sandbox, Matrix sliding-sync vs `/sync` v2, Teams
-browser-mode shim) are currently hardcoded per plugin. The user can't
-toggle them without a plugin rebuild.
+(Discord captcha-sandbox, Matrix sliding-sync, …) are currently
+hardcoded per plugin. The user can't toggle them without a plugin
+rebuild.
 
 This plan adds:
 
@@ -38,16 +45,16 @@ This plan adds:
    backend, so a regression in any one backend's version-propagation
    wire path is caught before merge.
 6. A **sandbox host-cap stub** — the trait + WIT host-cap declaration
-   are landed; the actual sandbox impl returns `Err(NotSupported)` and
-   is deferred to `plan-host-sandbox-impl.md`.
+   are landed; the actual sandbox impl returns `Err(NotImplemented)`
+   and is deferred to `plan-host-sandbox-impl.md`.
 
 ---
 
 ## Non-goals
 
 - Implementing the sandbox itself (Phase I lands the stub only).
-- Per-account overrides (version is a per-backend setting; mechanisms
-  are per-backend in v1, per-account is future work).
+- Per-account overrides (version is **per-backend in v1**; per-account
+  is future work — see the explicit pin in D2).
 - Breaking the WIT for plugins built against the older interface — all
   new methods carry default impls so existing plugins still load.
 - Adding fields to existing MCP tools — `client_settings_*` is its own
@@ -55,6 +62,11 @@ This plan adds:
 - Refactoring the existing `client-settings` WIT interface — the new
   surface lives in a new `client-config` WIT interface (justified
   below) so the storage-vs-config split stays clean.
+- Inventing mechanisms for backends whose code-paths don't yet exist.
+  Matrix sliding-sync, Teams browser-shim, HN realtime: zero plumbing
+  in tree (`grep` audit per backend below). v1 ships only mechanisms
+  that flip a code path that **already exists**; everything else is
+  Phase K (a sibling future plan).
 
 ---
 
@@ -79,7 +91,7 @@ CLAUDE.md "Design Principles — SOLID").
 by the `messenger-plugin` world. Default impls let pre-existing
 plugins return empty lists / pass-through.
 
-### D2 — Storage namespace
+### D2 — Storage namespace + per-account future-work pin
 
 User-tunable overrides persist in `poly_kv` (the host-side KV table)
 under host-owned keys, NOT plugin-owned `storage-*` keys. The plugin
@@ -93,17 +105,36 @@ Key schema:
 - `client.config.<backend_id>.version_override` → JSON string or `null`
 - `client.config.<backend_id>.mechanism.<mechanism_id>` → JSON bool
 
-`<backend_id>` is the BackendId slug (`discord`, `matrix`, `teams`, …)
-already used in `clients/client/src/types.rs`. Justification: the
-`client.config.` prefix is disjoint from existing `plugin.` /
-`account.` / `kv.` prefixes (audited via grep on commit ancestry);
-nesting under `<backend_id>` makes per-backend cleanup trivial when a
-backend is removed.
+`<backend_id>` is the BackendId slug from
+`clients/client/src/types.rs::BackendId` — current values:
+`demo`, `demo_forum`, `discord`, `forgejo`, `github`, `hackernews`,
+`lemmy`, `matrix`, `poly`, `stoat`, `teams`. Verification:
+`grep -rn "BackendId::new\|client.config\." crates/host-bridge/src/`
+returns zero hits today, confirming the `client.config.` prefix is
+disjoint from existing namespaces.
 
-### D3 — WIT extension shape (concrete)
+**Per-account future-work pin (resolved):** v1 is **per-backend
+only**. The `<backend_id>` slug in the key is intentionally NOT
+`<backend_id>:<account_id>` so a future per-account refinement adds a
+suffix without colliding. Future plan
+`plan-client-config-per-account.md` (NOT WRITTEN — out of scope) would
+add `client.config.<backend_id>.<account_id>.version_override`
+fallback-walked before the per-backend key.
 
-New `client-config` interface to add in `wit/messenger-plugin.wit`,
-exported by the `messenger-plugin` world:
+### D3 — WIT extension shape (concrete; verified against `wit/messenger-plugin.wit`)
+
+New `client-config` interface to add in `wit/messenger-plugin.wit`
+**after the existing `client-settings` block (line 995)** and
+**before the `client-sidebar` block (line 1002)**, exported by the
+`messenger-plugin` world (line 1540+ — append to the `export` block at
+line 1545 immediately after `export client-settings;`).
+
+`client-error` is defined in the `types` interface at
+`wit/messenger-plugin.wit:495-503` (variant with `auth-failed`,
+`network`, `not-found`, `rate-limited`, `permission-denied`,
+`internal`, `not-supported`). The new interface re-uses it via
+`use types.{client-error};` exactly as the eight existing interfaces
+already do.
 
 ```wit
 /// Host-defined, uniform-across-backends client configuration.
@@ -185,47 +216,123 @@ interface client-config {
 }
 ```
 
+Compile-syntax check passes against the existing WIT package: every
+`record` / `variant` / `func` shape mirrors the existing
+`client-settings` interface's idioms; `option<T>` / `result<_, E>` /
+`list<T>` / `string` / `bool` are all in current use elsewhere in the
+file.
+
 ### D4 — MCP tool family
 
-Mirror the `meta_persona_*` shape from `mcp/chat-mcp/src/tools.rs`
-(see lines 957+). Five new tools:
+Mirror the `meta_persona_*` shape from `mcp/chat-mcp/src/tools.rs`.
+Five new tools:
 
-| Tool name | Args | Returns |
-|---|---|---|
-| `client_settings_list` | `backend_id?: string` | List of `{backend_id, version, version_override, mechanisms[]}` for one or all backends |
-| `client_settings_get_version` | `backend_id: string` | `{version, override_active: bool, default_version: string}` |
-| `client_settings_set_version_override` | `backend_id: string, override?: string` | Success or `client-error` |
-| `client_settings_list_mechanisms` | `backend_id: string` | List of `mechanism` records |
-| `client_settings_set_mechanism` | `backend_id: string, mechanism_id: string, enabled: bool` | Success or `client-error` |
-
-Every `set_*` writes a row to the existing audit table used by
-`meta_persona_*` set-actions (see `meta_persona_recent_actions`) so
-"Claude fix Discord" leaves a paper trail.
-
-### D5 — Per-backend mechanism inventory (v1)
-
-Initial mechanism set per backend. "none" is fine — adds in later PRs.
-
-| Backend | Backend ID | v1 mechanisms | Notes |
+| Tool name | Args | Returns | Audit? |
 |---|---|---|---|
-| Demo | `demo` | none | Reference impl; serves as template |
-| Discord | `discord` | `captcha-sandbox` (requires `sandbox-browser` host-cap), `super-properties` | First needs the sandbox host-cap stub of Phase I; second toggles the X-Super-Properties header that real Discord checks |
-| Forgejo | `forgejo` | none | Plain REST + token; no client-side mechanism |
-| GitHub | `github` | none | Same |
-| HackerNews | `hackernews` | `firebase-realtime` | Currently always on; toggle to fall back to plain REST polling |
-| Lemmy | `lemmy` | none | |
-| Matrix | `matrix` | `sliding-sync`, `e2ee-disabled` | First swaps `/sync` v2 for sliding-sync endpoint; second is a debug toggle |
-| Server-client (poly-server) | `poly-server` | none | Internal protocol; no advertised version |
-| Stoat | `stoat` | none | Local-only test backend |
-| Teams | `teams` | `browser-shim`, `graph-fallback` | First sends the User-Agent that the real Teams web client sends; second falls back to MS Graph when MTC is rate-limited |
+| `client_settings_list` | `backend_id?: string` | List of `{backend_id, version, version_override, mechanisms[]}` for one or all backends | no (read-only) |
+| `client_settings_get_version` | `backend_id: string` | `{version, override_active: bool, default_version: string}` | no |
+| `client_settings_set_version_override` | `backend_id: string, override?: string` | Success or `client-error` | **yes** |
+| `client_settings_list_mechanisms` | `backend_id: string` | List of `mechanism` records | no |
+| `client_settings_set_mechanism` | `backend_id: string, mechanism_id: string, enabled: bool` | Success or `client-error` | **yes** |
 
-### D6 — Sandbox host-cap stub
-
-The `host-cap::sandbox-browser` variant lands in WIT in Phase A. The
-host-side trait + impl-stub lands in Phase I:
+**Audit row format** (every `set_*` writes one — Phase Q lint
+`tools/scripts/forbid-unaudited-persona-tool.sh` will be extended in
+Phase D.6 to cover `client_settings_set_*` exactly the same way):
 
 ```rust
-// In a new crate `crates/host-sandbox/src/lib.rs`:
+mem.record_persona_audit(
+    "system",                                 // persona_slug — synthetic "system" actor
+    "claude-desktop",                         // actor (matches meta_persona_* convention)
+    "client_settings_set_version_override",   // action
+    None,                                     // target_account
+    None,                                     // target_chat
+    Some(&serde_json::json!({
+        "backend_id": backend_id,
+        "override":   override_value,         // null when clearing
+    }).to_string()),                          // payload
+    "ok",                                     // result ("ok" / "error")
+    None,                                     // error_msg (Some(...) on failure)
+)?;
+```
+
+The "system" persona slug avoids per-persona attribution since these
+are app-wide settings; the Phase T `meta_persona_audit_query` tool
+already filters by `slug?` so `--slug=system` returns the
+client_settings audit history.
+
+### D5 — Per-backend version-source table (audited 2026-04-30)
+
+Today's reality across all 10 backends: **no header is set anywhere**
+(`grep` on `User-Agent`/`X-Super-Properties`/`x-ms-client-version`
+across `clients/*/src/` returns zero matches). All HTTP goes through
+`poly_host_bridge::http::HttpClient` constructed with `::new()`
+(no UA). Phase B is the first time these headers exist; the override
+ships the same day.
+
+| Backend | Slug | Today's version-source | Phase B target (header on every outbound) | Helper site |
+|---|---|---|---|---|
+| Demo | `demo` | none (in-memory only) | none — no wire | n/a |
+| `demo_forum` | `demo_forum` | none | none — no wire | n/a |
+| Discord | `discord` | none | `User-Agent: <override-or-default>` (+ `X-Super-Properties: <b64>` when `super-properties` mechanism on) | `clients/discord/src/http.rs::DiscordHttpClient::new` (line 21) |
+| Forgejo | `forgejo` | none | `User-Agent: <override-or-default>` | `clients/forgejo/src/api.rs::new` (line 33) |
+| GitHub | `github` | none (some `gh` shell-out, separate path) | `User-Agent: <override-or-default>` on the `HttpClient` path; `gh` shell-out unchanged | `clients/github/src/api.rs:230,443` (HttpClient construction sites) |
+| HackerNews | `hackernews` | none | `User-Agent: <override-or-default>` | `clients/hackernews/src/api.rs::with_base_url` (line 30) |
+| Lemmy | `lemmy` | none | `User-Agent: <override-or-default>` | `clients/lemmy/src/api.rs` (HttpClient site) |
+| Matrix | `matrix` | none | `User-Agent: <override-or-default>` | `clients/matrix/src/http.rs` (HttpClient site) |
+| Poly-server | `poly` | none | `User-Agent: <override-or-default>` (internal but useful for server logs) | `clients/server-client/src/http.rs` |
+| Stoat | `stoat` | none | `User-Agent: <override-or-default>` | `clients/stoat/src/http.rs` (line 52) |
+| Teams | `teams` | none | `User-Agent: <override-or-default>` | `clients/teams/src/http.rs::TeamsHttpClient::new` (line 70) |
+
+Pattern: every backend's `HttpClient::new()` is replaced with
+`HttpClientBuilder::new().user_agent(version_string).build()?`. The
+builder API at `crates/host-bridge/src/http.rs:226` already does the
+right thing on both transports (direct `reqwest` UA on native; UA
+piggybacked in the bridge wire payload on WASM).
+
+For Discord the `super-properties` mechanism additionally injects an
+`X-Super-Properties` header in `apply_version_headers(req)` — the
+helper added to `clients/discord/src/http.rs` per Phase B.4.
+
+### D6 — Per-backend mechanism inventory (v1, plumbing-verified)
+
+Only mechanisms whose code path **already exists** ship in v1.
+Mechanisms that would require new plumbing are deferred to Phase K
+(separate plan). Default state shown for each.
+
+| Backend | v1 mechanisms | Default | Plumbing status (audited) | Rationale |
+|---|---|---|---|---|
+| `demo` / `demo_forum` | none | — | n/a | Reference impl; no wire |
+| `discord` | `super-properties` | **off** | New (added in Phase B.4 `apply_version_headers`) | Off by default because real-Discord servers may flag fresh accounts that suddenly start sending it; user opts in if they need real-Discord parity |
+| `discord` | `captcha-sandbox` | **off** (host-cap absent) | Stub only — Phase I `StubSandbox` returns `NotImplemented` | "Honeypot" toggle that lets us land the UI + audit trail before the sandbox plumbing exists. UI renders disabled-with-tooltip when host-cap absent |
+| `forgejo` | none | — | — | Plain REST + token; nothing to toggle |
+| `github` | none | — | — | Same; `gh` shell-out vs HTTP is auto-detected by token type |
+| `hackernews` | none | — | Firebase-realtime is the *only* code path today; toggling to "plain REST polling" would require new plumbing → defer to Phase K | The plan's draft mention of `firebase-realtime` was incorrect — toggle is impossible without writing the alternate path first |
+| `lemmy` | none | — | — | |
+| `matrix` | none | — | Sliding-sync code path **does not exist** in tree (grep `clients/matrix/src/` for `sliding` returns one comment in `guest.rs` referencing the v3 `/sync` long-poll). Defer to Phase K | The plan's draft mention of `sliding-sync` was aspirational; ships as a follow-up plan |
+| `poly` (server-client) | none | — | — | Internal protocol |
+| `stoat` | none | — | — | Local-only test backend |
+| `teams` | none | — | "Browser-shim" and "Graph-fallback" don't exist as code paths (Teams uses Graph as its **only** backend, see `clients/teams/src/lib.rs:87` `DEFAULT_BASE_URL = "https://graph.microsoft.com"`). Defer to Phase K | Plan's draft mechanism list was wrong — there's only one path today |
+
+**Net for v1:** the only backend with a real mechanism toggle is
+Discord (`super-properties` enables an existing-in-Phase-B header
+flip; `captcha-sandbox` is the honeypot for the sandbox stub). Every
+other backend ships with `mechanisms: []`. The version-override
+surface is uniform across all 8 wire-bearing backends regardless.
+
+### D7 — Sandbox host-cap stub
+
+The `host-cap::sandbox-browser` variant lands in WIT in Phase A. The
+host-side trait + impl-stub lands in Phase I, in a new crate
+`crates/host-sandbox/`:
+
+```rust
+// crates/host-sandbox/src/lib.rs
+
+// FUTURE: docs/plans/plan-host-sandbox-impl.md
+//
+// This crate ships only the trait + a stub impl that errors. The
+// real sub-browser plumbing (Wry inner view / Electron BrowserWindow /
+// Web popup) is deferred to plan-host-sandbox-impl.md.
 
 #[derive(Debug, thiserror::Error)]
 pub enum SandboxError {
@@ -272,62 +379,86 @@ impl HostSandbox for StubSandbox {
         _url: String,
         _capture_url_pattern: String,
     ) -> Result<SandboxResult, SandboxError> {
-        // INTENTIONAL STUB — sub-browser plumbing is not in v1.
-        // Tracking plan: docs/plans/plan-host-sandbox-impl.md
-        // The Discord captcha-sandbox mechanism toggle in v1 only
-        // gates a code path; this stub returning NotImplemented
-        // is the expected response when that code path actually
-        // tries to open the browser.
         Err(SandboxError::NotImplemented)
     }
 }
+
+/// Capability registry — what host caps are advertised to the WIT
+/// `client-config.host-cap` enum at runtime. v1 returns empty so
+/// `sandbox-browser` is **NOT** advertised (UI renders Discord
+/// `captcha-sandbox` toggle as disabled-with-tooltip).
+pub fn advertised_host_caps() -> &'static [&'static str] {
+    &[]
+}
 ```
 
-### D7 — Test strategy (per-backend, four layers)
+**Backends that need the host-cap in v1:** Discord only
+(captcha-sandbox). Confirmed — no other backend declares
+`requires-host-cap = some(...)` in its mechanism inventory.
+
+### D8 — Test strategy (per-backend, four layers)
 
 For every backend that has a wire protocol (i.e. all except `demo`,
-`stoat`, `server-client`), the test pyramid is:
+`demo_forum`, `stoat`, `poly` server-client which is internal-only),
+the test pyramid is:
 
 1. **Unit** (`clients/<backend>/tests/version_override.rs`) — build a
-   client with a custom version, call any HTTP-bearing method, assert
-   the captured outgoing request carries the override in the right
-   header.
-2. **Mock-server log** (`servers/test-<backend>/src/lib.rs` adds
-   `GET /test/inspect/last-headers` that returns the most recent
-   inbound request's headers as JSON). Tests in
-   `servers/test-<backend>/tests/version_advertise.rs` set the override
-   via the WIT, exercise a real client method, query the inspect
-   endpoint, assert the override propagated.
-3. **e2e** (`tests/e2e/client-settings/`, orchestrated by the existing
-   harness from `plan-persona-e2e-multi-agent.md`) — adds a
-   `--scenario client-version-override` that for each backend: starts
-   the matching mock server, launches the app, sets the override via
-   the MCP, sends a message, scrapes the mock's
+   client with a custom version, call any HTTP-bearing method against
+   a `wiremock` server, assert the captured outgoing request carries
+   the override in the right header.
+2. **Mock-server log** (`servers/test-common/src/lib.rs` adds a shared
+   `LastInboundHeaders` ring buffer + `record_inbound_headers` axum
+   middleware; each `servers/test-<backend>/` mounts the middleware
+   plus `GET /test/inspect/last-headers`). Tests in
+   `servers/test-<backend>/tests/inspect_headers.rs` verify the
+   middleware captures.
+3. **e2e** (`tests/e2e/scenarios/client-version-override-<backend>/`,
+   orchestrated by the existing `tests/e2e/persona-multi-agent.sh`
+   harness). Adds `--scenario client-version-override` that for each
+   backend: starts the matching mock server, launches the app,
+   sets the override via the MCP, sends a message, scrapes the mock's
    `/test/inspect/last-headers`, asserts the wire string matches.
-4. **Playwright** (`tests/e2e/client-settings/playwright/version_override.spec.ts`)
+4. **Playwright**
+   (`tests/e2e/client-settings/playwright/version_override.spec.ts`)
    — UI flow: open settings → backend tab → toggle override on → enter
    custom string → save → trigger any backend action → query the mock's
    inspect endpoint → assert.
 
-### D8 — UI surface
+### D9 — UI surface
 
-A new generic page `crates/core/src/ui/account/settings/client_config.rs`
-that renders the WIT-discovered list:
+A new generic component
+`crates/core/src/ui/account/settings/client_config.rs` rendered from
+`crates/core/src/ui/account/settings/mod.rs` as a per-account section
+sandwiched between the host `Profile` block (line 363) and the host
+`Notifications` block (line 393–397) — wired alongside the existing
+plugin-declared sections rendered via `PluginSettingsSection` (line
+374–390), but driven by `client-config` not `client-settings`.
 
+Layout:
 - Top section: "Advertised client version"
-  - Toggle: "Override default" (off by default)
+  - Toggle: "Override default" (off by default;
+    `data-testid="client-settings-<backend>-version-override-toggle"`)
   - Text input: enabled when toggle is on; pre-filled with the current
     default; placeholder = the default
+    (`data-testid="client-settings-<backend>-version-input"`)
   - "Reset to default" button
+    (`data-testid="client-settings-<backend>-version-reset"`)
 - Second section: "Mechanisms" (only rendered if the backend reports
   a non-empty list)
   - One row per mechanism; checkbox; label; description on hover
+    (`data-testid="client-settings-<backend>-mechanism-<id>"`)
   - Disabled with tooltip when `requires-host-cap` is unmet
+    (`data-testid` unchanged so Playwright can still locate; element
+    carries `aria-disabled="true"`)
 
-Wired from the existing per-backend account-settings entry points
-(`crates/core/src/ui/account/settings/mod.rs` already routes to
-backend-specific tabs); each backend tab gets a "Client config" sub-
-tab that mounts the generic component.
+`data-testid` inventory (Phase H driving handles):
+| testid | Element |
+|---|---|
+| `client-settings-<backend>-version-override-toggle` | Override on/off toggle |
+| `client-settings-<backend>-version-input` | Version-string text input |
+| `client-settings-<backend>-version-reset` | Reset-to-default button |
+| `client-settings-<backend>-mechanism-<id>` | Per-mechanism checkbox row |
+| `client-settings-<backend>-save` | Save button (top of section) |
 
 ---
 
@@ -340,24 +471,47 @@ for default-impl pass-through.
 **Preconditions:** none.
 
 - [ ] **A.1** Add the `client-config` interface block to
-      `wit/messenger-plugin.wit` exactly as shown in D3.
-- [ ] **A.2** Add `export client-config;` to the
-      `world messenger-plugin` block (line 1540+).
+      `wit/messenger-plugin.wit` exactly as shown in D3 — insert at
+      line 996 (immediately after `client-settings` ends, before
+      `client-sidebar` starts).
+      **Verify:** `wit-bindgen markdown wit/ > /tmp/wit.md && grep -c
+      'interface client-config' /tmp/wit.md` == 1.
+- [ ] **A.2** Add `export client-config;` to the `world
+      messenger-plugin` block — append after line 1545
+      (`export client-settings;`).
+      **Verify:** `grep -c 'export client-config' wit/messenger-plugin.wit`
+      == 1.
 - [ ] **A.3** Add four trait methods to `ClientBackend` in
       `clients/client/src/lib.rs` with default impls:
-      `client_version()` returns a per-backend const,
-      `set_client_version_override(opt)` returns
-      `Err(ClientError::NotSupported(...))`,
-      `client_mechanisms()` returns `Ok(vec![])`,
-      `set_client_mechanism(id, on)` returns `NotSupported`.
+      ```rust
+      fn client_version(&self) -> String { "poly/0.0.0".to_string() }
+      async fn set_client_version_override(&self, _override: Option<String>)
+          -> ClientResult<()> {
+          Err(ClientError::NotSupported(
+              "set_client_version_override".to_string()))
+      }
+      async fn client_mechanisms(&self) -> ClientResult<Vec<Mechanism>> {
+          Ok(vec![])
+      }
+      async fn set_client_mechanism(&self, _id: &str, _enabled: bool)
+          -> ClientResult<()> {
+          Err(ClientError::NotSupported(
+              "set_client_mechanism".to_string()))
+      }
+      ```
+      Pattern matches existing default-impl style at
+      `clients/client/src/lib.rs:110-145` (NotSupported errors).
+      **Verify:** `cargo build -p poly-client` clean.
 - [ ] **A.4** Add `Mechanism` and `HostCap` types to
       `clients/client/src/types.rs` matching the WIT records.
+      **Verify:** `cargo test -p poly-client --lib` passes.
 - [ ] **A.5** Regenerate WIT bindings for every backend
-      (`wit_bindings.rs`); confirm clean build of
-      `cargo build -p poly-client -p poly-discord -p poly-matrix
-      -p poly-teams -p poly-github -p poly-forgejo -p poly-lemmy
-      -p poly-stoat -p poly-hackernews -p poly-server-client
-      -p poly-demo`.
+      (`cargo build` triggers `wit-bindgen` automatically); confirm clean
+      build of all 10 client crates.
+      **Verify:** `cargo build -p poly-client -p poly-discord -p
+      poly-matrix -p poly-teams -p poly-github -p poly-forgejo -p
+      poly-lemmy -p poly-stoat -p poly-hackernews -p poly-server-client
+      -p poly-demo` exits 0.
 
 **Acceptance:** `cargo build` clean for all 11 client crates with new
 WIT and trait methods present. `wit/messenger-plugin.wit` shows the
@@ -373,32 +527,45 @@ and `http.rs`.
 **Preconditions:** Phase A merged.
 
 - [ ] **B.1** Define a per-backend `DEFAULT_CLIENT_VERSION` const in
-      each `lib.rs` (Discord: matches current real-Discord web build;
-      Matrix: matches Element web; Teams: matches Teams web; others:
-      something sensible).
+      each `lib.rs` (Discord: matches a recent real-Discord web build
+      e.g. `"Mozilla/5.0 ... Discord/Stable 280000"`; Matrix: matches
+      Element web; Teams: matches Teams web; others: `"poly-<backend>/0.0.0"`).
+      **Verify:** `grep -rn DEFAULT_CLIENT_VERSION clients/*/src/lib.rs
+      | wc -l` ≥ 8 (one per wire-bearing backend; demo/demo_forum/stoat
+      can skip per D8).
 - [ ] **B.2** Implement `client_version()` on each backend to read
       override-or-default from a `Mutex<Option<String>>` field on the
-      backend struct.
+      backend struct. Initialise to `None` in `new()`.
+      **Verify:** unit test in `clients/<backend>/tests/version_override.rs`
+      asserts `client_version() == DEFAULT` before setting override.
 - [ ] **B.3** Implement `set_client_version_override(opt)` to write
       the field AND call `host-api.storage-set` with key
       `version_override` (JSON-encoded `string` or `null`); on init,
       every backend's `new()` reads `host-api.storage-get` for
       `version_override` and seeds the field.
-- [ ] **B.4** In each backend's `http.rs`, add a `User-Agent` header
-      (or backend-equivalent — Teams `x-ms-client-version`, Discord
-      `User-Agent` + `X-Super-Properties` if `super-properties`
-      mechanism is on) to every outbound request, sourced from
-      `client_version()`. Use a single `apply_version_headers(req)`
-      helper per backend so call sites can't forget.
+      **Verify:** the same test in B.2 round-trips an override.
+- [ ] **B.4** In each backend's `http.rs`, replace
+      `HttpClient::new()` with
+      `HttpClientBuilder::new().user_agent(self.client_version()).build()?`
+      (the builder API at `crates/host-bridge/src/http.rs:226` already
+      exists and works on both transports). For Discord additionally
+      add an `apply_version_headers(req)` helper that injects
+      `X-Super-Properties` when the `super-properties` mechanism is on.
+      Use a single helper per backend so call sites can't forget.
+      **Verify:** `grep -rn 'HttpClient::new()' clients/*/src/` returns
+      zero hits in wire-bearing backends after this phase.
 - [ ] **B.5** Smoke-test manually with `dev-plugins` — the
       `apps/web` build should still load and connect at least one
-      backend.
+      backend; check the dev-server access log shows the new UA string
+      on outbound requests.
+      **Verify:** `cd apps/web && dx serve --platform web` boots; visit
+      http://localhost:3000 and connect a test account; `tail -f
+      /tmp/poly-host.log | grep User-Agent` shows the default version.
 
-**Acceptance:** All 10 backends advertise a version on the wire by
-default; setting an override via the trait method changes the
-advertised string on the next request. Verified by logging a request
-with `tracing::debug!(target: "client::http", ...)` and grepping the
-log.
+**Acceptance:** All 8 wire-bearing backends advertise a version on the
+wire by default; setting an override via the trait method changes the
+advertised string on the next request. Verified by Phase G unit tests
++ Phase E mock-server inspection endpoint.
 
 ---
 
@@ -410,27 +577,41 @@ backend `new()` paths.
 **Preconditions:** Phase B merged.
 
 - [ ] **C.1** Add a host-side helper
-      `crates/host-config/src/lib.rs::ClientConfigStore` that exposes
-      `get_version_override(backend_id)`,
+      `crates/host-bridge/src/client_config.rs::ClientConfigStore` that
+      exposes `get_version_override(backend_id)`,
       `set_version_override(backend_id, opt)`,
       `get_mechanism(backend_id, mech_id)`,
-      `set_mechanism(backend_id, mech_id, on)` — all backed by
-      `poly_kv` under the `client.config.<backend_id>.*` namespace.
+      `set_mechanism(backend_id, mech_id, on)` — all backed by the
+      existing `kv_get`/`kv_set` at
+      `crates/host-bridge/src/lib.rs:588,604` under the
+      `client.config.<backend_id>.*` namespace from D2.
+      **Verify:** `cargo test -p poly-host-bridge client_config` passes.
 - [ ] **C.2** On host startup, the host iterates loaded backends and
       pushes any persisted override into the plugin via the new WIT
       `set-client-version-override` call. (Belt-and-braces: the plugin
-      ALSO reads its own `storage-get` per Phase B, but the host
+      ALSO reads its own `storage-get` per Phase B.3, but the host
       authoritative key wins.)
-- [ ] **C.3** Add a unit test in `crates/host-config/tests/persist.rs`
-      that round-trips `set → restart sim → get` for each backend ID.
+      **Verify:** add an integration test that pre-populates a
+      `poly_kv` row and asserts the loaded backend returns the
+      pre-populated string from `client_version()`.
+- [ ] **C.3** Add a unit test in
+      `crates/host-bridge/tests/client_config_persist.rs` that
+      round-trips `set → drop store → reopen → get` for each backend ID
+      slug listed in D5.
+      **Verify:** `cargo test -p poly-host-bridge --test
+      client_config_persist` exits 0.
 - [ ] **C.4** Wire `ClientConfigStore` into the existing host
-      bootstrap (`apps/poly-host/src/main.rs` and the per-shell
-      fullstack bootstrap in `apps/web`, `apps/desktop`,
-      `apps/desktop-electron`).
+      bootstrap path used by `apps/web`, `apps/desktop`, and
+      `apps/desktop-electron` fullstack servers (search call sites of
+      `poly_host::router(state)` per CLAUDE.md "Host-bridge" section).
+      **Verify:** `grep -rn ClientConfigStore apps/*/src/` returns ≥ 3
+      hits (one per shell).
 
 **Acceptance:** Setting an override, killing the app, re-launching:
 the override survives. `poly_kv` rows live under the documented
-namespace.
+namespace
+(`sqlite3 ~/.local/share/poly/storage.sqlite3 "SELECT key FROM poly_kv
+WHERE key LIKE 'client.config.%'"` returns the rows).
 
 ---
 
@@ -439,26 +620,52 @@ namespace.
 **Effort:** M (1 day). Touches: `mcp/chat-mcp/src/tools.rs`,
 `mcp/chat-mcp/src/lib.rs`.
 
-**Preconditions:** Phases A–C merged.
+**Preconditions:** Phases A, B, C merged.
 
 - [ ] **D.1** Add the five tool definitions (per D4 table) to the
       tool-list block in `mcp/chat-mcp/src/tools.rs` (mirror the
-      `meta_persona_*` block at lines 957+).
-- [ ] **D.2** Add the dispatch arms to the `match name` in the same
-      file (mirror lines 168–183).
-- [ ] **D.3** Each `set_*` tool emits an audit row via the same path
-      `meta_persona_set_*` uses (look up the helper near
-      `meta_persona_recent_actions`).
-- [ ] **D.4** Add a `poly-cli call client_settings_list` smoke recipe
+      `meta_persona_*` block at lines 957–1149).
+      **Verify:** `grep -c '"name": "client_settings_' mcp/chat-mcp/src/tools.rs`
+      == 5.
+- [ ] **D.2** Add the five names to the
+      `should_expose_tool` `match` (line 94+ in `tools.rs`) under a new
+      `// Phase D — client config tools (always exposed; host-side
+      concern, independent of which backend a chat uses).` arm.
+      **Verify:** `grep -A2 'client_settings_list' mcp/chat-mcp/src/tools.rs`
+      shows it in the always-exposed branch.
+- [ ] **D.3** Add the dispatch arms to the `match name` in `lib.rs`'s
+      tool-call dispatcher (mirror lines 1336–1349 in `tools.rs`).
+      **Verify:** `grep -c 'handle_client_settings_' mcp/chat-mcp/src/`
+      == 5.
+- [ ] **D.4** Each `set_*` tool emits an audit row via the existing
+      `audit(...)` helper at `mcp/chat-mcp/src/tools.rs:2768` exactly
+      as shown in the D4 audit-row format. Use synthetic
+      `persona_slug = "system"` and action name = tool name.
+      **Verify:** integration test in
+      `mcp/chat-mcp/tests/client_settings_tools.rs` calls each
+      `set_*` tool and then `meta_persona_recent_actions` with
+      `slug=system`, asserts the row landed.
+- [ ] **D.5** Add a `poly-cli call client_settings_list` smoke recipe
       to `docs/personas-cli.md` (or new `docs/client-settings.md`,
-      see Phase J).
-- [ ] **D.5** Unit test `mcp/chat-mcp/tests/client_settings_tools.rs`
-      — invokes each tool against a mock backend registry, asserts
-      the audit row landed.
+      see Phase J). Confirm `poly-cli` (the dynamic translator at
+      `tools/poly-cli/src/main.rs`) auto-exposes the new tool family
+      without source changes — the translator discovers tools via the
+      MCP `initialize` round-trip.
+      **Verify:** `cargo run -p poly-cli -- tools | grep client_settings_`
+      lists all 5.
+- [ ] **D.6** Extend the Phase Q lint
+      `tools/scripts/forbid-unaudited-persona-tool.sh` (audited at
+      `docs/plans/plan-persona-quality-gates.md:80-87`) to also scan
+      `client_settings_set_*` handlers — same regex, same allowlist
+      conventions.
+      **Verify:** lint script exits 0 against the new handlers.
 
 **Acceptance:** `poly-cli call client_settings_list` lists all 10
 backends with current version + mechanism state. Setting via CLI
-persists across `poly-cli` invocations.
+persists across `poly-cli` invocations. Audit rows visible via
+`meta_persona_audit_query --slug=system --action=client_settings_set_*`
+once Phase T of `plan-persona-quality-gates.md` ships (today the
+pattern still works via `meta_persona_recent_actions`).
 
 ---
 
@@ -468,21 +675,44 @@ persists across `poly-cli` invocations.
 
 **Preconditions:** none (parallelisable with Phases A–D).
 
-- [ ] **E.1** Add a shared `LastInboundHeaders: Mutex<Option<HashMap<String,String>>>`
+- [ ] **E.1** Add a shared
+      `LastInboundHeaders: Mutex<VecDeque<(String, HashMap<String,String>)>>`
       to `servers/test-common/src/lib.rs` plus an axum middleware
-      `record_inbound_headers` that captures every request.
+      `record_inbound_headers` that captures every request's
+      `(method+path, headers)`. **Cap at 100 entries** (ring buffer:
+      `if buf.len() == 100 { buf.pop_front(); } buf.push_back(...);`)
+      so the mock server doesn't grow unbounded under long e2e runs.
+      **Verify:** unit test in `servers/test-common/tests/inspect.rs`
+      sends 200 requests and asserts the buffer length stays ≤ 100.
 - [ ] **E.2** Add `GET /test/inspect/last-headers` to every
-      `servers/test-<backend>/src/lib.rs` returning the captured map
-      as JSON.
+      `servers/test-<backend>/src/lib.rs` returning the captured ring
+      buffer as JSON. Existing convention from
+      `servers/test-discord/src/lib.rs:31-104` (`/test/auth/token`,
+      `/seed`, `/reset`, `/reseed`) — the new route follows the
+      `/test/...` prefix for "test-only inspection" and the rest of
+      the path identifies the operation.
+      **Verify:** `for s in test-discord test-matrix test-teams
+      test-github test-forgejo test-lemmy test-hackernews test-stoat
+      test-poly; do grep -l '/test/inspect/last-headers'
+      servers/$s/src/lib.rs || echo "MISSING: $s"; done` lists no
+      missing servers.
 - [ ] **E.3** Wire the middleware into each backend's router
-      (one-line `.layer(record_inbound_headers())` per server).
+      (one-line `.layer(record_inbound_headers())` per server, applied
+      at the top-level Router so it catches every request).
+      **Verify:** identical grep as E.2 for `record_inbound_headers`.
 - [ ] **E.4** Per-server smoke test
       (`servers/test-<backend>/tests/inspect_headers.rs`) — boot
       the server, send any request, GET the inspect endpoint, assert
       the request method + path landed.
+      **Verify:** `cargo test -p test-discord -p test-matrix -p
+      test-teams -p test-github -p test-forgejo -p test-lemmy -p
+      test-hackernews -p test-stoat --test inspect_headers` exits 0.
+- [ ] **E.5** Document the ring-buffer cap in
+      `servers/test-common/src/lib.rs` rustdoc — N=100, FIFO eviction,
+      reset on `/reset`.
 
 **Acceptance:** Every test mock exposes `/test/inspect/last-headers`
-and returns the most-recent inbound request's headers.
+and returns the most-recent inbound request's headers, capped at 100.
 
 ---
 
@@ -490,27 +720,52 @@ and returns the most-recent inbound request's headers.
 
 **Effort:** M (1 day). Touches: `crates/core/src/ui/account/settings/`.
 
-**Preconditions:** Phase A (trait surface) merged.
+**Preconditions:** Phases A, B, C, D merged (trait surface + persistence
++ MCP available).
 
 - [ ] **F.1** New file
       `crates/core/src/ui/account/settings/client_config.rs` with the
-      generic component per D8.
-- [ ] **F.2** Hook it into each backend's per-account settings tab
-      from `crates/core/src/ui/account/settings/mod.rs` as a
-      "Client config" sub-tab.
+      generic component per D9, including all `data-testid` attrs from
+      the inventory table.
+      **Verify:** `grep -c 'data-testid="client-settings-' crates/core/src/ui/account/settings/client_config.rs`
+      ≥ 5.
+- [ ] **F.2** Hook it into
+      `crates/core/src/ui/account/settings/mod.rs` between the host
+      `Profile` block (line 363) and the host `NotificationsSettings`
+      block (line 396) as a new `ClientConfigSection { backend, account_id }`
+      div with `id="acct-section-client-config"` and the standard
+      `settings-section-block` class plus search-filter hide logic
+      (mirror line 393–397 pattern).
+      **Verify:** snapshot test: load the account-settings page for a
+      Discord account in dev mode, assert the section renders.
 - [ ] **F.3** Use `BatchedSignal` for the override-text-input draft
       state per the BatchedSignal countermeasure (CLAUDE.md hang-class
       #1). Use `set_if_changed` for any effect that writes the same
-      signal it reads (CLAUDE.md hang-class #8).
-- [ ] **F.4** Add FTL keys (`plugin-discord-mechanism-captcha-sandbox-label`,
-      etc.) to each backend's `clients/<backend>/locales/en/<backend>.ftl`.
+      signal it reads (CLAUDE.md hang-class #8). Use `.peek()` for the
+      backend-id read inside the `use_spawn_once` key (hang-class #7).
+      **Verify:** `tools/scripts/forbid-signal-write.sh` and
+      `forbid-effect-self-write.sh` and `forbid-render-time-read.sh`
+      all clean against the new file.
+- [ ] **F.4** Add FTL keys
+      (`plugin-discord-mechanism-captcha-sandbox-label`,
+      `plugin-discord-mechanism-super-properties-label`, etc.) to
+      `clients/discord/locales/en/discord.ftl` plus host-side keys
+      (`client-config-version-override-toggle-label`,
+      `client-config-version-input-placeholder`,
+      `client-config-version-reset`,
+      `client-config-mechanisms-section-title`) to
+      `crates/core/locales/en/main.ftl`.
+      **Verify:** `cargo run -p poly-i18n-lint` (or whatever the FTL
+      lint binary is) finds no missing keys.
 - [ ] **F.5** Manual smoke via Playwright (gut check; full spec is
-      Phase H).
+      Phase H): launch `apps/web`, click Account → Discord account →
+      scroll to Client config section, screenshot.
 
 **Acceptance:** Settings → Account → Discord → Client config shows
 the override toggle, custom-string input, mechanism checkboxes
-(Discord shows two: captcha-sandbox disabled with tooltip, super-
-properties enabled). Toggling persists across reloads.
+(Discord shows two: `captcha-sandbox` disabled with tooltip,
+`super-properties` enabled-but-default-off). Toggling persists across
+reloads.
 
 ---
 
@@ -521,23 +776,33 @@ properties enabled). Toggling persists across reloads.
 **Preconditions:** Phase B merged.
 
 - [ ] **G.1** For each of `discord`, `matrix`, `teams`, `github`,
-      `forgejo`, `lemmy`, `hackernews`: add
+      `forgejo`, `lemmy`, `hackernews`, `poly` (server-client): add
       `clients/<backend>/tests/version_override.rs` that:
-      1. Builds a backend with `mock_http_client()` (already in
-         `poly-host-bridge`).
-      2. Calls `set_client_version_override(Some("9.99.99-test"))`.
-      3. Calls a representative HTTP method (`get_user`, `list_dms`).
-      4. Asserts the captured request carries the override in the
-         right header.
-- [ ] **G.2** For `demo`, `stoat`, `server-client`: skip (no wire
+      1. Boots a `wiremock::MockServer` (already in dev-deps for
+         several backends; add per-crate as needed).
+      2. Builds the backend pointed at `mock.uri()`.
+      3. Calls `set_client_version_override(Some("9.99.99-test"))`.
+      4. Calls a representative HTTP method (`get_user`, `list_dms`,
+         or whatever's the cheapest authenticated GET).
+      5. Asserts the captured request carries the override in the
+         right header (use `wiremock::Match::header("user-agent",
+         "9.99.99-test")`).
+      **Verify:** `cargo test -p poly-discord -p poly-matrix -p
+      poly-teams -p poly-github -p poly-forgejo -p poly-lemmy -p
+      poly-hackernews -p poly-server-client --test version_override`
+      exits 0.
+- [ ] **G.2** For `demo`, `demo_forum`, `stoat`: skip (no wire
       protocol or no UA-relevant header). Add a `// no version
-      surface` README note in each crate.
+      surface — see plan-client-version-override-and-sandbox.md D5`
+      comment in each crate's `lib.rs`.
 - [ ] **G.3** Add `#![allow(clippy::unwrap_used, clippy::expect_used,
-      clippy::panic)]` per CLAUDE.md test-file convention.
+      clippy::panic)]` per CLAUDE.md test-file convention to every
+      new `version_override.rs` file.
 - [ ] **G.4** Tests run under `cargo test -p poly-<backend>`; CI gate
-      added.
+      added to `.github/workflows/lint-test.yml` alongside existing
+      backend test invocations.
 
-**Acceptance:** All 7 wire-bearing backends have a unit test that
+**Acceptance:** All 8 wire-bearing backends have a unit test that
 fails if the override doesn't propagate to the wire.
 
 ---
@@ -549,15 +814,30 @@ fails if the override doesn't propagate to the wire.
 **Preconditions:** Phases C, D, E, F merged (storage, MCP, mocks, UI).
 
 - [ ] **H.1** Add `tests/e2e/client-settings/playwright/version_override.spec.ts`
-      driving the UI flow per D7 layer 4. Iterates over a backend
-      fixture list (Discord + Matrix + Teams as the "must-pass" tier).
-- [ ] **H.2** Add `--scenario client-version-override` to the
-      multi-agent harness from `plan-persona-e2e-multi-agent.md`.
-      The scenario for each backend: start mock server, launch app,
-      MCP-set override, send message, query inspect endpoint, assert.
-- [ ] **H.3** Wire the new scenario into the existing CI matrix.
+      driving the UI flow per D8 layer 4. Drives by `data-testid`
+      (`client-settings-discord-version-override-toggle`,
+      `client-settings-discord-version-input`,
+      `client-settings-discord-save`). Iterates over a backend fixture
+      list (Discord + Matrix + Teams as the "must-pass" tier).
+      **Verify:** `npx playwright test version_override` exits 0
+      against a freshly-built `apps/web`.
+- [ ] **H.2** Extend `tests/e2e/persona-multi-agent.sh` with a new
+      scenario `client-version-override`. The dispatch shape is in the
+      script's `case "$SCENARIO" in ...` block (audited at
+      `tests/e2e/persona-multi-agent.sh` — Phase C agent shipped the
+      generic scenario plumbing per `plan-persona-e2e-multi-agent.md`).
+      Per-backend body: start mock server, launch app, MCP-set
+      override, send message, query inspect endpoint, assert.
+      **Verify:** `bash tests/e2e/persona-multi-agent.sh --scenario
+      client-version-override --mode mock-claude` exits 0 locally.
+- [ ] **H.3** Wire the new scenario into the existing CI matrix
+      (whichever workflow file runs the harness today; search
+      `.github/workflows/` for `persona-multi-agent.sh`).
+      **Verify:** the new scenario name appears in the workflow YAML.
 - [ ] **H.4** Document running locally:
-      `poly-test-runner run --scenario client-version-override`.
+      `bash tests/e2e/persona-multi-agent.sh --scenario
+      client-version-override` in the new `docs/client-settings.md`
+      (Phase J).
 
 **Acceptance:** Playwright spec passes locally and in CI. Multi-agent
 scenario passes for Discord + Matrix + Teams.
@@ -572,33 +852,45 @@ scenario passes for Discord + Matrix + Teams.
 
 - [ ] **I.1** Create `crates/host-sandbox/Cargo.toml` and
       `crates/host-sandbox/src/lib.rs` with the trait + types per
-      D6. Stub impl returns `Err(SandboxError::NotImplemented)`.
-- [ ] **I.2** Wire `StubSandbox` into the host's capability registry
-      so `host-cap::sandbox-browser` is **NOT** advertised by default
-      (the registry returns the absence of `sandbox-browser`, so the
-      Discord `captcha-sandbox` mechanism toggle is rendered disabled
-      with tooltip "Sandbox host capability not available — tracking
-      plan-host-sandbox-impl.md").
+      D7 verbatim. Stub impl returns `Err(SandboxError::NotImplemented)`.
+      Add to root `Cargo.toml` workspace members.
+      **Verify:** `cargo build -p poly-host-sandbox` exits 0.
+- [ ] **I.2** Wire `StubSandbox::advertised_host_caps()` into the
+      host's capability registry so `host-cap::sandbox-browser` is
+      **NOT** advertised by default. Source it from
+      `crates/host-bridge/src/client_config.rs::ClientConfigStore`
+      (added in Phase C.1) when serving
+      `client_settings_list_mechanisms`.
+      **Verify:** unit test asserts the cap is absent from the
+      default registry.
 - [ ] **I.3** Add a unit test
       `crates/host-sandbox/tests/stub.rs` asserting the stub returns
       `NotImplemented` and the cap is absent from the default
       registry.
+      **Verify:** `cargo test -p poly-host-sandbox` exits 0.
 - [ ] **I.4** Reference the future plan inline:
       `// FUTURE: docs/plans/plan-host-sandbox-impl.md` at the top
       of `crates/host-sandbox/src/lib.rs`.
 - [ ] **I.5** Add a stub
       `docs/plans/plan-host-sandbox-impl.md` with
       `## Status: 🚧 PLANNED — not started` and a one-paragraph
-      problem statement (so the cross-reference resolves).
+      problem statement (so the cross-reference resolves). The stub
+      file outlines what the real plan would cover: Wry inner-view on
+      desktop, BrowserWindow on Electron, popup on web; CDP-style
+      navigation interception; cookie + URL capture; cancel UX.
+      **Verify:** `cat docs/plans/plan-host-sandbox-impl.md | head -3`
+      shows the Status line.
 
 **Acceptance:** Sandbox host trait + stub compile; calling the stub
 returns `NotImplemented` immediately; UI renders the dependent
-mechanism toggle as disabled-with-tooltip; future-plan stub file
-exists and is referenced.
+mechanism toggle (Discord `captcha-sandbox`) as disabled-with-tooltip
+"Sandbox host capability not available — tracking
+plan-host-sandbox-impl.md"; future-plan stub file exists and is
+referenced.
 
 ---
 
-## Phase J — Documentation
+## Phase J — Documentation + rollback story
 
 **Effort:** XS (0.25 day).
 
@@ -608,46 +900,91 @@ exists and is referenced.
       `client-config` interface, the `poly_kv` namespace, the MCP
       tool family with example invocations, and the
       "Claude fix Discord" recipe.
+      **Verify:** `wc -l docs/client-settings.md` ≥ 80.
 - [ ] **J.2** Cross-link from `docs/personas-cli.md` and
       `docs/plans/plan-host-sandbox-impl.md`.
 - [ ] **J.3** Update `CLAUDE.md` "Critical Implementation Notes"
       with a one-line pointer to the new client-config namespace
       so future agents grep-find it.
+- [ ] **J.4** **Rollback recipe** (mandatory section). If the user
+      sets a bad version string and the backend fails to authenticate:
+      ```bash
+      # Clear the override (per-backend, takes effect on next request):
+      poly-cli call client_settings_set_version_override \
+          --backend_id=discord --override=null
+
+      # OR, if poly-cli can't reach the MCP because the app hasn't
+      # booted, edit the SQLite directly:
+      sqlite3 ~/.local/share/poly/storage.sqlite3 \
+          "DELETE FROM poly_kv WHERE key = 'client.config.discord.version_override'"
+
+      # Then relaunch — the backend will use DEFAULT_CLIENT_VERSION.
+      ```
+      Include both paths in `docs/client-settings.md` "Recovery"
+      section.
 
 **Acceptance:** Docs render; `grep client-settings docs/` returns
-the new file; agent lookup is one search away.
+the new file; agent lookup is one search away; rollback recipe
+documented.
 
 ---
 
 ## Whole-plan acceptance criteria
 
 - WIT `client-config` interface lands; existing plugins still load.
-- All 10 backends respond to `client-config.get-client-version`; 7
+- All 10 backends respond to `client-config.get-client-version`; 8
   wire-bearing backends propagate the override to their HTTP/WS
   headers (verified by Phase G unit tests + Phase E mock-server
   inspect endpoint).
 - MCP tool family `client_settings_*` (5 tools) ships and is
-  driveable from `poly-cli`.
+  driveable from `poly-cli` (auto-exposed via the dynamic translator).
 - Settings UI exposes the override toggle + mechanism list per
   backend; passes Playwright spec (Phase H).
 - Sandbox host-cap stub lands; depends-on-cap mechanisms (Discord
-  captcha-sandbox) render as disabled with the documented tooltip.
+  `captcha-sandbox`) render as disabled with the documented tooltip.
 - E2E multi-agent scenario `client-version-override` is green for
   Discord + Matrix + Teams.
 - "Claude fix Discord" workflow demonstrably works end-to-end:
   Claude calls `client_settings_set_version_override("discord",
   "<new ua>")` via MCP, the next outbound Discord request carries
   the new UA, the user sees no plugin rebuild.
+- All `set_*` MCP tools emit audit rows under `slug=system`;
+  Phase Q lint extension passes (D.6).
+- Rollback path documented and tested manually (Phase J.4).
+
+---
+
+## Implementation order + parallelism
+
+Recommended orchestrator wave dispatch:
+
+```
+Wave 1: A                       (WIT + trait surface — foundation)
+Wave 2: B and E in parallel     (B: backend impls; E: mock-server inspect — disjoint files)
+Wave 3: C                       (host-side persistence — needs B)
+Wave 4: D                       (MCP tools — needs A+B+C)
+Wave 5: F and G in parallel     (F: UI — needs A+B+C+D; G: unit tests — needs B; disjoint)
+Wave 6: H                       (e2e + Playwright — needs C+D+E+F)
+Wave 7: I and J in parallel     (I: sandbox stub — needs A only; J: docs — needs everything; disjoint)
+```
+
+Critical-path length: 7 waves. With single-agent execution this is
+~5.5 days of effort; with the parallel waves, ~3.5 days wall-clock.
+Phase G is the single longest phase (1.5 days) so wave 5 dominates
+when it runs.
 
 ---
 
 ## Dependencies / out-of-band notes
 
 - The Phase D audit-row helper relies on the `meta_persona_*`
-  audit table being present (shipped in commit `ccc2f7a2`).
+  audit table being present (shipped in commit `ccc2f7a2`) and the
+  `record_persona_audit` helper at
+  `mcp/chat-mcp/src/memory.rs:1169`.
 - Phase H multi-agent scenario depends on the
-  `plan-persona-e2e-multi-agent.md` harness being far enough along
-  to accept new scenarios — coordinate with whoever owns that plan.
+  `tests/e2e/persona-multi-agent.sh` harness having a working
+  `case "$SCENARIO" in ...` dispatch (shipped per
+  `plan-persona-e2e-multi-agent.md`).
 - Sub-browser plumbing for the Discord captcha sandbox is OUT OF
   SCOPE here — it's the entire `plan-host-sandbox-impl.md`. Until
   that ships, the v1 `captcha-sandbox` mechanism toggle is a
@@ -655,3 +992,12 @@ the new file; agent lookup is one search away.
   with `NotImplemented`. This is intentional — it lets us land the
   toggle UI + the audit trail + the mechanism inventory without
   blocking on the much larger sub-browser work.
+- Mechanisms removed from the v1 inventory after audit (Matrix
+  `sliding-sync`, Teams `browser-shim` / `graph-fallback`, HN
+  `firebase-realtime`) are deferred to a future Phase K (separate
+  sibling plan, NOT WRITTEN). Each requires net-new wire code, not a
+  toggle over an existing path.
+- Phase Q lint script extension (D.6) follows the same allowlist
+  convention as the original Q.2: file
+  `tools/scripts/unaudited-persona-tool-allowlist.txt` plus inline
+  `// poly-lint: allow unaudited-persona-tool — <reason>`.
