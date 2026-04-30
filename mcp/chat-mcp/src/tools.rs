@@ -186,7 +186,9 @@ pub fn should_expose_tool(tool_name: &str, caps: &BackendCapabilities) -> bool {
         | "meta_persona_set_memory"
         | "meta_persona_forget_memory"
         | "meta_persona_recent_actions"
-        | "meta_persona_set_outbound_allow" => true,
+        | "meta_persona_set_outbound_allow"
+        | "meta_persona_audit_query"
+        | "meta_persona_audit_export" => true,
 
         // Phase C — event subscription / poll (always exposed; backend-agnostic).
         "poll_events" | "subscribe_events" | "unsubscribe_events" => true,
@@ -1164,6 +1166,47 @@ pub fn tool_list() -> Vec<Value> {
             }
         }),
 
+        // ─── Phase T — audit surface ──────────────────────────────────────────
+
+        json!({
+            "name": "meta_persona_audit_query",
+            "description": "Query the persona_audit log with optional filters. \
+                            All filters are optional and ANDed together. \
+                            Returns matching rows newest-first, up to limit (default 100, max 500). \
+                            Use this instead of meta_persona_recent_actions when you need to filter by \
+                            action, actor, result, time range, or target account/chat.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "slug":           { "type": "string",  "description": "Persona slug to filter by" },
+                    "action":         { "type": "string",  "description": "Exact action name (e.g. invoke, outbound_send, heartbeat_run)" },
+                    "actor":          { "type": "string",  "description": "Exact actor value (e.g. user, heartbeat)" },
+                    "since":          { "type": "string",  "description": "ISO-8601 lower bound for occurred_at (inclusive)" },
+                    "until":          { "type": "string",  "description": "ISO-8601 upper bound for occurred_at (inclusive)" },
+                    "target_account": { "type": "string",  "description": "Exact target_account value" },
+                    "target_chat":    { "type": "string",  "description": "Exact target_chat value" },
+                    "result":         { "type": "string",  "description": "Exact result value (e.g. ok, denied, error)" },
+                    "limit":          { "type": "integer", "default": 100, "minimum": 1, "maximum": 500,
+                                        "description": "Maximum number of rows to return" }
+                },
+                "required": []
+            }
+        }),
+
+        json!({
+            "name": "meta_persona_audit_export",
+            "description": "Export the complete audit history for a persona as a JSONL string (oldest first). \
+                            Use before deleting a persona to preserve its audit trail: \
+                            poly-cli call meta_persona_audit_export --slug=foo > audit.jsonl",
+            "inputSchema": {
+                "type": "object",
+                "required": ["slug"],
+                "properties": {
+                    "slug": { "type": "string", "description": "Persona slug whose audit history to export" }
+                }
+            }
+        }),
+
         // ─── Phase C — event subscription / poll ─────────────────────────────
         // Added concurrently with Phase A agent; rebase-safe insertion at end.
         json!({
@@ -1431,6 +1474,8 @@ pub async fn dispatch(tool: &str, args: &Value, pool: &mut BackendPool, mem: &Me
         "meta_persona_forget_memory" => handle_meta_persona_forget_memory(args, mem),
         "meta_persona_recent_actions" => handle_meta_persona_recent_actions(args, mem),
         "meta_persona_set_outbound_allow" => handle_meta_persona_set_outbound_allow(args, mem),
+        "meta_persona_audit_query"    => handle_meta_persona_audit_query(args, mem),
+        "meta_persona_audit_export"   => handle_meta_persona_audit_export(args, mem),
 
         // Phase D (client-version plan) — client settings tools (always exposed).
         "client_settings_list"               => handle_client_settings_list(args, pool, mem).await,

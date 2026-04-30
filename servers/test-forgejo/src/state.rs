@@ -130,7 +130,8 @@ impl ForgejoState {
             id: 3,
             login: "testuser".to_string(),
             full_name: "Test User".to_string(),
-            avatar_url: "http://localhost:9106/avatars/testuser".to_string(),
+            // axolotl for cross-backend recognition: same asset as Lemmy's testuser
+            avatar_url: "http://localhost:9106/avatars/axolotl".to_string(),
         };
 
         self.users.insert("otter".to_string(), otter.clone());

@@ -27,6 +27,7 @@
 //!
 //! Each backend defines its own event enum but uses the same broadcast plumbing.
 
+pub mod avatars;
 mod auth;
 mod broadcast;
 mod cli;
@@ -34,6 +35,7 @@ pub mod inspect;
 mod server;
 
 pub use auth::{AuthState, TokenAuth, wipe_persisted};
+pub use avatars::serve_animal;
 pub use broadcast::EventBus;
 pub use cli::CliArgs;
 pub use inspect::{

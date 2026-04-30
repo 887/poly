@@ -433,23 +433,12 @@ pub struct TestAuthTokenRequest {
     pub username: String,
 }
 
-/// GET /avatars/{name} — serve SVG avatar for test users.
+/// GET /avatars/{name} — serve SVG/PNG avatar for test users.
+///
+/// testuser uses axolotl.svg for cross-backend visual recognition
+/// (matches forgejo's testuser asset to the Lemmy testuser asset).
 pub async fn serve_avatar(Path(name): Path<String>) -> impl IntoResponse {
-    static OTTER_SVG: &[u8] = include_bytes!("../../../clients/demo/assets/otter.svg");
-    static FLAMINGO_SVG: &[u8] = include_bytes!("../../../clients/demo/assets/flamingo.svg");
-
-    let bytes: &[u8] = match name.as_str() {
-        "otter" => OTTER_SVG,
-        "flamingo" => FLAMINGO_SVG,
-        // Unknown users get the otter as a fallback
-        _ => OTTER_SVG,
-    };
-    (
-        StatusCode::OK,
-        [("content-type", "image/svg+xml")],
-        bytes,
-    )
-        .into_response()
+    poly_test_common::serve_animal(&name)
 }
 
 pub async fn test_auth_token(

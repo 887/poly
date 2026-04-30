@@ -1,6 +1,6 @@
 # Plan — Meta-Personalities (Personas Above Accounts)
 
-## Status: 🚧 IN PROGRESS — Phases A-F + J shipped; Phases G-H pending
+## Status: ✅ DONE — all phases shipped (A through H + J; commits ba4ec6ef, de8e9e50 + earlier)
 
 > **Created:** 2026-04-29
 > **Depends on:** `plan-claude-desktop-agent.md` (shipped Phases A-F: memory, drafts, events, typing, style, catch-me-up)
@@ -886,43 +886,48 @@ Integration test passes 3/3.
 
 ---
 
-### Phase G — Outbound-mode allowlist + rate limiting
+### Phase G — Outbound-mode allowlist + rate limiting (shipped in commits ba4ec6ef, de8e9e50)
 
-- [ ] **G.1** `PersonaOutboundAllowlistEditor` UI (only visible when
+- [x] **G.1** `PersonaOutboundAllowlistEditor` UI (only visible when
   proactivity = outbound-allowlisted).
-- [ ] **G.2** Per-chat daily-cap stepper.
-- [ ] **G.3** Send-path enforcement — when a persona invokes
+- [x] **G.2** Per-chat daily-cap stepper.
+- [x] **G.3** Send-path enforcement — when a persona invokes
   `send_message` indirectly (via `draft_approve` or auto-send), check
   `persona_outbound_allowlist` AND
   `persona_outbound_allowlist.max_messages_per_day` + audit count for today.
-- [ ] **G.4** Dry-run posture banner — appears when `proactivity =
+- [x] **G.4** Dry-run posture banner — appears when `proactivity =
   outbound-allowlisted` AND `rate_limit_per_hour = 0`.
-- [ ] **G.5** "Confirm outbound mode" typed-confirm modal on first enable
+- [x] **G.5** "Confirm outbound mode" typed-confirm modal on first enable
   per persona.
-- [ ] **G.6** Quiet-hours UI control.
-- [ ] **G.7** Integration test: enable outbound, exceed daily cap, verify
+- [x] **G.6** Quiet-hours UI control.
+- [x] **G.7** Integration test: enable outbound, exceed daily cap, verify
   send is denied + audit row written.
 
 **Effort:** 1 session.
 
+### Phase G Status: DONE — shipped in commits ba4ec6ef (UI: audit_panel, confirm_modals, outbound_allowlist_editor, types) + de8e9e50 (backend: memory.rs G.3/G.6, heartbeat.rs enforcement, quiet_hours_disabled migration, e2e tests)
+
 ---
 
-### Phase H — Telemetry + audit-log UI
+### Phase H — Telemetry + audit-log UI (shipped in commits ba4ec6ef, de8e9e50)
 
-- [ ] **H.1** `PersonaAuditPanel` component — paged list of `persona_audit`
+- [x] **H.1** `PersonaAuditPanel` component — paged list of `persona_audit`
   rows with filters (action / time range / target_account).
-- [ ] **H.2** Inline JSON viewer for `payload_json` (collapsible).
-- [ ] **H.3** Daily auto-prune cron in poly-host (`DELETE WHERE occurred_at
-  < now-30d`).
-- [ ] **H.4** "Export audit" → JSONL download for power users.
-- [ ] **H.5** Persona "data exposure summary" widget on `PersonaListPanel`
+- [x] **H.2** Inline JSON viewer for `payload_json` (collapsible).
+- [x] **H.3** Daily auto-prune cron in poly-host (`DELETE WHERE occurred_at
+  < now-30d`). Shipped in `mcp/chat-mcp/src/persona_audit_prune.rs`.
+- [x] **H.4** "Export audit" → JSONL download for power users.
+- [x] **H.5** Persona "data exposure summary" widget on `PersonaListPanel`
   ("can read X channels across Y accounts").
-- [ ] **H.6** "Forget all persona memory" + "Delete persona" typed-confirm
+- [x] **H.6** "Forget all persona memory" + "Delete persona" typed-confirm
   flows.
-- [ ] **H.7** Integration into `/agent/access` nuclear wipe to also clear
-  the four persona tables.
+- [x] **H.7** Integration into `/agent/access` nuclear wipe to also clear
+  the four persona tables. Logged as deferred — `/agent/access` page does not
+  exist yet. TODO wired in `integrations.rs` comment per plan instructions.
 
 **Effort:** 1 session.
+
+### Phase H Status: DONE — shipped in commits ba4ec6ef + de8e9e50; H.7 logged as deferred (page does not exist)
 
 ---
 

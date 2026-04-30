@@ -689,6 +689,28 @@ pub async fn reseed(State(state): State<Arc<TeamsState>>) -> impl IntoResponse {
 }
 
 // ---------------------------------------------------------------------------
+// Avatar — Microsoft Graph profile-photo path
+// ---------------------------------------------------------------------------
+
+/// GET /v1.0/users/{user_id}/photo/$value — serve the user's profile photo.
+///
+/// Real Graph SDK calls this URL for `GET /users/{id}/photo/$value`.
+/// We map the seeded `avatar_url` hash (e.g. "sheep", "walrus") to bundled
+/// PNG bytes via the shared test-common helper.
+pub async fn serve_user_photo(
+    State(state): State<Arc<TeamsState>>,
+    Path(user_id): Path<String>,
+) -> impl IntoResponse {
+    match state.users.get(&user_id) {
+        None => (axum::http::StatusCode::NOT_FOUND, "user not found").into_response(),
+        Some(user) => match &user.avatar_url {
+            None => (axum::http::StatusCode::NOT_FOUND, "no photo").into_response(),
+            Some(animal) => poly_test_common::serve_animal(animal),
+        },
+    }
+}
+
+// ---------------------------------------------------------------------------
 // JSON serializers
 // ---------------------------------------------------------------------------
 

@@ -1273,6 +1273,121 @@ impl MemoryDb {
         collect_persona_audit(&mut stmt)
     }
 
+    /// Filter audit rows by optional criteria.  All parameters are optional;
+    /// omitting all is equivalent to calling `list_persona_audit` with no
+    /// slug restriction.  Rows are returned newest-first up to `limit` (max 500).
+    ///
+    /// Filters (all ANDed together when present):
+    /// - `slug`           → WHERE persona_slug = ?
+    /// - `action`         → WHERE action = ?
+    /// - `actor`          → WHERE actor = ?
+    /// - `since`          → WHERE occurred_at >= ?  (ISO-8601)
+    /// - `until`          → WHERE occurred_at <= ?  (ISO-8601)
+    /// - `target_account` → WHERE target_account = ?
+    /// - `target_chat`    → WHERE target_chat = ?
+    /// - `result`         → WHERE result = ?
+    #[allow(clippy::too_many_arguments)]
+    pub fn query_persona_audit(
+        &self,
+        slug:           Option<&str>,
+        action:         Option<&str>,
+        actor:          Option<&str>,
+        since:          Option<&str>,
+        until:          Option<&str>,
+        target_account: Option<&str>,
+        target_chat:    Option<&str>,
+        result:         Option<&str>,
+        limit:          i64,
+    ) -> Result<Vec<serde_json::Value>, MemoryError> {
+        // Build WHERE clauses dynamically using positional params.
+        let mut clauses: Vec<&str> = Vec::new();
+        let mut vals:    Vec<sqlite::Value>  = Vec::new();
+
+        macro_rules! push_filter {
+            ($opt:expr, $col:expr) => {
+                if let Some(v) = $opt {
+                    let idx = clauses.len() + 1;
+                    clauses.push(concat!($col, " = ?"));
+                    // We build the SQL with positional ?N markers separately.
+                    let _ = idx; // used below
+                    vals.push(sqlite::Value::String(v.to_string()));
+                }
+            };
+            (ge, $opt:expr, $col:expr) => {
+                if let Some(v) = $opt {
+                    clauses.push(concat!($col, " >= ?"));
+                    vals.push(sqlite::Value::String(v.to_string()));
+                }
+            };
+            (le, $opt:expr, $col:expr) => {
+                if let Some(v) = $opt {
+                    clauses.push(concat!($col, " <= ?"));
+                    vals.push(sqlite::Value::String(v.to_string()));
+                }
+            };
+        }
+
+        push_filter!(slug,           "persona_slug");
+        push_filter!(action,         "action");
+        push_filter!(actor,          "actor");
+        push_filter!(ge, since,      "occurred_at");
+        push_filter!(le, until,      "occurred_at");
+        push_filter!(target_account, "target_account");
+        push_filter!(target_chat,    "target_chat");
+        push_filter!(result,         "result");
+
+        // Build positional WHERE string: "col = ?1 AND col2 >= ?2 …"
+        let where_sql = if clauses.is_empty() {
+            String::new()
+        } else {
+            let parts: Vec<String> = clauses
+                .iter()
+                .enumerate()
+                .map(|(i, c)| {
+                    // Replace the trailing `?` with `?N` (1-indexed).
+                    let tail = c.trim_end_matches('?');
+                    format!("{tail}?{}", i + 1)
+                })
+                .collect();
+            format!("WHERE {}", parts.join(" AND "))
+        };
+
+        // The LIMIT param comes after all filter vals.
+        let limit_pos = vals.len() + 1;
+        let sql = format!(
+            "SELECT id,persona_slug,occurred_at,actor,action,\
+                    target_account,target_chat,payload_json,result,error_msg\
+             FROM persona_audit {where_sql}\
+             ORDER BY occurred_at DESC LIMIT ?{limit_pos}"
+        );
+
+        let db = self.lock()?;
+        let mut stmt = db.prepare(&sql)?;
+        for (i, v) in vals.iter().enumerate() {
+            stmt.bind((i + 1, v.clone()))?;
+        }
+        stmt.bind((limit_pos, limit))?;
+        collect_persona_audit(&mut stmt)
+    }
+
+    /// Return the complete audit history for a single persona as a `Vec` of
+    /// JSON rows (oldest first).  Intended for the `meta_persona_audit_export`
+    /// takeout path: the caller serialises to JSONL.
+    pub fn export_persona_audit(
+        &self,
+        slug: &str,
+    ) -> Result<Vec<serde_json::Value>, MemoryError> {
+        let db = self.lock()?;
+        let mut stmt = db.prepare(
+            "SELECT id,persona_slug,occurred_at,actor,action,\
+                    target_account,target_chat,payload_json,result,error_msg\
+             FROM persona_audit WHERE persona_slug=?1\
+             ORDER BY occurred_at ASC"
+        )?;
+        stmt.bind((1, slug))?;
+        collect_persona_audit(&mut stmt)
+    }
+
     /// Return all enabled personas that have a heartbeat interval configured.
     ///
     /// Used at host startup to seed the [`crate::persona::heartbeat::HeartbeatRegistry`].
@@ -2410,5 +2525,145 @@ mod tests {
         // This must not fail — all CREATE TABLE IF NOT EXISTS.
         let guard = db.db.lock().unwrap();
         MemoryDb::run_migrations(&guard).unwrap();
+    }
+
+    // ── query_persona_audit (Phase T.1) ───────────────────────────────────────
+
+    /// Helper: seed 4 audit rows for tests below.
+    ///
+    /// Row layout:
+    ///  1. bob / user    / invoke         / discord-1 / chan-1 / ok
+    ///  2. bob / hb      / heartbeat_run  / None      / None   / ok
+    ///  3. bob / hb      / outbound_send  / discord-1 / chan-2 / denied
+    ///  4. alice / user  / invoke         / matrix-1  / None   / ok
+    fn seed_audit_rows(db: &MemoryDb) {
+        db.create_persona("bob",   "Bob",   "🤖", "p", None, None, "drafts-only", 4).unwrap();
+        db.create_persona("alice", "Alice", "🤖", "p", None, None, "drafts-only", 4).unwrap();
+        db.record_persona_audit("bob",   "user", "invoke",        Some("discord-1"), Some("chan-1"), None, "ok",     None).unwrap();
+        db.record_persona_audit("bob",   "hb",   "heartbeat_run", None,             None,           None, "ok",     None).unwrap();
+        db.record_persona_audit("bob",   "hb",   "outbound_send", Some("discord-1"), Some("chan-2"), None, "denied", None).unwrap();
+        db.record_persona_audit("alice", "user", "invoke",        Some("matrix-1"), None,           None, "ok",     None).unwrap();
+    }
+
+    // Test 1 — no filter: returns all rows (equivalent to recent_actions with
+    // no slug restriction).
+    #[test]
+    fn query_audit_no_filter_returns_all() {
+        let db = fresh_db();
+        seed_audit_rows(&db);
+        let rows = db.query_persona_audit(
+            None, None, None, None, None, None, None, None, 100,
+        ).unwrap();
+        assert_eq!(rows.len(), 4);
+    }
+
+    // Test 2 — slug filter: only bob's rows.
+    #[test]
+    fn query_audit_filter_by_slug() {
+        let db = fresh_db();
+        seed_audit_rows(&db);
+        let rows = db.query_persona_audit(
+            Some("bob"), None, None, None, None, None, None, None, 100,
+        ).unwrap();
+        assert_eq!(rows.len(), 3);
+        for r in &rows {
+            assert_eq!(r["persona_slug"], "bob");
+        }
+    }
+
+    // Test 3 — action filter.
+    #[test]
+    fn query_audit_filter_by_action() {
+        let db = fresh_db();
+        seed_audit_rows(&db);
+        let rows = db.query_persona_audit(
+            None, Some("outbound_send"), None, None, None, None, None, None, 100,
+        ).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0]["action"], "outbound_send");
+    }
+
+    // Test 4 — result filter.
+    #[test]
+    fn query_audit_filter_by_result() {
+        let db = fresh_db();
+        seed_audit_rows(&db);
+        let rows = db.query_persona_audit(
+            None, None, None, None, None, None, None, Some("denied"), 100,
+        ).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0]["result"], "denied");
+    }
+
+    // Test 5 — target_account filter.
+    #[test]
+    fn query_audit_filter_by_target_account() {
+        let db = fresh_db();
+        seed_audit_rows(&db);
+        let rows = db.query_persona_audit(
+            None, None, None, None, None, Some("discord-1"), None, None, 100,
+        ).unwrap();
+        assert_eq!(rows.len(), 2); // bob/invoke + bob/outbound_send
+        for r in &rows {
+            assert_eq!(r["target_account"], "discord-1");
+        }
+    }
+
+    // Test 6 — combined slug + action + since filter.
+    // We seed rows with known timestamps that are in the past; use a
+    // `since` cutoff in the far past so all rows pass, then a `since`
+    // cutoff in the far future so no rows pass.
+    #[test]
+    fn query_audit_combined_slug_action_since() {
+        let db = fresh_db();
+        seed_audit_rows(&db);
+
+        // since=far past: all bob/invoke rows pass.
+        let rows_all = db.query_persona_audit(
+            Some("bob"), Some("invoke"), None,
+            Some("2000-01-01T00:00:00Z"), None,
+            None, None, None, 100,
+        ).unwrap();
+        assert_eq!(rows_all.len(), 1);
+        assert_eq!(rows_all[0]["action"], "invoke");
+        assert_eq!(rows_all[0]["persona_slug"], "bob");
+
+        // since=far future: no rows pass.
+        let rows_none = db.query_persona_audit(
+            Some("bob"), Some("invoke"), None,
+            Some("2099-01-01T00:00:00Z"), None,
+            None, None, None, 100,
+        ).unwrap();
+        assert_eq!(rows_none.len(), 0);
+    }
+
+    // Test 7 — export_persona_audit: returns all rows for slug, oldest first.
+    #[test]
+    fn export_persona_audit_all_rows_oldest_first() {
+        let db = fresh_db();
+        seed_audit_rows(&db);
+        let rows = db.export_persona_audit("bob").unwrap();
+        assert_eq!(rows.len(), 3);
+        // Oldest first — no guarantee on ordering ties, but all should be bob.
+        for r in &rows {
+            assert_eq!(r["persona_slug"], "bob");
+        }
+        // alice rows must not appear.
+        let alice_rows = db.export_persona_audit("alice").unwrap();
+        assert_eq!(alice_rows.len(), 1);
+    }
+
+    // Test 8 — actor filter (individual filter not covered by test 6).
+    #[test]
+    fn query_audit_filter_by_actor() {
+        let db = fresh_db();
+        seed_audit_rows(&db);
+        let rows = db.query_persona_audit(
+            None, None, Some("hb"), None, None, None, None, None, 100,
+        ).unwrap();
+        assert_eq!(rows.len(), 2); // heartbeat_run + outbound_send both by "hb"
+        for r in &rows {
+            assert_eq!(r["actor"], "hb");
+        }
     }
 }

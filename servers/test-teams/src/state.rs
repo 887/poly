@@ -150,18 +150,19 @@ impl TeamsState {
         }
         tracing::info!("seeding Teams demo data");
 
+        // Avatar hashes map to GET /v1.0/users/{id}/photo/$value (Graph profile photo path).
         self.users.insert("U001".into(), User {
             id: "U001".into(),
             display_name: "Sheep".into(),
             email: "sheep@contoso.com".into(),
-            avatar_url: None,
+            avatar_url: Some("sheep".into()),
             password: "testpass123".into(),
         });
         self.users.insert("U002".into(), User {
             id: "U002".into(),
             display_name: "Walrus".into(),
             email: "walrus@contoso.com".into(),
-            avatar_url: None,
+            avatar_url: Some("walrus".into()),
             password: "testpass123".into(),
         });
 
