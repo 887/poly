@@ -864,9 +864,10 @@ catch-up-recent-messages = recent messages
 catch-up-copy-prompt = Copy summary prompt
 catch-up-copy-prompt-title = Copy a Claude-Desktop-ready summary prompt to your clipboard
 
-# Composer-toolbar typing-simulation button
-composer-simulate-typing = Simulate typing
-composer-simulate-typing-stop = Stop simulation
+# Composer-toolbar typing-mode toggle (3-state cycle)
+composer-typing-off = Typing indicator off — click to enable real-typing
+composer-typing-real = Send typing indicator while you type — click for simulator
+composer-typing-simulator = Simulating active presence (60s) — click to stop
 
 # Attachment (image) right-click context menu
 attachment-menu-copy-image = Copy Image

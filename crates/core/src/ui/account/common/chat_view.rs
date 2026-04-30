@@ -4381,6 +4381,13 @@ fn render_message_input_row(ctx: ChatViewMarkupCtx) -> Element {
     let client_manager = ctx.client_manager;
     let chat_data = ctx.chat_data;
     let app_state = ctx.app_state;
+    // Typing-mode persists per chat-view mount (i.e. across channel switches
+    // within the same session). Owned here so the textarea oninput and the
+    // toolbar button can both read it.
+    let typing_mode = use_signal(|| TypingMode::Off);
+    // Debounce flag for Real-mode typing dispatch: while true, no further
+    // send_typing fires. Cleared 5s after each send.
+    let typing_send_in_flight = use_signal(|| false);
     let composer_runtime = ComposerRuntimeCtx {
         message_input,
         command_suggestions,
@@ -4439,14 +4446,25 @@ fn render_message_input_row(ctx: ChatViewMarkupCtx) -> Element {
                         placeholder: "{compose_placeholder}",
                         value: "{message_input}",
                         rows: "1",
-                        oninput: move |evt| {
-                            handle_composer_input(
-                                evt.value(),
-                                message_input,
-                                command_suggestions,
-                                show_command_popup,
-                                active_command_idx,
-                            );
+                        oninput: {
+                            let real_typing_channel = channel_id.clone();
+                            move |evt| {
+                                handle_composer_input(
+                                    evt.value(),
+                                    message_input,
+                                    command_suggestions,
+                                    show_command_popup,
+                                    active_command_idx,
+                                );
+                                if *typing_mode.peek() == TypingMode::Real {
+                                    maybe_send_real_typing(
+                                        real_typing_channel.clone(),
+                                        typing_send_in_flight,
+                                        app_state,
+                                        client_manager,
+                                    );
+                                }
+                            }
                         },
                         onkeydown: {
                             let channel_id_send = channel_id.clone();
@@ -4456,7 +4474,7 @@ fn render_message_input_row(ctx: ChatViewMarkupCtx) -> Element {
                         },
                     }
                 }
-                {render_composer_toolbar(show_input_emoji)}
+                {render_composer_toolbar(show_input_emoji, typing_mode)}
                 if has_channel {
                     ComposerHooks {
                         account_id: active_account_id.clone(),
@@ -4470,7 +4488,10 @@ fn render_message_input_row(ctx: ChatViewMarkupCtx) -> Element {
     }
 }
 
-fn render_composer_toolbar(mut show_input_emoji: Signal<bool>) -> Element {
+fn render_composer_toolbar(
+    mut show_input_emoji: Signal<bool>,
+    typing_mode: Signal<TypingMode>,
+) -> Element {
     rsx! {
         div { class: "input-toolbar input-toolbar-inline",
             button {
@@ -4482,50 +4503,114 @@ fn render_composer_toolbar(mut show_input_emoji: Signal<bool>) -> Element {
                 },
                 "😀"
             }
-            TypingSimulationButton {}
+            TypingModeButton { typing_mode }
         }
     }
 }
 
-/// Manual typing-simulation toggle. Spawns a fire-and-forget loop that
-/// calls `backend.send_typing(channel_id)` every 5s while active.
-/// One-click manual trigger that mirrors what chat-mcp's
-/// `start_typing_simulation` produces.
+/// Real-mode typing dispatch with a 5s debounce. The `in_flight` signal is
+/// the rate-limit gate: while it's true, no further send_typing is fired.
+/// Once a send completes, a 5s timer clears the flag.
+fn maybe_send_real_typing(
+    channel_id: Option<String>,
+    mut in_flight: Signal<bool>,
+    app_state: BatchedSignal<AppState>,
+    client_manager: BatchedSignal<ClientManager>,
+) {
+    if *in_flight.peek() { return; }
+    let Some(channel_id) = channel_id else { return };
+    in_flight.set(true);
+    let account_id = app_state.read().nav.active_account_id.cloned();
+    let server_id = app_state.read().nav.selected_server.cloned();
+    spawn(async move {
+        let handle = if let Some(ref sid) = server_id {
+            client_manager.read().get_backend_for_server(sid).map(|(_, b)| b)
+        } else if let Some(ref aid) = account_id {
+            client_manager.read().get_backend(aid)
+        } else {
+            None
+        };
+        if let Some(handle) = handle
+            && let Ok(backend) = handle
+                .read_with_timeout(std::time::Duration::from_secs(2))
+                .await
+        {
+            let _ = backend.send_typing(&channel_id).await;
+        }
+        #[cfg(target_arch = "wasm32")]
+        gloo_timers::future::TimeoutFuture::new(5_000).await;
+        #[cfg(not(target_arch = "wasm32"))]
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        in_flight.set(false);
+    });
+}
+
+/// Three-state typing-indicator mode for the composer.
+///
+/// - `Off`: no typing indicators are sent (privacy default).
+/// - `Real`: when the user types in the composer, fire `send_typing`
+///   debounced to once per 5s. Mirrors the standard messenger UX.
+/// - `Simulator`: one-click manual trigger that fires `send_typing`
+///   every 5s for ~60s to signal "I'm watching this chat" without
+///   actually composing — the original simulator the user wanted.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+pub enum TypingMode {
+    #[default]
+    Off,
+    Real,
+    Simulator,
+}
+
+impl TypingMode {
+    fn next(self) -> Self {
+        match self {
+            Self::Off       => Self::Real,
+            Self::Real      => Self::Simulator,
+            Self::Simulator => Self::Off,
+        }
+    }
+}
+
+/// Cycles `Off → Real → Simulator → Off`. In Simulator state, also drives
+/// the 60s typing-indicator heartbeat that mirrors chat-mcp's
+/// `start_typing_simulation`. In Real state, the textarea oninput handler
+/// is responsible for firing `send_typing` (debounced); this button only
+/// owns the mode signal.
 #[ui_action(inherit)]
 #[context_menu(none)]
 #[component]
-fn TypingSimulationButton() -> Element {
+fn TypingModeButton(mut typing_mode: Signal<TypingMode>) -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
-    let mut running = use_signal(|| false);
+    let mode = *typing_mode.read();
 
-    let label = if *running.read() {
-        t("composer-simulate-typing-stop")
-    } else {
-        t("composer-simulate-typing")
+    let (icon, label_key, class_extra) = match mode {
+        TypingMode::Off       => ("🔕", "composer-typing-off",       ""),
+        TypingMode::Real      => ("⌨️",  "composer-typing-real",      "typing-sim-btn-active"),
+        TypingMode::Simulator => ("🎭", "composer-typing-simulator", "typing-sim-btn-active"),
     };
-    let class = if *running.read() {
-        "toolbar-btn typing-sim-btn typing-sim-btn-active"
-    } else {
-        "toolbar-btn typing-sim-btn"
-    };
+    let class = format!("toolbar-btn typing-sim-btn {class_extra}");
+    let title = t(label_key);
 
     rsx! {
         button {
             class: "{class}",
-            title: "{label}",
+            title: "{title}",
             onclick: move |_| {
-                let was_running = *running.read();
-                running.set(!was_running);
-                if was_running { return; }
+                let next = typing_mode.peek().next();
+                typing_mode.set(next);
+                if next != TypingMode::Simulator { return; }
+
+                // Simulator mode: fire-and-forget 60s heartbeat. Loop bails
+                // out as soon as the user clicks again to leave Simulator.
                 let channel_id = app_state.read().nav.selected_channel.cloned();
                 let account_id = app_state.read().nav.active_account_id.cloned();
                 let server_id = app_state.read().nav.selected_server.cloned();
                 let Some(channel_id) = channel_id else { return };
-                let mut running_signal = running;
+                let mode_signal = typing_mode;
                 spawn(async move {
                     for _ in 0..12 {
-                        if !*running_signal.peek() { break; }
+                        if *mode_signal.peek() != TypingMode::Simulator { break; }
                         let handle = if let Some(ref sid) = server_id {
                             client_manager.read().get_backend_for_server(sid).map(|(_, b)| b)
                         } else if let Some(ref aid) = account_id {
@@ -4545,10 +4630,9 @@ fn TypingSimulationButton() -> Element {
                         #[cfg(not(target_arch = "wasm32"))]
                         tokio::time::sleep(std::time::Duration::from_secs(5)).await;
                     }
-                    running_signal.set(false);
                 });
             },
-            if *running.read() { "⏸️" } else { "⌨️" }
+            "{icon}"
         }
     }
 }

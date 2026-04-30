@@ -43,7 +43,6 @@ plugin-discord-overview-title = Deine Server
 plugin-discord-overview-subtitle = Alle Discord-Server, denen du beigetreten bist.
 
 # Composer buttons
-plugin-discord-composer-stickers-label = Sticker
 
 # Message actions
 plugin-discord-message-action-pin-message-label = Nachricht anpinnen

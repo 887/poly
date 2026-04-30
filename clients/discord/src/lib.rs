@@ -1846,12 +1846,10 @@ impl ClientBackend for DiscordClient {
     }
 
     async fn get_composer_buttons(&self, _channel_id: &str) -> ClientResult<Vec<ComposerButton>> {
-        Ok(vec![ComposerButton {
-            id: "stickers".to_string(),
-            label_key: "plugin-discord-composer-stickers-label".to_string(),
-            icon: "🎨".to_string(),
-            position: ComposerSlot::RightOfInput,
-        }])
+        // Stickers/GIF picker lives in the unified MediaPickerPopup
+        // (composer-common emoji button → tabs for emoji/GIF/stickers).
+        // Don't duplicate it as a separate composer button.
+        Ok(vec![])
     }
 
     async fn get_message_actions(
@@ -1876,10 +1874,7 @@ impl ClientBackend for DiscordClient {
         action_id: &str,
         _channel_id: &str,
     ) -> ClientResult<ActionOutcome> {
-        match action_id {
-            "stickers" => Ok(ActionOutcome::Noop),
-            other => Err(ClientError::NotFound(format!("unknown composer action: {other}"))),
-        }
+        Err(ClientError::NotFound(format!("unknown composer action: {action_id}")))
     }
 
     async fn invoke_message_action(

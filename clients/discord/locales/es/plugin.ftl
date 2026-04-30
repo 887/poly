@@ -43,7 +43,6 @@ plugin-discord-overview-title = Tus servidores
 plugin-discord-overview-subtitle = Todos los servidores de Discord a los que te has unido.
 
 # Composer buttons
-plugin-discord-composer-stickers-label = Stickers
 
 # Message actions
 plugin-discord-message-action-pin-message-label = Fijar mensaje
