@@ -70,6 +70,7 @@ cargo test \
   -p poly-plugin-host 2>&1
 cargo test -p poly-plugin-loader-tests --tests 2>&1
 cargo test -p poly-chat-mcp --test mcp_integration 2>&1
+cargo test -p poly-chat-mcp --lib 2>&1
 ```
 
 Expected: all tests pass. Report any failures with test name + stderr.
@@ -106,6 +107,46 @@ interaction responds as expected.
 
 ---
 
+## 6. Persona e2e mock smoke
+
+> Run after any change that touches `mcp/chat-mcp/src/persona/`, `crates/core/src/ui/agent/persona/`,
+> or `tests/e2e/persona-multi-agent.sh`. Safe to run on all other changes too — it skips
+> cleanly when the script or scenario is absent.
+
+```bash
+if [ ! -f tests/e2e/persona-multi-agent.sh ]; then
+  echo "SKIP — tests/e2e/persona-multi-agent.sh not present"
+  exit 0
+fi
+
+# Primary scenario (Phase E.3 of plan-persona-e2e-multi-agent.md — not yet shipped).
+# Falls back to two-personas-handoff which is present post Phases A-C.
+# Decision: mcp-to-ui-live-update doesn't exist yet; fallback documented here per Phase S design choice.
+SCENARIO="mcp-to-ui-live-update"
+FALLBACK="two-personas-handoff"
+SCRIPT="tests/e2e/persona-multi-agent.sh"
+
+if bash "$SCRIPT" --list-scenarios 2>/dev/null | grep -q "^${SCENARIO}$"; then
+  timeout 300 bash "$SCRIPT" --scenario "$SCENARIO" --mode mock-claude
+  RC=$?
+else
+  echo "INFO — scenario '${SCENARIO}' not found (Phase E.3 not yet shipped); running fallback '${FALLBACK}'"
+  timeout 300 bash "$SCRIPT" --scenario "$FALLBACK" --mode mock-claude
+  RC=$?
+fi
+
+if [ $RC -eq 124 ]; then
+  echo "FAIL — persona e2e smoke exceeded 5-minute budget (timeout 300s)"
+  exit 1
+fi
+exit $RC
+```
+
+Pass criteria: script exits 0 within 300 seconds. A "SKIP" line in stdout is an
+acceptable pass for branches that don't yet have the e2e plan landed.
+
+---
+
 ## Reporting
 
 After running all applicable steps, respond with a table:
@@ -117,3 +158,4 @@ After running all applicable steps, respond with a table:
 | 3. WASM build | PASS/FAIL | ... |
 | 4. unit tests | PASS/FAIL | N tests passed |
 | 5. poly-web MCP | PASS/SKIP/FAIL | ... |
+| 6. persona e2e smoke | PASS/SKIP/FAIL | ... |

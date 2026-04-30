@@ -90,6 +90,7 @@ prompt: "Read /home/laragana/workspcacemsg/TEST_HARNESS.md and execute every ste
 ```
 
 For UI-only changes (CSS / RSX), skip step 4 (unit tests) but always run step 3 (WASM build).
+For changes touching `mcp/chat-mcp/src/persona/` or `crates/core/src/ui/agent/persona/`, always run step 6 (persona e2e mock smoke) in addition to step 4.
 
 ---
 

@@ -15,10 +15,15 @@
 //! - No raw `Signal::write()` in `crates/core/src/ui/` scope — we use `.set()`
 //!   which is safe for single-subscriber local signals.
 
+use super::audit_panel::PersonaAuditPanel;
+use super::confirm_modals::{
+    ConfirmDeletePersonaModal, ConfirmForgetMemoryModal, ConfirmOutboundModal,
+};
 use super::mcp::call_persona_mcp;
+use super::outbound_allowlist_editor::PersonaOutboundAllowlistEditor;
 use super::sources_editor::PersonaSourcesEditor;
 use super::tool_whitelist_editor::PersonaToolWhitelistEditor;
-use super::types::{parse_persona_detail, AuditRow, PersonaDetail, PersonaFact};
+use super::types::{parse_persona_detail, PersonaDetail, PersonaFact};
 use crate::i18n::t;
 use crate::state::use_reactive_effect;
 use dioxus::prelude::*;
@@ -177,13 +182,21 @@ fn BehaviourSection(detail: Option<PersonaDetail>) -> Element {
     }
 }
 
-// ─── Memory section ───────────────────────────────────────────────────────────
+// ─── Memory section (H.6) ────────────────────────────────────────────────────
 
 #[rustfmt::skip]
 #[ui_action(inherit)]
 #[context_menu(inherit)]
 #[component]
-fn MemorySection(facts: Vec<PersonaFact>) -> Element {
+fn MemorySection(
+    facts: Vec<PersonaFact>,
+    persona_slug: String,
+    on_deleted: EventHandler<()>,
+) -> Element {
+    let mut show_forget_confirm: Signal<bool> = use_signal(|| false);
+    let mut show_delete_confirm: Signal<bool> = use_signal(|| false);
+    let mut op_error: Signal<Option<String>> = use_signal(|| None);
+
     rsx! {
         div { class: "persona-modal-section",
             if facts.is_empty() {
@@ -203,36 +216,107 @@ fn MemorySection(facts: Vec<PersonaFact>) -> Element {
                     }
                 }
             }
-            p { class: "persona-phase-note", {t("persona-memory-phase-h-note")} }
+
+            // H.6 — Destructive action buttons (separated from primary actions).
+            div { class: "persona-memory-danger-zone",
+                h6 { class: "persona-danger-zone-title", {t("persona-memory-danger-zone")} }
+                div { class: "persona-danger-zone-actions",
+                    button {
+                        class: "btn btn-sm btn-danger-outline",
+                        onclick: move |_| show_forget_confirm.set(true),
+                        {t("persona-memory-forget-all")}
+                    }
+                    button {
+                        class: "btn btn-sm btn-danger",
+                        onclick: move |_| show_delete_confirm.set(true),
+                        {t("persona-action-delete")}
+                    }
+                }
+                if let Some(err) = op_error.read().clone() {
+                    div { class: "persona-save-error", "{err}" }
+                }
+            }
+
+            // H.6a — Forget memory typed-confirm.
+            if *show_forget_confirm.read() {
+                ConfirmForgetMemoryModal {
+                    persona_slug: persona_slug.clone(),
+                    on_cancel: move |_| show_forget_confirm.set(false),
+                    on_confirm: {
+                        let slug = persona_slug.clone();
+                        move |_| {
+                            show_forget_confirm.set(false);
+                            let slug_inner = slug.clone();
+                            spawn(async move {
+                                match call_persona_mcp(
+                                    "meta_persona_forget_memory",
+                                    serde_json::json!({ "slug": slug_inner, "all": true }),
+                                ).await {
+                                    Ok(_) => {}
+                                    Err(e) => op_error.set(Some(e)),
+                                }
+                            });
+                        }
+                    },
+                }
+            }
+
+            // H.6b — Delete persona typed-confirm.
+            if *show_delete_confirm.read() {
+                ConfirmDeletePersonaModal {
+                    persona_slug: persona_slug.clone(),
+                    on_cancel: move |_| show_delete_confirm.set(false),
+                    on_confirm: {
+                        let slug = persona_slug.clone();
+                        let on_deleted = on_deleted.clone();
+                        move |_| {
+                            show_delete_confirm.set(false);
+                            let slug_inner = slug.clone();
+                            let on_del = on_deleted.clone();
+                            spawn(async move {
+                                match call_persona_mcp(
+                                    "meta_persona_delete",
+                                    serde_json::json!({ "slug": slug_inner }),
+                                ).await {
+                                    Ok(_) => on_del.call(()),
+                                    Err(e) => op_error.set(Some(e)),
+                                }
+                            });
+                        }
+                    },
+                }
+            }
         }
     }
 }
 
-// ─── Audit section ────────────────────────────────────────────────────────────
+// ─── OutboundSection (G.1-G.6) ───────────────────────────────────────────────
 
+/// Outbound section wrapper — shows the allowlist editor when proactivity is
+/// "outbound-allowlisted", and the first-enable typed-confirm when switching
+/// TO that mode.
 #[rustfmt::skip]
 #[ui_action(inherit)]
 #[context_menu(inherit)]
 #[component]
-fn AuditSection(rows: Vec<AuditRow>) -> Element {
+fn OutboundSection(
+    persona_slug: String,
+    proactivity: String,
+    rate_limit_per_hour: i64,
+    quiet_hours_disabled: Signal<bool>,
+) -> Element {
+    let is_outbound = proactivity == "outbound-allowlisted";
     rsx! {
         div { class: "persona-modal-section",
-            if rows.is_empty() {
-                div { class: "agent-panel-empty-state", {t("persona-audit-empty")} }
-            } else {
-                div { class: "persona-audit-list",
-                    for row in &rows {
-                        div { class: "persona-audit-row", key: "{row.id}",
-                            span { class: "persona-audit-time", "{row.occurred_at}" }
-                            span { class: "persona-audit-actor", "{row.actor}" }
-                            span { class: "persona-audit-action", "{row.action}" }
-                            span {
-                                class: if row.result == "ok" { "persona-audit-result ok" } else { "persona-audit-result err" },
-                                "{row.result}"
-                            }
-                        }
-                    }
+            if is_outbound {
+                PersonaOutboundAllowlistEditor {
+                    persona_slug: persona_slug.clone(),
+                    rate_limit_per_hour,
+                    quiet_hours_disabled: *quiet_hours_disabled.read(),
+                    on_quiet_hours_changed: move |v: bool| quiet_hours_disabled.set(v),
                 }
+            } else {
+                p { class: "persona-phase-note", {t("persona-outbound-not-active")} }
             }
         }
     }
@@ -293,6 +377,12 @@ pub fn PersonaEditModal(props: PersonaEditModalProps) -> Element {
     let mut field_notes = use_signal(String::new);
     let mut field_enabled = use_signal(|| true);
 
+    // G.6 — quiet hours per-persona override.
+    let mut field_quiet_hours_disabled: Signal<bool> = use_signal(|| false);
+
+    // G.5 — show typed-confirm before first outbound-mode enable.
+    let mut show_outbound_confirm: Signal<bool> = use_signal(|| false);
+
     // Loaded detail (None until loaded)
     let mut detail: Signal<Option<PersonaDetail>> = use_signal(|| None);
     let mut loading = use_signal(|| !is_new);
@@ -322,6 +412,7 @@ pub fn PersonaEditModal(props: PersonaEditModalProps) -> Element {
                             field_prompt.set(d.system_prompt.clone());
                             field_notes.set(d.style_notes.clone().unwrap_or_default());
                             field_enabled.set(d.enabled);
+                            field_quiet_hours_disabled.set(d.quiet_hours_disabled);
                             detail.set(Some(d));
                         }
                     }
@@ -334,13 +425,23 @@ pub fn PersonaEditModal(props: PersonaEditModalProps) -> Element {
 
     let on_close = props.on_close.clone();
     let on_saved = props.on_saved.clone();
+    let on_close_after_delete = props.on_close.clone();
     let slug_save = slug.clone();
 
     // Snapshot for sub-editors (use peek — just data, no subscription needed here).
     let sources = detail.peek().as_ref().map(|d| d.sources.clone()).unwrap_or_default();
     let tools = detail.peek().as_ref().map(|d| d.tool_whitelist.clone()).unwrap_or_default();
     let facts = detail.peek().as_ref().map(|d| d.pinned_facts.clone()).unwrap_or_default();
-    let audit = detail.peek().as_ref().map(|d| d.recent_audit.clone()).unwrap_or_default();
+    let cur_proactivity = detail.peek().as_ref()
+        .map(|d| d.proactivity.clone())
+        .unwrap_or_else(|| "drafts-only".to_string());
+    let cur_rate_limit = detail.peek().as_ref().map(|d| d.rate_limit_per_hour).unwrap_or(4);
+
+    // G.5 — track whether the persona was previously in outbound mode so we
+    // only show the typed-confirm on first switch (not on re-open).
+    let was_outbound_before = detail.peek().as_ref()
+        .map(|d| d.proactivity == "outbound-allowlisted")
+        .unwrap_or(false);
 
     rsx! {
         div { class: "persona-modal-overlay",
@@ -429,7 +530,7 @@ pub fn PersonaEditModal(props: PersonaEditModalProps) -> Element {
                             }
                         }
 
-                        // Outbound (Phase F — stub)
+                        // Outbound (G.1-G.6)
                         CollapsibleSection {
                             label: t("persona-section-outbound").to_string(),
                             open: *open_outbound.read(),
@@ -437,12 +538,15 @@ pub fn PersonaEditModal(props: PersonaEditModalProps) -> Element {
                                 let v = *open_outbound.read();
                                 open_outbound.set(!v);
                             },
-                            div { class: "persona-modal-section",
-                                p { class: "persona-phase-note", {t("persona-outbound-phase-f-note")} }
+                            OutboundSection {
+                                persona_slug: slug.clone(),
+                                proactivity: cur_proactivity.clone(),
+                                rate_limit_per_hour: cur_rate_limit,
+                                quiet_hours_disabled: field_quiet_hours_disabled,
                             }
                         }
 
-                        // Memory (read-only list, Phase H adds delete buttons)
+                        // Memory (H.6 — delete buttons + typed-confirm flows)
                         CollapsibleSection {
                             label: t("persona-section-memory").to_string(),
                             open: *open_memory.read(),
@@ -450,10 +554,14 @@ pub fn PersonaEditModal(props: PersonaEditModalProps) -> Element {
                                 let v = *open_memory.read();
                                 open_memory.set(!v);
                             },
-                            MemorySection { facts: facts.clone() }
+                            MemorySection {
+                                facts: facts.clone(),
+                                persona_slug: if is_new { String::new() } else { slug.clone() },
+                                on_deleted: move |_| on_close_after_delete.call(()),
+                            }
                         }
 
-                        // Audit (collapsed by default)
+                        // Audit (H.1 + H.2 + H.4 — full panel)
                         CollapsibleSection {
                             label: t("persona-section-audit").to_string(),
                             open: *open_audit.read(),
@@ -461,7 +569,13 @@ pub fn PersonaEditModal(props: PersonaEditModalProps) -> Element {
                                 let v = *open_audit.read();
                                 open_audit.set(!v);
                             },
-                            AuditSection { rows: audit.clone() }
+                            if !is_new {
+                                PersonaAuditPanel { persona_slug: slug.clone() }
+                            } else {
+                                div { class: "agent-panel-empty-state",
+                                    {t("persona-audit-not-available-for-new")}
+                                }
+                            }
                         }
                     }
 

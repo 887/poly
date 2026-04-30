@@ -205,7 +205,16 @@ impl MemoryDb {
             );
             CREATE INDEX IF NOT EXISTS idx_client_settings_audit_backend_time
                 ON client_settings_audit(backend_id, created_at DESC);"
-        ).map_err(|e| MemoryError::Sqlite(e.to_string()))
+        ).map_err(|e| MemoryError::Sqlite(e.to_string()))?;
+
+        // ── Phase G — quiet_hours_disabled column (additive migration) ─────────
+        // ALTER TABLE ignores the error if the column already exists so repeated
+        // open() calls are safe.
+        let _ = db.execute(
+            "ALTER TABLE personas ADD COLUMN quiet_hours_disabled INTEGER NOT NULL DEFAULT 0"
+        );
+
+        Ok(())
     }
 
     fn lock(&self) -> Result<std::sync::MutexGuard<'_, ConnectionThreadSafe>, MemoryError> {
@@ -781,7 +790,8 @@ impl MemoryDb {
         let mut stmt = db.prepare(
             "SELECT slug,name,avatar_emoji,system_prompt,style_notes,
                     heartbeat_interval_secs,proactivity,rate_limit_per_hour,
-                    created_at,updated_at,last_run_at,enabled
+                    created_at,updated_at,last_run_at,enabled,
+                    COALESCE(quiet_hours_disabled,0)
              FROM personas WHERE slug=?1"
         )?;
         stmt.bind((1, slug))?;
@@ -798,7 +808,8 @@ impl MemoryDb {
         let mut stmt = db.prepare(
             "SELECT slug,name,avatar_emoji,system_prompt,style_notes,
                     heartbeat_interval_secs,proactivity,rate_limit_per_hour,
-                    created_at,updated_at,last_run_at,enabled
+                    created_at,updated_at,last_run_at,enabled,
+                    COALESCE(quiet_hours_disabled,0)
              FROM personas ORDER BY name"
         )?;
         let mut out = Vec::new();
@@ -910,6 +921,27 @@ impl MemoryDb {
         } else {
             Ok(false)
         }
+    }
+
+    /// Set `quiet_hours_disabled` for a persona (G.6).
+    ///
+    /// When `true` the persona's outbound heartbeat runs even during 22:00-08:00.
+    /// When `false` (default) the global quiet-hours guard in `in_quiet_hours()`
+    /// applies.
+    pub fn set_persona_quiet_hours_disabled(
+        &self,
+        slug: &str,
+        disabled: bool,
+    ) -> Result<(), MemoryError> {
+        let now = now_iso8601();
+        let db = self.lock()?;
+        let mut stmt = db.prepare(
+            "UPDATE personas SET quiet_hours_disabled=?1, updated_at=?2 WHERE slug=?3"
+        )?;
+        stmt.bind((1, if disabled { 1_i64 } else { 0_i64 }))?;
+        stmt.bind((2, now.as_str()))?;
+        stmt.bind((3, slug))?;
+        drain(&mut stmt)
     }
 
     /// Delete a persona and cascade to all child tables.
@@ -1250,7 +1282,8 @@ impl MemoryDb {
         let mut stmt = db.prepare(
             "SELECT slug,name,avatar_emoji,system_prompt,style_notes,
                     heartbeat_interval_secs,proactivity,rate_limit_per_hour,
-                    created_at,updated_at,last_run_at,enabled
+                    created_at,updated_at,last_run_at,enabled,
+                    COALESCE(quiet_hours_disabled,0)
              FROM personas
              WHERE enabled=1 AND heartbeat_interval_secs IS NOT NULL
              ORDER BY name"
@@ -1285,6 +1318,78 @@ impl MemoryDb {
         } else {
             Ok(0)
         }
+    }
+
+    // ─── G.3 — outbound send-path enforcement ─────────────────────────────────
+
+    /// Count outbound_send audit rows for `persona_slug` since UTC midnight today.
+    ///
+    /// Used by the heartbeat send-path to enforce `max_messages_per_day` per
+    /// chat when proactivity = outbound-allowlisted.
+    pub fn count_outbound_sends_today(
+        &self,
+        persona_slug: &str,
+        account_id: &str,
+        chat_id: &str,
+    ) -> Result<i64, MemoryError> {
+        // UTC midnight for today: strip the time component from the current ISO
+        // timestamp.  "2026-04-30T14:23:00Z" → "2026-04-30T00:00:00Z"
+        let today = {
+            let ts = now_iso8601();
+            format!("{}T00:00:00Z", &ts[..10])
+        };
+        let db = self.lock()?;
+        let mut stmt = db.prepare(
+            "SELECT COUNT(*) FROM persona_audit
+             WHERE persona_slug=?1
+               AND target_account=?2
+               AND target_chat=?3
+               AND action='outbound_send'
+               AND occurred_at >= ?4"
+        )?;
+        stmt.bind((1, persona_slug))?;
+        stmt.bind((2, account_id))?;
+        stmt.bind((3, chat_id))?;
+        stmt.bind((4, today.as_str()))?;
+        if stmt.next()? == State::Row {
+            Ok(stmt.read::<i64, _>(0)?)
+        } else {
+            Ok(0)
+        }
+    }
+
+    /// Return the allowlist entry for `(persona_slug, account_id, chat_id)` if
+    /// one exists, along with the today-send count.
+    ///
+    /// Returns `Ok(None)` when the chat is NOT in the allowlist (i.e. blocked).
+    /// Returns `Ok(Some((max_per_day, sends_today)))` when allowed.
+    ///
+    /// Callers should check `sends_today < max_per_day` before sending.
+    pub fn check_persona_outbound_cap(
+        &self,
+        persona_slug: &str,
+        account_id: &str,
+        chat_id: &str,
+    ) -> Result<Option<(i64, i64)>, MemoryError> {
+        // Step 1: is (persona_slug, account_id, chat_id) in the allowlist?
+        let max_per_day = {
+            let db = self.lock()?;
+            let mut stmt = db.prepare(
+                "SELECT max_messages_per_day FROM persona_outbound_allowlist
+                 WHERE persona_slug=?1 AND account_id=?2 AND chat_id=?3"
+            )?;
+            stmt.bind((1, persona_slug))?;
+            stmt.bind((2, account_id))?;
+            stmt.bind((3, chat_id))?;
+            if stmt.next()? == State::Row {
+                stmt.read::<i64, _>(0)?
+            } else {
+                return Ok(None); // not allowlisted
+            }
+        };
+        // Step 2: count today's sends (acquires lock in its own call).
+        let sends_today = self.count_outbound_sends_today(persona_slug, account_id, chat_id)?;
+        Ok(Some((max_per_day, sends_today)))
     }
 
     /// Update `last_run_at` for a persona to the current UTC time.
@@ -1575,7 +1680,7 @@ fn read_style_row(stmt: &mut sqlite::Statement<'_>) -> Result<serde_json::Value,
 /// Read a single `personas` row.  Column order matches `get_persona` / `list_personas`.
 /// 0=slug 1=name 2=avatar_emoji 3=system_prompt 4=style_notes
 /// 5=heartbeat_interval_secs 6=proactivity 7=rate_limit_per_hour
-/// 8=created_at 9=updated_at 10=last_run_at 11=enabled
+/// 8=created_at 9=updated_at 10=last_run_at 11=enabled 12=quiet_hours_disabled
 fn read_persona_row(stmt: &mut sqlite::Statement<'_>) -> Result<serde_json::Value, MemoryError> {
     let style_notes: Option<String> = match stmt.read::<sqlite::Value, _>(4)? {
         sqlite::Value::String(s) => Some(s), _ => None };
@@ -1596,6 +1701,7 @@ fn read_persona_row(stmt: &mut sqlite::Statement<'_>) -> Result<serde_json::Valu
         "updated_at":              stmt.read::<String, _>(9)?,
         "last_run_at":             last_run,
         "enabled":                 stmt.read::<i64, _>(11)? != 0,
+        "quiet_hours_disabled":    stmt.read::<i64, _>(12)? != 0,
     }))
 }
 

@@ -11,6 +11,7 @@
 //! - `Signal<Vec<PersonaSummary>>` — all writes via `.set(…)` (single-component local).
 //! - No `Signal::write()` or raw `use_effect` with non-Signal captures.
 
+use super::data_exposure_summary::DataExposureSummary;
 use super::mcp::call_persona_mcp;
 use super::types::{parse_persona_list, PersonaSummary};
 use crate::i18n::t;
@@ -54,6 +55,8 @@ fn PersonaListRow(
             div { class: "persona-row-info",
                 span { class: "persona-row-name", "{persona.name}" }
                 PersonaStatusDot { enabled: persona.enabled }
+                // H.5 — Data exposure summary widget.
+                DataExposureSummary { persona_slug: persona.slug.clone() }
             }
             div { class: "persona-row-actions",
                 button {

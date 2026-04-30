@@ -36,6 +36,10 @@ pub struct PersonaDetail {
     pub pinned_facts: Vec<PersonaFact>,
     #[serde(default)]
     pub recent_audit: Vec<AuditRow>,
+    /// G.6 — when true, the 22:00-08:00 outbound quiet-hours block is lifted
+    /// for this persona.
+    #[serde(default)]
+    pub quiet_hours_disabled: bool,
 }
 
 /// A source binding row.

@@ -90,6 +90,11 @@ async fn run_http(port: u16) -> anyhow::Result<()> {
         shutdown_rx,
     ));
 
+    // H.3 — Daily audit prune: delete persona_audit rows older than 30 days.
+    tokio::spawn(poly_chat_mcp::persona_audit_prune::run_forever(
+        mem.as_ref().clone(),
+    ));
+
     let state = AppState { pool, mem };
 
     let app = axum::Router::new()

@@ -1,6 +1,6 @@
 # Plan — Persona Quality Gates (Lints, Fuzz, Audit Surface)
 
-## Status: 🚧 IN PROGRESS — Phases Q-R shipped; Phases S-T pending
+## Status: 🚧 IN PROGRESS — Phases Q-R-S shipped; Phase T pending
 
 > **Why this is its own plan, not extra phases on `plan-meta-personalities.md`:**
 > the work is **CI infrastructure** — `tools/scripts/forbid-*.sh` lints,
@@ -151,20 +151,23 @@ the mechanism (allowlisted regex grep that fails CI) is identical.
 
 ### Phase S — Smoke-test integration
 
-- [ ] **S.1** Edit `TEST_HARNESS.md` step 4 to include `cargo test -p
+- [x] **S.1** Edit `TEST_HARNESS.md` step 4 to include `cargo test -p
   poly-chat-mcp --lib` (currently runs only the integration test).
   Persona unit tests already pass; this just makes the harness assert
-  it.
-- [ ] **S.2** Add a new `TEST_HARNESS.md` step 6: "Persona e2e mock
+  it. Shipped in Phase S commit.
+- [x] **S.2** Add a new `TEST_HARNESS.md` step 6: "Persona e2e mock
   smoke" — runs `tests/e2e/persona-multi-agent.sh --scenario
   mcp-to-ui-live-update --mode mock-claude` (the headline live-update
   scenario from `plan-persona-e2e-multi-agent.md` E.3). Skip step
   cleanly if the script doesn't exist (so the harness still works for
   pre-Phase-A-of-e2e branches). Time budget 5 minutes; fail loud if it
-  exceeds.
-- [ ] **S.3** Update the haiku-tier subagent dispatch template in
+  exceeds. **Design decision:** `mcp-to-ui-live-update` scenario not yet
+  landed (Phase E.3 pending); step falls back to `two-personas-handoff`
+  (present post Phases A-C) with an INFO notice — documented inline in
+  the step. Shipped in Phase S commit.
+- [x] **S.3** Update the haiku-tier subagent dispatch template in
   CLAUDE.md "Agent Orchestration" section to mention persona changes
-  warrant the new step 6.
+  warrant the new step 6. Shipped in Phase S commit.
 
 **Effort:** 0.5 sessions.
 
@@ -330,3 +333,22 @@ Phase R shipped in commit `947b6364`. All R.1–R.5 sub-steps complete.
 - `PersonaSourceRow` is a new `pub struct` in `context.rs` rather than a wrapper in `memory.rs` — memory.rs sources are `serde_json::Value`; the typed row only needs to exist for the fuzz+test surface.
 - `Arbitrary` is derived on a `FuzzSourceRow` mirror in the fuzz crate (not on `PersonaSourceRow` itself) — keeps `arbitrary` out of the stable workspace dependencies.
 - 60-second sanity run: **1,133,800 executions, 0 crashes, 0 divergence**.
+
+---
+
+### Phase S Status
+
+Phase S shipped in a single commit. All S.1–S.3 sub-steps complete.
+
+| Sub-step | Status | Notes |
+|---|---|---|
+| S.1 `cargo test -p poly-chat-mcp --lib` in TEST_HARNESS.md step 4 | shipped | Appended to existing step 4 test block |
+| S.2 TEST_HARNESS.md step 6 "Persona e2e mock smoke" | shipped | Falls back to `two-personas-handoff` when `mcp-to-ui-live-update` scenario absent (Phase E.3 not yet landed); `timeout 300` enforces 5-min hard limit; "SKIP" path if script missing |
+| S.3 CLAUDE.md haiku dispatch template note | shipped | One-line note added after existing UI-only skip rule |
+
+**Design decision logged:** The `mcp-to-ui-live-update` scenario (Phase E.3 of
+`plan-persona-e2e-multi-agent.md`) does not yet exist on disk. Rather than leaving step 6
+effectively dead, the harness falls back to `two-personas-handoff` (present post Phases A-C)
+with an INFO notice in stdout. When Phase E.3 ships and adds `mcp-to-ui-live-update` to
+the scenario list, the primary branch of the if-else will activate automatically — no
+further harness change needed.

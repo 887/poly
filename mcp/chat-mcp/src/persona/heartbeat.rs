@@ -289,14 +289,19 @@ async fn run_heartbeat_task<P>(
             continue;
         }
 
-        // F.6 — Quiet-hours guard (outbound only).
-        let quiet = in_quiet_hours();
+        // F.6 / G.6 — Quiet-hours guard (outbound only).
+        // G.6: respect per-persona `quiet_hours_disabled` override.
+        let quiet_hours_disabled = persona
+            .get("quiet_hours_disabled")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let quiet = !quiet_hours_disabled && in_quiet_hours();
 
         // Determine what to emit based on proactivity.
         // Proactivity map (from the plan section 6):
         //   drafts-only          → drafts yes, notifications no, outbound no
         //   notify               → drafts yes, notifications yes, outbound no
-        //   outbound-allowlisted → drafts yes, notifications yes, outbound yes
+        //   outbound-allowlisted → drafts yes, notifications yes, outbound yes (if not quiet)
         let emit_notify = proactivity == "notify" || proactivity == "outbound-allowlisted";
         let emit_outbound = proactivity == "outbound-allowlisted" && !quiet;
 
@@ -365,10 +370,57 @@ async fn run_heartbeat_task<P>(
                         }
                     }
 
-                    // F.6 — If outbound is enabled and not quiet hours, we would send
-                    // here.  Phase G (outbound) is not yet shipped; log the intent.
+                    // G.3 — Outbound send with allowlist + daily-cap enforcement.
                     if emit_outbound {
-                        info!(slug, %chat_id, "heartbeat: outbound would fire (Phase G not yet shipped)");
+                        if let Some(chat_entry) = bundle.chats.iter().find(|c| &c.chat_id == chat_id) {
+                            match mem.check_persona_outbound_cap(
+                                &slug,
+                                &chat_entry.account_id,
+                                chat_id,
+                            ) {
+                                Ok(None) => {
+                                    // Chat not in allowlist — deny.
+                                    let _ = mem.record_persona_audit(
+                                        &slug, "heartbeat", "outbound_blocked_allowlist",
+                                        Some(&chat_entry.account_id),
+                                        Some(chat_id),
+                                        None,
+                                        "ok",
+                                        None,
+                                    );
+                                    info!(slug, %chat_id, "heartbeat: outbound blocked — not in allowlist");
+                                }
+                                Ok(Some((max_per_day, sends_today))) if sends_today >= max_per_day => {
+                                    // Daily cap exceeded — deny.
+                                    let _ = mem.record_persona_audit(
+                                        &slug, "heartbeat", "outbound_blocked_daily_cap",
+                                        Some(&chat_entry.account_id),
+                                        Some(chat_id),
+                                        Some(&format!("{{\"sends_today\":{sends_today},\"max\":{max_per_day}}}")),
+                                        "ok",
+                                        None,
+                                    );
+                                    warn!(slug, %chat_id, sends_today, max_per_day, "heartbeat: outbound blocked — daily cap");
+                                }
+                                Ok(Some(_)) => {
+                                    // Allowed — write outbound_send audit row.
+                                    // Actual send would be dispatched here once the send-message
+                                    // backend API is wired (post-Phase G UI).
+                                    let _ = mem.record_persona_audit(
+                                        &slug, "heartbeat", "outbound_send",
+                                        Some(&chat_entry.account_id),
+                                        Some(chat_id),
+                                        Some(&format!("{{\"prompt_len\":{}}}", prompt.len())),
+                                        "ok",
+                                        None,
+                                    );
+                                    info!(slug, %chat_id, "heartbeat: outbound send authorized");
+                                }
+                                Err(e) => {
+                                    warn!(slug, %chat_id, "heartbeat: outbound cap check failed: {e}");
+                                }
+                            }
+                        }
                     }
                 }
             }

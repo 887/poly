@@ -3,6 +3,7 @@
 pub mod memory;
 pub mod events;
 pub mod persona;
+pub mod persona_audit_prune;
 pub mod state;
 pub mod tools;
 pub mod typing_simulation;
