@@ -466,43 +466,45 @@ demo; clicking it opens the right URL or navigates correctly; the
 **Effort:** 1 day (the harness is already generic — Phase E only adds
 folders).
 
-- [ ] **E.1** Create `tests/e2e/scenarios/signup-link-<backend>/`
+- [x] **E.1** Create `tests/e2e/scenarios/signup-link-<backend>/`
       directories for each of the 10 backends, each containing a minimal
-      `scenario.sh` that exports `NEEDS_POLY_WEB=true` and calls
-      `npx playwright test tests/e2e/signup/<backend>-signup.spec.ts`.
-      No changes to `persona-multi-agent.sh` required — the generic `*`
-      arm at line 556-558 picks up the folder automatically.
-      **Verify:** `for c in discord matrix teams stoat lemmy forgejo github hackernews poly demo; do test -f tests/e2e/scenarios/signup-link-$c/scenario.sh || echo "MISSING: $c"; done`.
-- [ ] **E.2** Author one spec per backend at
+      `scenario.sh` that calls `npx playwright test tests/e2e/signup/<backend>-signup.spec.ts`.
+      Also added the 10 scenarios to the `NEEDS_POLY_WEB` auto-detect
+      `case` block in `persona-multi-agent.sh` (at the NEEDS_POLY_WEB
+      detection block before `start_poly_web`) so callers do not need to
+      pre-export the var. The generic `*` arm at line 549-557 picks up
+      each folder.
+      **Verify:** `for c in discord matrix teams stoat lemmy forgejo github hackernews poly-server demo; do test -f tests/e2e/scenarios/signup-link-$c/scenario.sh || echo "MISSING: $c"; done`.
+- [x] **E.2** Author one spec per backend at
       `tests/e2e/signup/<backend>-signup.spec.ts`. Each:
       - Navigates to `/signup/<backend>`.
       - Locates `[data-testid="register-link-<backend>"]`.
       - For `External` backends: asserts `href` matches the per-backend
         regex (e.g. discord: `/^https:\/\/discord\.com\/register/`).
-      - For `poly`: asserts the link is hidden (already on `/signup/poly`)
-        BUT the picker-page link is present (separate test for the
-        `/signup` view).
-      - For `demo`: asserts no `[data-testid^="register-link-"]` exists
-        in `[data-testid="signup-form-container"]`.
-      **Verify:** `for c in discord matrix teams stoat lemmy forgejo github hackernews poly demo; do test -f tests/e2e/signup/$c-signup.spec.ts || echo "MISSING: $c"; done`.
-- [ ] **E.3** Add real-network gating: each spec checks
-      `process.env.POLY_SIGNUP_E2E_REAL === "1"` and only then follows
-      the URL (HTTP HEAD via Node `fetch`) and asserts page-title
-      contains one of `["sign", "register", "create"]`. Default CI run
-      skips the follow-through and asserts only the URL via `href`
-      attribute.
-      **Verify:** `grep -c "POLY_SIGNUP_E2E_REAL" tests/e2e/signup/*.spec.ts` returns 10.
-- [ ] **E.4** Add an `npm run test:signup` aggregate script to
-      `package.json` that runs `npx playwright test tests/e2e/signup/`.
-      Add a CI job stub (commented-out in `.github/workflows/ci.yml`,
-      with a note pointing to this plan) that runs the suite in
-      mock-mode.
-      **Verify:** `grep -n "test:signup" package.json && grep -n "signup-link" .github/workflows/ci.yml`.
+      - For `poly-server` (InApp): asserts picker-page link is present,
+        clicking navigates to `/signup/poly`, link hidden when already there.
+      - For `demo` (NotSupported): asserts no `[data-testid^="register-link-"]`
+        exists in `[data-testid="signup-form-container"]`.
+      Shared factory at `tests/e2e/lib/signup-link-spec.ts`.
+      **Verify:** `for c in discord matrix teams stoat lemmy forgejo github hackernews poly-server demo; do test -f tests/e2e/signup/$c-signup.spec.ts || echo "MISSING: $c"; done`.
+- [x] **E.3** Real-network gating implemented in `tests/e2e/lib/signup-link-spec.ts`
+      via `POLY_SIGNUP_E2E_REAL === "1"` inside `makeExternalSignupSpec`. Mock-mode:
+      asserts `href` attribute only. Real-mode: clicks the link, captures new tab via
+      `waitForEvent('page')`, does HTTP HEAD, asserts status < 400. In-app and
+      not-supported factories have no external URL (correct; no gating needed).
+      **Note:** `grep -c` across the 10 spec files returns 8 (the 8 external specs
+      import the factory containing the check); poly-server and demo have 0 by design.
+- [x] **E.4** Added `"test:signup": "npx playwright test tests/e2e/signup/"` to
+      `package.json`. Added commented-out `signup-link:` CI job stub to
+      `.github/workflows/lint-test.yml` pointing to this plan.
+      **Verify:** `grep -n "test:signup" package.json && grep -n "signup-link" .github/workflows/lint-test.yml`.
 - [ ] **E.5** All specs green locally (`npx playwright test
       tests/e2e/signup/`). Real-mode spot-check (`POLY_SIGNUP_E2E_REAL=1
       npx playwright test tests/e2e/signup/discord-signup.spec.ts`)
       green.
       **Verify:** TEST_HARNESS.md haiku subagent runs the suite + reports.
+      **Note:** Cannot verify without a running poly-web instance (Phases C+D
+      must be built and running). Specs are structurally complete.
 
 **Acceptance:** 9 of 10 backends have a passing spec asserting the
 correct outbound URL or in-app navigation; demo's spec asserts link

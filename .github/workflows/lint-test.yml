@@ -227,3 +227,33 @@ jobs:
 
       - name: Run tests
         run: cargo test --workspace
+
+  # signup-link: (disabled — enable when poly-web is available in CI)
+  # Runs the Playwright signup-link spec suite in mock-mode (href assertions only).
+  # No real external URLs are followed; POLY_SIGNUP_E2E_REAL is not set.
+  # See docs/plans/plan-client-signup-link-surface.md Phase E for details.
+  #
+  # signup-link:
+  #   name: Signup Link Playwright specs (mock-mode)
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-node@v4
+  #       with:
+  #         node-version: '20'
+  #     - name: Install npm dependencies
+  #       run: npm ci
+  #     - name: Install Playwright browsers
+  #       run: npx playwright install --with-deps chromium
+  #     - name: Build poly-web (WASM)
+  #       run: |
+  #         cd apps/web && dx build --platform web \
+  #           --no-default-features --features "dev-plugins,web"
+  #     - name: Start poly-web server
+  #       run: |
+  #         cd apps/web && dx serve --platform web --fullstack --port 3000 \
+  #           @client --no-default-features --features "dev-plugins,web" \
+  #           @server --platform server --no-default-features --features "dev-plugins,server" &
+  #         npx wait-on http://localhost:3000 --timeout 60000
+  #     - name: Run signup-link specs (mock-mode)
+  #       run: npm run test:signup
