@@ -62,10 +62,9 @@ fn new_session_id() -> String {
         // On WASM use Math.random via js_sys for randomness.
         let r1 = (js_sys::Math::random() * u32::MAX as f64) as u32;
         let r2 = (js_sys::Math::random() * u32::MAX as f64) as u32;
-        let ts = web_sys::window()
-            .and_then(|w| w.performance())
-            .map(|p| p.now() as u64)
-            .unwrap_or(0);
+        // js_sys::Date::now() returns ms-since-epoch as f64 — works without
+        // enabling the web-sys "Performance" feature.
+        let ts = js_sys::Date::now() as u64;
         format!("{ts:016x}-{r1:08x}-{r2:08x}")
     }
     #[cfg(not(target_arch = "wasm32"))]

@@ -634,10 +634,9 @@ async fn prune_old_sessions(slug: &str, new_sid: &str) {
 fn current_timestamp_ms() -> u64 {
     #[cfg(target_arch = "wasm32")]
     {
-        web_sys::window()
-            .and_then(|w| w.performance())
-            .map(|p| p.now() as u64)
-            .unwrap_or(0)
+        // js_sys::Date::now() returns ms-since-epoch as f64 — works without
+        // enabling the web-sys "Performance" feature.
+        js_sys::Date::now() as u64
     }
     #[cfg(not(target_arch = "wasm32"))]
     {
