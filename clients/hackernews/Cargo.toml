@@ -42,6 +42,11 @@ poly-test-hackernews = { path = "../../servers/test-hackernews" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time", "net"] }
 axum = { workspace = true }
 serde_json = { workspace = true }
+reqwest = { workspace = true, features = ["json"] }
+
+[[test]]
+name = "version_override"
+path = "tests/version_override.rs"
 
 [lints]
 workspace = true

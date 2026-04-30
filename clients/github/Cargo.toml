@@ -39,5 +39,9 @@ tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time", "ne
 name = "back_and_forth"
 path = "tests/back_and_forth.rs"
 
+[[test]]
+name = "version_override"
+path = "tests/version_override.rs"
+
 [lints]
 workspace = true

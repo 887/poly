@@ -69,5 +69,9 @@ path = "tests/moderation.rs"
 name = "back_and_forth"
 path = "tests/back_and_forth.rs"
 
+[[test]]
+name = "version_override"
+path = "tests/version_override.rs"
+
 [lints]
 workspace = true
