@@ -308,7 +308,7 @@ for this commit and remain for the next Phase A commit.
 
 ---
 
-## Phase B — Per-backend default URLs + custom-server param wiring (shipped in commit TBD)
+## Phase B — Per-backend default URLs + custom-server param wiring (shipped in commit `f27ff362`)
 
 **Effort:** 1 day (10 backends × ~30 min each, including unit tests).
 

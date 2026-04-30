@@ -524,7 +524,7 @@ All 5 sub-steps shipped in one commit (see commit ID in phase header).
 
 ---
 
-## Phase B — Per-backend impls (`get-client-version` + override) (shipped in commit TBD)
+## Phase B — Per-backend impls (`get-client-version` + override) (shipped in commit `f27ff362`)
 
 **Effort:** M (1 day). Touches every `clients/<backend>/src/lib.rs`
 and `http.rs`.
