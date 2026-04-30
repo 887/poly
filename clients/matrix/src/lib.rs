@@ -1838,8 +1838,8 @@ impl ClientBackend for MatrixClient {
                 meta_text: Some(meta_text),
                 icon,
                 badge: None,
-                context_menu_target_kind: if is_space {
                 preview_image_url: None,
+                context_menu_target_kind: if is_space {
                     MenuTargetKind::Server
                 } else {
                     MenuTargetKind::Channel
