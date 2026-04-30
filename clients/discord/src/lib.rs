@@ -864,7 +864,6 @@ impl ClientBackend for DiscordClient {
                 .unwrap_or_default();
             posts.push(ForumPost {
                 thread: Self::discord_thread_to_thread_info(&t),
-                preview_image_url: None,
                 applied_tags,
                 starter_message_id,
             });
