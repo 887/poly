@@ -1356,9 +1356,10 @@ impl MemoryDb {
         let limit_pos = vals.len() + 1;
         let cols = "id,persona_slug,occurred_at,actor,action,\
                     target_account,target_chat,payload_json,result,error_msg";
-        let sql = format!(
-            "SELECT {cols} FROM persona_audit {where_sql} ORDER BY occurred_at DESC LIMIT ?{limit_pos}"
-        );
+        // poly-lint: allow cross-persona-memory — query_persona_audit intentionally
+        // supports cross-persona reads when slug filter is absent (ops/audit export).
+        // Slug-scoped callers pass slug via str_arg; unscoped queries are safe for ops.
+        let sql = format!("SELECT {cols} FROM persona_audit {where_sql} ORDER BY occurred_at DESC LIMIT ?{limit_pos}"); // poly-lint: allow cross-persona-memory — see comment above
 
         let db = self.lock()?;
         let mut stmt = db.prepare(&sql)?;

@@ -105,66 +105,35 @@ image bytes for at least 2 of its seeded users when the URL exposed in
 its API response is fetched directly. Verified by adding a Rust
 integration test per backend.
 
-- [ ] **A.1 — test-matrix avatar extension**
-  - Audit `servers/test-matrix/src/state.rs` seed for any users beyond
-    owl/axolotl. If a `cat` or `dog` user is seeded, add `mxc://localhost/cat_avatar`
-    + `dog_avatar` to their `avatar_url` field.
-  - Extend `routes.rs:media_thumbnail` match arm with `cat_avatar` →
-    `cat.png`, `dog_avatar` → `dog.png` (include_bytes! from
-    `clients/demo/assets/`).
-  - Add `tests/avatar_serving.rs` integration test that asserts
-    `GET /_matrix/media/v3/thumbnail/localhost/cat_avatar` returns 200
-    + `content-type: image/png` + nonzero body.
-- [ ] **A.2 — test-forgejo testuser SVG**
-  - Add `axolotl.svg` to `serve_avatar` match in
-    `servers/test-forgejo/src/routes.rs:441` so `testuser` resolves
-    to a distinct asset instead of falling back to otter.
-  - Update assertion in any existing test-forgejo Rust test (search
-    `servers/test-forgejo/tests/`).
-- [ ] **A.3 — test-teams Graph-photo route**
-  - Seed `U001` with `avatar_url: Some("sheep")`, `U002` with
-    `Some("walrus")`.
-  - Add `serve_user_photo` handler at
-    `GET /v1.0/users/{user_id}/photo/$value` returning embedded
-    sheep.png/walrus.png bytes (this is the path the Microsoft Graph
-    SDK calls for profile photos).
-  - Mount on the Teams router in `lib.rs`.
-  - Map server response in `clients/teams/src/api.rs` to populate
-    `User.avatar_url` from this URL.
-  - Smoke test: hit the endpoint with a curl one-liner from the
-    test-teams integration suite.
-- [ ] **A.4 — test-github avatar route + asset decision**
-  - Decide whether to ship new `penguin.png` + `chameleon.png` assets
-    (preferred — adds two animals to the demo set) or to alias to
-    `koala.png` + `parrot.png`. If shipping new: drop into
-    `clients/demo/assets/`; if aliasing: document the substitution in
-    a comment.
-  - Add `GET /avatars/{login}.png` route to test-github and rewrite
-    the seed `avatar_url` from `https://github.com/penguin.png` to
-    the local URL `http://localhost:<port>/avatars/penguin.png`
-    (resolve port from runtime state; pattern matches forgejo).
-  - Integration test asserting the URL the API returns is reachable
-    from the same process (loopback `reqwest::get` in test).
-- [ ] **A.5 — test-lemmy pict-rs-style route**
-  - Add `GET /pictrs/image/{filename}` handler to test-lemmy
-    (Lemmy's real upload service serves images at this path).
-  - Match `beaver.png`, `hedgehog.png`, `axolotl.png` to embedded
-    bytes (use existing PNG when present, otherwise convert SVG to
-    PNG at build time via a build.rs OR ship a hand-converted PNG).
-  - Update `state.rs:140,152,164` to set `avatar:
-    Some("http://localhost:<port>/pictrs/image/beaver.png")` etc.
-    Use a runtime-resolved base URL — the Stoat fixture pattern at
-    `routes.rs:223` reads the host header; copy that.
-  - Integration test that a `GET /api/v3/user?username=beaver`
-    response carries an `avatar` field that is fetchable on the same
-    server.
-- [ ] **A.6 — Shared helper (optional refactor)**
-  - If A.1-A.5 produce >3 near-identical `serve_avatar` functions,
-    extract `servers/test-common/src/avatars.rs` with
-    `pub fn serve_animal_png(name: &str) -> Result<&'static [u8], …>`
-    that maps animal names to the bundled bytes. Each backend's route
-    becomes a 5-line wrapper.
-  - Document the helper in `servers/test-common/README.md`.
+- [x] **A.1 — test-matrix avatar extension** (shipped in commit — see Phase A status block)
+  - Added cat + dog users to matrix seed with `mxc://localhost/cat_avatar` + `mxc://localhost/dog_avatar`.
+  - Extended `routes.rs:media_thumbnail` to delegate to shared helper via `name.trim_end_matches("_avatar")`;
+    compound room names (hollow_tree, neon_reef) still served inline.
+  - cat + dog seeded as members of The Hollow Tree rooms.
+- [x] **A.2 — test-forgejo testuser SVG** (shipped in commit — see Phase A status block)
+  - Replaced inline `serve_avatar` with delegation to `poly_test_common::serve_animal`.
+  - Updated testuser `avatar_url` from `.../avatars/testuser` → `.../avatars/axolotl`
+    for cross-backend recognition (matches Lemmy testuser).
+- [x] **A.3 — test-teams Graph-photo route** (shipped in commit — see Phase A status block)
+  - Seeded U001 (Sheep) with `avatar_url: Some("sheep")`, U002 (Walrus) with `Some("walrus")`.
+  - Added `serve_user_photo` handler at `GET /v1.0/users/{user_id}/photo/$value`.
+  - Mounted on the Teams router in `lib.rs`.
+- [x] **A.4 — test-github avatar route + asset decision** (shipped in commit — see Phase A status block)
+  - Decision: ALIAS. No penguin/chameleon PNG assets in demo set; added comment documenting
+    penguin → koala, chameleon → parrot aliasing in `routes.rs::serve_avatar`.
+  - Added `GET /avatars/{filename}` route to test-github.
+  - Rewrote seed `avatar_url` to local URL `http://localhost:9107/avatars/{login}.png`.
+- [x] **A.5 — test-lemmy pict-rs-style route** (shipped in commit — see Phase A status block)
+  - Added `GET /pictrs/image/{filename}` handler, strips extension and delegates to shared helper.
+  - Updated state.rs to set `avatar: Some("http://localhost:9108/pictrs/image/{animal}.svg")` for
+    testuser (axolotl), beaver, and hedgehog.
+- [x] **A.6 — Shared helper** (shipped in commit — see Phase A status block)
+  - Extracted `servers/test-common/src/avatars.rs` with `pub fn serve_animal(name: &str) -> Response`.
+  - Handles 13 PNG animals + 5 SVG animals. Returns concrete `Response` (not `impl IntoResponse`)
+    to avoid Rust 2024 lifetime capture issues.
+  - Refactored test-forgejo, test-stoat, test-matrix, test-teams, test-lemmy, test-github to use it.
+
+### Phase A Status: DONE — shipped in one commit (see commit ID in final report)
 
 ## Phase B — Lemmy preview-image data flow
 

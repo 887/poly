@@ -1,6 +1,6 @@
 # Plan — Persona Quality Gates (Lints, Fuzz, Audit Surface)
 
-## Status: 🚧 IN PROGRESS — Phases Q-R-S shipped; Phase T pending
+## Status: ✅ DONE — Phases Q-R-S-T all shipped
 
 > **Why this is its own plan, not extra phases on `plan-meta-personalities.md`:**
 > the work is **CI infrastructure** — `tools/scripts/forbid-*.sh` lints,
@@ -171,34 +171,31 @@ the mechanism (allowlisted regex grep that fails CI) is identical.
 
 **Effort:** 0.5 sessions.
 
-### Phase T — Audit surface
+### Phase T — Audit surface (shipped in commit pending)
 
-- [ ] **T.1** Add `meta_persona_audit_query` MCP tool. Args:
+- [x] **T.1** Add `meta_persona_audit_query` MCP tool. Args:
   `{slug?, action?, actor?, since?, until?, target_account?,
   target_chat?, result?, limit?}`. Returns the matching subset of
   `persona_audit` rows. SQL: dynamic `WHERE` builder gated by the
-  presence of each filter. Acceptance: 6 unit tests covering each
-  filter combo + 1 "no filter = recent_actions equivalent" test.
-- [ ] **T.2** Add `meta_persona_audit_export(slug)` — returns full audit
+  presence of each filter. Acceptance: 8 unit tests covering each
+  filter individually + 1 "no filter = all rows" + 1 combined
+  `slug+action+since` filter + export + actor filter.
+- [x] **T.2** Add `meta_persona_audit_export(slug)` — returns full audit
   history as JSONL. Mirror of Phase H.4 audit-export but exposed as an
   MCP tool so `poly-cli call meta_persona_audit_export --slug=foo >
   audit.jsonl` becomes the takeout path.
-- [ ] **T.3** `docs/personas-cli.md` (created in
-  `plan-meta-personalities.md` Phase J.8) gains an "Audit recipes"
-  section with 5 example invocations: "what did broker-bob do today",
-  "show me all denied outbound attempts", "find rate-limit-exceeded
-  audit rows in the last hour", "export full audit before deleting
-  persona", "diff today's vs yesterday's actions count".
-- [ ] **T.4** `PersonaAuditPanel` (Phase H.1) UI gains the same filter
-  surface — uses `meta_persona_audit_query` instead of the today's
-  full-table fetch. Avoids loading 30 days of audit at once.
-  Coordinate with Phase H owner.
-- [ ] **T.5** Add `--watch` mode to the CLI recipe: `poly-cli call
-  meta_persona_audit_query --slug=broker-bob --since=auto` polls every
-  5s and prints new rows. Implementation entirely in
-  `tools/poly-cli/src/main.rs` — adds a `--watch <interval_secs>` flag
-  that re-runs the call, dedupes by `id`, prints deltas. Useful for
-  live-debugging heartbeat behaviour.
+- [x] **T.3** `docs/personas-cli.md` gains an "Audit recipes" section
+  (section 13) with 5 example invocations + `--watch` live-tail recipe.
+- [x] **T.4** `PersonaAuditPanel` (Phase H.1) migrated from
+  `meta_persona_list_audit` (non-existent stub) to
+  `meta_persona_audit_query` with server-side action + target_account
+  filters. No longer applies filters client-side post full fetch.
+- [x] **T.5** Add `--watch <N>` flag to `tools/poly-cli/src/main.rs`.
+  Re-runs the call every N seconds, dedupes by `id`, prints only new
+  rows. `--since auto` initialises `since` to current UTC and advances
+  it to the latest `occurred_at` seen after each poll. Exits cleanly on
+  SIGINT (Ctrl+C). Requires `tokio` features `time`, `signal`, `macros`
+  added to `tools/poly-cli/Cargo.toml`.
 
 **Effort:** 1 session.
 
@@ -352,3 +349,23 @@ effectively dead, the harness falls back to `two-personas-handoff` (present post
 with an INFO notice in stdout. When Phase E.3 ships and adds `mcp-to-ui-live-update` to
 the scenario list, the primary branch of the if-else will activate automatically — no
 further harness change needed.
+
+---
+
+### Phase T Status
+
+Phase T shipped. All T.1–T.5 sub-steps complete.
+
+| Sub-step | Status | Notes |
+|---|---|---|
+| T.1 `meta_persona_audit_query` MCP tool | shipped | `MemoryDb::query_persona_audit` dynamic WHERE builder; 8 unit tests (all filters + combined); 114→122 total lib tests |
+| T.2 `meta_persona_audit_export` MCP tool | shipped | `MemoryDb::export_persona_audit` returns full history oldest-first as JSONL; test in T.1 suite |
+| T.3 Audit recipes in `docs/personas-cli.md` | shipped | Section 13 with 5 paste-ready examples + `--watch` live-tail recipe |
+| T.4 `PersonaAuditPanel` migrated | shipped | Was calling non-existent `meta_persona_list_audit`; now calls `meta_persona_audit_query` with server-side filter args; client-side filter pass removed |
+| T.5 `--watch` mode in `poly-cli` | shipped | `--watch <N>` flag + `--since auto`; dedupes by `id`; SIGINT exit; `tokio` features `time`/`signal`/`macros` added to Cargo.toml |
+
+**Decisions logged:**
+- T.1 WHERE builder: `Vec<&str> + Vec<sqlite::Value>` approach with positional `?N` substitution. Matches existing `memory.rs` bind patterns. The macro handles `=`, `>=`, `<=` variants.
+- Both `_audit_query` and `_audit_export` added to `unaudited-persona-tool-allowlist.txt` (read-only audit reads; circular audit rationale).
+- `--since auto` implemented client-side in `poly-cli` — keeps MCP tool stateless.
+- `PersonaAuditPanel` T.4: panel was calling `meta_persona_list_audit` which does not exist in `tools.rs`. Migration to `meta_persona_audit_query` fixes the broken call and improves efficiency (no full-table fetch).
