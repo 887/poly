@@ -345,6 +345,20 @@ interface types {
         message: message,
     }
 
+    /// How a backend exposes account signup to users.
+    ///
+    /// `external(url)` — open the given URL in the system browser.
+    /// `in-app(route)` — navigate to a plugin-declared in-app route.
+    /// `not-supported` — no signup affordance (demo, read-only feeds).
+    variant signup-method {
+        /// Open this URL in the host's external browser.
+        external(string),
+        /// Navigate to this plugin-declared in-app route.
+        in-app(string),
+        /// No signup link supported.
+        not-supported,
+    }
+
     /// An authenticated session with a backend.
     ///
     /// D17 — `backend` is a plugin-provided slug string.
@@ -994,6 +1008,86 @@ interface client-settings {
     ) -> result<_, client-error>;
 }
 
+// ─── Client Config ─────────────────────────────────────────────────
+
+/// Host-defined, uniform-across-backends client configuration.
+///
+/// Distinct from `client-settings` which is plugin-defined per-plugin
+/// schema. This interface covers the version string the plugin
+/// advertises on the wire and any backend-specific "mechanisms" the
+/// plugin supports (captcha-sandbox, sliding-sync, browser-shim, …).
+///
+/// All methods carry default impls in the Rust trait so existing
+/// plugins compiled against the old WIT continue to load — they
+/// surface as "version: <plugin default>" and "mechanisms: []".
+interface client-config {
+    use types.{client-error};
+
+    /// Optional host capability a mechanism may require to function.
+    ///
+    /// When a mechanism declares `requires-host-cap = some(sandbox-browser)`
+    /// and the host doesn't advertise that cap, the UI MUST disable
+    /// the toggle and the plugin MUST treat the mechanism as off.
+    variant host-cap {
+        /// Open a sub-browser the user can interact with for
+        /// challenges (Discord captcha, OAuth flows). Stub in v1.
+        sandbox-browser,
+        /// Native system tray icon (future).
+        system-tray,
+        /// OS-level notifications (future).
+        os-notifications,
+    }
+
+    /// One toggleable "mechanism" the plugin supports — a named code
+    /// path the user can opt into or out of. IDs are plugin-stable
+    /// (the plugin is free to define them) but should be kebab-case.
+    record mechanism {
+        /// Stable ID. Storage key suffix.
+        /// Example: "captcha-sandbox", "sliding-sync", "browser-shim".
+        id: string,
+        /// FTL key for the human-readable label.
+        /// Example: "plugin-discord-mechanism-captcha-sandbox-label".
+        name-key: string,
+        /// Current on/off state — already merged with the host-stored
+        /// override; the plugin returns the effective value.
+        enabled: bool,
+        /// If `some`, the mechanism only functions when the host
+        /// advertises the matching capability. The UI disables the
+        /// toggle when the cap is absent.
+        requires-host-cap: option<host-cap>,
+        /// Optional FTL key for a longer description shown on hover.
+        description-key: option<string>,
+    }
+
+    /// Return the version string the plugin will advertise on the
+    /// next outbound request. After the host sets an override via
+    /// `set-client-version-override(some(...))`, this MUST return
+    /// the override string. With no override set, this returns the
+    /// plugin's hardcoded default.
+    get-client-version: func() -> string;
+
+    /// Set or clear the version override. `none` clears.
+    /// The host stores the override in `poly_kv` and re-injects it
+    /// into the plugin via `host-api.storage-get` on next plugin
+    /// load; the plugin reads it on init and merges over its default.
+    set-client-version-override: func(
+        override: option<string>,
+    ) -> result<_, client-error>;
+
+    /// Return the full mechanism inventory for this backend. Empty
+    /// list is legal (most backends in v1).
+    get-client-mechanisms: func() -> result<list<mechanism>, client-error>;
+
+    /// Toggle one mechanism on or off by ID. Plugin persists via
+    /// `host-api.storage-set` under its own KV namespace (mirror of
+    /// the host-owned `client.config.<id>.mechanism.<m>` key) and
+    /// returns the new state via `get-client-mechanisms`.
+    set-client-mechanism: func(
+        id: string,
+        enabled: bool,
+    ) -> result<_, client-error>;
+}
+
 // ─── Client Sidebar ────────────────────────────────────────────────
 
 /// D11 / D5 / D19 — plugin-declared sidebar layout. The host ships five
@@ -1332,6 +1426,7 @@ interface messenger-client {
         forum-post,
         forum-sort-order,
         thread-info,
+        signup-method,
     };
 
     /// Authenticate with the backend.
@@ -1442,6 +1537,16 @@ interface messenger-client {
     /// that don't apply, e.g. mic/speaker for read-only news backends).
     get-backend-capabilities: func() -> backend-capabilities;
 
+    /// How this backend exposes account signup to users.
+    ///
+    /// `server-url` is passed for custom-server backends (Matrix, Stoat,
+    /// Lemmy, Forgejo, GitHub Enterprise) so the signup URL can be
+    /// parameterised. Hardcoded backends (Discord, Teams, …) ignore it.
+    ///
+    /// Old plugins that do not export this method are caught by the host
+    /// trap handler and get `not-supported` substituted.
+    get-signup-method: func(server-url: option<string>) -> result<signup-method, client-error>;
+
     /// List entries at the given path within a code-type channel.
     /// Path is repo-relative; empty string means the repo root.
     list-files: func(channel-id: string, path: string) -> result<list<file-entry>, client-error>;
@@ -1543,6 +1648,7 @@ world messenger-plugin {
     export client-ui-common;
     export client-menus;
     export client-settings;
+    export client-config;
     export client-sidebar;
     export client-views;
     export client-composer;

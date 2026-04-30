@@ -959,6 +959,66 @@ pub struct PluginManifest {
     pub homepage: Option<String>,
 }
 
+// ── Signup-link surface (plan-client-signup-link-surface Phase A) ────────────
+
+/// How a backend exposes account signup to users.
+///
+/// Mirrors the WIT `signup-method` variant.
+///
+/// `External(url)` — open the given URL in the system browser.
+/// `InApp(route)` — navigate to a plugin-declared in-app route.
+/// `NotSupported` — no signup affordance (demo, read-only feeds).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SignupMethod {
+    /// Open this URL in the host's external browser.
+    External(String),
+    /// Navigate to this plugin-declared in-app route.
+    InApp(String),
+    /// No signup link supported by this backend.
+    NotSupported,
+}
+
+// ── Client-config surface (plan-client-version-override-and-sandbox Phase A) ─
+
+/// Optional host capability a mechanism may require to function.
+///
+/// Mirrors the WIT `host-cap` variant in `interface client-config`.
+///
+/// When a mechanism declares `requires_host_cap = Some(HostCap::SandboxBrowser)`
+/// and the host doesn't advertise that cap, the UI MUST disable the toggle and
+/// the plugin MUST treat the mechanism as off.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum HostCap {
+    /// Open a sub-browser the user can interact with for challenges
+    /// (Discord captcha, OAuth flows). Stub in v1.
+    SandboxBrowser,
+    /// Native system tray icon (future).
+    SystemTray,
+    /// OS-level notifications (future).
+    OsNotifications,
+}
+
+/// One toggleable "mechanism" a backend supports — a named code path the
+/// user can opt into or out of.
+///
+/// Mirrors the WIT `mechanism` record in `interface client-config`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Mechanism {
+    /// Stable ID used as the storage key suffix.
+    /// Example: `"captcha-sandbox"`, `"sliding-sync"`, `"browser-shim"`.
+    pub id: String,
+    /// FTL key for the human-readable label.
+    /// Example: `"plugin-discord-mechanism-captcha-sandbox-label"`.
+    pub name_key: String,
+    /// Current on/off state — merged with the host-stored override.
+    pub enabled: bool,
+    /// If `Some`, the mechanism only functions when the host advertises
+    /// the matching capability.
+    pub requires_host_cap: Option<HostCap>,
+    /// Optional FTL key for a longer description shown on hover.
+    pub description_key: Option<String>,
+}
+
 /// A channel within a server.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Channel {

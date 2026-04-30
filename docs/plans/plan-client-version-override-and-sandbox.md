@@ -1,6 +1,6 @@
 # Plan: Client Version Override + Per-Mechanism Toggles + Sandbox Host-Cap Stub
 
-## Status: 🚧 PLANNED — not started
+## Status: 🚧 IN PROGRESS — Phase A shipped; B-J pending
 
 > Sibling future plan referenced from Phase I:
 > `docs/plans/plan-host-sandbox-impl.md` (stub written in Phase I.5).
@@ -462,7 +462,7 @@ Layout:
 
 ---
 
-## Phase A — WIT extension + ClientBackend trait surface
+## Phase A — WIT extension + ClientBackend trait surface (shipped in commit `083504763f0a`)
 
 **Effort:** S (0.5 day). Touches: `wit/messenger-plugin.wit`,
 `clients/client/src/lib.rs`, all 10 `clients/<backend>/src/wit_bindings.rs`
@@ -470,18 +470,18 @@ for default-impl pass-through.
 
 **Preconditions:** none.
 
-- [ ] **A.1** Add the `client-config` interface block to
+- [x] **A.1** Add the `client-config` interface block to
       `wit/messenger-plugin.wit` exactly as shown in D3 — insert at
       line 996 (immediately after `client-settings` ends, before
       `client-sidebar` starts).
       **Verify:** `wit-bindgen markdown wit/ > /tmp/wit.md && grep -c
       'interface client-config' /tmp/wit.md` == 1.
-- [ ] **A.2** Add `export client-config;` to the `world
+- [x] **A.2** Add `export client-config;` to the `world
       messenger-plugin` block — append after line 1545
       (`export client-settings;`).
       **Verify:** `grep -c 'export client-config' wit/messenger-plugin.wit`
       == 1.
-- [ ] **A.3** Add four trait methods to `ClientBackend` in
+- [x] **A.3** Add four trait methods to `ClientBackend` in
       `clients/client/src/lib.rs` with default impls:
       ```rust
       fn client_version(&self) -> String { "poly/0.0.0".to_string() }
@@ -502,10 +502,10 @@ for default-impl pass-through.
       Pattern matches existing default-impl style at
       `clients/client/src/lib.rs:110-145` (NotSupported errors).
       **Verify:** `cargo build -p poly-client` clean.
-- [ ] **A.4** Add `Mechanism` and `HostCap` types to
+- [x] **A.4** Add `Mechanism` and `HostCap` types to
       `clients/client/src/types.rs` matching the WIT records.
       **Verify:** `cargo test -p poly-client --lib` passes.
-- [ ] **A.5** Regenerate WIT bindings for every backend
+- [x] **A.5** Regenerate WIT bindings for every backend
       (`cargo build` triggers `wit-bindgen` automatically); confirm clean
       build of all 10 client crates.
       **Verify:** `cargo build -p poly-client -p poly-discord -p
@@ -516,6 +516,11 @@ for default-impl pass-through.
 **Acceptance:** `cargo build` clean for all 11 client crates with new
 WIT and trait methods present. `wit/messenger-plugin.wit` shows the
 new interface and world export. Default-impl plugins still load.
+
+### Phase A Status: DONE
+
+All 5 sub-steps shipped in one commit (see commit ID in phase header).
+`poly-client` + all 10 backend crates compile clean. 17 existing lib tests pass.
 
 ---
 

@@ -1,6 +1,6 @@
 # Client Signup-Link Surface — WIT Extension + Per-Backend Defaults + Playwright
 
-## Status: PLANNED — not started
+## Status: 🚧 IN PROGRESS — Phase A shipped (A.1+A.2); B-F pending
 
 > Why this is its own plan: every backend's account-add wizard currently lacks a
 > "Don't have an account? Register here" affordance. Most users register
@@ -256,18 +256,18 @@ runs in **mock-default mode** unless `POLY_SIGNUP_E2E_REAL=1` is set:
 
 ---
 
-## Phase A — WIT surface + ClientBackend trait extension
+## Phase A — WIT surface + ClientBackend trait extension (A.1+A.2 shipped in commit `083504763f0a`)
 
 **Effort:** half day.
 
-- [ ] **A.1** Add `signup-method` variant to `interface types` in
+- [x] **A.1** Add `signup-method` variant to `interface types` in
       `wit/messenger-plugin.wit` (insert before `record session`). Add
       `get-signup-method: func(server-url: option<string>) -> result<signup-method, client-error>;`
       to `interface messenger-client` (insert after
       `get-backend-capabilities`). Update the `use types.{...}` block at
       line 1309 to include `signup-method`.
       **Verify:** `cargo build -p poly-client && grep -c "signup-method" wit/messenger-plugin.wit` returns ≥ 3.
-- [ ] **A.2** Add `SignupMethod` enum (with `#[derive(Clone, Debug,
+- [x] **A.2** Add `SignupMethod` enum (with `#[derive(Clone, Debug,
       PartialEq, Eq)]`) and default `get_signup_method(&self, server_url:
       Option<&str>) -> SignupMethod` impl returning
       `SignupMethod::NotSupported` to `trait ClientBackend` in
@@ -297,6 +297,14 @@ runs in **mock-default mode** unless `POLY_SIGNUP_E2E_REAL=1` is set:
 **Acceptance:** workspace builds; old plugin .wasm files load and
 `get_signup_method` returns `NotSupported` for every backend; no
 behaviour change visible to users.
+
+### Phase A Status: PARTIAL — A.1+A.2 shipped; A.3-A.5 (plugin-host wiring + stale-plugin test) deferred to Phase A completion commit
+
+Shipped in one commit: WIT `signup-method` variant + `get-signup-method` method,
+`SignupMethod` enum in `types.rs`, `get_signup_method` default impl on `ClientBackend`.
+All 10 backend crates compile clean with default impl in place.
+A.3-A.5 (plugin-host wiring + stale-plugin regression test) are out of scope
+for this commit and remain for the next Phase A commit.
 
 ---
 

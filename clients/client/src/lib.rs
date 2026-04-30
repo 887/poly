@@ -684,6 +684,70 @@ pub trait ClientBackend: Send + Sync {
         BackendCapabilities::READ_ONLY_FEED
     }
 
+    // --- Signup-link surface (plan-client-signup-link-surface Phase A) --------
+
+    /// How this backend exposes account signup to users.
+    ///
+    /// `server_url` is passed for custom-server backends (Matrix, Stoat,
+    /// Lemmy, Forgejo, GitHub Enterprise) so the signup URL can be
+    /// parameterised. Hardcoded backends (Discord, Teams, …) ignore it.
+    ///
+    /// Default returns [`SignupMethod::NotSupported`]. Phase B overrides this
+    /// per backend in each `clients/<backend>/src/lib.rs`.
+    ///
+    /// Sync — signup URL is static metadata; no I/O required.
+    fn get_signup_method(&self, _server_url: Option<&str>) -> SignupMethod {
+        SignupMethod::NotSupported
+    }
+
+    // --- Client-config surface (plan-client-version-override-and-sandbox A) --
+
+    /// Return the version string the plugin will advertise on the next
+    /// outbound request.
+    ///
+    /// With no override set this returns `"poly/0.0.0"`. Phase B replaces
+    /// this with a per-backend constant + host-stored override merge.
+    ///
+    /// Sync — version is an in-memory value; no I/O required.
+    fn client_version(&self) -> String {
+        "poly/0.0.0".to_string()
+    }
+
+    /// Set or clear the version override. `None` clears.
+    ///
+    /// Default returns `Err(NotSupported)` — Phase B wires this through
+    /// `host-api.storage-set` in each backend.
+    async fn set_client_version_override(
+        &self,
+        _override: Option<String>,
+    ) -> ClientResult<()> {
+        Err(ClientError::NotSupported(
+            "set_client_version_override".to_string(),
+        ))
+    }
+
+    /// Return the full mechanism inventory for this backend.
+    ///
+    /// Empty list is legal (most backends in v1 have no mechanisms).
+    /// Default returns `Ok(vec![])`.
+    async fn client_mechanisms(&self) -> ClientResult<Vec<Mechanism>> {
+        Ok(vec![])
+    }
+
+    /// Toggle one mechanism on or off by ID.
+    ///
+    /// Default returns `Err(NotSupported)` — Phase B wires this through
+    /// `host-api.storage-set` in backends that declare mechanisms.
+    async fn set_client_mechanism(
+        &self,
+        _id: &str,
+        _enabled: bool,
+    ) -> ClientResult<()> {
+        Err(ClientError::NotSupported(
+            "set_client_mechanism".to_string(),
+        ))
+    }
+
     /// Self-declared plugin manifest. Purely informational.
     ///
     /// Native (in-tree) backends return [`PluginManifest::default`]. WASM
