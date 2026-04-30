@@ -1,6 +1,6 @@
 # Client Signup-Link Surface — WIT Extension + Per-Backend Defaults + Playwright
 
-## Status: 🚧 IN PROGRESS — Phases A-D + F shipped; Phase E pending
+## Status: ✅ DONE — Phases A through F all shipped (Phase E Playwright scenarios landed in commit 8a9cd591)
 
 > Why this is its own plan: every backend's account-add wizard currently lacks a
 > "Don't have an account? Register here" affordance. Most users register

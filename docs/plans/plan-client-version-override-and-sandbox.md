@@ -1,6 +1,6 @@
 # Plan: Client Version Override + Per-Mechanism Toggles + Sandbox Host-Cap Stub
 
-## Status: 🚧 IN PROGRESS — Phases A+B shipped; C-J pending + J shipped
+## Status: ✅ DONE — Phases A through J all shipped + Phase B Fix-up (wire-level UA propagation across 7 backends)
 
 > Sibling future plan referenced from Phase I:
 > `docs/plans/plan-host-sandbox-impl.md` (stub written in Phase I.5).
