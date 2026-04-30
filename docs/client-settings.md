@@ -290,3 +290,12 @@ with a tooltip explaining the dependency.
 
 A `list_client_settings_audit` MCP tool exposing the audit rows via `poly-cli`
 (instead of direct SQLite) is a planned follow-up.
+
+---
+
+## See also
+
+- `docs/signup-link-surface.md` — how each backend declares its "Register"
+  affordance (`get_signup_method`), per-backend URL table, and browser-opening
+  behaviour across Web / Electron / Wry shells.
+- `docs/personas-cli.md` — CLI recipe book for meta-persona tools.

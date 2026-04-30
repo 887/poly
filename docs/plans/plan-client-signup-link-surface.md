@@ -1,6 +1,6 @@
 # Client Signup-Link Surface — WIT Extension + Per-Backend Defaults + Playwright
 
-## Status: 🚧 IN PROGRESS — Phases A+B shipped; C-F pending
+## Status: 🚧 IN PROGRESS — Phases A-D + F shipped; Phase E pending
 
 > Why this is its own plan: every backend's account-add wizard currently lacks a
 > "Don't have an account? Register here" affordance. Most users register
@@ -514,22 +514,25 @@ absence; real-network mode runs cleanly when the env flag is set.
 
 **Effort:** 2 hours.
 
-- [ ] **F.1** Update `clients/client/agents.md` with an "Implementing
-      get_signup_method" section, including the per-backend table as
-      the canonical reference.
-      **Verify:** `grep -n "get_signup_method" clients/client/agents.md`.
-- [ ] **F.2** Add a one-paragraph note to `docs/messaging-architecture.md`
-      (or `README.md` if architecture doc absent) calling out the new
-      "Register" link as a user-visible feature. Locate target file
-      during implementation: `find docs -name "messaging-architecture*"`.
-      **Verify:** `grep -rn "register link\|Register here" docs/ README.md` shows the new mention.
-- [ ] **F.3** Tick every `- [x]` in this plan, mark `## Status: ✅ DONE
-      — all phases shipped (commits …)`, and reference the merge commits
-      in each phase header per the checkbox rule.
-      **Verify:** `grep -c "^- \[x\]" docs/plans/plan-client-signup-link-surface.md` ≥ 30.
+- [x] **F.1** Create `docs/signup-link-surface.md` with Overview and
+      Per-backend table sections (orchestrator-revised scope — standalone
+      surface doc instead of inline agents.md section).
+      **Verify:** `ls -la docs/signup-link-surface.md && grep -q "Per-backend table" docs/signup-link-surface.md`.
+- [x] **F.2** Add sections 3-5 to `docs/signup-link-surface.md`: Adding
+      support for a new backend, Browser-opening behaviour per shell,
+      Customising the URL for power users. Cross-link from
+      `docs/personas-cli.md` and `docs/client-settings.md` See-also
+      blocks.
+      **Verify:** `grep -q "register-link-poly-server" docs/signup-link-surface.md && grep -q "signup-link-surface" docs/personas-cli.md && grep -q "signup-link-surface" docs/client-settings.md`.
+- [x] **F.3** Plan status updated to 🚧 IN PROGRESS — A-D+F shipped;
+      E pending. F.1+F.2 ticked inline. Full DONE marker deferred until
+      Phase E lands.
+      **Verify:** `grep "Status:" docs/plans/plan-client-signup-link-surface.md | head -1`.
 
 **Acceptance:** doc updates merged; this file marked DONE; the
 follow-up CI job from E.4 enabled (uncommented).
+
+### Phase F Status: DONE — F.1+F.2+F.3 shipped (docs only; plan DONE marker awaits Phase E)
 
 ---
 

@@ -234,6 +234,9 @@ poly-cli call meta_persona_set_heartbeat --slug broker-bob --interval_secs 0
 
 - `docs/client-settings.md` — CLI recipe book for `client_settings_*` tools:
   version overrides, mechanism toggles, and the rollback story.
+- `docs/signup-link-surface.md` — per-backend "Register here" affordance:
+  `SignupMethod` enum, per-backend URL table, browser-opening behaviour across
+  Web / Electron / Wry shells, and how to add signup support to a new backend.
 
 ---
 
