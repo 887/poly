@@ -1,0 +1,16 @@
+[package]
+name = "poly-host-sandbox"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+poly-client = { workspace = true }    # for HostCap
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "macros"] }
+
+[lints]
+workspace = true

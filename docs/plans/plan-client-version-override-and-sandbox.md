@@ -829,18 +829,18 @@ scenario passes for Discord + Matrix + Teams.
 
 ---
 
-## Phase I — Sandbox host-cap stub
+## Phase I — Sandbox host-cap stub (shipped in commit below)
 
 **Effort:** S (0.5 day).
 
 **Preconditions:** Phase A merged (WIT host-cap variant present).
 
-- [ ] **I.1** Create `crates/host-sandbox/Cargo.toml` and
+- [x] **I.1** Create `crates/host-sandbox/Cargo.toml` and
       `crates/host-sandbox/src/lib.rs` with the trait + types per
       D7 verbatim. Stub impl returns `Err(SandboxError::NotImplemented)`.
       Add to root `Cargo.toml` workspace members.
       **Verify:** `cargo build -p poly-host-sandbox` exits 0.
-- [ ] **I.2** Wire `StubSandbox::advertised_host_caps()` into the
+- [x] **I.2** Wire `StubSandbox::advertised_host_caps()` into the
       host's capability registry so `host-cap::sandbox-browser` is
       **NOT** advertised by default. Source it from
       `crates/host-bridge/src/client_config.rs::ClientConfigStore`
@@ -848,15 +848,15 @@ scenario passes for Discord + Matrix + Teams.
       `client_settings_list_mechanisms`.
       **Verify:** unit test asserts the cap is absent from the
       default registry.
-- [ ] **I.3** Add a unit test
+- [x] **I.3** Add a unit test
       `crates/host-sandbox/tests/stub.rs` asserting the stub returns
       `NotImplemented` and the cap is absent from the default
       registry.
       **Verify:** `cargo test -p poly-host-sandbox` exits 0.
-- [ ] **I.4** Reference the future plan inline:
+- [x] **I.4** Reference the future plan inline:
       `// FUTURE: docs/plans/plan-host-sandbox-impl.md` at the top
       of `crates/host-sandbox/src/lib.rs`.
-- [ ] **I.5** Add a stub
+- [x] **I.5** Add a stub
       `docs/plans/plan-host-sandbox-impl.md` with
       `## Status: 🚧 PLANNED — not started` and a one-paragraph
       problem statement (so the cross-reference resolves). The stub

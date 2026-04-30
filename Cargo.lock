@@ -6595,6 +6595,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "axum",
+ "base64",
  "chrono",
  "dioxus",
  "futures",
@@ -6729,6 +6730,16 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "web-sys",
+]
+
+[[package]]
+name = "poly-host-sandbox"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "poly-client",
+ "thiserror 2.0.18",
+ "tokio",
 ]
 
 [[package]]
