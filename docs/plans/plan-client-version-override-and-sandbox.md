@@ -808,7 +808,7 @@ provided the same assertion capability without adding a new dependency.
 
 ---
 
-### Phase B Fix-up — wire-level override propagation (shipped in commit `<pending>`)
+### Phase B Fix-up — wire-level override propagation (shipped in commit `9475a0e8`)
 
 All Phase G deferred wire gaps are now fixed. Every backend injects the correct
 `User-Agent` on every outbound HTTP request, and `cargo test --test version_override`
