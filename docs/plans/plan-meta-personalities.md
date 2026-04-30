@@ -1,6 +1,6 @@
 # Plan — Meta-Personalities (Personas Above Accounts)
 
-## Status: 🚧 IN PROGRESS — Phase A shipped; Phases B-H pending
+## Status: 🚧 IN PROGRESS — Phases A-C shipped; Phases D-H pending
 
 > **Created:** 2026-04-29
 > **Depends on:** `plan-claude-desktop-agent.md` (shipped Phases A-F: memory, drafts, events, typing, style, catch-me-up)
@@ -762,24 +762,24 @@ Numbers update live. Click → expanded source view.
 
 ---
 
-### Phase C — Context builder
+### Phase C — Context builder (shipped)
 
-- [ ] **C.1** `mcp/chat-mcp/src/persona/context.rs` skeleton with
+- [x] **C.1** `mcp/chat-mcp/src/persona/context.rs` skeleton with
   `PersonaContextRequest`, `PersonaContextBundle`.
-- [ ] **C.2** Source resolution: enumerate concrete `(account_id, chat_id)`
+- [x] **C.2** Source resolution: enumerate concrete `(account_id, chat_id)`
   list from `persona_sources` rows, including deny-wins precedence.
-- [ ] **C.3** Per-account chat enumeration via `client.list_servers /
+- [x] **C.3** Per-account chat enumeration via `client.list_servers /
   list_channels / list_dms` with `read_with_timeout(5s)`.
-- [ ] **C.4** Per-chat summary fetch (Phase A `chat_summaries` table from
+- [x] **C.4** Per-chat summary fetch (Phase A `chat_summaries` table from
   `plan-claude-desktop-agent.md`) — fall back to
   `client.get_messages(limit=30)` only if no summary.
-- [ ] **C.5** 32KB bundle-size cap with progressive degradation (drop
+- [x] **C.5** 32KB bundle-size cap with progressive degradation (drop
   oldest messages, then drop to summary-only).
-- [ ] **C.6** Audit row: `(action=memory_read, target_account=…,
+- [x] **C.6** Audit row: `(action=memory_read, target_account=…,
   target_chat=…, payload_json={message_count})`.
-- [ ] **C.7** Unit tests with mocked `ClientBackend`s for source resolution
+- [x] **C.7** Unit tests with mocked `ClientBackend`s for source resolution
   + size-cap behaviour.
-- [ ] **C.8** Integration test: end-to-end `meta_persona_invoke` against
+- [x] **C.8** Integration test: end-to-end `meta_persona_invoke` against
   `test-discord` returning a non-empty bundle.
 
 **Effort:** 1.5 sessions.
@@ -1134,4 +1134,24 @@ All 8 Phase B checklist items complete. Implementation notes:
   the row exists before the cascade wipes `persona_audit`.
 
 95 unit tests pass (`cargo test -p poly-chat-mcp --lib`).
+`cargo check -p poly-chat-mcp` clean.
+
+---
+
+## Phase C Status
+
+| Item | Date | Notes |
+|---|---|---|
+| `persona/mod.rs` + `persona/context.rs` skeleton | 2026-04-30 | `mcp/chat-mcp/src/persona/` |
+| Source resolution (deny-wins) | 2026-04-30 | `resolve_sources()` in `context.rs` |
+| Per-account chat enumeration with 5s timeout | 2026-04-30 | `BackendPoolProvider` trait impl |
+| Per-chat summary fetch + message fallback | 2026-04-30 | C.4 — `get_chat_summary` → `fetch_messages` |
+| 32KB bundle-size cap (progressive degradation) | 2026-04-30 | `apply_size_cap()` — msgs → summary-only → drop chats |
+| Audit rows per chat read | 2026-04-30 | C.6 — `record_persona_audit` memory_read |
+| 8 unit tests (mock provider) | 2026-04-30 | `persona::context::tests`, 103 total lib tests |
+| E2E integration test vs poly-test-discord | 2026-04-30 | `tests/persona_invoke_e2e.rs` |
+| `handle_meta_persona_invoke` rewired to context builder | 2026-04-30 | `tools.rs` — async, `bundle_v1` |
+
+103 unit tests pass (`cargo test -p poly-chat-mcp --lib`).
++1 integration test (`cargo test -p poly-chat-mcp --test persona_invoke_e2e`).
 `cargo check -p poly-chat-mcp` clean.

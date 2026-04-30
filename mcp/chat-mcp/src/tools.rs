@@ -1339,7 +1339,7 @@ pub async fn dispatch(tool: &str, args: &Value, pool: &mut BackendPool, mem: &Me
         "meta_persona_delete"        => handle_meta_persona_delete(args, mem),
         "meta_persona_set_sources"   => handle_meta_persona_set_sources(args, mem),
         "meta_persona_set_tool_whitelist" => handle_meta_persona_set_tool_whitelist(args, mem),
-        "meta_persona_invoke"        => handle_meta_persona_invoke(args, mem),
+        "meta_persona_invoke"        => handle_meta_persona_invoke(args, pool, mem).await,
         "meta_persona_set_heartbeat" => handle_meta_persona_set_heartbeat(args, mem),
         "meta_persona_get_memory"    => handle_meta_persona_get_memory(args, mem),
         "meta_persona_set_memory"    => handle_meta_persona_set_memory(args, mem),
@@ -2940,18 +2940,20 @@ fn handle_meta_persona_set_tool_whitelist(args: &Value, mem: &MemoryDb) -> Value
     ok_result(format!("{{\"tools_set\":{added}}}"))
 }
 
-/// Phase B stub for `meta_persona_invoke`.
+/// Phase C implementation of `meta_persona_invoke`.
 ///
-/// Returns a `bundle_v0` JSON shape containing the persona's identity +
-/// system prompt + bound source IDs + pinned facts. Claude Desktop uses
-/// this as the prompt context and composes the reply.
-///
-/// Phase C will swap in the full `PersonaContextBuilder` that fetches
-/// actual chat messages; for now we return only what is already in the
-/// database (no backend reads required).
-fn handle_meta_persona_invoke(args: &Value, mem: &MemoryDb) -> Value {
-    let slug        = match str_arg(args, "slug") { Some(v) => v, None => return err_result("missing 'slug'") };
-    let user_prompt = str_arg(args, "user_prompt");
+/// Builds a full `bundle_v1` via `PersonaContextBuilder::build()` which
+/// fetches live chat messages from the backend.  Pre-validation (persona
+/// exists, enabled) still happens here before handing off to the builder.
+async fn handle_meta_persona_invoke(args: &Value, pool: &BackendPool, mem: &MemoryDb) -> Value {
+    use crate::persona::{PersonaContextRequest, build};
+    use crate::persona::context::BackendPoolProvider;
+
+    let slug = match str_arg(args, "slug") {
+        Some(v) => v,
+        None    => return err_result("missing 'slug'"),
+    };
+    let user_prompt = str_arg(args, "user_prompt").map(|s| s.to_string());
 
     // Verify the persona exists and is enabled.
     let persona = match mem.get_persona(slug) {
@@ -2970,42 +2972,49 @@ fn handle_meta_persona_invoke(args: &Value, mem: &MemoryDb) -> Value {
         return err_result(format!("persona '{slug}' is disabled"));
     }
 
-    // Collect sources and pinned facts for the bundle.
-    let sources = mem.list_persona_sources(slug).unwrap_or_default();
-    let source_ids: Vec<serde_json::Value> = sources.iter().map(|s| {
-        json!({
-            "account_id":     s.get("account_id"),
-            "selector_kind":  s.get("selector_kind"),
-            "selector_value": s.get("selector_value"),
-            "include":        s.get("include"),
-        })
-    }).collect();
+    // Parse optional tuning parameters.
+    let max_messages_per_chat = args.get("max_messages_per_chat")
+        .and_then(|v| v.as_u64())
+        .map(|v| v.clamp(1, 200) as usize)
+        .unwrap_or(30);
+    let max_chats = args.get("max_chats")
+        .and_then(|v| v.as_u64())
+        .map(|v| v.clamp(1, 100) as usize)
+        .unwrap_or(25);
+    let include_summaries = args.get("include_summaries")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
 
-    let pinned_facts = mem.list_persona_facts(slug, true).unwrap_or_default();
+    let req = PersonaContextRequest {
+        slug: slug.to_string(),
+        user_prompt: user_prompt.clone(),
+        max_messages_per_chat,
+        max_chats,
+        include_summaries,
+    };
 
-    // bundle_v0 — Phase C replaces this with the full context aggregation.
-    let bundle = json!({
-        "bundle_version": "v0",
-        "note": "Phase C will add full chat context. For now, supply persona system_prompt + pinned_facts to Claude.",
-        "persona": {
-            "slug":         persona.get("slug"),
-            "name":         persona.get("name"),
-            "avatar_emoji": persona.get("avatar_emoji"),
-        },
-        "system_prompt":  persona.get("system_prompt"),
-        "style_notes":    persona.get("style_notes"),
-        "pinned_facts":   pinned_facts,
-        "source_ids":     source_ids,
-        "user_prompt":    user_prompt,
-    });
+    let provider = BackendPoolProvider { pool };
 
-    let payload_str = format!(
-        "{{\"action\":\"invoke\",\"user_prompt\":{}}}",
-        user_prompt.map(|p| format!("{p:?}")).unwrap_or_else(|| "null".to_string()),
-    );
-    audit(mem, slug, "invoke", Some(&payload_str), "ok", None);
-
-    ok_result(serde_json::to_string_pretty(&bundle).unwrap_or_default())
+    match build(req, mem, &provider).await {
+        Ok(bundle) => {
+            let payload_str = format!(
+                "{{\"action\":\"invoke\",\"user_prompt\":{}}}",
+                user_prompt
+                    .as_deref()
+                    .map(|p| format!("{p:?}"))
+                    .unwrap_or_else(|| "null".to_string()),
+            );
+            audit(mem, slug, "invoke", Some(&payload_str), "ok", None);
+            ok_result(serde_json::to_string_pretty(&bundle).unwrap_or_default())
+        }
+        Err(e) => {
+            let msg = e.to_string();
+            let _ = mem.record_persona_audit(
+                slug, "claude-desktop", "invoke", None, None, None, "error", Some(&msg),
+            );
+            err_result(format!("meta_persona_invoke build failed: {msg}"))
+        }
+    }
 }
 
 fn handle_meta_persona_set_heartbeat(args: &Value, mem: &MemoryDb) -> Value {
@@ -3534,7 +3543,7 @@ mod tests {
     }
 
     #[test]
-    fn integration_invoke_stub_returns_bundle_v0() {
+    fn integration_invoke_returns_bundle_v1() {
         let mem = fresh_mem();
         dispatch_sync("meta_persona_create", json!({
             "slug": "invoke-test",
@@ -3552,9 +3561,12 @@ mod tests {
         assert_eq!(r["isError"], false);
         let text = r["content"][0]["text"].as_str().unwrap();
         assert!(text.contains("bundle_version"), "bundle_version missing: {text}");
-        assert!(text.contains("v0"), "bundle v0 marker missing: {text}");
+        // Phase C: bundle_version is now "v1".
+        assert!(text.contains("v1"), "bundle v1 marker missing: {text}");
         assert!(text.contains("invoke-test"), "slug missing: {text}");
         assert!(text.contains("pinned_facts"), "pinned_facts missing: {text}");
+        // With an empty BackendPool no backends are connected, so chats is empty.
+        assert!(text.contains("\"chats\""), "chats field missing: {text}");
 
         // Audit row should have been written
         let audit_rows = mem.list_persona_audit("invoke-test", 10).unwrap();
