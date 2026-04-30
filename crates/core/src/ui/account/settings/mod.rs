@@ -15,7 +15,9 @@
 //! Every `#[component]` fn body in this module MUST stay under **150 lines**
 //! of RSX + logic. Extract sub-components rather than growing any file.
 
-mod client_settings;
+// Client settings (version override + mechanism toggles) are now global,
+// not per-account — moved to `crates/core/src/ui/settings/client_settings/`.
+// They're per-backend, not per-account, and live in the global Settings page.
 mod content_social;
 mod notifications;
 
@@ -36,7 +38,6 @@ use crate::ui::settings::scroll_spy::{
     SettingsScrollSpyConfig, install_settings_scroll_spy as install_shared_settings_scroll_spy,
 };
 use crate::ui::split_shell::SplitMenuShell;
-use client_settings::ClientSettingsSection;
 use content_social::ContentSocialSettings;
 use dioxus::prelude::*;
 use notifications::NotificationsSettings;
@@ -107,7 +108,6 @@ fn profile_section_element(_show: bool, _account_id: String) -> Element {
 /// Account-specific searchable settings nodes.
 /// Format: (i18n key, section slug).
 const ACCT_NAV_SECTIONS: &[(&str, &str)] = &[
-    ("client-settings-title", "client-config"),
     ("settings-notifications", "notifications"),
     ("settings-content-social", "content-social"),
 ];
@@ -155,7 +155,6 @@ fn install_account_settings_scroll_spy(_active_section: Signal<String>, _show_pr
         let mut active_section = _active_section;
         let show_profile = _show_profile;
         let mut section_ids = vec![
-            "acct-section-client-config".to_string(),
             "acct-section-notifications".to_string(),
             "acct-section-content-social".to_string(),
         ];
@@ -393,11 +392,6 @@ pub fn AccountSettingsPage(backend: String, account_id: String) -> Element {
                                     }
                                 }
                             }
-                        }
-                        div {
-                            id: "acct-section-client-config",
-                            class: if sf.is_empty() || acct_section_has_match("client-config", &sf) { "settings-section-block" } else { "settings-section-block settings-section-hidden" },
-                            ClientSettingsSection {}
                         }
                         div {
                             id: "acct-section-notifications",

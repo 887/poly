@@ -32,6 +32,7 @@ mod identity;
 mod language;
 mod media;
 mod plugin_settings;
+mod client_settings;
 pub(crate) mod scroll_spy;
 // Re-export the demo render function so ui/demo.rs can register it at runtime
 // via ClientManager::register_plugin_settings without knowing UI module internals.
@@ -79,6 +80,7 @@ use identity::IdentitySettings;
 use language::LanguageSettings;
 use media::MediaSettings;
 use plugins::PluginsSettings;
+use client_settings::ClientSettingsSection;
 use theme::ThemeSettings;
 use translation::TranslationSettings;
 use voice_video::VoiceVideoSettings;
@@ -495,6 +497,14 @@ fn SettingsAllSections(search_query: String) -> Element {
                     }
                 }
             }
+        }
+        // Client settings (per-backend version override + mechanism toggles)
+        // — global, not per-account. Lives next to the per-plugin sections
+        // since both are about plugins-as-backends. Sits BEFORE the divider
+        // so it appears at the top of the plugin-related area.
+        div { id: "settings-section-client-config",
+              class: if q.is_empty() { "settings-section-block" } else { "settings-section-block settings-section-hidden" },
+            ClientSettingsSection {}
         }
         // Dynamic plugin settings pages — appended after the last built-in section.
         // Divider is shown only when search is not active.
