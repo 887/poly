@@ -875,6 +875,15 @@ Numbers update live. Click → expanded source view.
 
 **Effort:** 1 session.
 
+### Phase F Status: DONE — all sub-steps shipped
+
+Files added: `mcp/chat-mcp/src/persona/heartbeat.rs`,
+`mcp/chat-mcp/tests/persona_heartbeat_e2e.rs`.
+Files modified: `mcp/chat-mcp/src/memory.rs` (+3 helpers),
+`mcp/chat-mcp/src/persona/mod.rs` (expose heartbeat module).
+F.7: polling (option b) — task self-terminates on disabled/cleared row.
+Integration test passes 3/3.
+
 ---
 
 ### Phase G — Outbound-mode allowlist + rate limiting

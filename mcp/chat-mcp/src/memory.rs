@@ -1289,7 +1289,7 @@ impl MemoryDb {
     pub fn prune_persona_audit_before(&self, cutoff_iso8601: &str) -> Result<u64, MemoryError> {
         let db = self.lock()?;
         let mut stmt = db.prepare(
-            "DELETE FROM persona_audit WHERE occurred_at < ?1"
+            "DELETE FROM persona_audit WHERE occurred_at < ?1" // poly-lint: allow cross-persona-memory — time-based housekeeping prune; intentionally crosses personas. See docstring.
         )?;
         stmt.bind((1, cutoff_iso8601))?;
         drain(&mut stmt)?;
