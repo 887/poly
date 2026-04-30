@@ -761,6 +761,7 @@ impl ClientBackend for ForgejoClient {
                     icon: None,
                     badge: None,
                     context_menu_target_kind: MenuTargetKind::Server,
+                    preview_image_url: None,
                 })
                 .collect();
             let next_cursor = if repos.len() > start + page_size {

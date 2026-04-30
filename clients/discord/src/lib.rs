@@ -863,6 +863,7 @@ impl ClientBackend for DiscordClient {
                 .unwrap_or_default();
             posts.push(ForumPost {
                 thread: Self::discord_thread_to_thread_info(&t),
+                preview_image_url: None,
                 applied_tags,
                 starter_message_id,
             });
@@ -1835,6 +1836,7 @@ impl ClientBackend for DiscordClient {
                     icon: s.icon_url.clone(),
                     badge: None,
                     context_menu_target_kind: MenuTargetKind::Server,
+                    preview_image_url: None,
                 }
             })
             .collect();

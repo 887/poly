@@ -60,6 +60,10 @@ pub struct Post {
     pub published: String,
     pub score: i32,
     pub comment_count: i32,
+    /// Optional preview thumbnail URL — mirrors the real Lemmy `thumbnail_url`
+    /// field (populated by pict-rs from Open Graph images). Points at the
+    /// local pict-rs-style route from A.5 when set.
+    pub thumbnail_url: Option<String>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -220,6 +224,7 @@ impl LemmyState {
                 published: "2026-04-01T00:00:00Z".to_string(),
                 score: 0,
                 comment_count: 0,
+                thumbnail_url: None,
             },
         ]);
         self.comments.insert("3".to_string(), vec![]);
@@ -239,6 +244,10 @@ impl LemmyState {
                     published: "2025-01-01T00:00:00Z".to_string(),
                     score: 42,
                     comment_count: 7,
+                    // Preview thumbnail — uses the local pict-rs-style route from Phase A.5.
+                    // Reuses the koala PNG bundled in clients/demo/assets/ so the dev demo
+                    // shows thumbnail rendering without external network access.
+                    thumbnail_url: Some("http://localhost:9108/pictrs/image/koala.png".to_string()),
                 },
                 Post {
                     id: 2,
@@ -251,6 +260,7 @@ impl LemmyState {
                     published: "2025-01-02T00:00:00Z".to_string(),
                     score: 128,
                     comment_count: 23,
+                    thumbnail_url: None,
                 },
             ],
         );
@@ -269,6 +279,8 @@ impl LemmyState {
                 published: "2025-01-03T00:00:00Z".to_string(),
                 score: 19,
                 comment_count: 5,
+                // Preview thumbnail — uses axolotl PNG as a second distinct preview example.
+                thumbnail_url: Some("http://localhost:9108/pictrs/image/axolotl.svg".to_string()),
             }],
         );
 

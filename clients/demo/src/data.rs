@@ -197,6 +197,7 @@ mod forum_helper_tests {
             reply_to: None,
             edited: false,
             thread: None,
+            preview_image_url: None,
         }
     }
 
@@ -478,6 +479,7 @@ pub fn demo3_messages(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
                 edited: false,
                 thread: None,
+                preview_image_url: None,
             },
             Message {
                 id: "fpost-rust-2".to_string(),
@@ -498,6 +500,7 @@ pub fn demo3_messages(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
                 edited: false,
                 thread: None,
+                preview_image_url: None,
             },
             Message {
                 id: "fpost-rust-3".to_string(),
@@ -518,6 +521,7 @@ pub fn demo3_messages(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
                 edited: false,
                 thread: None,
+                preview_image_url: None,
             },
         ],
         "forum-rust-questions" => vec![
@@ -537,6 +541,7 @@ pub fn demo3_messages(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
                 edited: false,
                 thread: None,
+                preview_image_url: None,
             },
             Message {
                 id: "fpost-rust-q2".to_string(),
@@ -556,6 +561,7 @@ pub fn demo3_messages(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
                 edited: false,
                 thread: None,
+                preview_image_url: None,
             },
         ],
         "forum-linux-news" => vec![
@@ -579,6 +585,7 @@ pub fn demo3_messages(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
                 edited: false,
                 thread: None,
+                preview_image_url: None,
             },
         ],
         "forum-linux-help" => vec![
@@ -600,6 +607,7 @@ pub fn demo3_messages(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
                 edited: false,
                 thread: None,
+                preview_image_url: None,
             },
         ],
         "forum-prog-general" => vec![
@@ -623,6 +631,7 @@ pub fn demo3_messages(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
                 edited: false,
                 thread: None,
+                preview_image_url: None,
             },
         ],
         "forum-prog-discussion" => vec![
@@ -644,6 +653,7 @@ pub fn demo3_messages(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
                 edited: false,
                 thread: None,
+                preview_image_url: None,
             },
         ],
         "forum-rust-showcase" => vec![
@@ -665,6 +675,7 @@ pub fn demo3_messages(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
                 edited: false,
                 thread: None,
+                preview_image_url: None,
             },
         ],
         "forum-linux-rices" => vec![
@@ -687,6 +698,7 @@ pub fn demo3_messages(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
                 edited: false,
                 thread: None,
+                preview_image_url: None,
             },
         ],
         _ => vec![],
@@ -750,6 +762,7 @@ pub fn demo3_post_comments(post_id: &str) -> Vec<Message> {
             reply_to,
             edited: false,
             thread: None,
+            preview_image_url: None,
         }
     }
 
@@ -933,6 +946,7 @@ pub fn demo3_dm_channels() -> Vec<DmChannel> {
                 reply_to: None,
                 edited: false,
                 thread: None,
+                preview_image_url: None,
             }),
             unread_count: 1,
             backend: BackendType::from(DEMO_FORUM_BACKEND),
@@ -962,6 +976,7 @@ pub fn demo3_dm_messages(dm_id: &str) -> Vec<Message> {
                 reply_to: None,
                 edited: false,
                 thread: None,
+                preview_image_url: None,
             },
             Message {
                 id: "dm3-msg-1".to_string(),
@@ -979,6 +994,7 @@ pub fn demo3_dm_messages(dm_id: &str) -> Vec<Message> {
                 reply_to: None,
                 edited: false,
                 thread: None,
+                preview_image_url: None,
             },
         ],
         _ => vec![],
@@ -1430,6 +1446,7 @@ pub fn cat_dog_arena_messages() -> Vec<Message> {
             reply_to: None,
             edited: false,
             thread: None,
+            preview_image_url: None,
         },
         Message {
             id: "arena-msg-1".to_string(),
@@ -1441,6 +1458,7 @@ pub fn cat_dog_arena_messages() -> Vec<Message> {
             reply_to: None,
             edited: false,
             thread: None,
+            preview_image_url: None,
         },
         Message {
             id: "arena-msg-2".to_string(),
@@ -1454,6 +1472,7 @@ pub fn cat_dog_arena_messages() -> Vec<Message> {
             reply_to: None,
             edited: false,
             thread: None,
+            preview_image_url: None,
         },
         Message {
             id: "arena-msg-3".to_string(),
@@ -1465,6 +1484,7 @@ pub fn cat_dog_arena_messages() -> Vec<Message> {
             reply_to: None,
             edited: false,
             thread: None,
+            preview_image_url: None,
         },
     ]
 }
@@ -1883,6 +1903,7 @@ pub fn demo2_messages(channel_id: &str) -> Vec<Message> {
                 reactions: vec![],
                 attachments: vec![],
                 thread: None,
+                preview_image_url: None,
             },
             Message {
                 id: "msg2-2".to_string(),
@@ -1897,6 +1918,7 @@ pub fn demo2_messages(channel_id: &str) -> Vec<Message> {
                 reactions: vec![],
                 attachments: vec![],
                 thread: None,
+                preview_image_url: None,
             },
         ],
         "ch2-current-read" => vec![Message {
@@ -1915,6 +1937,7 @@ pub fn demo2_messages(channel_id: &str) -> Vec<Message> {
             }],
             attachments: vec![],
             thread: None,
+            preview_image_url: None,
         }],
         "ch2-workouts" => vec![Message {
             id: "msg2-30".to_string(),
@@ -1930,6 +1953,7 @@ pub fn demo2_messages(channel_id: &str) -> Vec<Message> {
             }],
             attachments: vec![],
             thread: None,
+            preview_image_url: None,
         }],
         _ => vec![],
     }
@@ -2127,6 +2151,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "msg-ch-general-1".to_string(),
@@ -2141,6 +2166,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "msg-ch-general-2".to_string(),
@@ -2155,6 +2181,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             // Same author within 7 minutes — should be grouped
             Message {
@@ -2170,6 +2197,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: true,
         thread: None,
+        preview_image_url: None,
             },
             // — Day 2: Yesterday —
             Message {
@@ -2196,6 +2224,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "msg-ch-general-5".to_string(),
@@ -2218,6 +2247,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "msg-ch-general-6".to_string(),
@@ -2232,6 +2262,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "msg-ch-general-7".to_string(),
@@ -2246,6 +2277,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             // — Today —
             Message {
@@ -2261,6 +2293,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "msg-ch-general-9".to_string(),
@@ -2275,6 +2308,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             // Same author, within 7 min — grouped
             Message {
@@ -2297,6 +2331,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
         ],
         "ch-off-topic" => vec![
@@ -2323,6 +2358,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "msg-ch-off-topic-1".to_string(),
@@ -2337,6 +2373,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "msg-ch-off-topic-2".to_string(),
@@ -2351,6 +2388,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
         ],
         "ch-minecraft" => vec![
@@ -2366,6 +2404,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "msg-ch-minecraft-1".to_string(),
@@ -2377,6 +2416,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "msg-ch-minecraft-2".to_string(),
@@ -2388,6 +2428,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "msg-ch-minecraft-3".to_string(),
@@ -2413,6 +2454,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "msg-ch-minecraft-4".to_string(),
@@ -2427,6 +2469,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
         ],
         _ => vec![
@@ -2442,6 +2485,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: format!("msg-{channel_id}-1"),
@@ -2455,6 +2499,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: format!("msg-{channel_id}-2"),
@@ -2468,6 +2513,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
         ],
     }
@@ -2505,6 +2551,7 @@ pub fn demo_sent_message_for(
         reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
     };
     record_sent_message(channel_id, msg.clone());
     msg
@@ -2563,6 +2610,7 @@ pub fn demo_groups() -> Vec<Group> {
                 reply_to: None,
                 edited: false,
                 thread: None,
+                preview_image_url: None,
             }),
             backend: BackendType::from("demo"),
             account_id: DEMO_ACCOUNT_ID.to_string(),
@@ -2581,6 +2629,7 @@ pub fn demo_groups() -> Vec<Group> {
                 reply_to: None,
                 edited: false,
                 thread: None,
+                preview_image_url: None,
             }),
             backend: BackendType::from("demo"),
             account_id: DEMO_ACCOUNT_ID.to_string(),
@@ -2617,6 +2666,7 @@ pub fn demo_dm_channels() -> Vec<DmChannel> {
                     reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
                 }),
                 unread_count: if i < 2 { 1 } else { 0 },
                 backend: BackendType::from("demo"),
@@ -2667,6 +2717,7 @@ pub fn demo_dm_channels() -> Vec<DmChannel> {
             reply_to: None,
             edited: false,
             thread: None,
+            preview_image_url: None,
         }),
         unread_count: 1,
         backend: BackendType::from("demo"),
@@ -2688,6 +2739,7 @@ pub fn demo_dm_channels() -> Vec<DmChannel> {
             reply_to: None,
             edited: false,
             thread: None,
+            preview_image_url: None,
         }),
         unread_count: 0,
         backend: BackendType::from("demo"),
@@ -2722,6 +2774,7 @@ pub fn demo_dm_channels() -> Vec<DmChannel> {
             reply_to: None,
             edited: false,
             thread: None,
+            preview_image_url: None,
         }),
         unread_count: 1,
         backend: BackendType::from("demo"),
@@ -3051,6 +3104,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "dm-alice-1".to_string(),
@@ -3064,6 +3118,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "dm-alice-2".to_string(),
@@ -3077,6 +3132,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "dm-alice-3".to_string(),
@@ -3090,6 +3146,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "dm-alice-4".to_string(),
@@ -3101,6 +3158,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
         ],
 
@@ -3118,6 +3176,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "dm-bob-1".to_string(),
@@ -3131,6 +3190,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "dm-bob-2".to_string(),
@@ -3144,6 +3204,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "dm-bob-3".to_string(),
@@ -3155,6 +3216,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "dm-bob-4".to_string(),
@@ -3168,6 +3230,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
         ],
 
@@ -3185,6 +3248,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "dm-charlie-1".to_string(),
@@ -3198,6 +3262,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "dm-charlie-2".to_string(),
@@ -3211,6 +3276,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "dm-charlie-3".to_string(),
@@ -3224,6 +3290,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "dm-charlie-4".to_string(),
@@ -3237,6 +3304,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
         ],
 
@@ -3262,6 +3330,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "dm-diana-1".to_string(),
@@ -3275,6 +3344,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "dm-diana-2".to_string(),
@@ -3288,6 +3358,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "dm-diana-3".to_string(),
@@ -3301,6 +3372,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
         ],
 
@@ -3318,6 +3390,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "dm-eve-1".to_string(),
@@ -3329,6 +3402,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "dm-eve-2".to_string(),
@@ -3342,6 +3416,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "dm-eve-3".to_string(),
@@ -3355,6 +3430,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "dm-eve-4".to_string(),
@@ -3366,6 +3442,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
         ],
 
@@ -3384,6 +3461,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "dm-cat-dog-1".to_string(),
@@ -3404,6 +3482,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "dm-cat-dog-2".to_string(),
@@ -3418,6 +3497,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "dm-cat-dog-3".to_string(),
@@ -3438,6 +3518,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "dm-cat-dog-4".to_string(),
@@ -3452,6 +3533,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "dm-cat-dog-5".to_string(),
@@ -3472,6 +3554,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "dm-cat-dog-6".to_string(),
@@ -3486,6 +3569,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "dm-cat-dog-7".to_string(),
@@ -3506,6 +3590,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
         ],
 
@@ -3524,6 +3609,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "dm-dog-cat-1".to_string(),
@@ -3538,6 +3624,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "dm-dog-cat-2".to_string(),
@@ -3552,6 +3639,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "dm-dog-cat-3".to_string(),
@@ -3566,6 +3654,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "dm-dog-cat-4".to_string(),
@@ -3580,6 +3669,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "dm-dog-cat-5".to_string(),
@@ -3594,6 +3684,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "dm-dog-cat-6".to_string(),
@@ -3608,6 +3699,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "dm-dog-cat-7".to_string(),
@@ -3622,6 +3714,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
         ],
 
@@ -3642,6 +3735,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                     reply_to: None,
                     edited: false,
                     thread: None,
+                    preview_image_url: None,
                 },
                 Message {
                     id: "msg-dm-iris-1".to_string(),
@@ -3656,6 +3750,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                     reply_to: None,
                     edited: false,
                     thread: None,
+                    preview_image_url: None,
                 },
                 Message {
                     id: "msg-dm-iris-2".to_string(),
@@ -3693,6 +3788,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                     reply_to: None,
                     edited: false,
                     thread: None,
+                    preview_image_url: None,
                 },
                 Message {
                     id: "msg-dm-iris-3".to_string(),
@@ -3706,6 +3802,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                     reply_to: None,
                     edited: false,
                     thread: None,
+                    preview_image_url: None,
                 },
             ]
         }
@@ -3727,6 +3824,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                     reply_to: None,
                     edited: false,
                     thread: None,
+                    preview_image_url: None,
                 },
                 Message {
                     id: "msg-dm-jack-1".to_string(),
@@ -3741,6 +3839,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                     reply_to: None,
                     edited: false,
                     thread: None,
+                    preview_image_url: None,
                 },
                 Message {
                     id: "msg-dm-jack-2".to_string(),
@@ -3754,6 +3853,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                     reply_to: None,
                     edited: false,
                     thread: None,
+                    preview_image_url: None,
                 },
             ]
         }
@@ -3770,6 +3870,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
         ],
     }
@@ -3801,6 +3902,7 @@ pub fn demo_groups_v2() -> Vec<Group> {
                 reply_to: None,
                 edited: false,
                 thread: None,
+                preview_image_url: None,
             }),
             backend: BackendType::from("demo"),
             account_id: DEMO_ACCOUNT_ID.to_string(),
@@ -3819,6 +3921,7 @@ pub fn demo_groups_v2() -> Vec<Group> {
                 reply_to: None,
                 edited: false,
                 thread: None,
+                preview_image_url: None,
             }),
             backend: BackendType::from("demo"),
             account_id: DEMO_ACCOUNT_ID.to_string(),
@@ -3837,6 +3940,7 @@ pub fn demo_groups_v2() -> Vec<Group> {
                 reply_to: None,
                 edited: false,
                 thread: None,
+                preview_image_url: None,
             }),
             backend: BackendType::from("demo"),
             account_id: DEMO_ACCOUNT_ID.to_string(),
@@ -3860,6 +3964,7 @@ pub fn demo_groups_v2() -> Vec<Group> {
                 reply_to: None,
                 edited: false,
                 thread: None,
+                preview_image_url: None,
             }),
             backend: BackendType::from("demo"),
             account_id: DEMO_ACCOUNT_ID.to_string(),
@@ -3887,6 +3992,7 @@ pub fn demo2_groups() -> Vec<Group> {
                 reply_to: None,
                 edited: false,
                 thread: None,
+                preview_image_url: None,
             }),
             backend: BackendType::from("demo"),
             account_id: DEMO2_ACCOUNT_ID.to_string(),
@@ -3907,6 +4013,7 @@ pub fn demo2_groups() -> Vec<Group> {
                 reply_to: None,
                 edited: false,
                 thread: None,
+                preview_image_url: None,
             }),
             backend: BackendType::from("demo"),
             account_id: DEMO2_ACCOUNT_ID.to_string(),
@@ -3925,6 +4032,7 @@ pub fn demo2_groups() -> Vec<Group> {
                 reply_to: None,
                 edited: false,
                 thread: None,
+                preview_image_url: None,
             }),
             backend: BackendType::from("demo"),
             account_id: DEMO2_ACCOUNT_ID.to_string(),
@@ -3955,6 +4063,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "grp-rust-1".to_string(),
@@ -3968,6 +4077,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "grp-rust-2".to_string(),
@@ -3984,6 +4094,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "grp-rust-3".to_string(),
@@ -3997,6 +4108,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "grp-rust-4".to_string(),
@@ -4010,6 +4122,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
         ],
 
@@ -4028,6 +4141,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "grp-ww-1".to_string(),
@@ -4039,6 +4153,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "grp-ww-2".to_string(),
@@ -4052,6 +4167,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "grp-ww-3".to_string(),
@@ -4063,6 +4179,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "grp-ww-4".to_string(),
@@ -4074,6 +4191,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
         ],
 
@@ -4090,6 +4208,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "grp-mj-1".to_string(),
@@ -4103,6 +4222,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "grp-mj-2".to_string(),
@@ -4116,6 +4236,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "grp-mj-3".to_string(),
@@ -4127,6 +4248,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
         ],
 
@@ -4146,6 +4268,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "grp-tp-1".to_string(),
@@ -4159,6 +4282,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "grp-tp-2".to_string(),
@@ -4172,6 +4296,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "grp-tp-3".to_string(),
@@ -4185,6 +4310,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "grp-tp-4".to_string(),
@@ -4198,6 +4324,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
         ],
 
@@ -4215,6 +4342,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "grp2-oss-1".to_string(),
@@ -4228,6 +4356,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "grp2-oss-2".to_string(),
@@ -4241,6 +4370,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
         ],
 
@@ -4257,6 +4387,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "grp2-bw-1".to_string(),
@@ -4270,6 +4401,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "grp2-bw-2".to_string(),
@@ -4283,6 +4415,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
         ],
 
@@ -4310,6 +4443,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "grp2-mp-1".to_string(),
@@ -4323,6 +4457,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "grp2-mp-2".to_string(),
@@ -4336,6 +4471,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
         ],
 
@@ -4353,6 +4489,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
         ],
     }
@@ -4472,6 +4609,7 @@ fn demo2_opensource_general_messages() -> Vec<Message> {
                 reply_to: None,
                 edited: index % 41 == 0,
                 thread: None,
+                preview_image_url: None,
             }
         })
         .collect()
@@ -4496,6 +4634,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "msg2-contrib-1".to_string(),
@@ -4509,6 +4648,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "msg2-contrib-2".to_string(),
@@ -4522,6 +4662,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
         ],
         "ch2-recommendations" => vec![
@@ -4537,6 +4678,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "msg2-rec-1".to_string(),
@@ -4550,6 +4692,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "msg2-rec-2".to_string(),
@@ -4563,6 +4706,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
         ],
         "ch2-recipes" => vec![
@@ -4589,6 +4733,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "msg2-recipes-1".to_string(),
@@ -4602,6 +4747,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "msg2-recipes-2".to_string(),
@@ -4615,6 +4761,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "msg2-recipes-3".to_string(),
@@ -4628,6 +4775,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
         ],
         "ch2-techniques" => vec![
@@ -4643,6 +4791,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "msg2-tech-1".to_string(),
@@ -4656,6 +4805,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "msg2-tech-2".to_string(),
@@ -4669,6 +4819,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
         ],
         "ch2-nutrition" => vec![
@@ -4684,6 +4835,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "msg2-nutr-1".to_string(),
@@ -4697,6 +4849,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "msg2-nutr-2".to_string(),
@@ -4710,6 +4863,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "msg2-nutr-3".to_string(),
@@ -4723,6 +4877,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
         ],
         "ch2-workouts" => vec![
@@ -4741,6 +4896,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "msg2-wk-1".to_string(),
@@ -4752,6 +4908,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "msg2-wk-2".to_string(),
@@ -4765,6 +4922,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "msg2-wk-3".to_string(),
@@ -4781,6 +4939,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
         ],
         "ch-rust" => vec![
@@ -4796,6 +4955,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "msg-rust-1".to_string(),
@@ -4809,6 +4969,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "msg-rust-2".to_string(),
@@ -4822,6 +4983,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "msg-rust-3".to_string(),
@@ -4835,6 +4997,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "msg-rust-4".to_string(),
@@ -4848,6 +5011,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
         ],
         "ch-dioxus" => vec![
@@ -4865,6 +5029,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "msg-dioxus-1".to_string(),
@@ -4878,6 +5043,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "msg-dioxus-2".to_string(),
@@ -4891,6 +5057,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "msg-dioxus-3".to_string(),
@@ -4904,6 +5071,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
         ],
         "ch-production" => vec![
@@ -4930,6 +5098,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "msg-prod-1".to_string(),
@@ -4943,6 +5112,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "msg-prod-2".to_string(),
@@ -4956,6 +5126,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "msg-prod-3".to_string(),
@@ -4969,6 +5140,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
         ],
         "ch-valorant" => vec![
@@ -4985,6 +5157,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "msg-valorant-1".to_string(),
@@ -4998,6 +5171,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "msg-valorant-2".to_string(),
@@ -5011,6 +5185,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
             Message {
                 id: "msg-valorant-3".to_string(),
@@ -5024,6 +5199,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
             },
         ],
         _ => vec![],

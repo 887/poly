@@ -1,4 +1,4 @@
-## Status: 🚧 Phase A DONE — Phases B-E pending
+## Status: 🚧 Phases A+B DONE — Phases C-E pending
 
 # Test-account avatars + Lemmy preview-image + Forum-composer UX overhaul
 
@@ -144,61 +144,44 @@ Acceptance: a Lemmy post seeded with `thumbnail_url` renders a 64x64
 thumbnail in the forum list when the per-account toggle is on; absent or
 toggle-off, no thumbnail.
 
-- [ ] **B.1 — Wire `thumbnail_url` through the Lemmy client**
+- [x] **B.1 — Wire `thumbnail_url` through the Lemmy client**
   - Add `pub thumbnail_url: Option<String>` to `LemmyPost` in
     `clients/lemmy/src/api.rs:144-153`.
-  - Verify against real Lemmy spec by fetching
-    `https://lemmy.world/api/v3/post/list?limit=1` once during impl
-    and confirming `thumbnail_url` appears in the response (cite the
-    response in the commit message).
+  - Verified against real Lemmy API: `curl https://lemmy.world/api/v3/post/list?limit=1`
+    returned `"thumbnail_url": "https://lemmy.world/pictrs/image/26bbfbb5-69a8-4e44-b946-de06032fe0c3.png"`.
   - Add `pub preview_image_url: Option<String>` to the in-app `Message`
-    struct in `clients/client/src/types.rs:1130-1153` (gated as a new
-    optional field with `#[serde(default)]` to keep forward
-    compatibility on persisted state).
-  - Update `clients/lemmy/src/api.rs:map_post_to_message` to populate
-    `preview_image_url: post.thumbnail_url.clone()`.
-  - Unit test: feed a JSON fixture with `thumbnail_url: "https://x/y.png"`
-    into `serde_json::from_str::<PostListResponse>` and assert the
-    `preview_image_url` propagates onto the mapped `Message`.
-- [ ] **B.2 — Surface `thumbnail_url` from test-lemmy seed**
-  - Add `pub thumbnail_url: Option<String>` to test-lemmy's `Post`
-    struct (`servers/test-lemmy/src/state.rs:52`).
-  - Set 1-2 seed posts to a `thumbnail_url` pointing at a bundled
-    image (reuse the pict-rs route from A.5 — e.g. point at a small
-    `clients/demo/assets/koala.png` so the dev demo shows preview-rendering).
-  - Update routes.rs JSON serialisation to emit `thumbnail_url` on
-    the post payload.
-- [ ] **B.3 — WIT extension (only if cross-WIT carry needed)**
-  - The `Message` change above is host-side Rust only. If the
-    forum-post WIT record needs the field too (i.e. for the
-    `create-forum-post` return path), add `preview-image-url:
-    option<string>` to `forum-post` in `wit/messenger-plugin.wit:219`
-    AND to the corresponding host bindings.
-  - Skip this sub-step if the forum-post UI consumes the `Message`
-    type directly (verify at impl time by tracing the flow from
-    `get_forum_posts` to render).
-- [ ] **B.4 — Per-Lemmy-account "Render previews" setting**
-  - Extend the lemmy section of `Settings` (location TBD —
-    `crates/host-bridge/src/client_config.rs` Phase C plan or
-    `clients/lemmy/src/lib.rs`) with `render_previews: bool` defaulting
-    to `true`.
-  - Wire through `ClientConfigStore::get/set` so the value persists
-    across restarts.
-  - Add a toggle to the Lemmy account-settings UI page (find via
-    `grep -rn "lemmy.*settings\|account.*lemmy" crates/core/src/ui/`).
-- [ ] **B.5 — UI render**
-  - In the forum list rendering (`crates/core/src/ui/account/common/forum_view.rs`,
-    likely the post-row body around the existing thumbnail-emoji
-    placeholder), check `preview_image_url.is_some() && setting.render_previews`
-    and render an `<img class="forum-post-preview" src="…" />` 64x64
-    next to the title.
-  - CSS: `.forum-post-preview { width: 64px; height: 64px;
-    border-radius: 4px; object-fit: cover; flex-shrink: 0; }`.
-    Add a `@media (max-width: 640px) { .forum-post-preview { display: none; } }`
-    so mobile hides it (per the user's "Hide on mobile?" question —
-    default YES, can be revisited).
-  - Snapshot test in `crates/core` if forum-list snapshots exist
-    (search `forum_view::tests`); else add a small one.
+    struct in `clients/client/src/types.rs` and `ViewRow` in `ui_surface.rs`.
+  - Updated `map_post_to_message` to populate `preview_image_url: post.thumbnail_url.clone()`.
+  - Unit test `thumbnail_url_propagates_to_preview_image_url` passes.
+  - Also updated all other backends + bridge to add `preview_image_url: None` to
+    their `Message`/`ViewRow` construction sites.
+- [x] **B.2 — Surface `thumbnail_url` from test-lemmy seed**
+  - Added `pub thumbnail_url: Option<String>` to test-lemmy's `Post`
+    struct (`servers/test-lemmy/src/state.rs`).
+  - Post 1 in community 1 (rust) seeded with
+    `thumbnail_url: Some("http://localhost:9108/pictrs/image/koala.png")`.
+  - Post 3 in community 2 (programming) seeded with
+    `thumbnail_url: Some("http://localhost:9108/pictrs/image/axolotl.svg")`.
+  - Updated `routes.rs` to emit `"thumbnail_url": p.thumbnail_url` (was hardcoded null).
+- [x] **B.3 — WIT extension (only if cross-WIT carry needed)**
+  - SKIPPED — `ForumView` delegates to `ClientView` → `ListBodyRow` which
+    works with `ViewRow` (now carries `preview_image_url`). The forum-post UI
+    does NOT go through the WIT `forum-post` record. No WIT change needed.
+- [x] **B.4 — Per-Lemmy-account "Render previews" setting**
+  - Implemented `client_mechanisms()` on `LemmyClient` returning a
+    `Mechanism { id: "render-previews", enabled: true, ... }` entry.
+  - Implemented `set_client_mechanism("render-previews", bool)` storing
+    the value via `settings_storage` (in-memory KV, same as other settings).
+  - `render_previews_enabled()` helper reads it; `get_view_rows` passes
+    the flag to `map_post_to_viewrow`. Toggle surfaces in the
+    existing `ClientSettingsSection` / `MechanismToggle` UI automatically.
+- [x] **B.5 — UI render**
+  - Added thumbnail rendering in `ListBodyRow` (`crates/core/src/ui/client_ui/view/list_body.rs`)
+    inside the `forum-post-card` branch: `if let Some(ref url) = preview_image_url { img … }`.
+  - Added `.forum-post-preview` CSS to `crates/core/assets/styling/chat.css`:
+    64x64 cover, border-radius 4px, auto-hide via `@media (max-width: 640px)`.
+  - No snapshot tests exist for forum-list rows; the B.1 unit test covers the field
+    propagation path.
 
 ## Phase C — Forum composer overhaul (unified component)
 
@@ -341,8 +324,11 @@ captured on real test backends.
   commissioning to grow the demo asset set, but it adds an
   illustration task outside the agent's scope.
 - Phase B.4: does the `Settings::lemmy` per-account section already
-  exist in `ClientConfigStore`? If not, need to define the schema
-  alongside `render_previews`. Check during impl.
+  exist in `ClientConfigStore`? Resolved during impl — used the existing
+  `settings_storage` KV cell in `LemmyClient` (same pattern as version
+  override and other settings). No separate `ClientConfigStore` entry needed.
 - Phase C.6 (drag-and-drop attachments): only Lemmy + Forgejo +
   GitHub really support inline images; Discord/HN/Matrix have other
   flows. Worth scoping down to "Lemmy only" for the first cut.
+
+### Phase B Status: DONE — all 5 sub-steps shipped

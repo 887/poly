@@ -82,7 +82,7 @@ fn post_view(p: &crate::state::Post) -> Value {
             "embed_title": null,
             "embed_description": null,
             "embed_video_url": null,
-            "thumbnail_url": null,
+            "thumbnail_url": p.thumbnail_url,
             "language_id": 0,
             "featured_community": false,
             "featured_local": false,

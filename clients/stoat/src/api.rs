@@ -680,6 +680,7 @@ impl StoatMessage {
             reply_to: None,
             edited: self.edited.is_some(),
             thread: None,
+            preview_image_url: None,
         }
     }
 

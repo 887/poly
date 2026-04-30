@@ -579,6 +579,7 @@ mod tests {
                 reply_to: None,
                 attachments: vec![],
                 thread: None,
+                preview_image_url: None,
             },
         };
         assert_eq!(EventKind::from_client_event(&ev_msg), EventKind::MessageReceived);

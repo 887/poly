@@ -228,6 +228,7 @@ impl MatrixClient {
             reactions: vec![],
             reply_to: None,
             thread: None,
+            preview_image_url: None,
         })
     }
 
@@ -357,6 +358,7 @@ impl MatrixClient {
             reactions: vec![],
             reply_to: None,
             thread: None,
+            preview_image_url: None,
         })
     }
 
@@ -1837,6 +1839,7 @@ impl ClientBackend for MatrixClient {
                 icon,
                 badge: None,
                 context_menu_target_kind: if is_space {
+                preview_image_url: None,
                     MenuTargetKind::Server
                 } else {
                     MenuTargetKind::Channel

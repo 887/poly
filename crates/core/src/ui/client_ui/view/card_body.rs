@@ -184,6 +184,7 @@ mod tests {
             icon: None,
             badge: None,
             context_menu_target_kind: MenuTargetKind::Message,
+            preview_image_url: None,
         }
     }
 

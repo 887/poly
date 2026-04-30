@@ -1150,6 +1150,12 @@ pub struct Message {
     /// If this message has spawned a thread, lightweight info about it.
     #[serde(default)]
     pub thread: Option<ThreadInfo>,
+    /// Optional preview thumbnail URL for forum posts (Lemmy `thumbnail_url`).
+    /// Populated when the post has an associated Open Graph image. Absent for
+    /// non-forum messages and when no preview was fetched. Gated by the
+    /// per-backend `render-previews` mechanism.
+    #[serde(default)]
+    pub preview_image_url: Option<String>,
 }
 
 /// A reaction on a message.

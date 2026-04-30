@@ -390,6 +390,7 @@ impl ClientBackend for DemoClient {
                                     reply_to: None,
                                     edited: false,
                                     thread: None,
+                                    preview_image_url: None,
                                 },
                             }
                         }
@@ -423,6 +424,7 @@ impl ClientBackend for DemoClient {
                                     reply_to: None,
                                     edited: false,
                                     thread: None,
+                                    preview_image_url: None,
                                 },
                             }
                         }
@@ -606,6 +608,7 @@ impl ClientBackend for DemoClient {
                         icon: None,
                         badge: None,
                         context_menu_target_kind: MenuTargetKind::Server,
+                        preview_image_url: None,
                     }
                 })
                 .collect();
@@ -882,6 +885,7 @@ impl ClientBackend for DemoClient2 {
                 reply_to: None,
                 edited: false,
                 thread: None,
+                preview_image_url: None,
             }),
             unread_count: 1,
             backend: BackendType::from("demo"),
@@ -1096,6 +1100,7 @@ impl ClientBackend for DemoClient2 {
                         icon: None,
                         badge: None,
                         context_menu_target_kind: MenuTargetKind::Server,
+                        preview_image_url: None,
                     }
                 })
                 .collect();
@@ -1587,6 +1592,7 @@ impl ClientBackend for DemoClient3 {
                         icon: None,
                         badge: None,
                         context_menu_target_kind: MenuTargetKind::Server,
+                        preview_image_url: None,
                     }
                 })
                 .collect();
@@ -1641,6 +1647,7 @@ impl ClientBackend for DemoClient3 {
                     icon: None,
                     badge: None,
                     context_menu_target_kind: MenuTargetKind::Message,
+                    preview_image_url: None,
                 }
             })
             .collect();
@@ -1756,6 +1763,7 @@ fn demo_federated_posts(channel_id: &str) -> Vec<Message> {
             reply_to: None,
             edited: false,
             thread: None,
+            preview_image_url: None,
         }
     }
     match channel_id {

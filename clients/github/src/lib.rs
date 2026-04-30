@@ -719,6 +719,7 @@ impl ClientBackend for GitHubClient {
                     icon: None,
                     badge: r.language.clone(),
                     context_menu_target_kind: MenuTargetKind::Server,
+                    preview_image_url: None,
                 })
                 .collect();
             return Ok(ViewRowsPage { rows, next_cursor: None });

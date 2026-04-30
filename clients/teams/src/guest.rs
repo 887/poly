@@ -227,6 +227,7 @@ fn graph_message_to_wit(m: GraphMessage) -> wit::Message {
         reply_to: None,
         edited: m.last_modified.is_some(),
         thread: None,
+        preview_image_url: None,
     }
 }
 

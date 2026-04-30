@@ -96,6 +96,16 @@ impl LemmyClient {
         self.http.session().map(|s| s.jwt)
     }
 
+    /// Read the `render-previews` mechanism state from in-memory storage.
+    ///
+    /// Defaults to `true` (previews on) when the user has never toggled it.
+    fn render_previews_enabled(&self) -> bool {
+        self.settings_storage
+            .get(SettingsScope::AccountGlobal, "", "render-previews")
+            .map(|v| v != "false")
+            .unwrap_or(true)
+    }
+
     /// Return the currently stored user_id, if authenticated.
     fn current_user_id(&self) -> Option<i64> {
         self.http.session().map(|s| s.user_id)
@@ -665,6 +675,35 @@ impl ClientBackend for LemmyClient {
         self.settings_storage.set(scope, scope_id, key, value)
     }
 
+    /// Return the mechanism inventory for this backend.
+    ///
+    /// Declares the `render-previews` mechanism, which controls whether
+    /// forum post thumbnails (`thumbnail_url`) are fetched from the pict-rs
+    /// CDN and displayed next to post titles. Default ON.
+    async fn client_mechanisms(&self) -> ClientResult<Vec<Mechanism>> {
+        let enabled = self.render_previews_enabled();
+        Ok(vec![Mechanism {
+            id: "render-previews".to_string(),
+            name_key: "plugin-lemmy-mechanism-render-previews-label".to_string(),
+            enabled,
+            requires_host_cap: None,
+            description_key: Some("plugin-lemmy-mechanism-render-previews-desc".to_string()),
+        }])
+    }
+
+    /// Toggle the `render-previews` mechanism on or off.
+    async fn set_client_mechanism(&self, id: &str, enabled: bool) -> ClientResult<()> {
+        match id {
+            "render-previews" => self.settings_storage.set(
+                SettingsScope::AccountGlobal,
+                "",
+                "render-previews",
+                if enabled { "true" } else { "false" },
+            ),
+            _ => Err(ClientError::NotFound(format!("unknown mechanism: {id}"))),
+        }
+    }
+
     async fn get_sidebar_declaration(&self) -> ClientResult<SidebarDeclaration> {
         Ok(SidebarDeclaration {
             layout: SidebarLayoutKind::Communities,
@@ -757,7 +796,8 @@ impl ClientBackend for LemmyClient {
             .await?;
 
         let now = chrono::Utc::now();
-        let rows: Vec<ViewRow> = resp.posts.iter().map(|v| map_post_to_viewrow(v, now)).collect();
+        let render_previews = self.render_previews_enabled();
+        let rows: Vec<ViewRow> = resp.posts.iter().map(|v| map_post_to_viewrow(v, now, render_previews)).collect();
         let next_cursor = next_page_cursor(page, page_size as usize, rows.len());
 
         Ok(ViewRowsPage { rows, next_cursor })

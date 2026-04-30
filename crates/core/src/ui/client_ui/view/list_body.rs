@@ -320,6 +320,7 @@ pub fn ListBodyRow(row: ViewRow, on_click: EventHandler<String>) -> Element {
     let icon = row.icon.clone();
     let badge = row.badge.clone();
 
+    let preview_image_url = row.preview_image_url.clone();
     let (maybe_score, meta_rest): (Option<i64>, String) = meta_raw
         .as_deref()
         .map_or((None, String::new()), parse_score_meta);
@@ -380,6 +381,14 @@ pub fn ListBodyRow(row: ViewRow, on_click: EventHandler<String>) -> Element {
                     }
                     if !meta_rest.is_empty() {
                         div { class: "forum-post-meta", "{meta_rest}" }
+                    }
+                }
+                if let Some(ref url) = preview_image_url {
+                    img {
+                        class: "forum-post-preview",
+                        src: "{url}",
+                        alt: "Post preview",
+                        loading: "lazy",
                     }
                 }
             }
@@ -578,6 +587,7 @@ mod tests {
             icon: None,
             badge: None,
             context_menu_target_kind: MenuTargetKind::Message,
+            preview_image_url: None,
         }
     }
 
@@ -603,6 +613,7 @@ mod tests {
             icon: Some("icon".into()),
             badge: Some("b".into()),
             context_menu_target_kind: MenuTargetKind::Message,
+            preview_image_url: None,
         };
         let parts = row_card_parts(&r);
         assert!(parts.has_primary);

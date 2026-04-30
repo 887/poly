@@ -529,6 +529,12 @@ pub struct ViewRow {
     pub icon: Option<String>,
     pub badge: Option<String>,
     pub context_menu_target_kind: MenuTargetKind,
+    /// Optional preview thumbnail URL for forum post rows. Populated by the
+    /// Lemmy backend when `thumbnail_url` is present on the post AND the
+    /// per-account `render-previews` mechanism is enabled.
+    /// Other backends leave this as `None`.
+    #[serde(default)]
+    pub preview_image_url: Option<String>,
 }
 
 /// D23 — one page of rows plus an optional next-cursor.

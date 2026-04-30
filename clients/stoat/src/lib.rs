@@ -1580,6 +1580,7 @@ impl ClientBackend for StoatClient {
                     icon: s.icon_url.clone(),
                     badge: None,
                     context_menu_target_kind: MenuTargetKind::Server,
+                    preview_image_url: None,
                 }
             })
             .collect();
@@ -1801,6 +1802,7 @@ fn parse_bonfire_event(json: serde_json::Value) -> Option<ClientEvent> {
                 reply_to: None,
                 edited: false,
                 thread: None,
+                preview_image_url: None,
             };
             Some(ClientEvent::MessageReceived { channel_id, message })
         }

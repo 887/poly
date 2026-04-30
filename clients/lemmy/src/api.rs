@@ -150,6 +150,12 @@ pub struct LemmyPost {
     pub updated: Option<DateTime<Utc>>,
     #[serde(default)]
     pub ap_id: Option<String>,
+    /// Preview thumbnail URL — set by pict-rs when the post URL's Open Graph
+    /// image is available. Verified present in real Lemmy API responses:
+    /// `curl https://lemmy.world/api/v3/post/list?limit=1` returns
+    /// `"thumbnail_url": "https://lemmy.world/pictrs/image/<uuid>.png"`.
+    #[serde(default)]
+    pub thumbnail_url: Option<String>,
 }
 
 /// A post view as returned in list responses.
@@ -406,6 +412,7 @@ pub fn map_community_to_viewrow(view: &CommunityView, unread: u32) -> ViewRow {
         icon: community.icon.clone(),
         badge: if unread > 0 { Some(unread.to_string()) } else { None },
         context_menu_target_kind: MenuTargetKind::Server,
+        preview_image_url: None,
     }
 }
 
@@ -474,6 +481,7 @@ pub fn map_post_to_message(view: &PostView) -> Message {
         reply_to: None,
         edited: post.updated.is_some(),
         thread: None,
+        preview_image_url: post.thumbnail_url.clone(),
     }
 }
 
@@ -498,7 +506,7 @@ pub fn humanize_age(published: DateTime<Utc>, now: DateTime<Utc>) -> String {
 /// Pure mapping — no I/O. Used by `get_view_rows`. The `SCORE:` prefix on
 /// `meta_text` is load-bearing: ListBody/TreeBody render the vote-card
 /// shape when it appears (per Pack A).
-pub fn map_post_to_viewrow(view: &PostView, now: DateTime<Utc>) -> ViewRow {
+pub fn map_post_to_viewrow(view: &PostView, now: DateTime<Utc>, render_previews: bool) -> ViewRow {
     let post = &view.post;
     let creator = &view.creator;
     let counts = &view.counts;
@@ -512,6 +520,12 @@ pub fn map_post_to_viewrow(view: &PostView, now: DateTime<Utc>) -> ViewRow {
         humanize_age(post.published, now)
     );
 
+    let preview_image_url = if render_previews {
+        post.thumbnail_url.clone()
+    } else {
+        None
+    };
+
     ViewRow {
         id,
         primary_text: post.name.clone(),
@@ -520,6 +534,7 @@ pub fn map_post_to_viewrow(view: &PostView, now: DateTime<Utc>) -> ViewRow {
         icon: None,
         badge: None,
         context_menu_target_kind: MenuTargetKind::Message,
+        preview_image_url,
     }
 }
 
@@ -573,6 +588,7 @@ pub fn map_comment_to_message(view: &CommentView) -> Message {
         reply_to: None,
         edited: comment.updated.is_some(),
         thread: None,
+        preview_image_url: None, // comments do not have preview thumbnails
     }
 }
 
@@ -622,6 +638,7 @@ pub fn map_pm_to_message(view: &PrivateMessageView, my_user_id: i64) -> Message 
         reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None, // private messages do not have preview thumbnails
     }
 }
 
@@ -1312,7 +1329,7 @@ mod tests {
         // Pin the clock so humanize_age output is deterministic.
         let now = Utc.with_ymd_and_hms(2026, 4, 18, 12, 0, 0).unwrap();
 
-        let row0 = map_post_to_viewrow(&resp.posts[0], now);
+        let row0 = map_post_to_viewrow(&resp.posts[0], now, true);
         assert_eq!(row0.id, "https://lemmy.example.com/post/101");
         assert_eq!(row0.primary_text, "Rust 2025 edition is here");
         assert_eq!(row0.secondary_text.as_deref(), Some("by Alice A."));
@@ -1323,7 +1340,7 @@ mod tests {
         assert_eq!(row0.context_menu_target_kind, MenuTargetKind::Message);
 
         // Row 1: creator has no display_name → falls back to `name`.
-        let row1 = map_post_to_viewrow(&resp.posts[1], now);
+        let row1 = map_post_to_viewrow(&resp.posts[1], now, true);
         assert_eq!(row1.secondary_text.as_deref(), Some("by bob"));
         let meta1 = row1.meta_text.expect("meta required");
         assert!(meta1.starts_with("SCORE:128"));
@@ -1361,6 +1378,63 @@ mod tests {
 
         // Short page → no next cursor.
         assert!(next_page_cursor(3, 25, 10).is_none());
+    }
+
+    /// Verify that `LemmyPost.thumbnail_url` propagates to `ViewRow.preview_image_url`
+    /// through `map_post_to_viewrow` when `render_previews` is true, and is suppressed
+    /// when `render_previews` is false.
+    ///
+    /// Also verifies propagation through `map_post_to_message.preview_image_url`.
+    #[test]
+    fn thumbnail_url_propagates_to_preview_image_url() {
+        let raw = include_str!("../tests/fixtures/post_list.json");
+        let resp: PostListResponse =
+            serde_json::from_str(raw).expect("fixture must deserialize");
+
+        let now = Utc.with_ymd_and_hms(2026, 4, 18, 12, 0, 0).unwrap();
+
+        // Post 0 has thumbnail_url set in the fixture.
+        let view0 = &resp.posts[0];
+        assert_eq!(
+            view0.post.thumbnail_url.as_deref(),
+            Some("https://lemmy.example.com/pictrs/image/test-preview.png"),
+            "fixture thumbnail_url must deserialize correctly"
+        );
+
+        // render_previews = true: preview_image_url is populated on the ViewRow.
+        let row_on = map_post_to_viewrow(view0, now, true);
+        assert_eq!(
+            row_on.preview_image_url.as_deref(),
+            Some("https://lemmy.example.com/pictrs/image/test-preview.png"),
+            "render_previews=true must propagate thumbnail_url to ViewRow.preview_image_url"
+        );
+
+        // render_previews = false: preview_image_url is suppressed on the ViewRow.
+        let row_off = map_post_to_viewrow(view0, now, false);
+        assert_eq!(
+            row_off.preview_image_url,
+            None,
+            "render_previews=false must suppress preview_image_url even when thumbnail_url is set"
+        );
+
+        // map_post_to_message always propagates thumbnail_url → preview_image_url
+        // (the mechanism check lives in get_view_rows, not in the message mapper).
+        let msg = map_post_to_message(view0);
+        assert_eq!(
+            msg.preview_image_url.as_deref(),
+            Some("https://lemmy.example.com/pictrs/image/test-preview.png"),
+            "map_post_to_message must propagate thumbnail_url to Message.preview_image_url"
+        );
+
+        // Post 1 has no thumbnail_url — preview_image_url must be None.
+        let view1 = &resp.posts[1];
+        assert!(view1.post.thumbnail_url.is_none(), "post[1] has no thumbnail_url in fixture");
+        let row1 = map_post_to_viewrow(view1, now, true);
+        assert_eq!(
+            row1.preview_image_url,
+            None,
+            "absent thumbnail_url must produce None preview_image_url"
+        );
     }
 }
 

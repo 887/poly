@@ -386,6 +386,8 @@ pub fn from_wit_message(m: wit::Message) -> pc::Message {
         reply_to: m.reply_to.map(from_wit_message_reply_preview),
         edited: m.edited,
         thread: m.thread.map(from_wit_thread_info),
+        // WIT Message surface has no preview_image_url yet — only native backends populate it.
+        preview_image_url: None,
     }
 }
 
@@ -1050,6 +1052,9 @@ pub fn from_wit_view_row(r: wit_views::ViewRow) -> pc::ViewRow {
         icon: r.icon,
         badge: r.badge,
         context_menu_target_kind: from_wit_view_menu_target_kind(r.context_menu_target_kind),
+        // WIT-side ViewRow has no preview_image_url yet (WASM plugin surface);
+        // host-side previews are populated by native backends only.
+        preview_image_url: None,
     }
 }
 

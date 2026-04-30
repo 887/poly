@@ -17,7 +17,8 @@
         "local": true,
         "featured_community": false,
         "featured_local": false,
-        "instance_id": 1
+        "instance_id": 1,
+        "thumbnail_url": "https://lemmy.example.com/pictrs/image/test-preview.png"
       },
       "creator": {
         "id": 7,

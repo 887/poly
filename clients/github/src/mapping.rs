@@ -215,6 +215,7 @@ pub fn map_issue_to_viewrow(issue: &GhIssue) -> ViewRow {
         icon: None,
         badge: Some(issue.state.clone()),
         context_menu_target_kind: MenuTargetKind::Channel,
+        preview_image_url: None,
     }
 }
 
@@ -242,6 +243,7 @@ pub fn map_discussion_to_viewrow(d: &GhDiscussion) -> ViewRow {
         icon: d.category.emoji.clone(),
         badge,
         context_menu_target_kind: MenuTargetKind::Channel,
+        preview_image_url: None,
     }
 }
 
@@ -339,6 +341,7 @@ pub fn issue_to_message(issue: &GhIssue) -> Message {
         reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
     }
 }
 
@@ -355,6 +358,7 @@ pub fn comment_to_message(c: &GhIssueComment) -> Message {
         reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
     }
 }
 

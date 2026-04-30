@@ -1395,6 +1395,25 @@
     word-break: break-word;
 }
 
+/* Preview thumbnail shown on Lemmy forum post rows when
+   the per-account "render-previews" mechanism is enabled.
+   Auto-hides on narrow screens so the title stays readable. */
+.forum-post-preview {
+    width: 64px;
+    height: 64px;
+    border-radius: 4px;
+    object-fit: cover;
+    flex-shrink: 0;
+    align-self: center;
+    margin-left: auto;
+}
+
+@media (max-width: 640px) {
+    .forum-post-preview {
+        display: none;
+    }
+}
+
 .forum-post-footer {
     display: flex;
     align-items: center;

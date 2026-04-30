@@ -285,6 +285,7 @@ pub fn hn_item_to_message(item: &HnItem) -> Message {
         reply_to: None,
         edited: false,
         thread: None,
+        preview_image_url: None,
     }
 }
 
@@ -330,6 +331,7 @@ pub fn hn_comment_to_message(item: &HnItem, parent_id: Option<u64>, story_id: u6
         reply_to,
         edited: false,
         thread: None,
+        preview_image_url: None,
     }
 }
 
@@ -398,6 +400,7 @@ pub fn hn_item_to_view_row(item: &HnItem) -> ViewRow {
         icon: None,
         badge: None,
         context_menu_target_kind: MenuTargetKind::Message,
+        preview_image_url: None,
     }
 }
 
@@ -453,6 +456,7 @@ pub fn hn_item_to_overview_row(item: &HnItem) -> ViewRow {
         icon: None,
         badge: None,
         context_menu_target_kind: MenuTargetKind::Message,
+        preview_image_url: None,
     }
 }
 

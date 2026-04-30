@@ -143,6 +143,7 @@ impl TeamsClient {
             reply_to: None,
             edited: false,
             thread: None,
+            preview_image_url: None,
         }
     }
 
@@ -273,6 +274,7 @@ fn poly_event_message_from_json(m: &serde_json::Value) -> Option<Message> {
         reply_to: None,
         edited,
         thread: None,
+        preview_image_url: None,
     })
 }
 
@@ -1152,6 +1154,7 @@ impl ClientBackend for TeamsClient {
                     None
                 },
                 context_menu_target_kind: MenuTargetKind::Server,
+                preview_image_url: None,
             });
         }
 

@@ -191,6 +191,7 @@ impl PolyServerBackend {
             reply_to: None,
             edited: msg.edited_at.is_some(),
             thread: None,
+            preview_image_url: None,
         }
     }
 }
@@ -1316,6 +1317,7 @@ impl ClientBackend for PolyServerBackend {
                 icon: server.icon_url.clone(),
                 badge: None,
                 context_menu_target_kind: MenuTargetKind::Server,
+                preview_image_url: None,
             });
         }
 
@@ -1394,6 +1396,7 @@ fn map_server_event(event: srv::ServerEvent) -> Option<ClientEvent> {
                 reply_to: None,
                 edited: payload.edited_at.is_some(),
                 thread: None,
+                preview_image_url: None,
             },
         }),
         srv::ServerEvent::MessageEdited(payload) => Some(ClientEvent::MessageEdited {
@@ -1414,6 +1417,7 @@ fn map_server_event(event: srv::ServerEvent) -> Option<ClientEvent> {
                 reply_to: None,
                 edited: true,
                 thread: None,
+                preview_image_url: None,
             },
         }),
         srv::ServerEvent::MessageDeleted {
