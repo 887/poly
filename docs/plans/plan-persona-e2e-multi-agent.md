@@ -245,11 +245,15 @@ Key design choices, captured up-front so phases don't re-litigate:
   `meta_persona_invoke` must NOT include that message in the bundle.
   Asserts deny-wins precedence at the e2e layer (unit tests cover it
   inside `persona/context.rs`; this catches integration regressions).
-- [ ] **E.5** `scenarios/heartbeat-tick-via-mcp/` — depends on Phase J.5
-  (`meta_persona_trigger_heartbeat`). Set persona to `proactivity=
-  drafts-only`, populate channel with 5 messages, call trigger. Assert
-  exactly 1 draft appears in `DraftsSidebar` UI within 5s + 1
-  `heartbeat_run` audit row.
+- [ ] **E.5** `scenarios/heartbeat-tick-via-mcp/` — depends on Phase F
+  shipping a heartbeat trigger surface (the original Phase J.5
+  `meta_persona_trigger_heartbeat` was descoped; expect Phase F to
+  expose either an MCP tool or a `poly-cli` recipe for one-shot
+  invocation). Set persona to `proactivity=drafts-only`, populate
+  channel with 5 messages, fire the trigger. Assert exactly 1 draft
+  appears in `DraftsSidebar` UI within 5s + 1 `heartbeat_run` audit
+  row. If Phase F lands without a trigger surface, this scenario
+  becomes the prompt to add one.
 - [ ] **E.6** `scenarios/rate-limit-respected/` — set
   `rate_limit_per_hour=2`, trigger heartbeat 5 times back-to-back, assert
   exactly 2 audit rows of class `draft_create` and 3 of class

@@ -1158,148 +1158,92 @@ All 8 Phase B checklist items complete. Implementation notes:
 
 ---
 
-## Phase J — MCP completeness + CLI parity
+## Phase J — MCP completeness audit + CLI ergonomics
 
-> **Why this lives here, not in a sibling plan:** the work is purely additive
-> on the existing `mcp/chat-mcp/src/tools.rs` persona-tool surface and the
-> `tools/poly-cli` thin wrapper that already auto-derives subcommands from
-> the MCP tool list. Tightly coupled to persona schema + dispatch, so it
-> belongs in the persona plan rather than its own file.
+> **Why this lives here, not in a sibling plan:** the work is purely
+> additive on the existing `mcp/chat-mcp/src/tools.rs` persona-tool surface
+> and the `tools/poly-cli` thin wrapper that already auto-derives
+> subcommands from the MCP tool list. Tightly coupled to persona schema
+> and dispatch.
 
 **Status:** 🚧 PLANNED — not started.
 
-**Depends on:** Phase D shipped (the UI surface defines what "parity" means
-in concrete terms — every gear-icon action must be reachable from MCP/CLI
-without screen-scraping).
+**Depends on:** Phase D shipped (the UI surface defines what "parity"
+means — every gear-icon action must be reachable from MCP/CLI without
+screen-scraping).
 
-**Effort:** 2 sessions total (J.1–J.4 ≈ 1 session, J.5–J.8 ≈ 1 session).
+**Effort:** 0.5 sessions.
 
-### Background — what already exists
+### Scope decision (codified 2026-04-30)
 
-- 14 `meta_persona_*` tools (J.1 audit will list them and grade gaps).
-- `tools/poly-cli` — dynamic MCP-to-CLI translator. `poly-cli call
-  meta_persona_create --slug=foo --name=Foo --system_prompt=…` works
-  TODAY against a running `poly-chat-mcp` (HTTP on port 3010 by default,
-  or `--stdio` for `mcp.json` integration). No persona-specific code in
-  `poly-cli` is required for tool reachability — the CLI mirrors the MCP
-  surface automatically. The user-facing question becomes: are there
-  MCP gaps, and is the dynamic CLI ergonomic enough?
+Original plan added 8 new `meta_persona_*` tools and 3 shortcut wrappers.
+**Rescoped:** the user (and `tools/poly-cli`'s dynamic translator) made
+the new-tool work redundant.
 
-### Gap audit (the goal of J.1)
+- `tools/poly-cli` already exposes every existing MCP tool as
+  `poly-cli call <tool> --key val …` — no per-tool CLI work needed for
+  reachability.
+- The 14 `meta_persona_*` tools shipped in Phase B already cover the
+  full lifecycle (create / get / list / update / delete / set_sources /
+  set_tool_whitelist / set_memory / forget / set_outbound_allow / list
+  outbound / list_recent_actions / invoke / pause via `_update`).
+- Shortcut tools (`set_enabled`, `pin_fact`, etc.) are read-modify-write
+  conveniences a CLI script can do in two lines — not worth a separate
+  tool surface that has to be maintained.
+- `meta_persona_trigger_heartbeat` and `meta_persona_invocation_history`
+  depend on Phases F and E respectively; defer to those phases as
+  natural ergonomic additions, not Phase J carry-overs.
+- `meta_persona_export_memory` is `meta_persona_list_facts` + JSONL
+  formatting at the consumer; punt to a CLI recipe.
 
-Pre-flight gaps already identified, to be confirmed in J.1 and expanded
-against whatever Phase D ships:
-
-| UI capability (Phase D) | MCP coverage today | Action |
-|---|---|---|
-| List sources (read-side of `set_sources`) | none — only set/replace | **add `meta_persona_list_sources`** |
-| List tool whitelist (read-side) | none | **add `meta_persona_list_tool_whitelist`** |
-| List outbound allowlist (read-side) | none — `list_persona_outbound_allows` exists in `memory.rs` but not exposed | **add `meta_persona_list_outbound_allows`** |
-| Pause / resume (set `enabled=true/false`) | possible via `meta_persona_update` | **add `meta_persona_set_enabled` shortcut** (one arg vs. full update) |
-| Pin / unpin a single fact | requires forget + re-set with new pinned flag | **add `meta_persona_pin_fact` / `meta_persona_unpin_fact`** |
-| Manually trigger a heartbeat tick (testing/debug) | none — heartbeat is host-internal cron | **add `meta_persona_trigger_heartbeat`** (mirrors what Phase F's scheduler does on a tick) |
-| Dry-run invoke (build bundle, return it, write NO audit/memory) | none — `meta_persona_invoke` always audits | **add `dry_run: bool` flag to `meta_persona_invoke`** |
-| Talk-to invocation history (per-session transcript) | partially — `meta_persona_recent_actions` returns audit, but invoke_id grouping not surfaced | **add `meta_persona_invocation_history` returning grouped (session_id, prompt, response_summary) rows** — requires Phase E.5 KV transcript schema |
-| Persona-fact bulk export | none | **add `meta_persona_export_memory`** (returns JSONL, mirrors Phase H.4 audit export) |
+What remains in Phase J: an audit (so the rescope is justified by
+evidence not assertion), the `dry_run` flag (a real new behaviour the
+e2e harness needs), and CLI recipe docs.
 
 ### Sub-step checkboxes
 
-- [ ] **J.1** Audit pass — diff the Phase D UI surface (gear menu, edit-modal
-  fields, list-row actions) against the 14 existing tools. Produce
-  `docs/plans/plan-meta-personalities-mcp-gap-audit.md` (a short table: UI
-  action → tool that supports it / GAP). Treat anything in the UI without a
-  named tool as a gap, even if technically achievable via `meta_persona_update`.
-  Acceptance: every Phase D gear-menu action maps to ≥1 tool in the table.
-
-- [ ] **J.2** Add read-side completeness tools to
-  `mcp/chat-mcp/src/tools.rs`:
-  - `meta_persona_list_sources(slug)` — return rows from
-    `list_persona_sources` with deny/include flags.
-  - `meta_persona_list_tool_whitelist(slug)` — return tool names.
-  - `meta_persona_list_outbound_allows(slug)` — wrap existing
-    `MemoryDb::list_persona_outbound_allows`.
-  - JSON schemas + dispatch arms + `should_expose_tool` arms + capability
-    test rows.
-  - Acceptance: `poly-cli tools | grep meta_persona | wc -l` jumps from 14
-    to 17.
-
-- [ ] **J.3** Add shortcut tools (one-arg semantics where today's flow
-  requires multi-arg update or read-modify-write):
-  - `meta_persona_set_enabled(slug, enabled)` — single-field wrapper.
-  - `meta_persona_pin_fact(slug, fact_id)` and `_unpin_fact(slug, fact_id)`
-    — both implemented as in-place UPDATE (new `MemoryDb::set_persona_fact_pinned`
-    helper; do NOT route through forget+re-set, which would lose the row id
-    and reorder the fact list).
-  - Acceptance: 3 new tools, 3 new dispatch arms, schema + capability tests.
+- [ ] **J.1** Audit pass — once Phase D lands, diff the Phase D UI
+  surface (gear menu, edit-modal fields, list-row actions) against the
+  14 existing tools. Produce `docs/plans/plan-meta-personalities-mcp-gap
+  -audit.md` (short table: UI action → tool that supports it /
+  GAP / "achievable via composed call"). Each row marked GAP gets a
+  one-line justification: ship a follow-up tool, defer to dependent
+  phase, or document the composed-call recipe instead.
+  Acceptance: every Phase D gear-menu action either maps to a named
+  tool, has an explicit composed-call recipe in `docs/personas-cli.md`,
+  or is logged as a real GAP with an owner.
 
 - [ ] **J.4** Add `dry_run: bool` flag to `meta_persona_invoke`.
-  - When `dry_run=true`: build the `bundle_v1` exactly as today, BUT skip
-    the `memory_read` audit-row writes AND tag the output JSON as
+  - When `dry_run=true`: build the `bundle_v1` exactly as today, BUT
+    skip the `memory_read` audit-row writes AND tag the output JSON as
     `"dry_run": true`.
-  - Use case: the e2e bash script (`plan-persona-e2e-multi-agent.md`)
-    can sanity-check bundle shape without polluting audit history; UI
-    "preview bundle" button (future Phase E.6) uses the same flag.
+  - Use case: the e2e bash harness
+    (`plan-persona-e2e-multi-agent.md`) sanity-checks bundle shape
+    without polluting audit history; future "preview bundle" UI button
+    uses the same flag.
   - Acceptance: integration test that runs `meta_persona_invoke` with
-    `dry_run=true` and asserts `persona_audit` row count is unchanged
-    afterwards.
+    `dry_run=true` and asserts the `persona_audit` row count for that
+    slug is unchanged afterwards. Existing non-dry-run integration test
+    must keep passing.
 
-- [ ] **J.5** Add `meta_persona_trigger_heartbeat(slug)` tool.
-  - Calls into `poly_host::persona_heartbeat::run_once(slug)` (Phase F
-    must expose `pub fn run_once`). When chat-mcp runs in-process inside
-    poly-host (the standard deployment), the trigger fires immediately;
-    when chat-mcp runs standalone (HTTP on 3010), the tool returns
-    `{"status":"unsupported","reason":"chat-mcp not collocated with
-    poly-host scheduler"}`.
-  - Use case: `poly-cli call meta_persona_trigger_heartbeat --slug=broker-bob`
-    is the bash-friendly way to test heartbeat output without waiting
-    15 minutes.
-  - Depends on Phase F shipping the runnable scheduler entry-point.
-  - Acceptance: against a poly-host with chat-mcp collocated, calling
-    the tool produces the same `persona_audit` rows as a real heartbeat
-    tick would.
-
-- [ ] **J.6** Add `meta_persona_invocation_history(slug, session_id?,
-  limit?)` tool.
-  - Reads from the KV transcript schema introduced in Phase E.5
-    (`persona.talk.<slug>.<session>`) and returns
-    `[{session_id, started_at, line_count, summary}]` for `session_id` =
-    None, or full transcript lines for a specific session.
-  - Acceptance: integration test that opens a talk-to session via
-    Phase E, then verifies `meta_persona_invocation_history` returns the
-    transcript rows in time order.
-  - Depends on Phase E shipped.
-
-- [ ] **J.7** Add `meta_persona_export_memory(slug)` tool.
-  - Returns all `persona_facts` rows for slug as JSONL string in the
-    tool result. Mirrors the Phase H.4 audit-export pattern; together
-    they are the "data takeout" surface for one persona.
-  - Acceptance: round-trip test — export persona's memory, delete the
-    persona, recreate, re-import via repeated `meta_persona_set_memory`
-    calls, assert facts equal modulo IDs.
-
-- [ ] **J.8** Documentation + CLI ergonomics:
-  - Add a `docs/personas-cli.md` recipe page showing the 8 most-common
-    flows as `poly-cli call …` invocations (create, set sources,
-    set tools, invoke, dry-run invoke, pin a fact, pause, delete).
-    These are the recipes the e2e bash script + Claude Desktop users
-    cite-and-paste from.
-  - Decide whether to extend `tools/poly-cli/src/main.rs` with typed
-    `poly-cli persona <create|list|invoke|…>` subcommands as syntactic
-    sugar over `poly-cli call meta_persona_*`. **Recommendation: NO** —
-    the dynamic translator already gives one binary that tracks every
-    new MCP tool for free; typed subcommands would drift. Document the
-    decision and close the question.
-  - Acceptance: `docs/personas-cli.md` exists; `tools/poly-cli/README.md`
-    (create if missing) names personas explicitly and links it.
+- [ ] **J.8** `docs/personas-cli.md` — bash-friendly recipe page
+  showing the 8 most-common flows as `poly-cli call …` invocations
+  (create, set sources, set tools, invoke, dry-run invoke, pin a fact
+  via composed update, pause via `_update enabled=false`, delete).
+  Codify the "no typed `poly-cli persona <verb>` subcommands"
+  decision in the page so future contributors don't reopen it.
+  Acceptance: file exists; `tools/poly-cli/README.md` (create if
+  missing) links it; the e2e harness scripts can copy verbatim
+  `poly-cli call …` lines from the page.
 
 ### Acceptance criteria (whole phase)
 
-- 8 new tools live in `mcp/chat-mcp/src/tools.rs` (J.2: 3, J.3: 3, J.5: 1,
-  J.6: 1, J.7: 1) plus the `dry_run` extension on `meta_persona_invoke`.
-- Tool count visible to Claude Desktop / `poly-cli tools` rises from 14 to
-  ≥22 `meta_persona_*` entries.
-- Every Phase D UI action has at least one MCP-tool path.
+- `docs/plans/plan-meta-personalities-mcp-gap-audit.md` exists and
+  every Phase D UI action maps to a tool / composed recipe / logged GAP.
+- `meta_persona_invoke` has a `dry_run` flag with a green integration
+  test.
+- `docs/personas-cli.md` is the canonical bash-friendly entry point and
+  closes the typed-subcommands debate.
 - `tools/scripts/forbid-ui-only-persona-action.sh` (added in
-  `plan-persona-quality-gates.md` Phase Q) passes — i.e. no UI button
-  exists that is unreachable from MCP.
-- `docs/personas-cli.md` is the canonical bash-friendly entry point.
+  `plan-persona-quality-gates.md` Phase Q) passes against the audit
+  output.
