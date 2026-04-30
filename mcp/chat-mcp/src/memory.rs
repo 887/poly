@@ -186,6 +186,25 @@ impl MemoryDb {
             );
             CREATE INDEX IF NOT EXISTS idx_persona_audit_slug_time
                 ON persona_audit(persona_slug, occurred_at DESC);"
+        ).map_err(|e| MemoryError::Sqlite(e.to_string()))?;
+
+        // ── Phase D — client_settings_audit schema ─────────────────────────────
+        // Separate from persona_audit: not persona-scoped, uses slug="system"
+        // as a synthetic marker. The cross-persona lint (Q.1) does not scan
+        // this table — it has its own helper `record_client_settings_audit`.
+        db.execute(
+            "CREATE TABLE IF NOT EXISTS client_settings_audit (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                slug         TEXT NOT NULL DEFAULT 'system',
+                backend_id   TEXT NOT NULL,
+                action       TEXT NOT NULL,
+                payload_json TEXT,
+                status       TEXT NOT NULL,
+                error_msg    TEXT,
+                created_at   TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_client_settings_audit_backend_time
+                ON client_settings_audit(backend_id, created_at DESC);"
         ).map_err(|e| MemoryError::Sqlite(e.to_string()))
     }
 
@@ -1300,6 +1319,111 @@ impl MemoryDb {
         } else {
             Ok(0)
         }
+    }
+
+    // ─── client_settings_audit (Phase D) ─────────────────────────────────────
+
+    /// Append an audit entry for a `client_settings_set_*` tool call.
+    ///
+    /// `slug` is always `"system"` — client settings are global, not
+    /// persona-scoped. `action` is the tool name (e.g. `"set_version_override"`).
+    /// `payload_json` records the relevant args. `status` is `"ok"` or `"error"`.
+    pub fn record_client_settings_audit(
+        &self,
+        backend_id: &str,
+        action: &str,
+        payload_json: Option<&str>,
+        status: &str,
+        error_msg: Option<&str>,
+    ) -> Result<i64, MemoryError> {
+        let now = now_iso8601();
+        let db = self.lock()?;
+        let mut stmt = db.prepare(
+            "INSERT INTO client_settings_audit
+                (slug,backend_id,action,payload_json,status,error_msg,created_at)
+             VALUES('system',?1,?2,?3,?4,?5,?6)"
+        )?;
+        stmt.bind((1, backend_id))?;
+        stmt.bind((2, action))?;
+        bind_opt_str(&mut stmt, 3, payload_json)?;
+        stmt.bind((4, status))?;
+        bind_opt_str(&mut stmt, 5, error_msg)?;
+        stmt.bind((6, now.as_str()))?;
+        drain(&mut stmt)?;
+
+        let mut id_stmt = db.prepare("SELECT last_insert_rowid()")?;
+        if id_stmt.next()? == State::Row {
+            Ok(id_stmt.read::<i64, _>(0)?)
+        } else {
+            Err(MemoryError::Sqlite("last_insert_rowid returned no row".to_string()))
+        }
+    }
+
+    /// Count total audit rows for a `backend_id` (used in integration tests).
+    pub fn count_client_settings_audit(&self, backend_id: &str) -> Result<i64, MemoryError> {
+        let db = self.lock()?;
+        let mut stmt = db.prepare(
+            "SELECT COUNT(*) FROM client_settings_audit WHERE backend_id=?1"
+        )?;
+        stmt.bind((1, backend_id))?;
+        if stmt.next()? == State::Row {
+            Ok(stmt.read::<i64, _>(0)?)
+        } else {
+            Ok(0)
+        }
+    }
+
+    /// Fetch the most recent `limit` audit rows for client settings
+    /// (newest first). Optionally filtered to a specific `backend_id`.
+    pub fn list_client_settings_audit(
+        &self,
+        backend_id: Option<&str>,
+        limit: i64,
+    ) -> Result<Vec<serde_json::Value>, MemoryError> {
+        let db = self.lock()?;
+        let (sql, bind_backend) = if backend_id.is_some() {
+            (
+                "SELECT id,slug,backend_id,action,payload_json,status,error_msg,created_at
+                 FROM client_settings_audit
+                 WHERE backend_id=?1
+                 ORDER BY created_at DESC LIMIT ?2",
+                true,
+            )
+        } else {
+            (
+                "SELECT id,slug,backend_id,action,payload_json,status,error_msg,created_at
+                 FROM client_settings_audit
+                 ORDER BY created_at DESC LIMIT ?1",
+                false,
+            )
+        };
+        let mut stmt = db.prepare(sql)?;
+        if bind_backend {
+            stmt.bind((1, backend_id.unwrap_or("")))?;
+            stmt.bind((2, limit))?;
+        } else {
+            stmt.bind((1, limit))?;
+        }
+        let mut out = Vec::new();
+        while stmt.next()? == State::Row {
+            let payload: Option<String> = match stmt.read::<sqlite::Value, _>(4)? {
+                sqlite::Value::String(s) => Some(s), _ => None,
+            };
+            let error: Option<String> = match stmt.read::<sqlite::Value, _>(6)? {
+                sqlite::Value::String(s) => Some(s), _ => None,
+            };
+            out.push(serde_json::json!({
+                "id":           stmt.read::<i64, _>(0)?,
+                "slug":         stmt.read::<String, _>(1)?,
+                "backend_id":   stmt.read::<String, _>(2)?,
+                "action":       stmt.read::<String, _>(3)?,
+                "payload_json": payload,
+                "status":       stmt.read::<String, _>(5)?,
+                "error_msg":    error,
+                "created_at":   stmt.read::<String, _>(7)?,
+            }));
+        }
+        Ok(out)
     }
 }
 

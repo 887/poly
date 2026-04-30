@@ -163,6 +163,14 @@ pub fn should_expose_tool(tool_name: &str, caps: &BackendCapabilities) -> bool {
         | "list_chat_styles"
         | "forget_chat_style" => true,
 
+        // Phase D (client-version plan) — client config tools; always exposed;
+        // host-side concern, independent of which backend a chat uses.
+        "client_settings_list"
+        | "client_settings_get_version"
+        | "client_settings_set_version_override"
+        | "client_settings_list_mechanisms"
+        | "client_settings_set_mechanism" => true,
+
         // Phase B (meta-personas) — always exposed; persona state is
         // Poly-side only, independent of which backend a chat uses.
         "meta_persona_list"
@@ -1257,6 +1265,82 @@ pub fn tool_list() -> Vec<Value> {
                 "required": ["account_id"]
             }
         }),
+
+        // ─── Phase D (client-version plan) — client settings tools ───────────
+        // Always exposed; client settings are a host-side concern independent
+        // of which backend a chat uses. Known backend IDs are hardcoded (10 IDs)
+        // to avoid a live BackendPool dependency in the schema layer — simpler
+        // and more reliable than deriving from the pool at list time.
+        json!({
+            "name": "client_settings_list",
+            "description": "List current client settings (version override + mechanism states) for \
+                one or all backends. If backend_id is omitted, returns an array covering the 10 \
+                known backend IDs. Read-only — no audit row.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "backend_id": {
+                        "type": "string",
+                        "description": "Optional backend slug (e.g. 'discord'). \
+                            Omit to list all 10 known backends."
+                    }
+                }
+            }
+        }),
+        json!({
+            "name": "client_settings_get_version",
+            "description": "Return the effective client version for a backend — the override string \
+                if one is set, otherwise the backend default. Read-only — no audit row.",
+            "inputSchema": {
+                "type": "object",
+                "required": ["backend_id"],
+                "properties": {
+                    "backend_id": { "type": "string", "description": "Backend slug, e.g. 'discord'" }
+                }
+            }
+        }),
+        json!({
+            "name": "client_settings_set_version_override",
+            "description": "Set or clear the client-version override for a backend. Passing null/absent \
+                clears the override (backend reverts to its default version). Writes an audit row.",
+            "inputSchema": {
+                "type": "object",
+                "required": ["backend_id"],
+                "properties": {
+                    "backend_id": { "type": "string", "description": "Backend slug, e.g. 'discord'" },
+                    "override":   {
+                        "type": ["string", "null"],
+                        "description": "Version string, e.g. 'poly-discord/0.0.0'. Null clears the override."
+                    }
+                }
+            }
+        }),
+        json!({
+            "name": "client_settings_list_mechanisms",
+            "description": "Return all known mechanism states for a backend (mechanism_id + enabled). \
+                Only mechanisms that have been explicitly set appear; the backend default applies \
+                for any omitted mechanism. Read-only — no audit row.",
+            "inputSchema": {
+                "type": "object",
+                "required": ["backend_id"],
+                "properties": {
+                    "backend_id": { "type": "string", "description": "Backend slug, e.g. 'discord'" }
+                }
+            }
+        }),
+        json!({
+            "name": "client_settings_set_mechanism",
+            "description": "Enable or disable a named mechanism for a backend. Writes an audit row.",
+            "inputSchema": {
+                "type": "object",
+                "required": ["backend_id", "mechanism_id", "enabled"],
+                "properties": {
+                    "backend_id":    { "type": "string", "description": "Backend slug, e.g. 'discord'" },
+                    "mechanism_id":  { "type": "string", "description": "Mechanism identifier, e.g. 'captcha-sandbox'" },
+                    "enabled":       { "type": "boolean", "description": "true to enable, false to disable" }
+                }
+            }
+        }),
     ]
         .into_iter()
         .chain(crate::typing_simulation::tool_definitions())
@@ -1347,6 +1431,13 @@ pub async fn dispatch(tool: &str, args: &Value, pool: &mut BackendPool, mem: &Me
         "meta_persona_forget_memory" => handle_meta_persona_forget_memory(args, mem),
         "meta_persona_recent_actions" => handle_meta_persona_recent_actions(args, mem),
         "meta_persona_set_outbound_allow" => handle_meta_persona_set_outbound_allow(args, mem),
+
+        // Phase D (client-version plan) — client settings tools (always exposed).
+        "client_settings_list"               => handle_client_settings_list(args, pool, mem).await,
+        "client_settings_get_version"        => handle_client_settings_get_version(args, pool, mem).await,
+        "client_settings_set_version_override" => handle_client_settings_set_version_override(args, pool, mem).await,
+        "client_settings_list_mechanisms"    => handle_client_settings_list_mechanisms(args, pool, mem).await,
+        "client_settings_set_mechanism"      => handle_client_settings_set_mechanism(args, pool, mem).await,
 
         // Phase C — added concurrently, rebase-safe insertion
         "poll_events" => handle_poll_events(args, pool).await,
@@ -3162,6 +3253,187 @@ fn handle_meta_persona_set_outbound_allow(args: &Value, mem: &MemoryDb) -> Value
                 ok_result(format!("outbound allow set for {account_id}/{chat_id} max={max_per_day}/day"))
             }
             Err(e) => err_result(format!("meta_persona_set_outbound_allow failed: {e}")),
+        }
+    }
+}
+
+// ─── Phase D (client-version plan) — client settings handlers ────────────────
+//
+// These handlers use `ClientConfigStore` from `poly_host_bridge`, which wraps
+// the `/host/kv/*` bridge routes. In tests (no live bridge server), the store's
+// `kv_*` calls will fail — tests that exercise these handlers spin up a full
+// host-bridge mock or use `MemoryDb`-only assertions for the audit path.
+//
+// Backend IDs are hardcoded (10 slugs) in `client_settings_list` to avoid
+// taking a live `BackendPool` dependency in the schema layer. New backends must
+// be added here when they are added to `state.rs::create_backend`.
+
+/// The 10 known backend slugs for `client_settings_list` enumeration.
+const CLIENT_SETTINGS_BACKENDS: &[&str] = &[
+    "stoat", "matrix", "lemmy", "hackernews", "discord",
+    "teams", "poly", "github", "forgejo", "demo",
+];
+
+/// Emit a client-settings audit row; swallows errors so failures don't break
+/// the primary return path.
+fn audit_client_settings(
+    mem: &MemoryDb,
+    backend_id: &str,
+    action: &str,
+    payload: Option<&str>,
+    status: &str,
+    error_msg: Option<&str>,
+) {
+    let _ = mem.record_client_settings_audit(backend_id, action, payload, status, error_msg);
+}
+
+async fn handle_client_settings_list(args: &Value, pool: &BackendPool, _mem: &MemoryDb) -> Value {
+    // poly-lint: allow unaudited-client-settings-tool — read-only; no audit needed.
+    let store = &pool.config_store;
+
+    if let Some(bid) = str_arg(args, "backend_id") {
+        // Single backend snapshot.
+        match store.list_overrides(bid).await {
+            Ok(snap) => ok_result(serde_json::to_string_pretty(&snap).unwrap_or_default()),
+            Err(e)   => {
+                // If host bridge is not reachable, return a zero-state snapshot
+                // so callers can still reason about the backend.
+                let snap = serde_json::json!({
+                    "backend_id": bid,
+                    "version_override": null,
+                    "mechanisms": [],
+                    "_error": format!("host bridge unavailable: {e}")
+                });
+                ok_result(serde_json::to_string_pretty(&snap).unwrap_or_default())
+            }
+        }
+    } else {
+        // All 10 known backends.
+        let mut results = Vec::with_capacity(CLIENT_SETTINGS_BACKENDS.len());
+        for bid in CLIENT_SETTINGS_BACKENDS {
+            let snap = match store.list_overrides(bid).await {
+                Ok(s) => serde_json::to_value(s).unwrap_or_default(),
+                Err(e) => serde_json::json!({
+                    "backend_id": bid,
+                    "version_override": null,
+                    "mechanisms": [],
+                    "_error": format!("host bridge unavailable: {e}")
+                }),
+            };
+            results.push(snap);
+        }
+        ok_result(serde_json::to_string_pretty(&results).unwrap_or_default())
+    }
+}
+
+async fn handle_client_settings_get_version(args: &Value, pool: &BackendPool, _mem: &MemoryDb) -> Value {
+    // poly-lint: allow unaudited-client-settings-tool — read-only; no audit needed.
+    let bid = match str_arg(args, "backend_id") {
+        Some(v) => v,
+        None => return err_result("missing 'backend_id'"),
+    };
+    let store = &pool.config_store;
+    match store.get_version_override(bid).await {
+        Ok(Some(ov)) => ok_result(serde_json::json!({
+            "backend_id": bid,
+            "effective_version": &ov,
+            "source": "override",
+            "override": &ov,
+        }).to_string()),
+        Ok(None) => ok_result(serde_json::json!({
+            "backend_id": bid,
+            "effective_version": null,
+            "source": "default",
+            "override": null,
+        }).to_string()),
+        Err(e) => err_result(format!("client_settings_get_version failed: {e}")),
+    }
+}
+
+async fn handle_client_settings_set_version_override(args: &Value, pool: &BackendPool, mem: &MemoryDb) -> Value {
+    let bid = match str_arg(args, "backend_id") {
+        Some(v) => v,
+        None => return err_result("missing 'backend_id'"),
+    };
+    // `override` may be absent (clear), null JSON (clear), or a string (set).
+    let override_val: Option<String> = match args.get("override") {
+        None | Some(serde_json::Value::Null) => None,
+        Some(v) => match v.as_str() {
+            Some(s) => Some(s.to_owned()),
+            None => return err_result("'override' must be a string or null"),
+        },
+    };
+
+    let payload = serde_json::json!({
+        "backend_id": bid,
+        "override": override_val,
+    }).to_string();
+
+    let store = &pool.config_store;
+    match store.set_version_override(bid, override_val.clone()).await {
+        Ok(()) => {
+            audit_client_settings(mem, bid, "set_version_override", Some(&payload), "ok", None);
+            let msg = match &override_val {
+                Some(s) => format!("version override for '{bid}' set to '{s}'"),
+                None    => format!("version override for '{bid}' cleared"),
+            };
+            ok_result(msg)
+        }
+        Err(e) => {
+            let err_msg = format!("client_settings_set_version_override failed: {e}");
+            audit_client_settings(mem, bid, "set_version_override", Some(&payload), "error", Some(&err_msg));
+            err_result(err_msg)
+        }
+    }
+}
+
+async fn handle_client_settings_list_mechanisms(args: &Value, pool: &BackendPool, _mem: &MemoryDb) -> Value {
+    // poly-lint: allow unaudited-client-settings-tool — read-only; no audit needed.
+    let bid = match str_arg(args, "backend_id") {
+        Some(v) => v,
+        None => return err_result("missing 'backend_id'"),
+    };
+    let store = &pool.config_store;
+    match store.list_overrides(bid).await {
+        Ok(snap) => {
+            let mechs: Vec<serde_json::Value> = snap
+                .mechanisms
+                .into_iter()
+                .map(|(id, enabled)| serde_json::json!({ "mechanism_id": id, "enabled": enabled }))
+                .collect();
+            ok_result(serde_json::to_string_pretty(&serde_json::json!({
+                "backend_id": bid,
+                "mechanisms": mechs,
+            })).unwrap_or_default())
+        }
+        Err(e) => err_result(format!("client_settings_list_mechanisms failed: {e}")),
+    }
+}
+
+async fn handle_client_settings_set_mechanism(args: &Value, pool: &BackendPool, mem: &MemoryDb) -> Value {
+    let bid   = match str_arg(args, "backend_id")   { Some(v) => v, None => return err_result("missing 'backend_id'") };
+    let mech  = match str_arg(args, "mechanism_id")  { Some(v) => v, None => return err_result("missing 'mechanism_id'") };
+    let enabled = match args.get("enabled").and_then(|v| v.as_bool()) {
+        Some(b) => b,
+        None => return err_result("missing or invalid 'enabled' (must be boolean)"),
+    };
+
+    let payload = serde_json::json!({
+        "backend_id": bid,
+        "mechanism_id": mech,
+        "enabled": enabled,
+    }).to_string();
+
+    let store = &pool.config_store;
+    match store.set_mechanism_state(bid, mech, enabled).await {
+        Ok(()) => {
+            audit_client_settings(mem, bid, "set_mechanism", Some(&payload), "ok", None);
+            ok_result(format!("mechanism '{mech}' on '{bid}' set to {enabled}"))
+        }
+        Err(e) => {
+            let err_msg = format!("client_settings_set_mechanism failed: {e}");
+            audit_client_settings(mem, bid, "set_mechanism", Some(&payload), "error", Some(&err_msg));
+            err_result(err_msg)
         }
     }
 }

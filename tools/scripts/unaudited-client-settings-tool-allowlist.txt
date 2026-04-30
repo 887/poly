@@ -1,0 +1,28 @@
+# unaudited-client-settings-tool-allowlist.txt — Phase D.6 of
+# plan-client-version-override-and-sandbox.md.
+#
+# Handler suffixes (the part after `handle_client_settings`) that are
+# intentionally exempt from the audit-call requirement because they are
+# pure read operations that do not mutate state.
+#
+# Format: one entry per line.
+#   _suffix    (leading underscore or bare suffix both match)
+# Blank lines and lines starting with `#` are ignored.
+#
+# Every entry MUST carry a preceding `#`-comment block explaining
+# WHY auditing is not required.
+
+# client_settings_list — returns snapshots of all/one backend's settings.
+# No state mutation; read-only. Auditing every list call would generate
+# noise with no forensic value — only writes (set_version_override,
+# set_mechanism) need audit rows.
+_list
+
+# client_settings_get_version — returns the effective version string.
+# No state mutation; read-only. The interesting forensic event is the
+# write (set_version_override), not subsequent reads.
+_get_version
+
+# client_settings_list_mechanisms — returns all mechanism states.
+# No state mutation; read-only. Same rationale as _list and _get_version.
+_list_mechanisms

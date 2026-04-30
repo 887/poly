@@ -608,50 +608,54 @@ WHERE key LIKE 'client.config.%'"` returns the rows).
 
 ---
 
-## Phase D — MCP tool family + dispatch + audit
+## Phase D — MCP tool family + dispatch + audit (shipped in commit `<pending>`)
 
 **Effort:** M (1 day). Touches: `mcp/chat-mcp/src/tools.rs`,
-`mcp/chat-mcp/src/lib.rs`.
+`mcp/chat-mcp/src/memory.rs`, `mcp/chat-mcp/src/state.rs`,
+`mcp/chat-mcp/Cargo.toml`,
+`tools/scripts/forbid-unaudited-persona-tool.sh`.
 
 **Preconditions:** Phases A, B, C merged.
 
-- [ ] **D.1** Add the five tool definitions (per D4 table) to the
-      tool-list block in `mcp/chat-mcp/src/tools.rs` (mirror the
-      `meta_persona_*` block at lines 957–1149).
+- [x] **D.1** Add `client_settings_audit` table migration to
+      `mcp/chat-mcp/src/memory.rs` alongside the other migrations.
+      Added `MemoryDb::record_client_settings_audit`,
+      `count_client_settings_audit`, and `list_client_settings_audit` helpers.
+      **Verify:** schema appears in migration block; `cargo check` clean.
+- [x] **D.2** Add the five tool definitions to `tool_list()` in
+      `mcp/chat-mcp/src/tools.rs` (mirror the `meta_persona_*` block).
       **Verify:** `grep -c '"name": "client_settings_' mcp/chat-mcp/src/tools.rs`
-      == 5.
-- [ ] **D.2** Add the five names to the
-      `should_expose_tool` `match` (line 94+ in `tools.rs`) under a new
-      `// Phase D — client config tools (always exposed; host-side
-      concern, independent of which backend a chat uses).` arm.
+      == 5. ✓
+- [x] **D.3** Add the five names to the `should_expose_tool` `match`
+      under a new Phase D client config arm (always exposed; host-side
+      concern, independent of which backend a chat uses).
       **Verify:** `grep -A2 'client_settings_list' mcp/chat-mcp/src/tools.rs`
-      shows it in the always-exposed branch.
-- [ ] **D.3** Add the dispatch arms to the `match name` in `lib.rs`'s
-      tool-call dispatcher (mirror lines 1336–1349 in `tools.rs`).
-      **Verify:** `grep -c 'handle_client_settings_' mcp/chat-mcp/src/`
-      == 5.
-- [ ] **D.4** Each `set_*` tool emits an audit row via the existing
-      `audit(...)` helper at `mcp/chat-mcp/src/tools.rs:2768` exactly
-      as shown in the D4 audit-row format. Use synthetic
-      `persona_slug = "system"` and action name = tool name.
-      **Verify:** integration test in
-      `mcp/chat-mcp/tests/client_settings_tools.rs` calls each
-      `set_*` tool and then `meta_persona_recent_actions` with
-      `slug=system`, asserts the row landed.
-- [ ] **D.5** Add a `poly-cli call client_settings_list` smoke recipe
-      to `docs/personas-cli.md` (or new `docs/client-settings.md`,
-      see Phase J). Confirm `poly-cli` (the dynamic translator at
-      `tools/poly-cli/src/main.rs`) auto-exposes the new tool family
-      without source changes — the translator discovers tools via the
-      MCP `initialize` round-trip.
-      **Verify:** `cargo run -p poly-cli -- tools | grep client_settings_`
-      lists all 5.
-- [ ] **D.6** Extend the Phase Q lint
-      `tools/scripts/forbid-unaudited-persona-tool.sh` (audited at
-      `docs/plans/plan-persona-quality-gates.md:80-87`) to also scan
-      `client_settings_set_*` handlers — same regex, same allowlist
-      conventions.
-      **Verify:** lint script exits 0 against the new handlers.
+      shows it in the always-exposed branch. ✓
+- [x] **D.4** Add the five dispatch arms + five handler fns to
+      `dispatch()` in `tools.rs`. `ClientConfigStore` wired via
+      `BackendPool::config_store` (added to `state.rs`). Added
+      `BackendPool::new_with_config_store` for test injection.
+      **Verify:** `grep -c 'handle_client_settings_' mcp/chat-mcp/src/tools.rs`
+      == 10 (5 dispatch + 5 fn defs). ✓
+- [x] **D.5** Each `set_*` handler calls `audit_client_settings(mem,…)`
+      on success AND on failure (status="error"). `audit_client_settings`
+      is a best-effort wrapper around `record_client_settings_audit`.
+      Audit table uses `slug="system"` (synthetic; client settings are
+      global, not persona-scoped).
+      **Verify:** integration tests assert +1 audit row per set_* call. ✓
+- [x] **D.6** Extend `tools/scripts/forbid-unaudited-persona-tool.sh`
+      to also scan `fn handle_client_settings_*` handlers and require
+      `audit_client_settings(` or `record_client_settings_audit(` on
+      non-comment lines. Added
+      `tools/scripts/unaudited-client-settings-tool-allowlist.txt` for
+      the 3 read-only handlers (_list, _get_version, _list_mechanisms).
+      **Verify:** lint exits 0 against new handlers; awk correctly flags
+      `set_mechanism` if its audit calls are removed. ✓
+- [x] **D.7** 5 integration tests in
+      `mcp/chat-mcp/tests/client_settings_e2e.rs`: round-trip set→get
+      for version, list-snapshot, mechanism toggle, audit-row count delta
+      (+1 per set_* call), clear-override. All 5 pass.
+      **Verify:** `cargo test -p poly-chat-mcp --test client_settings_e2e` → 5/5. ✓
 
 **Acceptance:** `poly-cli call client_settings_list` lists all 10
 backends with current version + mechanism state. Setting via CLI
@@ -659,6 +663,8 @@ persists across `poly-cli` invocations. Audit rows visible via
 `meta_persona_audit_query --slug=system --action=client_settings_set_*`
 once Phase T of `plan-persona-quality-gates.md` ships (today the
 pattern still works via `meta_persona_recent_actions`).
+
+### Phase D Status: DONE — all 7 sub-steps shipped.
 
 ---
 

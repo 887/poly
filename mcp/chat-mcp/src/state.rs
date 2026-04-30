@@ -3,6 +3,7 @@
 use crate::events::{SharedEventStore, new_event_store, spawn_fan_out};
 use crate::typing_simulation::{SharedSimRegistry, new_shared_registry};
 use poly_client::{AuthCredentials, BackendType, ClientBackend, Session};
+use poly_host_bridge::client_config::ClientConfigStore;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::task::JoinHandle;
@@ -26,6 +27,10 @@ pub struct BackendPool {
     fan_out_tasks: HashMap<String, (JoinHandle<()>, tokio::sync::oneshot::Sender<()>)>,
     /// Phase D typing-simulation registry — one entry per in-flight simulation.
     pub sim_registry: SharedSimRegistry,
+    /// Phase D (client-version plan) — store for per-backend client settings.
+    /// Backed by the host-bridge KV routes. `new()` targets the default bridge
+    /// URL; use `new_with_config_store` or `set_config_store` for tests.
+    pub config_store: ClientConfigStore,
 }
 
 impl BackendPool {
@@ -35,6 +40,19 @@ impl BackendPool {
             events: new_event_store(),
             fan_out_tasks: HashMap::new(),
             sim_registry: new_shared_registry(),
+            config_store: ClientConfigStore::new(),
+        }
+    }
+
+    /// Create a pool with a custom `ClientConfigStore` — used in integration
+    /// tests to point the store at a local mock bridge server.
+    pub fn new_with_config_store(store: ClientConfigStore) -> Self {
+        Self {
+            backends: HashMap::new(),
+            events: new_event_store(),
+            fan_out_tasks: HashMap::new(),
+            sim_registry: new_shared_registry(),
+            config_store: store,
         }
     }
 
