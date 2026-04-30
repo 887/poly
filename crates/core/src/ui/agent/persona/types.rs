@@ -73,6 +73,10 @@ pub struct AuditRow {
     pub target_chat: Option<String>,
     pub result: String,
     pub error_msg: Option<String>,
+    /// Phase H.2 — JSON payload of the audit row (raw stringified JSON).
+    /// Renders as a collapsible inline viewer in `PersonaAuditPanel`.
+    #[serde(default)]
+    pub payload_json: Option<String>,
 }
 
 /// Source include state for the per-account editor tree.
