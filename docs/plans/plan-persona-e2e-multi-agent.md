@@ -130,7 +130,9 @@ Key design choices, captured up-front so phases don't re-litigate:
   from CLAUDE.md (note the `@server --platform server` flag — required).
   Wait for `:3000` to respond.
 - [ ] **B.4** Smoke check: `poly-cli --url http://localhost:3010/mcp tools`
-  prints ≥22 persona tools (post-Phase J). Fail loud if less.
+  lists ≥14 `meta_persona_*` tools (the Phase B baseline; Phase J was
+  rescoped to NOT add new tools, only the `dry_run` flag on
+  `meta_persona_invoke`). Fail loud if fewer.
 - [ ] **B.5** Persistent build cache — set `CARGO_TARGET_DIR=$RUN_ROOT/target`
   and pre-warm with `cargo build -p poly-chat-mcp -p poly-web -p
   poly-test-runner` at the top of the script so the wait_for_port windows
