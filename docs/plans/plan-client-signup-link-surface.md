@@ -275,7 +275,7 @@ runs in **mock-default mode** unless `POLY_SIGNUP_E2E_REAL=1` is set:
       `backend_capabilities` (~line 683). Sync, not `async fn` — see
       Design summary justification.
       **Verify:** `cargo build -p poly-client && grep -n "SignupMethod" clients/client/src/lib.rs` shows the enum + the trait method.
-- [ ] **A.3** Wire the new method through the WASM host bindings layer in
+- [x] **A.3** Wire the new method through the WASM host bindings layer in
       `crates/plugin-host/src/host_impl.rs` (and any matching guest-side
       adapter under `crates/plugin-guest/`): host calls the WIT export,
       maps WIT's async return to the sync trait method via `block_on` on
@@ -283,11 +283,11 @@ runs in **mock-default mode** unless `POLY_SIGNUP_E2E_REAL=1` is set:
       caught by the `Result::Err(Trap::Unreachable | _)` branch and the
       host substitutes `SignupMethod::NotSupported`.
       **Verify:** `cargo build -p poly-plugin-host && grep -n "get_signup_method\|signup-method" crates/plugin-host/src/host_impl.rs` shows wiring.
-- [ ] **A.4** `cargo build --workspace` clean. Confirm every backend
+- [x] **A.4** `cargo build --workspace` clean. Confirm every backend
       crate compiles with the default impl in place (no per-backend
       changes yet).
       **Verify:** `cargo build --workspace 2>&1 | grep -E "^(error|warning: unused)" | wc -l` returns 0 (or only pre-existing warnings).
-- [ ] **A.5** Add a regression test in `crates/plugin-host/tests/` that
+- [x] **A.5** Add a regression test in `crates/plugin-host/tests/` that
       loads a stale plugin .wasm built against the previous WIT (use the
       existing demo plugin built before this PR, or a fixture .wasm in
       `tests/fixtures/`) and confirms `get_signup_method` returns
@@ -319,19 +319,19 @@ for this commit and remain for the next Phase A commit.
       github-enterprise) honour the `server_url` argument; hardcoded
       backends ignore it. demo returns `NotSupported`.
       **Verify:** `for c in discord matrix teams stoat lemmy forgejo github hackernews server-client demo; do grep -l "get_signup_method" clients/$c/src/lib.rs || echo "MISSING: $c"; done` lists no MISSING.
-- [ ] **B.2** Implement the same for the WASM-only sideloaded backends
+- [x] **B.2** Implement the same for the WASM-only sideloaded backends
       (Discord, Teams) by adding `get-signup-method` exports in their
       guest crates (`clients/discord/src/guest.rs`,
       `clients/teams/src/guest.rs`). Both ignore `server_url`.
       **Verify:** `grep -c "get-signup-method\|get_signup_method" clients/discord/src/guest.rs clients/teams/src/guest.rs` ≥ 2.
-- [ ] **B.3** Per-backend unit test in each crate's `tests/` (or inline
+- [x] **B.3** Per-backend unit test in each crate's `tests/` (or inline
       `#[cfg(test)]`) verifying:
       - `External(url)` is well-formed (parses via `url::Url::parse`).
       - For custom-server backends: passing `server_url` overrides the default.
       - For hardcoded backends: passing `server_url` is ignored.
       - For demo: returns `NotSupported`.
       **Verify:** `cargo test --workspace get_signup_method 2>&1 | grep -E "^test " | wc -l` ≥ 10.
-- [ ] **B.4** Update plugin FTL bundles
+- [x] **B.4** Update plugin FTL bundles
       (`clients/<backend>/locales/en-US/<backend>.ftl`): add
       `plugin-<backend>-signup-link-label = Don't have an account? Register at <Backend Name> →`
       for each compiled-in backend. English first; other locales follow as
@@ -422,7 +422,7 @@ no new CSP / sandbox concerns introduced.
       Also added `signup_method: fn(Option<&str>) -> SignupMethod` field to `SignupEntry`
       in `client_manager.rs`; all existing entry instantiations updated with
       `|_| SignupMethod::NotSupported` placeholder (Phase B will replace with real impls).
-- [ ] **D.2** Mount `<RegisterLink>` in every per-backend signup form's
+- [x] **D.2** Mount `<RegisterLink>` in every per-backend signup form's
       render fn (the `signup_render_fn` exported by each
       `clients/<backend>/src/signup.rs`). Position: below the primary
       submit button, inside a `<footer class="signup-footer">` div with
@@ -443,7 +443,7 @@ no new CSP / sandbox concerns introduced.
       Keys added: `signup-register-link-prefix`, `signup-register-link-action`,
       `signup-register-link-generic`. TODO(i18n) comment added for de/es/fr.
       **Verify:** `grep -n "signup-register-link-generic" locales/en/main.ftl`.
-- [ ] **D.5** Visual smoke test in poly-web (Chromium MCP): open
+- [x] **D.5** Visual smoke test in poly-web (Chromium MCP): open
       `/signup`, observe a Register link under each backend nav item.
       Click into `/signup/lemmy`, observe the Register link in the
       footer, type a custom server URL into the instance field, observe
@@ -498,7 +498,7 @@ folders).
       `package.json`. Added commented-out `signup-link:` CI job stub to
       `.github/workflows/lint-test.yml` pointing to this plan.
       **Verify:** `grep -n "test:signup" package.json && grep -n "signup-link" .github/workflows/lint-test.yml`.
-- [ ] **E.5** All specs green locally (`npx playwright test
+- [x] **E.5** All specs green locally (`npx playwright test
       tests/e2e/signup/`). Real-mode spot-check (`POLY_SIGNUP_E2E_REAL=1
       npx playwright test tests/e2e/signup/discord-signup.spec.ts`)
       green.

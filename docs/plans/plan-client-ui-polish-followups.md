@@ -2,7 +2,7 @@
 
 > **Created:** 2026-04-19
 > **Status:** ✅ COMPLETE 2026-04-19 — every item shipped or superseded
-> **Notes:** F1, F2, F4, F5, F6, F7, F8, F9, F10, F11, F12 all shipped. F3 (Playwright) dropped — superseded by `docs/plans/plan-blitz-component-tests.md` (deferred design plan for in-process Dioxus Blitz snapshots, since Playwright is too slow for the desired iteration loop).
+> **Notes:** F1, F2, F4, F5, F6, F7, F8, F9, F10, F11, F12 all shipped. F3 (Playwright) dropped — Playwright is too slow for the iteration loop the user wants; replacement strategy is a Dioxus Blitz–based component-test approach (WGPU-native in-process rendering, already wired in `apps/desktop-blitz`). The previous tracking doc `plan-blitz-component-tests.md` was deleted 2026-05-02 — it isn't being forgotten, just not tracked in a plan file.
 > **Parent:** `plan-client-ui-polish.md` (✅ 10 packs shipped but with known gaps)
 > **Why this plan exists:** the parent polish plan was marked ✅ COMPLETE based on `cargo check --workspace` + `cargo test --workspace --lib` — which skips integration & e2e tests. A full `cargo test --workspace` revealed **30 failures** in `poly-plugin-loader-tests`. F1 fixed that. This plan collects every remaining follow-up in one honest list.
 
@@ -37,7 +37,7 @@ cargo check --workspace --all-targets  →  0 warnings
 
 ### ⏸ F3 — UI snapshot goldens infrastructure (DROPPED — superseded 2026-04-19)
 
-**Resolution:** Playwright dropped — too slow for the iteration loop the user wants. Replaced by a deferred plan for **Dioxus Blitz–based component testing** (WGPU-native, in-process Dioxus rendering — already wired in `apps/desktop-blitz` as a shipping renderer). New plan file: `docs/plans/plan-blitz-component-tests.md`. Snapshot/regression coverage of visual-polish packs lives in that plan now; this followup is closed out without action here.
+**Resolution:** Playwright dropped — too slow for the iteration loop the user wants. Replacement strategy: **Dioxus Blitz–based component testing** (WGPU-native, in-process Dioxus rendering — already wired in `apps/desktop-blitz` as a shipping renderer). The previous tracking doc `docs/plans/plan-blitz-component-tests.md` was deleted 2026-05-02 — the user is keeping it in mind but not in a plan file. This followup is closed out without action here.
 
 ---
 

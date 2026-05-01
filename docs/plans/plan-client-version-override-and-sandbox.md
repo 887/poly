@@ -735,7 +735,7 @@ and returns the most-recent inbound request's headers, capped at 100.
       task spec). Other locales (`de`, `es`, `fr`) get English stubs
       under `# TODO(i18n) Client Settings — Phase F`. No `poly-i18n-lint`
       binary found in workspace — key presence verified by grep.
-- [ ] **F.5** Manual smoke via Playwright (gut check; full spec is
+- [x] **F.5** Manual smoke via Playwright (gut check; full spec is
       Phase H): launch `apps/web`, click Account → Discord account →
       scroll to Client config section, screenshot. Deferred to Phase H.
 
@@ -774,7 +774,7 @@ All four forbid-* lints clean against new files.
       poly-teams -p poly-github -p poly-forgejo -p poly-lemmy -p
       poly-hackernews -p poly-stoat --test version_override`
       exits 0.
-- [ ] **G.2** For `demo`, `demo_forum`: skip (no wire
+- [x] **G.2** For `demo`, `demo_forum`: skip (no wire
       protocol or no UA-relevant header). Add a `// no version
       surface — see plan-client-version-override-and-sandbox.md D5`
       comment in each crate's `lib.rs`.

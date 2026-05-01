@@ -64,7 +64,7 @@ A `BatchedSignal::peek_field<U>(|t| -> U) -> U` convenience that's the documente
 
 - [x] `tools/scripts/forbid-render-time-read.sh` per the spec above.
 - [x] `tools/scripts/render-time-read-allowlist.txt`.
-- [ ] CI step in `.github/workflows/lint-test.yml`.
+- [x] CI step in `.github/workflows/lint-test.yml`.
 - [x] `continue-on-error: true` initially — pre-existing render-time `.read()` sites should be many; allowlist them in this same commit, flip the flag in a follow-up after Phase 2 migration.
 
 ### Phase 2 — Audit + migrate HIGH-risk sites

@@ -1,7 +1,7 @@
 # Plan — Claude-Desktop-Driven Social Agent
 
 > **Created:** 2026-04-20
-> **Status:** ✅ DONE 2026-04-21 — every phase (A–F) + UI panel shipped end-to-end. `start_typing_simulation` runtime wiring + Phase D ↔ Phase C `stop_on_other_typing` bridge landed in `6ce5f7e4`. Plan chain: 9364d71e → afc617ed → 340f3f5f → 343b0ee1 → 05c9d21a → 3f6130d0 → c7e67657 → c6588714 → 0f3e5122 → 6ce5f7e4.
+> **Status:** 🚧 MOSTLY DONE — Phases A.1-A.3, B, C.1-C.3+C.5+C.6, D, E, F shipped. Memory UI (A.4 FTL keys + A.5 `/agent/memory` route) is unshipped TODO debt despite the original 2026-04-21 "every phase shipped" claim. C.4 (SSE transport) + C.7 (doc stub) are intentionally deferred. Plan chain: 9364d71e → afc617ed → 340f3f5f → 343b0ee1 → 05c9d21a → 3f6130d0 → c7e67657 → c6588714 → 0f3e5122 → 6ce5f7e4. **Audit note (2026-05-02):** softened status from "every phase shipped end-to-end" — see ⚠️ markers on A.4/A.5 and acceptance-criteria 5+7.
 > **Depends on:** `poly-chat-mcp` (shipped), `/agent` page KV persistence (shipped 7920bdb7), `send_typing` trait + MCP tool (shipped 6a587e66)
 > **Supersedes:** the LLM-provider-in-Poly approach drafted in `docs/6-ai-agent/6.0-social-agent-vision.md` — **not** taking that path.
 
@@ -73,8 +73,8 @@ No global timer — multi-account usage means each chat needs its own independen
     "chat_summary": { "summary", "window_start", "window_end", "updated_at" } | null
   }
   ```
-- [ ] **A.4** FTL keys for fact-management UI: `agent-memory-title`, `agent-memory-empty`, `agent-memory-category-*`
-- [ ] **A.5** `/agent/memory` route + page — per-contact facts viewer/editor (read-only MVP; editing is a later follow-up)
+- [ ] ⚠️ **A.4** FTL keys for fact-management UI: `agent-memory-title`, `agent-memory-empty`, `agent-memory-category-*`
+- [ ] ⚠️ **A.5** `/agent/memory` route + page — per-contact facts viewer/editor (read-only MVP; editing is a later follow-up)
 - [x] **A.6** Unit tests: 19 memory unit tests in `memory::tests` + 8 capability/tool-list tests in `tools::tests`; all 48 existing integration tests still pass
 - [x] **A.7** Capability gate — all 10 memory/bundler tools registered as always-exposed in `should_expose_tool` (memory is Poly's own concern, not per-backend)
 
@@ -109,10 +109,10 @@ No global timer — multi-account usage means each chat needs its own independen
 
 - [x] **C.2** `subscribe_events(filters)` tool — returns `subscription_id`; filters: `account_ids?, chat_ids?, event_types?`. `unsubscribe_events(subscription_id)` removes it.
 - [x] **C.3** `tokio::sync::broadcast` channel inside `mcp/chat-mcp/src/events.rs` (`EventStore`). Per-account fan-out task spawned in `BackendPool::insert()`, cancelled in `BackendPool::remove()`. Ring buffer capped at 2000 events / 5-minute TTL.
-- [ ] **C.4** SSE transport — **deferred.** Current Claude Desktop does not consume server-initiated frames. Open when a future Claude Desktop version advertises `notifications` capability in the handshake.
+- [ ] ⏸ **C.4** SSE transport — **deferred.** Current Claude Desktop does not consume server-initiated frames. Open when a future Claude Desktop version advertises `notifications` capability in the handshake.
 - [x] **C.5** `poll_events(since_ms, limit?, account_ids?, chat_ids?, event_types?, subscription_id?)` — primary delivery tool. Bounded at 500 events/call. `next_since_ms` in response lets Claude advance the cursor cheaply.
 - [x] **C.6** Integration test `phase_c_discord_message_received_via_poll_events` — subscribe → send message via REST (broadcasts `MESSAGE_CREATE` gateway event) → poll within 2s → asserts `message_received` event present. Additional: `phase_c_poll_events_empty_on_fresh_pool`, `phase_c_subscribe_and_unsubscribe`.
-- [ ] **C.7** Document the subscription pattern in `docs/6-ai-agent/6.1-mcp-server.md` — deferred (doc stub open).
+- [ ] ⏸ **C.7** Document the subscription pattern in `docs/6-ai-agent/6.1-mcp-server.md` — deferred (doc stub open).
 
 **Additional work landed in Phase C:**
 - `clients/discord/src/lib.rs`: `parse_gateway_event` now handles `MESSAGE_CREATE`, `MESSAGE_UPDATE`, `MESSAGE_DELETE`, `TYPING_START`, `PRESENCE_UPDATE`.
@@ -127,7 +127,7 @@ No global timer — multi-account usage means each chat needs its own independen
 
 **Goal:** Claude triggers typing rhythm via MCP; Poly runs the pulse locally so the LLM isn't paying for keystrokes.
 
-- [ ] **D.1** MCP tool API:
+- [x] **D.1** MCP tool API:
   ```
   start_typing_simulation(
     account_id, chat_id,
@@ -142,21 +142,21 @@ No global timer — multi-account usage means each chat needs its own independen
   ```
   stop_typing_simulation(simulation_id) -> ok
   ```
-- [ ] **D.2** Worker — tokio task per simulation. Pulses `ClientBackend::send_typing` on a backend-appropriate cadence:
+- [x] **D.2** Worker — tokio task per simulation. Pulses `ClientBackend::send_typing` on a backend-appropriate cadence:
   - Discord: every 8s (server times out at 10s)
   - Matrix: every 8s (typing-timeout setting in `PUT /typing/{userId}`, default 30s but we pulse sooner)
   - Stoat: matches Discord cadence
   - poly-server: use the ws.rs `send_typing` that already exists
-- [ ] **D.3** Rhythm generator — gaussian-noise-ified per-second decision tree: `fn tick() → { Send, Pause, FalseStartStop }`. Pure function; unit-testable with a seeded RNG.
-- [ ] **D.4** Stop triggers:
+- [x] **D.3** Rhythm generator — gaussian-noise-ified per-second decision tree: `fn tick() → { Send, Pause, FalseStartStop }`. Pure function; unit-testable with a seeded RNG.
+- [x] **D.4** Stop triggers:
   - elapsed >= total_duration_ms → stop + notify Claude via SSE (Phase C) or via a tool return
   - `stop_typing_simulation(id)` called → cancel the task immediately
   - `stop_on_other_typing=true` AND a `TypingStarted` event arrives from the contact → cancel the task, notify Claude so it can either wait or cancel the reply
-- [ ] **D.5** Per-account registry — `HashMap<simulation_id, JoinHandle>` inside `poly-chat-mcp`'s state. New simulations for the same `(account, chat)` cancel any in-flight one for that chat.
-- [ ] **D.6** Bounds — hard-cap max 20 concurrent simulations per account. 21st start returns an error. (Expected upper-bound: a user driving ~10 concurrent conversations — 20 gives headroom for multi-burst scenarios.)
-- [ ] **D.7** Per-chat opt-in — setting on `/agent/chat/:id` gates whether this chat even accepts `start_typing_simulation` calls. Default off.
-- [ ] **D.8** Integration test against `test-discord`: start simulation, verify `/typing` endpoint is hit roughly every 8s for the configured duration; start another simulation for the same chat, verify the first is cancelled.
-- [ ] **D.9** Unit tests for the rhythm generator — given a seeded RNG and parameters, output matches a golden file.
+- [x] **D.5** Per-account registry — `HashMap<simulation_id, JoinHandle>` inside `poly-chat-mcp`'s state. New simulations for the same `(account, chat)` cancel any in-flight one for that chat.
+- [x] **D.6** Bounds — hard-cap max 20 concurrent simulations per account. 21st start returns an error. (Expected upper-bound: a user driving ~10 concurrent conversations — 20 gives headroom for multi-burst scenarios.)
+- [x] **D.7** Per-chat opt-in — setting on `/agent/chat/:id` gates whether this chat even accepts `start_typing_simulation` calls. Default off.
+- [x] **D.8** Integration test against `test-discord`: start simulation, verify `/typing` endpoint is hit roughly every 8s for the configured duration; start another simulation for the same chat, verify the first is cancelled.
+- [x] **D.9** Unit tests for the rhythm generator — given a seeded RNG and parameters, output matches a golden file.
 
 **Effort:** ~1 session.
 
@@ -180,10 +180,10 @@ No global timer — multi-account usage means each chat needs its own independen
 
 **Goal:** one-button "summarize overnight activity" — fully client-side via existing tools, no new MCP tools needed.
 
-- [ ] **F.1** UI — "✨ Catch me up" button on the notifications page.
-- [ ] **F.2** Click → Claude Desktop is told (via a new well-known prompt stored in KV) to call `get_reply_context` for each unread chat and compose a digest.
-- [ ] **F.3** Display result in a modal; user can click into any mentioned chat.
-- [ ] **F.4** Optional: a `get_all_unread(account_id)` bundler tool if manual per-chat fetching is too slow in practice.
+- [x] **F.1** UI — "✨ Catch me up" button on the notifications page.
+- [x] **F.2** Click → Claude Desktop is told (via a new well-known prompt stored in KV) to call `get_reply_context` for each unread chat and compose a digest.
+- [x] **F.3** Display result in a modal; user can click into any mentioned chat.
+- [x] **F.4** Optional: a `get_all_unread(account_id)` bundler tool if manual per-chat fetching is too slow in practice.
 
 **Effort:** ~0.5 session.
 
@@ -223,14 +223,14 @@ F ──► (after A — small, opportunistic)
 
 ## Acceptance criteria
 
-- [ ] Pasting the MCP config into Claude Desktop exposes all Phase A-F tools
-- [ ] Claude Desktop can draft a reply using `get_reply_context` and create a `draft_create` for user approval
-- [ ] User sees the draft in a banner in the chat, approves it, message goes out through the backend
-- [ ] Typing simulation pulses at a human cadence during an active draft — visible as a typing indicator to the other party in the test server
-- [ ] Memory persists across Poly restarts — Claude can recall facts it stored in a previous session
-- [ ] Default behavior with zero user configuration: nothing autonomous happens; every reply requires explicit user approval
-- [ ] Per-chat toggles let the user grant auto-approval, memory access, typing simulation access individually
-- [ ] No outbound HTTP request to any LLM provider from any Poly binary (grep `cargo deny` would be nice but out of scope for this plan)
+- [x] Pasting the MCP config into Claude Desktop exposes all Phase A-F tools
+- [x] Claude Desktop can draft a reply using `get_reply_context` and create a `draft_create` for user approval
+- [x] User sees the draft in a banner in the chat, approves it, message goes out through the backend
+- [x] Typing simulation pulses at a human cadence during an active draft — visible as a typing indicator to the other party in the test server
+- [ ] ⚠️ Memory persists across Poly restarts — Claude can recall facts it stored in a previous session
+- [x] Default behavior with zero user configuration: nothing autonomous happens; every reply requires explicit user approval
+- [ ] ⚠️ Per-chat toggles let the user grant auto-approval, memory access, typing simulation access individually
+- [x] No outbound HTTP request to any LLM provider from any Poly binary (grep `cargo deny` would be nice but out of scope for this plan)
 
 ---
 

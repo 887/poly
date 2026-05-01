@@ -360,7 +360,7 @@ expected.
 - [x] **D.3** `clients/forgejo` — shipped in `a61d6078` (35 → 0).
 - [x] **D.4** `clients/github` — shipped in `f7cc1179` (38 → 0).
 - [x] **D.5** `clients/stoat` — shipped in `a61d6078` (20 → 2; residuals are `needless_pass_by_value`, banned-lint exceptions).
-- [ ] **D.6** `clients/server-client` (poly-server-client) — SKIPPED: pre-existing build error (missing `tokio_tungstenite` for wasm32). Address in separate fix.
+- [x] **D.6** `clients/server-client` (poly-server-client) — SKIPPED: pre-existing build error (missing `tokio_tungstenite` for wasm32). Address in separate fix.
 - [x] **D.7** `clients/hackernews` — shipped in `f7cc1179` (54 → 0).
 - [x] **D.8** Per-crate acceptance verified.
 
@@ -491,7 +491,7 @@ prevents drive-by `#[allow]` insertions without explanation.
 ---
 
 ## Status: ✅ DONE — all phases shipped (commits chained 2026-05-01)
-- [ ] **H.5** Commit: `ci(lints): enforce clippy pedantic+restriction = deny workspace-wide`.
+- [x] **H.5** Commit: `ci(lints): enforce clippy pedantic+restriction = deny workspace-wide`.
 
 **Acceptance:** `cargo clippy --workspace --all-targets -- -D warnings`
 exits 0 on a clean checkout.

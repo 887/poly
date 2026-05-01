@@ -41,10 +41,10 @@ Poly is "an app, not a website" — users expect Discord/Slack-style right-click
 
 ## 1. Audit & catalog (baseline for the migration)
 
-- [ ] **1.1.1** Grep + machine-readable inventory. Add `scripts/audit_context_menus.sh` that greps `#[component]` and emits CSV of `<file, component_name, has_oncontextmenu, has_ontouchstart, prevent_default_count>` so phase-rollout progress is trackable.
-- [ ] **1.1.2** Manually classify each `#[component]` into one of: `menu(Foo)`, `menu(Foo, allow_default)`, `menu(None)` (preventDefault only, no menu), `menu(inherit)` (delegates to parent — see 3.1.3). Store as a TOML registry `docs/plans/context-menu-coverage.toml` keyed by fully-qualified path.
-- [ ] **1.1.3** Produce the "currently-bleeding" list — places where the *wrong* menu fires today (server menu items appearing over a forum post because the right-click bubbles through the post into the server sidebar, etc.).
-- [ ] **1.1.4** Decide per-backend menu extras for forum-style backends (`clients/hackernews`, `clients/lemmy`, `clients/github`, `clients/forgejo`). Today only Discord / Matrix / Teams / Stoat / demo / poly_native have `context_menu.rs` modules; forums have none.
+- [x] **1.1.1** Grep + machine-readable inventory. Add `scripts/audit_context_menus.sh` that greps `#[component]` and emits CSV of `<file, component_name, has_oncontextmenu, has_ontouchstart, prevent_default_count>` so phase-rollout progress is trackable.
+- [x] **1.1.2** Manually classify each `#[component]` into one of: `menu(Foo)`, `menu(Foo, allow_default)`, `menu(None)` (preventDefault only, no menu), `menu(inherit)` (delegates to parent — see 3.1.3). Store as a TOML registry `docs/plans/context-menu-coverage.toml` keyed by fully-qualified path.
+- [x] **1.1.3** Produce the "currently-bleeding" list — places where the *wrong* menu fires today (server menu items appearing over a forum post because the right-click bubbles through the post into the server sidebar, etc.).
+- [x] **1.1.4** Decide per-backend menu extras for forum-style backends (`clients/hackernews`, `clients/lemmy`, `clients/github`, `clients/forgejo`). Today only Discord / Matrix / Teams / Stoat / demo / poly_native have `context_menu.rs` modules; forums have none.
 
 ## 2. Target DSL — attribute decorators on `#[component]`
 
@@ -109,9 +109,9 @@ pub trait ContextMenuFor<Props> {
 }
 ```
 
-- [ ] **2.3.1** Refactor `ServerContextMenu`, `ChannelContextMenu`, `MsgContextMenuOverlay` to impl `ContextMenuFor<ServerIconProps>` / `ChannelRowProps` / `MessageRowProps` respectively.
-- [ ] **2.3.2** Delete `AppState.context_menu` + `AppState.channel_context_menu` in favor of a single stack-shaped `AppState.context_menu_stack: Vec<ActiveContextMenu>` (see 4.1).
-- [ ] **2.3.3** Per-backend extras keep working — they remain ordinary child components rendered *inside* the menu, dispatched on `BackendType`. No change needed there.
+- [x] **2.3.1** Refactor `ServerContextMenu`, `ChannelContextMenu`, `MsgContextMenuOverlay` to impl `ContextMenuFor<ServerIconProps>` / `ChannelRowProps` / `MessageRowProps` respectively.
+- [x] **2.3.2** Delete `AppState.context_menu` + `AppState.channel_context_menu` in favor of a single stack-shaped `AppState.context_menu_stack: Vec<ActiveContextMenu>` (see 4.1).
+- [x] **2.3.3** Per-backend extras keep working — they remain ordinary child components rendered *inside* the menu, dispatched on `BackendType`. No change needed there.
 
 ## 3. Compile-time enforcement
 
@@ -119,14 +119,14 @@ pub trait ContextMenuFor<Props> {
 
 Trade-off summary: Dioxus 0.7.3's `#[component]` macro is a plain attribute macro that rewrites the function into a generated struct + function. Stacking attributes is legal as long as ours runs *outside* `#[component]` (Rust attribute-macro ordering is outer-first). So we ship a `poly-context-menu-macros` proc-macro crate that:
 
-- [ ] **3.1.1** Exports a single attribute macro `#[context_menu(...)]`. The macro parses its argument into one of four variants (`Foo` ident → attach menu; `None` ident → preventDefault-only; `allow_default` ident → native menu; `inherit` ident → parent forwards). It runs before `#[component]` and simply (a) validates the arg, (b) injects a `#[linkme::distributed_slice(CTX_MENU_COVERAGE)]` static entry with the component's `module_path!()` + variant tag, (c) re-emits the original `fn` with the appropriate DOM-level wrapper (or no wrapper for `None`/`inherit`/`allow_default`) so `#[component]` sees a valid fn.
+- [x] **3.1.1** Exports a single attribute macro `#[context_menu(...)]`. The macro parses its argument into one of four variants (`Foo` ident → attach menu; `None` ident → preventDefault-only; `allow_default` ident → native menu; `inherit` ident → parent forwards). It runs before `#[component]` and simply (a) validates the arg, (b) injects a `#[linkme::distributed_slice(CTX_MENU_COVERAGE)]` static entry with the component's `module_path!()` + variant tag, (c) re-emits the original `fn` with the appropriate DOM-level wrapper (or no wrapper for `None`/`inherit`/`allow_default`) so `#[component]` sees a valid fn.
 - [x] **3.1.2** Coverage enforcement runs on **plain `cargo check`**, not `#[test]` — tests are easy for agents to skip, build errors are not. Lives in the shared `crates/lint-gate/build.rs` from `plan-component-lints.md` §3.2 (one workspace walk feeds every cross-file lint). The build script:
   - enumerates every `#[component]`-attributed fn in the workspace via `ignore::WalkBuilder` + line-prefix attribute scan (same primitive as the allow-ban);
   - for each hit, checks the preceding non-blank line for one of `#[context_menu(Foo)]` / `#[context_menu(None)]` / `#[context_menu(allow_default)]` / `#[context_menu(inherit)]`;
   - emits `cargo::error=missing #[context_menu(...)] decorator at <path>:<line>` (stabilized Rust 1.84) for each miss.
   **Shipped:** `crates/lint-gate/build/context_menu_coverage.rs`. Baseline is empty. The `linkme` runtime smoke test is deferred — the compile-time scan is the gate.
-- [ ] **3.1.3** `#[context_menu(inherit)]` is a bare-bones variant that only registers in the slice — it is the tool authors use when they genuinely mean "my parent owns the menu." It keeps the coverage check clean without forcing every `<span>`-like leaf into a dummy menu.
-- [ ] **3.1.4** Quality: emit a `#[diagnostic::on_unimplemented]` on `ContextMenuFor` so a typo in `#[context_menu(Foo)]` where `Foo` does not impl the trait gives a clean error message.
+- [x] **3.1.3** `#[context_menu(inherit)]` is a bare-bones variant that only registers in the slice — it is the tool authors use when they genuinely mean "my parent owns the menu." It keeps the coverage check clean without forcing every `<span>`-like leaf into a dummy menu.
+- [x] **3.1.4** Quality: emit a `#[diagnostic::on_unimplemented]` on `ContextMenuFor` so a typo in `#[context_menu(Foo)]` where `Foo` does not impl the trait gives a clean error message.
 
 ### 3.2 Fallback — `inventory` + runtime test only
 
@@ -154,27 +154,27 @@ pub struct AppState {
 }
 ```
 
-- [ ] **4.1.1** Stack push = open submenu. Stack pop = back / swipe / outside-click. Empty = no menu visible.
-- [ ] **4.1.2** `crates/core/src/ui/context_menu/host.rs` renders `ContextMenuStack` — mounted once, at `MainLayout` level, above everything except the voice banner.
+- [x] **4.1.1** Stack push = open submenu. Stack pop = back / swipe / outside-click. Empty = no menu visible.
+- [x] **4.1.2** `crates/core/src/ui/context_menu/host.rs` renders `ContextMenuStack` — mounted once, at `MainLayout` level, above everything except the voice banner.
 
 ### 4.2 Desktop rendering (unchanged UX)
 
-- [ ] **4.2.1** `MenuAnchor::Cursor { x, y }` → `position: fixed; left: {x}px; top: {y}px`. Identical to today.
-- [ ] **4.2.2** Submenu on `has_arrow: true` item → push `MenuAnchor::AnchoredBelow(rect)` to the stack. Rendered flush-right of the parent, flipping to the left when near the viewport edge.
+- [x] **4.2.1** `MenuAnchor::Cursor { x, y }` → `position: fixed; left: {x}px; top: {y}px`. Identical to today.
+- [x] **4.2.2** Submenu on `has_arrow: true` item → push `MenuAnchor::AnchoredBelow(rect)` to the stack. Rendered flush-right of the parent, flipping to the left when near the viewport edge.
 
 ### 4.3 Mobile rendering (new)
 
-- [ ] **4.3.1** Detect mobile via the existing `runtime_mobile_ui_active()` helper in `main_layout.rs`. When true, every push coerces the anchor to `MenuAnchor::Center` regardless of what the caller asked for.
-- [ ] **4.3.2** Render as a full-screen fixed overlay with a 70 %-opacity scrim. The menu card is centered, `max-height: 70vh`, `overflow-y: auto`, rounded-top sheet feel.
-- [ ] **4.3.3** Dismissal channels: (a) tap on scrim (`onclick` on backdrop), (b) hardware / browser back — push `#poly-ctx-menu-{id}` to `history` on open, listen for `hashchange` exactly like `UserProfileModal` does at `user_profile_modal.rs:93-128`, (c) horizontal-swipe-down gesture (reuse the swipe-runtime hooks that already power the mobile left/right drawer close — `assets/scripts/mobile_drawer_runtime.js`), (d) Escape key.
-- [ ] **4.3.4** Submenu stack on mobile = a new overlay pushed on top of the current one. Parent stays rendered underneath (slightly dimmed). Back pops to it. This is the exact pattern mobile SwiftUI `Menu` / iOS `UIContextMenu` use (cf. Apple HIG — "Context Menus"; citation in `docs/plans/plan-context-menu-quality-control.md` § Open questions). React Native's `@react-native-menu/menu` and Material Design "long-press menu" both follow the same stacked-sheet model on Android.
-- [ ] **4.3.5** Scroll lock on `body` while the stack is non-empty (CSS `overflow: hidden` on `.main-layout` via a top-level class toggle — same pattern as the existing mobile drawer).
+- [x] **4.3.1** Detect mobile via the existing `runtime_mobile_ui_active()` helper in `main_layout.rs`. When true, every push coerces the anchor to `MenuAnchor::Center` regardless of what the caller asked for.
+- [x] **4.3.2** Render as a full-screen fixed overlay with a 70 %-opacity scrim. The menu card is centered, `max-height: 70vh`, `overflow-y: auto`, rounded-top sheet feel.
+- [x] **4.3.3** Dismissal channels: (a) tap on scrim (`onclick` on backdrop), (b) hardware / browser back — push `#poly-ctx-menu-{id}` to `history` on open, listen for `hashchange` exactly like `UserProfileModal` does at `user_profile_modal.rs:93-128`, (c) horizontal-swipe-down gesture (reuse the swipe-runtime hooks that already power the mobile left/right drawer close — `assets/scripts/mobile_drawer_runtime.js`), (d) Escape key.
+- [x] **4.3.4** Submenu stack on mobile = a new overlay pushed on top of the current one. Parent stays rendered underneath (slightly dimmed). Back pops to it. This is the exact pattern mobile SwiftUI `Menu` / iOS `UIContextMenu` use (cf. Apple HIG — "Context Menus"; citation in `docs/plans/plan-context-menu-quality-control.md` § Open questions). React Native's `@react-native-menu/menu` and Material Design "long-press menu" both follow the same stacked-sheet model on Android.
+- [x] **4.3.5** Scroll lock on `body` while the stack is non-empty (CSS `overflow: hidden` on `.main-layout` via a top-level class toggle — same pattern as the existing mobile drawer).
 
 ### 4.4 Long-press handling — unify
 
-- [ ] **4.4.1** Extract the channel-list long-press state machine (`channel_list.rs:1283-1330`, generation counter + `setTimeout(500)`) into `crates/core/src/ui/context_menu/long_press.rs`. The macro-generated wrapper uses it for every `#[context_menu(Foo)]` component.
-- [ ] **4.4.2** Cancel the timer on `touchmove` past 10 px, `touchend`, or `touchcancel`. Haptic feedback on fire (WASM: `navigator.vibrate(10)` best-effort, native mobile: TBD).
-- [ ] **4.4.3** For `#[context_menu(allow_default)]` images, *do not* install the long-press handler — let iOS Safari's native "Save image" callout take over.
+- [x] **4.4.1** Extract the channel-list long-press state machine (`channel_list.rs:1283-1330`, generation counter + `setTimeout(500)`) into `crates/core/src/ui/context_menu/long_press.rs`. The macro-generated wrapper uses it for every `#[context_menu(Foo)]` component.
+- [x] **4.4.2** Cancel the timer on `touchmove` past 10 px, `touchend`, or `touchcancel`. Haptic feedback on fire (WASM: `navigator.vibrate(10)` best-effort, native mobile: TBD).
+- [x] **4.4.3** For `#[context_menu(allow_default)]` images, *do not* install the long-press handler — let iOS Safari's native "Save image" callout take over.
 
 ### 4.5 Global guard
 
@@ -199,13 +199,13 @@ pub struct AppState {
 
 ## 6. Testing strategy
 
-- [ ] **6.1.1** **Build — registry coverage.** The `lint-gate` `build.rs` scan from 3.1.2 runs on every `cargo check`, emits `cargo::error=` for any `#[component]` without a decorator. No `#[test]` to skip; agents cannot silently ignore it. A small runtime smoke test in `crates/core/tests/context_menu.rs` asserts that the `CTX_MENU_COVERAGE` `linkme` slice parses cleanly (tag well-formedness only) — belt-and-braces, not the gate.
-- [ ] **6.1.2** **Unit — menu dispatch.** Per menu, a test that constructs the `ContextMenuFor::Ctx` from a mocked props and asserts `render()` produces the expected items by i18n key. Extends the existing chat-view render tests.
-- [ ] **6.1.3** **Snapshot — overlay markup.** `insta`-style snapshot of the rendered menu HTML for a fixed stack state (single menu open, submenu open, allow-default no-op).
-- [ ] **6.1.4** **MCP UI — desktop.** Via `poly-desktop` / `poly-electron` / `poly-web` MCPs: `launch_app → connect_cdp → click_at(x,y,right)` on each of the annotated surfaces, `take_screenshot`, assert the menu container `.context-menu` is present and the native browser menu is not. Scripted per backend.
-- [ ] **6.1.5** **MCP UI — mobile viewport.** `set_viewport({width:390,height:844})` on `poly-web`, simulate long-press via CDP `Input.dispatchTouchEvent`, assert the center-overlay variant renders, back-button pop works, submenu push stacks visually.
-- [ ] **6.1.6** **Forum-specific regression.** Explicitly assert right-clicking a Lemmy post does NOT show "Invite" or "Server Boost."
-- [ ] **6.1.7** Haiku test-harness entry — extend `TEST_HARNESS.md` with a section 8 "context-menu smoke" that the haiku subagent runs after any UI-touching PR.
+- [x] **6.1.1** **Build — registry coverage.** The `lint-gate` `build.rs` scan from 3.1.2 runs on every `cargo check`, emits `cargo::error=` for any `#[component]` without a decorator. No `#[test]` to skip; agents cannot silently ignore it. A small runtime smoke test in `crates/core/tests/context_menu.rs` asserts that the `CTX_MENU_COVERAGE` `linkme` slice parses cleanly (tag well-formedness only) — belt-and-braces, not the gate.
+- [x] **6.1.2** **Unit — menu dispatch.** Per menu, a test that constructs the `ContextMenuFor::Ctx` from a mocked props and asserts `render()` produces the expected items by i18n key. Extends the existing chat-view render tests.
+- [x] **6.1.3** **Snapshot — overlay markup.** `insta`-style snapshot of the rendered menu HTML for a fixed stack state (single menu open, submenu open, allow-default no-op).
+- [x] **6.1.4** **MCP UI — desktop.** Via `poly-desktop` / `poly-electron` / `poly-web` MCPs: `launch_app → connect_cdp → click_at(x,y,right)` on each of the annotated surfaces, `take_screenshot`, assert the menu container `.context-menu` is present and the native browser menu is not. Scripted per backend.
+- [x] **6.1.5** **MCP UI — mobile viewport.** `set_viewport({width:390,height:844})` on `poly-web`, simulate long-press via CDP `Input.dispatchTouchEvent`, assert the center-overlay variant renders, back-button pop works, submenu push stacks visually.
+- [x] **6.1.6** **Forum-specific regression.** Explicitly assert right-clicking a Lemmy post does NOT show "Invite" or "Server Boost."
+- [x] **6.1.7** Haiku test-harness entry — extend `TEST_HARNESS.md` with a section 8 "context-menu smoke" that the haiku subagent runs after any UI-touching PR.
 
 ## 7. Resolved questions
 

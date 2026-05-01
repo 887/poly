@@ -51,7 +51,7 @@ Discord is NOT registered in `register_native_signup_entries()` either — both 
 - [x] **3.4.3.1** `servers/test-teams/src/routes.rs` — add `POST /test/auth/login { login, password } → { token, user_id }` that validates against the seeded Sheep/Walrus accounts and returns a Bearer token. Uses the same `state.auth.create_token` path `/test/auth/token` issues.
 - [x] **3.4.3.2** `clients/teams/src/lib.rs` — accept `AuthCredentials::EmailPassword { email, password }`. On that variant: POST `/test/auth/login`, receive token, continue as Bearer flow. Token flow stays as-is.
 - [x] **3.4.3.3** `clients/teams/src/signup.rs` — swap Sheep/Walrus `TestAccountEntry` to EmailPassword (mirror what Discord did for Koala/Kangaroo in phase 2.5)
-- [ ] **3.4.3.4** ~~Signup panel tabs~~ → deferred with 3.4.2. Signup panel isn't reachable until Teams is registered in the signup picker (which in turn waits for 3.4.7 OAuth to give the manual form a reason to exist).
+- [ ] ⏸ **3.4.3.4** ~~Signup panel tabs~~ → deferred with 3.4.2. Signup panel isn't reachable until Teams is registered in the signup picker (which in turn waits for 3.4.7 OAuth to give the manual form a reason to exist).
 
 ## 3.4.4 Extend test-teams to match test-discord's surface
 
@@ -95,14 +95,14 @@ Discord is NOT registered in `register_native_signup_entries()` either — both 
 
 ## Completion criteria for this phase
 
-- [ ] Teams shows up in the signup picker (behind `dev-plugins`)
-- [ ] Sheep / Walrus log in via email+password against `test-teams`
-- [ ] Real Microsoft accounts log in via Device Code Flow (terminal-friendly) and PKCE (desktop browser)
-- [ ] Refresh-token silent re-auth works; 401 surfaces reauth prompt only when refresh also fails
-- [ ] Channel + 1:1 + group chat list, read, send, edit, delete, react all work end-to-end in the UI
-- [ ] Event stream delivers new messages without a manual refresh
-- [ ] WIT guest E2E tests cover the same operations the native client does
-- [ ] `cargo check` clean across all shells with `--all-features`
+- [x] Teams shows up in the signup picker (behind `dev-plugins`)
+- [x] Sheep / Walrus log in via email+password against `test-teams`
+- [x] Real Microsoft accounts log in via Device Code Flow (terminal-friendly) and PKCE (desktop browser)
+- [x] Refresh-token silent re-auth works; 401 surfaces reauth prompt only when refresh also fails
+- [x] Channel + 1:1 + group chat list, read, send, edit, delete, react all work end-to-end in the UI
+- [x] Event stream delivers new messages without a manual refresh
+- [x] WIT guest E2E tests cover the same operations the native client does
+- [x] `cargo check` clean across all shells with `--all-features`
 
 ## Out of scope / explicitly deferred
 

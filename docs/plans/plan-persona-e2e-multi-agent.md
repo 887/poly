@@ -326,16 +326,16 @@ Key design choices, captured up-front so phases don't re-litigate:
 
 ## 5. Acceptance criteria
 
-- [ ] `tests/e2e/persona-multi-agent.sh --scenario two-personas-shared-channel
+- [x] `tests/e2e/persona-multi-agent.sh --scenario two-personas-shared-channel
   --mode mock-claude` exits 0 from a clean checkout in ≤ 5 minutes.
-- [ ] All 6 scenarios (E.1–E.6) pass mock-claude mode in CI.
-- [ ] `--mode real-claude` works locally with a paid `ANTHROPIC_API_KEY`
+- [x] All 6 scenarios (E.1–E.6) pass mock-claude mode in CI.
+- [x] `--mode real-claude` works locally with a paid `ANTHROPIC_API_KEY`
   for at least scenario E.3 (UI live-update).
-- [ ] `data-testid` attributes added to the 4 named components without
+- [x] `data-testid` attributes added to the 4 named components without
   regressing component-lint or component-size budgets.
-- [ ] Cleanup trap leaves zero stray `poly-test-*`, `poly-chat-mcp`,
+- [x] Cleanup trap leaves zero stray `poly-test-*`, `poly-chat-mcp`,
   `dx serve`, or `claude` processes after exit (verified by `pgrep -f`).
-- [ ] CI run posts a sticky PR comment with per-scenario pass/fail and
+- [x] CI run posts a sticky PR comment with per-scenario pass/fail and
   live-update timing histogram.
 
 ---

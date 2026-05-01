@@ -162,7 +162,7 @@ All 5-second default.
 
 ### Phase 4 — UNKNOWN review
 
-- [ ] Manual review of `list_body.rs:238` and `tree_body.rs:210` — if
+- [x] Manual review of `list_body.rs:238` and `tree_body.rs:210` — if
   genuinely long-scoped, migrate with 5s-30s timeout; if short-scoped,
   treat as SAFE and bulk-migrate in Phase 3.
 

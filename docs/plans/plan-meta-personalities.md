@@ -936,14 +936,14 @@ Integration test passes 3/3.
 Out of scope for v1 but worth noting so we don't paint ourselves into a
 corner with the schema:
 
-- [ ] **I.1** Personas could share a fact pool when explicitly linked
+- [ ] 📋 **I.1** Personas could share a fact pool when explicitly linked
   (e.g. Broker Bob and Frag Frank both know "user travels Tuesday").
   Realised as a `persona_fact_links` join table — additive, no schema
   rewrite needed.
-- [ ] **I.2** "Council mode" — invoke multiple personas in parallel and
+- [ ] 📋 **I.2** "Council mode" — invoke multiple personas in parallel and
   aggregate the responses. Pure UI feature on top of multiple
   `meta_persona_invoke` calls.
-- [ ] **I.3** Cross-persona conflict detection ("Broker Bob and Greens
+- [ ] 📋 **I.3** Cross-persona conflict detection ("Broker Bob and Greens
   Greg gave contradictory predictions") — pure UI.
 
 ---
@@ -986,23 +986,23 @@ that should land before the user is encouraged to enable outbound mode.
 
 ## 11. Acceptance criteria
 
-- [ ] User creates a persona "Broker Bob" via UI; row appears in `personas`.
-- [ ] User binds 2 Discord servers + 1 Matrix room; rows appear in
+- [x] User creates a persona "Broker Bob" via UI; row appears in `personas`.
+- [x] User binds 2 Discord servers + 1 Matrix room; rows appear in
   `persona_sources`.
-- [ ] In Claude Desktop, calling `meta_persona_invoke({slug: "broker-bob",
+- [x] In Claude Desktop, calling `meta_persona_invoke({slug: "broker-bob",
   user_prompt: "what's up"})` returns a context bundle containing recent
   messages from those 3 sources only.
-- [ ] User clicks "Talk to" in `PersonaListPanel`, types a question, sees
+- [x] User clicks "Talk to" in `PersonaListPanel`, types a question, sees
   the bundle / Claude follow-up rendered inline.
-- [ ] Setting heartbeat to 15m and walking away for an hour produces 4
+- [x] Setting heartbeat to 15m and walking away for an hour produces 4
   audit rows + (with proactivity=`drafts-only`) zero outbound messages.
-- [ ] Toggling proactivity to `outbound-allowlisted` with no allowlist rows
+- [x] Toggling proactivity to `outbound-allowlisted` with no allowlist rows
   produces zero outbound messages even on heartbeat tick.
-- [ ] Rate-limit-exceeded path is observable as a single audit row, no
+- [x] Rate-limit-exceeded path is observable as a single audit row, no
   side-effects.
-- [ ] "Delete persona" cascades; verify all 6 tables are clean for that
+- [x] "Delete persona" cascades; verify all 6 tables are clean for that
   slug.
-- [ ] No outbound HTTP from any Poly binary on heartbeat — heartbeat is
+- [x] No outbound HTTP from any Poly binary on heartbeat — heartbeat is
   100% local-summariser, NOT an LLM call (consistent with parent plan).
 
 ---

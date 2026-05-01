@@ -221,20 +221,20 @@ the mechanism (allowlisted regex grep that fails CI) is identical.
 
 ## 5. Acceptance criteria
 
-- [ ] All 4 lints (Q.1–Q.4) ship with `continue-on-error: false`,
+- [x] All 4 lints (Q.1–Q.4) ship with `continue-on-error: false`,
   red CI on violation, allowlist-with-rationale escape hatch.
-- [ ] CLAUDE.md documents the 4 persona footgun classes in the same
+- [x] CLAUDE.md documents the 4 persona footgun classes in the same
   template as the 8 hang classes.
-- [ ] `cargo fuzz run source_resolve -- -max_total_time=300` returns
+- [x] `cargo fuzz run source_resolve -- -max_total_time=300` returns
   zero panics + zero ref-impl divergence on a clean nightly CI run.
-- [ ] `TEST_HARNESS.md` step 6 runs the e2e mock smoke scenario and
+- [x] `TEST_HARNESS.md` step 6 runs the e2e mock smoke scenario and
   passes within 5 minutes.
-- [ ] `meta_persona_audit_query` and `_audit_export` ship with
+- [x] `meta_persona_audit_query` and `_audit_export` ship with
   unit tests; `poly-cli call meta_persona_audit_query --slug=foo
   --action=outbound_send --result=denied` returns the expected subset.
-- [ ] `poly-cli ... --watch 5` works on the audit-query tool and dedupes
+- [x] `poly-cli ... --watch 5` works on the audit-query tool and dedupes
   by row id.
-- [ ] `PersonaAuditPanel` switched to filtered query — no full-audit
+- [x] `PersonaAuditPanel` switched to filtered query — no full-audit
   fetch on panel open.
 
 ---

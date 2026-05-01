@@ -241,11 +241,11 @@ cargo::warning=poly-action-coverage: 47 components declare #[ui_action(SomeEnum)
   `state: &'a mut AppState` and `navigator: Option<Navigator>`.
   Note: `ActionCx::test()` constructor not yet implemented.
 
-- [ ] **A.3** Add `dispatch_action!` macro.
+- [x] **A.3** Add `dispatch_action!` macro.
 
-- [ ] **A.4** Add `Navigator::stub()` — no-op navigator for test contexts (`#[cfg(test)]` shim).
+- [x] **A.4** Add `Navigator::stub()` — no-op navigator for test contexts (`#[cfg(test)]` shim).
 
-- [ ] **A.5** Trybuild compile-fail fixtures:
+- [x] **A.5** Trybuild compile-fail fixtures:
   - `dispatch_action!(NotAUiAction, state, nav)` → compile error
   - non-exhaustive match in `UiAction::apply()` → compile error
 
@@ -254,9 +254,9 @@ cargo::warning=poly-action-coverage: 47 components declare #[ui_action(SomeEnum)
 - [x] **B.1** `#[ui_action(...)]` proc-macro exists in `poly_ui_macros`. Parses `SomeIdent`,
   `None`, `inherit`. Emits no-op attribute (marker only).
 
-- [ ] **B.2** Add `#[diagnostic::on_unimplemented]` to the `UiAction` trait.
+- [x] **B.2** Add `#[diagnostic::on_unimplemented]` to the `UiAction` trait.
 
-- [ ] **B.3** Trybuild compile-fail fixtures:
+- [x] **B.3** Trybuild compile-fail fixtures:
   - `#[ui_action()]` → parse error
   - `#[ui_action(Foo, Bar)]` → parse error
   - `#[ui_action(unknown_keyword)]` → scanner violation
