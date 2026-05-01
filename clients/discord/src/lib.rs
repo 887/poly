@@ -27,6 +27,7 @@ mod wit_bindings;
 mod guest;
 
 /// Return Fluent translations for the given locale.
+#[must_use]
 pub fn plugin_translations(locale: &str) -> String {
     match locale {
         "en" => include_str!("../locales/en/plugin.ftl").to_string(),
@@ -85,9 +86,9 @@ pub mod test_helpers {
     use twilight_model::channel::ChannelType as DC;
 
     /// Map a raw Discord channel type integer to `poly_client::ChannelType`.
+    #[must_use]
     pub fn map_discord_channel_type(raw: u8) -> ChannelType {
         let dc = match raw {
-            0 => DC::GuildText,
             1 => DC::Private,
             2 => DC::GuildVoice,
             4 => DC::GuildCategory,
@@ -99,6 +100,7 @@ pub mod test_helpers {
             14 => DC::GuildDirectory,
             15 => DC::GuildForum,
             16 => DC::GuildMedia,
+            // 0 (GuildText) and any other unknown raw → fall back to GuildText
             _ => DC::GuildText,
         };
         DiscordClient::map_channel_type(dc)
@@ -164,6 +166,7 @@ pub struct DiscordClient {
 
 #[cfg(feature = "native")]
 impl DiscordClient {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             http: DiscordHttpClient::new("https://discord.com".to_string()),
@@ -176,6 +179,7 @@ impl DiscordClient {
         }
     }
 
+    #[must_use]
     pub fn with_base_url(base_url: String) -> Self {
         Self {
             http: DiscordHttpClient::new(base_url),
@@ -192,6 +196,7 @@ impl DiscordClient {
     ///
     /// `gateway_ws_url` is the WebSocket URL the client will connect to in
     /// `event_stream()`.  Example: `"ws://127.0.0.1:9999/gateway/ws"`.
+    #[must_use]
     pub fn with_base_url_and_gateway(base_url: String, gateway_ws_url: String) -> Self {
         Self {
             http: DiscordHttpClient::new(base_url),
@@ -233,9 +238,10 @@ impl DiscordClient {
 
     fn discord_message_to_poly(&self, m: api::DiscordMessage) -> Message {
         let author = self.discord_user_to_poly(m.author);
-        let timestamp = chrono::DateTime::parse_from_rfc3339(&m.timestamp)
-            .map(|dt| dt.with_timezone(&chrono::Utc))
-            .unwrap_or_else(|_| chrono::Utc::now());
+        let timestamp = chrono::DateTime::parse_from_rfc3339(&m.timestamp).map_or_else(
+            |_| chrono::Utc::now(),
+            |dt| dt.with_timezone(&chrono::Utc),
+        );
         let thread = m.thread.map(|t| Self::discord_thread_to_thread_info(&t));
         Message {
             id: m.id.to_string(),
@@ -255,13 +261,21 @@ impl DiscordClient {
     fn map_channel_type(dc: twilight_model::channel::ChannelType) -> ChannelType {
         use twilight_model::channel::ChannelType as DC;
         match dc {
-            DC::GuildText => ChannelType::Text,
             DC::GuildVoice | DC::GuildStageVoice => ChannelType::Voice,
-            DC::GuildCategory => ChannelType::Text, // categories are not exposed as channels
             DC::GuildAnnouncement => ChannelType::Announcement,
             DC::AnnouncementThread | DC::PublicThread | DC::PrivateThread => ChannelType::Thread,
             DC::GuildForum | DC::GuildMedia => ChannelType::Forum,
-            _ => ChannelType::Text,
+            // GuildText is the canonical text type; categories aren't exposed
+            // as their own channels in the UI so they fall back to Text;
+            // Private (DM), Group (group DM), GuildDirectory, Unknown(_), and
+            // any future-added variant also fall back to Text.
+            DC::GuildText
+            | DC::GuildCategory
+            | DC::Private
+            | DC::Group
+            | DC::GuildDirectory
+            | DC::Unknown(_)
+            | _ => ChannelType::Text,
         }
     }
 
@@ -325,7 +339,9 @@ impl DiscordClient {
             id: ch.id.to_string(),
             name: ch.name,
             channel_type,
-            server_id: ch.guild_id.map(|id| id.to_string()).unwrap_or_else(|| server_id.to_string()),
+            server_id: ch
+                .guild_id
+                .map_or_else(|| server_id.to_string(), |id| id.to_string()),
             unread_count: 0,
             mention_count: 0,
             last_message_id: None,
@@ -402,7 +418,7 @@ impl DiscordClient {
                 let parent_channel_id = data
                     .get("parent_id")
                     .and_then(|v| v.as_str())
-                    .map(|s| s.to_string());
+                    .map(std::string::ToString::to_string);
                 if thread_id.is_empty() {
                     return vec![];
                 }
@@ -655,7 +671,11 @@ impl ClientBackend for DiscordClient {
                 self.http.login(&email, &password).await?
             }
             AuthCredentials::OAuth { token } => token,
-            _ => return Err(ClientError::AuthFailed("Discord requires a user token or email+password".into())),
+            AuthCredentials::DeviceCode { .. } | AuthCredentials::PolyServer { .. } => {
+                return Err(ClientError::AuthFailed(
+                    "Discord requires a user token or email+password".into(),
+                ));
+            }
         };
         self.http.set_token(token.clone());
         let user = self.http.get_me().await?;
@@ -809,7 +829,7 @@ impl ClientBackend for DiscordClient {
             .map(|id| id.to_string())
             .ok_or_else(|| ClientError::Internal("forum channel missing guild_id".into()))?;
 
-        let cap = limit.unwrap_or(50).min(100) as usize;
+        let cap = usize::try_from(limit.unwrap_or(50).min(100)).unwrap_or(usize::MAX);
 
         // Fetch all active threads in the guild, filter to this forum.
         let active = self.http.get_active_threads(&guild_id).await?;
@@ -818,8 +838,7 @@ impl ClientBackend for DiscordClient {
             .into_iter()
             .filter(|t| {
                 t.parent_id
-                    .map(|pid| pid.to_string() == forum_channel_id)
-                    .unwrap_or(false)
+                    .is_some_and(|pid| pid.to_string() == forum_channel_id)
             })
             .collect();
 
@@ -860,7 +879,7 @@ impl ClientBackend for DiscordClient {
             let applied_tags = t
                 .applied_tags
                 .as_ref()
-                .map(|tags| tags.iter().map(|id| id.to_string()).collect())
+                .map(|tags| tags.iter().map(std::string::ToString::to_string).collect())
                 .unwrap_or_default();
             posts.push(ForumPost {
                 thread: Self::discord_thread_to_thread_info(&t),
@@ -993,8 +1012,7 @@ impl ClientBackend for DiscordClient {
         let is_owner = guild
             .owner_id
             .as_deref()
-            .map(|oid| oid == caller_id)
-            .unwrap_or(false);
+            .is_some_and(|oid| oid == caller_id);
 
         if is_owner {
             return Ok(MemberPermissions {
@@ -1202,27 +1220,29 @@ impl ClientBackend for DiscordClient {
                     .user_id
                     .map(|id| id.to_string())
                     .unwrap_or_default();
-                let moderator = user_map
-                    .get(&moderator_id)
-                    .map(|u| self.discord_user_to_poly(u.clone()))
-                    .unwrap_or_else(|| User {
+                let moderator = user_map.get(&moderator_id).map_or_else(
+                    || User {
                         id: moderator_id.clone(),
                         display_name: moderator_id.clone(),
                         avatar_url: None,
                         presence: PresenceStatus::Offline,
                         backend: BackendType::from("discord"),
-                    });
+                    },
+                    |u| self.discord_user_to_poly(u.clone()),
+                );
 
                 // The audit log entry's snowflake ID encodes the timestamp.
                 // Discord snowflake epoch: 2015-01-01T00:00:00.000Z = 1420070400000ms
                 let entry_id_u64 = entry.id.get();
                 let discord_epoch_ms: u64 = 1_420_070_400_000;
-                let ts_ms = (entry_id_u64 >> 22) + discord_epoch_ms;
+                let ts_ms = (entry_id_u64 >> 22).wrapping_add(discord_epoch_ms);
                 let timestamp = chrono::DateTime::<chrono::Utc>::from_timestamp_millis(
-                    ts_ms as i64,
+                    i64::try_from(ts_ms).unwrap_or(i64::MAX),
                 )
-                .map(|dt| dt.to_rfc3339())
-                .unwrap_or_else(|| chrono::Utc::now().to_rfc3339());
+                .map_or_else(
+                    || chrono::Utc::now().to_rfc3339(),
+                    |dt| dt.to_rfc3339(),
+                );
 
                 ModerationLogEntry {
                     id: entry.id.to_string(),
@@ -1249,14 +1269,17 @@ impl ClientBackend for DiscordClient {
             .map(|dr| {
                 let perms_bits: i64 = dr.permissions.parse().unwrap_or(0);
                 // Derive display_role name as the role's own name.
+                let admin_bit: i64 = 1_i64 << 3_i32;
+                let is_admin = perms_bits & admin_bit != 0;
+                let has = |flag_bit: i64| is_admin || (perms_bits & flag_bit != 0);
                 let permissions = MemberPermissions {
-                    manage_server: perms_bits & (1 << 5) != 0 || perms_bits & (1 << 3) != 0,
-                    manage_channels: perms_bits & (1 << 4) != 0 || perms_bits & (1 << 3) != 0,
-                    manage_roles: perms_bits & (1 << 28) != 0 || perms_bits & (1 << 3) != 0,
-                    kick_members: perms_bits & (1 << 1) != 0 || perms_bits & (1 << 3) != 0,
-                    ban_members: perms_bits & (1 << 2) != 0 || perms_bits & (1 << 3) != 0,
-                    manage_messages: perms_bits & (1 << 13) != 0 || perms_bits & (1 << 3) != 0,
-                    timeout_members: perms_bits & (1 << 40) != 0 || perms_bits & (1 << 3) != 0,
+                    manage_server: has(1_i64 << 5_i32),
+                    manage_channels: has(1_i64 << 4_i32),
+                    manage_roles: has(1_i64 << 28_i32),
+                    kick_members: has(1_i64 << 1_i32),
+                    ban_members: has(1_i64 << 2_i32),
+                    manage_messages: has(1_i64 << 13_i32),
+                    timeout_members: has(1_i64 << 40_i32),
                     display_role: dr.name.clone(),
                     power_level: None,
                 };
@@ -1326,7 +1349,7 @@ impl ClientBackend for DiscordClient {
         match target {
             MenuTargetKind::Server => {
                 // State-aware: Mute Server / Unmute Server, plus static items.
-                let muted = self.menu_state.lock().unwrap_or_else(|p| p.into_inner()).muted_servers.contains(target_id);
+                let muted = self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).muted_servers.contains(target_id);
                 let mute_item = if muted {
                     MenuItem {
                         id: "unmute-server".to_string(),
@@ -1406,7 +1429,7 @@ impl ClientBackend for DiscordClient {
             }
             MenuTargetKind::Channel => {
                 // State-aware: Mute/Unmute Channel, Mark Read.
-                let muted = self.menu_state.lock().unwrap_or_else(|p| p.into_inner()).muted_channels.contains(target_id);
+                let muted = self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).muted_channels.contains(target_id);
                 let mute_item = if muted {
                     MenuItem {
                         id: "unmute-channel".to_string(),
@@ -1446,8 +1469,8 @@ impl ClientBackend for DiscordClient {
             }
             MenuTargetKind::User => {
                 // State-aware: Block/Unblock, Add Friend/Remove Friend, Open DM.
-                let blocked = self.menu_state.lock().unwrap_or_else(|p| p.into_inner()).blocked_users.contains(target_id);
-                let is_friend = self.menu_state.lock().unwrap_or_else(|p| p.into_inner()).friend_ids.contains(target_id);
+                let blocked = self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).blocked_users.contains(target_id);
+                let is_friend = self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).friend_ids.contains(target_id);
                 let block_item = if blocked {
                     MenuItem {
                         id: "unblock-user".to_string(),
@@ -1536,7 +1559,7 @@ impl ClientBackend for DiscordClient {
             }
             MenuTargetKind::Dm => {
                 // State-aware: Mute/Unmute DM, Close DM.
-                let muted = self.menu_state.lock().unwrap_or_else(|p| p.into_inner()).muted_dms.contains(target_id);
+                let muted = self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).muted_dms.contains(target_id);
                 let mute_item = if muted {
                     MenuItem {
                         id: "unmute-dm".to_string(),
@@ -1582,57 +1605,60 @@ impl ClientBackend for DiscordClient {
         &self, action_id: &str, _target: MenuTargetKind, target_id: &str,
     ) -> Result<ActionOutcome, ClientError> {
         match action_id {
-            // Server actions
-            "invite-people" | "privacy-settings" | "edit-per-server-profile"
-            | "server-boost" | "leave-server" => Ok(ActionOutcome::Noop),
+            // Server / channel / user / message actions that are pure no-ops at this layer.
+            "invite-people"
+            | "privacy-settings"
+            | "edit-per-server-profile"
+            | "server-boost"
+            | "leave-server"
+            | "mark-channel-read"
+            | "open-dm"
+            | "copy-message-link"
+            | "delete-message"
+            | "close-dm" => Ok(ActionOutcome::Noop),
             "mute-server" => {
-                self.menu_state.lock().unwrap_or_else(|p| p.into_inner()).muted_servers.insert(target_id.to_string());
+                self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).muted_servers.insert(target_id.to_string());
                 Ok(ActionOutcome::Noop)
             }
             "unmute-server" => {
-                self.menu_state.lock().unwrap_or_else(|p| p.into_inner()).muted_servers.remove(target_id);
+                self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).muted_servers.remove(target_id);
                 Ok(ActionOutcome::Noop)
             }
             // Channel actions
             "mute-channel" => {
-                self.menu_state.lock().unwrap_or_else(|p| p.into_inner()).muted_channels.insert(target_id.to_string());
+                self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).muted_channels.insert(target_id.to_string());
                 Ok(ActionOutcome::Noop)
             }
             "unmute-channel" => {
-                self.menu_state.lock().unwrap_or_else(|p| p.into_inner()).muted_channels.remove(target_id);
+                self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).muted_channels.remove(target_id);
                 Ok(ActionOutcome::Noop)
             }
-            "mark-channel-read" => Ok(ActionOutcome::Noop),
             // User actions
-            "open-dm" => Ok(ActionOutcome::Noop),
             "add-friend" => {
-                self.menu_state.lock().unwrap_or_else(|p| p.into_inner()).friend_ids.insert(target_id.to_string());
+                self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).friend_ids.insert(target_id.to_string());
                 Ok(ActionOutcome::Noop)
             }
             "remove-friend" => {
-                self.menu_state.lock().unwrap_or_else(|p| p.into_inner()).friend_ids.remove(target_id);
+                self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).friend_ids.remove(target_id);
                 Ok(ActionOutcome::Noop)
             }
             "block-user" => {
-                self.menu_state.lock().unwrap_or_else(|p| p.into_inner()).blocked_users.insert(target_id.to_string());
+                self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).blocked_users.insert(target_id.to_string());
                 Ok(ActionOutcome::Noop)
             }
             "unblock-user" => {
-                self.menu_state.lock().unwrap_or_else(|p| p.into_inner()).blocked_users.remove(target_id);
+                self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).blocked_users.remove(target_id);
                 Ok(ActionOutcome::Noop)
             }
-            // Message actions
-            "copy-message-link" | "delete-message" => Ok(ActionOutcome::Noop),
             // DM actions
             "mute-dm" => {
-                self.menu_state.lock().unwrap_or_else(|p| p.into_inner()).muted_dms.insert(target_id.to_string());
+                self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).muted_dms.insert(target_id.to_string());
                 Ok(ActionOutcome::Noop)
             }
             "unmute-dm" => {
-                self.menu_state.lock().unwrap_or_else(|p| p.into_inner()).muted_dms.remove(target_id);
+                self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).muted_dms.remove(target_id);
                 Ok(ActionOutcome::Noop)
             }
-            "close-dm" => Ok(ActionOutcome::Noop),
             other => Err(ClientError::NotFound(format!("unknown action: {other}"))),
         }
     }

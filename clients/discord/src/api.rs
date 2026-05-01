@@ -217,6 +217,5 @@ pub struct DiscordAuditLogResponse {
     pub users: Vec<DiscordUser>,
 }
 
-/// Response from `PATCH /channels/{id}` — a partial channel object with updated fields.
-/// We reuse `DiscordChannel` for this since the shape is the same.
-pub type DiscordChannelUpdate = DiscordChannel;
+// `DiscordChannelUpdate` removed — `PATCH /channels/{id}` returns a full
+// `DiscordChannel` object; callers use `DiscordChannel` directly.

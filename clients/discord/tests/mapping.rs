@@ -8,7 +8,13 @@
 //! - Message with `thread` field → `Message.thread = Some(...)`
 //! - Gateway events THREAD_CREATE / THREAD_UPDATE / THREAD_DELETE / THREAD_LIST_SYNC
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::indexing_slicing,
+    clippy::wildcard_enum_match_arm
+)]
 
 use poly_client::{ChannelType, ClientEvent};
 use poly_discord::test_helpers::{

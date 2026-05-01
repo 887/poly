@@ -1,9 +1,9 @@
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 //! WP-1 regression: Discord is full social chat with full moderation capabilities.
 
 use poly_client::{
-    BackendCapabilities, ClientBackend, DmSupport, FriendModel, MessagingModel,
-    NotificationSupport, VoiceSupport, capabilities_for_slug,
+    ClientBackend, DmSupport, FriendModel, MessagingModel, NotificationSupport, VoiceSupport,
+    capabilities_for_slug,
 };
 use poly_discord::DiscordClient;
 

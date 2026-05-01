@@ -67,8 +67,10 @@ impl DiscordHttpClient {
         self.user_agent
             .lock()
             .ok()
-            .map(|g| g.clone())
-            .unwrap_or_else(|| DEFAULT_CLIENT_VERSION.to_string())
+            .map_or_else(
+                || DEFAULT_CLIENT_VERSION.to_string(),
+                |g| g.clone(),
+            )
     }
 
     /// Apply version headers (User-Agent + X-Super-Properties) to a request.
@@ -381,13 +383,13 @@ impl DiscordHttpClient {
     ) -> Result<(), ClientError> {
         let path = format!("/api/v10/guilds/{guild_id}/bans/{user_id}");
         let mut body = serde_json::json!({});
-        if let Some(secs) = delete_message_seconds {
-            if let Some(obj) = body.as_object_mut() {
-                obj.insert(
-                    "delete_message_seconds".to_string(),
-                    serde_json::json!(secs.min(604800)),
-                );
-            }
+        if let Some(secs) = delete_message_seconds
+            && let Some(obj) = body.as_object_mut()
+        {
+            obj.insert(
+                "delete_message_seconds".to_string(),
+                serde_json::json!(secs.min(604_800)),
+            );
         }
         let mut req = self
             .apply_version_headers(self.http.put(self.api_url(&path)))

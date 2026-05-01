@@ -4,7 +4,14 @@
 //! demo data, authenticates via `/test/auth/token`, then exercises the full
 //! `ClientBackend` API surface.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing, dead_code)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::indexing_slicing,
+    clippy::wildcard_enum_match_arm,
+    dead_code
+)]
 
 use std::sync::Arc;
 
@@ -436,19 +443,19 @@ async fn test_gateway_thread_create_flow() {
     let thread_payload = serde_json::json!({
         "id": "9001",
         "name": "New gateway thread",
-        "type": 11,
+        "type": 11_i32,
         "guild_id": "100",
         "parent_id": "500",
         "thread_metadata": {
             "archived": false,
             "locked": false,
-            "auto_archive_duration": 1440,
+            "auto_archive_duration": 1_440_i32,
             "archive_timestamp": null,
             "create_timestamp": "2026-04-19T00:00:00.000Z"
         },
         "owner_id": "1",
-        "message_count": 0,
-        "member_count": 1,
+        "message_count": 0_i32,
+        "member_count": 1_i32,
         "applied_tags": []
     });
 
