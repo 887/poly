@@ -1,15 +1,18 @@
 plugin-hackernews-signup-name = Hacker News
-plugin-hackernews-signup-desc = Browse anonymously or with your HN username.
+plugin-hackernews-signup-desc = Read anonymously or sign in to comment and submit.
 plugin-hackernews-title = Hacker News
 plugin-hackernews-signup-title = Add Hacker News
-plugin-hackernews-signup-tab-anonymous = Anonymous
-plugin-hackernews-signup-tab-account = With Username
-plugin-hackernews-signup-anonymous-desc = No account needed. Browse top stories, Ask HN, Show HN, and jobs.
-plugin-hackernews-signup-anonymous-btn = Add Hacker News
-plugin-hackernews-signup-account-desc = Enter your HN username to personalize your session.
+plugin-hackernews-signup-tab-anonymous = Anonymous (read-only)
+plugin-hackernews-signup-tab-signin = Sign in
+plugin-hackernews-signup-anonymous-desc = No account needed. Browse top stories, Ask HN, Show HN, and jobs. Posting is disabled in this mode.
+plugin-hackernews-signup-anonymous-btn = Add anonymous Hacker News
+plugin-hackernews-signup-signin-desc = Sign in with your news.ycombinator.com account to comment and submit. Multiple accounts are supported — sign in once per account.
 plugin-hackernews-signup-username-label = HN Username
 plugin-hackernews-signup-username-placeholder = your-username
-plugin-hackernews-signup-account-btn = Add Hacker News
+plugin-hackernews-signup-password-label = Password
+plugin-hackernews-signup-password-placeholder = ••••••••
+plugin-hackernews-signup-signin-btn = Sign in to Hacker News
+plugin-hackernews-signup-signing-in = Signing in…
 
 plugin-hackernews-setting-preferences-label = Preferences
 plugin-hackernews-setting-default-feed-label = Default Feed
