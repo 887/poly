@@ -23,10 +23,15 @@ default = ["dev-plugins", "web"]
 dev-plugins = ["poly-core/discord", "poly-core/teams"]
 production = []
 # `web` brings in the WASM renderer; compiled when targeting wasm32.
-# `dioxus/fullstack` activates `dioxus-web/hydrate` so the client hydrates
-# the SSR output from the fullstack server instead of re-rendering next
-# to it (which produces a duplicated .poly-app root).
-web = ["dioxus/web", "dioxus/fullstack"]
+# We DELIBERATELY do NOT enable `dioxus/fullstack` here — that would
+# activate `dioxus-web/hydrate` so the client tries to hydrate against
+# the SSR output. Hydration is the source of the textContent crash on
+# boot: cfg(target_arch="wasm32") branches inside the App tree produce
+# different shapes server vs client, the client's hydrate mapping
+# desyncs, and the next text-edit opcode hits a missing node ID.
+# Without fullstack, the client renders fresh; the server's empty
+# `#poly-app-shell` (see App() cfg(not(wasm32))) is replaced cleanly.
+web = ["dioxus/web"]
 # `server` pulls in the Dioxus fullstack server runtime so `dx serve
 # --platform web` builds this binary as a native axum server. The
 # server binary serves the WASM bundle AND mounts `/host/*` on the

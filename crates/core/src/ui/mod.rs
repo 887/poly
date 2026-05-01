@@ -1567,6 +1567,24 @@ fn StartupOverlay(state: StartupOverlayState) -> Element {
 #[context_menu(inherit)]
 #[component]
 pub fn App() -> Element {
+    // SSR-side render: produce an EMPTY shell so the WASM client doesn't have
+    // to hydrate a server-rendered tree. The dioxus-fullstack server pre-renders
+    // the App tree and emits HTML the WASM client tries to map node-by-node.
+    // Boot-time signal cascades + cfg(target_arch="wasm32") branches inside
+    // descendants produce subtle node-shape divergence between SSR and the
+    // client's first WASM render — that desync surfaces as the
+    // "Cannot set properties of undefined (setting 'textContent')" crash on
+    // the next text-edit opcode.
+    //
+    // Returning an empty container on the server makes the SSR output be
+    // just `<div id="poly-app-shell"></div>`. The WASM client then renders
+    // its full tree from scratch into that container — no hydration, no
+    // mismatch.
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        return rsx! { div { id: "poly-app-shell" } };
+    }
+
     let app_state: BatchedSignal<AppState> =
         BatchedSignal::from_signal(use_signal(AppState::default));
     let storage_ready = use_signal(|| false);
