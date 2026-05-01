@@ -72,7 +72,6 @@ pub fn AccountContextMenu() -> Element {
             // Mark Account as Read — sweep every DM + channel for this account.
             {
                 let aid = account_id.clone();
-                let close = close;
                 rsx! {
                     AccountMenuItem {
                         label: t("account-menu-mark-read"),
@@ -109,7 +108,6 @@ pub fn AccountContextMenu() -> Element {
                 let backend = backend_slug.clone();
                 let inst = instance_id.clone();
                 let aid = account_id.clone();
-                let close = close;
                 rsx! {
                     AccountMenuItem {
                         label: t("account-menu-settings"),
@@ -129,7 +127,6 @@ pub fn AccountContextMenu() -> Element {
             // can re-enable from Settings → Plugins).
             {
                 let aid = account_id.clone();
-                let close = close;
                 rsx! {
                     AccountMenuItem {
                         label: t("account-menu-sign-out"),
@@ -148,7 +145,6 @@ pub fn AccountContextMenu() -> Element {
             // Copy Account ID
             {
                 let aid = account_id.clone();
-                let close = close;
                 rsx! {
                     AccountMenuItem {
                         label: t("account-menu-copy-id"),

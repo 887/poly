@@ -135,6 +135,14 @@ pub fn sanitize_html(input: &str) -> String {
 
 /// Remove `href="data:…"` attributes from `<a>` tags. Called as a post-pass
 /// after `ammonia::clean` because ammonia's URL allowlist is global.
+// lint-allow-unused: hand-written byte parser; arithmetic + string slicing are
+// inherent to the state machine. Char-boundary safety is established by the
+// SAFETY comment inside; ASCII tag scan + `len_utf8()` advance.
+#[allow(
+    clippy::arithmetic_side_effects,
+    clippy::string_slice,
+    clippy::indexing_slicing
+)]
 fn strip_data_href_on_anchors(html: &str) -> String {
     // Tiny state machine: find `<a ` tags, within them find `href="data:`
     // and replace with `href=""`. Good enough for our threat model; the
@@ -181,6 +189,12 @@ fn strip_data_href_on_anchors(html: &str) -> String {
 }
 
 /// Replace `href="<scheme>…"` with `href=""` in `tag`.
+// lint-allow-unused: byte slice arithmetic; indices are checked via `find`.
+#[allow(
+    clippy::arithmetic_side_effects,
+    clippy::string_slice,
+    clippy::indexing_slicing
+)]
 fn replace_href_scheme(tag: &str, scheme: &str) -> String {
     let lower = tag.to_ascii_lowercase();
     for quote in ['"', '\''] {
@@ -213,7 +227,15 @@ fn replace_href_scheme(tag: &str, scheme: &str) -> String {
 /// but ammonia already sanitizes the HTML and the stylesheet cannot contain
 /// script, so the blast radius of a malformed prefix is a broken layout,
 /// not a security hole.
-#[must_use] 
+// lint-allow-unused: CSS selector splitter; integer division for capacity hint
+// is intentional, string slicing uses `find` for boundary safety.
+#[allow(
+    clippy::arithmetic_side_effects,
+    clippy::string_slice,
+    clippy::indexing_slicing,
+    clippy::integer_division
+)]
+#[must_use]
 pub fn prefix_css_selectors(css: &str, scope_class: &str) -> String {
     let prefix = format!(".{}", scope_class);
     let mut out = String::with_capacity(css.len() + css.len() / 4);

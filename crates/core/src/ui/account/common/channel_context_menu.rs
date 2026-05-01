@@ -67,7 +67,6 @@ pub fn ChannelContextMenu() -> Element {
             // Mark as Read
             {
                 let channel_id = channel_id.clone();
-                let close = close;
                 rsx! {
                     ChannelMenuItem {
                         label: t("channel-menu-mark-read"),
@@ -105,7 +104,6 @@ pub fn ChannelContextMenu() -> Element {
                     .active_instance_id
                     .cloned()
                     .unwrap_or_default();
-                let close = close;
                 rsx! {
                     ChannelMenuItem {
                         label: t("channel-settings-title"),
@@ -128,13 +126,12 @@ pub fn ChannelContextMenu() -> Element {
             // Copy Channel ID
             {
                 let cid = channel_id.clone();
-                let close = close;
                 rsx! {
                     ChannelMenuItem {
                         label: t("channel-menu-copy-id"),
                         onclick: move |_| {
                             let cid2 = cid.clone();
-                            let _eval = document::eval(&format!("navigator.clipboard.writeText('{cid2}')"));
+                            #[allow(clippy::let_underscore_must_use)] let _ = document::eval(&format!("navigator.clipboard.writeText('{cid2}')"));
                             close();
                         },
                     }

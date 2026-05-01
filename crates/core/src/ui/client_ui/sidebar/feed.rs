@@ -65,7 +65,6 @@ pub fn FeedLayout() -> Element {
                     let selected = current == id_s;
                     let class = if selected { "feed-row selected" } else { "feed-row" };
                     let account_id = account_id.clone();
-                    let client_manager = client_manager;
                     let id_for_click = id_s.clone();
                     let onclick = move |_evt: MouseEvent| {
                         let id_disp = id_for_click.clone();

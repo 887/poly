@@ -75,7 +75,6 @@ pub fn AvatarContextMenu() -> Element {
             {
                 let uid = user_id.clone();
                 let dname = display_name.clone();
-                let close = close;
                 rsx! {
                     AvatarMenuItem {
                         label: t("avatar-menu-view-profile"),
@@ -99,7 +98,6 @@ pub fn AvatarContextMenu() -> Element {
             // Stub logs a debug message until the nav path is available.
             {
                 let uid = user_id.clone();
-                let close = close;
                 rsx! {
                     AvatarMenuItem {
                         label: t("avatar-menu-send-dm"),
@@ -117,7 +115,6 @@ pub fn AvatarContextMenu() -> Element {
             // Mention — copies `@username` to clipboard
             {
                 let mention_text = format!("@{display_name}");
-                let close = close;
                 rsx! {
                     AvatarMenuItem {
                         label: t("avatar-menu-mention"),
@@ -125,7 +122,9 @@ pub fn AvatarContextMenu() -> Element {
                             let escaped = mention_text
                                 .replace('\\', "\\\\")
                                 .replace('`', "\\`");
-                            let _eval = document::eval(&format!(
+                            // lint-allow-unused: Eval is fire-and-forget here (Copy + Future).
+                            #[allow(clippy::let_underscore_must_use)]
+                            let _ = document::eval(&format!(
                                 "navigator.clipboard && navigator.clipboard.writeText(`{escaped}`);"
                             ));
                             close();

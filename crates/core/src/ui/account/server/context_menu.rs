@@ -106,7 +106,6 @@ pub fn ServerContextMenu() -> Element {
             ContextMenuItem {
                 label: t("server-menu-mark-read"),
                 onclick: {
-                    let close = close;
                     move |_| {
                         // TODO(phase-3): mark all channels read via backend
                         close();
@@ -128,7 +127,6 @@ pub fn ServerContextMenu() -> Element {
                 let aid = account_id.clone();
                 let iid = instance_id.clone();
                 let bslug = backend_slug.clone();
-                let close = close;
                 rsx! {
                     ContextMenuItem {
                         label: t("server-menu-notif-settings"),
@@ -184,7 +182,6 @@ pub fn ServerContextMenu() -> Element {
                     label: t("server-menu-add-favorites"),
                     onclick: {
                         let sid = server_id.clone();
-                        let close = close;
                         move |_| {
                             let new_favs = chat_data.batch(|cd| {
                                 if !cd.favorited_server_ids.contains(&sid) {
@@ -210,7 +207,6 @@ pub fn ServerContextMenu() -> Element {
                 let aid = account_id.clone();
                 let iid = instance_id.clone();
                 let bslug = backend_slug.clone();
-                let close = close;
                 rsx! {
                     ContextMenuItem {
                         label: t("server-menu-leave"),
@@ -234,13 +230,12 @@ pub fn ServerContextMenu() -> Element {
             // Copy Server ID
             {
                 let sid = server_id.clone();
-                let close = close;
                 rsx! {
                     ContextMenuItem {
                         label: t("server-menu-copy-id"),
                         onclick: move |_| {
                             let sid2 = sid.clone();
-                            let _eval = document::eval(&format!("navigator.clipboard.writeText('{sid2}')"));
+                            #[allow(clippy::let_underscore_must_use)] let _ = document::eval(&format!("navigator.clipboard.writeText('{sid2}')"));
                             close();
                         },
                     }

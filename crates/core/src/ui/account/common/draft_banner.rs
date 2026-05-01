@@ -128,7 +128,7 @@ async fn call_draft_mcp(tool: &str, args: serde_json::Value) -> bool {
                 !json
                     .get("result")
                     .and_then(|r| r.get("isError"))
-                    .and_then(|e| e.as_bool())
+                    .and_then(serde_json::Value::as_bool)
                     .unwrap_or(false)
             }
             Err(e) => {

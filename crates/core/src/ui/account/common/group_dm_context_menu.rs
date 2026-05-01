@@ -58,7 +58,6 @@ pub fn GroupDmContextMenu() -> Element {
             // Mark as Read — host-side. Greyed when nothing to mark.
             {
                 let cid = channel_id.clone();
-                let close = close;
                 rsx! {
                     GroupDmMenuItem {
                         label: t("channel-menu-mark-read"),
@@ -76,7 +75,6 @@ pub fn GroupDmContextMenu() -> Element {
 
             // Edit Group — needs an inline form; for now, toast "coming soon"
             {
-                let close = close;
                 rsx! {
                     GroupDmMenuItem {
                         label: t("group-dm-menu-edit"),
@@ -92,7 +90,6 @@ pub fn GroupDmContextMenu() -> Element {
 
             // Invite Friends to Group DM — needs a friend picker modal
             {
-                let close = close;
                 rsx! {
                     GroupDmMenuItem {
                         label: t("group-dm-menu-invite"),
@@ -142,7 +139,6 @@ pub fn GroupDmContextMenu() -> Element {
             {
                 let cid = channel_id.clone();
                 let aid = account_id.clone();
-                let close = close;
                 rsx! {
                     GroupDmMenuItem {
                         label: t("group-dm-menu-leave"),
@@ -170,7 +166,6 @@ pub fn GroupDmContextMenu() -> Element {
             // Copy Channel ID
             {
                 let cid = channel_id.clone();
-                let close = close;
                 rsx! {
                     GroupDmMenuItem {
                         label: t("channel-menu-copy-id"),

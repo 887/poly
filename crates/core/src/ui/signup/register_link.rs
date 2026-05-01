@@ -82,7 +82,9 @@ pub(crate) fn RegisterLink(backend_slug: String, server_url: Option<String>) -> 
                             "window.open({url}, '_blank', 'noopener,noreferrer');",
                             url = js_url,
                         );
-                        let _eval = document::eval(&js);
+                        // lint-allow-unused: Eval is fire-and-forget here (Copy + Future).
+                        #[allow(clippy::let_underscore_must_use)]
+                        let _ = document::eval(&js);
                     },
                     "{t(\"signup-register-link-prefix\")} "
                     span { class: "register-link__action", "{label}" }

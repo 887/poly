@@ -63,7 +63,6 @@ pub fn AttachmentContextMenu() -> Element {
             // Copy Image — fetch the bytes and put them on the clipboard as a blob.
             {
                 let u = url.clone();
-                let close = close;
                 rsx! {
                     AttachmentMenuItem {
                         label: t("attachment-menu-copy-image"),
@@ -72,7 +71,9 @@ pub fn AttachmentContextMenu() -> Element {
                                 "(async () => {{\n  try {{\n    const r = await fetch({url});\n    const b = await r.blob();\n    await navigator.clipboard.write([new ClipboardItem({{[b.type]: b}})]);\n  }} catch (e) {{ console.warn('copy image failed:', e); }}\n}})();",
                                 url = serde_json::to_string(&u).unwrap_or_else(|_| "\"\"".into()),
                             );
-                            let _eval = document::eval(&js);
+                            // lint-allow-unused: Eval is fire-and-forget here (Copy + Future).
+                            #[allow(clippy::let_underscore_must_use)]
+                            let _ = document::eval(&js);
                             close();
                         },
                     }
@@ -83,7 +84,6 @@ pub fn AttachmentContextMenu() -> Element {
             {
                 let u = url.clone();
                 let f = filename.clone();
-                let close = close;
                 rsx! {
                     AttachmentMenuItem {
                         label: t("attachment-menu-save-image"),
@@ -93,7 +93,9 @@ pub fn AttachmentContextMenu() -> Element {
                                 url = serde_json::to_string(&u).unwrap_or_else(|_| "\"\"".into()),
                                 name = serde_json::to_string(&f).unwrap_or_else(|_| "\"\"".into()),
                             );
-                            let _eval = document::eval(&js);
+                            // lint-allow-unused: Eval is fire-and-forget here (Copy + Future).
+                            #[allow(clippy::let_underscore_must_use)]
+                            let _ = document::eval(&js);
                             close();
                         },
                     }
@@ -105,7 +107,6 @@ pub fn AttachmentContextMenu() -> Element {
             // Copy Media Link.
             {
                 let u = url.clone();
-                let close = close;
                 rsx! {
                     AttachmentMenuItem {
                         label: t("attachment-menu-copy-link"),
@@ -114,7 +115,9 @@ pub fn AttachmentContextMenu() -> Element {
                                 "navigator.clipboard.writeText({url}).catch((e) => console.warn('copy link failed:', e));",
                                 url = serde_json::to_string(&u).unwrap_or_else(|_| "\"\"".into()),
                             );
-                            let _eval = document::eval(&js);
+                            // lint-allow-unused: Eval is fire-and-forget here (Copy + Future).
+                            #[allow(clippy::let_underscore_must_use)]
+                            let _ = document::eval(&js);
                             close();
                         },
                     }
@@ -124,7 +127,6 @@ pub fn AttachmentContextMenu() -> Element {
             // Open Media Link.
             {
                 let u = url.clone();
-                let close = close;
                 rsx! {
                     AttachmentMenuItem {
                         label: t("attachment-menu-open-link"),
@@ -133,7 +135,9 @@ pub fn AttachmentContextMenu() -> Element {
                                 "window.open({url}, '_blank', 'noopener,noreferrer');",
                                 url = serde_json::to_string(&u).unwrap_or_else(|_| "\"\"".into()),
                             );
-                            let _eval = document::eval(&js);
+                            // lint-allow-unused: Eval is fire-and-forget here (Copy + Future).
+                            #[allow(clippy::let_underscore_must_use)]
+                            let _ = document::eval(&js);
                             close();
                         },
                     }
