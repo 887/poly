@@ -38,6 +38,7 @@ use poly_client::*;
 use std::pin::Pin;
 
 /// Return FTL translation source for the Forgejo client plugin.
+#[must_use] 
 pub fn plugin_translations(locale: &str) -> String {
     match locale {
         "en" => include_str!("../locales/en/plugin.ftl").to_string(),
@@ -83,14 +84,13 @@ impl ForgejoClient {
     }
 
     fn session_id(&self) -> &str {
-        self.session.as_ref().map(|s| s.id.as_str()).unwrap_or("fj")
+        self.session.as_ref().map_or("fj", |s| s.id.as_str())
     }
 
     fn session_login(&self) -> &str {
         self.session
             .as_ref()
-            .map(|s| s.user.id.as_str())
-            .unwrap_or("anonymous")
+            .map_or("anonymous", |s| s.user.id.as_str())
     }
 
 }
@@ -111,7 +111,10 @@ impl ClientBackend for ForgejoClient {
     async fn authenticate(&mut self, credentials: AuthCredentials) -> ClientResult<Session> {
         let token = match credentials {
             AuthCredentials::Token(t) => t,
-            other => {
+            other @ (AuthCredentials::EmailPassword { .. }
+            | AuthCredentials::OAuth { .. }
+            | AuthCredentials::DeviceCode { .. }
+            | AuthCredentials::PolyServer { .. }) => {
                 return Err(ClientError::AuthFailed(format!(
                     "Forgejo does not support {:?} credentials",
                     std::mem::discriminant(&other)
@@ -422,7 +425,7 @@ impl ClientBackend for ForgejoClient {
                     "delete_message: not a Forgejo comment id: {message_id}"
                 ))
             })?;
-        let comment_id: u64 = comment_id_str.parse().map_err(|_| {
+        let comment_id: u64 = comment_id_str.parse().map_err(|_err| {
             ClientError::NotFound(format!(
                 "delete_message: malformed comment id: {message_id}"
             ))
@@ -746,7 +749,9 @@ impl ClientBackend for ForgejoClient {
                 .and_then(|c| c.value.parse().ok())
                 .unwrap_or(1);
             let page_size: usize = 30;
-            let start = ((page - 1) as usize) * page_size;
+            let start = usize::try_from(page.saturating_sub(1))
+                .unwrap_or(usize::MAX)
+                .saturating_mul(page_size);
             let slice: Vec<_> = repos.iter().skip(start).take(page_size).collect();
             let rows: Vec<ViewRow> = slice
                 .iter()
@@ -764,8 +769,8 @@ impl ClientBackend for ForgejoClient {
                     preview_image_url: None,
                 })
                 .collect();
-            let next_cursor = if repos.len() > start + page_size {
-                Some(Cursor { kind: CursorKind::Offset, value: (page + 1).to_string() })
+            let next_cursor = if repos.len() > start.saturating_add(page_size) {
+                Some(Cursor { kind: CursorKind::Offset, value: page.saturating_add(1).to_string() })
             } else {
                 None
             };
@@ -799,7 +804,7 @@ impl ClientBackend for ForgejoClient {
 
         // If a full page was returned there may be more; advertise next page.
         let next_cursor = if rows.len() == 30 {
-            Some(Cursor { kind: CursorKind::Offset, value: (page + 1).to_string() })
+            Some(Cursor { kind: CursorKind::Offset, value: page.saturating_add(1).to_string() })
         } else {
             None
         };
@@ -815,7 +820,7 @@ impl ClientBackend for ForgejoClient {
         let (owner, repo) = parse_forum_channel(channel_id)?;
         let index: u64 = row_id
             .parse()
-            .map_err(|_| ClientError::NotFound(format!("row_id must be an issue number: {row_id}")))?;
+            .map_err(|_err| ClientError::NotFound(format!("row_id must be an issue number: {row_id}")))?;
         let issue = self.api.get_issue(&owner, &repo, index).await?;
         // Fetch comments so the split-pane detail panel shows the full thread.
         // On failure fall back to an empty list so the issue body is still shown.
@@ -1005,13 +1010,19 @@ fn decode_b64_simple(input: &str) -> Vec<u8> {
     let mut lookup = [255u8; 256];
     for (i, &b) in TABLE.iter().enumerate() {
         if let Some(slot) = lookup.get_mut(usize::from(b)) {
-            *slot = i as u8;
+            // lint-allow-unused: i is bounded by TABLE.len() == 64 < u8::MAX
+            #[allow(clippy::cast_possible_truncation, clippy::as_conversions)]
+            {
+                *slot = i as u8;
+            }
         }
     }
     let bytes = input.as_bytes();
+    // lint-allow-unused: capacity is best-effort hint; truncating arithmetic safe here
+    #[allow(clippy::integer_division, clippy::arithmetic_side_effects)]
     let mut out = Vec::with_capacity(bytes.len() * 3 / 4);
-    let mut buf = 0u32;
-    let mut bits = 0u32;
+    let mut buf: u32 = 0;
+    let mut bits: u32 = 0;
     for &b in bytes {
         if b == b'=' {
             break;
@@ -1020,10 +1031,12 @@ fn decode_b64_simple(input: &str) -> Vec<u8> {
         if v == 255 {
             continue;
         }
-        buf = (buf << 6) | u32::from(v);
-        bits += 6;
+        buf = (buf << 6_u32) | u32::from(v);
+        bits = bits.saturating_add(6);
         if bits >= 8 {
-            bits -= 8;
+            bits = bits.saturating_sub(8);
+            // lint-allow-unused: masked to 0xff so byte cast is exact
+            #[allow(clippy::cast_possible_truncation, clippy::as_conversions)]
             out.push(((buf >> bits) & 0xff) as u8);
         }
     }

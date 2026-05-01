@@ -125,7 +125,7 @@ impl StoatHttpClient {
         let mut session = self
             .session
             .write()
-            .map_err(|_| ClientError::Internal("Stoat session lock poisoned".to_string()))?;
+            .map_err(|_err| ClientError::Internal("Stoat session lock poisoned".to_string()))?;
         *session = None;
         Ok(())
     }
@@ -135,7 +135,7 @@ impl StoatHttpClient {
         let mut session = self
             .session
             .write()
-            .map_err(|_| ClientError::Internal("Stoat session lock poisoned".to_string()))?;
+            .map_err(|_err| ClientError::Internal("Stoat session lock poisoned".to_string()))?;
         *session = Some(session_state);
         Ok(())
     }
@@ -151,9 +151,7 @@ impl StoatHttpClient {
     fn ua(&self) -> String {
         self.user_agent
             .read()
-            .ok()
-            .map(|g| g.clone())
-            .unwrap_or_else(|| DEFAULT_CLIENT_VERSION.to_string())
+            .ok().map_or_else(|| DEFAULT_CLIENT_VERSION.to_string(), |g| g.clone())
     }
 
     /// Create an unauthenticated HTTP request builder.
@@ -1010,7 +1008,7 @@ fn encode_multipart_file(
     content_type: &str,
     bytes: &[u8],
 ) -> Vec<u8> {
-    let mut body: Vec<u8> = Vec::with_capacity(bytes.len() + 256);
+    let mut body: Vec<u8> = Vec::with_capacity(bytes.len().saturating_add(256));
     body.extend_from_slice(b"--");
     body.extend_from_slice(boundary.as_bytes());
     body.extend_from_slice(b"\r\n");

@@ -269,13 +269,16 @@ pub struct LocalUserView {
 /// not currently consumed by the caller (the return value is discarded).
 #[derive(Debug, Clone, Deserialize)]
 pub struct BanFromCommunityResponse {
+    #[allow(dead_code)] // lint-allow-unused: kept for protocol-fidelity decode
     pub banned_person: PersonView,
+    #[allow(dead_code)] // lint-allow-unused: kept for protocol-fidelity decode
     pub banned: bool,
 }
 
 /// A person view (person + counts).
 #[derive(Debug, Clone, Deserialize)]
 pub struct PersonView {
+    #[allow(dead_code)] // lint-allow-unused: kept for protocol-fidelity decode
     pub person: LemmyPerson,
 }
 
@@ -286,6 +289,7 @@ pub struct ModBanFromCommunityView {
     pub moderator: Option<LemmyPerson>,
     pub banned_person: LemmyPerson,
     /// Community context decoded for completeness; not currently read.
+    #[allow(dead_code)] // lint-allow-unused: kept for protocol-fidelity decode
     pub community: LemmyCommunity,
 }
 
@@ -319,6 +323,7 @@ pub struct ModRemovePost {
     #[serde(default)]
     pub reason: Option<String>,
     #[serde(default)]
+    #[allow(dead_code)] // lint-allow-unused: kept for protocol-fidelity decode
     pub removed: bool,
 }
 
@@ -340,6 +345,7 @@ pub struct ModRemoveComment {
     #[serde(default)]
     pub reason: Option<String>,
     #[serde(default)]
+    #[allow(dead_code)] // lint-allow-unused: kept for protocol-fidelity decode
     pub removed: bool,
 }
 
@@ -412,9 +418,7 @@ pub fn map_community_to_viewrow(view: &CommunityView, unread: u32) -> ViewRow {
     let secondary = community
         .description
         .as_deref()
-        .filter(|d| !d.is_empty())
-        .map(|d| d.to_string())
-        .unwrap_or_else(|| community.name.clone());
+        .filter(|d| !d.is_empty()).map_or_else(|| community.name.clone(), std::string::ToString::to_string);
 
     let meta = format!(
         "{} subscribers · {} active · {} unread",
@@ -478,13 +482,13 @@ pub fn map_post_to_message(view: &PostView) -> Message {
     let reactions = vec![
         Reaction {
             emoji: "upvote".to_string(),
-            count: counts.upvotes.max(0) as u32,
-            me: view.my_vote == Some(1),
+            count: u32::try_from(counts.upvotes.max(0)).unwrap_or(u32::MAX),
+            me: view.my_vote == Some(1_i32),
         },
         Reaction {
             emoji: "downvote".to_string(),
-            count: counts.downvotes.max(0) as u32,
-            me: view.my_vote == Some(-1),
+            count: u32::try_from(counts.downvotes.max(0)).unwrap_or(u32::MAX),
+            me: view.my_vote == Some(-1_i32),
         },
     ];
 
@@ -506,7 +510,12 @@ pub fn map_post_to_message(view: &PostView) -> Message {
 ///
 /// Pure fn — takes `now` explicitly so tests can pin the clock.
 pub fn humanize_age(published: DateTime<Utc>, now: DateTime<Utc>) -> String {
-    let secs = (now - published).num_seconds().max(0);
+    let secs = now
+        .signed_duration_since(published)
+        .num_seconds()
+        .max(0);
+    // lint-allow-unused: time-bucket boundaries; truncation is the desired display semantic
+    #[allow(clippy::integer_division)]
     if secs < 60 {
         format!("{secs}s")
     } else if secs < 3600 {
@@ -562,7 +571,7 @@ pub fn next_page_cursor(current_page: u32, page_size: usize, rows_returned: usiz
     }
     Some(Cursor {
         kind: CursorKind::Offset,
-        value: (current_page + 1).to_string(),
+        value: current_page.saturating_add(1).to_string(),
     })
 }
 
@@ -571,7 +580,7 @@ pub fn cursor_to_page(cursor: Option<&Cursor>) -> u32 {
     cursor
         .and_then(|c| match c.kind {
             CursorKind::Offset => c.value.parse::<u32>().ok(),
-            _ => None,
+            CursorKind::Timestamp | CursorKind::Id | CursorKind::Opaque => None,
         })
         .unwrap_or(1)
 }
@@ -585,13 +594,13 @@ pub fn map_comment_to_message(view: &CommentView) -> Message {
     let reactions = vec![
         Reaction {
             emoji: "upvote".to_string(),
-            count: counts.upvotes.max(0) as u32,
-            me: view.my_vote == Some(1),
+            count: u32::try_from(counts.upvotes.max(0)).unwrap_or(u32::MAX),
+            me: view.my_vote == Some(1_i32),
         },
         Reaction {
             emoji: "downvote".to_string(),
-            count: counts.downvotes.max(0) as u32,
-            me: view.my_vote == Some(-1),
+            count: u32::try_from(counts.downvotes.max(0)).unwrap_or(u32::MAX),
+            me: view.my_vote == Some(-1_i32),
         },
     ];
 
@@ -707,7 +716,7 @@ impl LemmyHttpClient {
     pub fn is_authenticated(&self) -> bool {
         self.session
             .read()
-            .unwrap_or_else(|e| e.into_inner())
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .is_some()
     }
 
@@ -715,21 +724,19 @@ impl LemmyHttpClient {
     pub fn session(&self) -> Option<LemmySession> {
         self.session
             .read()
-            .unwrap_or_else(|e| e.into_inner())
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone()
     }
 
     /// Store a session JWT after successful login.
     pub fn set_session(&self, session: LemmySession) {
-        *self.session.write().unwrap_or_else(|e| e.into_inner()) = Some(session);
+        *self.session.write().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(session);
     }
 
     /// Clear the stored session.
     pub fn clear_session(&self) {
-        *self.session.write().unwrap_or_else(|e| e.into_inner()) = None;
+        *self.session.write().unwrap_or_else(std::sync::PoisonError::into_inner) = None;
     }
-
-    /// Build the full URL for an API path (e.g. `/api/v3/user/login`).
 
     /// Update the User-Agent string.
     pub fn set_user_agent(&self, ua: String) {
@@ -741,9 +748,7 @@ impl LemmyHttpClient {
     fn ua(&self) -> String {
         self.user_agent
             .read()
-            .ok()
-            .map(|g| g.clone())
-            .unwrap_or_else(|| DEFAULT_CLIENT_VERSION.to_string())
+            .ok().map_or_else(|| DEFAULT_CLIENT_VERSION.to_string(), |g| g.clone())
     }
 
     fn url(&self, path: &str) -> String {
@@ -759,6 +764,7 @@ impl LemmyHttpClient {
 
 
     /// POST with UA header injected.
+    #[allow(dead_code)] // lint-allow-unused: helper kept for upcoming UA-aware routes
     async fn http_post<B: serde::Serialize, T: serde::de::DeserializeOwned>(
         &self,
         path: &str,
@@ -785,6 +791,7 @@ impl LemmyHttpClient {
     }
 
     /// GET with UA header injected.
+    #[allow(dead_code)] // lint-allow-unused: helper kept for upcoming UA-aware routes
     async fn http_get<T: serde::de::DeserializeOwned>(
         &self,
         path: &str,

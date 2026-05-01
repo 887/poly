@@ -102,7 +102,9 @@ impl TryFrom<AuthCredentials> for StoatAuthInput {
             AuthCredentials::EmailPassword { email, password } => {
                 Ok(Self::EmailPassword { email, password })
             }
-            _ => Err(ClientError::AuthFailed(
+            AuthCredentials::OAuth { .. }
+            | AuthCredentials::DeviceCode { .. }
+            | AuthCredentials::PolyServer { .. } => Err(ClientError::AuthFailed(
                 "Stoat only supports token or email/password credentials".to_string(),
             )),
         }

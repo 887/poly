@@ -81,6 +81,7 @@ pub struct ForgejoIssue {
 
 impl ForgejoIssue {
     /// Whether this issue is actually a pull request.
+    #[must_use] 
     pub fn is_pull_request(&self) -> bool {
         self.pull_request.is_some()
     }

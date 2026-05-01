@@ -294,7 +294,7 @@ pub fn issue_to_view_detail(issue: &ForgejoIssue, comments: &[ForgejoComment]) -
         },
         comments_section: if !comments.is_empty() {
             Some(TreeSpec {
-                root_page_size: comments.len() as u32,
+                root_page_size: u32::try_from(comments.len()).unwrap_or(u32::MAX),
                 max_depth: 1,
             })
         } else {
@@ -311,7 +311,12 @@ pub fn humanize_age(created_at: &str) -> String {
     let Ok(dt) = DateTime::parse_from_rfc3339(created_at) else {
         return "unknown".to_string();
     };
-    let secs = (Utc::now() - dt.with_timezone(&Utc)).num_seconds().max(0);
+    let secs = Utc::now()
+        .signed_duration_since(dt.with_timezone(&Utc))
+        .num_seconds()
+        .max(0);
+    // lint-allow-unused: time-bucket boundaries; truncation is the desired display semantic
+    #[allow(clippy::integer_division)]
     match secs {
         s if s < 60 => "just now".to_string(),
         s if s < 3600 => format!("{}m", s / 60),
@@ -331,16 +336,16 @@ fn html_escape(s: &str) -> String {
 }
 
 fn parse_ts(s: &str) -> DateTime<Utc> {
-    DateTime::parse_from_rfc3339(s)
-        .map(|dt| dt.with_timezone(&Utc))
-        .unwrap_or_else(|_| Utc::now())
+    DateTime::parse_from_rfc3339(s).map_or_else(|_| Utc::now(), |dt| dt.with_timezone(&Utc))
 }
 
 /// Filter a slice of repos to those with `updated_at` within the last 2 years
 /// and not archived.
 #[must_use]
 pub fn filter_active_repos(repos: Vec<ForgejoRepo>) -> Vec<ForgejoRepo> {
-    let cutoff = Utc::now() - chrono::Duration::days(365 * 2);
+    let cutoff = Utc::now()
+        .checked_sub_signed(chrono::Duration::days(365 * 2))
+        .unwrap_or(chrono::DateTime::<Utc>::MIN_UTC);
     repos
         .into_iter()
         .filter(|r| {

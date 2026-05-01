@@ -514,8 +514,7 @@ impl StoatChannelUnread {
     pub fn mention_count(&self) -> u32 {
         self.mentions
             .as_ref()
-            .map(|mentions| u32::try_from(mentions.len()).unwrap_or(u32::MAX))
-            .unwrap_or(0)
+            .map_or(0, |mentions| u32::try_from(mentions.len()).unwrap_or(u32::MAX))
     }
 
     /// Conservative unread estimate used until full message sync lands.
@@ -808,12 +807,11 @@ impl StoatUser {
         let presence = self
             .status
             .and_then(|status| status.presence)
-            .map(StoatPresence::into_poly_presence)
-            .unwrap_or(if self.online {
+            .map_or(if self.online {
                 PresenceStatus::Online
             } else {
                 PresenceStatus::Offline
-            });
+            }, StoatPresence::into_poly_presence);
 
         User {
             id: self.id,
@@ -1048,7 +1046,7 @@ fn stoat_message_timestamp(message_id: &str) -> DateTime<Utc> {
 fn extract_ulid_timestamp_ms(ulid: &str) -> Option<i64> {
     let mut value = 0_u64;
     for ch in ulid.chars().take(10) {
-        value = (value << 5) | u64::from(crockford_base32_value(ch)?);
+        value = (value << 5_u32) | u64::from(crockford_base32_value(ch)?);
     }
     i64::try_from(value & 0x0000_FFFF_FFFF_FFFF).ok()
 }

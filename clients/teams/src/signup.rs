@@ -34,8 +34,10 @@ pub async fn authenticate_oauth(
         })
         .await
         .map_err(|e| e.to_string())?;
+    let expires_secs = i64::try_from(tokens.expires_in).unwrap_or(i64::MAX);
     let expires_at = chrono::Utc::now()
-        + chrono::Duration::seconds(tokens.expires_in.min(i64::MAX as u64) as i64);
+        .checked_add_signed(chrono::Duration::seconds(expires_secs))
+        .unwrap_or(chrono::DateTime::<chrono::Utc>::MAX_UTC);
     Ok(SignupCompleted {
         session,
         backend: Box::new(backend),
@@ -80,6 +82,7 @@ fn walrus_auth(
 }
 
 /// Test accounts for the Teams local dev server (port 9103).
+#[must_use] 
 pub fn get_test_accounts() -> &'static [poly_client::TestAccountEntry] {
     use poly_client::TestAccountEntry;
     const ACCOUNTS: &[TestAccountEntry] = &[

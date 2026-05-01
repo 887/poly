@@ -31,6 +31,7 @@ impl ForgejoApi {
     /// Create a new client pointing at `instance_url` (e.g. `https://codeberg.org`).
     ///
     /// The constructor strips a trailing slash and appends `/api/v1`.
+    #[must_use] 
     pub fn new(instance_url: &str) -> Self {
         let mut url = instance_url.trim_end_matches('/').to_string();
         url.push_str("/api/v1");
@@ -50,12 +51,11 @@ impl ForgejoApi {
     }
 
     /// The current User-Agent string.
+    #[must_use] 
     pub fn user_agent(&self) -> String {
         self.user_agent
             .lock()
-            .ok()
-            .map(|g| g.clone())
-            .unwrap_or_else(|| DEFAULT_CLIENT_VERSION.to_string())
+            .ok().map_or_else(|| DEFAULT_CLIENT_VERSION.to_string(), |g| g.clone())
     }
 
     fn ua(&self) -> String {
@@ -73,6 +73,7 @@ impl ForgejoApi {
     }
 
     /// The configured base URL (no trailing slash).
+    #[must_use] 
     pub fn base_url(&self) -> &str {
         &self.base_url
     }

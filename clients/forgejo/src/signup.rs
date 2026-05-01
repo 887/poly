@@ -70,6 +70,7 @@ fn flamingo_auth(
 }
 
 /// Test accounts for the Forgejo local dev server (port 9106).
+#[must_use] 
 pub fn get_test_accounts() -> &'static [poly_client::TestAccountEntry] {
     use poly_client::TestAccountEntry;
     const ACCOUNTS: &[TestAccountEntry] = &[

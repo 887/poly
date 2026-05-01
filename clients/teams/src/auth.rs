@@ -40,7 +40,7 @@ where
 {
     let mut attempt: u32 = 0;
     loop {
-        attempt += 1;
+        attempt = attempt.saturating_add(1);
         let resp = make_req()
             .send()
             .await
@@ -57,7 +57,7 @@ where
                 .and_then(|s| s.parse::<u64>().ok())
                 .unwrap_or(DEFAULT_RETRY_AFTER_SECS)
         } else {
-            1u64 << (attempt - 1)
+            1u64 << attempt.saturating_sub(1)
         }
         .min(MAX_BACKOFF_SECS);
         tokio::time::sleep(Duration::from_secs(delay)).await;
@@ -240,6 +240,7 @@ pub async fn refresh_access_token(
 ///
 /// `code_verifier` — caller-generated 43-128 char random string. Hash it with
 /// SHA-256 + base64url (no padding) to get the `code_challenge`.
+#[must_use] 
 pub fn build_pkce_authorize_url(
     tenant: &str,
     client_id: &str,

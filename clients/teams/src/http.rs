@@ -33,7 +33,7 @@ where
 {
     let mut attempt: u32 = 0;
     loop {
-        attempt += 1;
+        attempt = attempt.saturating_add(1);
         let resp = make_req()
             .send()
             .await
@@ -50,7 +50,7 @@ where
                 .and_then(|s| s.parse::<u64>().ok())
                 .unwrap_or(DEFAULT_RETRY_AFTER_SECS)
         } else {
-            1u64 << (attempt - 1) // 1, 2, 4…
+            1u64 << attempt.saturating_sub(1) // 1, 2, 4…
         };
         let delay = delay.min(MAX_BACKOFF_SECS);
         tracing::debug!(
@@ -102,9 +102,7 @@ impl TeamsHttpClient {
     fn ua(&self) -> String {
         self.user_agent
             .lock()
-            .ok()
-            .map(|g| g.clone())
-            .unwrap_or_else(|| DEFAULT_CLIENT_VERSION.to_string())
+            .ok().map_or_else(|| DEFAULT_CLIENT_VERSION.to_string(), |g| g.clone())
     }
 
     fn auth_header(&self) -> String {
@@ -481,6 +479,7 @@ impl TeamsHttpClient {
     /// Returns the raw JSON events array so the caller can dispatch to `ClientEvent`.
     ///
     /// Long-polls skip retry on 5xx — the caller loop reconnects on its own schedule.
+    #[cfg(not(target_arch = "wasm32"))]
     pub async fn poll_events(&self) -> Result<Vec<serde_json::Value>, ClientError> {
         #[derive(serde::Deserialize)]
         struct PollResp {

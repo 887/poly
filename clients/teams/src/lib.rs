@@ -26,6 +26,7 @@ mod wit_bindings;
 mod guest;
 
 /// Return Fluent translations for the given locale.
+#[must_use] 
 pub fn plugin_translations(locale: &str) -> String {
     match locale {
         "en" => include_str!("../locales/en/plugin.ftl").to_string(),
@@ -85,10 +86,12 @@ pub struct TeamsClient {
 
 #[cfg(feature = "native")]
 impl TeamsClient {
+    #[must_use] 
     pub fn new() -> Self {
         Self::with_base_url("https://graph.microsoft.com".to_string())
     }
 
+    #[must_use] 
     pub fn with_base_url(base_url: String) -> Self {
         Self {
             http: TeamsHttpClient::new(base_url),
@@ -130,9 +133,7 @@ impl TeamsClient {
         } else {
             self.unknown_user()
         };
-        let timestamp = chrono::DateTime::parse_from_rfc3339(&m.created_date_time)
-            .map(|dt| dt.with_timezone(&chrono::Utc))
-            .unwrap_or_else(|_| chrono::Utc::now());
+        let timestamp = chrono::DateTime::parse_from_rfc3339(&m.created_date_time).map_or_else(|_| chrono::Utc::now(), |dt| dt.with_timezone(&chrono::Utc));
         Message {
             id: m.id,
             author,
@@ -207,8 +208,8 @@ impl Default for TeamsClient {
 
 /// Convert a `TeamsEvent` JSON payload (from `/test/events/poll`) to a
 /// `ClientEvent`. Returns None for events we don't yet surface.
-#[cfg(feature = "native")]
-fn teams_event_to_client(ev: serde_json::Value) -> Option<ClientEvent> {
+#[cfg(all(feature = "native", not(target_arch = "wasm32")))]
+fn teams_event_to_client(ev: &serde_json::Value) -> Option<ClientEvent> {
     let ty = ev.get("type")?.as_str()?;
     match ty {
         "MessageCreated" => {
@@ -232,7 +233,7 @@ fn teams_event_to_client(ev: serde_json::Value) -> Option<ClientEvent> {
     }
 }
 
-#[cfg(feature = "native")]
+#[cfg(all(feature = "native", not(target_arch = "wasm32")))]
 fn poly_event_message_from_json(m: &serde_json::Value) -> Option<Message> {
     let id = m.get("id")?.as_str()?.to_string();
     let content = m.get("body")
@@ -242,9 +243,7 @@ fn poly_event_message_from_json(m: &serde_json::Value) -> Option<Message> {
         .to_string();
     let timestamp = m.get("createdDateTime")
         .and_then(|t| t.as_str())
-        .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
-        .map(|dt| dt.with_timezone(&chrono::Utc))
-        .unwrap_or_else(chrono::Utc::now);
+        .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok()).map_or_else(chrono::Utc::now, |dt| dt.with_timezone(&chrono::Utc));
     let author_id = m.get("from")
         .and_then(|f| f.get("user"))
         .and_then(|u| u.get("id"))
@@ -257,7 +256,7 @@ fn poly_event_message_from_json(m: &serde_json::Value) -> Option<Message> {
         .and_then(|v| v.as_str())
         .unwrap_or_default()
         .to_string();
-    let edited = m.get("lastModifiedDateTime").map(|v| !v.is_null()).unwrap_or(false);
+    let edited = m.get("lastModifiedDateTime").is_some_and(|v| !v.is_null());
     Some(Message {
         id,
         author: User {
@@ -289,7 +288,11 @@ impl ClientBackend for TeamsClient {
             AuthCredentials::EmailPassword { email, password } => {
                 self.http.login(&email, &password).await?
             }
-            _ => return Err(ClientError::AuthFailed("Teams requires a Bearer token".into())),
+            AuthCredentials::DeviceCode { .. } | AuthCredentials::PolyServer { .. } => {
+                return Err(ClientError::AuthFailed(
+                    "Teams requires a Bearer token".into(),
+                ));
+            }
         };
         self.http.set_token(token.clone());
         let user = self.http.get_me().await?;
@@ -719,7 +722,7 @@ impl ClientBackend for TeamsClient {
                     match http.poll_events().await {
                         Ok(events) => {
                             for ev in events {
-                                if let Some(ce) = teams_event_to_client(ev)
+                                if let Some(ce) = teams_event_to_client(&ev)
                                     && tx.send(ce).await.is_err()
                                 {
                                     return;
@@ -784,17 +787,17 @@ impl ClientBackend for TeamsClient {
                 let hidden = self
                     .hidden_channels
                     .lock()
-                    .unwrap_or_else(|e| e.into_inner())
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .contains(target_id);
                 let pinned = self
                     .pinned_channels
                     .lock()
-                    .unwrap_or_else(|e| e.into_inner())
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .contains(target_id);
                 let muted = self
                     .muted_channels
                     .lock()
-                    .unwrap_or_else(|e| e.into_inner())
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .contains(target_id);
                 Ok(vec![
                     item("mark-read", "plugin-teams-menu-mark-read-label", MenuSlot::Top, MenuItemVariant::Normal),
@@ -821,7 +824,7 @@ impl ClientBackend for TeamsClient {
                 let muted = self
                     .muted_teams
                     .lock()
-                    .unwrap_or_else(|e| e.into_inner())
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .contains(target_id);
                 Ok(vec![
                     if muted {
@@ -847,7 +850,7 @@ impl ClientBackend for TeamsClient {
                 let saved = self
                     .saved_messages
                     .lock()
-                    .unwrap_or_else(|e| e.into_inner())
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .contains(target_id);
                 Ok(vec![
                     item("react", "plugin-teams-menu-react-label", MenuSlot::Top, MenuItemVariant::Normal),
@@ -866,12 +869,12 @@ impl ClientBackend for TeamsClient {
                 let muted = self
                     .muted_dms
                     .lock()
-                    .unwrap_or_else(|e| e.into_inner())
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .contains(target_id);
                 let hidden = self
                     .hidden_dms
                     .lock()
-                    .unwrap_or_else(|e| e.into_inner())
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .contains(target_id);
                 Ok(vec![
                     if muted {
@@ -902,80 +905,86 @@ impl ClientBackend for TeamsClient {
             "pin-channel" => {
                 self.pinned_channels
                     .lock()
-                    .unwrap_or_else(|e| e.into_inner())
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .insert(target_id.to_string());
                 Ok(ActionOutcome::RefreshTarget)
             }
             "unpin-channel" => {
                 self.pinned_channels
                     .lock()
-                    .unwrap_or_else(|e| e.into_inner())
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .remove(target_id);
                 Ok(ActionOutcome::RefreshTarget)
             }
             "hide-channel" => {
                 self.hidden_channels
                     .lock()
-                    .unwrap_or_else(|e| e.into_inner())
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .insert(target_id.to_string());
                 Ok(ActionOutcome::RefreshTarget)
             }
             "show-channel" => {
                 self.hidden_channels
                     .lock()
-                    .unwrap_or_else(|e| e.into_inner())
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .remove(target_id);
                 Ok(ActionOutcome::RefreshTarget)
             }
             "mute-channel" => {
                 self.muted_channels
                     .lock()
-                    .unwrap_or_else(|e| e.into_inner())
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .insert(target_id.to_string());
                 Ok(ActionOutcome::RefreshTarget)
             }
             "unmute-channel" => {
                 self.muted_channels
                     .lock()
-                    .unwrap_or_else(|e| e.into_inner())
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .remove(target_id);
                 Ok(ActionOutcome::RefreshTarget)
             }
-            "mark-read" | "mark-unread" => Ok(ActionOutcome::Noop),
+            "mark-read"
+            | "mark-unread"
+            | "leave-team"
+            | "get-team-code"
+            | "manage-team"
+            | "team-settings"
+            | "edit-per-team-profile"
+            | "open-chat"
+            | "view-profile"
+            | "schedule-meeting" => Ok(ActionOutcome::Noop),
 
             // ── Team toggles ─────────────────────────────────────────────────
             "mute-team" => {
                 self.muted_teams
                     .lock()
-                    .unwrap_or_else(|e| e.into_inner())
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .insert(target_id.to_string());
                 Ok(ActionOutcome::RefreshTarget)
             }
             "unmute-team" => {
                 self.muted_teams
                     .lock()
-                    .unwrap_or_else(|e| e.into_inner())
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .remove(target_id);
                 Ok(ActionOutcome::RefreshTarget)
             }
-            "leave-team" | "get-team-code" | "manage-team" | "team-settings"
-            | "edit-per-team-profile" => Ok(ActionOutcome::Noop),
 
             // ── User actions ─────────────────────────────────────────────────
-            "open-chat" | "view-profile" | "schedule-meeting" => Ok(ActionOutcome::Noop),
 
             // ── Message toggles ──────────────────────────────────────────────
             "save-message" => {
                 self.saved_messages
                     .lock()
-                    .unwrap_or_else(|e| e.into_inner())
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .insert(target_id.to_string());
                 Ok(ActionOutcome::RefreshTarget)
             }
             "unsave-message" => {
                 self.saved_messages
                     .lock()
-                    .unwrap_or_else(|e| e.into_inner())
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .remove(target_id);
                 Ok(ActionOutcome::RefreshTarget)
             }
@@ -987,28 +996,28 @@ impl ClientBackend for TeamsClient {
             "mute-dm" => {
                 self.muted_dms
                     .lock()
-                    .unwrap_or_else(|e| e.into_inner())
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .insert(target_id.to_string());
                 Ok(ActionOutcome::RefreshTarget)
             }
             "unmute-dm" => {
                 self.muted_dms
                     .lock()
-                    .unwrap_or_else(|e| e.into_inner())
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .remove(target_id);
                 Ok(ActionOutcome::RefreshTarget)
             }
             "hide-dm" => {
                 self.hidden_dms
                     .lock()
-                    .unwrap_or_else(|e| e.into_inner())
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .insert(target_id.to_string());
                 Ok(ActionOutcome::RefreshTarget)
             }
             "show-dm" => {
                 self.hidden_dms
                     .lock()
-                    .unwrap_or_else(|e| e.into_inner())
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .remove(target_id);
                 Ok(ActionOutcome::RefreshTarget)
             }

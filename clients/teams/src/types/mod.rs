@@ -73,6 +73,7 @@ impl GraphError {
     /// - 404 → `NotFound`
     /// - 429 / 5xx → `Network` (transient)
     /// - other 4xx → `Internal`
+    #[must_use] 
     pub fn into_client_error(self, status: u16) -> ClientError {
         let msg = format!("Graph {status} {}: {}", self.error.code, self.error.message);
         match status {

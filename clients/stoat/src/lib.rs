@@ -80,6 +80,7 @@ use uuid::Uuid;
 ///
 /// Mirrors the WIT `plugin-metadata.get-translations(locale)` export used by
 /// the WASM plugin host.
+#[must_use] 
 pub fn plugin_translations(locale: &str) -> String {
     match locale {
         "de" => include_str!("../locales/de/plugin.ftl").to_string(),
@@ -239,8 +240,7 @@ impl StoatClient {
     ) -> u32 {
         unread_index
             .get(channel_id)
-            .map(StoatChannelUnread::approximate_unread_count)
-            .unwrap_or(0)
+            .map_or(0, StoatChannelUnread::approximate_unread_count)
     }
 
     fn current_user_id(&self) -> Option<String> {
@@ -608,9 +608,8 @@ impl ClientBackend for StoatClient {
             .map(|channel| {
                 let unread = unread_index.get(&channel.id);
                 let unread_count = unread
-                    .map(StoatChannelUnread::approximate_unread_count)
-                    .unwrap_or(0);
-                let mention_count = unread.map(StoatChannelUnread::mention_count).unwrap_or(0);
+                    .map_or(0, StoatChannelUnread::approximate_unread_count);
+                let mention_count = unread.map_or(0, StoatChannelUnread::mention_count);
 
                 channel.into_poly_server_channel(unread_count, mention_count)
             })
@@ -623,9 +622,8 @@ impl ClientBackend for StoatClient {
         let unread_index = Self::index_unreads(unreads);
         let unread = unread_index.get(&channel.id);
         let unread_count = unread
-            .map(StoatChannelUnread::approximate_unread_count)
-            .unwrap_or(0);
-        let mention_count = unread.map(StoatChannelUnread::mention_count).unwrap_or(0);
+            .map_or(0, StoatChannelUnread::approximate_unread_count);
+        let mention_count = unread.map_or(0, StoatChannelUnread::mention_count);
 
         channel.into_poly_server_channel(unread_count, mention_count)
     }
@@ -789,7 +787,7 @@ impl ClientBackend for StoatClient {
         future::try_join_all(
             channels
                 .into_iter()
-                .filter(|channel| channel.is_group())
+                .filter(api::StoatChannel::is_group)
                 .map(|channel| {
                     let autumn_base_url = autumn_base_url.clone();
                     let account_id = account_id.clone();
@@ -1347,7 +1345,9 @@ impl ClientBackend for StoatClient {
                 }
                 Ok(ActionOutcome::Completed)
             }
-            "mark-channel-read" => Ok(ActionOutcome::Completed),
+            "mark-channel-read" | "leave-server" | "delete-message" => {
+                Ok(ActionOutcome::Completed)
+            }
             "mute-server" => {
                 if let Ok(mut state) = self.menu_state.lock() {
                     state.muted_servers.insert(target_id.to_string());
@@ -1363,7 +1363,6 @@ impl ClientBackend for StoatClient {
             "invite-people" | "privacy-settings" | "edit-per-server-profile" | "manage-bots" => {
                 Ok(ActionOutcome::Noop)
             }
-            "leave-server" => Ok(ActionOutcome::Completed),
             "block-user" => {
                 if let Ok(mut state) = self.menu_state.lock() {
                     state.blocked_users.insert(target_id.to_string());
@@ -1388,10 +1387,7 @@ impl ClientBackend for StoatClient {
                 }
                 Ok(ActionOutcome::Completed)
             }
-            "open-dm" => Ok(ActionOutcome::Noop),
-            "react-message" => Ok(ActionOutcome::Noop),
-            "copy-message-link" => Ok(ActionOutcome::Noop),
-            "delete-message" => Ok(ActionOutcome::Completed),
+            "open-dm" | "react-message" | "copy-message-link" => Ok(ActionOutcome::Noop),
             "close-dm" => {
                 if let Ok(mut state) = self.menu_state.lock() {
                     state.closed_dms.insert(target_id.to_string());

@@ -43,6 +43,7 @@ use std::collections::HashMap;
 use std::pin::Pin;
 
 /// Return the raw FTL translation source for the Lemmy client plugin.
+#[must_use] 
 pub fn plugin_translations(locale: &str) -> String {
     match locale {
         "en" => include_str!("../locales/en/plugin.ftl").to_string(),
@@ -102,8 +103,7 @@ impl LemmyClient {
     fn render_previews_enabled(&self) -> bool {
         self.settings_storage
             .get(SettingsScope::AccountGlobal, "", "render-previews")
-            .map(|v| v != "false")
-            .unwrap_or(true)
+            .is_none_or(|v| v != "false")
     }
 
     /// Return the currently stored user_id, if authenticated.
@@ -159,7 +159,7 @@ impl LemmyClient {
         let raw = member_id
             .strip_prefix("lemmy-user-")
             .unwrap_or(member_id);
-        raw.parse::<i64>().map_err(|_| {
+        raw.parse::<i64>().map_err(|_err| {
             ClientError::NotFound(format!("invalid Lemmy member id: {member_id}"))
         })
     }
@@ -216,7 +216,9 @@ impl ClientBackend for LemmyClient {
                     backend_url: Some(self.base_url().to_string()),
                 });
             }
-            other => {
+            other @ (AuthCredentials::OAuth { .. }
+            | AuthCredentials::DeviceCode { .. }
+            | AuthCredentials::PolyServer { .. }) => {
                 return Err(ClientError::AuthFailed(format!(
                     "Lemmy does not support {:?} credentials",
                     std::mem::discriminant(&other)
@@ -544,8 +546,7 @@ impl ClientBackend for LemmyClient {
                         Ok(view) => view
                             .subscribed
                             .as_deref()
-                            .map(|s| s == "Subscribed" || s == "Pending")
-                            .unwrap_or(false),
+                            .is_some_and(|s| s == "Subscribed" || s == "Pending"),
                         // Lookup failed (network / auth): default to unsubscribed.
                         Err(_) => false,
                     },
@@ -610,7 +611,11 @@ impl ClientBackend for LemmyClient {
                     },
                 ])
             }
-            _ => Ok(Vec::new()),
+            MenuTargetKind::Category
+            | MenuTargetKind::Channel
+            | MenuTargetKind::Dm
+            | MenuTargetKind::Message
+            | MenuTargetKind::User => Ok(Vec::new()),
         }
     }
 
@@ -811,7 +816,7 @@ impl ClientBackend for LemmyClient {
         let now = chrono::Utc::now();
         let render_previews = self.render_previews_enabled();
         let rows: Vec<ViewRow> = resp.posts.iter().map(|v| map_post_to_viewrow(v, now, render_previews)).collect();
-        let next_cursor = next_page_cursor(page, page_size as usize, rows.len());
+        let next_cursor = next_page_cursor(page, page_size.try_into().unwrap_or(usize::MAX), rows.len());
 
         Ok(ViewRowsPage { rows, next_cursor })
     }
@@ -1195,13 +1200,16 @@ impl ClientBackend for LemmyClient {
             } else {
                 ModerationAction::MemberUnbanned
             };
-            let moderator = e.moderator.as_ref().map(map_person).unwrap_or_else(|| User {
-                id: "lemmy-user-unknown".to_string(),
-                display_name: "Unknown".to_string(),
-                avatar_url: None,
-                presence: PresenceStatus::Offline,
-                backend: BackendType::from("lemmy"),
-            });
+            let moderator = e.moderator.as_ref().map_or_else(
+                || User {
+                    id: "lemmy-user-unknown".to_string(),
+                    display_name: "Unknown".to_string(),
+                    avatar_url: None,
+                    presence: PresenceStatus::Offline,
+                    backend: BackendType::from("lemmy"),
+                },
+                map_person,
+            );
             entries.push(ModerationLogEntry {
                 id: format!("lemmy-modlog-ban-{}", e.mod_ban_from_community.id),
                 action,
@@ -1221,13 +1229,16 @@ impl ClientBackend for LemmyClient {
         }
 
         for e in &modlog.removed_posts {
-            let moderator = e.moderator.as_ref().map(map_person).unwrap_or_else(|| User {
-                id: "lemmy-user-unknown".to_string(),
-                display_name: "Unknown".to_string(),
-                avatar_url: None,
-                presence: PresenceStatus::Offline,
-                backend: BackendType::from("lemmy"),
-            });
+            let moderator = e.moderator.as_ref().map_or_else(
+                || User {
+                    id: "lemmy-user-unknown".to_string(),
+                    display_name: "Unknown".to_string(),
+                    avatar_url: None,
+                    presence: PresenceStatus::Offline,
+                    backend: BackendType::from("lemmy"),
+                },
+                map_person,
+            );
             entries.push(ModerationLogEntry {
                 id: format!("lemmy-modlog-rmpost-{}", e.mod_remove_post.id),
                 action: ModerationAction::MessageDeleted,
@@ -1245,13 +1256,16 @@ impl ClientBackend for LemmyClient {
         }
 
         for e in &modlog.removed_comments {
-            let moderator = e.moderator.as_ref().map(map_person).unwrap_or_else(|| User {
-                id: "lemmy-user-unknown".to_string(),
-                display_name: "Unknown".to_string(),
-                avatar_url: None,
-                presence: PresenceStatus::Offline,
-                backend: BackendType::from("lemmy"),
-            });
+            let moderator = e.moderator.as_ref().map_or_else(
+                || User {
+                    id: "lemmy-user-unknown".to_string(),
+                    display_name: "Unknown".to_string(),
+                    avatar_url: None,
+                    presence: PresenceStatus::Offline,
+                    backend: BackendType::from("lemmy"),
+                },
+                map_person,
+            );
             entries.push(ModerationLogEntry {
                 id: format!("lemmy-modlog-rmcomment-{}", e.mod_remove_comment.id),
                 action: ModerationAction::MessageDeleted,
