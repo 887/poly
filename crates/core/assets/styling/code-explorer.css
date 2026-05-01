@@ -178,3 +178,43 @@
     padding: 0.05rem 0.4rem;
     border-radius: 3px;
 }
+
+/* Homepage link inside the manifest panel — no garish browser-default
+ * blue underline; pick up the accent color, underline only on hover. */
+.plugin-manifest-row a {
+    color: var(--accent-primary);
+    text-decoration: none;
+    word-break: break-all;
+}
+
+.plugin-manifest-row a:hover,
+.plugin-manifest-row a:focus-visible {
+    text-decoration: underline;
+}
+
+/* Client-settings version-override input — match the shared dark-themed
+ * text-input look so it doesn't render as the browser-default white pill. */
+.client-settings-version-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 8px 10px;
+    background-color: var(--bg-input);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-family: var(--font-mono, monospace);
+    font-size: 13px;
+}
+
+.client-settings-version-input::placeholder {
+    color: var(--text-muted);
+}
+
+.client-settings-version-input:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+}
+
+.client-settings-version-input-row {
+    gap: 8px;
+}

@@ -54,36 +54,50 @@ fn parse_backend_list(json: &Value) -> Vec<(String, String, Option<String>)> {
         .collect()
 }
 
-/// Embed a single backend's version-override + mechanism-toggles inside an
-/// existing per-plugin settings section. Self-fetches its own snapshot — no
-/// shared parent state needed. Used by every `<plugin>_settings_render_fn` so
-/// the version override lives next to the plugin's own settings (one section
-/// per plugin, no duplication).
+/// Embed a single backend's client-config rows inside an existing per-plugin
+/// settings section. Self-fetches its own snapshot — no shared parent state
+/// needed.
+///
+/// `default_version` is the static `DEFAULT_CLIENT_VERSION` constant for
+/// the backend. When `Some`, the version-override row is shown and uses
+/// this string as the effective version when no override is set. When
+/// `None`, the version-override row is hidden entirely (e.g. for backends
+/// where User-Agent spoofing makes no sense — read-only feeds, gh-CLI
+/// transports).
 #[rustfmt::skip]
 #[ui_action(inherit)]
 #[context_menu(none)]
 #[component]
-pub fn ClientSettingsForBackend(backend_id: String) -> Element {
+pub fn ClientSettingsForBackend(
+    backend_id: String,
+    default_version: Option<String>,
+) -> Element {
     let mut effective_version: Signal<Option<String>> = use_signal(|| None);
     let mut version_override_state: Signal<Option<String>> = use_signal(|| None);
     let mut error: Signal<Option<String>> = use_signal(|| None);
 
+    // No version override surface for this backend → skip the MCP fetch and
+    // render nothing. (Mechanisms have no UI surface yet either.)
+    if default_version.is_none() {
+        return rsx! {};
+    }
+
     let bid_load = backend_id.clone();
+    let default_for_load = default_version.clone();
     use_future(move || {
         let bid = bid_load.clone();
+        let dflt = default_for_load.clone();
         async move {
-            // get_version returns: { effective_version, override }
             match client_settings_get_version(&bid).await {
                 Ok(json) => {
-                    let eff = json
-                        .get("effective_version")
-                        .and_then(|v| v.as_str())
-                        .map(|s| s.to_owned())
-                        .unwrap_or_else(|| "default".to_owned());
                     let over = json
                         .get("override")
                         .and_then(|v| v.as_str())
                         .map(|s| s.to_owned());
+                    let eff = over
+                        .clone()
+                        .or(dflt)
+                        .unwrap_or_else(|| "(unknown)".to_owned());
                     effective_version.set(Some(eff));
                     version_override_state.set(over);
                 }
@@ -108,8 +122,6 @@ pub fn ClientSettingsForBackend(backend_id: String) -> Element {
                 version_override: version_override_state.read().clone(),
             }
         }
-        // Loading state: render nothing — the rows pop in once loaded so we
-        // don't show a transient "Loading client config…" placeholder.
     }
 }
 
@@ -166,6 +178,8 @@ pub fn ClientSettingsSection() -> Element {
                             backend_id: backend_id.clone(),
                             effective_version: effective_version.clone(),
                             version_override: version_override.clone(),
+                            // Standalone section is dev-only; show overrides
+                            // for everything regardless of relevance.
                         }
                     }
                 }

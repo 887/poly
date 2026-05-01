@@ -99,7 +99,7 @@ pub fn DemoPluginSettings() -> Element {
                     span { class: "toggle-slider" }
                 }
             }
-            ClientSettingsForBackend { backend_id: "demo".to_string() }
+            ClientSettingsForBackend { backend_id: "demo".to_string(), default_version: None }
         }
     }
 }
@@ -137,7 +137,13 @@ pub fn StoatPluginSettings() -> Element {
             p { class: "settings-section-description",
                 "{t(\"plugin-stoat-settings-description\")}"
             }
-            ClientSettingsForBackend { backend_id: "stoat".to_string() }
+            ClientSettingsForBackend {
+                backend_id: "stoat".to_string(),
+                // Mirror of `poly_stoat::http::DEFAULT_CLIENT_VERSION` —
+                // hardcoded here so the call site stays buildable without
+                // pulling in the optional `stoat` dep.
+                default_version: Some("poly-stoat/0.0.0".to_string()),
+            }
         }
     }
 }
@@ -254,7 +260,7 @@ pub fn PolyServerPluginSettings() -> Element {
                     span { class: "toggle-slider" }
                 }
             }
-            ClientSettingsForBackend { backend_id: "poly".to_string() }
+            ClientSettingsForBackend { backend_id: "poly".to_string(), default_version: None }
         }
     }
 }
@@ -283,7 +289,7 @@ pub fn HackerNewsPluginSettings() -> Element {
             p { class: "plugin-settings-desc",
                 "Read-only Hacker News client. Browse top stories, Ask HN, Show HN, and job posts. No write access."
             }
-            ClientSettingsForBackend { backend_id: "hackernews".to_string() }
+            ClientSettingsForBackend { backend_id: "hackernews".to_string(), default_version: None }
         }
     }
 }
@@ -308,7 +314,10 @@ pub fn MatrixPluginSettings() -> Element {
             p { class: "plugin-settings-desc",
                 "Federated, end-to-end-encrypted messaging via the Matrix protocol. Connect to matrix.org or any homeserver."
             }
-            ClientSettingsForBackend { backend_id: "matrix".to_string() }
+            ClientSettingsForBackend {
+                backend_id: "matrix".to_string(),
+                default_version: Some("poly-matrix/0.0.0".to_string()),
+            }
         }
     }
 }
@@ -333,7 +342,7 @@ pub fn LemmyPluginSettings() -> Element {
             p { class: "plugin-settings-desc",
                 "Federated link aggregator. Connect to any Lemmy instance with your credentials."
             }
-            ClientSettingsForBackend { backend_id: "lemmy".to_string() }
+            ClientSettingsForBackend { backend_id: "lemmy".to_string(), default_version: None }
         }
     }
 }
@@ -372,7 +381,12 @@ pub fn DiscordPluginSettings() -> Element {
                 "Popular gaming and community chat platform. Dev-only — not shipped in release builds."
             }
             PluginManifestPanel { manifest }
-            ClientSettingsForBackend { backend_id: "discord".to_string() }
+            ClientSettingsForBackend {
+                backend_id: "discord".to_string(),
+                default_version: Some(
+                    "poly-discord/0.0.0 (DiscordBot https://github.com/poly-app; 10)".to_string(),
+                ),
+            }
         }
     }
 }
@@ -407,7 +421,10 @@ pub fn TeamsPluginSettings() -> Element {
                 "Enterprise communication platform by Microsoft. Dev-only — not shipped in release builds."
             }
             PluginManifestPanel { manifest }
-            ClientSettingsForBackend { backend_id: "teams".to_string() }
+            ClientSettingsForBackend {
+                backend_id: "teams".to_string(),
+                default_version: Some("poly-teams/0.0.0".to_string()),
+            }
         }
     }
 }
@@ -440,7 +457,10 @@ pub fn GitHubPluginSettings() -> Element {
                 "Read-only GitHub / GHE client. Browses repos, issues, pull requests, and source code through your local gh CLI."
             }
             PluginManifestPanel { manifest }
-            ClientSettingsForBackend { backend_id: "github".to_string() }
+            // GitHub uses the user's gh CLI as transport — there's no
+            // HTTP User-Agent we control, so a version override would be
+            // a no-op. Hide the row entirely.
+            ClientSettingsForBackend { backend_id: "github".to_string(), default_version: None }
         }
     }
 }
@@ -474,7 +494,7 @@ pub fn ForgejoPluginSettings() -> Element {
                 "Forge backend for Forgejo, Gitea, and Codeberg instances. Browse repos, issues, pull requests, and source code via the Forgejo REST API."
             }
             PluginManifestPanel { manifest }
-            ClientSettingsForBackend { backend_id: "forgejo".to_string() }
+            ClientSettingsForBackend { backend_id: "forgejo".to_string(), default_version: None }
         }
     }
 }
