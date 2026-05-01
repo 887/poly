@@ -478,13 +478,16 @@ pub fn GitHubPluginSettings() -> Element {
                 span { class: "plugin-section-badge", "{t(\"settings-plugins-badge\")}" }
             }
             p { class: "settings-section-description",
-                "GitHub / GHE client. Browse repos, issues, pull requests, and source code through your local gh CLI — write access depends on your gh auth scopes."
+                "GitHub / GHE client. Two transports: spawns your local gh CLI by default, or speaks the GitHub REST API directly when an account is configured with a token. Write access depends on the auth scopes of whichever path the account uses."
             }
             PluginManifestPanel { manifest }
-            // GitHub uses the user's gh CLI as transport — there's no
-            // HTTP User-Agent we control, so a version override would be
-            // a no-op. Hide the row entirely.
-            ClientSettingsForBackend { backend_id: "github".to_string(), default_version: None }
+            // Override only takes effect in HTTP API mode (gh CLI owns its
+            // own User-Agent). Shown unconditionally because per-account
+            // mode isn't queryable from the per-plugin settings page.
+            ClientSettingsForBackend {
+                backend_id: "github".to_string(),
+                default_version: Some("poly-github/0.0.0".to_string()),
+            }
         }
     }
 }

@@ -422,9 +422,10 @@ impl ClientBackend for GitHubClient {
     fn plugin_manifest(&self) -> PluginManifest {
         PluginManifest {
             exec_programs: vec!["gh".to_string()],
-            http_hosts: vec![],
-            description: "Wraps the user's gh CLI to surface GitHub / GHE repos as Poly servers. \
-                          No tokens are read from disk; all auth flows go through gh."
+            http_hosts: vec!["api.github.com".to_string()],
+            description: "GitHub / GHE backend with two transports: by default spawns the user's \
+                          gh CLI (no tokens read from disk, all auth goes through gh) or — when an \
+                          account is configured with a token — speaks the GitHub REST API directly."
                 .to_string(),
             homepage: Some("https://cli.github.com".to_string()),
         }
