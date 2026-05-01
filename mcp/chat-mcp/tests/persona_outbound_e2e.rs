@@ -108,7 +108,7 @@ fn outbound_prune_audit_before_cutoff() {
     make_persona(&mem, "prune-test", "drafts-only");
 
     // Write 3 audit rows.
-    for _ in 0..3 {
+    for _ in 0_i32..3_i32 {
         mem.record_persona_audit("prune-test", "system", "invoke", None, None, None, "ok", None)
             .expect("record audit");
     }

@@ -70,6 +70,7 @@ pub enum HeartbeatOutput {
 ///   also emit a `DraftPlaceholder`.
 ///
 /// "Pure" here means no database calls and no randomness.  Easy to unit-test.
+#[must_use] 
 pub fn summarise(bundle: &PersonaContextBundle) -> Vec<HeartbeatOutput> {
     let mut out = Vec::new();
 
@@ -118,9 +119,10 @@ pub fn summarise(bundle: &PersonaContextBundle) -> Vec<HeartbeatOutput> {
         // return newest-first), so `.first()` is the newest message.
         if let Some(newest_msg) = chat.recent_messages.first() {
             let tail = if newest_msg.text.len() > 200 {
-                &newest_msg.text[newest_msg.text.len() - 200..]
+                let start = newest_msg.text.len().saturating_sub(200);
+                newest_msg.text.get(start..).unwrap_or(newest_msg.text.as_str())
             } else {
-                &newest_msg.text
+                newest_msg.text.as_str()
             };
             // Heuristic: contains `?` and the author is not the persona itself.
             if tail.contains('?') && newest_msg.from != persona_name {
@@ -149,9 +151,10 @@ pub fn summarise(bundle: &PersonaContextBundle) -> Vec<HeartbeatOutput> {
 /// "Local TZ" is the server process's system timezone as reported by
 /// `chrono::Local`.  Per the plan, quiet hours apply to OUTBOUND only;
 /// notify and draft still fire so the user sees them in the morning.
+#[must_use] 
 pub fn in_quiet_hours() -> bool {
     let h = Local::now().hour();
-    h >= 22 || h < 8
+    !(8..22).contains(&h)
 }
 
 // ─── Per-task heartbeat runner ────────────────────────────────────────────────
@@ -206,10 +209,10 @@ async fn run_heartbeat_task<P>(
         };
 
         // Stop if disabled or heartbeat removed.
-        let enabled = persona.get("enabled").and_then(|v| v.as_bool()).unwrap_or(false);
+        let enabled = persona.get("enabled").and_then(serde_json::Value::as_bool).unwrap_or(false);
         let hb_secs = persona
             .get("heartbeat_interval_secs")
-            .and_then(|v| v.as_i64())
+            .and_then(serde_json::Value::as_i64)
             .filter(|&s| s > 0);
 
         if !enabled || hb_secs.is_none() {
@@ -230,14 +233,14 @@ async fn run_heartbeat_task<P>(
             Ok(b) => b,
             Err(e) => {
                 warn!(slug, "heartbeat: context build failed: {e}");
-                let _ = mem.record_persona_audit(
+                drop(mem.record_persona_audit(
                     &slug, "heartbeat", "heartbeat_run",
                     None, None,
                     Some(&format!("{{\"error\":\"{e}\"}}")),
                     "error",
                     Some(&e.to_string()),
-                );
-                let _ = mem.update_persona_last_run_at(&slug);
+                ));
+                drop(mem.update_persona_last_run_at(&slug));
                 continue;
             }
         };
@@ -248,7 +251,7 @@ async fn run_heartbeat_task<P>(
         // F.5 — Rate-limit check.
         let rate_limit = persona
             .get("rate_limit_per_hour")
-            .and_then(|v| v.as_i64())
+            .and_then(serde_json::Value::as_i64)
             .unwrap_or(4);
 
         let proactivity = persona
@@ -278,14 +281,14 @@ async fn run_heartbeat_task<P>(
 
         if recent_action_count >= rate_limit {
             warn!(slug, recent_action_count, rate_limit, "heartbeat: rate limited");
-            let _ = mem.record_persona_audit(
+            drop(mem.record_persona_audit(
                 &slug, "heartbeat", "rate_limited",
                 None, None,
                 Some(&format!("{{\"count\":{recent_action_count},\"limit\":{rate_limit}}}")),
                 "ok",
                 None,
-            );
-            let _ = mem.update_persona_last_run_at(&slug);
+            ));
+            drop(mem.update_persona_last_run_at(&slug));
             continue;
         }
 
@@ -293,7 +296,7 @@ async fn run_heartbeat_task<P>(
         // G.6: respect per-persona `quiet_hours_disabled` override.
         let quiet_hours_disabled = persona
             .get("quiet_hours_disabled")
-            .and_then(|v| v.as_bool())
+            .and_then(serde_json::Value::as_bool)
             .unwrap_or(false);
         let quiet = !quiet_hours_disabled && in_quiet_hours();
 
@@ -330,15 +333,15 @@ async fn run_heartbeat_task<P>(
                                 None,
                             ) {
                                 Ok(_) => {
-                                    let _ = mem.record_persona_audit(
+                                    drop(mem.record_persona_audit(
                                         &slug, "heartbeat", "notify",
                                         Some(&chat_entry.account_id),
                                         Some(chat_id),
                                         None,
                                         "ok",
                                         None,
-                                    );
-                                    notify_count += 1;
+                                    ));
+                                    notify_count = notify_count.wrapping_add(1);
                                 }
                                 Err(e) => warn!(slug, %chat_id, "heartbeat: notify draft insert failed: {e}"),
                             }
@@ -356,23 +359,23 @@ async fn run_heartbeat_task<P>(
                             None,
                         ) {
                             Ok(_) => {
-                                let _ = mem.record_persona_audit(
+                                drop(mem.record_persona_audit(
                                     &slug, "heartbeat", "draft_create",
                                     Some(&chat_entry.account_id),
                                     Some(chat_id),
                                     None,
                                     "ok",
                                     None,
-                                );
-                                draft_count += 1;
+                                ));
+                                draft_count = draft_count.wrapping_add(1);
                             }
                             Err(e) => warn!(slug, %chat_id, "heartbeat: draft insert failed: {e}"),
                         }
                     }
 
                     // G.3 — Outbound send with allowlist + daily-cap enforcement.
-                    if emit_outbound {
-                        if let Some(chat_entry) = bundle.chats.iter().find(|c| &c.chat_id == chat_id) {
+                    if emit_outbound
+                        && let Some(chat_entry) = bundle.chats.iter().find(|c| &c.chat_id == chat_id) {
                             match mem.check_persona_outbound_cap(
                                 &slug,
                                 &chat_entry.account_id,
@@ -380,40 +383,40 @@ async fn run_heartbeat_task<P>(
                             ) {
                                 Ok(None) => {
                                     // Chat not in allowlist — deny.
-                                    let _ = mem.record_persona_audit(
+                                    drop(mem.record_persona_audit(
                                         &slug, "heartbeat", "outbound_blocked_allowlist",
                                         Some(&chat_entry.account_id),
                                         Some(chat_id),
                                         None,
                                         "ok",
                                         None,
-                                    );
+                                    ));
                                     info!(slug, %chat_id, "heartbeat: outbound blocked — not in allowlist");
                                 }
                                 Ok(Some((max_per_day, sends_today))) if sends_today >= max_per_day => {
                                     // Daily cap exceeded — deny.
-                                    let _ = mem.record_persona_audit(
+                                    drop(mem.record_persona_audit(
                                         &slug, "heartbeat", "outbound_blocked_daily_cap",
                                         Some(&chat_entry.account_id),
                                         Some(chat_id),
                                         Some(&format!("{{\"sends_today\":{sends_today},\"max\":{max_per_day}}}")),
                                         "ok",
                                         None,
-                                    );
+                                    ));
                                     warn!(slug, %chat_id, sends_today, max_per_day, "heartbeat: outbound blocked — daily cap");
                                 }
                                 Ok(Some(_)) => {
                                     // Allowed — write outbound_send audit row.
                                     // Actual send would be dispatched here once the send-message
                                     // backend API is wired (post-Phase G UI).
-                                    let _ = mem.record_persona_audit(
+                                    drop(mem.record_persona_audit(
                                         &slug, "heartbeat", "outbound_send",
                                         Some(&chat_entry.account_id),
                                         Some(chat_id),
                                         Some(&format!("{{\"prompt_len\":{}}}", prompt.len())),
                                         "ok",
                                         None,
-                                    );
+                                    ));
                                     info!(slug, %chat_id, "heartbeat: outbound send authorized");
                                 }
                                 Err(e) => {
@@ -421,24 +424,23 @@ async fn run_heartbeat_task<P>(
                                 }
                             }
                         }
-                    }
                 }
             }
         }
 
         // Quiet-hours outbound skip audit.
         if proactivity == "outbound-allowlisted" && quiet {
-            let _ = mem.record_persona_audit(
+            drop(mem.record_persona_audit(
                 &slug, "heartbeat", "quiet_hours_skipped",
                 None, None,
                 None,
                 "ok",
                 None,
-            );
+            ));
         }
 
         // F.3 — Write heartbeat_run audit row at completion.
-        let accts: Vec<&str> = touched_accounts.iter().map(|s| s.as_str()).collect();
+        let accts: Vec<&str> = touched_accounts.iter().map(std::string::String::as_str).collect();
         let payload = format!(
             "{{\"chats_touched\":{ct},\"drafts\":{dc},\"notifications\":{nc},\"accounts\":{an}}}",
             ct = bundle.chats.len(),
@@ -446,16 +448,16 @@ async fn run_heartbeat_task<P>(
             nc = notify_count,
             an = serde_json::to_string(&accts).unwrap_or_else(|_| "[]".to_string()),
         );
-        let _ = mem.record_persona_audit(
+        drop(mem.record_persona_audit(
             &slug, "heartbeat", "heartbeat_run",
             None, None,
             Some(&payload),
             "ok",
             None,
-        );
+        ));
 
         // F.3 — Update last_run_at unconditionally.
-        let _ = mem.update_persona_last_run_at(&slug);
+        drop(mem.update_persona_last_run_at(&slug));
 
         info!(slug, "heartbeat tick complete");
     }
@@ -481,6 +483,7 @@ pub struct HeartbeatRegistry {
 }
 
 impl HeartbeatRegistry {
+    #[must_use] 
     pub fn new() -> Self {
         Self { entries: HashMap::new() }
     }
@@ -559,6 +562,8 @@ impl HeartbeatRegistry {
     /// Queries all `enabled=1` personas with a `heartbeat_interval_secs`,
     /// spawns a task for each, and computes the first tick from `last_run_at`
     /// so a restart doesn't burst-fire all heartbeats at once.
+    // poly-lint: provider arc passed by value because each spawned task takes its own clone.
+    #[allow(clippy::needless_pass_by_value)]
     pub fn start_all_enabled<P>(&mut self, mem: &MemoryDb, provider: Arc<P>)
     where
         P: PersonaBackendProvider + 'static,
@@ -577,16 +582,16 @@ impl HeartbeatRegistry {
             };
             let interval_secs = match row
                 .get("heartbeat_interval_secs")
-                .and_then(|v| v.as_i64())
+                .and_then(serde_json::Value::as_i64)
                 .filter(|&s| s > 0)
             {
-                Some(s) => s as u64,
+                Some(s) => u64::try_from(s).unwrap_or(0),
                 None => continue,
             };
             let last_run_at = row
                 .get("last_run_at")
                 .and_then(|v| v.as_str())
-                .map(|s| s.to_string());
+                .map(std::string::ToString::to_string);
 
             self.start(
                 &slug,
@@ -600,11 +605,13 @@ impl HeartbeatRegistry {
     }
 
     /// Number of active heartbeat tasks.
+    #[must_use] 
     pub fn len(&self) -> usize {
         self.entries.len()
     }
 
     /// `true` if no tasks are running.
+    #[must_use] 
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
@@ -644,8 +651,8 @@ fn compute_first_tick(interval_secs: u64, last_run_at: Option<&str>) -> Instant 
         // Overdue — fire immediately.
         Instant::now()
     } else {
-        let delay_secs = next_unix - now_unix;
-        Instant::now() + Duration::from_secs(delay_secs)
+        let delay_secs = next_unix.saturating_sub(now_unix);
+        Instant::now().checked_add(Duration::from_secs(delay_secs)).unwrap_or_else(Instant::now)
     }
 }
 
@@ -653,6 +660,8 @@ fn compute_first_tick(interval_secs: u64, last_run_at: Option<&str>) -> Instant 
 /// (the format `now_iso8601()` in memory.rs produces).
 ///
 /// Returns seconds since Unix epoch, or `None` on parse failure.
+// poly-lint: bounded calendar arithmetic on a parsed string of fixed shape; overflow impossible for any well-formed Gregorian date.
+#[allow(clippy::arithmetic_side_effects, clippy::string_slice)]
 fn parse_iso8601_to_unix(s: &str) -> Option<u64> {
     // Expect: "YYYY-MM-DDTHH:MM:SSZ" (exactly 20 chars)
     let b = s.as_bytes();
@@ -676,6 +685,8 @@ fn parse_u64(s: &str) -> Option<u64> {
 }
 
 /// Convert (year, month, day) to days since 1970-01-01 (Gregorian).
+// poly-lint: textbook Gregorian-calendar algorithm (Hinnant); inputs are validated upstream.
+#[allow(clippy::arithmetic_side_effects, clippy::integer_division)]
 fn ymd_to_days(y: u64, m: u64, d: u64) -> Option<u64> {
     // Port of the inverse algorithm used in memory.rs `days_to_ymd`.
     // Reference: https://howardhinnant.github.io/date_algorithms.html
@@ -688,6 +699,8 @@ fn ymd_to_days(y: u64, m: u64, d: u64) -> Option<u64> {
 }
 
 /// Convert Unix seconds to ISO-8601 UTC "YYYY-MM-DDTHH:MM:SSZ".
+// poly-lint: bounded modular arithmetic on Unix seconds.
+#[allow(clippy::arithmetic_side_effects, clippy::integer_division)]
 fn unix_secs_to_iso8601(secs: u64) -> String {
     let sec = secs % 60;
     let min = (secs / 60) % 60;
@@ -698,6 +711,8 @@ fn unix_secs_to_iso8601(secs: u64) -> String {
 }
 
 /// Mirror of `days_to_ymd` from memory.rs (private there).
+// poly-lint: textbook Gregorian-calendar algorithm (Hinnant); operands are bounded by Unix epoch range.
+#[allow(clippy::arithmetic_side_effects, clippy::integer_division)]
 fn days_to_ymd_pub(days: u64) -> (u64, u64, u64) {
     let z   = days + 719_468;
     let era = z / 146_097;
@@ -833,6 +848,6 @@ mod tests {
     #[test]
     fn quiet_hours_returns_bool() {
         // Just ensure it doesn't panic.
-        let _ = in_quiet_hours();
+        let _v = in_quiet_hours();
     }
 }

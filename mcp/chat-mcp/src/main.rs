@@ -114,7 +114,7 @@ async fn run_http(port: u16) -> anyhow::Result<()> {
     axum::serve(listener, app).await?;
 
     // Shutdown the auto-send engine when the HTTP server exits.
-    let _ = shutdown_tx.send(());
+    shutdown_tx.send(()).ok();
     Ok(())
 }
 
@@ -187,7 +187,7 @@ async fn run_autosend_engine(
         };
 
         for draft in due {
-            let draft_id = match draft.get("id").and_then(|v| v.as_i64()) {
+            let draft_id = match draft.get("id").and_then(serde_json::Value::as_i64) {
                 Some(id) => id,
                 None     => continue,
             };
@@ -217,7 +217,8 @@ async fn run_autosend_engine(
                     let account_id2 = account_id.clone();
                     let chat_id2 = chat_id.clone();
                     let body2 = body.clone();
-                    let result = async move {
+                    
+                    async move {
                         let locked = pool2.lock().await;
                         if let Some(e) = locked.find_by_account(&account_id2) {
                             e.backend.send_message(&chat_id2, MessageContent::Text(body2)).await
@@ -226,8 +227,7 @@ async fn run_autosend_engine(
                                 "no backend for account".to_string()
                             ))
                         }
-                    }.await;
-                    result
+                    }.await
                 } else {
                     drop(locked);
                     Err(poly_client::ClientError::NotSupported(
@@ -246,7 +246,7 @@ async fn run_autosend_engine(
                 }
                 Err(e) => {
                     tracing::warn!("auto-send engine: draft {draft_id} send failed: {e}; marking expired");
-                    let _ = mem.draft_set_status(draft_id, "expired");
+                    drop(mem.draft_set_status(draft_id, "expired"));
                 }
             }
         }
@@ -333,12 +333,13 @@ fn open_memory_db() -> anyhow::Result<MemoryDb> {
     } else {
         #[cfg(target_os = "linux")]
         {
-            let base: std::path::PathBuf = std::env::var("XDG_DATA_HOME")
-                .map(std::path::PathBuf::from)
-                .unwrap_or_else(|_| {
+            let base: std::path::PathBuf = std::env::var("XDG_DATA_HOME").map_or_else(
+                |_| {
                     let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
                     std::path::PathBuf::from(home).join(".local").join("share")
-                });
+                },
+                std::path::PathBuf::from,
+            );
             base.join("poly")
         }
         #[cfg(target_os = "macos")]
@@ -367,10 +368,13 @@ fn open_memory_db() -> anyhow::Result<MemoryDb> {
 
 // ─── JSON-RPC helpers ────────────────────────────────────────────────────────
 
+// poly-lint: id and result pass through json! by value into JSON-RPC wire format.
+#[allow(clippy::needless_pass_by_value)]
 fn mcp_response(id: Option<Value>, result: Value) -> Value {
     json!({ "jsonrpc": "2.0", "id": id, "result": result })
 }
 
+#[allow(clippy::needless_pass_by_value)]
 fn mcp_error(id: Option<Value>, code: i64, msg: &str) -> Value {
     json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": msg } })
 }

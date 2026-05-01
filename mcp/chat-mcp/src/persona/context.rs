@@ -203,7 +203,7 @@ impl PersonaBackendProvider for BackendPoolProvider<'_> {
         self.pool
             .list_accounts()
             .into_iter()
-            .filter_map(|v| v.get("user_id").and_then(|u| u.as_str()).map(|s| s.to_string()))
+            .filter_map(|v| v.get("user_id").and_then(|u| u.as_str()).map(std::string::ToString::to_string))
             .collect()
     }
 
@@ -275,7 +275,7 @@ impl PersonaBackendProvider for BackendPoolProvider<'_> {
             .with_context(|| format!("no backend for account {account_id}"))?;
 
         let query = poly_client::MessageQuery {
-            limit: Some(limit as u32),
+            limit: Some(u32::try_from(limit).unwrap_or(u32::MAX)),
             ..Default::default()
         };
 
@@ -352,6 +352,7 @@ pub struct PersonaSourceRow {
 /// 3. If any deny matches → return `false`.
 /// 4. Check for any allow row whose selector matches → return `true`.
 /// 5. No matching rule → return `false` (default-deny).
+#[must_use] 
 pub fn is_chat_included(
     rows: &[PersonaSourceRow],
     account_id: &str,
@@ -404,11 +405,8 @@ fn selector_matches(row: &PersonaSourceRow, chat_id: &str) -> bool {
             // expands server → channels via backend; here we approximate.
             row.selector_value.as_deref() == Some(chat_id)
         }
-        "tag" => {
-            // Tag selectors are unsupported (see context.rs warn! branch).
-            // Treat as non-matching for the purposes of the deny-wins check.
-            false
-        }
+        // "tag" selectors are unsupported (see context.rs warn! branch).
+        // Treat unknown / tag as non-matching for the deny-wins check.
         _ => false,
     }
 }
@@ -438,11 +436,11 @@ async fn resolve_sources(
     // Split sources into allow and deny first, then process allows.
     let allow_sources: Vec<&Value> = sources
         .iter()
-        .filter(|s| s.get("include").and_then(|v| v.as_bool()).unwrap_or(true))
+        .filter(|s| s.get("include").and_then(serde_json::Value::as_bool).unwrap_or(true))
         .collect();
     let deny_sources: Vec<&Value> = sources
         .iter()
-        .filter(|s| !s.get("include").and_then(|v| v.as_bool()).unwrap_or(true))
+        .filter(|s| !s.get("include").and_then(serde_json::Value::as_bool).unwrap_or(true))
         .collect();
 
     // Expand deny rows first (they're cheaper — no backend call for channel/dm).
@@ -458,7 +456,7 @@ async fn resolve_sources(
         let value = src
             .get("selector_value")
             .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
+            .map(std::string::ToString::to_string);
 
         match kind {
             "all" => {
@@ -517,7 +515,7 @@ async fn resolve_sources(
         let value = src
             .get("selector_value")
             .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
+            .map(std::string::ToString::to_string);
 
         match kind {
             "all" => {
@@ -604,15 +602,14 @@ async fn resolve_sources(
                 }
             }
             "channel" | "dm" => {
-                if let Some(chat_id) = value {
-                    if !denied.contains(&(account_id.clone(), chat_id.clone())) {
+                if let Some(chat_id) = value
+                    && !denied.contains(&(account_id.clone(), chat_id.clone())) {
                         allowed.push(ResolvedChat {
                             account_id,
                             chat_id,
                             chat_name: None,
                         });
                     }
-                }
             }
             "tag" => {
                 warn!(slug, "selector_kind 'tag' is not yet supported — skipped");
@@ -650,13 +647,12 @@ fn apply_size_cap(chats: &mut Vec<ChatEntry>) {
         }
         // Find the chat with the most messages (above floor) and trim it.
         let target = chats.iter_mut().max_by_key(|c| c.recent_messages.len());
-        if let Some(entry) = target {
-            if entry.recent_messages.len() > MIN_MESSAGES_FLOOR {
+        if let Some(entry) = target
+            && entry.recent_messages.len() > MIN_MESSAGES_FLOOR {
                 // Drop oldest message (index 0 is oldest in our ordering).
                 entry.recent_messages.remove(0);
                 continue 'stage1;
             }
-        }
         break; // All chats are at floor — move to stage 2.
     }
 
@@ -704,7 +700,7 @@ pub async fn build(
     let style_notes = persona
         .get("style_notes")
         .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
+        .map(std::string::ToString::to_string);
 
     let persona_header = json!({
         "slug":         persona.get("slug"),
@@ -719,7 +715,7 @@ pub async fn build(
     let all_facts = mem.list_persona_facts(slug, false).unwrap_or_default();
     let recent_facts: Vec<Value> = all_facts
         .into_iter()
-        .filter(|f| !f.get("pinned").and_then(|v| v.as_bool()).unwrap_or(false))
+        .filter(|f| !f.get("pinned").and_then(serde_json::Value::as_bool).unwrap_or(false))
         .rev()
         .take(50)
         .collect();
@@ -742,7 +738,7 @@ pub async fn build(
         let summary_opt = if req.include_summaries {
             mem.get_chat_summary(account_id, chat_id)
                 .unwrap_or_default()
-                .and_then(|v| v.get("summary").and_then(|s| s.as_str()).map(|s| s.to_string()))
+                .and_then(|v| v.get("summary").and_then(|s| s.as_str()).map(std::string::ToString::to_string))
         } else {
             None
         };
@@ -768,7 +764,7 @@ pub async fn build(
                             "{{\"message_count\":{}}}",
                             messages.len()
                         );
-                        let _ = mem.record_persona_audit(
+                        drop(mem.record_persona_audit(
                             slug,
                             "claude-desktop",
                             "memory_read",
@@ -777,14 +773,14 @@ pub async fn build(
                             Some(&payload),
                             "ok",
                             None,
-                        );
+                        ));
                     }
                     messages
                 }
                 Ok(Err(e)) => {
                     warn!(slug, %account_id, %chat_id, "fetch_messages error: {e}");
                     if !req.dry_run {
-                        let _ = mem.record_persona_audit(
+                        drop(mem.record_persona_audit(
                             slug,
                             "claude-desktop",
                             "memory_read",
@@ -793,14 +789,14 @@ pub async fn build(
                             None,
                             "error",
                             Some(&e.to_string()),
-                        );
+                        ));
                     }
                     vec![]
                 }
                 Err(_) => {
                     warn!(slug, %account_id, %chat_id, "fetch_messages timed out");
                     if !req.dry_run {
-                        let _ = mem.record_persona_audit(
+                        drop(mem.record_persona_audit(
                             slug,
                             "claude-desktop",
                             "memory_read",
@@ -809,7 +805,7 @@ pub async fn build(
                             None,
                             "error",
                             Some("timeout"),
-                        );
+                        ));
                     }
                     vec![]
                 }
@@ -820,7 +816,7 @@ pub async fn build(
         // Also write an audit row when we used a stored summary.
         // Suppressed in dry_run mode for the same reason as above.
         if summary.is_some() && !req.dry_run {
-            let _ = mem.record_persona_audit(
+            drop(mem.record_persona_audit(
                 slug,
                 "claude-desktop",
                 "memory_read",
@@ -829,7 +825,7 @@ pub async fn build(
                 Some("{\"source\":\"summary\"}"),
                 "ok",
                 None,
-            );
+            ));
         }
 
         chat_entries.push(ChatEntry {
@@ -911,6 +907,7 @@ mod tests {
                 .push((ch_id.to_string(), ch_name.to_string()));
         }
 
+        #[allow(dead_code)] // reserved for future tests covering DM-bound personas.
         fn add_dm(&mut self, account: &str, dm_id: &str, partner: &str) {
             self.dms
                 .entry(account.to_string())
@@ -1084,7 +1081,7 @@ mod tests {
             mem.add_persona_source("big", "acc1", "channel", Some(&ch), true)
                 .expect("add source");
             // Each message is ~200 bytes; 30 messages = 6KB per chat × 20 = 120KB.
-            let msgs: Vec<MessageBrief> = (0..30)
+            let msgs: Vec<MessageBrief> = (0_i32..30_i32)
                 .map(|j| MessageBrief {
                     from: format!("user{j}"),
                     ts: format!("2026-01-0{j:02}"),
@@ -1134,7 +1131,7 @@ mod tests {
         };
 
         // Start with 10 chats × 30 messages × 200 bytes each = way over 32 KB.
-        let mut chats: Vec<ChatEntry> = (0..10).map(|i| make_chat(&format!("ch{i}"), 30)).collect();
+        let mut chats: Vec<ChatEntry> = (0_i32..10_i32).map(|i| make_chat(&format!("ch{i}"), 30)).collect();
 
         apply_size_cap(&mut chats);
 

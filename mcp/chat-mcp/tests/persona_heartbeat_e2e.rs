@@ -59,7 +59,7 @@ async fn call(pool: &mut BackendPool, mem: &MemoryDb, tool: &str, args: Value) -
 
 fn assert_ok(result: &Value) {
     assert!(
-        !result.get("isError").and_then(|e| e.as_bool()).unwrap_or(false),
+        !result.get("isError").and_then(serde_json::Value::as_bool).unwrap_or(false),
         "tool returned error: {result}"
     );
 }
@@ -99,7 +99,7 @@ async fn persona_heartbeat_e2e_creates_audit_and_draft() {
         "slug": "hb-test",
         "name": "HB Test",
         "system_prompt": "You are a heartbeat test persona.",
-        "heartbeat_interval_secs": 2,
+        "heartbeat_interval_secs": 2_i32,
         "proactivity": "drafts-only",
     })).await;
     assert_ok(&create);
@@ -140,7 +140,7 @@ async fn persona_heartbeat_e2e_creates_audit_and_draft() {
             self.pool
                 .list_accounts()
                 .into_iter()
-                .filter_map(|v| v.get("user_id").and_then(|u| u.as_str()).map(|s| s.to_string()))
+                .filter_map(|v| v.get("user_id").and_then(|u| u.as_str()).map(std::string::ToString::to_string))
                 .collect()
         }
 
@@ -180,7 +180,7 @@ async fn persona_heartbeat_e2e_creates_audit_and_draft() {
                 .find_by_account(account_id)
                 .map(|e| std::sync::Arc::clone(&e.backend))
                 .ok_or_else(|| anyhow::anyhow!("no backend for {account_id}"))?;
-            let query = poly_client::MessageQuery { limit: Some(limit as u32), ..Default::default() };
+            let query = poly_client::MessageQuery { limit: Some(u32::try_from(limit).unwrap_or(u32::MAX)), ..Default::default() };
             let messages = backend.get_messages(chat_id, query).await?;
             Ok(messages.into_iter().map(|m| poly_chat_mcp::persona::context::MessageBrief {
                 from: m.author.display_name,

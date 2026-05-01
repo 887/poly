@@ -19,6 +19,10 @@
 //! ## Retention
 //! `RETENTION_DAYS = 30` — audit rows older than 30 calendar days are deleted.
 
+// poly-lint: bounded calendar arithmetic on u64 timestamps; modular ops by definition,
+// no overflow possible for any physical wall-clock.
+#![allow(clippy::arithmetic_side_effects, clippy::integer_division)]
+
 use crate::memory::MemoryDb;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::time::{MissedTickBehavior, interval};

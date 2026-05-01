@@ -66,6 +66,7 @@ pub struct SimParams {
 
 impl SimParams {
     /// Apply server-side clamping per D.1 spec.
+    #[must_use] 
     pub fn clamped(
         total_duration_ms: u32,
         avg_wpm: u16,
@@ -135,7 +136,7 @@ pub fn next_tick_decision(
         TickDecision::FalseStartStop
     } else if roll < pause_thresh {
         // Pause 1–3 seconds.
-        let pause_ms = 1_000 + (rng.random::<u64>() % 2_000);
+        let pause_ms = 1_000_u64.saturating_add(rng.random::<u64>() % 2_000);
         TickDecision::Pause(pause_ms)
     } else {
         TickDecision::Pulse
@@ -165,6 +166,7 @@ pub struct SimRegistry {
 }
 
 impl SimRegistry {
+    #[must_use] 
     pub fn new() -> Self {
         Self::default()
     }
@@ -211,11 +213,13 @@ impl SimRegistry {
     }
 
     /// Number of active simulations.
+    #[must_use] 
     pub fn len(&self) -> usize {
         self.sims.len()
     }
 
     /// `true` if no active simulations.
+    #[must_use] 
     pub fn is_empty(&self) -> bool {
         self.sims.is_empty()
     }
@@ -230,6 +234,7 @@ pub struct GlobalSimRegistry {
 }
 
 impl GlobalSimRegistry {
+    #[must_use] 
     pub fn new() -> Self {
         Self::default()
     }
@@ -305,7 +310,7 @@ pub fn spawn_worker(
         let mut last_pulse_ms: u64 = 0;
 
         loop {
-            let elapsed_ms = start.elapsed().as_millis() as u64;
+            let elapsed_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
 
             // Check abort channel (non-blocking poll).
             match abort_rx.try_recv() {
@@ -330,7 +335,7 @@ pub fn spawn_worker(
                 TickDecision::FalseStartStop => {
                     tracing::trace!("typing sim: false start for chat {chat_id}");
                     // Brief visual stop: skip the pulse, wait 200–600 ms, then continue.
-                    tokio::time::sleep(Duration::from_millis(200 + (elapsed_ms % 400))).await;
+                    tokio::time::sleep(Duration::from_millis(200_u64.saturating_add(elapsed_ms % 400))).await;
                 }
                 TickDecision::Pulse => {
                     // Only send an actual HTTP pulse every PULSE_INTERVAL_MS ms.
@@ -384,6 +389,7 @@ fn new_sim_id() -> String {
 pub type SharedSimRegistry = Arc<Mutex<GlobalSimRegistry>>;
 
 /// Create a fresh shared registry.
+#[must_use] 
 pub fn new_shared_registry() -> SharedSimRegistry {
     Arc::new(Mutex::new(GlobalSimRegistry::new()))
 }
@@ -392,6 +398,7 @@ pub fn new_shared_registry() -> SharedSimRegistry {
 
 /// Return the MCP tool list entries for the two Phase D tools.
 /// Designed to be appended by `main.rs` / `tools.rs` at registration time.
+#[must_use] 
 pub fn tool_definitions() -> Vec<Value> {
     vec![
         json!({
@@ -482,7 +489,12 @@ mod tests {
         let mut rng = StdRng::seed_from_u64(seed);
         let tick_ms = 1_000u64;
         (0..n)
-            .map(|i| next_tick_decision(&mut rng, i as u64 * tick_ms, params.total_duration_ms, params))
+            .map(|i| next_tick_decision(
+                &mut rng,
+                u64::try_from(i).unwrap_or(u64::MAX).saturating_mul(tick_ms),
+                params.total_duration_ms,
+                params,
+            ))
             .collect()
     }
 
@@ -535,9 +547,9 @@ mod tests {
         for (x, y) in a.iter().zip(b.iter()) {
             // Compare variant tags (Pause inner value is deterministic too).
             match (x, y) {
-                (TickDecision::Pulse, TickDecision::Pulse) => {}
-                (TickDecision::FalseStartStop, TickDecision::FalseStartStop) => {}
-                (TickDecision::End, TickDecision::End) => {}
+                (TickDecision::Pulse, TickDecision::Pulse)
+                | (TickDecision::FalseStartStop, TickDecision::FalseStartStop)
+                | (TickDecision::End, TickDecision::End) => {}
                 (TickDecision::Pause(a), TickDecision::Pause(b)) => assert_eq!(a, b),
                 _ => panic!("diverged: {x:?} vs {y:?}"),
             }
@@ -592,6 +604,7 @@ mod tests {
         use std::sync::atomic::{AtomicU32, Ordering};
 
         // A mock backend that counts send_typing calls.
+        #[allow(dead_code)] // reserved for future expansion to a full ClientBackend stub
         struct MockBackend {
             count: Arc<AtomicU32>,
         }
@@ -614,7 +627,7 @@ mod tests {
 
         // Spawn a task that just waits for the abort signal.
         let handle = tokio::spawn(async move {
-            let _ = abort_rx.await;
+            drop(abort_rx.await);
             // Signal received — task exits cleanly.
             count2.fetch_add(1, Ordering::Relaxed);
         });

@@ -12,10 +12,13 @@ use poly_client::{
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+// poly-lint: takes impl ToString by value to support both owned String and &str callers ergonomically.
+#[allow(clippy::needless_pass_by_value)]
 fn ok_result(text: impl ToString) -> Value {
     json!({ "content": [{"type": "text", "text": text.to_string()}], "isError": false })
 }
 
+#[allow(clippy::needless_pass_by_value)]
 fn err_result(text: impl ToString) -> Value {
     json!({ "content": [{"type": "text", "text": text.to_string()}], "isError": true })
 }
@@ -25,7 +28,7 @@ fn str_arg<'a>(args: &'a Value, key: &str) -> Option<&'a str> {
 }
 
 fn u64_arg(args: &Value, key: &str) -> Option<u64> {
-    args.get(key).and_then(|v| v.as_u64())
+    args.get(key).and_then(serde_json::Value::as_u64)
 }
 
 fn parse_menu_target(s: &str) -> Option<MenuTargetKind> {
@@ -92,13 +95,15 @@ fn parse_backend_type(s: &str) -> Option<BackendType> {
 ///   backend-agnostic and always exposed.
 #[must_use]
 pub fn should_expose_tool(tool_name: &str, caps: &BackendCapabilities) -> bool {
+    // poly-lint: arms are intentionally separated by category for readability;
+    // merging would make the gating policy harder to audit.
+    #[allow(clippy::match_same_arms)]
     match tool_name {
         // Account management and meta — always advertised.
-        "login" | "logout" | "list_accounts" | "list_plugins" | "list_plugin_tools"
-        | "test_signin" | "test_health" | "test_reseed" => true,
-
         // Legacy Discord-shaped read tools gated on capability.
-        "list_servers" | "list_channels" | "get_messages" | "get_user" => true,
+        "login" | "logout" | "list_accounts" | "list_plugins" | "list_plugin_tools"
+        | "test_signin" | "test_health" | "test_reseed"
+        | "list_servers" | "list_channels" | "get_messages" | "get_user" => true,
         "list_friends" => !matches!(caps.friends, FriendModel::None),
         "list_dms" => !matches!(caps.dms, DmSupport::None),
 
@@ -212,14 +217,14 @@ pub fn tool_list_for_backend(slug: &str) -> Vec<Value> {
         .filter(|t| {
             t.get("name")
                 .and_then(|n| n.as_str())
-                .map(|n| should_expose_tool(n, &caps))
-                .unwrap_or(false)
+                .is_some_and(|n| should_expose_tool(n, &caps))
         })
         .collect()
 }
 
 // ─── Tool list ───────────────────────────────────────────────────────────────
 
+#[must_use] 
 pub fn tool_list() -> Vec<Value> {
     vec![
         // Account management
@@ -1514,15 +1519,15 @@ async fn handle_login(args: &Value, pool: &mut BackendPool) -> Value {
     };
 
     let credentials = if backend == "poly" {
-        let is_signup = args.get("is_signup").and_then(|v| v.as_bool()).unwrap_or(false);
+        let is_signup = args.get("is_signup").and_then(serde_json::Value::as_bool).unwrap_or(false);
         let key: [u8; 32] = rand::random();
         AuthCredentials::PolyServer {
             server_url: url.to_string(),
             private_key_bytes: key.to_vec(),
-            username: str_arg(args, "username").map(|s| s.to_string()),
+            username: str_arg(args, "username").map(std::string::ToString::to_string),
             email: None,
-            display_name: str_arg(args, "display_name").map(|s| s.to_string()),
-            selected_user_id: str_arg(args, "user_id").map(|s| s.to_string()),
+            display_name: str_arg(args, "display_name").map(std::string::ToString::to_string),
+            selected_user_id: str_arg(args, "user_id").map(std::string::ToString::to_string),
             is_signup,
         }
     } else {
@@ -1556,7 +1561,7 @@ fn handle_logout(args: &Value, pool: &mut BackendPool) -> Value {
         Some(b) => b,
         None => return err_result(format!("unknown backend: {backend_str}")),
     };
-    match pool.remove(bt, account_id) {
+    match pool.remove(&bt, account_id) {
         Some(_) => ok_result(format!("Disconnected {backend_str}:{account_id}")),
         None => err_result(format!("No active session for {backend_str}:{account_id}")),
     }
@@ -1570,10 +1575,10 @@ fn find_backend<'a>(args: &Value, pool: &'a BackendPool) -> Result<&'a crate::st
         .ok_or_else(|| err_result(format!("unknown backend: {backend_str}")))?;
 
     if let Some(account_id) = str_arg(args, "account_id") {
-        pool.get(bt, account_id)
+        pool.get(&bt, account_id)
             .ok_or_else(|| err_result(format!("no session for {backend_str}:{account_id}")))
     } else {
-        pool.find_by_type(bt)
+        pool.find_by_type(&bt)
             .ok_or_else(|| err_result(format!("no active {backend_str} session. Call 'login' first.")))
     }
 }
@@ -1613,7 +1618,7 @@ async fn handle_get_messages(args: &Value, pool: &BackendPool) -> Value {
         Some(c) => c,
         None => return err_result("missing 'channel_id'"),
     };
-    let limit = u64_arg(args, "limit").unwrap_or(50) as u32;
+    let limit = u32::try_from(u64_arg(args, "limit").unwrap_or(50)).unwrap_or(u32::MAX);
     match entry
         .backend
         .get_messages(
@@ -1779,6 +1784,8 @@ fn handle_list_plugin_tools(args: &Value) -> Value {
 // ─── List compiled-in plugins ────────────────────────────────────────────────
 
 /// Snapshot one plugin's identity + declared manifest.
+// poly-lint: manifest fields are moved into json! by value.
+#[allow(clippy::needless_pass_by_value)]
 fn plugin_entry(id: &str, name: &str, manifest: PluginManifest) -> Value {
     json!({
         "id": id,
@@ -1883,7 +1890,7 @@ async fn handle_test_signin(args: &Value, pool: &mut BackendPool) -> Value {
                 .or_else(|| body.get("jwt"))
                 .or_else(|| body.get("access_token"))
                 .and_then(|t| t.as_str())
-                .map(|s| s.to_string());
+                .map(std::string::ToString::to_string);
             match token_val {
                 Some(t) => t,
                 None => return err_result("test server did not return a token or jwt"),
@@ -2244,7 +2251,7 @@ fn handle_recall_facts(args: &Value, mem: &MemoryDb) -> Value {
 }
 
 fn handle_forget_fact(args: &Value, mem: &MemoryDb) -> Value {
-    let fact_id = match args.get("fact_id").and_then(|v| v.as_i64()) {
+    let fact_id = match args.get("fact_id").and_then(serde_json::Value::as_i64) {
         Some(id) => id,
         None => return err_result("missing or invalid 'fact_id' (must be integer)"),
     };
@@ -2283,7 +2290,7 @@ fn handle_get_chat_notes(args: &Value, mem: &MemoryDb) -> Value {
 }
 
 fn handle_forget_chat_note(args: &Value, mem: &MemoryDb) -> Value {
-    let note_id = match args.get("note_id").and_then(|v| v.as_i64()) {
+    let note_id = match args.get("note_id").and_then(serde_json::Value::as_i64) {
         Some(id) => id,
         None => return err_result("missing or invalid 'note_id' (must be integer)"),
     };
@@ -2322,7 +2329,7 @@ fn handle_get_chat_summary(args: &Value, mem: &MemoryDb) -> Value {
 async fn handle_get_reply_context(args: &Value, pool: &BackendPool, mem: &MemoryDb) -> Value {
     let account_id = match str_arg(args, "account_id") { Some(v) => v, None => return err_result("missing 'account_id'") };
     let chat_id    = match str_arg(args, "chat_id")    { Some(v) => v, None => return err_result("missing 'chat_id'") };
-    let message_limit = args.get("message_limit").and_then(|v| v.as_u64()).unwrap_or(20) as u32;
+    let message_limit = u32::try_from(args.get("message_limit").and_then(serde_json::Value::as_u64).unwrap_or(20)).unwrap_or(u32::MAX);
     let contact_id = str_arg(args, "contact_id");
 
     // Find the backend for this account.
@@ -2410,6 +2417,8 @@ async fn handle_get_reply_context(args: &Value, pool: &BackendPool, mem: &Memory
 // ─── Phase B — Draft queue handlers ──────────────────────────────────────────
 
 /// Helper: compute ISO-8601 UTC timestamp for `now + secs`.
+// poly-lint: textbook Gregorian-calendar arithmetic on u64 timestamp.
+#[allow(clippy::arithmetic_side_effects, clippy::integer_division)]
 fn future_iso8601(secs: u64) -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
     let total = SystemTime::now()
@@ -2452,18 +2461,17 @@ async fn handle_draft_create(args: &Value, pool: &BackendPool, mem: &MemoryDb) -
     // We check a synthetic pool-level setting. Since pool has no KV store itself,
     // the auto-send feature is gated on the caller explicitly passing auto_send_in_secs
     // AND the backend being writable (as a safety proxy).
-    let auto_send_in_secs = args.get("auto_send_in_secs").and_then(|v| v.as_u64());
+    let auto_send_in_secs = args.get("auto_send_in_secs").and_then(serde_json::Value::as_u64);
 
     // Only honour auto_send_in_secs when the backend is writable (sanity gate).
     let auto_send_at: Option<String> = if let Some(secs) = auto_send_in_secs {
         let is_writable = pool.find_by_account(account_id)
-            .map(|e| {
+            .is_some_and(|e| {
                 let caps = poly_client::capabilities_for_slug(
                     &format!("{:?}", e.session.backend)
                 );
                 caps.composer_writable()
-            })
-            .unwrap_or(false);
+            });
         if is_writable {
             Some(future_iso8601(secs))
         } else {
@@ -2491,7 +2499,7 @@ fn handle_draft_list(args: &Value, mem: &MemoryDb) -> Value {
 }
 
 async fn handle_draft_approve(args: &Value, pool: &BackendPool, mem: &MemoryDb) -> Value {
-    let draft_id = match args.get("draft_id").and_then(|v| v.as_i64()) {
+    let draft_id = match args.get("draft_id").and_then(serde_json::Value::as_i64) {
         Some(id) => id,
         None     => return err_result("missing 'draft_id'"),
     };
@@ -2527,14 +2535,14 @@ async fn handle_draft_approve(args: &Value, pool: &BackendPool, mem: &MemoryDb) 
             ok_result(format!("draft {draft_id} sent and status updated to sent"))
         }
         Err(e) => {
-            let _ = mem.draft_set_status(draft_id, "expired");
+            drop(mem.draft_set_status(draft_id, "expired"));
             err_result(format!("send_message failed: {e}; draft marked expired"))
         }
     }
 }
 
 fn handle_draft_edit(args: &Value, mem: &MemoryDb) -> Value {
-    let draft_id = match args.get("draft_id").and_then(|v| v.as_i64()) {
+    let draft_id = match args.get("draft_id").and_then(serde_json::Value::as_i64) {
         Some(id) => id,
         None     => return err_result("missing 'draft_id'"),
     };
@@ -2554,7 +2562,7 @@ fn handle_draft_edit(args: &Value, mem: &MemoryDb) -> Value {
 }
 
 fn handle_draft_discard(args: &Value, mem: &MemoryDb) -> Value {
-    let draft_id = match args.get("draft_id").and_then(|v| v.as_i64()) {
+    let draft_id = match args.get("draft_id").and_then(serde_json::Value::as_i64) {
         Some(id) => id,
         None     => return err_result("missing 'draft_id'"),
     };
@@ -2566,7 +2574,7 @@ fn handle_draft_discard(args: &Value, mem: &MemoryDb) -> Value {
 }
 
 fn handle_draft_cancel_autosend(args: &Value, mem: &MemoryDb) -> Value {
-    let draft_id = match args.get("draft_id").and_then(|v| v.as_i64()) {
+    let draft_id = match args.get("draft_id").and_then(serde_json::Value::as_i64) {
         Some(id) => id,
         None     => return err_result("missing 'draft_id'"),
     };
@@ -2584,7 +2592,7 @@ fn handle_set_chat_style(args: &Value, mem: &MemoryDb) -> Value {
     let chat_id    = match str_arg(args, "chat_id")    { Some(v) => v, None => return err_result("missing 'chat_id'") };
     let tone          = str_arg(args, "tone");
     let formality     = str_arg(args, "formality");
-    let emoji_allowed = args.get("emoji_allowed").and_then(|v| v.as_bool());
+    let emoji_allowed = args.get("emoji_allowed").and_then(serde_json::Value::as_bool);
     let signature     = str_arg(args, "signature");
     let extra_notes   = str_arg(args, "extra_notes");
     match mem.set_chat_style(account_id, chat_id, tone, formality, emoji_allowed, signature, extra_notes) {
@@ -2658,13 +2666,12 @@ const DEFAULT_POLL_LIMIT: usize = 100;
 async fn handle_poll_events(args: &Value, pool: &BackendPool) -> Value {
     let since_ms = args
         .get("since_ms")
-        .and_then(|v| v.as_i64())
+        .and_then(serde_json::Value::as_i64)
         .unwrap_or(0);
     let limit = args
         .get("limit")
-        .and_then(|v| v.as_u64())
-        .map(|n| n as usize)
-        .unwrap_or(DEFAULT_POLL_LIMIT)
+        .and_then(serde_json::Value::as_u64)
+        .map_or(DEFAULT_POLL_LIMIT, |n| usize::try_from(n).unwrap_or(usize::MAX))
         .min(MAX_POLL_LIMIT);
 
     let store = pool.events.lock().await;
@@ -2719,11 +2726,13 @@ async fn handle_start_typing_simulation(args: &Value, pool: &BackendPool) -> Val
     }
     let backend_arc = entry.backend.clone();
 
+    // poly-lint: probabilities are f64→f32 by API contract; truncation is acceptable in [0,1] range.
+    #[allow(clippy::cast_possible_truncation, clippy::as_conversions)]
     let params = crate::typing_simulation::SimParams::clamped(
-        args.get("total_duration_ms").and_then(Value::as_u64).unwrap_or(8_000) as u32,
-        args.get("avg_wpm").and_then(Value::as_u64).unwrap_or(60) as u16,
-        args.get("false_start_probability").and_then(Value::as_f64).unwrap_or(0.05) as f32,
-        args.get("pause_probability").and_then(Value::as_f64).unwrap_or(0.10) as f32,
+        u32::try_from(args.get("total_duration_ms").and_then(Value::as_u64).unwrap_or(8_000)).unwrap_or(u32::MAX),
+        u16::try_from(args.get("avg_wpm").and_then(Value::as_u64).unwrap_or(60)).unwrap_or(u16::MAX),
+        args.get("false_start_probability").and_then(Value::as_f64).unwrap_or(0.05_f64) as f32,
+        args.get("pause_probability").and_then(Value::as_f64).unwrap_or(0.10_f64) as f32,
         args.get("stop_on_other_typing").and_then(Value::as_bool).unwrap_or(false),
     );
 
@@ -2732,8 +2741,8 @@ async fn handle_start_typing_simulation(args: &Value, pool: &BackendPool) -> Val
     // `next_tick_decision` directly, not this path.
     let seed = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_nanos() as u64)
-        .unwrap_or(0xCAFEu64);
+        .map(|d| u64::try_from(d.as_nanos()).unwrap_or(u64::MAX))
+        .unwrap_or(0xCAFE_u64);
 
     let stop_on_other_typing = params.stop_on_other_typing;
     let (abort_tx, abort_rx) = tokio::sync::oneshot::channel();
@@ -2814,10 +2823,10 @@ async fn handle_get_unread_summary(args: &Value, pool: &BackendPool) -> Value {
         Some(v) => v,
         None => return err_result("missing 'account_id'"),
     };
-    let message_limit = args
+    let message_limit = u32::try_from(args
         .get("message_limit")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(10) as u32;
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or(10)).unwrap_or(u32::MAX);
 
     let entry = match pool.find_by_account(account_id) {
         Some(e) => e,
@@ -2909,7 +2918,7 @@ fn audit(
     result: &str,
     error_msg: Option<&str>,
 ) {
-    let _ = mem.record_persona_audit(slug, "claude-desktop", action, None, None, payload, result, error_msg);
+    drop(mem.record_persona_audit(slug, "claude-desktop", action, None, None, payload, result, error_msg));
 }
 
 fn handle_meta_persona_list(mem: &MemoryDb) -> Value {
@@ -2938,9 +2947,9 @@ fn handle_meta_persona_create(args: &Value, mem: &MemoryDb) -> Value {
 
     let avatar_emoji  = str_arg(args, "avatar_emoji").unwrap_or("🤖");
     let style_notes   = str_arg(args, "style_notes");
-    let heartbeat     = args.get("heartbeat_interval_secs").and_then(|v| v.as_i64());
+    let heartbeat     = args.get("heartbeat_interval_secs").and_then(serde_json::Value::as_i64);
     let proactivity   = str_arg(args, "proactivity").unwrap_or("drafts-only");
-    let rate_limit    = args.get("rate_limit_per_hour").and_then(|v| v.as_i64()).unwrap_or(4);
+    let rate_limit    = args.get("rate_limit_per_hour").and_then(serde_json::Value::as_i64).unwrap_or(4);
 
     match mem.create_persona(slug, name, avatar_emoji, system_prompt, style_notes, heartbeat, proactivity, rate_limit) {
         Ok(s) => {
@@ -2976,8 +2985,8 @@ fn handle_meta_persona_update(args: &Value, mem: &MemoryDb) -> Value {
     };
 
     let proactivity   = str_arg(args, "proactivity");
-    let rate_limit    = args.get("rate_limit_per_hour").and_then(|v| v.as_i64());
-    let enabled       = args.get("enabled").and_then(|v| v.as_bool());
+    let rate_limit    = args.get("rate_limit_per_hour").and_then(serde_json::Value::as_i64);
+    let enabled       = args.get("enabled").and_then(serde_json::Value::as_bool);
 
     match mem.update_persona(slug, name, avatar_emoji, system_prompt, style_notes, heartbeat, proactivity, rate_limit, enabled, None) {
         Ok(true)  => {
@@ -2992,8 +3001,8 @@ fn handle_meta_persona_update(args: &Value, mem: &MemoryDb) -> Value {
 fn handle_meta_persona_delete(args: &Value, mem: &MemoryDb) -> Value {
     let slug = match str_arg(args, "slug") { Some(v) => v, None => return err_result("missing 'slug'") };
     // Write the audit row BEFORE deleting (cascade will wipe it otherwise).
-    let _ = mem.record_persona_audit(slug, "claude-desktop", "invoke", None, None,
-        Some("{\"action\":\"delete\"}"), "ok", None);
+    drop(mem.record_persona_audit(slug, "claude-desktop", "invoke", None, None,
+        Some("{\"action\":\"delete\"}"), "ok", None));
     match mem.delete_persona(slug) {
         Ok(()) => ok_result(format!("persona '{slug}' deleted")),
         Err(e) => err_result(format!("meta_persona_delete failed: {e}")),
@@ -3013,11 +3022,10 @@ fn handle_meta_persona_set_sources(args: &Value, mem: &MemoryDb) -> Value {
         Err(e) => return err_result(format!("meta_persona_set_sources list failed: {e}")),
     };
     for src in &existing {
-        if let Some(id) = src.get("id").and_then(|v| v.as_i64()) {
-            if let Err(e) = mem.remove_persona_source(id) {
+        if let Some(id) = src.get("id").and_then(serde_json::Value::as_i64)
+            && let Err(e) = mem.remove_persona_source(id) {
                 return err_result(format!("meta_persona_set_sources remove failed: {e}"));
             }
-        }
     }
 
     let mut added = 0usize;
@@ -3031,12 +3039,12 @@ fn handle_meta_persona_set_sources(args: &Value, mem: &MemoryDb) -> Value {
             None => return err_result("source missing 'selector_kind'"),
         };
         let selector_value = src.get("selector_value").and_then(|v| v.as_str());
-        let include        = src.get("include").and_then(|v| v.as_bool()).unwrap_or(true);
+        let include        = src.get("include").and_then(serde_json::Value::as_bool).unwrap_or(true);
 
         if let Err(e) = mem.add_persona_source(slug, account_id, selector_kind, selector_value, include) {
             return err_result(format!("meta_persona_set_sources insert failed: {e}"));
         }
-        added += 1;
+        added = added.wrapping_add(1);
     }
 
     audit(mem, slug, "invoke", Some(&format!("{{\"action\":\"set_sources\",\"count\":{added}}}")), "ok", None);
@@ -3070,7 +3078,7 @@ fn handle_meta_persona_set_tool_whitelist(args: &Value, mem: &MemoryDb) -> Value
         if let Err(e) = mem.add_persona_tool(slug, name) {
             return err_result(format!("meta_persona_set_tool_whitelist insert failed: {e}"));
         }
-        added += 1;
+        added = added.wrapping_add(1);
     }
 
     audit(mem, slug, "invoke", Some(&format!("{{\"action\":\"set_tool_whitelist\",\"count\":{added}}}")), "ok", None);
@@ -3103,41 +3111,39 @@ async fn handle_meta_persona_invoke(args: &Value, pool: &BackendPool, mem: &Memo
         Some(v) => v,
         None    => return err_result("missing 'slug'"),
     };
-    let user_prompt = str_arg(args, "user_prompt").map(|s| s.to_string());
+    let user_prompt = str_arg(args, "user_prompt").map(std::string::ToString::to_string);
 
     // Parse the dry_run flag (default: false).
     let dry_run = args.get("dry_run")
-        .and_then(|v| v.as_bool())
+        .and_then(serde_json::Value::as_bool)
         .unwrap_or(false);
 
     // Verify the persona exists and is enabled.
     let persona = match mem.get_persona(slug) {
         Ok(Some(p)) => p,
         Ok(None)    => {
-            let _ = mem.record_persona_audit(slug, "claude-desktop", "invoke", None, None,
-                None, "error", Some("persona not found"));
+            drop(mem.record_persona_audit(slug, "claude-desktop", "invoke", None, None,
+                None, "error", Some("persona not found")));
             return err_result(format!("persona '{slug}' not found"));
         }
         Err(e) => return err_result(format!("meta_persona_invoke failed: {e}")),
     };
 
-    if persona.get("enabled").and_then(|v| v.as_bool()) == Some(false) {
-        let _ = mem.record_persona_audit(slug, "claude-desktop", "invoke", None, None,
-            None, "denied", Some("persona disabled"));
+    if persona.get("enabled").and_then(serde_json::Value::as_bool) == Some(false) {
+        drop(mem.record_persona_audit(slug, "claude-desktop", "invoke", None, None,
+            None, "denied", Some("persona disabled")));
         return err_result(format!("persona '{slug}' is disabled"));
     }
 
     // Parse optional tuning parameters.
     let max_messages_per_chat = args.get("max_messages_per_chat")
-        .and_then(|v| v.as_u64())
-        .map(|v| v.clamp(1, 200) as usize)
-        .unwrap_or(30);
+        .and_then(serde_json::Value::as_u64)
+        .map_or(30, |v| usize::try_from(v.clamp(1, 200)).unwrap_or(200));
     let max_chats = args.get("max_chats")
-        .and_then(|v| v.as_u64())
-        .map(|v| v.clamp(1, 100) as usize)
-        .unwrap_or(25);
+        .and_then(serde_json::Value::as_u64)
+        .map_or(25, |v| usize::try_from(v.clamp(1, 100)).unwrap_or(100));
     let include_summaries = args.get("include_summaries")
-        .and_then(|v| v.as_bool())
+        .and_then(serde_json::Value::as_bool)
         .unwrap_or(true);
 
     let req = PersonaContextRequest {
@@ -3156,9 +3162,7 @@ async fn handle_meta_persona_invoke(args: &Value, pool: &BackendPool, mem: &Memo
             let payload_str = format!(
                 "{{\"action\":\"invoke\",\"user_prompt\":{},\"dry_run\":{dry_run}}}",
                 user_prompt
-                    .as_deref()
-                    .map(|p| format!("{p:?}"))
-                    .unwrap_or_else(|| "null".to_string()),
+                    .as_deref().map_or_else(|| "null".to_string(), |p| format!("{p:?}")),
             );
             // The invoke audit row fires unconditionally — even in dry_run mode.
             // This is intentional: the invoke row records that the user asked the
@@ -3170,9 +3174,9 @@ async fn handle_meta_persona_invoke(args: &Value, pool: &BackendPool, mem: &Memo
         }
         Err(e) => {
             let msg = e.to_string();
-            let _ = mem.record_persona_audit(
+            drop(mem.record_persona_audit(
                 slug, "claude-desktop", "invoke", None, None, None, "error", Some(&msg),
-            );
+            ));
             err_result(format!("meta_persona_invoke build failed: {msg}"))
         }
     }
@@ -3207,7 +3211,7 @@ fn handle_meta_persona_set_heartbeat(args: &Value, mem: &MemoryDb) -> Value {
 
 fn handle_meta_persona_get_memory(args: &Value, mem: &MemoryDb) -> Value {
     let slug        = match str_arg(args, "slug") { Some(v) => v, None => return err_result("missing 'slug'") };
-    let pinned_only = args.get("pinned_only").and_then(|v| v.as_bool()).unwrap_or(false);
+    let pinned_only = args.get("pinned_only").and_then(serde_json::Value::as_bool).unwrap_or(false);
 
     match mem.list_persona_facts(slug, pinned_only) {
         Ok(facts) => {
@@ -3223,7 +3227,7 @@ fn handle_meta_persona_set_memory(args: &Value, mem: &MemoryDb) -> Value {
     let fact_text = match str_arg(args, "fact_text") { Some(v) => v, None => return err_result("missing 'fact_text'") };
 
     let category = str_arg(args, "category");
-    let pinned   = args.get("pinned").and_then(|v| v.as_bool()).unwrap_or(false);
+    let pinned   = args.get("pinned").and_then(serde_json::Value::as_bool).unwrap_or(false);
 
     match mem.add_persona_fact(slug, category, fact_text, pinned) {
         Ok(id) => {
@@ -3236,7 +3240,7 @@ fn handle_meta_persona_set_memory(args: &Value, mem: &MemoryDb) -> Value {
 
 fn handle_meta_persona_forget_memory(args: &Value, mem: &MemoryDb) -> Value {
     let slug       = match str_arg(args, "slug") { Some(v) => v, None => return err_result("missing 'slug'") };
-    let forget_all = args.get("forget_all").and_then(|v| v.as_bool()).unwrap_or(false);
+    let forget_all = args.get("forget_all").and_then(serde_json::Value::as_bool).unwrap_or(false);
 
     if forget_all {
         match mem.forget_all_persona_facts(slug) {
@@ -3247,7 +3251,7 @@ fn handle_meta_persona_forget_memory(args: &Value, mem: &MemoryDb) -> Value {
             Err(e) => err_result(format!("meta_persona_forget_memory failed: {e}")),
         }
     } else {
-        let fact_id = match args.get("fact_id").and_then(|v| v.as_i64()) {
+        let fact_id = match args.get("fact_id").and_then(serde_json::Value::as_i64) {
             Some(id) => id,
             None => return err_result("must provide 'fact_id' or set 'forget_all': true"),
         };
@@ -3264,7 +3268,7 @@ fn handle_meta_persona_forget_memory(args: &Value, mem: &MemoryDb) -> Value {
 
 fn handle_meta_persona_recent_actions(args: &Value, mem: &MemoryDb) -> Value {
     let slug  = match str_arg(args, "slug") { Some(v) => v, None => return err_result("missing 'slug'") };
-    let limit = args.get("limit").and_then(|v| v.as_i64()).unwrap_or(50).max(1).min(500);
+    let limit = args.get("limit").and_then(serde_json::Value::as_i64).unwrap_or(50).clamp(1, 500);
 
     match mem.list_persona_audit(slug, limit) {
         Ok(rows) => ok_result(serde_json::to_string_pretty(&rows).unwrap_or_default()),
@@ -3276,7 +3280,7 @@ fn handle_meta_persona_set_outbound_allow(args: &Value, mem: &MemoryDb) -> Value
     let slug       = match str_arg(args, "slug")       { Some(v) => v, None => return err_result("missing 'slug'") };
     let account_id = match str_arg(args, "account_id") { Some(v) => v, None => return err_result("missing 'account_id'") };
     let chat_id    = match str_arg(args, "chat_id")    { Some(v) => v, None => return err_result("missing 'chat_id'") };
-    let remove     = args.get("remove").and_then(|v| v.as_bool()).unwrap_or(false);
+    let remove     = args.get("remove").and_then(serde_json::Value::as_bool).unwrap_or(false);
 
     if remove {
         match mem.remove_persona_outbound_allow(slug, account_id, chat_id) {
@@ -3288,7 +3292,7 @@ fn handle_meta_persona_set_outbound_allow(args: &Value, mem: &MemoryDb) -> Value
         }
     } else {
         let max_per_day = args.get("max_messages_per_day")
-            .and_then(|v| v.as_i64()).unwrap_or(1).max(1).min(100);
+            .and_then(serde_json::Value::as_i64).unwrap_or(1).clamp(1, 100);
         match mem.set_persona_outbound_allow(slug, account_id, chat_id, max_per_day) {
             Ok(()) => {
                 let payload = format!(
@@ -3317,17 +3321,17 @@ fn handle_meta_persona_audit_query(args: &Value, mem: &MemoryDb) -> Value {
     let target_account = str_arg(args, "target_account");
     let target_chat    = str_arg(args, "target_chat");
     let result         = str_arg(args, "result");
-    let limit          = args.get("limit").and_then(|v| v.as_i64()).unwrap_or(100).max(1).min(500);
+    let limit          = args.get("limit").and_then(serde_json::Value::as_i64).unwrap_or(100).clamp(1, 500);
 
     match mem.query_persona_audit(
-        slug.as_deref(),
-        action.as_deref(),
-        actor.as_deref(),
-        since.as_deref(),
-        until.as_deref(),
-        target_account.as_deref(),
-        target_chat.as_deref(),
-        result.as_deref(),
+        slug,
+        action,
+        actor,
+        since,
+        until,
+        target_account,
+        target_chat,
+        result,
         limit,
     ) {
         Ok(rows) => ok_result(serde_json::to_string_pretty(&rows).unwrap_or_default()),
@@ -3385,7 +3389,7 @@ fn audit_client_settings(
     status: &str,
     error_msg: Option<&str>,
 ) {
-    let _ = mem.record_client_settings_audit(backend_id, action, payload, status, error_msg);
+    drop(mem.record_client_settings_audit(backend_id, action, payload, status, error_msg));
 }
 
 async fn handle_client_settings_list(args: &Value, pool: &BackendPool, _mem: &MemoryDb) -> Value {
@@ -3514,7 +3518,7 @@ async fn handle_client_settings_list_mechanisms(args: &Value, pool: &BackendPool
 async fn handle_client_settings_set_mechanism(args: &Value, pool: &BackendPool, mem: &MemoryDb) -> Value {
     let bid   = match str_arg(args, "backend_id")   { Some(v) => v, None => return err_result("missing 'backend_id'") };
     let mech  = match str_arg(args, "mechanism_id")  { Some(v) => v, None => return err_result("missing 'mechanism_id'") };
-    let enabled = match args.get("enabled").and_then(|v| v.as_bool()) {
+    let enabled = match args.get("enabled").and_then(serde_json::Value::as_bool) {
         Some(b) => b,
         None => return err_result("missing or invalid 'enabled' (must be boolean)"),
     };
@@ -3808,6 +3812,7 @@ mod tests {
         crate::memory::MemoryDb::open(":memory:").expect("in-memory db")
     }
 
+    #[allow(clippy::needless_pass_by_value)] // args constructed inline by test callers
     fn dispatch_sync(tool: &str, args: serde_json::Value, mem: &crate::memory::MemoryDb) -> Value {
         // Spin up a minimal Tokio runtime so we can call the async dispatch.
         // The persona handlers are all sync but the top-level dispatch is async.
@@ -4002,11 +4007,11 @@ mod tests {
         // Set heartbeat interval
         let r = dispatch_sync("meta_persona_set_heartbeat", json!({
             "slug": "hb-test",
-            "interval_secs": 3600
+            "interval_secs": 3600_i64
         }), &mem);
         assert_eq!(r["isError"], false);
         let p = mem.get_persona("hb-test").unwrap().unwrap();
-        assert_eq!(p["heartbeat_interval_secs"], 3600);
+        assert_eq!(p["heartbeat_interval_secs"], 3600_i64);
 
         // Clear heartbeat
         let r = dispatch_sync("meta_persona_set_heartbeat", json!({
@@ -4032,12 +4037,12 @@ mod tests {
             "slug": "ob-test",
             "account_id": "acc1",
             "chat_id": "ch1",
-            "max_messages_per_day": 2
+            "max_messages_per_day": 2_i64
         }), &mem);
         assert_eq!(r["isError"], false);
         let entries = mem.list_persona_outbound_allows("ob-test").unwrap();
         assert_eq!(entries.len(), 1);
-        assert_eq!(entries[0]["max_messages_per_day"], 2);
+        assert_eq!(entries[0]["max_messages_per_day"], 2_i64);
 
         // Remove it
         let r = dispatch_sync("meta_persona_set_outbound_allow", json!({
@@ -4066,7 +4071,7 @@ mod tests {
 
         let r = dispatch_sync("meta_persona_recent_actions", json!({
             "slug": "audit-test",
-            "limit": 10
+            "limit": 10_i32
         }), &mem);
         assert_eq!(r["isError"], false);
         let text = r["content"][0]["text"].as_str().unwrap();

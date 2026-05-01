@@ -61,7 +61,7 @@ async fn call(pool: &mut BackendPool, mem: &MemoryDb, tool: &str, args: Value) -
 
 fn assert_ok(result: &Value) {
     assert!(
-        !result.get("isError").and_then(|e| e.as_bool()).unwrap_or(false),
+        !result.get("isError").and_then(serde_json::Value::as_bool).unwrap_or(false),
         "tool returned error: {}",
         result
     );
@@ -114,7 +114,7 @@ async fn persona_invoke_e2e_discord_bundle_v1() {
     let create_res = call(&mut pool, &mem, "meta_persona_invoke", json!({ "slug": "not-yet" })).await;
     // Persona doesn't exist yet — expect an error.
     assert!(
-        create_res.get("isError").and_then(|e| e.as_bool()).unwrap_or(false),
+        create_res.get("isError").and_then(serde_json::Value::as_bool).unwrap_or(false),
         "expected error for missing persona"
     );
 
@@ -150,7 +150,7 @@ async fn persona_invoke_e2e_discord_bundle_v1() {
 
     let text = text_of(&invoke);
     let json_start = text.find('{').unwrap_or(0);
-    let bundle: Value = serde_json::from_str(&text[json_start..])
+    let bundle: Value = serde_json::from_str(text.get(json_start..).unwrap_or(""))
         .unwrap_or_else(|e| panic!("bundle not valid JSON: {e}\nraw: {text}"));
 
     // bundle_version must be "v1".
@@ -284,7 +284,7 @@ async fn persona_invoke_dry_run_skips_memory_audit() {
     // ── 6. Parse the bundle and verify it is well-formed v1.
     let text = text_of(&invoke);
     let json_start = text.find('{').unwrap_or(0);
-    let bundle: Value = serde_json::from_str(&text[json_start..])
+    let bundle: Value = serde_json::from_str(text.get(json_start..).unwrap_or(""))
         .unwrap_or_else(|e| panic!("bundle not valid JSON: {e}\nraw: {text}"));
 
     assert_eq!(
@@ -323,7 +323,7 @@ async fn persona_invoke_dry_run_skips_memory_audit() {
         new_rows, 1,
         "dry_run=true should add exactly 1 audit row (the invoke row), got {new_rows}. \
          New rows: {:?}",
-        &all_rows_after[before_rows..]
+        all_rows_after.get(before_rows..).unwrap_or(&[])
     );
 
     // ── 8. No memory_read rows exist for this persona at all (we never ran

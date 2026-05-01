@@ -210,14 +210,16 @@ impl MemoryDb {
         // ── Phase G — quiet_hours_disabled column (additive migration) ─────────
         // ALTER TABLE ignores the error if the column already exists so repeated
         // open() calls are safe.
-        let _ = db.execute(
+        drop(db.execute(
             "ALTER TABLE personas ADD COLUMN quiet_hours_disabled INTEGER NOT NULL DEFAULT 0"
-        );
+        ));
 
         Ok(())
     }
 
     fn lock(&self) -> Result<std::sync::MutexGuard<'_, ConnectionThreadSafe>, MemoryError> {
+        // poly-lint: PoisonError carries no useful payload past "mutex poisoned".
+        #[allow(clippy::map_err_ignore)]
         self.db
             .lock()
             .map_err(|_| MemoryError::Sqlite("mutex poisoned".to_string()))
@@ -584,6 +586,7 @@ impl MemoryDb {
     /// Fields that are `None` are left at their current DB value (not
     /// overwritten with NULL) unless there is no existing row, in which case
     /// `None` columns are stored as SQL NULL.
+    #[allow(clippy::too_many_arguments)]
     pub fn set_chat_style(
         &self,
         account_id: &str,
@@ -618,14 +621,14 @@ impl MemoryDb {
             };
         drop(sel);
 
-        let final_tone      = tone.map(|s| s.to_string()).or(cur_tone);
-        let final_formality = formality.map(|s| s.to_string()).or(cur_formality);
+        let final_tone      = tone.map(std::string::ToString::to_string).or(cur_tone);
+        let final_formality = formality.map(std::string::ToString::to_string).or(cur_formality);
         let final_emoji     = emoji_allowed
             .map(|b| if b { 1_i64 } else { 0_i64 })
             .or(cur_emoji)
             .unwrap_or(1_i64);
-        let final_sig       = signature.map(|s| s.to_string()).or(cur_sig);
-        let final_notes     = extra_notes.map(|s| s.to_string()).or(cur_notes);
+        let final_sig       = signature.map(std::string::ToString::to_string).or(cur_sig);
+        let final_notes     = extra_notes.map(std::string::ToString::to_string).or(cur_notes);
 
         let mut stmt = db.prepare(
             "INSERT INTO chat_style
@@ -744,6 +747,7 @@ impl MemoryDb {
     // ─── personas ─────────────────────────────────────────────────────────────
 
     /// Insert a new persona row.  Returns the slug on success (same as input).
+    #[allow(clippy::too_many_arguments)]
     pub fn create_persona(
         &self,
         slug: &str,
@@ -823,6 +827,7 @@ impl MemoryDb {
     /// `slug` is the lookup key and cannot be changed.
     ///
     /// Returns `true` if the row was found and updated, `false` if slug not found.
+    #[allow(clippy::too_many_arguments)]
     pub fn update_persona(
         &self,
         slug: &str,
@@ -854,19 +859,22 @@ impl MemoryDb {
         let cur_emoji:   String         = sel.read::<String, _>(1)?;
         let cur_prompt:  String         = sel.read::<String, _>(2)?;
         let cur_notes:   Option<String> = match sel.read::<sqlite::Value, _>(3)? {
-            sqlite::Value::String(s) => Some(s), _ => None };
+            sqlite::Value::String(s) => Some(s),
+            sqlite::Value::Binary(_) | sqlite::Value::Float(_) | sqlite::Value::Integer(_) | sqlite::Value::Null => None };
         let cur_hb:      Option<i64>    = match sel.read::<sqlite::Value, _>(4)? {
-            sqlite::Value::Integer(v) => Some(v), _ => None };
+            sqlite::Value::Integer(v) => Some(v),
+            sqlite::Value::Binary(_) | sqlite::Value::Float(_) | sqlite::Value::String(_) | sqlite::Value::Null => None };
         let cur_pro:     String         = sel.read::<String, _>(5)?;
         let cur_rl:      i64            = sel.read::<i64, _>(6)?;
         let cur_enabled: i64            = sel.read::<i64, _>(7)?;
         let cur_lr:      Option<String> = match sel.read::<sqlite::Value, _>(8)? {
-            sqlite::Value::String(s) => Some(s), _ => None };
+            sqlite::Value::String(s) => Some(s),
+            sqlite::Value::Binary(_) | sqlite::Value::Float(_) | sqlite::Value::Integer(_) | sqlite::Value::Null => None };
         drop(sel);
 
-        let fin_name   = name.map(|s| s.to_string()).unwrap_or(cur_name);
-        let fin_emoji  = avatar_emoji.map(|s| s.to_string()).unwrap_or(cur_emoji);
-        let fin_prompt = system_prompt.map(|s| s.to_string()).unwrap_or(cur_prompt);
+        let fin_name   = name.map_or(cur_name, std::string::ToString::to_string);
+        let fin_emoji  = avatar_emoji.map_or(cur_emoji, std::string::ToString::to_string);
+        let fin_prompt = system_prompt.map_or(cur_prompt, std::string::ToString::to_string);
         let fin_notes: Option<String> = match style_notes {
             Some(Some(v)) => Some(v.to_string()),
             Some(None)    => None,
@@ -877,9 +885,9 @@ impl MemoryDb {
             Some(None)    => None,
             None          => cur_hb,
         };
-        let fin_pro = proactivity.map(|s| s.to_string()).unwrap_or(cur_pro);
+        let fin_pro = proactivity.map_or(cur_pro, std::string::ToString::to_string);
         let fin_rl  = rate_limit_per_hour.unwrap_or(cur_rl);
-        let fin_en  = enabled.map(|b| if b { 1_i64 } else { 0_i64 }).unwrap_or(cur_enabled);
+        let fin_en  = enabled.map_or(cur_enabled, |b| if b { 1_i64 } else { 0_i64 });
         let fin_lr: Option<String> = match last_run_at {
             Some(Some(v)) => Some(v.to_string()),
             Some(None)    => None,
@@ -1007,7 +1015,8 @@ impl MemoryDb {
         let mut out = Vec::new();
         while stmt.next()? == State::Row {
             let sv: Option<String> = match stmt.read::<sqlite::Value, _>(4)? {
-                sqlite::Value::String(s) => Some(s), _ => None };
+                sqlite::Value::String(s) => Some(s),
+            sqlite::Value::Binary(_) | sqlite::Value::Float(_) | sqlite::Value::Integer(_) | sqlite::Value::Null => None };
             out.push(serde_json::json!({
                 "id":             stmt.read::<i64, _>(0)?,
                 "persona_slug":   stmt.read::<String, _>(1)?,
@@ -1217,6 +1226,7 @@ impl MemoryDb {
     // ─── persona_audit ────────────────────────────────────────────────────────
 
     /// Append an audit entry.
+    #[allow(clippy::too_many_arguments)]
     pub fn record_persona_audit(
         &self,
         persona_slug: &str,
@@ -1286,7 +1296,8 @@ impl MemoryDb {
     /// - `target_account` → WHERE target_account = ?
     /// - `target_chat`    → WHERE target_chat = ?
     /// - `result`         → WHERE result = ?
-    #[allow(clippy::too_many_arguments)]
+    // poly-lint: query builder uses bounded Vec-index arithmetic for SQL positional params.
+    #[allow(clippy::too_many_arguments, clippy::arithmetic_side_effects)]
     pub fn query_persona_audit(
         &self,
         slug:           Option<&str>,
@@ -1306,10 +1317,9 @@ impl MemoryDb {
         macro_rules! push_filter {
             ($opt:expr, $col:expr) => {
                 if let Some(v) = $opt {
-                    let idx = clauses.len() + 1;
+                    let _idx = clauses.len() + 1;
                     clauses.push(concat!($col, " = ?"));
                     // We build the SQL with positional ?N markers separately.
-                    let _ = idx; // used below
                     vals.push(sqlite::Value::String(v.to_string()));
                 }
             };
@@ -1451,7 +1461,7 @@ impl MemoryDb {
         // timestamp.  "2026-04-30T14:23:00Z" → "2026-04-30T00:00:00Z"
         let today = {
             let ts = now_iso8601();
-            format!("{}T00:00:00Z", &ts[..10])
+            format!("{}T00:00:00Z", ts.get(..10).unwrap_or(""))
         };
         let db = self.lock()?;
         let mut stmt = db.prepare(
@@ -1535,7 +1545,7 @@ impl MemoryDb {
 
         let mut chk = db.prepare("SELECT changes()")?;
         if chk.next()? == State::Row {
-            Ok(chk.read::<i64, _>(0)? as u64)
+            Ok(u64::try_from(chk.read::<i64, _>(0)?).unwrap_or(0))
         } else {
             Ok(0)
         }
@@ -1627,10 +1637,12 @@ impl MemoryDb {
         let mut out = Vec::new();
         while stmt.next()? == State::Row {
             let payload: Option<String> = match stmt.read::<sqlite::Value, _>(4)? {
-                sqlite::Value::String(s) => Some(s), _ => None,
+                sqlite::Value::String(s) => Some(s),
+            sqlite::Value::Binary(_) | sqlite::Value::Float(_) | sqlite::Value::Integer(_) | sqlite::Value::Null => None,
             };
             let error: Option<String> = match stmt.read::<sqlite::Value, _>(6)? {
-                sqlite::Value::String(s) => Some(s), _ => None,
+                sqlite::Value::String(s) => Some(s),
+            sqlite::Value::Binary(_) | sqlite::Value::Float(_) | sqlite::Value::Integer(_) | sqlite::Value::Null => None,
             };
             out.push(serde_json::json!({
                 "id":           stmt.read::<i64, _>(0)?,
@@ -1654,11 +1666,13 @@ pub struct ChatStyle;
 
 impl ChatStyle {
     /// Predefined tone labels (free-form values are also accepted).
+    #[must_use] 
     pub fn tone_options() -> &'static [&'static str] {
         &["casual", "professional", "snarky", "warm", "direct"]
     }
 
     /// Predefined formality labels.
+    #[must_use] 
     pub fn formality_options() -> &'static [&'static str] {
         &["tu", "vous", "neutral"]
     }
@@ -1666,6 +1680,8 @@ impl ChatStyle {
 
 // ─── Private helpers ──────────────────────────────────────────────────────────
 
+// poly-lint: bounded calendar arithmetic on u64 timestamps.
+#[allow(clippy::arithmetic_side_effects, clippy::integer_division)]
 fn now_iso8601() -> String {
     // std-only, no chrono dep: use UNIX_EPOCH seconds formatted manually.
     // RFC 3339 / ISO 8601 UTC: "YYYY-MM-DDTHH:MM:SSZ"
@@ -1685,6 +1701,8 @@ fn now_iso8601() -> String {
 }
 
 /// Convert days since Unix epoch (1970-01-01) to (year, month, day).
+// poly-lint: textbook Hinnant Gregorian-calendar algorithm; operands bounded by Unix epoch range.
+#[allow(clippy::arithmetic_side_effects, clippy::integer_division)]
 fn days_to_ymd(days: u64) -> (u64, u64, u64) {
     // Algorithm from https://www.researchgate.net/publication/316558298
     let z = days + 719_468;
@@ -1762,7 +1780,7 @@ fn collect_drafts(
         // auto_send_at may be NULL — read as Option<String>.
         let auto_send_at: Option<String> = match stmt.read::<sqlite::Value, _>(6)? {
             sqlite::Value::String(s) => Some(s),
-            _ => None,
+            sqlite::Value::Binary(_) | sqlite::Value::Float(_) | sqlite::Value::Integer(_) | sqlite::Value::Null => None,
         };
         out.push(serde_json::json!({
             "id":           stmt.read::<i64, _>(0)?,
@@ -1798,11 +1816,14 @@ fn read_style_row(stmt: &mut sqlite::Statement<'_>) -> Result<serde_json::Value,
 /// 8=created_at 9=updated_at 10=last_run_at 11=enabled 12=quiet_hours_disabled
 fn read_persona_row(stmt: &mut sqlite::Statement<'_>) -> Result<serde_json::Value, MemoryError> {
     let style_notes: Option<String> = match stmt.read::<sqlite::Value, _>(4)? {
-        sqlite::Value::String(s) => Some(s), _ => None };
+        sqlite::Value::String(s) => Some(s),
+            sqlite::Value::Binary(_) | sqlite::Value::Float(_) | sqlite::Value::Integer(_) | sqlite::Value::Null => None };
     let hb: Option<i64> = match stmt.read::<sqlite::Value, _>(5)? {
-        sqlite::Value::Integer(v) => Some(v), _ => None };
+        sqlite::Value::Integer(v) => Some(v),
+            sqlite::Value::Binary(_) | sqlite::Value::Float(_) | sqlite::Value::String(_) | sqlite::Value::Null => None };
     let last_run: Option<String> = match stmt.read::<sqlite::Value, _>(10)? {
-        sqlite::Value::String(s) => Some(s), _ => None };
+        sqlite::Value::String(s) => Some(s),
+            sqlite::Value::Binary(_) | sqlite::Value::Float(_) | sqlite::Value::Integer(_) | sqlite::Value::Null => None };
     Ok(serde_json::json!({
         "slug":                    stmt.read::<String, _>(0)?,
         "name":                    stmt.read::<String, _>(1)?,
@@ -1826,7 +1847,8 @@ fn collect_persona_facts(
     let mut out = Vec::new();
     while stmt.next()? == State::Row {
         let cat: Option<String> = match stmt.read::<sqlite::Value, _>(2)? {
-            sqlite::Value::String(s) => Some(s), _ => None };
+            sqlite::Value::String(s) => Some(s),
+            sqlite::Value::Binary(_) | sqlite::Value::Float(_) | sqlite::Value::Integer(_) | sqlite::Value::Null => None };
         out.push(serde_json::json!({
             "id":           stmt.read::<i64, _>(0)?,
             "persona_slug": stmt.read::<String, _>(1)?,
@@ -1846,13 +1868,17 @@ fn collect_persona_audit(
     let mut out = Vec::new();
     while stmt.next()? == State::Row {
         let ta: Option<String> = match stmt.read::<sqlite::Value, _>(5)? {
-            sqlite::Value::String(s) => Some(s), _ => None };
+            sqlite::Value::String(s) => Some(s),
+            sqlite::Value::Binary(_) | sqlite::Value::Float(_) | sqlite::Value::Integer(_) | sqlite::Value::Null => None };
         let tc: Option<String> = match stmt.read::<sqlite::Value, _>(6)? {
-            sqlite::Value::String(s) => Some(s), _ => None };
+            sqlite::Value::String(s) => Some(s),
+            sqlite::Value::Binary(_) | sqlite::Value::Float(_) | sqlite::Value::Integer(_) | sqlite::Value::Null => None };
         let pj: Option<String> = match stmt.read::<sqlite::Value, _>(7)? {
-            sqlite::Value::String(s) => Some(s), _ => None };
+            sqlite::Value::String(s) => Some(s),
+            sqlite::Value::Binary(_) | sqlite::Value::Float(_) | sqlite::Value::Integer(_) | sqlite::Value::Null => None };
         let em: Option<String> = match stmt.read::<sqlite::Value, _>(9)? {
-            sqlite::Value::String(s) => Some(s), _ => None };
+            sqlite::Value::String(s) => Some(s),
+            sqlite::Value::Binary(_) | sqlite::Value::Float(_) | sqlite::Value::Integer(_) | sqlite::Value::Null => None };
         out.push(serde_json::json!({
             "id":             stmt.read::<i64, _>(0)?,
             "persona_slug":   stmt.read::<String, _>(1)?,
@@ -1986,7 +2012,7 @@ mod tests {
         let notes = db.get_chat_notes("acc1", "chat1").unwrap();
         assert_eq!(notes.len(), 2);
         assert!(notes[0]["id"].as_i64().unwrap() < notes[1]["id"].as_i64().unwrap());
-        let _ = (id1, id2);
+        let _ids = (id1, id2);
     }
 
     #[test]
@@ -2246,7 +2272,7 @@ mod tests {
         assert!(p["style_notes"].is_null());
         assert!(p["heartbeat_interval_secs"].is_null());
         assert_eq!(p["proactivity"], "drafts-only");
-        assert_eq!(p["rate_limit_per_hour"], 4);
+        assert_eq!(p["rate_limit_per_hour"], 4_i64);
         assert_eq!(p["enabled"], true);
         assert!(p["last_run_at"].is_null());
     }
@@ -2291,7 +2317,7 @@ mod tests {
         let p = db.get_persona("bob").unwrap().unwrap();
         assert_eq!(p["name"], "Bob Updated");
         assert_eq!(p["system_prompt"], "new prompt");
-        assert_eq!(p["rate_limit_per_hour"], 8);
+        assert_eq!(p["rate_limit_per_hour"], 8_i64);
         assert_eq!(p["avatar_emoji"], "🤖");   // preserved
         assert_eq!(p["proactivity"], "drafts-only"); // preserved
     }
@@ -2439,7 +2465,7 @@ mod tests {
         let allows = db.list_persona_outbound_allows("bob").unwrap();
         assert_eq!(allows.len(), 2);
         let a = allows.iter().find(|a| a["chat_id"] == "channel-1").unwrap();
-        assert_eq!(a["max_messages_per_day"], 2);
+        assert_eq!(a["max_messages_per_day"], 2_i64);
     }
 
     #[test]
@@ -2450,7 +2476,7 @@ mod tests {
         db.set_persona_outbound_allow("bob", "discord-1", "channel-1", 5).unwrap(); // upsert
         let allows = db.list_persona_outbound_allows("bob").unwrap();
         assert_eq!(allows.len(), 1);
-        assert_eq!(allows[0]["max_messages_per_day"], 5);
+        assert_eq!(allows[0]["max_messages_per_day"], 5_i64);
     }
 
     #[test]

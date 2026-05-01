@@ -86,7 +86,14 @@ impl EventKind {
             ClientEvent::TypingStarted { .. } => Self::TypingStarted,
             ClientEvent::PresenceChanged { .. } => Self::PresenceChanged,
             ClientEvent::FriendRequestReceived { .. } => Self::FriendRequest,
-            _ => Self::Other,
+            ClientEvent::NotificationReceived(_)
+            | ClientEvent::ChannelUpdated(_)
+            | ClientEvent::ServerUpdated(_)
+            | ClientEvent::ConnectionStateChanged { .. }
+            | ClientEvent::VoiceUserJoined { .. }
+            | ClientEvent::VoiceUserLeft { .. }
+            | ClientEvent::VoiceStateUpdated { .. }
+            | ClientEvent::SidebarInvalidated => Self::Other,
         }
     }
 
@@ -145,8 +152,17 @@ fn channel_id_of(ev: &ClientEvent) -> Option<String> {
         ClientEvent::MessageReceived { channel_id, .. }
         | ClientEvent::MessageEdited { channel_id, .. }
         | ClientEvent::MessageDeleted { channel_id, .. }
-        | ClientEvent::TypingStarted { channel_id, .. } => Some(channel_id.clone()),
-        _ => None,
+        | ClientEvent::TypingStarted { channel_id, .. }
+        | ClientEvent::VoiceUserJoined { channel_id, .. }
+        | ClientEvent::VoiceUserLeft { channel_id, .. }
+        | ClientEvent::VoiceStateUpdated { channel_id, .. } => Some(channel_id.clone()),
+        ClientEvent::PresenceChanged { .. }
+        | ClientEvent::NotificationReceived(_)
+        | ClientEvent::ChannelUpdated(_)
+        | ClientEvent::ServerUpdated(_)
+        | ClientEvent::FriendRequestReceived { .. }
+        | ClientEvent::ConnectionStateChanged { .. }
+        | ClientEvent::SidebarInvalidated => None,
     }
 }
 
@@ -163,22 +179,20 @@ pub struct Subscription {
 
 impl Subscription {
     fn matches(&self, ev: &McpEvent) -> bool {
-        if let Some(acc) = &self.account_ids {
-            if !acc.iter().any(|a| ev.account_key.contains(a.as_str())) {
+        if let Some(acc) = &self.account_ids
+            && !acc.iter().any(|a| ev.account_key.contains(a.as_str())) {
                 return false;
             }
-        }
         if let Some(chats) = &self.chat_ids {
             let cid = ev.channel_id.as_deref().unwrap_or("");
             if !chats.iter().any(|c| c == cid) {
                 return false;
             }
         }
-        if let Some(kinds) = &self.event_types {
-            if !kinds.contains(&ev.kind) {
+        if let Some(kinds) = &self.event_types
+            && !kinds.contains(&ev.kind) {
                 return false;
             }
-        }
         true
     }
 }
@@ -192,7 +206,14 @@ pub struct EventStore {
     subscriptions: HashMap<String, Subscription>,
 }
 
+impl Default for EventStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl EventStore {
+    #[must_use] 
     pub fn new() -> Self {
         let (tx, _) = broadcast::channel(BROADCAST_CAPACITY);
         Self {
@@ -203,6 +224,7 @@ impl EventStore {
     }
 
     /// Subscribe `broadcast::Receiver`; caller can listen for push if desired.
+    #[must_use] 
     pub fn subscribe_broadcast(&self) -> broadcast::Receiver<McpEvent> {
         self.tx.subscribe()
     }
@@ -210,12 +232,13 @@ impl EventStore {
     /// Publish an event — stores in ring buffer and broadcasts.
     pub fn publish(&mut self, ev: McpEvent) {
         // Prune ring (age + capacity).
-        let cutoff = Utc::now().timestamp_millis() - MAX_EVENT_AGE_SECS * 1000;
+        let cutoff = Utc::now()
+            .timestamp_millis()
+            .saturating_sub(MAX_EVENT_AGE_SECS.saturating_mul(1000));
         while self
             .ring
             .front()
-            .map(|e| e.seq_ms < cutoff)
-            .unwrap_or(false)
+            .is_some_and(|e| e.seq_ms < cutoff)
         {
             self.ring.pop_front();
         }
@@ -224,7 +247,7 @@ impl EventStore {
         }
         // Broadcast first so slow subscribers don't see a message already in
         // the ring but potentially already pruned by the time they check.
-        let _ = self.tx.send(ev.clone()); // ok if no receivers
+        self.tx.send(ev.clone()).ok(); // ok if no receivers
         self.ring.push_back(ev);
     }
 
@@ -241,6 +264,7 @@ impl EventStore {
     }
 
     /// Get subscription filter by id (for poll-time filtering).
+    #[must_use] 
     pub fn subscription(&self, id: &str) -> Option<&Subscription> {
         self.subscriptions.get(id)
     }
@@ -269,6 +293,7 @@ impl EventStore {
     }
 
     /// Poll events using an ad-hoc filter (no pre-registered subscription).
+    #[must_use] 
     pub fn poll_adhoc(
         &self,
         account_ids: Option<&[String]>,
@@ -283,22 +308,20 @@ impl EventStore {
                 if e.seq_ms <= since_ms {
                     return false;
                 }
-                if let Some(acc) = account_ids {
-                    if !acc.iter().any(|a| e.account_key.contains(a.as_str())) {
+                if let Some(acc) = account_ids
+                    && !acc.iter().any(|a| e.account_key.contains(a.as_str())) {
                         return false;
                     }
-                }
                 if let Some(chats) = chat_ids {
                     let cid = e.channel_id.as_deref().unwrap_or("");
                     if !chats.iter().any(|c| c == cid) {
                         return false;
                     }
                 }
-                if let Some(kinds) = event_types {
-                    if !kinds.contains(&e.kind) {
+                if let Some(kinds) = event_types
+                    && !kinds.contains(&e.kind) {
                         return false;
                     }
-                }
                 true
             })
             .take(limit)
@@ -312,6 +335,7 @@ impl EventStore {
 /// Cheaply-cloneable handle to the shared event store.
 pub type SharedEventStore = Arc<Mutex<EventStore>>;
 
+#[must_use] 
 pub fn new_event_store() -> SharedEventStore {
     Arc::new(Mutex::new(EventStore::new()))
 }
@@ -362,6 +386,7 @@ pub fn spawn_fan_out(
 // ─── Helpers exposed to tools.rs (Phase C insertion) ─────────────────────────
 
 /// Parse an optional JSON array of strings from `args[key]`.
+#[must_use] 
 pub fn parse_opt_string_vec(args: &serde_json::Value, key: &str) -> Option<Vec<String>> {
     args.get(key).and_then(|v| {
         v.as_array().map(|arr| {
@@ -373,6 +398,7 @@ pub fn parse_opt_string_vec(args: &serde_json::Value, key: &str) -> Option<Vec<S
 }
 
 /// Parse an optional JSON array of event-kind slugs from `args[key]`.
+#[must_use] 
 pub fn parse_opt_event_kinds(args: &serde_json::Value, key: &str) -> Option<Vec<EventKind>> {
     args.get(key).and_then(|v| {
         v.as_array().map(|arr| {
@@ -384,6 +410,7 @@ pub fn parse_opt_event_kinds(args: &serde_json::Value, key: &str) -> Option<Vec<
 }
 
 /// Generate a short UUID-based subscription id.
+#[must_use] 
 pub fn new_subscription_id() -> String {
     // uuid crate may not be in workspace; fall back to a timestamp+random suffix.
     // We avoid using uuid here to keep dependencies minimal.
@@ -413,7 +440,7 @@ mod tests {
 
     fn make_event(account_key: &str, kind: EventKind, channel_id: Option<&str>, ts_offset_ms: i64) -> McpEvent {
         McpEvent {
-            seq_ms: Utc::now().timestamp_millis() + ts_offset_ms,
+            seq_ms: Utc::now().timestamp_millis().saturating_add(ts_offset_ms),
             account_key: account_key.to_string(),
             kind,
             channel_id: channel_id.map(String::from),
@@ -528,7 +555,7 @@ mod tests {
         let base = Utc::now().timestamp_millis();
         for i in 0..(RING_CAPACITY + 50) {
             store.publish(McpEvent {
-                seq_ms: base + i as i64,
+                seq_ms: base.saturating_add(i64::try_from(i).unwrap_or(i64::MAX)),
                 account_key: "acc".to_string(),
                 kind: EventKind::TypingStarted,
                 channel_id: None,

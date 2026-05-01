@@ -60,7 +60,7 @@ async fn call(pool: &mut BackendPool, mem: &MemoryDb, tool: &str, args: Value) -
 
 fn assert_ok(result: &Value) {
     assert!(
-        !result.get("isError").and_then(|e| e.as_bool()).unwrap_or(false),
+        !result.get("isError").and_then(serde_json::Value::as_bool).unwrap_or(false),
         "tool returned error: {result}"
     );
 }
@@ -148,7 +148,7 @@ async fn persona_talk_e2e_overlay_send_flow() {
     // ── 7. Assert the returned bundle.
     let text = text_of(&invoke);
     let json_start = text.find('{').unwrap_or(0);
-    let bundle: Value = serde_json::from_str(&text[json_start..])
+    let bundle: Value = serde_json::from_str(text.get(json_start..).unwrap_or(""))
         .unwrap_or_else(|e| panic!("bundle not valid JSON: {e}\nraw: {text}"));
 
     // bundle_version must be "v1".

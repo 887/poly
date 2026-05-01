@@ -143,7 +143,7 @@ async fn call(pool: &mut BackendPool, tool: &str, args: Value) -> Value {
 
 fn assert_ok(result: &Value) {
     assert!(
-        !result.get("isError").and_then(|e| e.as_bool()).unwrap_or(false),
+        !result.get("isError").and_then(serde_json::Value::as_bool).unwrap_or(false),
         "tool returned error: {}",
         result
     );
@@ -151,7 +151,7 @@ fn assert_ok(result: &Value) {
 
 fn assert_err(result: &Value) {
     assert!(
-        result.get("isError").and_then(|e| e.as_bool()).unwrap_or(false),
+        result.get("isError").and_then(serde_json::Value::as_bool).unwrap_or(false),
         "expected error but got success: {}",
         result
     );
@@ -172,7 +172,7 @@ fn parse_text<T: serde::de::DeserializeOwned>(result: &Value) -> T {
     let text = text_of(result);
     // Strip leading prose before JSON (e.g. "Logged in successfully.\n{...}")
     let json_start = text.find('[').or_else(|| text.find('{')).unwrap_or(0);
-    serde_json::from_str(&text[json_start..]).expect("parse text as JSON")
+    serde_json::from_str(text.get(json_start..).unwrap_or("")).expect("parse text as JSON")
 }
 
 // ---------------------------------------------------------------------------
@@ -252,7 +252,7 @@ async fn discord_get_messages() {
     let result = call(&mut pool, "get_messages", json!({
         "backend": "discord",
         "channel_id": "200",
-        "limit": 10
+        "limit": 10_i32
     })).await;
     assert_ok(&result);
     let msgs: Vec<Value> = parse_text(&result);
@@ -395,7 +395,7 @@ async fn teams_get_messages() {
     let result = call(&mut pool, "get_messages", json!({
         "backend": "teams",
         "channel_id": "T001/CH001",
-        "limit": 10
+        "limit": 10_i32
     })).await;
     assert_ok(&result);
     let msgs: Vec<Value> = parse_text(&result);
@@ -514,7 +514,7 @@ async fn lemmy_get_messages() {
     let result = call(&mut pool, "get_messages", json!({
         "backend": "lemmy",
         "channel_id": "lemmy-feed-1",
-        "limit": 5
+        "limit": 5_i32
     })).await;
     assert_ok(&result);
     let msgs: Vec<Value> = parse_text(&result);
@@ -573,7 +573,7 @@ async fn hackernews_get_messages_top() {
     let result = call(&mut pool, "get_messages", json!({
         "backend": "hackernews",
         "channel_id": "hn-top",
-        "limit": 5
+        "limit": 5_i32
     })).await;
     assert_ok(&result);
     let msgs: Vec<Value> = parse_text(&result);
@@ -658,7 +658,7 @@ async fn stoat_get_messages() {
     let result = call(&mut pool, "get_messages", json!({
         "backend": "stoat",
         "channel_id": "CH001",
-        "limit": 5
+        "limit": 5_i32
     })).await;
     assert_ok(&result);
     let msgs: Vec<Value> = parse_text(&result);
@@ -767,7 +767,7 @@ async fn matrix_get_messages() {
     let result = call(&mut pool, "get_messages", json!({
         "backend": "matrix",
         "channel_id": "!general1:localhost",
-        "limit": 5
+        "limit": 5_i32
     })).await;
     assert_ok(&result);
     let msgs: Vec<Value> = parse_text(&result);
@@ -858,7 +858,7 @@ async fn list_plugins_reports_all_compiled_backends() {
 fn parse_tool_names(result: &Value) -> Vec<String> {
     let text = text_of(result);
     let json_start = text.find('[').unwrap_or(0);
-    serde_json::from_str(&text[json_start..]).expect("parse tool list as JSON")
+    serde_json::from_str(text.get(json_start..).unwrap_or("")).expect("parse tool list as JSON")
 }
 
 #[tokio::test]
@@ -1303,14 +1303,14 @@ async fn phase_c_poll_events_empty_on_fresh_pool() {
     let mut pool = BackendPool::new();
 
     let result = call(&mut pool, "poll_events", json!({
-        "since_ms": 0,
-        "limit": 100
+        "since_ms": 0_i64,
+        "limit": 100_i32
     })).await;
     assert_ok(&result);
 
     let text = text_of(&result);
     let parsed: serde_json::Value = serde_json::from_str(
-        &text[text.find('{').unwrap_or(0)..]
+        text.get(text.find('{').unwrap_or(0)..).unwrap_or("")
     ).expect("poll_events response is JSON");
 
     assert_eq!(
@@ -1332,7 +1332,7 @@ async fn phase_c_subscribe_and_unsubscribe() {
 
     let text = text_of(&sub_result);
     let parsed: serde_json::Value = serde_json::from_str(
-        &text[text.find('{').unwrap_or(0)..]
+        text.get(text.find('{').unwrap_or(0)..).unwrap_or("")
     ).expect("subscribe_events returns JSON");
 
     let sub_id = parsed["subscription_id"].as_str().expect("has subscription_id").to_string();
@@ -1340,7 +1340,7 @@ async fn phase_c_subscribe_and_unsubscribe() {
 
     // poll with the subscription id — should return no events yet
     let poll_result = call(&mut pool, "poll_events", json!({
-        "since_ms": 0,
+        "since_ms": 0_i64,
         "subscription_id": sub_id
     })).await;
     assert_ok(&poll_result);
@@ -1353,7 +1353,7 @@ async fn phase_c_subscribe_and_unsubscribe() {
 
     // poll after unsubscribe should error (unknown subscription)
     let poll_after = call(&mut pool, "poll_events", json!({
-        "since_ms": 0,
+        "since_ms": 0_i64,
         "subscription_id": sub_id
     })).await;
     assert_err(&poll_after);
@@ -1428,15 +1428,15 @@ async fn phase_c_discord_message_received_via_poll_events() {
     assert_ok(&sub_resp);
     let sub_text = text_of(&sub_resp);
     let sub_json: serde_json::Value = serde_json::from_str(
-        &sub_text[sub_text.find('{').unwrap_or(0)..]
+        sub_text.get(sub_text.find('{').unwrap_or(0)..).unwrap_or("")
     ).unwrap();
     let sub_id = sub_json["subscription_id"].as_str().unwrap().to_string();
 
     // Record cursor before sending.
-    let before_ms = std::time::SystemTime::now()
+    let before_ms = i64::try_from(std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
-        .as_millis() as i64
+        .as_millis()).unwrap_or(i64::MAX)
         - 1;
 
     // Push a message into channel 200 via HTTP. The test server now broadcasts
@@ -1462,7 +1462,7 @@ async fn phase_c_discord_message_received_via_poll_events() {
 
         let poll_text = text_of(&poll);
         let poll_json: serde_json::Value = serde_json::from_str(
-            &poll_text[poll_text.find('{').unwrap_or(0)..]
+            poll_text.get(poll_text.find('{').unwrap_or(0)..).unwrap_or("")
         ).unwrap();
 
         if poll_json["count"].as_u64().unwrap_or(0) > 0 {
@@ -1486,5 +1486,5 @@ async fn phase_c_discord_message_received_via_poll_events() {
         "poll_events should have received a message_received event within 2s after sending"
     );
 
-    let _ = shutdown_tx.send(());
+    shutdown_tx.send(()).ok();
 }

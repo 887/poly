@@ -108,7 +108,7 @@ async fn call(pool: &mut BackendPool, mem: &MemoryDb, tool: &str, args: Value) -
 
 fn assert_ok(result: &Value, context: &str) {
     assert!(
-        !result.get("isError").and_then(|e| e.as_bool()).unwrap_or(false),
+        !result.get("isError").and_then(serde_json::Value::as_bool).unwrap_or(false),
         "{context}: tool returned error: {}",
         result
     );

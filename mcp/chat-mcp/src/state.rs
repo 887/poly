@@ -33,7 +33,14 @@ pub struct BackendPool {
     pub config_store: ClientConfigStore,
 }
 
+impl Default for BackendPool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BackendPool {
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             backends: HashMap::new(),
@@ -46,6 +53,7 @@ impl BackendPool {
 
     /// Create a pool with a custom `ClientConfigStore` — used in integration
     /// tests to point the store at a local mock bridge server.
+    #[must_use] 
     pub fn new_with_config_store(store: ClientConfigStore) -> Self {
         Self {
             backends: HashMap::new(),
@@ -56,8 +64,8 @@ impl BackendPool {
         }
     }
 
-    fn key(backend_type: BackendType, account_id: &str) -> String {
-        format!("{:?}:{}", backend_type, account_id)
+    fn key(backend_type: &BackendType, account_id: &str) -> String {
+        format!("{backend_type:?}:{account_id}")
     }
 
     /// Add an authenticated backend to the pool.
@@ -65,7 +73,7 @@ impl BackendPool {
     /// After inserting, a Phase-C fan-out task is spawned for this backend so
     /// its real-time events flow into the shared `EventStore`.
     pub fn insert(&mut self, session: Session, backend: Box<dyn ClientBackend + Send + Sync>) {
-        let key = Self::key(session.backend.clone(), &session.user.id);
+        let key = Self::key(&session.backend, &session.user.id);
 
         // Box → Arc so Phase D workers can clone-and-hold the backend.
         let backend: Arc<dyn ClientBackend + Send + Sync> = Arc::from(backend);
@@ -75,7 +83,7 @@ impl BackendPool {
         let (handle, shutdown) = spawn_fan_out(key.clone(), stream, self.events.clone());
         // If there was already a fan-out for this key (re-login), shut the old one down.
         if let Some((old_handle, old_shutdown)) = self.fan_out_tasks.remove(&key) {
-            let _ = old_shutdown.send(());
+            old_shutdown.send(()).ok();
             old_handle.abort();
         }
         self.fan_out_tasks.insert(key.clone(), (handle, shutdown));
@@ -84,19 +92,22 @@ impl BackendPool {
     }
 
     /// Get a backend by type and account ID.
-    pub fn get(&self, backend_type: BackendType, account_id: &str) -> Option<&BackendEntry> {
+    #[must_use] 
+    pub fn get(&self, backend_type: &BackendType, account_id: &str) -> Option<&BackendEntry> {
         let key = Self::key(backend_type, account_id);
         self.backends.get(&key)
     }
 
     /// Find the first backend of a given type (for single-account usage).
-    pub fn find_by_type(&self, backend_type: BackendType) -> Option<&BackendEntry> {
+    #[must_use]
+    pub fn find_by_type(&self, backend_type: &BackendType) -> Option<&BackendEntry> {
         self.backends
             .values()
-            .find(|e| e.session.backend == backend_type)
+            .find(|e| &e.session.backend == backend_type)
     }
 
     /// Find the first backend whose session account_id matches (backend-agnostic).
+    #[must_use] 
     pub fn find_by_account(&self, account_id: &str) -> Option<&BackendEntry> {
         self.backends
             .values()
@@ -106,17 +117,18 @@ impl BackendPool {
     /// Remove a backend from the pool.
     ///
     /// Also stops the Phase-C fan-out task for this account.
-    pub fn remove(&mut self, backend_type: BackendType, account_id: &str) -> Option<BackendEntry> {
+    pub fn remove(&mut self, backend_type: &BackendType, account_id: &str) -> Option<BackendEntry> {
         let key = Self::key(backend_type, account_id);
         // Stop fan-out task.
         if let Some((handle, shutdown)) = self.fan_out_tasks.remove(&key) {
-            let _ = shutdown.send(());
+            shutdown.send(()).ok();
             handle.abort();
         }
         self.backends.remove(&key)
     }
 
     /// List all connected accounts.
+    #[must_use] 
     pub fn list_accounts(&self) -> Vec<serde_json::Value> {
         self.backends
             .values()
