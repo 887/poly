@@ -25,7 +25,10 @@ storage-surreal = ["dep:surrealdb"]
 # Replaces the IndexedDB backend so apps/web shares one SQLite file with
 # apps/desktop / apps/desktop-electron. See
 # `docs/plans/phase-2.21-host-bridge-unification-plan.md`.
-storage-host-bridge = ["dep:poly-host-bridge"]
+# Historically gated `poly-host-bridge` — the dep is now unconditional
+# (used by the client-settings UI), so the feature is a no-op kept only
+# for back-compat with apps/* feature lists. Remove once those drop it.
+storage-host-bridge = []
 
 [dependencies]
 # UI
@@ -76,6 +79,13 @@ sys-locale = { workspace = true }
 # Sync client
 reqwest = { workspace = true }
 
+# Direct host-bridge transport for client-settings UI (no chat-mcp hop).
+# On wasm32 the `web-direct` feature points at `window.location.origin`
+# (same port as the fullstack server hosting the UI). On native shells it
+# defaults to the loopback bridge URL — all in-tree shells override that
+# via their own bridge client, so the settings UI works in every config.
+poly-host-bridge = { workspace = true, features = ["web-direct"] }
+
 # Utilities
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -123,10 +133,6 @@ js-sys = { workspace = true }
 poly-server-client = { workspace = true, optional = true, features = [
     "wasm-http",
 ] }
-# Enabled by the `storage-host-bridge` feature. On wasm32 this routes every
-# KV op through a native shell's `/host/kv/*` endpoints instead of talking
-# to the browser-local IndexedDB.
-poly-host-bridge = { workspace = true, optional = true, features = ["web-direct"] }
 # WASM-safe timer for `BackendHandleExt::read_with_timeout` — tokio::time is
 # unavailable on wasm32-unknown-unknown (Instant::now() panics), so the
 # helper races the read future against gloo_timers::future::TimeoutFuture.
