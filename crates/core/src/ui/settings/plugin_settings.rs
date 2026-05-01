@@ -283,12 +283,20 @@ pub fn poly_settings_render_fn() -> Element {
 #[ui_action(None)]
 #[component]
 pub fn HackerNewsPluginSettings() -> Element {
+    use poly_client::ClientBackend as _;
+    let client = poly_hackernews::HackerNewsClient::new();
+    let manifest = client.plugin_manifest();
     rsx! {
-        div { class: "plugin-settings-section",
-            h3 { class: "plugin-settings-title", "Hacker News" }
-            p { class: "plugin-settings-desc",
-                "Read-only Hacker News client. Browse top stories, Ask HN, Show HN, and job posts. No write access."
+        div { class: "settings-section plugin-section",
+            div { class: "plugin-section-header",
+                span { class: "plugin-section-icon", "📰" }
+                h2 { class: "plugin-section-title", "Hacker News" }
+                span { class: "plugin-section-badge", "{t(\"settings-plugins-badge\")}" }
             }
+            p { class: "settings-section-description",
+                "Browse top stories, Ask HN, Show HN, and job posts. Sign in with your news.ycombinator.com account to comment and submit."
+            }
+            PluginManifestPanel { manifest }
             ClientSettingsForBackend { backend_id: "hackernews".to_string(), default_version: None }
         }
     }
@@ -308,12 +316,20 @@ pub fn hackernews_settings_render_fn() -> Element {
 #[ui_action(None)]
 #[component]
 pub fn MatrixPluginSettings() -> Element {
+    use poly_client::ClientBackend as _;
+    let client = poly_matrix::MatrixClient::new();
+    let manifest = client.plugin_manifest();
     rsx! {
-        div { class: "plugin-settings-section",
-            h3 { class: "plugin-settings-title", "Matrix" }
-            p { class: "plugin-settings-desc",
+        div { class: "settings-section plugin-section",
+            div { class: "plugin-section-header",
+                span { class: "plugin-section-icon", "🟩" }
+                h2 { class: "plugin-section-title", "{t(\"plugin-matrix-title\")}" }
+                span { class: "plugin-section-badge", "{t(\"settings-plugins-badge\")}" }
+            }
+            p { class: "settings-section-description",
                 "Federated, end-to-end-encrypted messaging via the Matrix protocol. Connect to matrix.org or any homeserver."
             }
+            PluginManifestPanel { manifest }
             ClientSettingsForBackend {
                 backend_id: "matrix".to_string(),
                 default_version: Some("poly-matrix/0.0.0".to_string()),
@@ -336,12 +352,20 @@ pub fn matrix_settings_render_fn() -> Element {
 #[ui_action(None)]
 #[component]
 pub fn LemmyPluginSettings() -> Element {
+    use poly_client::ClientBackend as _;
+    let client = poly_lemmy::LemmyClient::new("https://lemmy.world");
+    let manifest = client.plugin_manifest();
     rsx! {
-        div { class: "plugin-settings-section",
-            h3 { class: "plugin-settings-title", "Lemmy" }
-            p { class: "plugin-settings-desc",
+        div { class: "settings-section plugin-section",
+            div { class: "plugin-section-header",
+                span { class: "plugin-section-icon", "🦫" }
+                h2 { class: "plugin-section-title", "Lemmy" }
+                span { class: "plugin-section-badge", "{t(\"settings-plugins-badge\")}" }
+            }
+            p { class: "settings-section-description",
                 "Federated link aggregator. Connect to any Lemmy instance with your credentials."
             }
+            PluginManifestPanel { manifest }
             ClientSettingsForBackend { backend_id: "lemmy".to_string(), default_version: None }
         }
     }
@@ -454,7 +478,7 @@ pub fn GitHubPluginSettings() -> Element {
                 span { class: "plugin-section-badge", "{t(\"settings-plugins-badge\")}" }
             }
             p { class: "settings-section-description",
-                "Read-only GitHub / GHE client. Browses repos, issues, pull requests, and source code through your local gh CLI."
+                "GitHub / GHE client. Browse repos, issues, pull requests, and source code through your local gh CLI — write access depends on your gh auth scopes."
             }
             PluginManifestPanel { manifest }
             // GitHub uses the user's gh CLI as transport — there's no
