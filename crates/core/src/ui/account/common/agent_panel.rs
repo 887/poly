@@ -301,25 +301,22 @@ pub fn AgentPanel(
                     access_enabled: *access_enabled.read(),
                 }
 
-                // Phase E.4: PersonaListPanel with on_talk wired to open overlay.
-                PersonaListPanel {
-                    on_talk: move |summary: PersonaSummary| {
-                        let session = TalkSession {
-                            persona_slug: summary.slug.clone(),
-                            persona_name: summary.name.clone(),
-                            persona_avatar: summary.avatar_emoji.clone(),
-                            session_id: new_session_id(),
-                        };
-                        talk_session.set(Some(session));
-                    },
-                }
+                // PersonaListPanel removed — personas don't make sense in
+                // the per-conversation Agent panel (they're a global
+                // concept, managed at /agent/personas). The TalkToOverlay
+                // is also no longer reachable from here; if we ever
+                // want a "talk to persona about this chat" affordance,
+                // it belongs as a button in the chat composer or a
+                // global keyboard shortcut, not in this panel.
 
                 AgentStyleSection {
                     access_enabled: *access_enabled.read(),
                 }
             }
 
-            // Phase E.1: PersonaTalkToOverlay — mounted over the panel when active.
+            // PersonaTalkToOverlay kept for compatibility — only mounts
+            // if some other code path opens a TalkSession. Currently
+            // unreachable from this panel after removing PersonaListPanel.
             if let Some(session) = current_talk {
                 PersonaTalkToOverlay {
                     session,

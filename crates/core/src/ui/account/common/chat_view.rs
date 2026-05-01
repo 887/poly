@@ -209,9 +209,6 @@ enum ChatUtilityPanel {
     /// Lives in the same right wing as Search/Pinned/Threads so the user
     /// can switch between tabs without losing the agent context.
     Agent,
-    /// Catch-me-up summary panel — last 20 messages + "copy summary
-    /// prompt" hook for Claude Desktop. No LLM call from the host.
-    CatchUp,
 }
 
 #[derive(Clone, Copy)]
@@ -2840,24 +2837,8 @@ fn ChatHeaderActions(
                     },
                     "🧵"
                 }
-                button {
-                    class: if *utility_panel.read() == Some(ChatUtilityPanel::CatchUp) {
-                        "header-btn active chat-header-btn-catchup"
-                    } else {
-                        "header-btn chat-header-btn-catchup"
-                    },
-                    title: t("chat-banner-catch-me-up"),
-                    onclick: move |_| {
-                        show_search_filters.set(false);
-                        let next = if *utility_panel.read() == Some(ChatUtilityPanel::CatchUp) {
-                            None
-                        } else {
-                            Some(ChatUtilityPanel::CatchUp)
-                        };
-                        utility_panel.set(next);
-                    },
-                    "✨"
-                }
+                // Catch-me-up tab removed — feature relocated to chat
+                // settings as a "Copy last 20 messages" clipboard button.
                 button {
                     class: if pinned_active { "header-btn active chat-header-btn-pinned" } else { "header-btn chat-header-btn-pinned" },
                     title: t("pinned-messages"),
@@ -5241,8 +5222,6 @@ fn ChatUtilityRail(
         t("agent-drafts-sidebar-title")
     } else if panel == ChatUtilityPanel::Agent {
         t("agent-panel-title")
-    } else if panel == ChatUtilityPanel::CatchUp {
-        t("chat-banner-catch-me-up")
     } else {
         t("threads")
     };
@@ -5367,7 +5346,10 @@ fn ChatUtilityRail(
                     }
                 }
             } else if panel == ChatUtilityPanel::Settings {
-                ChatSettingsPanel { notifications_muted }
+                ChatSettingsPanel {
+                    notifications_muted,
+                    channel_name: current_channel_name.clone(),
+                }
             } else if panel == ChatUtilityPanel::Drafts {
                 // B.5 — Pending drafts across all chats for the active account.
                 {
@@ -5407,8 +5389,6 @@ fn ChatUtilityRail(
                         }
                     }
                 }
-            } else if panel == ChatUtilityPanel::CatchUp {
-                CatchUpPanel { channel_name: current_channel_name.clone() }
             } else {
                 div { class: "chat-utility-body",
                     div { class: "utility-empty-state",
@@ -5420,76 +5400,30 @@ fn ChatUtilityRail(
     }
 }
 
-/// Catch-me-up panel — last 20 messages + clipboard "summary prompt" hook.
-#[ui_action(inherit)]
-#[context_menu(none)]
-#[component]
-fn CatchUpPanel(channel_name: String) -> Element {
-    let chat_data: BatchedSignal<ChatData> = use_context();
-    let recent: Vec<Message> = {
-        let snap = chat_data.read();
-        snap.messages.iter().rev().take(20).cloned().collect()
-    };
+/// Build the "Copy last N messages" clipboard payload from the most
+/// recent `limit` messages in `chat_data`. Plain-text format
+/// (`- Author: body`) suitable for pasting into Claude Desktop or any
+/// other LLM that reads recent context. Used by the chat-settings
+/// "Catch me up" button.
+fn catch_up_clipboard_text(chat_data: &ChatData, channel_name: &str, limit: usize) -> String {
+    let recent: Vec<&Message> = chat_data.messages.iter().rev().take(limit).collect();
     let total = recent.len();
-    let chan = channel_name.clone();
-    let prompt = {
-        let body = recent
-            .iter()
-            .rev()
-            .map(|m| {
-                let body = match &m.content {
-                    poly_client::MessageContent::Text(s) => s.clone(),
-                    poly_client::MessageContent::WithAttachments { text, .. } => text.clone(),
-                };
-                format!("- {}: {}", m.author.display_name, body)
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-        format!(
-            "Summarize the recent conversation in #{chan} (last {total} messages). Pull out decisions, open questions, and action items.\n\n{body}"
-        )
-    };
-
-    rsx! {
-        div { class: "chat-utility-body catch-up-panel",
-            if total == 0 {
-                div { class: "utility-empty-state",
-                    p { "✨ {t(\"catch-up-empty\")}" }
-                }
-            } else {
-                p { class: "catch-up-meta",
-                    "{total} {t(\"catch-up-recent-messages\")}"
-                }
-                button {
-                    class: "catch-up-copy-btn",
-                    title: t("catch-up-copy-prompt-title"),
-                    onclick: {
-                        let p = prompt.clone();
-                        move |_| {
-                            let escaped = p.replace('\\', r"\\").replace('`', r"\`");
-                            let _ = document::eval(&format!(
-                                "navigator.clipboard.writeText(`{escaped}`)"
-                            ));
-                        }
-                    },
-                    "📋 {t(\"catch-up-copy-prompt\")}"
-                }
-                div { class: "catch-up-list",
-                    for m in recent.iter().rev() {
-                        div { class: "catch-up-row",
-                            span { class: "catch-up-author", "{m.author.display_name}" }
-                            span { class: "catch-up-text",
-                                {match &m.content {
-                                    poly_client::MessageContent::Text(s) => s.clone(),
-                                    poly_client::MessageContent::WithAttachments { text, .. } => text.clone(),
-                                }}
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
+    let body = recent
+        .iter()
+        .rev()
+        .map(|m| {
+            let body = match &m.content {
+                poly_client::MessageContent::Text(s) => s.clone(),
+                poly_client::MessageContent::WithAttachments { text, .. } => text.clone(),
+            };
+            format!("- {}: {}", m.author.display_name, body)
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!(
+        "Summarize the recent conversation in #{channel_name} (last {total} messages). \
+         Pull out decisions, open questions, and action items.\n\n{body}"
+    )
 }
 
 /// Chat settings panel — shown inside the utility rail when the ⚙️ tab is open.
@@ -5499,13 +5433,18 @@ fn CatchUpPanel(channel_name: String) -> Element {
 #[ui_action(inherit)]
 #[context_menu(none)]
 #[component]
-fn ChatSettingsPanel(mut notifications_muted: Signal<bool>) -> Element {
+fn ChatSettingsPanel(
+    mut notifications_muted: Signal<bool>,
+    channel_name: String,
+) -> Element {
     use crate::ui::settings::common::{PolySelect, SelectOption};
     let mut app_state: BatchedSignal<AppState> = use_context();
+    let chat_data: BatchedSignal<ChatData> = use_context();
     let muted    = *notifications_muted.read();
     let grouping = app_state.read().member_list_grouping;
     let sort     = app_state.read().member_list_sort_order;
     let show_off = app_state.read().member_list_show_offline;
+    let mut copy_status: Signal<Option<String>> = use_signal(|| None);
 
     let grouping_options = vec![
         SelectOption { value: "by-status", label: t("chat-settings-grouping-by-status") },
@@ -5519,6 +5458,39 @@ fn ChatSettingsPanel(mut notifications_muted: Signal<bool>) -> Element {
 
     rsx! {
         div { class: "chat-utility-body chat-settings-panel",
+
+            // ── Catch me up ──────────────────────────────────────────────
+            // One-click button to copy the last 20 messages of this
+            // conversation as a plain-text summary prompt to the
+            // clipboard. Replaces the previous Catch-me-up tab.
+            div { class: "chat-settings-section",
+                h4 { class: "chat-settings-section-title", {t("chat-settings-catch-up")} }
+                p { class: "chat-settings-section-desc",
+                    {t("chat-settings-catch-up-desc")}
+                }
+                button {
+                    class: "chat-settings-action-btn",
+                    onclick: {
+                        let chan = channel_name.clone();
+                        move |_| {
+                            let snapshot = chat_data.read().clone();
+                            let payload = catch_up_clipboard_text(&snapshot, &chan, 20);
+                            let escaped = payload.replace('\\', r"\\").replace('`', r"\`");
+                            let _ = document::eval(&format!(
+                                "navigator.clipboard.writeText(`{escaped}`)"
+                            ));
+                            copy_status.set(Some(t("chat-settings-catch-up-copied")));
+                        }
+                    },
+                    span { class: "chat-settings-action-icon", "📋" }
+                    span { class: "chat-settings-action-label",
+                        {t("chat-settings-catch-up-button")}
+                    }
+                }
+                if let Some(msg) = copy_status.read().clone() {
+                    p { class: "chat-settings-action-status", "{msg}" }
+                }
+            }
 
             // ── Notifications ────────────────────────────────────────────
             div { class: "chat-settings-section",
