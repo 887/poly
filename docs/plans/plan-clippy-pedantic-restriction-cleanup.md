@@ -1,6 +1,15 @@
 # Plan — Clippy Opt-in Lint Policy + Workspace Cleanup
 
-## Status: 🚧 IN PROGRESS — Phases 0-6 SHIPPED 2026-05-01 + Native cleanup pass (`8b3e0b0e`, `a4af6d67`); ~5564 → ~362 warns (93.5% reduction). Phase 7 (CI deny gate) deferred — needs taste decisions on residuals.
+## Status: ✅ DONE — Phases 0-6 + Native + Final burndown SHIPPED. **0 own-file clippy warnings workspace-wide on both native + wasm32 targets.**
+
+**Final commit chain on main (2026-05-01):**
+- Phases 0-6 + Native A/B: see history below
+- Round 1A (`2494d2bc`): poly-demo 163 → 0 (chrono `ago_*()` helpers + `CommentMeta` ref refactor)
+- Round 1B (`9d7c5754`): poly-core 179 → 53 (autofix + arithmetic refactors + `RenderArgs` bundle for `too_many_arguments`)
+- Round 1C (`9cec06f7`, includes orchestrator mop-up): small crates burn + poly-core non-mod 49 → 0 (incl banned-bypass refactors: stoat `network_error(&e)` 57 callers, server-client `new(&config)` 16 callers; intentional `match_same_arms` collapsed by removing redundant explicit arms; wildcard match allow moved to expression level so it actually applies)
+- Round 2 (`ec0f6d59`): 40 mod.rs files renamed to `foo.rs` mechanically + `theme.rs` `include_str!` paths fixed (`../../assets/...` → `../assets/...`) + `ui.rs` `include!("css.rs")` → `include!("ui/css.rs")` + 29 wasm-cfg-gated warnings in poly-core fixed + 4 stragglers in poly-discord IDENTIFY frame
+
+Trajectory: ~5564 (Phase 0 baseline) → 2065 (opt-in policy) → 362 (Tier 1-5 burn) → **0 (final, both targets)**. 100% reduction.
 
 **Remaining 362 warnings, by category (post Native A+B):**
 - poly-core lib: 182 — 43 `needless_pass_by_value` (banned), 26 `mod_module_files`, 22 `arithmetic_side_effects`, 18 `let_underscore_must_use`, 17 `as_conversions`, 12 `match_same_arms` (intentional), 9 `wildcard_enum_match_arm`, 5 `too_many_arguments` (banned), 5 `map_err_ignore`, 3 `string_slice`, ~21 misc
