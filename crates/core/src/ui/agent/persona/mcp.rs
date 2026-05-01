@@ -106,10 +106,8 @@ pub async fn call_persona_mcp(tool: &str, args: Value) -> Result<Value, String> 
     }
 }
 
-/// Extract the payload from a JSON-RPC 2.0 MCP response.
-///
-/// MCP success: `{"result": {"content": [{"type": "text", "text": "..."}]}}`
-/// MCP error:   `{"result": {"isError": true, "content": [...]}}`
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
+#[allow(clippy::needless_pass_by_value)]
 fn extract_mcp_result(json: Value) -> Result<Value, String> {
     if let Some(err) = json.get("error") {
         return Err(format!("mcp error: {err}"));

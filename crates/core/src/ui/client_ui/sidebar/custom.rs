@@ -131,7 +131,7 @@ fn SidebarItemRow(node: SidebarNode, depth: usize) -> Element {
     let icon = node.item.icon.clone();
     let children = node.children.clone();
     let has_children = !children.is_empty();
-    let indent = format!("padding-left: {}px;", 8 + depth.saturating_mul(12));
+    let indent = format!("padding-left: {}px;", 8_usize.saturating_add(depth.saturating_mul(12)));
 
     rsx! {
         li {

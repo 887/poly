@@ -159,11 +159,11 @@ pub fn ChatStyleEditor(account_id: String, chat_id: String) -> Element {
                     saved.set(false);
                     spawn(async move {
                         if let Some(storage) = crate::STORAGE.get() {
-                            let _ = storage.set(&kv_key(&acc, &cid, "tone"),         serde_json::json!(t_v)).await;
-                            let _ = storage.set(&kv_key(&acc, &cid, "formality"),    serde_json::json!(f_v)).await;
-                            let _ = storage.set(&kv_key(&acc, &cid, "emoji_allowed"),serde_json::json!(e_v)).await;
-                            let _ = storage.set(&kv_key(&acc, &cid, "signature"),    serde_json::json!(s_v)).await;
-                            let _ = storage.set(&kv_key(&acc, &cid, "extra_notes"),  serde_json::json!(n_v)).await;
+                            drop(storage.set(&kv_key(&acc, &cid, "tone"),         serde_json::json!(t_v)).await);
+                            drop(storage.set(&kv_key(&acc, &cid, "formality"),    serde_json::json!(f_v)).await);
+                            drop(storage.set(&kv_key(&acc, &cid, "emoji_allowed"),serde_json::json!(e_v)).await);
+                            drop(storage.set(&kv_key(&acc, &cid, "signature"),    serde_json::json!(s_v)).await);
+                            drop(storage.set(&kv_key(&acc, &cid, "extra_notes"),  serde_json::json!(n_v)).await);
                         }
                         saved.set(true);
                     });

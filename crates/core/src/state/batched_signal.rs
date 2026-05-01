@@ -149,6 +149,7 @@ impl<T: 'static> BatchedSignal<T> {
     ///
     /// See [`PendingUpdate`] for the full API and `load_server_data_internal`
     /// in `favorites_sidebar.rs` for the canonical pattern.
+    #[must_use]
     pub fn pending_update(&self) -> PendingUpdate<T> {
         PendingUpdate {
             target: *self,
@@ -275,9 +276,12 @@ impl<T: 'static> BatchedSignal<T> {
 /// pending.apply(); // ONE cascade, no matter how many .set() calls
 /// ```
 #[must_use = "a PendingUpdate does nothing unless you call .apply() (or .discard() to abort)"]
+/// Type alias for a queued mutation closure on a `PendingUpdate<T>`.
+type Mutator<T> = Box<dyn FnOnce(&mut T)>;
+
 pub struct PendingUpdate<T: 'static> {
     target: BatchedSignal<T>,
-    mutators: Vec<Box<dyn FnOnce(&mut T)>>,
+    mutators: Vec<Mutator<T>>,
     applied: bool,
 }
 

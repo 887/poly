@@ -41,8 +41,8 @@ pub struct ForumPostCtx {
 
 pub const FORUM_POST_MENU_TYPE: &str = "forum_post";
 
-/// Convenience: build an `ActiveContextMenu` that the caller can push onto
-/// `AppState.context_menu_stack`.
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
+#[allow(clippy::needless_pass_by_value)]
 pub fn forum_post_entry(ctx: ForumPostCtx, evt: &MouseEvent) -> ActiveContextMenu {
     let coords = evt.client_coordinates();
     ActiveContextMenu {
@@ -107,6 +107,8 @@ pub struct UserRowCtx {
 
 pub const USER_ROW_MENU_TYPE: &str = "user_row";
 
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
+#[allow(clippy::needless_pass_by_value)]
 pub fn user_row_entry(ctx: UserRowCtx, evt: &MouseEvent) -> ActiveContextMenu {
     let coords = evt.client_coordinates();
     ActiveContextMenu {

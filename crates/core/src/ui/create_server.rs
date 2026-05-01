@@ -143,10 +143,8 @@ struct CreateSignals {
     error_msg: Signal<String>,
 }
 
-/// Shared helper — spawns the async create-server task.
-///
-/// Extracted so both the button click and the Enter-key handler can call it
-/// without duplicating the spawn closure.
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
+#[allow(clippy::needless_pass_by_value)]
 fn do_create_server(
     name: String,
     account_id: String,

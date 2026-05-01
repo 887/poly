@@ -123,11 +123,11 @@ pub fn GroupDmContextMenu() -> Element {
                                         .read_with_timeout(Duration::from_secs(5))
                                         .await
                                 {
-                                    let _ = if was_muted {
+                                    drop(if was_muted {
                                         backend.unmute_conversation(&cid).await
                                     } else {
                                         backend.mute_conversation(&cid, None).await
-                                    };
+                                    });
                                 }
                             });
                         },
@@ -152,7 +152,7 @@ pub fn GroupDmContextMenu() -> Element {
                                         .read_with_timeout(Duration::from_secs(5))
                                         .await
                                 {
-                                    let _ = backend.leave_group_dm(&cid).await;
+                                    drop(backend.leave_group_dm(&cid).await);
                                 }
                             });
                             close();

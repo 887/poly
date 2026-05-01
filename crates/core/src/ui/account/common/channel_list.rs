@@ -238,17 +238,8 @@ async fn load_dm_messages(
     pending.apply();
 }
 
-/// Activate a DM channel: update navigation state, set the active channel in
-/// `chat_data`, then navigate to the DM chat route and kick off message loading.
-///
-/// # Write-guard discipline
-/// Each `Signal` is written exactly once via a single `write()` guard.  Using
-/// multiple consecutive `.write()` calls on the same signal causes Dioxus to
-/// schedule a new re-render after every individual write, which can create a
-/// rapid succession of render cycles on the single-threaded WASM runtime and
-/// produce an apparent freeze.  All field assignments are batched under one
-/// guard per signal so only two re-renders are triggered (one for `app_state`,
-/// one for `chat_data`).
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
+#[allow(clippy::needless_pass_by_value)]
 fn activate_dm_channel(
     dm: DmChannel,
     instance_id: String,
@@ -940,7 +931,12 @@ fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
                                     _ => "📋",
                                 },
                                 ChannelType::Code => "📁",
-                                _ => "#",
+                                ChannelType::Text
+                                | ChannelType::Voice
+                                | ChannelType::Video
+                                | ChannelType::HackerNews
+                                | ChannelType::Thread
+                                | ChannelType::Announcement => "#",
                             };
                             let label = match ch.name.as_str() {
                                 "issues" => "Issues",
@@ -1636,9 +1632,11 @@ fn ChannelItemRow(channel: Channel) -> Element {
                 let channel_id_for_persist = ch_id.clone();
                 spawn(async move {
                     if let Some(storage) = crate::STORAGE.get() {
-                        let _ = storage
-                            .set_last_channel_for_server(&server_id_for_persist, &channel_id_for_persist)
-                            .await;
+                        drop(
+                            storage
+                                .set_last_channel_for_server(&server_id_for_persist, &channel_id_for_persist)
+                                .await,
+                        );
                     }
                 });
                 let cid = ch_id.clone();

@@ -496,6 +496,11 @@ pub enum Route {
 ///
 /// Called from [`RouterConfig::on_update`] *before* dependent components
 /// re-render.
+// lint-allow-unused: per-route arms have intentionally separate bodies
+// even when they look identical — each arm is the documented landing
+// behaviour for its specific Route variant; merging would obscure intent
+// and the arms are likely to diverge as new fields are added per-route.
+#[allow(clippy::match_same_arms)]
 pub fn sync_route_to_app_state(route: &Route, app_state: BatchedSignal<AppState>) {
     #[cfg(debug_assertions)]
     record_route_visit(route);

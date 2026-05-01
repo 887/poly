@@ -167,6 +167,10 @@ pub fn AccountServerBar() -> Element {
     // Uses `use_resource` keyed on account_id so it re-fires when the user
     // switches accounts. Runs for ALL backends so chat-style accounts also
     // refresh on first mount (e.g. if restore was slow).
+    // lint-allow-unused: use_resource returns a Resource handle that owns the
+    // spawned future; we deliberately discard the handle so the resource lives
+    // for the component's lifetime via Dioxus' runtime.
+    #[allow(clippy::let_underscore_future, clippy::let_underscore_must_use)]
     let _ = {
         let account_id_res = account_id.clone();
         let backend_slug_res = backend_slug.clone();
@@ -525,8 +529,6 @@ fn ServerIconDisplay(
     }
 }
 
-/// Conversations button for the account server bar.
-#[rustfmt::skip]
 /// Per-account Overview button — first item in the AccountServerBar.
 ///
 /// Routes to `Route::ServerOverviewRoute` which renders the plugin-supplied

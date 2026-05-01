@@ -160,7 +160,7 @@ pub fn solve_pow(nonce: &str, difficulty: u32) -> u64 {
         if check_pow_difficulty(&hash, difficulty) {
             return counter;
         }
-        counter += 1;
+        counter = counter.wrapping_add(1);
     }
 }
 
@@ -169,7 +169,16 @@ fn check_pow_difficulty(hash: &[u8], difficulty: u32) -> bool {
     if difficulty == 0 {
         return true;
     }
+    // lint-allow-unused: difficulty/8 cannot exceed difficulty, and conversion
+    // to usize is safe (difficulty is u32). Modulo by const 8 is safe.
+    #[allow(
+        clippy::integer_division,
+        clippy::arithmetic_side_effects,
+        clippy::as_conversions,
+        clippy::cast_possible_truncation
+    )]
     let full_bytes = (difficulty / 8) as usize;
+    #[allow(clippy::arithmetic_side_effects)]
     let remaining_bits = difficulty % 8;
     for byte in hash.iter().take(full_bytes) {
         if *byte != 0 {
@@ -177,6 +186,9 @@ fn check_pow_difficulty(hash: &[u8], difficulty: u32) -> bool {
         }
     }
     if remaining_bits > 0 {
+        // lint-allow-unused: remaining_bits is in 1..8 (we just checked > 0
+        // and it's % 8); 8 - remaining_bits stays in 1..8 — never overflows.
+        #[allow(clippy::arithmetic_side_effects)]
         let mask = 0xFF_u8 << (8 - remaining_bits);
         if hash.get(full_bytes).is_some_and(|b| b & mask != 0) {
             return false;

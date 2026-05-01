@@ -251,6 +251,8 @@ fn render_descriptor(
     render_descriptor_inner(channel_id, account_id, desc, initial_tab, None)
 }
 
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
+#[allow(clippy::needless_pass_by_value)]
 fn render_descriptor_inner(
     channel_id: String,
     account_id: String,

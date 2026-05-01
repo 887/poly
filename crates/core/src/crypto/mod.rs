@@ -184,7 +184,7 @@ pub fn encrypt(data: &[u8], key: &[u8; 32]) -> Result<Vec<u8>, CryptoError> {
         .map_err(|e| CryptoError::Encryption(e.to_string()))?;
 
     // Wire format: nonce || ciphertext+tag
-    let mut out = Vec::with_capacity(12 + ciphertext.len());
+    let mut out = Vec::with_capacity(12usize.saturating_add(ciphertext.len()));
     out.extend_from_slice(nonce.as_slice());
     out.extend_from_slice(&ciphertext);
     Ok(out)
@@ -210,7 +210,7 @@ pub fn decrypt(data: &[u8], key: &[u8; 32]) -> Result<Vec<u8>, CryptoError> {
     let cipher = ChaCha20Poly1305::new(Key::from_slice(key));
     cipher
         .decrypt(nonce, ciphertext)
-        .map_err(|_| CryptoError::Encryption("decryption failed — bad key or tampered data".into()))
+        .map_err(|_e| CryptoError::Encryption("decryption failed — bad key or tampered data".into()))
 }
 
 #[cfg(test)]

@@ -45,6 +45,9 @@ fn current_page(route: &Route) -> OverviewPage {
         Route::ServerOverviewMissedRoute { .. } => OverviewPage::Missed,
         Route::ServerOverviewStatsRoute { .. } => OverviewPage::Stats,
         Route::ServerOverviewAgentsRoute { .. } => OverviewPage::Agents,
+        // lint-allow-unused: Route has dozens of variants; we deliberately
+        // map any non-overview route to the General page.
+        #[allow(clippy::wildcard_enum_match_arm)]
         _ => OverviewPage::General,
     }
 }

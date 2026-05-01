@@ -15,11 +15,11 @@
 //! ## Decision: UserRowContextMenu vs AvatarContextMenu
 //!
 //! `UserRowContextMenu` (in `context_menu/menus.rs`) is wired to *sidebar user
-//! rows* (`DmMemberRow`, `DmContactRow`, `UserSidebar`) and offers "View Profile"
-//! + "Copy ID". `AvatarContextMenu` is for *message-row avatar images* and offers
-//! "View Profile" + "Send DM" + "Mention". These are separate surfaces with
-//! different expected actions, so both menus are kept. The `UserRowContextMenu`
-//! annotations on sidebar rows are left untouched.
+//!   rows* (`DmMemberRow`, `DmContactRow`, `UserSidebar`) and offers "View Profile"
+//!   + "Copy ID". `AvatarContextMenu` is for *message-row avatar images* and offers
+//!   "View Profile" + "Send DM" + "Mention". These are separate surfaces with
+//!   different expected actions, so both menus are kept. The `UserRowContextMenu`
+//!   annotations on sidebar rows are left untouched.
 
 use crate::i18n::t;
 use crate::state::{AppState, BatchedSignal};

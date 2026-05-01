@@ -624,11 +624,8 @@ impl ClientManager {
         self.server_account_map.insert(server_id, account_id);
     }
 
-    /// Remove all backends belonging to a given [`BackendType`], returning the removed
-    /// account IDs and their handles so the caller can run async cleanup (logout, token
-    /// removal) **after** releasing the `Signal` write lock.
-    ///
-    /// Also clears all server-map entries and status entries owned by those accounts.
+    // lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
+    #[allow(clippy::needless_pass_by_value)]
     pub fn take_accounts_by_backend(
         &mut self,
         backend_type: BackendType,

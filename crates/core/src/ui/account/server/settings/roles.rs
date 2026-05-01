@@ -64,6 +64,8 @@ pub fn RolesTab(server_id: String, account_id: String) -> Element {
     }
 }
 
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
+#[allow(clippy::needless_pass_by_value)]
 fn render_role_row(role: Role) -> Element {
     let color_style = role.color
         .as_deref()

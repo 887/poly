@@ -151,6 +151,8 @@ pub fn ComposerHooks(
     }
 }
 
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
+#[allow(clippy::needless_pass_by_value)]
 fn render_composer_button(
     button: ComposerButton,
     account_id: String,
@@ -270,6 +272,8 @@ pub fn MessageActions(
     }
 }
 
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
+#[allow(clippy::needless_pass_by_value)]
 fn render_message_action_item(
     item: MenuItem,
     account_id: String,

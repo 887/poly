@@ -171,6 +171,8 @@ pub(crate) async fn toggle_demo(
                     ))
                     .await
                     .map_err(|e| format!("Demo (cat) auth failed: {e}"))?;
+                // lint-allow-unused: trait-object up-cast for type erasure into BackendHandle
+                #[allow(clippy::as_conversions)]
                 let handle: BackendHandle = std::sync::Arc::new(tokio::sync::RwLock::new(
                     Box::new(client) as Box<dyn poly_client::ClientBackend>,
                 ));
@@ -187,6 +189,8 @@ pub(crate) async fn toggle_demo(
                     ))
                     .await
                     .map_err(|e| format!("Demo (dog) auth failed: {e}"))?;
+                // lint-allow-unused: trait-object up-cast for type erasure into BackendHandle
+                #[allow(clippy::as_conversions)]
                 let handle: BackendHandle = std::sync::Arc::new(tokio::sync::RwLock::new(
                     Box::new(client) as Box<dyn poly_client::ClientBackend>,
                 ));
@@ -203,6 +207,8 @@ pub(crate) async fn toggle_demo(
                     ))
                     .await
                     .map_err(|e| format!("Demo (platypus) auth failed: {e}"))?;
+                // lint-allow-unused: trait-object up-cast for type erasure into BackendHandle
+                #[allow(clippy::as_conversions)]
                 let handle: BackendHandle = std::sync::Arc::new(tokio::sync::RwLock::new(
                     Box::new(client) as Box<dyn poly_client::ClientBackend>,
                 ));
@@ -456,6 +462,8 @@ pub(crate) async fn toggle_demo_forum_on(
             ))
             .await
             .map_err(|e| format!("Forum Demo auth failed: {e}"))?;
+        // lint-allow-unused: trait-object up-cast for type erasure into BackendHandle
+        #[allow(clippy::as_conversions)]
         let handle: BackendHandle = std::sync::Arc::new(tokio::sync::RwLock::new(
             Box::new(client) as Box<dyn poly_client::ClientBackend>,
         ));
@@ -601,6 +609,9 @@ pub(crate) fn spawn_event_stream_listener(
                         }
                     });
                 }
+                // lint-allow-unused: arm body is empty same as the wildcard,
+                // but kept as a documentation hook for the future TODO below.
+                #[allow(clippy::match_same_arms)]
                 ClientEvent::TypingStarted { .. } => {
                     // TODO(phase-3): show typing indicator in chat view
                 }
@@ -612,6 +623,9 @@ pub(crate) fn spawn_event_stream_listener(
                             s.sidebar_invalidated_tick.wrapping_add(1);
                     });
                 }
+                // lint-allow-unused: ClientEvent has dozens of variants;
+                // the demo handler only wires the explicitly handled ones.
+                #[allow(clippy::wildcard_enum_match_arm)]
                 _ => {}
             }
         }

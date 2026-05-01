@@ -285,6 +285,14 @@ pub fn TreeBodyRow(row: ViewRow, on_click: EventHandler<String>) -> Element {
     let secondary = row.secondary_text.clone();
     let meta_raw = row.meta_text.clone();
     let depth = 0_u32;
+    // lint-allow-unused: depth is currently const-zero; the multiplication
+    // and i32 cast cannot overflow in any reachable case.
+    #[allow(
+        clippy::arithmetic_side_effects,
+        clippy::as_conversions,
+        clippy::cast_possible_truncation,
+        clippy::cast_possible_wrap
+    )]
     let indent_px = (depth * 16) as i32;
 
     let (maybe_score, meta_rest): (Option<i64>, String) = meta_raw
@@ -353,9 +361,14 @@ pub fn TreeBodyRow(row: ViewRow, on_click: EventHandler<String>) -> Element {
 /// Pure helper — the upper-bound cap on rendered rows. Extracted so unit
 /// tests can pin the formula without spinning up a Dioxus virtual DOM.
 pub(crate) fn max_visible_rows(spec: &TreeSpec) -> usize {
-    spec.root_page_size
+    // lint-allow-unused: u32→usize widening is non-lossy on every supported
+    // target (usize is at least 32 bits on all of native + wasm32).
+    #[allow(clippy::as_conversions)]
+    let v = spec
+        .root_page_size
         .saturating_mul(spec.max_depth.max(1))
-        .max(spec.root_page_size) as usize
+        .max(spec.root_page_size) as usize;
+    v
 }
 
 #[cfg(test)]

@@ -197,6 +197,9 @@ pub async fn restore_native_accounts(
                     session.user.avatar_url = Some(url);
                 }
                 let account_id = session.id.clone();
+                // lint-allow-unused: trait-object up-cast from Box<dyn T> with
+                // additional auto-trait bounds; safe because backend is `Send + Sync`.
+                #[allow(clippy::as_conversions)]
                 let backend_handle: BackendHandle =
                     Arc::new(RwLock::new(backend as Box<dyn ClientBackend + Send + Sync>));
 

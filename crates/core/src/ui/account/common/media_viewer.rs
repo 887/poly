@@ -143,7 +143,7 @@ pub fn MessageMediaViewerOverlay(props: MessageMediaViewerOverlayProps) -> Eleme
     let url = attachment.url.clone();
 
     let can_prev = pos > 0;
-    let can_next = pos + 1 < total;
+    let can_next = pos.saturating_add(1) < total;
     let is_zoomed = scale > 1.01;
 
     rsx! {

@@ -115,7 +115,7 @@ async fn read_with_timeout_impl<'a>(
             let err = BackendReadTimeout { duration, location };
             tracing::warn!(
                 target: "poly_core::backend_timeout",
-                duration_ms = duration.as_millis() as u64,
+                duration_ms = u64::try_from(duration.as_millis()).unwrap_or(u64::MAX),
                 location = %location,
                 "backend read timed out — see CLAUDE.md hang class #4"
             );
@@ -146,7 +146,7 @@ async fn read_with_timeout_impl<'a>(
             let err = BackendReadTimeout { duration, location };
             tracing::warn!(
                 target: "poly_core::backend_timeout",
-                duration_ms = duration.as_millis() as u64,
+                duration_ms = u64::try_from(duration.as_millis()).unwrap_or(u64::MAX),
                 location = %location,
                 "backend read timed out — see CLAUDE.md hang class #4"
             );

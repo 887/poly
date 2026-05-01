@@ -347,7 +347,7 @@ fn HighlightedSearchText(class_name: String, text: String, search_terms: Vec<Str
         let lowercase_term = term.to_lowercase();
         lowercase_text
             .find(&lowercase_term)
-            .map(|index| (index, index + lowercase_term.len()))
+            .map(|index| (index, index.saturating_add(lowercase_term.len())))
     });
 
     if let Some((start, end)) = found_match {

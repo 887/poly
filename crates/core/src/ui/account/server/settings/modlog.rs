@@ -83,6 +83,8 @@ fn action_label(action: &ModerationAction) -> String {
     }
 }
 
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
+#[allow(clippy::needless_pass_by_value)]
 fn render_modlog_row(entry: ModerationLogEntry) -> Element {
     let action = action_label(&entry.action);
     let moderator = entry.moderator.display_name.clone();

@@ -122,7 +122,7 @@ fn IconPanel(
                                     } else {
                                         settings.server_icon_overrides.insert(sid2, url);
                                     }
-                                    let _ = storage.set_app_settings(&settings).await;
+                                    drop(storage.set_app_settings(&settings).await);
                                 }
                             });
                             saved.set(true);
@@ -245,7 +245,7 @@ fn BannerPanel(
                                     } else {
                                         settings.server_banner_overrides.insert(sid2.clone(), url2.clone());
                                     }
-                                    let _ = storage.set_app_settings(&settings).await;
+                                    drop(storage.set_app_settings(&settings).await);
                                 }
                                 // 2. Call backend API
                                 if let Some(arc) = backend_arc {

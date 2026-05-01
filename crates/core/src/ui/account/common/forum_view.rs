@@ -39,7 +39,7 @@ fn build_comment_tree(post_id: &str, comments: &[Message]) -> Vec<ForumCommentNo
                     .is_some_and(|r| r.message_id == parent_id)
             })
             .map(|m| ForumCommentNode {
-                children: children_of(&m.id, all, depth + 1),
+                children: children_of(&m.id, all, depth.saturating_add(1)),
                 msg: m.clone(),
                 depth,
             })
@@ -79,7 +79,7 @@ fn post_score(msg: &Message) -> i64 {
         .max(reaction_count(msg, "🎉"))
         .max(reaction_count(msg, "🦀")));
     let down = i64::from(reaction_count(msg, "👎"));
-    up - down
+    up.saturating_sub(down)
 }
 
 fn post_text(content: &MessageContent) -> &str {
@@ -422,6 +422,13 @@ fn ForumComment(node: ForumCommentNode) -> Element {
     let ctx_text = text.clone();
     let comment_id = msg.id.clone();
 
+    // lint-allow-unused: depth.min(4) ≤ 4, * 20 ≤ 80 — fits i32 trivially.
+    #[allow(
+        clippy::arithmetic_side_effects,
+        clippy::as_conversions,
+        clippy::cast_possible_truncation,
+        clippy::cast_possible_wrap
+    )]
     let indent_px = (depth.min(4) * 20) as i32;
     let border_color = match depth % 4 {
         0 => "#60a5fa",
@@ -432,7 +439,9 @@ fn ForumComment(node: ForumCommentNode) -> Element {
 
     // Count total descendants for the collapsed summary.
     fn count_descendants(nodes: &[ForumCommentNode]) -> usize {
-        nodes.iter().fold(0, |acc, n| acc + 1 + count_descendants(&n.children))
+        nodes.iter().fold(0_usize, |acc, n| {
+            acc.saturating_add(1).saturating_add(count_descendants(&n.children))
+        })
     }
     let descendant_count = count_descendants(&children);
     let is_collapsed = *collapsed.read();

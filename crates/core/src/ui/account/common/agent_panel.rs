@@ -77,8 +77,12 @@ fn new_session_id() -> String {
             .unwrap_or(0);
         // Mix in the thread ID for pseudo-uniqueness.
         let tid = format!("{:?}", std::thread::current().id());
-        let hash: u64 = tid.bytes().fold(ts as u64, |acc, b| {
-            acc.wrapping_mul(31).wrapping_add(b as u64)
+        // lint-allow-unused: u128→u64 truncation is intentional — only need
+        // a low-bits seed for a deterministic per-thread pseudo-id hash.
+        #[allow(clippy::cast_possible_truncation, clippy::as_conversions)]
+        let ts_seed = ts as u64;
+        let hash: u64 = tid.bytes().fold(ts_seed, |acc, b| {
+            acc.wrapping_mul(31).wrapping_add(u64::from(b))
         });
         format!("{ts:032x}-{hash:016x}")
     }

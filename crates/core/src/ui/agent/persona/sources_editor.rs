@@ -70,7 +70,7 @@ fn SourceNodeRow(
     on_toggle: EventHandler<String>,
 ) -> Element {
     let key = node.key.clone();
-    let indent_px = node.depth * 16;
+    let indent_px = node.depth.saturating_mul(16);
     let mut row_class = "persona-source-node".to_string();
     if denied_by_ancestor {
         row_class.push_str(" persona-source-denied");

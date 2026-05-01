@@ -43,7 +43,7 @@ fn compute_summary(json: &serde_json::Value) -> SourceSummary {
         if let Some(acc) = row.get("account_id").and_then(|v| v.as_str()) {
             accounts.insert(acc.to_string());
         }
-        channels += 1;
+        channels = channels.saturating_add(1);
     }
 
     SourceSummary {

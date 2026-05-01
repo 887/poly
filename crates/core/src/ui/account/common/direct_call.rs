@@ -214,6 +214,8 @@ struct TemporaryCallSpec {
     instance_id: String,
 }
 
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
+#[allow(clippy::needless_pass_by_value)]
 fn activate_existing_or_new_call(
     spec: TemporaryCallSpec,
     remote_users: Vec<User>,
@@ -331,9 +333,11 @@ pub(crate) fn start_direct_call_from_active_account(
     client_manager: BatchedSignal<ClientManager>,
 ) {
     spawn(async move {
-        let _ = document::eval(JS_REQUEST_AUDIO_PERMISSION)
-            .recv::<String>()
-            .await;
+        drop(
+            document::eval(JS_REQUEST_AUDIO_PERMISSION)
+                .recv::<String>()
+                .await,
+        );
 
         let resolved_dm = resolve_direct_message_for_active_account(
             request.target_user.id.clone(),

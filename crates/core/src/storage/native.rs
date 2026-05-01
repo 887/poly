@@ -47,7 +47,7 @@ impl StorageInner {
         let db = self
             .db
             .lock()
-            .map_err(|_| StorageError::Backend("sqlite mutex poisoned".to_string()))?;
+            .map_err(|_e| StorageError::Backend("sqlite mutex poisoned".to_string()))?;
 
         let mut statement = db
             .prepare("SELECT payload FROM poly_kv WHERE key = ?1 LIMIT 1")
@@ -79,7 +79,7 @@ impl StorageInner {
         let db = self
             .db
             .lock()
-            .map_err(|_| StorageError::Backend("sqlite mutex poisoned".to_string()))?;
+            .map_err(|_e| StorageError::Backend("sqlite mutex poisoned".to_string()))?;
 
         let mut statement = db
             .prepare(
@@ -105,7 +105,7 @@ impl StorageInner {
         let db = self
             .db
             .lock()
-            .map_err(|_| StorageError::Backend("sqlite mutex poisoned".to_string()))?;
+            .map_err(|_e| StorageError::Backend("sqlite mutex poisoned".to_string()))?;
 
         let mut statement = db
             .prepare("DELETE FROM poly_kv WHERE key = ?1")
@@ -125,7 +125,7 @@ impl StorageInner {
         let db = self
             .db
             .lock()
-            .map_err(|_| StorageError::Backend("sqlite mutex poisoned".to_string()))?;
+            .map_err(|_e| StorageError::Backend("sqlite mutex poisoned".to_string()))?;
         db.execute("DELETE FROM poly_kv")
             .map_err(|e| StorageError::Backend(format!("clear_all: {e}")))?;
         Ok(())

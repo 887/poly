@@ -157,7 +157,7 @@ const CSS_SLICES: &[Asset] = &[CSS_0];
 
         // Remove tailwind.css if it exists (cleanup from a previous release build).
         if tailwind_path.exists() {
-            let _ = std::fs::remove_file(&tailwind_path);
+            drop(std::fs::remove_file(&tailwind_path));
         }
 
         // Generate css.rs with individual asset!() references for each partial.

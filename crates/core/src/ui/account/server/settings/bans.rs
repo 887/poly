@@ -61,6 +61,8 @@ pub fn BansTab(server_id: String, account_id: String) -> Element {
     }
 }
 
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
+#[allow(clippy::needless_pass_by_value)]
 fn render_ban_row(
     ban: BannedMember,
     server_id: String,

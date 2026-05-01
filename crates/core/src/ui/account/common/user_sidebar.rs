@@ -78,9 +78,10 @@ fn HighlightedName(name: String, query: String) -> Element {
     let lower_name = name.to_lowercase();
     let lower_q = query.to_lowercase();
     if let Some(pos) = lower_name.find(lower_q.as_str()) {
-        let before = name[..pos].to_string();
-        let matched = name[pos..pos + lower_q.len()].to_string();
-        let after = name[pos + lower_q.len()..].to_string();
+        let end = pos.saturating_add(lower_q.len());
+        let before = name.get(..pos).unwrap_or_default().to_string();
+        let matched = name.get(pos..end).unwrap_or_default().to_string();
+        let after = name.get(end..).unwrap_or_default().to_string();
         rsx! {
             span {
                 "{before}"

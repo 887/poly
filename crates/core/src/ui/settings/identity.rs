@@ -82,7 +82,7 @@ async fn create_identity() -> Result<(String, Vec<String>), String> {
     // Persist account_id to app settings
     if let Ok(mut settings) = s.get_app_settings().await {
         settings.account_id = account_id.clone();
-        let _ = s.set_app_settings(&settings).await;
+        drop(s.set_app_settings(&settings).await);
     }
     Ok((account_id, words))
 }

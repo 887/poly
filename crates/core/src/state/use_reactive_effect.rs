@@ -69,20 +69,8 @@
 
 use dioxus::prelude::*;
 
-/// Run `body(deps)` once, and re-run it whenever `deps` changes
-/// (`PartialEq`). See module-level docs for the full contract.
-///
-/// ```ignore
-/// // before — stale capture, only fires once with the initial server_id
-/// use_effect(move || {
-///     do_something_with(&server_id); // silently stale on navigation
-/// });
-///
-/// // after — re-fires whenever server_id changes
-/// use_reactive_effect(server_id.clone(), move |sid| {
-///     do_something_with(&sid);
-/// });
-/// ```
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
+#[allow(clippy::needless_pass_by_value)]
 pub fn use_reactive_effect<Deps, F>(deps: Deps, body: F)
 where
     Deps: PartialEq + Clone + 'static,

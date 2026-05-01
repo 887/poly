@@ -203,6 +203,9 @@ pub fn ClientMenu(
                         focused_index.set(next);
                         evt.prevent_default();
                     }
+                    // lint-allow-unused: dioxus Key has many variants; only Up/Down
+                    // arrow keys participate in menu navigation, others ignored.
+                    #[allow(clippy::wildcard_enum_match_arm)]
                     _ => {}
                 }
             },
@@ -211,8 +214,8 @@ pub fn ClientMenu(
     }
 }
 
-/// Render the flat `items` list as slot-grouped top-level items, with
-/// host separators inserted between occupied slots.
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
+#[allow(clippy::needless_pass_by_value)]
 fn render_grouped(
     items: Vec<MenuItem>,
     target: MenuTargetKind,
@@ -273,7 +276,7 @@ fn render_grouped(
                 &mut visited,
                 is_focused,
             ));
-            flat_index += 1;
+            flat_index = flat_index.saturating_add(1);
         }
     }
 
@@ -372,11 +375,8 @@ impl RenderCtx {
     }
 }
 
-/// Render a single item and (recursively) any nested submenu children.
-///
-/// `visited` is the set of ancestor ids; a child whose id is already in
-/// `visited` is dropped as a cycle (redundant with `reconstruct_tree`, but
-/// cheap and defensive against bad plugin output).
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
+#[allow(clippy::needless_pass_by_value)]
 fn render_item(
     item: MenuItem,
     children_by_parent: &HashMap<String, Vec<MenuItem>>,
@@ -418,6 +418,8 @@ fn render_icon(icon: &Option<IconSource>) -> Element {
     }
 }
 
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
+#[allow(clippy::needless_pass_by_value)]
 fn render_leaf(
     item: MenuItem,
     danger: bool,
@@ -510,7 +512,7 @@ fn render_submenu(
             child.clone(),
             children_by_parent,
             ctx.clone(),
-            depth + 1,
+            depth.saturating_add(1),
             visited,
             false,
         ));
@@ -540,6 +542,9 @@ fn render_submenu(
                         open.set(false);
                         evt.prevent_default();
                     }
+                    // lint-allow-unused: dioxus Key has many variants;
+                    // only the explicit submenu navigation keys participate.
+                    #[allow(clippy::wildcard_enum_match_arm)]
                     _ => {}
                 }
             },
@@ -568,8 +573,8 @@ fn render_submenu(
     }
 }
 
-/// Render an info-block menu item. When the item has a `CustomBlock`
-/// attached, delegate to the real [`CustomBlock`] component (P14).
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
+#[allow(clippy::needless_pass_by_value)]
 fn render_info_block(item: MenuItem) -> Element {
     let label = t(&item.label_key);
     let block: Option<CustomBlockData> = item.block.clone();

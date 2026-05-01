@@ -213,7 +213,7 @@ pub fn PersonaAuditPanel(props: PersonaAuditPanelProps) -> Element {
 
     // Pagination.
     let page_rows: Vec<AuditRow> = {
-        let start = *page.read() * PAGE_SIZE;
+        let start = page.read().saturating_mul(PAGE_SIZE);
         rows.read()
             .iter()
             .skip(start)
@@ -344,12 +344,12 @@ pub fn PersonaAuditPanel(props: PersonaAuditPanelProps) -> Element {
 /// is consumed by the browser's download mechanism which decodes it before
 /// writing to disk.
 fn js_sys_encode_uri_component(s: &str) -> String {
-    let mut out = String::with_capacity(s.len() * 3);
+    let mut out = String::with_capacity(s.len().saturating_mul(3));
     for b in s.bytes() {
         match b {
             b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9'
             | b'-' | b'_' | b'.' | b'!' | b'~' | b'*' | b'\'' | b'(' | b')' => {
-                out.push(b as char);
+                out.push(char::from(b));
             }
             _ => {
                 out.push('%');

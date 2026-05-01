@@ -125,6 +125,8 @@ fn handle_navigate(route_str: &str) {
     }
 }
 
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
+#[allow(clippy::needless_pass_by_value)]
 fn handle_open_settings(anchor: SettingsAnchor) {
     // The `SettingsAnchor` has a `scope` / `scope_id` / `section_key` triple.
     // The host's `SettingsRoute` doesn't yet carry query params (tracked by
@@ -139,6 +141,8 @@ fn handle_open_settings(anchor: SettingsAnchor) {
     nav!(Route::SettingsRoute);
 }
 
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
+#[allow(clippy::needless_pass_by_value)]
 fn handle_pending(handle: PendingHandle, cx: ActionOutcomeCx) {
     // Enqueue a sticky "Working…" toast so the user sees the async work in
     // flight. Polling resolves by dismissing this toast + recursing once

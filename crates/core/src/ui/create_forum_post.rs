@@ -109,9 +109,11 @@ pub(crate) fn CreateForumPostPage(
                                 // is imported via BackendHandleExt; keep as direct .read() here
                                 // because read_with_timeout is not stable on all build targets yet.
                                 let guard = bh.read().await;
-                                let _ = guard
-                                    .create_forum_post(&channel, &title, &body_text, vec![])
-                                    .await;
+                                drop(
+                                    guard
+                                        .create_forum_post(&channel, &title, &body_text, vec![])
+                                        .await,
+                                );
                                 // Navigate back regardless of result — error feedback is a
                                 // Phase D / E concern (toast system not yet wired here).
                             }

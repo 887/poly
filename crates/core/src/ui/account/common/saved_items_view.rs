@@ -54,7 +54,7 @@ fn HighlightedSavedText(text: String, search_terms: Vec<String>) -> Element {
         let lowercase_term = term.to_lowercase();
         lowercase_text
             .find(&lowercase_term)
-            .map(|index| (index, index + lowercase_term.len()))
+            .map(|index| (index, index.saturating_add(lowercase_term.len())))
     });
 
     if let Some((start, end)) = found_match {
@@ -81,7 +81,7 @@ fn build_saved_sources(items: &[SavedPinnedItem]) -> Vec<SavedSourceSummary> {
             .iter_mut()
             .find(|source| source.channel_id == item.hit.channel_id)
         {
-            existing.count += 1;
+            existing.count = existing.count.saturating_add(1);
             if item.hit.message.timestamp > existing.latest_timestamp {
                 existing.latest_timestamp = item.hit.message.timestamp;
             }

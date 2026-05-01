@@ -295,6 +295,8 @@ fn startup_log_lines(
     lines
 }
 
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
+#[allow(clippy::needless_pass_by_value)]
 fn startup_overlay_state(
     params: StartupOverlayParams,
     app_state: &AppState,

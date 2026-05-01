@@ -51,6 +51,7 @@ mod native_impl {
         /// Open the `drafts` table in the shared Poly database.
         ///
         /// Returns `Ok(None)` if the database does not exist yet (MCP not run yet).
+        #[must_use]
         pub fn try_open() -> Option<Self> {
             let path = crate::storage::poly_data_dir().join("storage.sqlite3");
             if !path.exists() {
@@ -62,6 +63,7 @@ mod native_impl {
         }
 
         /// Return all pending drafts for a specific `account_id` + `chat_id`.
+        #[must_use]
         pub fn pending_for_chat(&self, account_id: &str, chat_id: &str) -> Vec<Draft> {
             let db = match self.db.lock() {
                 Ok(d) => d,
@@ -83,6 +85,7 @@ mod native_impl {
         }
 
         /// Return all pending drafts for an `account_id` across all chats.
+        #[must_use]
         pub fn pending_for_account(&self, account_id: &str) -> Vec<Draft> {
             let db = match self.db.lock() {
                 Ok(d) => d,

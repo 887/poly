@@ -221,15 +221,15 @@ fn PluginSettingField(
         }
         Some(Ok(current_json)) => {
             let current_json = current_json.clone();
-            render_widget(
-                field.clone(),
+            render_widget(RenderArgs {
+                field: field.clone(),
                 label_key,
                 desc_opt,
                 current_json,
                 account_id,
                 scope,
                 scope_id,
-            )
+            })
         }
     }
 }
@@ -245,7 +245,13 @@ fn render_error_row(label: &str, msg: &str) -> Element {
     }
 }
 
-fn render_widget(
+/// Bundled arguments for the per-widget render helpers.
+///
+/// These args are shared by `render_toggle`, `render_text_input`,
+/// `render_select`, `render_slider`. Bundling avoids `too_many_arguments`
+/// and keeps the dispatch site (`render_widget`) terse.
+#[derive(Clone)]
+struct RenderArgs {
     field: SettingDescriptor,
     label_key: String,
     desc_opt: Option<String>,
@@ -253,33 +259,22 @@ fn render_widget(
     account_id: String,
     scope: SettingsScope,
     scope_id: String,
-) -> Element {
-    match field.kind {
-        SettingKind::Toggle => render_toggle(
-            field, label_key, desc_opt, current_json, account_id, scope, scope_id,
-        ),
-        SettingKind::TextInput => render_text_input(
-            field, label_key, desc_opt, current_json, account_id, scope, scope_id,
-        ),
-        SettingKind::Select => render_select(
-            field, label_key, desc_opt, current_json, account_id, scope, scope_id,
-        ),
-        SettingKind::Slider => render_slider(
-            field, label_key, desc_opt, current_json, account_id, scope, scope_id,
-        ),
-        SettingKind::InfoLabel => render_info_label(label_key, desc_opt, current_json),
+}
+
+fn render_widget(args: RenderArgs) -> Element {
+    match args.field.kind {
+        SettingKind::Toggle => render_toggle(args),
+        SettingKind::TextInput => render_text_input(args),
+        SettingKind::Select => render_select(args),
+        SettingKind::Slider => render_slider(args),
+        SettingKind::InfoLabel => render_info_label(&args.label_key, args.desc_opt, &args.current_json),
     }
 }
 
-fn render_toggle(
-    field: SettingDescriptor,
-    label_key: String,
-    desc_opt: Option<String>,
-    current_json: String,
-    account_id: String,
-    scope: SettingsScope,
-    scope_id: String,
-) -> Element {
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
+#[allow(clippy::needless_pass_by_value)]
+fn render_toggle(args: RenderArgs) -> Element {
+    let RenderArgs { field, label_key, desc_opt, current_json, account_id, scope, scope_id } = args;
     let checked = serde_json::from_str::<bool>(&current_json).unwrap_or(false);
     let checked_str = if checked { "true" } else { "false" };
     let key = field.key.clone();
@@ -316,15 +311,10 @@ fn render_toggle(
     }
 }
 
-fn render_text_input(
-    field: SettingDescriptor,
-    label_key: String,
-    desc_opt: Option<String>,
-    current_json: String,
-    account_id: String,
-    scope: SettingsScope,
-    scope_id: String,
-) -> Element {
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
+#[allow(clippy::needless_pass_by_value)]
+fn render_text_input(args: RenderArgs) -> Element {
+    let RenderArgs { field, label_key, desc_opt, current_json, account_id, scope, scope_id } = args;
     let value = serde_json::from_str::<String>(&current_json).unwrap_or_default();
     let key = field.key.clone();
     rsx! {
@@ -356,15 +346,10 @@ fn render_text_input(
     }
 }
 
-fn render_select(
-    field: SettingDescriptor,
-    label_key: String,
-    desc_opt: Option<String>,
-    current_json: String,
-    account_id: String,
-    scope: SettingsScope,
-    scope_id: String,
-) -> Element {
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
+#[allow(clippy::needless_pass_by_value)]
+fn render_select(args: RenderArgs) -> Element {
+    let RenderArgs { field, label_key, desc_opt, current_json, account_id, scope, scope_id } = args;
     let current = serde_json::from_str::<String>(&current_json).unwrap_or_default();
     let options: Vec<String> =
         serde_json::from_str::<Vec<String>>(&field.extra).unwrap_or_default();
@@ -406,15 +391,10 @@ fn render_select(
     }
 }
 
-fn render_slider(
-    field: SettingDescriptor,
-    label_key: String,
-    desc_opt: Option<String>,
-    current_json: String,
-    account_id: String,
-    scope: SettingsScope,
-    scope_id: String,
-) -> Element {
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
+#[allow(clippy::needless_pass_by_value)]
+fn render_slider(args: RenderArgs) -> Element {
+    let RenderArgs { field, label_key, desc_opt, current_json, account_id, scope, scope_id } = args;
     let value = serde_json::from_str::<f64>(&current_json).unwrap_or(0.0_f64);
     // `extra` is a JSON object like {"min":0,"max":100,"step":1}
     let bounds: serde_json::Value =
@@ -462,10 +442,10 @@ fn render_slider(
     }
 }
 
-fn render_info_label(label_key: String, desc_opt: Option<String>, current_json: String) -> Element {
+fn render_info_label(label_key: &str, desc_opt: Option<String>, current_json: &str) -> Element {
     // InfoLabel is non-interactive. The stored JSON string is the body text
     // if any; otherwise fall back to the desc (if present).
-    let body = serde_json::from_str::<String>(&current_json)
+    let body = serde_json::from_str::<String>(current_json)
         .ok()
         .or(desc_opt)
         .unwrap_or_default();

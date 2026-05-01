@@ -2420,7 +2420,7 @@ fn render_chat_header(ctx: ChatViewMarkupCtx) -> Element {
     }
 }
 
-// lint-allow-unused: ChatViewMarkupCtx is Clone; render_* fns own their copy by convention
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
 #[allow(clippy::needless_pass_by_value)]
 fn render_chat_header_info(ctx: ChatViewMarkupCtx) -> Element {
     let current_channel = ctx.current_channel.clone();
@@ -2552,7 +2552,7 @@ fn close_chat_side_column_state(
     });
 }
 
-// lint-allow-unused: ChatViewMarkupCtx is Clone; render_* fns own their copy by convention
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
 #[allow(clippy::needless_pass_by_value)]
 fn render_mobile_chat_header_right_toggle(ctx: ChatViewMarkupCtx) -> Element {
     let app_state = ctx.app_state;
@@ -3208,7 +3208,7 @@ fn render_member_toggle_button(
     }
 }
 
-// lint-allow-unused: ChatViewMarkupCtx is Clone; render_* fns own their copy by convention
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
 #[allow(clippy::needless_pass_by_value)]
 fn render_chat_header_search(ctx: ChatViewMarkupCtx) -> Element {
     let search_placeholder = ctx.search_placeholder.clone();
@@ -3353,7 +3353,7 @@ fn handle_search_filter_keydown(
     }
 }
 
-// lint-allow-unused: signal/text helper-style render fn called inline from rsx!
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
 #[allow(clippy::needless_pass_by_value)]
 fn render_search_clear_button(
     search_query_value: String,
@@ -3418,7 +3418,7 @@ fn render_chat_content_column(ctx: ChatViewMarkupCtx) -> Element {
     }
 }
 
-// lint-allow-unused: ChatViewMarkupCtx is Clone; render_* fns own their copy by convention
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
 #[allow(clippy::needless_pass_by_value)]
 fn render_message_list(ctx: ChatViewMarkupCtx) -> Element {
     let loading = ctx.loading;
@@ -3526,7 +3526,7 @@ fn render_message_list(ctx: ChatViewMarkupCtx) -> Element {
     }
 }
 
-// lint-allow-unused: ChatViewMarkupCtx is Clone; render_* fns own their copy by convention
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
 #[allow(clippy::needless_pass_by_value)]
 fn render_message_list_loading_overlays(ctx: ChatViewMarkupCtx) -> Element {
     let history_snapshot = ctx.history_state.read().clone();
@@ -3767,7 +3767,7 @@ async fn load_newer_messages(
     history_state.batch(|h| h.loading_after = false);
 }
 
-// lint-allow-unused: ChatViewMarkupCtx is Clone; render_* fns own their copy by convention
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
 #[allow(clippy::needless_pass_by_value)]
 fn render_message_list_content(ctx: ChatViewMarkupCtx) -> Element {
     if ctx.loading {
@@ -3877,13 +3877,7 @@ fn render_message_list_content(ctx: ChatViewMarkupCtx) -> Element {
     }
 }
 
-/// Render the "Jump to Present" / "You're Viewing Older Messages" floating button.
-///
-/// Shown when the user has scrolled up far enough from the live tail (tracked by
-/// `scrolled_from_bottom`) or when `has_more_after = true` (newer unloaded messages exist).
-/// Clicking it scrolls to the bottom and, if `has_more_after`, the scroll sentinel will
-/// automatically chain-load newer message pages to bring the user to the live tail.
-// lint-allow-unused: ChatViewMarkupCtx is Clone; render_* fns own their copy by convention
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
 #[allow(clippy::needless_pass_by_value)]
 fn render_jump_to_present(ctx: ChatViewMarkupCtx) -> Element {
     let is_scrolled = *ctx.scrolled_from_bottom.read();
@@ -3931,7 +3925,7 @@ fn render_jump_to_present(ctx: ChatViewMarkupCtx) -> Element {
     }
 }
 
-// lint-allow-unused: ChatViewMarkupCtx is Clone; render_* fns own their copy by convention
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
 #[allow(clippy::needless_pass_by_value)]
 fn render_unread_banner(ctx: ChatViewMarkupCtx) -> Element {
     // Only show the banner if there are unread messages AND the unread marker is not visible on screen
@@ -3967,7 +3961,7 @@ fn render_unread_banner(ctx: ChatViewMarkupCtx) -> Element {
     }
 }
 
-// lint-allow-unused: ChatViewMarkupCtx is Clone; render_* fns own their copy by convention
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
 #[allow(clippy::needless_pass_by_value)]
 fn render_message_row(ctx: ChatViewMarkupCtx, msg: Message, prev_msg: Option<Message>) -> Element {
     let show_date_sep = match prev_msg.as_ref() {
@@ -4050,7 +4044,7 @@ fn render_message_row(ctx: ChatViewMarkupCtx, msg: Message, prev_msg: Option<Mes
     }
 }
 
-// lint-allow-unused: ChatViewMarkupCtx is Clone; render_* fns own their copy by convention
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
 #[allow(clippy::needless_pass_by_value)]
 fn render_message_actions(
     ctx: ChatViewMarkupCtx,
@@ -4153,7 +4147,7 @@ fn render_message_actions(
     }
 }
 
-// lint-allow-unused: ChatViewMarkupCtx is Clone; render_* fns own their copy by convention
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
 #[allow(clippy::needless_pass_by_value)]
 fn render_full_message_body(
     ctx: ChatViewMarkupCtx,
@@ -4191,7 +4185,7 @@ fn render_full_message_body(
     }
 }
 
-// lint-allow-unused: ChatViewMarkupCtx is Clone; render_* fns own their copy by convention
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
 #[allow(clippy::needless_pass_by_value)]
 fn render_grouped_message_body(
     ctx: ChatViewMarkupCtx,
@@ -4207,7 +4201,7 @@ fn render_grouped_message_body(
     }
 }
 
-// lint-allow-unused: ChatViewMarkupCtx is Clone; render_* fns own their copy by convention
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
 #[allow(clippy::needless_pass_by_value)]
 fn render_message_content_stack(ctx: ChatViewMarkupCtx, msg: Message, is_editing: bool) -> Element {
     rsx! {
@@ -4308,7 +4302,7 @@ fn render_message_input_enabled(ctx: ChatViewMarkupCtx) -> Element {
     }
 }
 
-// lint-allow-unused: ChatViewMarkupCtx is Clone; render_* fns own their copy by convention
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
 #[allow(clippy::needless_pass_by_value)]
 fn render_attachment_preview_strip(ctx: ChatViewMarkupCtx) -> Element {
     let previews = ctx.pending_attachments.read().clone();
@@ -4349,7 +4343,7 @@ fn render_attachment_preview_strip(ctx: ChatViewMarkupCtx) -> Element {
     }
 }
 
-// lint-allow-unused: ChatViewMarkupCtx is Clone; render_* fns own their copy by convention
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
 #[allow(clippy::needless_pass_by_value)]
 fn render_slash_command_popup(ctx: ChatViewMarkupCtx) -> Element {
     let all_cmds = ctx.command_suggestions.read().clone();
@@ -4813,7 +4807,7 @@ fn apply_selected_slash_command(ctx: ComposerRuntimeCtx) {
     }
 }
 
-// lint-allow-unused: ChatViewMarkupCtx is Clone; render_* fns own their copy by convention
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
 #[allow(clippy::needless_pass_by_value)]
 fn render_send_button(ctx: ChatViewMarkupCtx) -> Element {
     let channel_id = ctx.channel_id.clone();
@@ -4870,7 +4864,7 @@ fn render_send_button(ctx: ChatViewMarkupCtx) -> Element {
     }
 }
 
-// lint-allow-unused: ChatViewMarkupCtx is Clone; render_* fns own their copy by convention
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
 #[allow(clippy::needless_pass_by_value)]
 fn render_hidden_file_input(ctx: ChatViewMarkupCtx) -> Element {
     let pending_attachments = ctx.pending_attachments;
@@ -4892,7 +4886,7 @@ fn render_hidden_file_input(ctx: ChatViewMarkupCtx) -> Element {
     }
 }
 
-// lint-allow-unused: ChatViewMarkupCtx is Clone; render_* fns own their copy by convention
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
 #[allow(clippy::needless_pass_by_value)]
 fn render_input_emoji_picker(ctx: ChatViewMarkupCtx) -> Element {
     let mut message_input = ctx.message_input;
@@ -4979,7 +4973,7 @@ fn render_chat_side_column(ctx: ChatViewMarkupCtx) -> Element {
     }
 }
 
-// lint-allow-unused: ChatViewMarkupCtx is Clone; render_* fns own their copy by convention
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
 #[allow(clippy::needless_pass_by_value)]
 fn render_chat_tools_panel(ctx: ChatViewMarkupCtx) -> Element {
     let app_state = ctx.app_state;
@@ -5102,7 +5096,7 @@ fn render_chat_tools_panel(ctx: ChatViewMarkupCtx) -> Element {
     }
 }
 
-// lint-allow-unused: ChatViewMarkupCtx is Clone; render_* fns own their copy by convention
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
 #[allow(clippy::needless_pass_by_value)]
 fn render_chat_utility_rail(
     ctx: ChatViewMarkupCtx,
@@ -5205,7 +5199,7 @@ fn render_chat_utility_rail(
     }
 }
 
-// lint-allow-unused: ChatViewMarkupCtx is Clone; render_* fns own their copy by convention
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
 #[allow(clippy::needless_pass_by_value)]
 fn render_chat_overlays(ctx: ChatViewMarkupCtx) -> Element {
     let reaction_picker_id = ctx.reaction_picker_id.clone();
@@ -6364,7 +6358,7 @@ fn MsgContextMenuOverlay(
     }
 }
 
-// lint-allow-unused: signal/text helper-style render fn called inline from rsx!
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
 #[allow(clippy::needless_pass_by_value)]
 fn render_context_menu_quick_reactions(
     message_id: String,

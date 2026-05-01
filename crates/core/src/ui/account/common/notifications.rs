@@ -619,6 +619,9 @@ fn format_time_ago(ts: chrono::DateTime<chrono::Utc>) -> String {
     use crate::i18n::{t, t_args};
 
     let now = chrono::Utc::now();
+    // lint-allow-unused: chrono Duration subtraction is checked internally;
+    // overflow only on >290y deltas which the UI cannot produce.
+    #[allow(clippy::arithmetic_side_effects)]
     let diff = now - ts;
 
     if diff.num_minutes() < 1 {

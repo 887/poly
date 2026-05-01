@@ -176,6 +176,8 @@ pub fn format_file_size(bytes: u64) -> String {
     if bytes < 1024 {
         return format!("{bytes} B");
     }
+    // lint-allow-unused: u64→f64 lossy is acceptable for human-readable size display.
+    #[allow(clippy::cast_precision_loss, clippy::as_conversions)]
     let kb = bytes as f64 / 1_024.0_f64;
     if kb < 1_024.0_f64 {
         return format!("{kb:.1} KB");
@@ -221,8 +223,9 @@ pub fn user_color(user_id: &str) -> &'static str {
         "#2dd4bf", // teal
         "#f472b6", // pink
     ];
-    colors
-        .get((hash as usize) % colors.len())
-        .copied()
-        .unwrap_or("#60a5fa")
+    // lint-allow-unused: hash is u32, usize is at least 32 bits; modulo by a
+    // non-zero const len is safe (colors has 8 entries, always nonzero).
+    #[allow(clippy::as_conversions, clippy::arithmetic_side_effects)]
+    let idx = (hash as usize) % colors.len();
+    colors.get(idx).copied().unwrap_or("#60a5fa")
 }

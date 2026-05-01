@@ -165,7 +165,7 @@ async fn join_voice_channel(
 ) {
     // Step 1: Request microphone permission so browser shows the prompt now.
     let mut perm_eval = document::eval(JS_REQUEST_AUDIO_PERMISSION);
-    let _ = perm_eval.recv::<String>().await; // proceed regardless of grant/deny
+    drop(perm_eval.recv::<String>().await); // proceed regardless of grant/deny
 
     // Step 2: Disconnect from any active voice channel before joining a new one.
     if chat_data.read().voice_connection.is_some() {

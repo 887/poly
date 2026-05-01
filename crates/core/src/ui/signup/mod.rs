@@ -432,7 +432,7 @@ async fn remove_backend_account_now(
     let handle = client_manager.batch(move |cm| cm.take_account(&aid));
     if let Some(h) = handle {
         let mut g = h.write().await;
-        let _ = g.logout().await;
+        drop(g.logout().await);
     }
     {
         let aid = account_id.clone();
@@ -448,7 +448,7 @@ async fn remove_backend_account_now(
         });
     }
     if let Some(storage) = crate::STORAGE.get() {
-        let _ = storage.remove_account_token(&backend_slug, &account_id).await;
+        drop(storage.remove_account_token(&backend_slug, &account_id).await);
     }
     crate::nav!(Route::SettingsRoute);
 }
@@ -468,7 +468,7 @@ async fn ensure_poly_signup_identity(client: &str) -> Option<Vec<u8>> {
 
     if let Ok(mut settings) = storage.get_app_settings().await {
         settings.account_id = account_id;
-        let _ = storage.set_app_settings(&settings).await;
+        drop(storage.set_app_settings(&settings).await);
     }
 
     Some(key_bytes.to_vec())
