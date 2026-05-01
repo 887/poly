@@ -97,19 +97,19 @@ pub fn ClientSettingsForBackend(backend_id: String) -> Element {
 
     let bid_card = backend_id.clone();
     rsx! {
-        div { class: "settings-toggle-row settings-client-config-row",
-            if let Some(err) = error.read().clone() {
+        if let Some(err) = error.read().clone() {
+            div { class: "settings-toggle-row",
                 p { class: "settings-toggle-desc", "Client-config load failed: {err}" }
-            } else if let Some(eff) = effective_version.read().clone() {
-                BackendCard {
-                    backend_id: bid_card.clone(),
-                    effective_version: eff,
-                    version_override: version_override_state.read().clone(),
-                }
-            } else {
-                p { class: "settings-toggle-desc", "Loading client config…" }
+            }
+        } else if let Some(eff) = effective_version.read().clone() {
+            BackendCard {
+                backend_id: bid_card.clone(),
+                effective_version: eff,
+                version_override: version_override_state.read().clone(),
             }
         }
+        // Loading state: render nothing — the rows pop in once loaded so we
+        // don't show a transient "Loading client config…" placeholder.
     }
 }
 
