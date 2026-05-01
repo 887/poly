@@ -1,6 +1,30 @@
 # Plan — Clippy Opt-in Lint Policy + Workspace Cleanup
 
-## Status: 🚧 IN PROGRESS — Phases 0-6 SHIPPED 2026-05-01; Phase 7 (CI deny gate) remaining
+## Status: 🚧 IN PROGRESS — Phases 0-6 SHIPPED 2026-05-01 + Native cleanup pass (`8b3e0b0e`, `a4af6d67`); ~5564 → ~362 warns (93.5% reduction). Phase 7 (CI deny gate) deferred — needs taste decisions on residuals.
+
+**Remaining 362 warnings, by category (post Native A+B):**
+- poly-core lib: 182 — 43 `needless_pass_by_value` (banned), 26 `mod_module_files`, 22 `arithmetic_side_effects`, 18 `let_underscore_must_use`, 17 `as_conversions`, 12 `match_same_arms` (intentional), 9 `wildcard_enum_match_arm`, 5 `too_many_arguments` (banned), 5 `map_err_ignore`, 3 `string_slice`, ~21 misc
+- poly-demo lib: 163 — mostly chained chrono Duration arithmetic in fixture data (after `ago_*()` helper extraction), `needless_pass_by_value` on `CommentMeta` builder
+- poly-server lib: 5 (`mod_module_files`)
+- poly-discord lib: 4
+- poly-backup-server lib: 3 (`mod_module_files`)
+- poly-stoat lib: 1 (`needless_pass_by_value` banned)
+- poly-server-client lib: 1 (`needless_pass_by_value` banned)
+- poly-teams lib: 1 (`mod_module_files`)
+- poly-github lib: 1
+- poly-core build script: 1 (`let_underscore_must_use`)
+
+**Categorization:**
+- Banned lint-gate bypass needed: ~50 (`needless_pass_by_value` + `too_many_arguments`) — requires signature refactors
+- Out of scope per task brief: ~36 (`mod_module_files` — file renames)
+- Intentional skips: ~12 (`match_same_arms` doc-bearing arms)
+- Macro-emit (dioxus rsx!): ~27 (`redundant_locals` from rsx! expansion; need upstream patch or `poly-ui-macros` wrapper)
+- Genuine fixable: ~237 (most in poly-demo fixtures + remaining poly-core arithmetic/as/let_underscore/wildcard)
+
+**Phase 7 path forward** — three options for the user:
+1. **Promote opt-in lints to `deny` workspace-wide with allowlist** — needs all 237 genuine-fixable burned down first; ETA ~6h more.
+2. **Per-crate `[lints]` overrides in Cargo.toml** — demote noisy lints in poly-demo (test backend) and poly-core's macro sites to `allow`; promote others to `deny`. ETA ~2h.
+3. **Snapshot-based CI gate** — fail CI if warning count exceeds current `362` baseline (regression detection only). ETA ~30min. Most pragmatic, lowest risk.
 
 > Last updated: 2026-05-01 (post-Phase-0 audit)
 > Audit logs:
