@@ -1,25 +1,31 @@
-# Plan — Clippy `pedantic` + `restriction` Cleanup (Workspace-Wide Triage)
+# Plan — Clippy Opt-in Lint Policy + Workspace Cleanup
 
-## Status: 🚧 PLANNED — not started (audit run 2026-04-30; design decisions resolved 2026-05-01)
+## Status: 🚧 IN PROGRESS — Phase 0 SHIPPED 2026-05-01
 
-> Last updated: 2026-05-01
-> Audit logs: `/tmp/audit/workspace-clippy.log` + `/tmp/audit/audit-<crate>-{clippy,test}.log`
+> Last updated: 2026-05-01 (post-Phase-0 audit)
+> Audit logs:
+> - Original (pedantic+restriction wholesale): `/tmp/audit/workspace-clippy.log` (5,564 warnings)
+> - Post-Phase-0 (opt-in): `/tmp/audit/post-phase-0-optin.log` (2,065 warnings + 24 errors)
 
 ## Design decisions (frozen 2026-05-01)
 
-User-confirmed answers to the two open design questions:
-
-- **`servers/test-*` strategy:** **per-lint cleanup** (option b). NO blanket
-  `#![allow(clippy::pedantic, clippy::restriction)]` on the test-server
-  crates. Test fixtures get the same pedantic+restriction discipline as
-  production code — agents pick up bad habits from any wiggle-room and
-  carry them into prod paths. Yes, this is more work; it's required work.
+- **Approach:** **OPT-IN, not opt-out** — `[workspace.lints.clippy]`
+  enables ~25 lints by name. NO `pedantic`/`restriction` group enables.
+  Clippy itself emits `blanket_clippy_restriction_lints` to discourage
+  the wholesale pattern. Opt-in means new clippy releases can't
+  surprise-flood the workspace, and reading the config tells you
+  exactly what's enforced.
+- **`servers/test-*` strategy:** **per-lint cleanup**. NO blanket
+  `#![allow(...)]` on the test-server crates. Test fixtures get the
+  same lint discipline as production code — agents pick up bad habits
+  from any wiggle-room and carry them into prod paths. Yes, this is
+  more work; it's required work.
 - **Safety-critical lints (`arithmetic_side_effects`, `as_conversions`,
-  `default_numeric_fallback`):** **workspace-wide `warn`** (option ii). One
-  global level. NO per-subtree allow carve-outs. UI dev is hard enough
-  without programming-logic bugs masquerading as render bugs; the lint
-  noise is preferable to the bug-hunting it would prevent. Same
-  zero-wiggle-room rationale: agents will mimic any `allow` they find.
+  `default_numeric_fallback`):** **workspace-wide `warn`**. One global
+  level. NO per-subtree allow carve-outs. UI dev is hard enough without
+  programming-logic bugs masquerading as render bugs; the lint noise is
+  preferable to the bug-hunting it would prevent. Same zero-wiggle-room
+  rationale: agents will mimic any `allow` they find.
 
 ---
 
@@ -103,31 +109,65 @@ implications before applying**:
 
 ---
 
-## 3. Top-of-the-mountain noise inventory
+## 3. Post-Phase-0 audit (real numbers from opt-in clippy run)
 
-### 3.1 Top 20 noisiest crates (by `generated N warnings` from workspace clippy run)
+### 3.1 Top crates by warning count (post-Phase-0)
 
-Only the 12 crates that clippy reached are listed; the other 35 will be
-populated after Phase 1 unblocks the audit.
+| Rank | Crate | Warnings | Notes |
+|--:|-------|---------:|-------|
+| 1 | `poly-demo` | 460 | Demo data + sample renders; lots of `must_use_candidate`. |
+| 2 | `poly-plugin-host` | 143 | **TIER 1.** WIT plumbing — heavy `arithmetic_side_effects` on byte offsets, `as_conversions` on size casts. Biggest payoff for UI stability. |
+| 3 | `poly-lint-gate` | 133 | Build-script crate; mostly `default_numeric_fallback`. **Has 5 Phase-1 blockers.** |
+| 4 | `poly-web-devtools-mcp` | 128 | MCP server; CDP message parsing — `as_conversions` on int sizes. |
+| 5 | `poly-electron-devtools-mcp` | 118 | Same shape as web-devtools-mcp. |
+| 6 | `poly-hackernews` | 109 | HN client — JSON parsing casts. |
+| 7 | `poly-cli` | 98 | **Has 4 Phase-1 blockers.** |
+| 8 | `poly-teams` | 87 | Microsoft Graph client. |
+| 9 | `poly-github` | 86 | GitHub gh-CLI wrapper + REST. |
+| 10 | `poly-desktop-devtools-mcp` | 86 | |
+| 11 | `poly-lemmy` | 84 | |
+| 12 | `poly-discord` | 82 | **Has 8 Phase-1 blockers.** |
+| 13 | `poly-backup-server` | 81 | |
+| 14 | `poly-forgejo` | 78 | |
+| 15 | `poly-server` | 70 | Down from 1,605! Pure noise lints were 96% of its volume. |
+| 16 | `poly-stoat` | 52 | |
+| 17 | `poly-devtools-protocol` | 48 | Down from 476. |
+| 18 | `poly-server-client` | 46 | |
+| 19 | `poly-test-discord` | 45 | |
+| 20 | `poly-matrix` | 44 | |
+| ... | (long tail) | <30 each | |
 
-| # | Crate | lib warns | lib-test warns | Notes |
-|--:|-------|-----------|----------------|-------|
-| 1 | `poly-server` | 1,605 | 1,436 | Largest single source; mostly `arbitrary_source_item_ordering` + `implicit_return` + `missing_docs_*`. |
-| 2 | `poly-memory-mcp` | 549 | 530 | Heavy `min_ident_chars`, `single_call_fn`, `implicit_return`. |
-| 3 | `poly-host-bridge` | 501 | 483 | + 2 indexing-may-panic blockers in lib test. |
-| 4 | `poly-devtools-protocol` | 476 | 479 | Same shape — lots of `?` operator, `implicit_return`. |
-| 5 | `poly-backup-server` | 475 | 474 | |
-| 6 | `poly-client` | 850 | (lib only) | `clients/client` is the polyglot trait crate; many `pub_use`/`absolute_paths`. |
-| 7 | `poly-lint-gate` | 495 | (build script) | + 5 indexing-may-panic blockers. |
-| 8 | `poly-cli` | 200 | 188 | + 4 indexing-may-panic blockers. |
-| 9 | `poly-test-common` | 179 | 198 | |
-| 10 | `poly-ui-macros` | 96 | 111 | + 7 in compile_fail tests. |
-| 11 | `poly-core` (build script only) | 45 | — | Real `crates/core` lib didn't compile-finish before clippy short-circuited; expected to be in the thousands once Phase 1 unblocks. |
-| 12 | `poly-discord` (via chat-mcp dep) | 1,031 | — | + 8 indexing-may-panic blockers. |
+Total: **2,065 warnings + 24 errors** across the workspace. The original
+pre-Phase-0 number was 5,564. Phase 0 removed pure noise; remaining
+warnings are all real signal worth fixing.
 
-After per-crate audits land (background job `bvftjcr2k`), this table will
-extend to all 47 crates. Per-crate raw clippy logs at
-`/tmp/audit/audit-<name>-clippy.log`.
+### 3.2 Lint frequency table (post-Phase-0, descending)
+
+Every lint listed here is a lint we **chose to enable**. No more "what
+even is `arbitrary_source_item_ordering`?" mystery hits.
+
+| # | Lint | Count | Group | Notes |
+|--:|------|------:|-------|-------|
+| 1 | `missing_trait_methods` | 559 | restriction | Trait implementors not spelling out optional methods (`clone_from`, `next_back`, etc.) — auto-impls are fine, just noisy. **Re-evaluate after burn-down: may demote to allow.** |
+| 2 | `arithmetic_side_effects` | 385 | restriction | Real signal — every integer add/sub/mul that could overflow. Per design decision: workspace-wide warn. Mostly in byte-offset / index math. |
+| 3 | `must_use_candidate` | 240 | pedantic | Builder-style methods + `Result`-returning helpers without `#[must_use]`. Apply per crate. |
+| 4 | `default_numeric_fallback` | 146 | restriction | `let x = 1` falling back to `i32` — explicit type annotation needed. |
+| 5 | `let_underscore_must_use` | 119 | restriction | `let _ = result_returning_call()` discarding `Result`. Each one is "did you mean to handle this error?" |
+| 6 | `redundant_closure_for_method_calls` | 114 | pedantic | `\|x\| x.foo()` → `Foo::foo`. Mechanical fix. |
+| 7 | `map_unwrap_or` | 88 | pedantic | `.map(...).unwrap_or(...)` → `.map_or(...)`. Mechanical. |
+| 8 | `as_conversions` | 78 | restriction | `as` casts — replace with `From`/`TryFrom`/`u32::try_from()`. Per design decision: warn workspace-wide. |
+| 9 | `integer_division` | 42 | restriction | `a / b` silently floors for ints — flag for "did you want `div_ceil`/`div_floor`/checked?". |
+| 10 | `cast_possible_truncation` | 38 | pedantic | `usize as u32` etc. Real signal; pair with `try_from`. |
+| 11 | `string_slice` | 31 | restriction | `s[0..3]` panics on UTF-8 boundary — use `s.get(..)` or `chars()`. |
+| 12 | `map_err_ignore` | 28 | restriction | `.map_err(\|_\| MyError)` losing the original error context. |
+| 13 | `wildcard_enum_match_arm` | 26 | restriction | `_ => ...` on enums — explicit arms force re-evaluation when variants are added. |
+| 14 | `needless_pass_by_value` | 21 | pedantic | Take by `&` if function doesn't need ownership. |
+| 15 | `match_same_arms` | 19 | pedantic | Identical arms can be merged with `\|`. |
+| 16 | `collapsible_if` | 19 | (style — not in our list) | Comes from default warn; ignore for now. |
+| 17 | `indexing_slicing` | 17 | (deny'd) | `Vec[i]` warnings *that escaped the deny gate* — usually inside test code. Need `#[allow]` per site. |
+| 18 | `single_match` | 13 | (style) | `match x { Some(_) => ... _ => () }` → `if let`. Default-warn; not in our list. |
+| 19 | `print_stdout` | 13 | restriction | `println!` in libraries — use `tracing::info!`. |
+| 20 | `mod_module_files` | 9 | restriction | `foo/mod.rs` instead of `foo.rs`. Project convention check. |
 
 ### 3.2 Top 20 lint categories across the workspace (frequency)
 
@@ -156,87 +196,84 @@ Bucketed by inferred lint name from the warning message text:
 | 19 | `pattern_type_mismatch` | 36 | restriction | **ALLOW** — pedantic about `&Some(x)` vs `Some(&x)`; not a bug. |
 | 20 | `as_conversions` | 30 | restriction | **KEEP as warn** — workspace-wide, per design decision 2026-05-01. Use `From`/`TryFrom`/`u32::try_from()` instead of bare `as`; the latter silently truncates. `cast_lossless`/`cast_possible_truncation` overlap but `as_conversions` catches the cases where the user wrote `as` to bypass the type system at all. |
 
-**KEEP as warn (signal lints)** that survive Phase 0:
+### 3.3 Phase-1 blocker errors (24 deny'd sites — actual data)
 
-- `must_use_candidate` (54) — pedantic, real signal.
-- `let_underscore_must_use` (38) — restriction, real signal.
-- `cast_possible_truncation` (24) — pedantic, real signal.
-- `cast_lossless` — pedantic, real signal.
-- `map_unwrap_or` (19) — pedantic, real signal.
-- `redundant_closure_for_method_calls` (28) — pedantic, real signal.
-- `needless_pass_by_value` (14) — pedantic, real signal (clones are expensive).
-- `default_numeric_fallback` (20) — restriction, **real signal everywhere** (not just numeric code). Workspace-wide warn per design decision 2026-05-01.
-- `arithmetic_side_effects` (107) — restriction, **promoted from ALLOW to KEEP** per design decision 2026-05-01.
-- `as_conversions` (30) — restriction, **promoted from ALLOW to KEEP** per design decision 2026-05-01.
-- `string_slice` (28) — restriction, real signal (UTF-8 panics).
-- `integer_division` (15) — restriction, sometimes signal — review per crate.
-- `map_err_ignore` (10) — restriction, real signal (loses error context).
-- `print_stdout` / `print_stderr` (19) — restriction, real signal in libraries.
-- `mod_module_files` (8) — restriction, project-wide convention check (we have 8 violations in `servers/`).
-- `wildcard_enum_match_arm` (7) — restriction, real signal.
-- `missing_trait_methods` (4) — restriction, occasional signal (`clone_from`).
-- `match_same_arms` (5) — pedantic, real signal.
-- `unwrap_used` regressions (1+) — already `deny`d but counted here; Phase 1 fix.
+These are `unwrap_used`/`expect_used`/`indexing_slicing` violations that
+make `cargo clippy` exit non-zero. Until they're fixed, any CI step
+using `clippy -- -D warnings` blocks at exit 101. Fix order: smallest
+crate first.
 
-### 3.3 Phase-1 blocker errors (15 `error:` lines)
+| Crate | File | Sites | Pattern |
+|---|---|--:|---|
+| `poly-lint-gate` | `crates/lint-gate/build/custom_block_usage.rs` | 5 | `bytes[i]` / `bytes[a..b]` parser indexing — replace with `.get(i)` / `.get(a..b)`. |
+| `poly-host` | `apps/poly-host/src/lib.rs:984, 993` | 2 | `expect()` calls — replace with `?`/`Result` propagation or `if let Some(...)`. |
+| `poly-cli` | `tools/poly-cli/src/main.rs:183 (×2), 278, 283` | 4 | `args[i]` indexing — replace with `args.get(i)`. |
+| `poly-discord` | `clients/discord/src/http.rs:385` + `clients/discord/src/lib.rs:1134–1146 (×5), 2013, 2016` | 8 | `body["key"] = json!(...)` — `serde_json::Value` `IndexMut` panics on non-object. Refactor to `if let Some(obj) = body.as_object_mut() { obj.insert("key".into(), json!(...)); }`. |
+| `clients/stoat` | `clients/stoat/src/api.rs:515` | 1 | `indexing may panic` — single site, easy fix. |
+| `servers/test-teams` | `servers/test-teams/src/routes.rs:224` | 1 | `indexing may panic` in fixture — same `.get()` fix. |
+| **TOTAL** | | **21 actionable sites** | (the other 3 deny errors are summary "could not compile" lines.) |
 
-| File | Line | Error |
-|---|---|---|
-| `crates/lint-gate/build/custom_block_usage.rs` | 82 | `slicing may panic` |
-| `crates/lint-gate/build/custom_block_usage.rs` | 83, 86×2, 89 | `indexing may panic` |
-| `tools/poly-cli/src/main.rs` | 183×2, 278, 283 | `indexing may panic` |
-| `crates/host-bridge/src/client_config.rs` | 326 (test), 408 (test) | `indexing may panic` |
-| `clients/discord/src/http.rs` | 385 | `indexing may panic` (`body["key"] = json!(…)` — serde `IndexMut`) |
-| `clients/discord/src/lib.rs` | 1133, 1136, 1139, 1142, 1145, 2011, 2014 | `indexing may panic` (same pattern) |
+**Pattern note — Discord 8 sites:** `serde_json::Value` indexing with
+`[…] = json!(…)` panics on non-object values. Cannot use `.expect()`
+(workspace-deny); must be:
 
-Total **20** distinct error sites (some `error:` lines are summary "could
-not compile" messages, hence the 15 vs 20 discrepancy).
+```rust
+if let Some(obj) = body.as_object_mut() {
+    obj.insert("key".to_string(), json!(value));
+}
+```
 
-Discord pattern (8 sites): `serde_json::Value` indexing with `[…] = json!(…)`
-panics on non-object values. Refactor to `body.as_object_mut().expect("…")
-.insert(k.into(), v)` — or a small helper. Cannot use `.expect` (workspace-deny);
-must use `if let Some(obj) = body.as_object_mut() { obj.insert(…); }`.
-
-Lint-gate / poly-cli sites: classic `bytes[i]` / `args[i]` indexing in parser
-loops. Replace with `bytes.get(i).copied()` / `args.get(i)?.as_str()`.
+Or extract a small helper `set_field(&mut Value, &str, Value)` and
+use it in all 8 spots — drier than 8 inline `if let`s.
 
 ---
 
-## Phase 0 — Bulk allows for noise lints
+## Phase 0 — ✅ DONE — Switch to opt-in lint policy (commit pending)
 
 **Effort:** S (15 min) | **Depends on:** nothing | **Blocks:** Phases 2-7.
 
-Edit `Cargo.toml` `[workspace.lints.clippy]` to add `<lint> = "allow"` for
-the 18 noise lints from §3.2, each with a one-line `# rationale` comment
-on the same line above. Keep the existing `unwrap_used`/`expect_used`/
-`panic`/`indexing_slicing = "deny"`. Keep `pedantic`/`restriction = "warn"`
-so newly-violated signal lints surface.
+**Single edit:** `Cargo.toml` `[workspace.lints.clippy]` rewritten as an
+explicit ~25-lint opt-in list. NO `pedantic`/`restriction` group enables.
+Keep existing `unwrap_used` / `expect_used` / `panic` / `indexing_slicing`
+deny gates.
 
-**Acceptance:** `cargo clippy --workspace --all-targets 2>&1 | grep -c '^warning:'`
-drops from 5,564 to **< 1,000**. (Estimate based on §3.2: 18 lints
-suppress ~4,800 of 5,564 warnings.)
+The full opt-in list lives in the `Cargo.toml` file with one-line
+comments per lint. See sections in that file:
+- Compile-error class (4 deny'd)
+- Safety-critical (3 warn — design decision)
+- Casts that hide bugs (2 warn)
+- API quality (4 warn)
+- Logic / correctness (7 warn)
+- Hygiene (3 warn)
 
-- [ ] **A.1** Add `Cargo.toml` allow block + per-line rationale comments for the 18 lints from §3.2.
-- [ ] **A.2** Re-run `cargo clippy --workspace --all-targets > /tmp/audit/post-phase-0.log 2>&1`; assert warning count dropped 80%+.
-- [ ] **A.3** Commit: `chore(lints): suppress noise pedantic/restriction lints (cleanup phase 0)`.
+**Acceptance achieved:**
+- 5,564 warnings → **2,065 warnings** (62% drop)
+- 15 errors → **24 errors** (more visible because no group is masking them)
+- All warnings now from a lint we *chose* to enable; no mystery hits
+  from unmaintained `restriction` lints.
+
+- [x] **A.1** Rewrite `Cargo.toml` `[workspace.lints.clippy]` as opt-in (shipped 2026-05-01).
+- [x] **A.2** Re-run `cargo clippy --workspace --all-targets > /tmp/audit/post-phase-0-optin.log 2>&1`; warning count dropped 62%, all 47 crates check (no group-shadowing of errors).
+- [ ] **A.3** Commit: `chore(lints): switch to opt-in clippy policy (drop wholesale pedantic+restriction)`.
 
 ---
 
-## Phase 1 — Fix the 11 indexing/slicing blocker errors
+## Phase 1 — Fix the 21 deny'd-lint blocker sites
 
-**Effort:** S (45 min) | **Depends on:** Phase 0 (so the diff is readable)
-| **Blocks:** Phase 2+.
+**Effort:** S (~45 min) | **Depends on:** Phase 0 (so error sites are visible)
+| **Blocks:** Phase 2+ (and any CI step that uses `-- -D warnings`).
 
 Each site is a small refactor (`bytes.get(i)` / `as_object_mut()` /
-`get_mut`). All 20 sites listed in §3.3.
+`?` propagation). All 21 sites listed in §3.3.
 
 - [ ] **B.1** `crates/lint-gate/build/custom_block_usage.rs` — replace 5 raw indexes with `.get()` + `?` / `else continue`.
-- [ ] **B.2** `tools/poly-cli/src/main.rs` — 4 raw indexes → `args.get(i)` + `match`.
-- [ ] **B.3** `crates/host-bridge/src/client_config.rs` — 2 test indexes → `assert_eq!(back.mechanisms.first(), …)` + named field assertions.
-- [ ] **B.4** `clients/discord/src/http.rs` + `clients/discord/src/lib.rs` — 8 `body["k"] = v` sites → `if let Some(obj) = body.as_object_mut() { obj.insert(…); }` (or a small `set_field(&mut body, k, v)` helper).
-- [ ] **B.5** Re-run `cargo clippy --workspace --all-targets`; assert **0** `error:` lines, all 47 crates checked.
-- [ ] **B.6** Re-run audit script; populate per-crate warning counts for the previously-blocked 35 crates and append to §3.1 table.
-- [ ] **B.7** Commit: `fix(lints): eliminate 20 indexing_slicing panic sites blocking workspace clippy`.
+- [ ] **B.2** `apps/poly-host/src/lib.rs:984,993` — drop 2 `expect()` calls; propagate via `?` or `if let Some(...)`.
+- [ ] **B.3** `tools/poly-cli/src/main.rs` — 4 raw indexes → `args.get(i)` + `match`.
+- [ ] **B.4** `clients/discord/src/http.rs` + `clients/discord/src/lib.rs` — 8 `body["k"] = v` sites → `set_field` helper or per-site `as_object_mut()`.
+- [ ] **B.5** `clients/stoat/src/api.rs:515` — single index → `.get()`.
+- [ ] **B.6** `servers/test-teams/src/routes.rs:224` — single index → `.get()`.
+- [ ] **B.7** Re-run `cargo clippy --workspace --all-targets`; assert **exit 0** (or warnings only).
+- [ ] **B.8** Commit: `fix(lints): eliminate 21 deny'd-lint panic sites (clippy phase 1)`.
 
 ---
 

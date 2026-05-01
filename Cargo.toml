@@ -247,12 +247,51 @@ poly-ui-types = { path = "crates/ui-types" }
 unsafe_code = "deny"
 
 [workspace.lints.clippy]
-unwrap_used = "deny"
-expect_used = "deny"
-panic = "deny"
+# Opt-in lint policy — every enforced lint is listed explicitly.
+# We DELIBERATELY do NOT enable `pedantic` or `restriction` as groups —
+# clippy itself emits `blanket_clippy_restriction_lints` to discourage
+# that pattern. Wholesale enables flood the workspace (5,564 warnings
+# of which ~85% were noise) and surface every new lint clippy adds on
+# the next toolchain bump as forced churn.
+#
+# Adding a new lint here is a deliberate commit; see
+# `docs/plans/plan-clippy-pedantic-restriction-cleanup.md` for rationale
+# and the per-crate burn-down plan.
+
+# ── Compile-error class: foot-guns we never want in production ─────────
+unwrap_used      = "deny"
+expect_used      = "deny"
+panic            = "deny"
 indexing_slicing = "deny"
-# Group-level surfacing — kept at WARN to avoid breaking CI before the
-# triage plan in `docs/plans/plan-clippy-pedantic-restriction-cleanup.md`
-# burns down. priority=-1 / -2 lets per-lint allows above override.
-pedantic = { level = "warn", priority = -1 }
-restriction = { level = "warn", priority = -2 }
+
+# ── Safety-critical (per design decision 2026-05-01) ──────────────────
+# Workspace-wide warn — no per-subtree allow carve-outs. UI dev is hard
+# enough without programming-logic bugs masquerading as render bugs;
+# zero-wiggle-room policy keeps agents from picking up bad habits.
+arithmetic_side_effects   = "warn"
+as_conversions            = "warn"
+default_numeric_fallback  = "warn"
+
+# ── Casts that hide bugs ──────────────────────────────────────────────
+cast_possible_truncation  = "warn"
+cast_lossless             = "warn"
+
+# ── API quality ───────────────────────────────────────────────────────
+must_use_candidate                  = "warn"
+let_underscore_must_use             = "warn"
+needless_pass_by_value              = "warn"
+redundant_closure_for_method_calls  = "warn"
+
+# ── Logic / correctness ───────────────────────────────────────────────
+map_unwrap_or            = "warn"
+match_same_arms          = "warn"
+wildcard_enum_match_arm  = "warn"
+map_err_ignore           = "warn"
+string_slice             = "warn"  # UTF-8 panic risk
+integer_division         = "warn"  # silent floor — usually a bug
+missing_trait_methods    = "warn"  # `clone_from` etc.
+
+# ── Hygiene ───────────────────────────────────────────────────────────
+print_stdout      = "warn"
+print_stderr      = "warn"
+mod_module_files  = "warn"
