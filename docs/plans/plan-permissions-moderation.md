@@ -954,48 +954,48 @@ The following backends have special cases that do NOT fit the shared abstraction
 
 ## Section 4 Per-Backend Implementation Plan
 
-### Phase B-DS: Discord
+### Phase B-DS: Discord — ✅ DONE (Wave 2, `8c9367bc20d7`)
 
 > Files primarily touched: `clients/discord/src/lib.rs`, `clients/discord/src/api.rs`
 
-- [ ] **B-DS-1** Plugin: implement `get_my_permissions(server_id, channel_id?)` via
+- [x] **B-DS-1** Plugin: implement `get_my_permissions(server_id, channel_id?)` via
   `GET /guilds/{guild.id}/members/@me` (get role IDs) + `GET /guilds/{guild.id}/roles` (get
   permission bitfields) + optional `GET /channels/{channel.id}` for overwrites. Return
   `MemberPermissions` with computed boolean flags. In `clients/discord/src/lib.rs::DiscordClient`.
 
-- [ ] **B-DS-2** Plugin: implement `kick_member` via `DELETE /guilds/{guild.id}/members/{user.id}`.
+- [x] **B-DS-2** Plugin: implement `kick_member` via `DELETE /guilds/{guild.id}/members/{user.id}`.
   Requires `KICK_MEMBERS` permission. In `clients/discord/src/lib.rs::DiscordClient::kick_member`.
 
-- [ ] **B-DS-3** Plugin: implement `ban_member` via `PUT /guilds/{guild.id}/bans/{user.id}`.
+- [x] **B-DS-3** Plugin: implement `ban_member` via `PUT /guilds/{guild.id}/bans/{user.id}`.
   Map `expires_at` → encode duration in reason (Discord bans are permanent; no native expiry API
   as of v10 — note this limitation explicitly, implement `expires_at` as `NotSupported` for now
   OR use a background task approach — see Section 7 for out-of-scope note).
   Map `delete_message_history_secs` → `delete_message_seconds`.
   In `clients/discord/src/lib.rs::DiscordClient::ban_member`.
 
-- [ ] **B-DS-4** Plugin: implement `unban_member` via `DELETE /guilds/{guild.id}/bans/{user.id}`.
+- [x] **B-DS-4** Plugin: implement `unban_member` via `DELETE /guilds/{guild.id}/bans/{user.id}`.
 
-- [ ] **B-DS-5** Plugin: implement `get_bans` via `GET /guilds/{guild.id}/bans`
+- [x] **B-DS-5** Plugin: implement `get_bans` via `GET /guilds/{guild.id}/bans`
   (paginated; fetch all pages). Map to `Vec<BannedMember>`.
 
-- [ ] **B-DS-6** Plugin: implement `delete_message` via `DELETE /channels/{channel.id}/messages/{message.id}`.
+- [x] **B-DS-6** Plugin: implement `delete_message` via `DELETE /channels/{channel.id}/messages/{message.id}`.
   In `clients/discord/src/lib.rs::DiscordClient::delete_message`.
 
-- [ ] **B-DS-7** Plugin: implement `update_channel` via `PATCH /channels/{channel.id}`.
+- [x] **B-DS-7** Plugin: implement `update_channel` via `PATCH /channels/{channel.id}`.
   Map `UpdateChannelParams.slow_mode_secs` → `rate_limit_per_user`,
   `nsfw` → `nsfw`, `name` → `name`, `topic` → `topic`, `position` → `position`.
 
-- [ ] **B-DS-8** Plugin: implement `reorder_channels` via `PATCH /guilds/{guild.id}/channels`
+- [x] **B-DS-8** Plugin: implement `reorder_channels` via `PATCH /guilds/{guild.id}/channels`
   with `[{id, position, parent_id?}]`.
 
-- [ ] **B-DS-9** Plugin: implement `get_moderation_log` via `GET /guilds/{guild.id}/audit-logs`
+- [x] **B-DS-9** Plugin: implement `get_moderation_log` via `GET /guilds/{guild.id}/audit-logs`
   with relevant `action_type` values (20=kick, 22=ban, 23=unban, 12=channel update, 72=msg delete).
   Map audit log entries to `ModerationLogEntry`.
 
-- [ ] **B-DS-10** Update `backend_capabilities()` in `clients/discord/src/lib.rs`:
+- [x] **B-DS-10** Update `backend_capabilities()` in `clients/discord/src/lib.rs`:
   `has_roles: true, has_kick: true, has_ban: true, has_channel_mgmt: true, has_moderation_log: true`.
 
-- [ ] **B-DS-11** Plugin tests in `clients/discord/tests/`:
+- [x] **B-DS-11** Plugin tests in `clients/discord/tests/`:
   - `test_get_my_permissions_admin` — returns all `true` flags for guild owner token
   - `test_kick_member` — asserts DELETE request sent to correct endpoint
   - `test_ban_member` — asserts PUT with correct body
@@ -1003,37 +1003,37 @@ The following backends have special cases that do NOT fit the shared abstraction
   - `test_update_channel` — asserts PATCH with name/topic/slow_mode
   - `test_get_moderation_log` — maps audit log entry to `ModerationLogEntry`
 
-- [ ] **B-DS-12** Host UI: server-settings → **Roles** tab (gated on `has_roles`).
+- [x] **B-DS-12** Host UI: server-settings → **Roles** tab (gated on `has_roles`).
   File to create: `crates/core/src/ui/account/server/settings/roles.rs`.
   Displays role list with name + permission summary. Read-only in v1; role editing is Section 7 future work.
 
-- [ ] **B-DS-13** Host UI: server-settings → **Bans** tab (gated on `has_ban`).
+- [x] **B-DS-13** Host UI: server-settings → **Bans** tab (gated on `has_ban`).
   File to create: `crates/core/src/ui/account/server/settings/bans.rs`.
   Displays banned members table with unban button. Each unban requires confirmation dialog.
 
-- [ ] **B-DS-14** Host UI: server-settings → **Mod Log** tab (gated on `has_moderation_log`).
+- [x] **B-DS-14** Host UI: server-settings → **Mod Log** tab (gated on `has_moderation_log`).
   File to create: `crates/core/src/ui/account/server/settings/modlog.rs`.
   Paginated list of moderation actions with actor, target, action, reason, timestamp.
 
-- [ ] **B-DS-15** Host UI: channel context-menu → **Edit Channel** dialog
+- [x] **B-DS-15** Host UI: channel context-menu → **Edit Channel** dialog
   (gated on `has_channel_mgmt && my_perms.manage_channels`).
   File to create: `crates/core/src/ui/dialogs/edit_channel.rs`.
   Fields: name, topic, slow-mode (slider 0-21600s), NSFW toggle.
 
-- [ ] **B-DS-16** Host UI: channel list → **drag-handle** for reorder
+- [x] **B-DS-16** Host UI: channel list → **drag-handle** for reorder
   (gated on `my_perms.manage_channels`). Implement in
   `crates/core/src/ui/account/server/channel_list.rs`.
 
-- [ ] **B-DS-17** Host UI: message context-menu → **Delete** item
+- [x] **B-DS-17** Host UI: message context-menu → **Delete** item
   (gated on `message.author_id == my_user_id || my_perms.manage_messages`).
   Add to `crates/core/src/ui/context_menu/menus.rs::MessageContextMenu`.
 
-- [ ] **B-DS-18** Host UI: member context-menu → **Kick / Ban / Timeout**
+- [x] **B-DS-18** Host UI: member context-menu → **Kick / Ban / Timeout**
   (gated on `my_perms.kick_members`, `my_perms.ban_members`, `my_perms.timeout_members`).
   Add to `crates/core/src/ui/context_menu/menus.rs::UserRowContextMenu`.
   Kick/Ban open confirmation dialogs. Timeout opens a duration-picker.
 
-- [ ] **B-DS-19** Manual test via poly-web (Discord Koala or Kangaroo accounts):
+- [x] **B-DS-19** Manual test via poly-web (Discord Koala or Kangaroo accounts):
   - Right-click a message → Delete is visible; click → message removed.
   - Right-click a member → Kick visible if my_perms.kick_members; click → confirmation → member removed.
   - Server settings → Bans tab → lists bans; Unban a member.
@@ -1042,66 +1042,66 @@ The following backends have special cases that do NOT fit the shared abstraction
 
 ---
 
-### Phase B-MX: Matrix
+### Phase B-MX: Matrix — ✅ DONE (Wave 2, `8c9367bc20d7`)
 
 > Files primarily touched: `clients/matrix/src/lib.rs`, `clients/matrix/src/api.rs`
 
-- [ ] **B-MX-1** Plugin: implement `get_my_permissions(server_id, channel_id?)` by fetching
+- [x] **B-MX-1** Plugin: implement `get_my_permissions(server_id, channel_id?)` by fetching
   `GET /_matrix/client/v3/rooms/{roomId}/state/m.room.power_levels` and returning a
   `MemberPermissions` built from the current user's power level vs the `ban`, `kick`, `redact`,
   `state_default` thresholds.
 
-- [ ] **B-MX-2** Plugin: implement `kick_member` via `POST /_matrix/client/v3/rooms/{roomId}/kick`
+- [x] **B-MX-2** Plugin: implement `kick_member` via `POST /_matrix/client/v3/rooms/{roomId}/kick`
   with `{"user_id": member_id, "reason": reason}`.
 
-- [ ] **B-MX-3** Plugin: implement `ban_member` via `POST /_matrix/client/v3/rooms/{roomId}/ban`.
+- [x] **B-MX-3** Plugin: implement `ban_member` via `POST /_matrix/client/v3/rooms/{roomId}/ban`.
   Matrix bans are permanent — ignore `expires_at` (document in code; matrix has no native
   temporary ban; log a warning if `expires_at` is `Some`).
 
-- [ ] **B-MX-4** Plugin: implement `unban_member` via `POST /_matrix/client/v3/rooms/{roomId}/unban`.
+- [x] **B-MX-4** Plugin: implement `unban_member` via `POST /_matrix/client/v3/rooms/{roomId}/unban`.
 
-- [ ] **B-MX-5** Plugin: implement `get_bans` — query
+- [x] **B-MX-5** Plugin: implement `get_bans` — query
   `GET /_matrix/client/v3/rooms/{roomId}/members?membership=ban` and map to `Vec<BannedMember>`.
 
-- [ ] **B-MX-6** Plugin: implement `delete_message` via
+- [x] **B-MX-6** Plugin: implement `delete_message` via
   `PUT /_matrix/client/v3/rooms/{roomId}/redact/{eventId}/{txnId}` with `{"reason": reason}`.
   Generate `txnId` as a random UUID per spec.
 
-- [ ] **B-MX-7** Plugin: implement `update_channel` for room name/topic:
+- [x] **B-MX-7** Plugin: implement `update_channel` for room name/topic:
   - `PUT /_matrix/client/v3/rooms/{roomId}/state/m.room.name` with `{"name": name}`
   - `PUT /_matrix/client/v3/rooms/{roomId}/state/m.room.topic` with `{"topic": topic}`
   - Ignore `slow_mode_secs` (Matrix has no equivalent — log `NotSupported` internally).
   - Ignore `nsfw` (not a Matrix concept).
 
-- [ ] **B-MX-8** Plugin: `reorder_channels` → return `NotSupported`. Matrix rooms/spaces do
+- [x] **B-MX-8** Plugin: `reorder_channels` → return `NotSupported`. Matrix rooms/spaces do
   not have a user-controllable position order at the spec level.
 
-- [ ] **B-MX-9** Plugin: `get_moderation_log` → return `NotSupported`. Matrix has no server-side
+- [x] **B-MX-9** Plugin: `get_moderation_log` → return `NotSupported`. Matrix has no server-side
   moderation log. Note this in `CLAUDE.md`-style inline comment.
 
-- [ ] **B-MX-10** Update `backend_capabilities()` in `clients/matrix/src/lib.rs`:
+- [x] **B-MX-10** Update `backend_capabilities()` in `clients/matrix/src/lib.rs`:
   `has_roles: true, has_kick: true, has_ban: true, has_channel_mgmt: true, has_moderation_log: false`.
 
-- [ ] **B-MX-11** Plugin tests in `clients/matrix/tests/`:
+- [x] **B-MX-11** Plugin tests in `clients/matrix/tests/`:
   - `test_get_my_permissions_moderator` — power level 50, assert kick/ban/redact true
   - `test_kick_member` — asserts POST to `/rooms/{id}/kick`
   - `test_ban_member` — asserts POST to `/rooms/{id}/ban`
   - `test_delete_message_redacts` — asserts PUT to `/rooms/{id}/redact/{eventId}/{txnId}`
   - `test_update_channel_name_and_topic` — asserts two PUT state events
 
-- [ ] **B-MX-12** Host UI: Roles tab gated on `has_roles`. For Matrix, "roles" = power level
+- [x] **B-MX-12** Host UI: Roles tab gated on `has_roles`. For Matrix, "roles" = power level
   configuration. Show a list of members with their current power level + a number input to
   change (requires `manage_roles = my_power_level >= state_default`).
 
-- [ ] **B-MX-13** Host UI: Bans tab (same as B-DS-13 shared component).
+- [x] **B-MX-13** Host UI: Bans tab (same as B-DS-13 shared component).
 
-- [ ] **B-MX-14** Host UI: Edit Channel dialog — name and topic fields only (no slow-mode, no NSFW).
+- [x] **B-MX-14** Host UI: Edit Channel dialog — name and topic fields only (no slow-mode, no NSFW).
 
-- [ ] **B-MX-15** Host UI: message context-menu → Delete (redact). Wire in menus.rs.
+- [x] **B-MX-15** Host UI: message context-menu → Delete (redact). Wire in menus.rs.
 
-- [ ] **B-MX-16** Host UI: member context-menu → Kick / Ban (no Timeout — return `NotSupported`).
+- [x] **B-MX-16** Host UI: member context-menu → Kick / Ban (no Timeout — return `NotSupported`).
 
-- [ ] **B-MX-17** Manual test via poly-web (Matrix Owl/Axolotl accounts):
+- [x] **B-MX-17** Manual test via poly-web (Matrix Owl/Axolotl accounts):
   - Redact a message → message shows as `[message redacted]`.
   - Kick a member → member leaves the room.
   - Ban a member → member cannot rejoin.
@@ -1110,7 +1110,7 @@ The following backends have special cases that do NOT fit the shared abstraction
 
 ---
 
-### Phase B-ST: Stoat
+### Phase B-ST: Stoat — ✅ DONE (Wave 3, `c23018d42755`)
 
 > Files primarily touched: `clients/stoat/src/lib.rs`, `clients/stoat/src/api.rs`
 
@@ -1119,48 +1119,48 @@ https://developers.stoat.chat/developers/api/reference.html/ before implementing
 The paths below follow Revolt's API and are most likely correct but were not directly
 confirmed from documentation during research.
 
-- [ ] **B-ST-1** Plugin: implement `get_my_permissions` by fetching the calling user's
+- [x] **B-ST-1** Plugin: implement `get_my_permissions` by fetching the calling user's
   member object from `GET /servers/{server_id}/members/@me` and the server's roles from
   `GET /servers/{server_id}`. Compute MemberPermissions from the permission bitfield.
 
-- [ ] **B-ST-2** Plugin: implement `kick_member` via `DELETE /servers/{server_id}/members/{member_id}`.
+- [x] **B-ST-2** Plugin: implement `kick_member` via `DELETE /servers/{server_id}/members/{member_id}`.
   Requires `KickMembers` permission (bit 6, value 64).
 
-- [ ] **B-ST-3** Plugin: implement `ban_member` via `PUT /servers/{server_id}/bans/{user_id}`
+- [x] **B-ST-3** Plugin: implement `ban_member` via `PUT /servers/{server_id}/bans/{user_id}`
   with body `{reason?: string, delete_message_seconds?: i64}`. Stoat bans are permanent — there
   is no `expires_at` field in the API. If `expires_at` is `Some`, return
   `ClientError::NotSupported("Stoat bans are permanent; use timeout_member for timed restrictions")`.
   Map `delete_message_history_secs` → `delete_message_seconds`.
 
-- [ ] **B-ST-4** Plugin: implement `unban_member` via `DELETE /servers/{server_id}/bans/{user_id}`.
+- [x] **B-ST-4** Plugin: implement `unban_member` via `DELETE /servers/{server_id}/bans/{user_id}`.
 
-- [ ] **B-ST-5** Plugin: implement `get_bans` via `GET /servers/{server_id}/bans`.
+- [x] **B-ST-5** Plugin: implement `get_bans` via `GET /servers/{server_id}/bans`.
 
-- [ ] **B-ST-6** Plugin: implement `delete_message` via
+- [x] **B-ST-6** Plugin: implement `delete_message` via
   `DELETE /channels/{channel_id}/messages/{message_id}`.
 
-- [ ] **B-ST-7** Plugin: implement `update_channel` via `PATCH /channels/{channel_id}`.
+- [x] **B-ST-7** Plugin: implement `update_channel` via `PATCH /channels/{channel_id}`.
   Fields: `name`, `description` (→ `topic`), `nsfw` (→ `nsfw`), `archived` (→ `active`),
   `slow_mode_secs` → `slowmode` (Stoat's field name; uint64 seconds, max 21600).
   Verified from `DataEditChannel` schema. Remove any internal "no slow-mode" warning.
 
-- [ ] **B-ST-8** Plugin: implement `reorder_channels` — verify if Stoat has a channel
+- [x] **B-ST-8** Plugin: implement `reorder_channels` — verify if Stoat has a channel
   position/reorder endpoint. If not (Revolt did not have one), return `NotSupported` and set
   `has_channel_mgmt` to `true` but note reorder is partial.
 
-- [ ] **B-ST-9** Update `backend_capabilities()`:
+- [x] **B-ST-9** Update `backend_capabilities()`:
   `has_roles: true, has_kick: true, has_ban: true, has_channel_mgmt: true, has_moderation_log: false`.
 
-- [ ] **B-ST-10** Plugin tests: kick, ban, delete_message, update_channel, get_my_permissions.
+- [x] **B-ST-10** Plugin tests: kick, ban, delete_message, update_channel, get_my_permissions.
 
-- [ ] **B-ST-11** Host UI: Roles, Bans, Edit Channel, Delete Message, Kick/Ban member context menu.
+- [x] **B-ST-11** Host UI: Roles, Bans, Edit Channel, Delete Message, Kick/Ban member context menu.
   Same shared components as Discord (B-DS-12 through B-DS-18).
 
-- [ ] **B-ST-12** Manual test via poly-web (Stoat/Raccoon accounts).
+- [x] **B-ST-12** Manual test via poly-web (Stoat/Raccoon accounts).
 
 ---
 
-### Phase B-TE: Teams
+### Phase B-TE: Teams — ✅ DONE (Wave 3, `c23018d42755`)
 
 > Files primarily touched: `clients/teams/src/lib.rs`, `clients/teams/src/http.rs`
 
@@ -1170,75 +1170,75 @@ confirmed from documentation during research.
 - Personal Microsoft accounts: ALL moderation features unsupported.
 - Soft-delete only (messages show as deleted but content is preserved in compliance copy).
 
-- [ ] **B-TE-1** Plugin: implement `get_my_permissions` by checking the caller's membership
+- [x] **B-TE-1** Plugin: implement `get_my_permissions` by checking the caller's membership
   record via `GET /teams/{team-id}/members` and filtering for `me`. If `roles: ["owner"]`,
   return all permissions true. Otherwise member-level permissions (no kick/ban).
   **Note:** Teams API does not expose a per-channel permission concept.
 
-- [ ] **B-TE-2** Plugin: implement `kick_member` via
+- [x] **B-TE-2** Plugin: implement `kick_member` via
   `DELETE /teams/{team-id}/members/{membership-id}`.
   The `membership-id` is the base64-encoded composite ID; the plugin must resolve it via
   `GET /teams/{team-id}/members` or cache it at login. Requires `TeamMember.ReadWrite.All`.
 
-- [ ] **B-TE-3** Plugin: `ban_member` → return `ClientError::NotSupported("ban_member: Teams has no ban concept")`.
+- [x] **B-TE-3** Plugin: `ban_member` → return `ClientError::NotSupported("ban_member: Teams has no ban concept")`.
 
-- [ ] **B-TE-4** Plugin: implement `delete_message` via
+- [x] **B-TE-4** Plugin: implement `delete_message` via
   `POST /teams/{teamId}/channels/{channelId}/messages/{msgId}/softDelete`.
   The existing Teams channel ID format (`"<team_id>/<channel_id>"`) means the plugin must
   split on `/` to get both IDs. Requires `ChannelMessage.ReadWrite` delegated scope.
 
-- [ ] **B-TE-5** Plugin: implement `update_channel` via `PATCH /teams/{team-id}/channels/{channel-id}`.
+- [x] **B-TE-5** Plugin: implement `update_channel` via `PATCH /teams/{team-id}/channels/{channel-id}`.
   Supported fields: `displayName` (→ `name`), `description` (→ `topic`).
   No slow-mode, no nsfw, no position — ignore all and log a warning for unsupported fields.
 
-- [ ] **B-TE-6** Plugin: `reorder_channels` → return `NotSupported`. Graph API has no
+- [x] **B-TE-6** Plugin: `reorder_channels` → return `NotSupported`. Graph API has no
   channel position endpoint.
 
-- [ ] **B-TE-7** Update `backend_capabilities()` in `clients/teams/src/lib.rs`:
+- [x] **B-TE-7** Update `backend_capabilities()` in `clients/teams/src/lib.rs`:
   `has_roles: false, has_kick: true, has_ban: false, has_channel_mgmt: true, has_moderation_log: false`.
 
-- [ ] **B-TE-8** Plugin tests: `test_kick_member_delegates_to_graph`,
+- [x] **B-TE-8** Plugin tests: `test_kick_member_delegates_to_graph`,
   `test_ban_member_returns_not_supported`, `test_delete_message_soft_deletes`,
   `test_update_channel_patch`.
 
-- [ ] **B-TE-9** Host UI: Edit Channel dialog (name + description only; gated on `has_channel_mgmt`).
+- [x] **B-TE-9** Host UI: Edit Channel dialog (name + description only; gated on `has_channel_mgmt`).
   Host UI: Kick button in member context menu (gated on `has_kick`).
   Host UI: No Bans tab (has_ban=false).
   Host UI: Delete Message (same shared menus.rs addition).
 
-- [ ] **B-TE-10** Manual test via poly-web (Teams Sheep/Walrus accounts):
+- [x] **B-TE-10** Manual test via poly-web (Teams Sheep/Walrus accounts):
   - Soft-delete a message → shows "This message was deleted".
   - Kick a member → member removed from team.
   - Edit Channel → rename → verify in Teams native app.
 
 ---
 
-### Phase B-LE: Lemmy
+### Phase B-LE: Lemmy — ✅ DONE (Wave 2, `8c9367bc20d7`)
 
 > Files primarily touched: `clients/lemmy/src/lib.rs`, `clients/lemmy/src/api.rs`
 
-- [ ] **B-LE-1** Plugin: implement `get_my_permissions` by checking if the calling user is
+- [x] **B-LE-1** Plugin: implement `get_my_permissions` by checking if the calling user is
   in the community's `moderators` list (from `GET /api/v3/community?id={community_id}`)
   or if they are a site admin (from the `local_user_view.local_user.admin` field in the
   session). Map to `MemberPermissions{ban_members: is_mod, manage_messages: is_mod, ...}`.
 
-- [ ] **B-LE-2** Plugin: `kick_member` → return `ClientError::NotSupported("kick_member: Lemmy has no kick concept; community membership is implicit")`.
+- [x] **B-LE-2** Plugin: `kick_member` → return `ClientError::NotSupported("kick_member: Lemmy has no kick concept; community membership is implicit")`.
 
-- [ ] **B-LE-3** Plugin: implement `ban_member` via `POST /api/v3/community/ban_user`.
+- [x] **B-LE-3** Plugin: implement `ban_member` via `POST /api/v3/community/ban_user`.
   Parameters: `community_id` (from server_id), `person_id` (from member_id), `ban: true`,
   `reason`, `expires` (Unix timestamp from `expires_at`), `remove_data: false`.
 
-- [ ] **B-LE-4** Plugin: implement `unban_member` via `POST /api/v3/community/ban_user`
+- [x] **B-LE-4** Plugin: implement `unban_member` via `POST /api/v3/community/ban_user`
   with `ban: false`.
 
-- [ ] **B-LE-5** Plugin: implement `get_bans` — Lemmy does not expose a `GET /community/bans`
+- [x] **B-LE-5** Plugin: implement `get_bans` — Lemmy does not expose a `GET /community/bans`
   endpoint. The modlog shows ban events. Fetch from
   `GET /api/v3/modlog?community_id={id}&type_=ModBanFromCommunity` and map the
   `banned_from_community[]` array in the `GetModlogResponse` to `Vec<BannedMember>`.
   Note: `type_=ModBan` is site-wide admin bans; `type_=ModBanFromCommunity` is
   community-level bans. Use `ModBanFromCommunity`. Verified from real Lemmy v1.0 API.
 
-- [ ] **B-LE-6** Plugin: implement `delete_message` by mapping to:
+- [x] **B-LE-6** Plugin: implement `delete_message` by mapping to:
   - If `message_id` refers to a post: `POST /api/v3/post/remove` with `{post_id, removed: true, reason}`.
   - If `message_id` refers to a comment: `POST /api/v3/comment/remove` with `{comment_id, removed: true, reason}`.
   The plugin must detect which type a message ID refers to — use a prefix convention:
@@ -1246,12 +1246,12 @@ confirmed from documentation during research.
   returned by `get_messages`. (Verify this encoding exists in `map_post_to_message` and
   `map_comment_to_message` in `clients/lemmy/src/api.rs`; add if missing.)
 
-- [ ] **B-LE-7** Plugin: `update_channel` → return `NotSupported` (Lemmy has no sub-channels;
+- [x] **B-LE-7** Plugin: `update_channel` → return `NotSupported` (Lemmy has no sub-channels;
   "channel" = community and community update is admin-only and out-of-scope for v1).
 
-- [ ] **B-LE-8** Plugin: `reorder_channels` → return `NotSupported`.
+- [x] **B-LE-8** Plugin: `reorder_channels` → return `NotSupported`.
 
-- [ ] **B-LE-9** Plugin: implement `get_moderation_log` via
+- [x] **B-LE-9** Plugin: implement `get_moderation_log` via
   `GET /api/v3/modlog?community_id={id}&limit={limit}` (no `type_` filter — use `All`).
   Response is a `GetModlogResponse` object with separate arrays per action type:
   - `removed_posts[]` → `ModerationAction::MessageDeleted` (with post context)
@@ -1260,163 +1260,163 @@ confirmed from documentation during research.
   - `added_to_community[]` → `ModerationAction::MemberRoleUpdated`
   Merge all arrays, sort by timestamp descending. Verified response shape from real Lemmy API.
 
-- [ ] **B-LE-10** Update `backend_capabilities()`:
+- [x] **B-LE-10** Update `backend_capabilities()`:
   `has_roles: false, has_kick: false, has_ban: true, has_channel_mgmt: false, has_moderation_log: true`.
 
-- [ ] **B-LE-11** Plugin tests: `test_ban_member`, `test_unban_member`, `test_delete_post_message`,
+- [x] **B-LE-11** Plugin tests: `test_ban_member`, `test_unban_member`, `test_delete_post_message`,
   `test_delete_comment_message`, `test_get_moderation_log`.
 
-- [ ] **B-LE-12** Host UI: Bans tab (has_ban=true). Delete Message in message context menu.
+- [x] **B-LE-12** Host UI: Bans tab (has_ban=true). Delete Message in message context menu.
   Mod Log tab (has_moderation_log=true). No Roles tab, no Kick button.
 
-- [ ] **B-LE-13** Manual test via poly-web (Lemmy Beaver/Hedgehog accounts):
+- [x] **B-LE-13** Manual test via poly-web (Lemmy Beaver/Hedgehog accounts):
   - Ban a community member → they can no longer post.
   - Remove (soft-delete) a post.
   - View Mod Log tab.
 
 ---
 
-### Phase B-FJ: Forgejo
+### Phase B-FJ: Forgejo — ✅ DONE (Wave 2, `8c9367bc20d7`)
 
 > Files primarily touched: `clients/forgejo/src/lib.rs`, `clients/forgejo/src/api.rs`
 
-- [ ] **B-FJ-1** Plugin: implement `get_my_permissions` by checking if the authenticated user
+- [x] **B-FJ-1** Plugin: implement `get_my_permissions` by checking if the authenticated user
   is the repo owner or has admin collaborator access via
   `GET /repos/{owner}/{repo}/collaborators/{username}/permission`.
   Map to `MemberPermissions{manage_server: is_admin, manage_messages: is_write_or_admin, ...}`.
 
-- [ ] **B-FJ-2** Plugin: `kick_member` → for personal repos, return `NotSupported`.
+- [x] **B-FJ-2** Plugin: `kick_member` → for personal repos, return `NotSupported`.
   For org repos, removing a collaborator maps to kick:
   `DELETE /repos/{owner}/{repo}/collaborators/{username}`.
   However, this only removes direct access; org team membership is unchanged.
   Document this limitation clearly in the code.
 
-- [ ] **B-FJ-3** Plugin: `ban_member` → return `NotSupported`.
+- [x] **B-FJ-3** Plugin: `ban_member` → return `NotSupported`.
   Forgejo has org-level blocking (`PUT /orgs/{org}/block/{username}`) but no repo-level ban.
   Out-of-scope for v1 (see Section 7).
 
-- [ ] **B-FJ-4** Plugin: implement `delete_message` — in Forgejo, "messages" are issue comments.
+- [x] **B-FJ-4** Plugin: implement `delete_message` — in Forgejo, "messages" are issue comments.
   Map to `DELETE /repos/{owner}/{repo}/issues/comments/{comment_id}`.
   The `message_id` must encode the comment ID; verify the encoding in
   `clients/forgejo/src/mapping.rs`.
 
-- [ ] **B-FJ-5** Plugin: `update_channel` → return `NotSupported` (channels are hardcoded issue/PR/code types).
+- [x] **B-FJ-5** Plugin: `update_channel` → return `NotSupported` (channels are hardcoded issue/PR/code types).
 
-- [ ] **B-FJ-6** Plugin: `reorder_channels` → return `NotSupported`.
+- [x] **B-FJ-6** Plugin: `reorder_channels` → return `NotSupported`.
 
-- [ ] **B-FJ-7** Plugin: `get_moderation_log` → return `NotSupported`. Forgejo has no public
+- [x] **B-FJ-7** Plugin: `get_moderation_log` → return `NotSupported`. Forgejo has no public
   moderation log REST endpoint.
 
-- [ ] **B-FJ-8** Update `backend_capabilities()`:
+- [x] **B-FJ-8** Update `backend_capabilities()`:
   `has_roles: false, has_kick: false, has_ban: false, has_channel_mgmt: false, has_moderation_log: false`.
   (For org repos: `has_kick: true` — but this requires knowing at runtime whether the
   current repo is org-owned. Proposed: check during `authenticate` and set a flag. Mark as TODO.)
 
-- [ ] **B-FJ-9** Plugin tests: `test_delete_issue_comment`, `test_get_my_permissions_admin`.
+- [x] **B-FJ-9** Plugin tests: `test_delete_issue_comment`, `test_get_my_permissions_admin`.
 
-- [ ] **B-FJ-10** Host UI: Delete Message item in message context-menu only
+- [x] **B-FJ-10** Host UI: Delete Message item in message context-menu only
   (gated on `manage_messages || is_own_message`). No Roles, Bans, Mod Log, or Edit Channel tabs.
 
-- [ ] **B-FJ-11** Manual test via poly-web (Forgejo Otter/Flamingo accounts).
+- [x] **B-FJ-11** Manual test via poly-web (Forgejo Otter/Flamingo accounts).
 
 ---
 
-### Phase B-GH: GitHub
+### Phase B-GH: GitHub — ✅ DONE (Wave 2, `8c9367bc20d7`)
 
 > Files primarily touched: `clients/github/src/lib.rs`, `clients/github/src/api.rs`
 
-- [ ] **B-GH-1** Plugin: implement `get_my_permissions` by calling
+- [x] **B-GH-1** Plugin: implement `get_my_permissions` by calling
   `GET /repos/{owner}/{repo}/collaborators/{username}/permission` for the authenticated user.
   Map `admin` → `manage_server: true, manage_channels: false, manage_messages: true`.
 
-- [ ] **B-GH-2** Plugin: `kick_member` → `DELETE /repos/{owner}/{repo}/collaborators/{username}`.
+- [x] **B-GH-2** Plugin: `kick_member` → `DELETE /repos/{owner}/{repo}/collaborators/{username}`.
   Only meaningful for repos where user is a direct collaborator. For org repos this does not
   remove org team membership — document the limitation.
 
-- [ ] **B-GH-3** Plugin: `ban_member` → return `NotSupported`. GitHub has no repo-level ban.
+- [x] **B-GH-3** Plugin: `ban_member` → return `NotSupported`. GitHub has no repo-level ban.
 
-- [ ] **B-GH-4** Plugin: implement `delete_message` (issue comment deletion) via
+- [x] **B-GH-4** Plugin: implement `delete_message` (issue comment deletion) via
   `DELETE /repos/{owner}/{repo}/issues/comments/{comment_id}`.
   Verify comment ID encoding in `clients/github/src/mapping.rs`.
 
-- [ ] **B-GH-5** Plugin: `update_channel` → return `NotSupported`.
+- [x] **B-GH-5** Plugin: `update_channel` → return `NotSupported`.
 
-- [ ] **B-GH-6** Plugin: `reorder_channels` → return `NotSupported`.
+- [x] **B-GH-6** Plugin: `reorder_channels` → return `NotSupported`.
 
-- [ ] **B-GH-7** Plugin: `get_moderation_log` → return `NotSupported`.
+- [x] **B-GH-7** Plugin: `get_moderation_log` → return `NotSupported`.
 
-- [ ] **B-GH-8** Update `backend_capabilities()`:
+- [x] **B-GH-8** Update `backend_capabilities()`:
   `has_roles: false, has_kick: false, has_ban: false, has_channel_mgmt: false, has_moderation_log: false`.
   (Same note as Forgejo: `has_kick: true` for repos where the user is an admin collaborator.)
 
-- [ ] **B-GH-9** Plugin tests: `test_delete_issue_comment_gh`, `test_get_my_permissions_admin_gh`.
+- [x] **B-GH-9** Plugin tests: `test_delete_issue_comment_gh`, `test_get_my_permissions_admin_gh`.
 
-- [ ] **B-GH-10** Host UI: Delete Message in message context-menu only.
+- [x] **B-GH-10** Host UI: Delete Message in message context-menu only.
 
-- [ ] **B-GH-11** Manual test via poly-web (GitHub Penguin/Chameleon accounts).
+- [x] **B-GH-11** Manual test via poly-web (GitHub Penguin/Chameleon accounts).
 
 ---
 
-### Phase B-PS: poly-server
+### Phase B-PS: poly-server — ✅ DONE (Wave 3, `c23018d42755`)
 
 > Files primarily touched: `clients/server-client/src/backend.rs`, `servers/poly-server/src/`
 
-- [ ] **B-PS-1** Server: Add `role` column (`owner | admin | moderator | member`) to the
+- [x] **B-PS-1** Server: Add `role` column (`owner | admin | moderator | member`) to the
   `server_members` table in poly-server. Add migration. In `servers/poly-server/`.
 
-- [ ] **B-PS-2** Server: Add REST endpoints (see Section 1.8 proposed endpoints) to poly-server's
+- [x] **B-PS-2** Server: Add REST endpoints (see Section 1.8 proposed endpoints) to poly-server's
   axum router: `GET/POST/DELETE /api/servers/{id}/bans`, `PATCH /api/servers/{id}/members/{id}/role`,
   `DELETE /api/servers/{id}/members/{id}` (kick), `DELETE/PATCH /api/channels/{id}`,
   `PATCH /api/servers/{id}/channels/reorder`, `GET /api/servers/{id}/modlog`.
 
-- [ ] **B-PS-3** Server: Enforce permission checks on all new endpoints using the `role` field.
+- [x] **B-PS-3** Server: Enforce permission checks on all new endpoints using the `role` field.
   Middleware: parse JWT → look up `server_members.role` → check against required role tier.
 
-- [ ] **B-PS-4** Client: implement `get_my_permissions` via
+- [x] **B-PS-4** Client: implement `get_my_permissions` via
   `GET /api/servers/{server_id}/members/@me/permissions` in `clients/server-client/src/backend.rs`.
 
-- [ ] **B-PS-5** Client: implement `kick_member`, `ban_member`, `unban_member`, `get_bans`,
+- [x] **B-PS-5** Client: implement `kick_member`, `ban_member`, `unban_member`, `get_bans`,
   `delete_message`, `update_channel`, `reorder_channels`, `get_moderation_log`.
 
-- [ ] **B-PS-6** Update `backend_capabilities()`:
+- [x] **B-PS-6** Update `backend_capabilities()`:
   `has_roles: true, has_kick: true, has_ban: true, has_channel_mgmt: true, has_moderation_log: true`.
 
-- [ ] **B-PS-7** Server tests in `servers/poly-server/tests/`: test each new endpoint with
+- [x] **B-PS-7** Server tests in `servers/poly-server/tests/`: test each new endpoint with
   correct role, insufficient role, and non-member scenarios. Use the existing
   `servers/test-poly-server/` test infrastructure.
 
-- [ ] **B-PS-8** Client tests: test each new client method against the test server.
+- [x] **B-PS-8** Client tests: test each new client method against the test server.
 
-- [ ] **B-PS-9** Host UI: full Roles tab, Bans tab, Mod Log tab, Edit Channel dialog,
+- [x] **B-PS-9** Host UI: full Roles tab, Bans tab, Mod Log tab, Edit Channel dialog,
   drag-to-reorder, Kick/Ban/Delete buttons.
 
-- [ ] **B-PS-10** Manual test via poly-web.
+- [x] **B-PS-10** Manual test via poly-web.
 
 ---
 
-## Section 5 Host-Side Shared Work (Lands First)
+## Section 5 Host-Side Shared Work (Lands First) — ✅ DONE (Wave 1, `4d5f90a58f7c`)
 
 This phase has no backend dependency and can be done in parallel with backend research.
 It must land before any per-backend phase to avoid merge conflicts.
 
-- [ ] **H-1** Add new fields to `BackendCapabilities` in `clients/client/src/types.rs`:
+- [x] **H-1** Add new fields to `BackendCapabilities` in `clients/client/src/types.rs`:
   `has_roles`, `has_kick`, `has_ban`, `has_channel_mgmt`, `has_moderation_log` (all `bool`).
   Update ALL `const` presets and the `capabilities_for_slug` match arm. Update pack-F
   capability-gate unit tests in the same file.
 
-- [ ] **H-2** Add new types to `clients/client/src/types.rs`:
+- [x] **H-2** Add new types to `clients/client/src/types.rs`:
   `MemberPermissions`, `MemberRole`, `BannedMember`, `UpdateChannelParams`, `ModerationLogEntry`,
   `ModerationAction`. All derive `Debug, Clone, PartialEq, Eq, Serialize, Deserialize`.
 
-- [ ] **H-3** Add new methods to `ClientBackend` trait in `clients/client/src/lib.rs`:
+- [x] **H-3** Add new methods to `ClientBackend` trait in `clients/client/src/lib.rs`:
   `get_my_permissions`, `get_member_permissions`, `update_member_role`, `kick_member`,
   `ban_member`, `unban_member`, `get_bans`, `delete_message`, `update_channel`,
   `reorder_channels`, `get_moderation_log`. All have `NotSupported` default implementations.
 
-- [ ] **H-4** Extend `wit/messenger-plugin.wit` with `client-moderation` interface (Section 3.4).
+- [x] **H-4** Extend `wit/messenger-plugin.wit` with `client-moderation` interface (Section 3.4).
   Add `export client-moderation;` to the world. Re-generate WIT bindings for any WASM backends.
 
-- [ ] **H-5** Create shared server-settings tab framework additions:
+- [x] **H-5** Create shared server-settings tab framework additions:
   - `crates/core/src/ui/account/server/settings/roles.rs` — `RolesTab` component.
     Props: `account_id`, `server_id`. Fetches role list; displays member-role rows.
     Gated in parent on `caps.has_roles`.
@@ -1426,11 +1426,11 @@ It must land before any per-backend phase to avoid merge conflicts.
   - `crates/core/src/ui/account/server/settings/modlog.rs` — `ModLogTab` component.
     Paginated. Gated on `caps.has_moderation_log`.
 
-- [ ] **H-6** Add the new tabs to `ServerSettingsSection` enum in
+- [x] **H-6** Add the new tabs to `ServerSettingsSection` enum in
   `crates/core/src/ui/account/server/settings/mod.rs`:
   `Roles`, `Bans`, `ModLog`. Render conditionally based on `BackendCapabilities`.
 
-- [ ] **H-7** Create dialog components:
+- [x] **H-7** Create dialog components:
   - `crates/core/src/ui/dialogs/edit_channel.rs` — `EditChannelDialog`.
     Props: `account_id`, `channel_id`. Fields: name (text), topic (textarea), slow-mode (number
     input 0-21600), nsfw toggle. Gated on `caps.has_channel_mgmt && my_perms.manage_channels`.
@@ -1440,28 +1440,28 @@ It must land before any per-backend phase to avoid merge conflicts.
     Props: `account_id`, `server_id`, `member_id`. Fields: reason (text), duration (select:
     permanent / 1h / 1d / 7d / 30d / custom), delete-message-history (toggle).
 
-- [ ] **H-8** Add drag-handle to channel list items in
+- [x] **H-8** Add drag-handle to channel list items in
   `crates/core/src/ui/account/server/channel_list.rs`.
   Gated on `my_perms.manage_channels`. Use HTML5 `draggable` + ondragstart/ondragover/ondrop;
   on drop call `reorder_channels`. Only render the handle when `caps.has_channel_mgmt`.
 
-- [ ] **H-9** Add "Delete" item to `MessageContextMenu` in
+- [x] **H-9** Add "Delete" item to `MessageContextMenu` in
   `crates/core/src/ui/context_menu/menus.rs`.
   Gated on: `my_user_id == message.author.id || my_perms.manage_messages`.
   Confirmation required (destructive variant). On confirm → `delete_message(channel_id, msg_id)`.
 
-- [ ] **H-10** Add "Kick", "Ban", "Timeout" items to `UserRowContextMenu` in
+- [x] **H-10** Add "Kick", "Ban", "Timeout" items to `UserRowContextMenu` in
   `crates/core/src/ui/context_menu/menus.rs`.
   - Kick: gated on `caps.has_kick && my_perms.kick_members`. Opens `KickMemberDialog`.
   - Ban: gated on `caps.has_ban && my_perms.ban_members`. Opens `BanMemberDialog`.
   - Timeout: gated on `my_perms.timeout_members`. Opens a duration-picker inline or as dialog.
   All three are `destructive` variant. Separated from primary actions by a divider.
 
-- [ ] **H-11** Add "Edit Channel" to `ChannelContextMenu` in
+- [x] **H-11** Add "Edit Channel" to `ChannelContextMenu` in
   `crates/core/src/ui/context_menu/menus.rs`.
   Gated on `caps.has_channel_mgmt && my_perms.manage_channels`. Opens `EditChannelDialog`.
 
-- [ ] **H-12** Add FTL keys for all new strings. Files to update:
+- [x] **H-12** Add FTL keys for all new strings. Files to update:
   - `locales/en/main.ftl`
   - `locales/de/main.ftl`
   - `locales/es/main.ftl`
@@ -1503,11 +1503,11 @@ It must land before any per-backend phase to avoid merge conflicts.
   perm-modlog-entry-msg-deleted = {$mod} deleted a message
   ```
 
-- [ ] **H-13** Update `ServerSettingsSection` `const` array in `server/settings/mod.rs` to
+- [x] **H-13** Update `ServerSettingsSection` `const` array in `server/settings/mod.rs` to
   conditionally render new tabs, keyed on capabilities. Update `SERVER_SETTINGS_SECTIONS`
   to not be a fixed-size array (make it a `Vec` computed from capabilities at runtime).
 
-- [ ] **H-14** Add `get_my_permissions` calls to the server-load flow in
+- [x] **H-14** Add `get_my_permissions` calls to the server-load flow in
   `crates/core/src/state.rs` (or wherever `ChatData` is populated). Cache permissions
   in `ChatData` as `Signal<HashMap<server_id, MemberPermissions>>`. Refresh on
   `ServerUpdated` events.
