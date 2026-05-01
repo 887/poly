@@ -478,7 +478,7 @@ async fn do_signin(
     ),
     String,
 > {
-    let key_bytes = resolve_key(private_key, no_key_msg).map_err(|_| no_key_msg.to_string())?;
+    let key_bytes = resolve_key(private_key, no_key_msg).map_err(|()| no_key_msg.to_string())?;
 
     let mut backend = PolyServerBackend::new(server_url, key_bytes);
     let credentials = AuthCredentials::PolyServer {
@@ -516,7 +516,7 @@ async fn do_signup(
     ),
     String,
 > {
-    let key_bytes = resolve_key(private_key, no_key_msg).map_err(|_| no_key_msg.to_string())?;
+    let key_bytes = resolve_key(private_key, no_key_msg).map_err(|()| no_key_msg.to_string())?;
 
     let mut backend = PolyServerBackend::new(server_url, key_bytes);
     let credentials = AuthCredentials::PolyServer {
@@ -540,5 +540,5 @@ async fn do_signup(
 /// Parse the private key bytes from the `SignupContext`.
 fn resolve_key(private_key: Option<Vec<u8>>, _no_key_msg: &str) -> Result<[u8; 32], ()> {
     let bytes = private_key.ok_or(())?;
-    bytes.try_into().map_err(|_| ())
+    bytes.try_into().map_err(|_v: Vec<u8>| ())
 }

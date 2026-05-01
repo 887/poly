@@ -112,7 +112,7 @@ async fn do_eval(js: impl Into<String>) -> Result<String, String> {
     };
 
     let tx = {
-        let guard = EVAL_TX.lock().unwrap_or_else(|e| e.into_inner());
+        let guard = EVAL_TX.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         guard.clone()
     }
     .ok_or_else(|| {
@@ -157,9 +157,9 @@ fn has_top_level_semicolon(s: &str) -> bool {
             match c {
                 '\'' => in_single = true,
                 '"' => in_double = true,
-                '{' | '(' | '[' => depth += 1,
-                '}' | ')' | ']' => depth -= 1,
-                ';' if depth == 0 => return true,
+                '{' | '(' | '[' => depth = depth.wrapping_add(1_i32),
+                '}' | ')' | ']' => depth = depth.wrapping_sub(1_i32),
+                ';' if depth == 0_i32 => return true,
                 _ => {}
             }
         }
@@ -244,7 +244,7 @@ async fn run_eval_coroutine() {
     }
 
     // Increment the generation counter so callers can detect hot-patch cycles.
-    let generation_num = GENERATION.fetch_add(1, Ordering::Relaxed) + 1;
+    let generation_num = GENERATION.fetch_add(1, Ordering::Relaxed).wrapping_add(1);
     tracing::info!(
         "Eval bridge coroutine started — generation {generation_num} (channels recreated)"
     );
@@ -252,13 +252,17 @@ async fn run_eval_coroutine() {
     while let Some(req) = rx.recv().await {
         let result: Result<serde_json::Value, _> = eval(&req.js).await;
         let out = match result {
-            Ok(v) => Ok(match v {
-                serde_json::Value::String(s) => s,
-                other => other.to_string(),
+            Ok(v) => Ok(match &v {
+                serde_json::Value::String(s) => s.clone(),
+                serde_json::Value::Null
+                | serde_json::Value::Bool(_)
+                | serde_json::Value::Number(_)
+                | serde_json::Value::Array(_)
+                | serde_json::Value::Object(_) => v.to_string(),
             }),
             Err(e) => Err(e.to_string()),
         };
-        let _ = req.resp.send(out);
+        drop(req.resp.send(out));
     }
 
     // Coroutine ending — clear the sender so callers get a clean error
@@ -303,16 +307,16 @@ async fn run_screenshot_coroutine() {
                 Ok(surface) => {
                     let mut buf: Vec<u8> = Vec::new();
                     match surface.write_to_png(&mut buf) {
-                        Ok(_) => {
-                            let _ = cb_tx.send(Ok(buf));
+                        Ok(()) => {
+                            drop(cb_tx.send(Ok(buf)));
                         }
                         Err(e) => {
-                            let _ = cb_tx.send(Err(e.to_string()));
+                            drop(cb_tx.send(Err(e.to_string())));
                         }
                     }
                 }
                 Err(e) => {
-                    let _ = cb_tx.send(Err(e.to_string()));
+                    drop(cb_tx.send(Err(e.to_string())));
                 }
             },
         );
@@ -327,7 +331,7 @@ async fn run_screenshot_coroutine() {
                 }
             }
         };
-        let _ = req.resp.send(result);
+        drop(req.resp.send(result));
     }
 
     // Coroutine ending — clear the sender.
@@ -486,7 +490,7 @@ async fn http_screenshot() -> axum::response::Response {
     use axum::response::IntoResponse;
 
     let tx = {
-        let guard = SCREENSHOT_TX.lock().unwrap_or_else(|e| e.into_inner());
+        let guard = SCREENSHOT_TX.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         guard.clone()
     };
     let Some(tx) = tx else {

@@ -58,6 +58,7 @@ impl PolyServerBackend {
     /// Create a new backend for a poly-server instance.
     ///
     /// `private_key_bytes` is the raw 32-byte Ed25519 signing key from the user's identity.
+    #[must_use]
     pub fn new(base_url: &str, private_key_bytes: [u8; 32]) -> Self {
         let config = PolyServerConfig {
             base_url: base_url.to_string(),
@@ -296,7 +297,9 @@ impl ClientBackend for PolyServerBackend {
                     backend_url: Some(self.base_url.trim_end_matches('/').to_string()),
                 })
             }
-            _ => Err(ClientError::AuthFailed(
+            AuthCredentials::EmailPassword { .. }
+            | AuthCredentials::OAuth { .. }
+            | AuthCredentials::DeviceCode { .. } => Err(ClientError::AuthFailed(
                 "PolyServerBackend only supports PolyServer or Token credentials".into(),
             )),
         }
@@ -586,17 +589,16 @@ impl ClientBackend for PolyServerBackend {
             let other = participants.iter().find(|p| p.user != account_id);
 
             let user = if let Some(p) = other {
-                self.http
-                    .get_user(&p.user)
-                    .await
-                    .map(|profile| Self::map_user(&profile))
-                    .unwrap_or_else(|_| User {
+                match self.http.get_user(&p.user).await {
+                    Ok(profile) => Self::map_user(&profile),
+                    Err(_) => User {
                         id: p.user.clone(),
                         display_name: ch.name.clone(),
                         avatar_url: None,
                         presence: PresenceStatus::Offline,
                         backend: BackendType::from("poly"),
-                    })
+                    },
+                }
             } else {
                 // Fallback: use the channel name as display name.
                 User {
@@ -810,7 +812,7 @@ impl ClientBackend for PolyServerBackend {
                     channel_id,
                     update.name.as_deref(),
                     None,
-                    update.position.map(|p| p as i64),
+                    update.position.map(i64::from),
                 )
                 .await
                 .map_err(|e| ClientError::Network(e.to_string()))?;
@@ -1490,6 +1492,7 @@ fn map_server_event(event: srv::ServerEvent) -> Option<ClientEvent> {
         // Server metadata updated — wrap into ServerUpdated client event.
         // We don't have a full Server struct here, so we emit a reduced channel update.
         // Future: expose a dedicated ServerMetaUpdated event in poly_client.
+        // Reaction events are intentionally dropped here until ClientEvent adds them.
         srv::ServerEvent::ServerMemberJoined { .. }
         | srv::ServerEvent::ServerMemberLeft { .. }
         | srv::ServerEvent::ServerUpdated { .. }
@@ -1497,9 +1500,8 @@ fn map_server_event(event: srv::ServerEvent) -> Option<ClientEvent> {
         | srv::ServerEvent::ChannelDeleted { .. }
         | srv::ServerEvent::FriendRequestAccepted { .. }
         | srv::ServerEvent::VoiceSignalRelay { .. }
-        | srv::ServerEvent::Ping => None,
-        // ReactionAdded / ReactionRemoved — poly_client::ClientEvent has no reaction
-        // variants yet. Events are intentionally dropped here until the trait adds them.
-        srv::ServerEvent::ReactionAdded { .. } | srv::ServerEvent::ReactionRemoved { .. } => None,
+        | srv::ServerEvent::Ping
+        | srv::ServerEvent::ReactionAdded { .. }
+        | srv::ServerEvent::ReactionRemoved { .. } => None,
     }
 }

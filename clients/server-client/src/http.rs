@@ -58,6 +58,7 @@ impl std::fmt::Debug for PolyServerHttpClient {
 
 impl PolyServerHttpClient {
     /// Create a new HTTP client for the given server.
+    #[must_use]
     pub fn new(config: PolyServerConfig) -> Self {
         let signing_key = SigningKey::from_bytes(&config.private_key_bytes);
         Self {
@@ -69,11 +70,13 @@ impl PolyServerHttpClient {
     }
 
     /// Get the base URL.
+    #[must_use]
     pub fn base_url(&self) -> &str {
         &self.base_url
     }
 
     /// Get the hex-encoded public key.
+    #[must_use]
     pub fn public_key_hex(&self) -> String {
         hex::encode(self.signing_key.verifying_key().to_bytes())
     }
@@ -89,6 +92,7 @@ impl PolyServerHttpClient {
     }
 
     /// Get a clone of the session lock for sharing with WS client.
+    #[must_use]
     pub fn session_lock(&self) -> Arc<RwLock<Option<SessionState>>> {
         Arc::clone(&self.session)
     }
@@ -975,6 +979,7 @@ impl PolyServerHttpClient {
     /// `GET /attachments/:id` — get attachment download URL.
     ///
     /// Returns the full URL (not the file bytes). Use reqwest to download.
+    #[must_use]
     pub fn attachment_url(&self, attachment_id: &str) -> String {
         self.url(&format!("/attachments/{attachment_id}"))
     }

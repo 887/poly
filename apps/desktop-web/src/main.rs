@@ -362,7 +362,7 @@ async fn http_screenshot(
     proxy: tao::event_loop::EventLoopProxy<UserEvent>,
 ) -> axum::response::Response {
     let tx = {
-        let guard = screenshot_tx.lock().unwrap_or_else(|e| e.into_inner());
+        let guard = screenshot_tx.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         guard.clone()
     };
     let Some(tx) = tx else {
@@ -384,7 +384,7 @@ async fn http_screenshot(
 
     // Wake the tao event loop so it processes the screenshot request.
     // Without this, ControlFlow::Wait keeps the loop blocked on idle windows.
-    let _ = proxy.send_event(UserEvent::WakeForScreenshot);
+    drop(proxy.send_event(UserEvent::WakeForScreenshot));
 
     match resp_rx.await {
         Ok(Ok(png)) => ([(axum::http::header::CONTENT_TYPE, "image/png")], png).into_response(),
@@ -436,7 +436,11 @@ fn main() {
     {
         Ok(w) => w,
         Err(e) => {
-            eprintln!("fatal: Failed to create window: {e}");
+            // lint-allow-unused: pre-logger startup fatal — stderr is the only sink
+            #[allow(clippy::print_stderr)]
+            {
+                eprintln!("fatal: Failed to create window: {e}");
+            }
             std::process::exit(1);
         }
     };
@@ -454,7 +458,7 @@ fn main() {
                 tracing::warn!("IPC: invalid JSON from JS: {body}");
                 return;
             };
-            let Some(id) = v.get("id").and_then(|v| v.as_u64()) else {
+            let Some(id) = v.get("id").and_then(serde_json::Value::as_u64) else {
                 tracing::warn!("IPC: missing id in message");
                 return;
             };
@@ -466,9 +470,9 @@ fn main() {
                 Ok(v.to_string())
             };
 
-            let mut map = pending_ipc.lock().unwrap_or_else(|e| e.into_inner());
+            let mut map = pending_ipc.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
             if let Some(pending_eval) = map.remove(&id) {
-                let _ = pending_eval.tx.send(result);
+                drop(pending_eval.tx.send(result));
             }
         });
 
@@ -481,14 +485,22 @@ fn main() {
         let vbox = match window.default_vbox() {
             Some(v) => v,
             None => {
-                eprintln!("fatal: tao window should have a default vbox");
+                // lint-allow-unused: pre-logger startup fatal — stderr is the only sink
+                #[allow(clippy::print_stderr)]
+                {
+                    eprintln!("fatal: tao window should have a default vbox");
+                }
                 std::process::exit(1);
             }
         };
         match builder.build_gtk(vbox) {
             Ok(wv) => wv,
             Err(e) => {
-                eprintln!("fatal: Failed to create webview: {e}");
+                // lint-allow-unused: pre-logger startup fatal — stderr is the only sink
+                #[allow(clippy::print_stderr)]
+                {
+                    eprintln!("fatal: Failed to create webview: {e}");
+                }
                 std::process::exit(1);
             }
         }
@@ -498,7 +510,11 @@ fn main() {
     let webview = match builder.build(&window) {
         Ok(wv) => wv,
         Err(e) => {
-            eprintln!("fatal: Failed to create webview: {e}");
+            // lint-allow-unused: pre-logger startup fatal — stderr is the only sink
+            #[allow(clippy::print_stderr)]
+            {
+                eprintln!("fatal: Failed to create webview: {e}");
+            }
             std::process::exit(1);
         }
     };
@@ -508,7 +524,7 @@ fn main() {
     // The tokio task will pull from this channel in the event loop.
     let (ss_tx, mut ss_rx) = tokio::sync::mpsc::channel::<ScreenshotRequest>(4);
     {
-        let mut guard = screenshot_tx.lock().unwrap_or_else(|e| e.into_inner());
+        let mut guard = screenshot_tx.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         *guard = Some(ss_tx);
     }
 
@@ -523,7 +539,11 @@ fn main() {
     let rt = match tokio::runtime::Runtime::new() {
         Ok(rt) => rt,
         Err(e) => {
-            eprintln!("fatal: failed to create tokio runtime: {e}");
+            // lint-allow-unused: pre-logger startup fatal — stderr is the only sink
+            #[allow(clippy::print_stderr)]
+            {
+                eprintln!("fatal: failed to create tokio runtime: {e}");
+            }
             std::process::exit(1);
         }
     };
@@ -582,16 +602,16 @@ fn main() {
                     Ok(surface) => {
                         let mut buf: Vec<u8> = Vec::new();
                         match surface.write_to_png(&mut buf) {
-                            Ok(_) => {
-                                let _ = cb_tx.send(Ok(buf));
+                            Ok(()) => {
+                                drop(cb_tx.send(Ok(buf)));
                             }
                             Err(e) => {
-                                let _ = cb_tx.send(Err(e.to_string()));
+                                drop(cb_tx.send(Err(e.to_string())));
                             }
                         }
                     }
                     Err(e) => {
-                        let _ = cb_tx.send(Err(e.to_string()));
+                        drop(cb_tx.send(Err(e.to_string())));
                     }
                 },
             );
@@ -600,7 +620,7 @@ fn main() {
             rt.spawn(async move {
                 let result = loop {
                     tokio::time::sleep(std::time::Duration::from_millis(16)).await;
-                    let guard = poll_rx.lock().unwrap_or_else(|e| e.into_inner());
+                    let guard = poll_rx.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
                     match guard.try_recv() {
                         Ok(r) => break r,
                         Err(std_mpsc::TryRecvError::Empty) => continue,
@@ -609,10 +629,12 @@ fn main() {
                         }
                     }
                 };
-                let _ = req.resp.send(result);
+                drop(req.resp.send(result));
             });
         }
 
+        // lint-allow-unused: tao::event::Event has 30+ variants we deliberately ignore via `_`
+        #[allow(clippy::wildcard_enum_match_arm, clippy::match_same_arms)]
         match event {
             tao::event::Event::UserEvent(UserEvent::EvalRequest { id: _id, script }) => {
                 if let Err(e) = webview.evaluate_script(&script) {

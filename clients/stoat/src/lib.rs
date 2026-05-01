@@ -1174,7 +1174,7 @@ impl ClientBackend for StoatClient {
                         Ok(WsMessage::Text(text)) => {
                             if let Ok(event_json) =
                                 serde_json::from_str::<serde_json::Value>(&text)
-                                && let Some(ev) = parse_bonfire_event(event_json)
+                                && let Some(ev) = parse_bonfire_event(&event_json)
                                 && tx.send(ev).await.is_err()
                             {
                                 break;
@@ -1774,7 +1774,7 @@ impl ClientBackend for StoatClient {
 }
 
 #[cfg(all(feature = "native", not(target_arch = "wasm32")))]
-fn parse_bonfire_event(json: serde_json::Value) -> Option<ClientEvent> {
+fn parse_bonfire_event(json: &serde_json::Value) -> Option<ClientEvent> {
     match json.get("type")?.as_str()? {
         "Message" => {
             let channel_id = json.get("channel")?.as_str()?.to_string();

@@ -37,7 +37,8 @@ impl StoatConfig {
 
     /// Create configuration for a custom Stoat instance.
     pub fn new(base_url: impl Into<String>) -> Result<Self, StoatConfigError> {
-        let normalized = normalize_base_url(base_url.into())?;
+        let base_url_string: String = base_url.into();
+        let normalized = normalize_base_url(&base_url_string)?;
         Ok(Self {
             base_url: normalized,
         })
@@ -111,7 +112,7 @@ impl TryFrom<AuthCredentials> for StoatAuthInput {
     }
 }
 
-fn normalize_base_url(base_url: String) -> Result<String, StoatConfigError> {
+fn normalize_base_url(base_url: &str) -> Result<String, StoatConfigError> {
     let trimmed = base_url.trim().trim_end_matches('/').to_string();
     if trimmed.is_empty() {
         return Err(StoatConfigError::EmptyBaseUrl);

@@ -62,11 +62,13 @@ impl PolyServerWsClient {
     }
 
     /// Get a receiver for server events.
+    #[must_use]
     pub fn subscribe(&self) -> broadcast::Receiver<ServerEvent> {
         self.tx.subscribe()
     }
 
     /// Get the sender (for bridging events into poly-client streams).
+    #[must_use]
     pub fn sender(&self) -> broadcast::Sender<ServerEvent> {
         self.tx.clone()
     }
@@ -188,7 +190,7 @@ async fn ws_reconnect_loop(
                             match serde_json::from_str::<ServerEvent>(&text) {
                                 Ok(event) => {
                                     // Ignore send errors — no subscribers means nobody is listening.
-                                    let _ = tx.send(event);
+                                    drop(tx.send(event));
                                 }
                                 Err(e) => {
                                     debug!("WS: Failed to parse event: {e} — raw: {text}");
@@ -218,6 +220,6 @@ async fn ws_reconnect_loop(
         // Reconnect with exponential backoff.
         info!("WS: Reconnecting in {backoff_secs}s");
         tokio::time::sleep(Duration::from_secs(backoff_secs)).await;
-        backoff_secs = (backoff_secs * 2).min(MAX_BACKOFF_SECS);
+        backoff_secs = backoff_secs.saturating_mul(2).min(MAX_BACKOFF_SECS);
     }
 }

@@ -78,6 +78,7 @@ pub use ws::PolyServerWsClient;
 /// Mirrors the WIT `plugin-metadata.get-translations(locale) → string` export.
 /// Returns an empty string for unsupported locales so the host falls back to
 /// English (same contract as the WIT interface).
+#[must_use]
 pub fn plugin_translations(locale: &str) -> String {
     match locale {
         "de" => include_str!("../locales/de/plugin.ftl").to_string(),

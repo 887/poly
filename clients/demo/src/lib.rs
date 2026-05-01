@@ -44,6 +44,7 @@ mod guest;
 /// Mirrors the WIT `plugin-metadata.get-translations(locale) → string` export.
 /// Returns an empty string for unsupported locales so the host falls back to
 /// English (the same contract as the WIT interface).
+#[must_use] 
 pub fn plugin_translations(locale: &str) -> String {
     match locale {
         "de" => include_str!("../locales/de/plugin.ftl").to_string(),
@@ -88,6 +89,7 @@ pub struct DemoClient {
 #[cfg(feature = "native")]
 impl DemoClient {
     /// Create a new demo client.
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             authenticated: false,
@@ -685,6 +687,7 @@ pub struct DemoClient2 {
 #[cfg(feature = "native")]
 impl DemoClient2 {
     /// Create a new demo2 client.
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             authenticated: false,
@@ -1177,6 +1180,7 @@ pub struct DemoClient3 {
 #[cfg(feature = "native")]
 impl DemoClient3 {
     /// Create a new demo_forum client.
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             authenticated: false,
@@ -1577,8 +1581,7 @@ impl ClientBackend for DemoClient3 {
                         s.categories
                             .first()
                             .and_then(|c| c.channel_ids.first())
-                            .map(|id| id.as_str())
-                            .unwrap_or(""),
+                            .map_or("", String::as_str),
                     )
                     .len();
                     let meta = format!("{members} subscribers · {posts_count} posts");

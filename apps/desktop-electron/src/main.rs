@@ -63,8 +63,12 @@ async fn main() -> anyhow::Result<()> {
 
 #[cfg(all(not(target_arch = "wasm32"), not(feature = "server")))]
 fn main() {
-    eprintln!(
-        "poly-desktop-electron binary built without the `server` feature; nothing to run. \
-         Build with `--features server` or use `dx serve --platform web --fullstack`."
-    );
+    // lint-allow-unused: fallback main() has no logger initialised yet
+    #[allow(clippy::print_stderr)]
+    {
+        eprintln!(
+            "poly-desktop-electron binary built without the `server` feature; nothing to run. \
+             Build with `--features server` or use `dx serve --platform web --fullstack`."
+        );
+    }
 }
