@@ -1,177 +1,180 @@
-# CI: Nightly fuzz run — persona source-resolution deny-wins algorithm.
+# DISABLED — kept commented out, not deleted. We don't want this CI
+# action running. Re-enable by uncommenting if/when needed.
 #
-# Runs `cargo fuzz run source_resolve` for 5 minutes against the
-# mcp/chat-mcp/fuzz crate.  On any crash: upload the crashing input
-# as a workflow artefact and open a GitHub issue with the crash details.
-#
-# Schedule: daily at 06:00 UTC.
-# NOT on PRs — fuzz timing is non-deterministic and the run takes 5+ minutes.
-# See docs/plans/plan-persona-quality-gates.md Phase R.4.
-
-name: Fuzz — Persona source resolution
-
-on:
-  schedule:
-    - cron: '0 6 * * *'
-  workflow_dispatch:    # Allow manual trigger for debugging.
-
-env:
-  CARGO_TERM_COLOR: always
-
-jobs:
-  fuzz-source-resolve:
-    name: cargo fuzz run source_resolve (5 min)
-    runs-on: ubuntu-latest
-    permissions:
-      issues: write   # Needed by actions/github-script to open an issue.
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust nightly
-        uses: dtolnay/rust-toolchain@nightly
-        with:
-          # libfuzzer-sys requires llvm-tools for coverage instrumentation.
-          components: llvm-tools-preview, rust-src
-
-      # Cache both the cargo registry and the fuzz target build artefacts.
-      - name: Cache cargo registry & fuzz build
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            mcp/chat-mcp/fuzz/target
-          key: ${{ runner.os }}-fuzz-personas-${{ hashFiles('mcp/chat-mcp/fuzz/Cargo.lock', 'mcp/chat-mcp/Cargo.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-fuzz-personas-
-
-      - name: Install cargo-fuzz
-        run: cargo install cargo-fuzz --locked
-        env:
-          CARGO_INSTALL_ROOT: ~/.cargo
-
-      - name: Install system dependencies (for poly-chat-mcp native deps)
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q libssl-dev pkg-config
-
-      - name: Run fuzz target (5 minutes)
-        id: fuzz_run
-        working-directory: mcp/chat-mcp/fuzz
-        # Exit code 0 = clean run; non-zero = crash or error.
-        run: |
-          cargo +nightly fuzz run source_resolve \
-            corpus/source_resolve \
-            -- -max_total_time=300 -print_final_stats=1 2>&1 | tee /tmp/fuzz-output.txt
-        # Don't fail the step here — we handle failure below so we can
-        # upload artefacts and open the issue before marking the job failed.
-        continue-on-error: true
-
-      - name: Collect crash artefacts
-        if: steps.fuzz_run.outcome == 'failure'
-        id: collect_crashes
-        working-directory: mcp/chat-mcp/fuzz
-        run: |
-          # cargo fuzz writes crashes to:
-          #   fuzz/artifacts/source_resolve/crash-<hash>
-          #   fuzz/artifacts/source_resolve/timeout-<hash>
-          ARTIFACT_DIR="artifacts/source_resolve"
-          if [ -d "$ARTIFACT_DIR" ] && [ "$(ls -A $ARTIFACT_DIR 2>/dev/null)" ]; then
-            CRASH_FILE=$(ls -t "$ARTIFACT_DIR"/ | head -1)
-            CRASH_PATH="$ARTIFACT_DIR/$CRASH_FILE"
-            echo "crash_path=$CRASH_PATH" >> "$GITHUB_OUTPUT"
-            echo "crash_file=$CRASH_FILE" >> "$GITHUB_OUTPUT"
-            # Hex-dump first 256 bytes for the issue body.
-            xxd "$CRASH_PATH" | head -16 > /tmp/crash-hex.txt || true
-          else
-            echo "No crash artefacts found (timeout or OOM?)."
-            echo "crash_path=" >> "$GITHUB_OUTPUT"
-            echo "crash_file=unknown" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Upload crash artefacts
-        if: steps.fuzz_run.outcome == 'failure'
-        uses: actions/upload-artifact@v4
-        with:
-          name: fuzz-crash-source_resolve-${{ github.run_id }}
-          path: |
-            mcp/chat-mcp/fuzz/artifacts/source_resolve/
-            /tmp/fuzz-output.txt
-          retention-days: 30
-          if-no-files-found: warn
-
-      - name: Open GitHub issue on crash
-        if: steps.fuzz_run.outcome == 'failure'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const crashFile = '${{ steps.collect_crashes.outputs.crash_file }}';
-            const runUrl = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
-            let hexDump = '';
-            try {
-              hexDump = fs.readFileSync('/tmp/crash-hex.txt', 'utf8');
-            } catch (_) {
-              hexDump = '(hex dump not available)';
-            }
-            let fuzzOutput = '';
-            try {
-              const lines = fs.readFileSync('/tmp/fuzz-output.txt', 'utf8').split('\n');
-              // Last 40 lines are most relevant (stats + crash line).
-              fuzzOutput = lines.slice(-40).join('\n');
-            } catch (_) {
-              fuzzOutput = '(fuzz output not available)';
-            }
-
-            const body = [
-              '## Fuzz crash: `source_resolve` — deny-wins resolver',
-              '',
-              `**Workflow run:** ${runUrl}`,
-              `**Crash file:** \`${crashFile}\``,
-              `**Date:** ${new Date().toISOString().split('T')[0]}`,
-              '',
-              '### Repro',
-              '',
-              '```bash',
-              '# Download the artefact bundle from the workflow run above.',
-              '# Then:',
-              'cd mcp/chat-mcp/fuzz',
-              `cargo +nightly fuzz run source_resolve artifacts/source_resolve/${crashFile}`,
-              '```',
-              '',
-              '### Crash hex dump (first 256 bytes)',
-              '',
-              '```',
-              hexDump,
-              '```',
-              '',
-              '### Fuzz run tail output',
-              '',
-              '```',
-              fuzzOutput,
-              '```',
-              '',
-              '### What to fix',
-              '',
-              '- If **panic** in `is_chat_included`: fix the panic in `mcp/chat-mcp/src/persona/context.rs`.',
-              '- If **assertion failure** (fast ≠ slow): the fast path diverges from the reference oracle.',
-              '  Compare `is_chat_included` vs `reference_is_chat_included` in `mcp/chat-mcp/fuzz/src/lib.rs`.',
-              '',
-              'See `docs/plans/plan-persona-quality-gates.md` Phase R for context.',
-            ].join('\n');
-
-            await github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: `[fuzz] source_resolve crash — ${new Date().toISOString().split('T')[0]}`,
-              body,
-              labels: ['bug', 'fuzz', 'persona'],
-            });
-
-      # Fail the job AFTER uploading artefacts and opening the issue.
-      - name: Fail job if fuzz found a crash
-        if: steps.fuzz_run.outcome == 'failure'
-        run: |
-          echo "::error::cargo fuzz found a crash. See artefacts and the opened issue."
-          exit 1
+# # CI: Nightly fuzz run — persona source-resolution deny-wins algorithm.
+# #
+# # Runs `cargo fuzz run source_resolve` for 5 minutes against the
+# # mcp/chat-mcp/fuzz crate.  On any crash: upload the crashing input
+# # as a workflow artefact and open a GitHub issue with the crash details.
+# #
+# # Schedule: daily at 06:00 UTC.
+# # NOT on PRs — fuzz timing is non-deterministic and the run takes 5+ minutes.
+# # See docs/plans/plan-persona-quality-gates.md Phase R.4.
+# 
+# name: Fuzz — Persona source resolution
+# 
+# on:
+#   schedule:
+#     - cron: '0 6 * * *'
+#   workflow_dispatch:    # Allow manual trigger for debugging.
+# 
+# env:
+#   CARGO_TERM_COLOR: always
+# 
+# jobs:
+#   fuzz-source-resolve:
+#     name: cargo fuzz run source_resolve (5 min)
+#     runs-on: ubuntu-latest
+#     permissions:
+#       issues: write   # Needed by actions/github-script to open an issue.
+# 
+#     steps:
+#       - uses: actions/checkout@v4
+# 
+#       - name: Install Rust nightly
+#         uses: dtolnay/rust-toolchain@nightly
+#         with:
+#           # libfuzzer-sys requires llvm-tools for coverage instrumentation.
+#           components: llvm-tools-preview, rust-src
+# 
+#       # Cache both the cargo registry and the fuzz target build artefacts.
+#       - name: Cache cargo registry & fuzz build
+#         uses: actions/cache@v4
+#         with:
+#           path: |
+#             ~/.cargo/registry
+#             ~/.cargo/git
+#             mcp/chat-mcp/fuzz/target
+#           key: ${{ runner.os }}-fuzz-personas-${{ hashFiles('mcp/chat-mcp/fuzz/Cargo.lock', 'mcp/chat-mcp/Cargo.toml') }}
+#           restore-keys: |
+#             ${{ runner.os }}-fuzz-personas-
+# 
+#       - name: Install cargo-fuzz
+#         run: cargo install cargo-fuzz --locked
+#         env:
+#           CARGO_INSTALL_ROOT: ~/.cargo
+# 
+#       - name: Install system dependencies (for poly-chat-mcp native deps)
+#         run: |
+#           sudo apt-get update -q
+#           sudo apt-get install -y -q libssl-dev pkg-config
+# 
+#       - name: Run fuzz target (5 minutes)
+#         id: fuzz_run
+#         working-directory: mcp/chat-mcp/fuzz
+#         # Exit code 0 = clean run; non-zero = crash or error.
+#         run: |
+#           cargo +nightly fuzz run source_resolve \
+#             corpus/source_resolve \
+#             -- -max_total_time=300 -print_final_stats=1 2>&1 | tee /tmp/fuzz-output.txt
+#         # Don't fail the step here — we handle failure below so we can
+#         # upload artefacts and open the issue before marking the job failed.
+#         continue-on-error: true
+# 
+#       - name: Collect crash artefacts
+#         if: steps.fuzz_run.outcome == 'failure'
+#         id: collect_crashes
+#         working-directory: mcp/chat-mcp/fuzz
+#         run: |
+#           # cargo fuzz writes crashes to:
+#           #   fuzz/artifacts/source_resolve/crash-<hash>
+#           #   fuzz/artifacts/source_resolve/timeout-<hash>
+#           ARTIFACT_DIR="artifacts/source_resolve"
+#           if [ -d "$ARTIFACT_DIR" ] && [ "$(ls -A $ARTIFACT_DIR 2>/dev/null)" ]; then
+#             CRASH_FILE=$(ls -t "$ARTIFACT_DIR"/ | head -1)
+#             CRASH_PATH="$ARTIFACT_DIR/$CRASH_FILE"
+#             echo "crash_path=$CRASH_PATH" >> "$GITHUB_OUTPUT"
+#             echo "crash_file=$CRASH_FILE" >> "$GITHUB_OUTPUT"
+#             # Hex-dump first 256 bytes for the issue body.
+#             xxd "$CRASH_PATH" | head -16 > /tmp/crash-hex.txt || true
+#           else
+#             echo "No crash artefacts found (timeout or OOM?)."
+#             echo "crash_path=" >> "$GITHUB_OUTPUT"
+#             echo "crash_file=unknown" >> "$GITHUB_OUTPUT"
+#           fi
+# 
+#       - name: Upload crash artefacts
+#         if: steps.fuzz_run.outcome == 'failure'
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: fuzz-crash-source_resolve-${{ github.run_id }}
+#           path: |
+#             mcp/chat-mcp/fuzz/artifacts/source_resolve/
+#             /tmp/fuzz-output.txt
+#           retention-days: 30
+#           if-no-files-found: warn
+# 
+#       - name: Open GitHub issue on crash
+#         if: steps.fuzz_run.outcome == 'failure'
+#         uses: actions/github-script@v7
+#         with:
+#           script: |
+#             const fs = require('fs');
+#             const crashFile = '${{ steps.collect_crashes.outputs.crash_file }}';
+#             const runUrl = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
+#             let hexDump = '';
+#             try {
+#               hexDump = fs.readFileSync('/tmp/crash-hex.txt', 'utf8');
+#             } catch (_) {
+#               hexDump = '(hex dump not available)';
+#             }
+#             let fuzzOutput = '';
+#             try {
+#               const lines = fs.readFileSync('/tmp/fuzz-output.txt', 'utf8').split('\n');
+#               // Last 40 lines are most relevant (stats + crash line).
+#               fuzzOutput = lines.slice(-40).join('\n');
+#             } catch (_) {
+#               fuzzOutput = '(fuzz output not available)';
+#             }
+# 
+#             const body = [
+#               '## Fuzz crash: `source_resolve` — deny-wins resolver',
+#               '',
+#               `**Workflow run:** ${runUrl}`,
+#               `**Crash file:** \`${crashFile}\``,
+#               `**Date:** ${new Date().toISOString().split('T')[0]}`,
+#               '',
+#               '### Repro',
+#               '',
+#               '```bash',
+#               '# Download the artefact bundle from the workflow run above.',
+#               '# Then:',
+#               'cd mcp/chat-mcp/fuzz',
+#               `cargo +nightly fuzz run source_resolve artifacts/source_resolve/${crashFile}`,
+#               '```',
+#               '',
+#               '### Crash hex dump (first 256 bytes)',
+#               '',
+#               '```',
+#               hexDump,
+#               '```',
+#               '',
+#               '### Fuzz run tail output',
+#               '',
+#               '```',
+#               fuzzOutput,
+#               '```',
+#               '',
+#               '### What to fix',
+#               '',
+#               '- If **panic** in `is_chat_included`: fix the panic in `mcp/chat-mcp/src/persona/context.rs`.',
+#               '- If **assertion failure** (fast ≠ slow): the fast path diverges from the reference oracle.',
+#               '  Compare `is_chat_included` vs `reference_is_chat_included` in `mcp/chat-mcp/fuzz/src/lib.rs`.',
+#               '',
+#               'See `docs/plans/plan-persona-quality-gates.md` Phase R for context.',
+#             ].join('\n');
+# 
+#             await github.rest.issues.create({
+#               owner: context.repo.owner,
+#               repo: context.repo.repo,
+#               title: `[fuzz] source_resolve crash — ${new Date().toISOString().split('T')[0]}`,
+#               body,
+#               labels: ['bug', 'fuzz', 'persona'],
+#             });
+# 
+#       # Fail the job AFTER uploading artefacts and opening the issue.
+#       - name: Fail job if fuzz found a crash
+#         if: steps.fuzz_run.outcome == 'failure'
+#         run: |
+#           echo "::error::cargo fuzz found a crash. See artefacts and the opened issue."
+#           exit 1
