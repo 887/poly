@@ -5346,10 +5346,7 @@ fn ChatUtilityRail(
                     }
                 }
             } else if panel == ChatUtilityPanel::Settings {
-                ChatSettingsPanel {
-                    notifications_muted,
-                    channel_name: current_channel_name.clone(),
-                }
+                ChatSettingsPanel { notifications_muted }
             } else if panel == ChatUtilityPanel::Drafts {
                 // B.5 — Pending drafts across all chats for the active account.
                 {
@@ -5403,9 +5400,9 @@ fn ChatUtilityRail(
 /// Build the "Copy last N messages" clipboard payload from the most
 /// recent `limit` messages in `chat_data`. Plain-text format
 /// (`- Author: body`) suitable for pasting into Claude Desktop or any
-/// other LLM that reads recent context. Used by the chat-settings
-/// "Catch me up" button.
-fn catch_up_clipboard_text(chat_data: &ChatData, channel_name: &str, limit: usize) -> String {
+/// other LLM that reads recent context. Used by the AgentPanel
+/// "Catch me up" button (see crates/core/src/ui/account/common/agent_panel.rs).
+pub(crate) fn catch_up_clipboard_text(chat_data: &ChatData, channel_name: &str, limit: usize) -> String {
     let recent: Vec<&Message> = chat_data.messages.iter().rev().take(limit).collect();
     let total = recent.len();
     let body = recent
@@ -5433,18 +5430,13 @@ fn catch_up_clipboard_text(chat_data: &ChatData, channel_name: &str, limit: usiz
 #[ui_action(inherit)]
 #[context_menu(none)]
 #[component]
-fn ChatSettingsPanel(
-    mut notifications_muted: Signal<bool>,
-    channel_name: String,
-) -> Element {
+fn ChatSettingsPanel(mut notifications_muted: Signal<bool>) -> Element {
     use crate::ui::settings::common::{PolySelect, SelectOption};
     let mut app_state: BatchedSignal<AppState> = use_context();
-    let chat_data: BatchedSignal<ChatData> = use_context();
     let muted    = *notifications_muted.read();
     let grouping = app_state.read().member_list_grouping;
     let sort     = app_state.read().member_list_sort_order;
     let show_off = app_state.read().member_list_show_offline;
-    let mut copy_status: Signal<Option<String>> = use_signal(|| None);
 
     let grouping_options = vec![
         SelectOption { value: "by-status", label: t("chat-settings-grouping-by-status") },
@@ -5458,39 +5450,6 @@ fn ChatSettingsPanel(
 
     rsx! {
         div { class: "chat-utility-body chat-settings-panel",
-
-            // ── Catch me up ──────────────────────────────────────────────
-            // One-click button to copy the last 20 messages of this
-            // conversation as a plain-text summary prompt to the
-            // clipboard. Replaces the previous Catch-me-up tab.
-            div { class: "chat-settings-section",
-                h4 { class: "chat-settings-section-title", {t("chat-settings-catch-up")} }
-                p { class: "chat-settings-section-desc",
-                    {t("chat-settings-catch-up-desc")}
-                }
-                button {
-                    class: "chat-settings-action-btn",
-                    onclick: {
-                        let chan = channel_name.clone();
-                        move |_| {
-                            let snapshot = chat_data.read().clone();
-                            let payload = catch_up_clipboard_text(&snapshot, &chan, 20);
-                            let escaped = payload.replace('\\', r"\\").replace('`', r"\`");
-                            let _ = document::eval(&format!(
-                                "navigator.clipboard.writeText(`{escaped}`)"
-                            ));
-                            copy_status.set(Some(t("chat-settings-catch-up-copied")));
-                        }
-                    },
-                    span { class: "chat-settings-action-icon", "📋" }
-                    span { class: "chat-settings-action-label",
-                        {t("chat-settings-catch-up-button")}
-                    }
-                }
-                if let Some(msg) = copy_status.read().clone() {
-                    p { class: "chat-settings-action-status", "{msg}" }
-                }
-            }
 
             // ── Notifications ────────────────────────────────────────────
             div { class: "chat-settings-section",

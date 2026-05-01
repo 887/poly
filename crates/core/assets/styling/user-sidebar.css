@@ -585,6 +585,56 @@
     padding: 8px 0;
 }
 
+/* "Catch me up" section — section description + themed action button.
+ * Matches the dark surface chrome of other agent-panel sections.
+ */
+.agent-panel-section-desc {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.45;
+    margin: 6px 0 10px 0;
+}
+
+.agent-panel-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    background-color: var(--bg-input);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.12s, border-color 0.12s;
+}
+
+.agent-panel-action-btn:hover {
+    background-color: var(--bg-hover);
+    border-color: var(--accent-primary);
+}
+
+.agent-panel-action-btn:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
+}
+
+.agent-panel-action-icon {
+    font-size: 14px;
+    line-height: 1;
+}
+
+.agent-panel-action-label {
+    line-height: 1;
+}
+
+.agent-panel-action-status {
+    margin: 8px 0 0 0;
+    font-size: 12px;
+    color: var(--accent-primary);
+}
+
 .agent-panel-disabled-state {
     font-size: 13px;
     color: var(--text-muted);

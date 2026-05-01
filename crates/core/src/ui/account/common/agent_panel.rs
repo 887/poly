@@ -25,6 +25,7 @@
 
 use crate::i18n::{t, t_args};
 use crate::state::{AppState, BatchedSignal, ChatData};
+use crate::ui::account::common::chat_view::catch_up_clipboard_text;
 use crate::ui::agent::persona::talk_to_overlay::{PersonaTalkToOverlay, TalkSession};
 use crate::ui::agent::persona::{PersonaListPanel, PersonaSummary};
 use dioxus::prelude::*;
@@ -213,6 +214,54 @@ fn AgentDraftsSection(access_enabled: bool) -> Element {
 }
 
 // ---------------------------------------------------------------------------
+// Section: Catch me up — clipboard helper for external LLMs
+// ---------------------------------------------------------------------------
+
+/// "Catch me up" — copies the last 20 messages of the current chat as a
+/// plain-text summary prompt to the clipboard, so the user can paste them
+/// into Claude Desktop / ChatGPT / any external LLM and ask for a recap.
+/// No network call from the host. Doesn't depend on the in-app agent
+/// being authorised; useful even when the access toggle is off.
+#[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
+#[component]
+fn AgentCatchUpSection(channel_name: String) -> Element {
+    let chat_data: BatchedSignal<ChatData> = use_context();
+    let mut copy_status: Signal<Option<String>> = use_signal(|| None);
+    rsx! {
+        div { class: "agent-panel-section agent-panel-catch-up",
+            h4 { class: "agent-panel-section-title", {t("agent-panel-catch-up-title")} }
+            p { class: "agent-panel-section-desc",
+                {t("agent-panel-catch-up-desc")}
+            }
+            button {
+                class: "agent-panel-action-btn",
+                onclick: {
+                    let chan = channel_name.clone();
+                    move |_| {
+                        let snapshot = chat_data.read().clone();
+                        let payload = catch_up_clipboard_text(&snapshot, &chan, 20);
+                        let escaped = payload.replace('\\', r"\\").replace('`', r"\`");
+                        let _ = document::eval(&format!(
+                            "navigator.clipboard.writeText(`{escaped}`)"
+                        ));
+                        copy_status.set(Some(t("agent-panel-catch-up-copied")));
+                    }
+                },
+                span { class: "agent-panel-action-icon", "📋" }
+                span { class: "agent-panel-action-label",
+                    {t("agent-panel-catch-up-button")}
+                }
+            }
+            if let Some(msg) = copy_status.read().clone() {
+                p { class: "agent-panel-action-status", "{msg}" }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Section: Style (stub)
 // ---------------------------------------------------------------------------
 
@@ -281,7 +330,7 @@ pub fn AgentPanel(
     // on every render (hang class #7 countermeasure).
     let current_talk = talk_session.peek().clone();
 
-    let _ = (&chat_name, &mut app_state);
+    let _ = &mut app_state;
 
     rsx! {
         aside { class: "user-sidebar agent-panel-sidebar",
@@ -299,6 +348,10 @@ pub fn AgentPanel(
                 }
                 AgentDraftsSection {
                     access_enabled: *access_enabled.read(),
+                }
+
+                AgentCatchUpSection {
+                    channel_name: chat_name.clone(),
                 }
 
                 // PersonaListPanel removed — personas don't make sense in
