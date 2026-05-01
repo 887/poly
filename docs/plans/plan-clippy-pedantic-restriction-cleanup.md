@@ -148,7 +148,7 @@ even is `arbitrary_source_item_ordering`?" mystery hits.
 
 | # | Lint | Count | Group | Notes |
 |--:|------|------:|-------|-------|
-| 1 | `missing_trait_methods` | 559 | restriction | Trait implementors not spelling out optional methods (`clone_from`, `next_back`, etc.) — auto-impls are fine, just noisy. **Re-evaluate after burn-down: may demote to allow.** |
+| 1 | ~~`missing_trait_methods`~~ | ~~559~~ | restriction | **DEMOTED to allow 2026-05-01** — kitchen-sink ClientBackend trait (~50+ default methods × 8 backend impls) made this lint produce ~400 trivial fn copies for zero signal. Removed from `Cargo.toml`. Re-enable per-impl if a specific trait stabilises. |
 | 2 | `arithmetic_side_effects` | 385 | restriction | Real signal — every integer add/sub/mul that could overflow. Per design decision: workspace-wide warn. Mostly in byte-offset / index math. |
 | 3 | `must_use_candidate` | 240 | pedantic | Builder-style methods + `Result`-returning helpers without `#[must_use]`. Apply per crate. |
 | 4 | `default_numeric_fallback` | 146 | restriction | `let x = 1` falling back to `i32` — explicit type annotation needed. |

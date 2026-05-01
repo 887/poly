@@ -289,7 +289,12 @@ wildcard_enum_match_arm  = "warn"
 map_err_ignore           = "warn"
 string_slice             = "warn"  # UTF-8 panic risk
 integer_division         = "warn"  # silent floor — usually a bug
-missing_trait_methods    = "warn"  # `clone_from` etc.
+# missing_trait_methods removed 2026-05-01 — would force every
+# ClientBackend impl across 8 backends to spell out 50+ default methods
+# (~400 trivial copies, no value, unreadable diffs). The lint is fine
+# for small traits; ours are kitchen-sink. Re-enable per-impl with
+# `#[warn(clippy::missing_trait_methods)]` if a specific trait
+# stabilises and we want the explicit "did you mean to override" check.
 
 # ── Hygiene ───────────────────────────────────────────────────────────
 print_stdout      = "warn"
