@@ -1,5 +1,7 @@
 # Direct Calls & Temporary Calls
 
+## Status: 📋 DESIGN/REFERENCE DOC — current-state reference for the 1:1 DM call surface in `poly-core`. Not an execution plan; describes the model already shipped.
+
 _Last updated: 2026-03-20_
 
 ## Goal

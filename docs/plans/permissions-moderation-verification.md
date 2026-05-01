@@ -1,5 +1,7 @@
 # Moderation API verification — Wave 0 of permissions plan
 
+## Status: 📋 VERIFICATION ARTIFACT — Wave 0 evidence for `plan-permissions-moderation.md`. Not a plan; captures endpoint behaviour at audit time so subsequent phases can compare against a known baseline.
+
 > Generated: 2026-04-23
 > Plan reference: `docs/plans/plan-permissions-moderation.md` (Section 1.3 + 1.5 + Phase B-ST + B-LE)
 > Test servers: Stoat port 9101, Lemmy port 9104 (both confirmed up via `/health`)
