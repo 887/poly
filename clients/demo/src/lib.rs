@@ -62,8 +62,6 @@ pub fn plugin_translations(locale: &str) -> String {
 #[cfg(feature = "native")]
 use async_trait::async_trait;
 #[cfg(feature = "native")]
-use chrono::{Duration, Utc};
-#[cfg(feature = "native")]
 use futures::stream::Stream;
 #[cfg(feature = "native")]
 use poly_client::*;
@@ -361,24 +359,31 @@ impl ClientBackend for DemoClient {
                         return None;
                     }
 
+                    // counter is bounded by stream lifetime; usize on 32-bit hosts is ample
+                    // for the demo's lifetime (incremented once per ~5s).
+                    let cu = usize::try_from(counter).unwrap_or(usize::MAX);
+
                     // Stagger timing: 4s, 6s, 8s, 5s, 7s, 3s cycle
                     let delays = [4u64, 6, 8, 5, 7, 3];
                     let delay_secs = delays
-                        .get((counter as usize) % delays.len())
+                        .get(cu.checked_rem(delays.len()).unwrap_or(0))
                         .copied()
                         .unwrap_or(5);
                     tokio::time::sleep(std::time::Duration::from_secs(delay_secs)).await;
 
-                    let user_idx = (counter as usize) % users.len();
+                    let user_idx = cu.checked_rem(users.len()).unwrap_or(0);
                     let user = users.get(user_idx)?;
 
                     // Rotate: server msg, typing, DM msg, server msg, presence
-                    let event = match counter % 5 {
+                    let event = match counter.checked_rem(5).unwrap_or(0) {
                         // Server channel message
                         0 | 3 => {
-                            let ch_idx = (counter as usize) % server_channels.len();
+                            let ch_idx = cu.checked_rem(server_channels.len()).unwrap_or(0);
                             let channel_id = (*server_channels.get(ch_idx)?).to_string();
-                            let msg_idx = (counter as usize / 5) % server_messages.len();
+                            let msg_idx = cu
+                                .checked_div(5)
+                                .and_then(|v| v.checked_rem(server_messages.len()))
+                                .unwrap_or(0);
                             let text = server_messages.get(msg_idx).copied().unwrap_or("...");
                             ClientEvent::MessageReceived {
                                 channel_id,
@@ -398,7 +403,7 @@ impl ClientBackend for DemoClient {
                         }
                         // Typing indicator in a server channel
                         1 => {
-                            let ch_idx = (counter as usize) % server_channels.len();
+                            let ch_idx = cu.checked_rem(server_channels.len()).unwrap_or(0);
                             let channel_id = (*server_channels.get(ch_idx)?).to_string();
                             ClientEvent::TypingStarted {
                                 channel_id,
@@ -408,11 +413,20 @@ impl ClientBackend for DemoClient {
                         }
                         // DM channel message (simulates another user messaging you)
                         2 => {
-                            let dm_idx = (counter as usize / 2) % dm_channels.len();
+                            let dm_idx = cu
+                                .checked_div(2)
+                                .and_then(|v| v.checked_rem(dm_channels.len()))
+                                .unwrap_or(0);
                             let channel_id = (*dm_channels.get(dm_idx)?).to_string();
-                            let dm_user_idx = (counter as usize + 1) % users.len();
+                            let dm_user_idx = cu
+                                .checked_add(1)
+                                .and_then(|v| v.checked_rem(users.len()))
+                                .unwrap_or(0);
                             let dm_user = users.get(dm_user_idx)?;
-                            let msg_idx = (counter as usize / 3) % dm_messages.len();
+                            let msg_idx = cu
+                                .checked_div(3)
+                                .and_then(|v| v.checked_rem(dm_messages.len()))
+                                .unwrap_or(0);
                             let text = dm_messages.get(msg_idx).copied().unwrap_or("hey!");
                             ClientEvent::MessageReceived {
                                 channel_id,
@@ -438,7 +452,10 @@ impl ClientBackend for DemoClient {
                                 PresenceStatus::DoNotDisturb,
                                 PresenceStatus::Online,
                             ];
-                            let s_idx = (counter as usize / 3) % statuses.len();
+                            let s_idx = cu
+                                .checked_div(3)
+                                .and_then(|v| v.checked_rem(statuses.len()))
+                                .unwrap_or(0);
                             let status = statuses
                                 .get(s_idx)
                                 .cloned()
@@ -450,7 +467,7 @@ impl ClientBackend for DemoClient {
                         }
                     };
 
-                    Some((event, counter + 1))
+                    Some((event, counter.saturating_add(1)))
                 }
             });
 
@@ -882,7 +899,7 @@ impl ClientBackend for DemoClient2 {
                     "fair! 😹 but you have to admit the feature flag organization is *clean* even if it's stolen from my 2023 design"
                         .to_string(),
                 ),
-                timestamp: Utc::now() - Duration::hours(3),
+                timestamp: data::ago_hours(3),
                 attachments: vec![],
                 reactions: vec![],
                 reply_to: None,
@@ -1676,13 +1693,15 @@ impl ClientBackend for DemoClient3 {
         let body_html = data::demo3_messages(channel_id)
             .into_iter()
             .find(|msg| msg.id == row_id)
-            .map(|msg| match msg.content {
-                MessageContent::Text(t) => format!("<p>{}</p>", html_escape(&t)),
-                MessageContent::WithAttachments { text, .. } => {
-                    format!("<p>{}</p>", html_escape(&text))
-                }
-            })
-            .unwrap_or_else(|| format!("<p>(post {} not found)</p>", html_escape(row_id)));
+            .map_or_else(
+                || format!("<p>(post {} not found)</p>", html_escape(row_id)),
+                |msg| match msg.content {
+                    MessageContent::Text(t)
+                    | MessageContent::WithAttachments { text: t, .. } => {
+                        format!("<p>{}</p>", html_escape(&t))
+                    }
+                },
+            );
         Ok(ViewDetail {
             body_block: CustomBlock {
                 sanitized_html: body_html,
@@ -1760,7 +1779,7 @@ fn demo_federated_posts(channel_id: &str) -> Vec<Message> {
                 backend: BackendType::from(DEMO_FORUM_BACKEND),
             },
             content: MessageContent::Text(body.to_string()),
-            timestamp: Utc::now() - Duration::hours(age_h),
+            timestamp: data::ago_hours(age_h),
             attachments: vec![],
             reactions: vec![Reaction { emoji: "👍".to_string(), count: score, me: false }],
             reply_to: None,

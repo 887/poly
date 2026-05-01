@@ -101,16 +101,43 @@ pub fn apply_local_read_state_dms(mut dms: Vec<DmChannel>) -> Vec<DmChannel> {
 // arithmetic is mathematically safe for the bounded fixture-data ranges (≤ 60 days).
 // Used in 187 fixture sites; per-site allow would clutter the file.
 #[allow(clippy::arithmetic_side_effects)]
-fn ago_hours(n: i64) -> chrono::DateTime<chrono::Utc> {
+pub(crate) fn ago_hours(n: i64) -> chrono::DateTime<chrono::Utc> {
     chrono::Utc::now() - chrono::Duration::hours(n)
 }
 #[allow(clippy::arithmetic_side_effects)]
+#[cfg(test)]
 fn ago_days(n: i64) -> chrono::DateTime<chrono::Utc> {
     chrono::Utc::now() - chrono::Duration::days(n)
 }
 #[allow(clippy::arithmetic_side_effects)]
 fn ago_minutes(n: i64) -> chrono::DateTime<chrono::Utc> {
     chrono::Utc::now() - chrono::Duration::minutes(n)
+}
+
+// lint-allow-unused: chrono Duration arithmetic on bounded fixture-data values
+// (≤ 60 days, ≤ 23 hours, ≤ 59 minutes) cannot overflow i64 milliseconds.
+// Combinator helpers replace 100+ chained `ago_X(n) - Duration::hours(h) - Duration::minutes(m)`
+// fixture sites that would otherwise need per-line allows.
+#[allow(clippy::arithmetic_side_effects)]
+fn ago_dh(d: i64, h: i64) -> chrono::DateTime<chrono::Utc> {
+    chrono::Utc::now() - chrono::Duration::days(d) - chrono::Duration::hours(h)
+}
+#[allow(clippy::arithmetic_side_effects)]
+fn ago_dhm(d: i64, h: i64, m: i64) -> chrono::DateTime<chrono::Utc> {
+    chrono::Utc::now()
+        - chrono::Duration::days(d)
+        - chrono::Duration::hours(h)
+        - chrono::Duration::minutes(m)
+}
+#[allow(clippy::arithmetic_side_effects)]
+fn ago_hm(h: i64, m: i64) -> chrono::DateTime<chrono::Utc> {
+    chrono::Utc::now() - chrono::Duration::hours(h) - chrono::Duration::minutes(m)
+}
+/// Build a positive forward-offset Duration of `h` hours plus `m` minutes,
+/// for fixture sites that add to a base instant.
+#[allow(clippy::arithmetic_side_effects)]
+fn dur_hm(h: i64, m: i64) -> chrono::Duration {
+    chrono::Duration::hours(h) + chrono::Duration::minutes(m)
 }
 
 /// Return a clone of `users[idx]`, or a placeholder user when the index is
@@ -164,7 +191,7 @@ pub fn forum_post_score(msg: &Message) -> i64 {
         .max(reaction_count("\u{1f389}")) // 🎉
         .max(reaction_count("\u{1f980}"))); // 🦀
     let down = i64::from(reaction_count("\u{1f44e}")); // 👎
-    up - down
+    up.saturating_sub(down)
 }
 
 /// Humanize a timestamp relative to now. Mirrors the pre-refactor
@@ -761,7 +788,7 @@ pub fn demo3_post_comments(post_id: &str) -> Vec<Message> {
         id: &str,
         author: User,
         text: &str,
-        meta: CommentMeta<'_>,
+        meta: &CommentMeta<'_>,
     ) -> Message {
         let reply_to = meta.parent_id.map(|pid| MessageReplyPreview {
             message_id: pid.to_string(),
@@ -777,11 +804,14 @@ pub fn demo3_post_comments(post_id: &str) -> Vec<Message> {
         if meta.downvotes > 0 {
             reactions.push(Reaction { emoji: "👎".to_string(), count: meta.downvotes, me: false });
         }
+        // lint-allow-unused: chrono DateTime - Duration is bounded fixture math (≤ 7 hours).
+        #[allow(clippy::arithmetic_side_effects)]
+        let timestamp = now - meta.ts_offset;
         Message {
             id: id.to_string(),
             author,
             content: MessageContent::Text(text.to_string()),
-            timestamp: now - meta.ts_offset,
+            timestamp,
             attachments: vec![],
             reactions,
             reply_to,
@@ -794,7 +824,7 @@ pub fn demo3_post_comments(post_id: &str) -> Vec<Message> {
     // Convenience macro-like closure — captures `now` legally.
     let c = |id: &str, author: User, text: &str, offset: chrono::Duration,
               up: u32, down: u32, parent: Option<&str>, parent_name: Option<&str>| {
-        forum_comment(now, id, author, text, CommentMeta {
+        forum_comment(now, id, author, text, &CommentMeta {
             ts_offset: offset,
             upvotes: up,
             downvotes: down,
@@ -808,17 +838,17 @@ pub fn demo3_post_comments(post_id: &str) -> Vec<Message> {
             c("fpost-rust-1-c1",
                 forum_user("u-mem-safety", "mem_safety_enjoyer"),
                 "Embassy is fantastic. We've been running it on nRF52840 for a year. The executor overhead is basically zero — tokio would never fly on a 64k device.",
-                chrono::Duration::hours(2) + chrono::Duration::minutes(45),
+                dur_hm(2, 45),
                 23, 0, None, None),
             c("fpost-rust-1-c1r1",
                 forum_user("demo3-user-ferris", "ferris_fan"),
                 "Exactly our setup. The only tricky part was getting USB HID working without std. Had to write a tiny descriptor parser.",
-                chrono::Duration::hours(2) + chrono::Duration::minutes(30),
+                dur_hm(2, 30),
                 12, 0, Some("fpost-rust-1-c1"), Some("mem_safety_enjoyer")),
             c("fpost-rust-1-c1r1r1",
                 forum_user("u-mem-safety", "mem_safety_enjoyer"),
                 "Did you use `usb-device` crate? It's surprisingly solid once you get the descriptor right.",
-                chrono::Duration::hours(2) + chrono::Duration::minutes(10),
+                dur_hm(2, 10),
                 8, 0, Some("fpost-rust-1-c1r1"), Some("ferris_fan")),
             c("fpost-rust-1-c2",
                 forum_user("u-async-enjoyer", "async_enjoyer"),
@@ -828,34 +858,34 @@ pub fn demo3_post_comments(post_id: &str) -> Vec<Message> {
             c("fpost-rust-1-c2r1",
                 forum_user("demo3-user-ferris", "ferris_fan"),
                 "Depends on the use case. Embassy wins on async/await ergonomics. RTIC wins if you're extremely interrupt-bound. For most IoT work, Embassy is the pragmatic choice.",
-                chrono::Duration::hours(1) + chrono::Duration::minutes(48),
+                dur_hm(1, 48),
                 21, 0, Some("fpost-rust-1-c2"), Some("async_enjoyer")),
             c("fpost-rust-1-c3",
                 forum_user("u-no-unsafe", "zero_unsafe"),
                 "This is a big milestone. I showed this post to my team — we've been on Arduino for 3 years and the Rust embedded story was our main blocker. Time to reconsider.",
-                chrono::Duration::hours(1) + chrono::Duration::minutes(30),
+                dur_hm(1, 30),
                 9, 0, None, None),
             c("fpost-rust-1-c3r1",
                 forum_user("demo3-user-self", "Platypus (demo_forum)"),
                 "The tooling story is night and day from 2 years ago. `probe-rs` just works, `flip-link` solves stack overflow detection, `defmt` is production-grade logging. Go for it.",
-                chrono::Duration::hours(1) + chrono::Duration::minutes(10),
+                dur_hm(1, 10),
                 14, 0, Some("fpost-rust-1-c3"), Some("zero_unsafe")),
         ],
         "fpost-rust-2" => vec![
             c("fpost-rust-2-c1",
                 forum_user("u-gat-fan", "gat_fan"),
                 "Generic associated types (GATs) please — and make them not require 47 where clauses. That's my one. The workarounds are painful.",
-                chrono::Duration::hours(6) + chrono::Duration::minutes(50),
+                dur_hm(6, 50),
                 31, 0, None, None),
             c("fpost-rust-2-c1r1",
                 forum_user("demo3-user-lifetime", "lifetime_enjoyer"),
                 "GATs are stable now but the ergonomics still need work. `impl Trait` in return position helps a lot for the common case.",
-                chrono::Duration::hours(6) + chrono::Duration::minutes(30),
+                dur_hm(6, 30),
                 18, 2, Some("fpost-rust-2-c1"), Some("gat_fan")),
             c("fpost-rust-2-c2",
                 forum_user("u-async-traits", "async_trait_hater"),
                 "First-class async traits without the `async_trait` proc macro please. The boxing overhead is real in hot paths and the syntax is terrible.",
-                chrono::Duration::hours(6) + chrono::Duration::minutes(20),
+                dur_hm(6, 20),
                 45, 1, None, None),
             c("fpost-rust-2-c2r1",
                 forum_user("u-gat-fan", "gat_fan"),
@@ -865,24 +895,24 @@ pub fn demo3_post_comments(post_id: &str) -> Vec<Message> {
             c("fpost-rust-2-c3",
                 forum_user("demo3-user-self", "Platypus (demo_forum)"),
                 "Stable specialization would change my life. I have 3 crates where I need it and have horrible macro workarounds instead.",
-                chrono::Duration::hours(5) + chrono::Duration::minutes(30),
+                dur_hm(5, 30),
                 22, 0, None, None),
         ],
         "fpost-prog-1" => vec![
             c("fpost-prog-1-c1",
                 forum_user("u-polyrepo", "polyrepo_chad"),
                 "Hard disagree. Monorepos work great at Google scale with Bazel. They're a disaster at 5-10 person startup scale where nobody wants to maintain build tooling.",
-                chrono::Duration::hours(3) + chrono::Duration::minutes(55),
+                dur_hm(3, 55),
                 28, 3, None, None),
             c("fpost-prog-1-c1r1",
                 forum_user("demo3-user-devrel", "devrel_nerd"),
                 "Turborepo makes monorepo build caching trivial now. The 'nobody wants to maintain build tooling' complaint was valid 5 years ago, not today.",
-                chrono::Duration::hours(3) + chrono::Duration::minutes(40),
+                dur_hm(3, 40),
                 19, 1, Some("fpost-prog-1-c1"), Some("polyrepo_chad")),
             c("fpost-prog-1-c1r1r1",
                 forum_user("u-polyrepo", "polyrepo_chad"),
                 "Turborepo is JS-only. Try that argument with a mixed Rust/Go/Python shop.",
-                chrono::Duration::hours(3) + chrono::Duration::minutes(20),
+                dur_hm(3, 20),
                 15, 0, Some("fpost-prog-1-c1r1"), Some("devrel_nerd")),
             c("fpost-prog-1-c1r1r1r1",
                 forum_user("u-bazel-enjoyer", "bazel_enjoyer"),
@@ -892,24 +922,24 @@ pub fn demo3_post_comments(post_id: &str) -> Vec<Message> {
             c("fpost-prog-1-c2",
                 forum_user("demo3-user-self", "Platypus (demo_forum)"),
                 "The 'but what about CI time' argument is moot if you have proper remote caching set up. We went monorepo, CI got faster because we stopped rebuilding everything.",
-                chrono::Duration::hours(3) + chrono::Duration::minutes(30),
+                dur_hm(3, 30),
                 16, 0, None, None),
         ],
         "fpost-linux-1" => vec![
             c("fpost-linux-1-c1",
                 forum_user("u-rustacean-kernel", "rustacean_kernel"),
                 "The GPIO driver PR was a great read. The borrow checker forced them to fix two actual races that the C reviewers had missed. This is the pitch for Rust in kernels.",
-                chrono::Duration::hours(1) + chrono::Duration::minutes(50),
+                dur_hm(1, 50),
                 67, 0, None, None),
             c("fpost-linux-1-c1r1",
                 forum_user("demo3-user-tux", "tux_forever"),
                 "Linus was skeptical of Rust in kernel for years. His tone in the thread merged this PR was noticeably different — 'reasonable Rust usage'. That's high praise.",
-                chrono::Duration::hours(1) + chrono::Duration::minutes(35),
+                dur_hm(1, 35),
                 44, 0, Some("fpost-linux-1-c1"), Some("rustacean_kernel")),
             c("fpost-linux-1-c2",
                 forum_user("u-c-forever", "c_forever"),
                 "Cool, another language to learn to contribute to the kernel. NACK from me until there's a compelling performance reason not just memory safety.",
-                chrono::Duration::hours(1) + chrono::Duration::minutes(20),
+                dur_hm(1, 20),
                 3, 22, None, None),
             c("fpost-linux-1-c2r1",
                 forum_user("u-rustacean-kernel", "rustacean_kernel"),
@@ -1027,7 +1057,7 @@ pub fn demo3_dm_messages(dm_id: &str) -> Vec<Message> {
 }
 
 /// Encode SVG markup as a data URI so demo artwork is self-contained.
-fn svg_data_uri(svg: String) -> String {
+fn svg_data_uri(svg: &str) -> String {
     let encoded = svg
         .replace('%', "%25")
         .replace('#', "%23")
@@ -1049,7 +1079,7 @@ fn svg_data_uri(svg: String) -> String {
 
 /// Animal-style demo avatar.
 fn animal_avatar(emoji: &str, primary: &str, secondary: &str) -> String {
-    svg_data_uri(format!(
+    svg_data_uri(&format!(
         r#"
 <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'>
     <defs>
@@ -1068,7 +1098,7 @@ fn animal_avatar(emoji: &str, primary: &str, secondary: &str) -> String {
 
 /// Server icon matched to the server name/theme.
 fn themed_server_icon(symbol: &str, primary: &str, secondary: &str) -> String {
-    svg_data_uri(format!(
+    svg_data_uri(&format!(
         r#"
 <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'>
     <defs>
@@ -1087,7 +1117,7 @@ fn themed_server_icon(symbol: &str, primary: &str, secondary: &str) -> String {
 
 /// Wide banner artwork matched to the server theme.
 fn themed_banner(primary: &str, secondary: &str, accent: &str, symbol: &str) -> String {
-    svg_data_uri(format!(
+    svg_data_uri(&format!(
         r#"
 <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 960 240'>
     <defs>
@@ -1461,7 +1491,6 @@ pub fn cat_dog_arena_channel() -> Channel {
 /// accounts share a state-for-state-identical message log.
 #[must_use]
 pub fn cat_dog_arena_messages() -> Vec<Message> {
-    use chrono::{Duration, Utc};
     vec![
         Message {
             id: "arena-msg-0".to_string(),
@@ -1481,7 +1510,7 @@ pub fn cat_dog_arena_messages() -> Vec<Message> {
             id: "arena-msg-1".to_string(),
             author: demo_dog_user(),
             content: MessageContent::Text("🐶 woof! arena online".to_string()),
-            timestamp: ago_hours(2) + Duration::minutes(2),
+            timestamp: ago_hm(1, 58),
             attachments: vec![],
             reactions: vec![],
             reply_to: None,
@@ -2175,7 +2204,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                     "Hey everyone! Welcome to the Poly Development server 👋\n\nExcited to have you all here. Let's build something amazing together!"
                         .to_string(),
                 ),
-                timestamp: ago_days(2) - Duration::hours(3),
+                timestamp: ago_dh(2, 3),
                 attachments: vec![],
                 reactions: vec![
                     Reaction { emoji: "👋".to_string(), count: 5, me: true },
@@ -2193,7 +2222,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                     "Thanks for having me! This project looks really cool."
                         .to_string(),
                 ),
-                timestamp: ago_days(2) - Duration::hours(2) - Duration::minutes(50),
+                timestamp: ago_dhm(2, 2, 50),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "❤️".to_string(), count: 2, me: false }],
                 reply_to: None,
@@ -2208,7 +2237,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                     "Has anyone tried the new **Dioxus 0.7** hot-reload? It's blazing fast!\n\n- hot patches in seconds\n- keeps router state alive\n- makes UI iteration way less painful"
                         .to_string(),
                 ),
-                timestamp: ago_days(2) - Duration::hours(2) - Duration::minutes(45),
+                timestamp: ago_dhm(2, 2, 45),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "🔥".to_string(), count: 4, me: true }],
                 reply_to: None,
@@ -2224,7 +2253,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                     "Yeah, subsecond hot-patch is a game changer for development.\nI tested it with a massive component tree and it works flawlessly."
                         .to_string(),
                 ),
-                timestamp: ago_days(2) - Duration::hours(2) - Duration::minutes(42),
+                timestamp: ago_dhm(2, 2, 42),
                 attachments: vec![],
                 reactions: vec![],
                 reply_to: None,
@@ -2240,7 +2269,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                     "I just pushed some updates to the theme engine. Check it out!"
                         .to_string(),
                 ),
-                timestamp: ago_days(1) - Duration::hours(5),
+                timestamp: ago_dh(1, 5),
                 attachments: vec![
                     Attachment::remote(
                         "att-screenshot-1".to_string(),
@@ -2266,7 +2295,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                     "The SurrealDB integration is coming along nicely.\n\nHere's the architectural diagram I drafted:"
                         .to_string(),
                 ),
-                timestamp: ago_days(1) - Duration::hours(4),
+                timestamp: ago_dh(1, 4),
                 attachments: vec![
                     Attachment::remote(
                         "att-diagram-1".to_string(),
@@ -2289,7 +2318,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                     "Anyone up for a code review session later today?"
                         .to_string(),
                 ),
-                timestamp: ago_days(1) - Duration::hours(2),
+                timestamp: ago_dh(1, 2),
                 attachments: vec![],
                 reactions: vec![],
                 reply_to: None,
@@ -2304,7 +2333,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                     "Sure! I'll be free around 3pm."
                         .to_string(),
                 ),
-                timestamp: ago_days(1) - Duration::hours(1) - Duration::minutes(55),
+                timestamp: ago_dhm(1, 1, 55),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "👍".to_string(), count: 1, me: false }],
                 reply_to: None,
@@ -2335,7 +2364,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                     "We should test that early. It's flagged as a risk in the plan.\n\n| Target | Status | Note |\n| --- | --- | --- |\n| Android | ⚠️ Pending | Need emulator pass |\n| iOS | ⚠️ Pending | Need device build |\n| Web | ✅ Green | WASM check already passes |\n\nI can try spinning up the Android emulator this afternoon to test. 📱"
                         .to_string(),
                 ),
-                timestamp: ago_hours(1) - Duration::minutes(30),
+                timestamp: ago_hm(1, 30),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "🙏".to_string(), count: 2, me: false }],
                 reply_to: None,
@@ -2350,7 +2379,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "Also here's a doc I found on the topic:".to_string(),
                 ),
-                timestamp: ago_hours(1) - Duration::minutes(28),
+                timestamp: ago_hm(1, 28),
                 attachments: vec![
                     Attachment::remote(
                         "att-doc-1".to_string(),
@@ -2400,7 +2429,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                     "That's gorgeous! Where was this?"
                         .to_string(),
                 ),
-                timestamp: ago_hours(7) - Duration::minutes(50),
+                timestamp: ago_hm(7, 50),
                 attachments: vec![],
                 reactions: vec![],
                 reply_to: None,
@@ -2415,7 +2444,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                     "Taken from the rooftop of my apartment building in Berlin 🇩🇪\n\nThe light was perfect around 7:30pm."
                         .to_string(),
                 ),
-                timestamp: ago_hours(7) - Duration::minutes(45),
+                timestamp: ago_hm(7, 45),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "🇩🇪".to_string(), count: 1, me: false }],
                 reply_to: None,
@@ -2431,7 +2460,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "Who wants to play Minecraft tonight? 🎮".to_string(),
                 ),
-                timestamp: ago_days(1) - Duration::hours(6),
+                timestamp: ago_dh(1, 6),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "🙋".to_string(), count: 3, me: true }],
                 reply_to: None,
@@ -2443,7 +2472,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 id: "msg-ch-minecraft-1".to_string(),
                 author: u(&users, 3),
                 content: MessageContent::Text("I'm in! What time?".to_string()),
-                timestamp: ago_days(1) - Duration::hours(5) - Duration::minutes(45),
+                timestamp: ago_dhm(1, 5, 45),
                 attachments: vec![],
                 reactions: vec![],
                 reply_to: None,
@@ -2455,7 +2484,7 @@ pub fn demo_messages(channel_id: &str) -> Vec<Message> {
                 id: "msg-ch-minecraft-2".to_string(),
                 author: u(&users, 1),
                 content: MessageContent::Text("Let's do 8pm EST".to_string()),
-                timestamp: ago_days(1) - Duration::hours(5) - Duration::minutes(40),
+                timestamp: ago_dhm(1, 5, 40),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "👍".to_string(), count: 2, me: false }],
                 reply_to: None,
@@ -2617,8 +2646,7 @@ pub fn demo_sent_reply_message(
         author_display_name: msg.author.display_name,
         author_avatar_url: msg.author.avatar_url,
         snippet: match msg.content {
-            MessageContent::Text(text) => text,
-            MessageContent::WithAttachments { text, .. } => text,
+            MessageContent::Text(text) | MessageContent::WithAttachments { text, .. } => text,
         }
         .chars()
         .take(80)
@@ -2696,7 +2724,7 @@ pub fn demo_dm_channels() -> Vec<DmChannel> {
                             "Hey, how's it going?".to_string()
                         }
                     ),
-                    timestamp: ago_hours(i as i64 * 2),
+                    timestamp: ago_hours(i64::try_from(i).unwrap_or(0).saturating_mul(2)),
                     attachments: vec![],
                     reactions: vec![],
                     reply_to: None,
@@ -3137,7 +3165,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                     "Hey! Just saw your PR for the SurrealDB integration — looks really solid 🎉"
                         .to_string(),
                 ),
-                timestamp: ago_days(1) - Duration::hours(5),
+                timestamp: ago_dh(1, 5),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "👀".to_string(), count: 1, me: false }],
                 reply_to: None,
@@ -3151,7 +3179,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "Thanks! Took me a while to figure out the SurrealKV path handling on Linux. Did you get a chance to test it on your side?".to_string(),
                 ),
-                timestamp: ago_days(1) - Duration::hours(4) - Duration::minutes(50),
+                timestamp: ago_dhm(1, 4, 50),
                 attachments: vec![],
                 reactions: vec![],
                 reply_to: None,
@@ -3165,7 +3193,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "Just ran it — compiles clean! The hot-reload with subsecond patches is incredible.\n\n> One small nit: the error messages for auth failure could be more descriptive.\n\n```rust\nErr(ClientError::AuthFailed(message.to_string()))\n```".to_string(),
                 ),
-                timestamp: ago_days(1) - Duration::hours(4) - Duration::minutes(30),
+                timestamp: ago_dhm(1, 4, 30),
                 attachments: vec![],
                 reactions: vec![],
                 reply_to: None,
@@ -3209,7 +3237,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "You playing anything this weekend? We're doing a Minecraft survival session Saturday night 🎮".to_string(),
                 ),
-                timestamp: ago_days(2) - Duration::hours(8),
+                timestamp: ago_dh(2, 8),
                 attachments: vec![],
                 reactions: vec![],
                 reply_to: None,
@@ -3223,7 +3251,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "Oh nice! What time? I might be free after 8pm.".to_string(),
                 ),
-                timestamp: ago_days(2) - Duration::hours(7) - Duration::minutes(45),
+                timestamp: ago_dhm(2, 7, 45),
                 attachments: vec![],
                 reactions: vec![],
                 reply_to: None,
@@ -3237,7 +3265,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "8pm EST works perfectly. Diana and Jack are also joining. We built a whole underground base last time 😄".to_string(),
                 ),
-                timestamp: ago_days(2) - Duration::hours(7) - Duration::minutes(30),
+                timestamp: ago_dhm(2, 7, 30),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "🙌".to_string(), count: 1, me: true }],
                 reply_to: None,
@@ -3249,7 +3277,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 id: "dm-bob-3".to_string(),
                 author: demo_session().user,
                 content: MessageContent::Text("I'm in! See you then 🏰".to_string()),
-                timestamp: ago_days(2) - Duration::hours(6),
+                timestamp: ago_dh(2, 6),
                 attachments: vec![],
                 reactions: vec![],
                 reply_to: None,
@@ -3281,7 +3309,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "Hey, quick Rust question — I'm hitting a lifetime error I don't understand 😅\n\n`error[E0502]: cannot borrow 'data' as mutable because it is also borrowed as immutable`".to_string(),
                 ),
-                timestamp: ago_days(1) - Duration::hours(6),
+                timestamp: ago_dh(1, 6),
                 attachments: vec![],
                 reactions: vec![],
                 reply_to: None,
@@ -3295,7 +3323,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "Ah classic! Can you share the snippet? Usually it's because you're holding a `&data` reference while trying to call a `&mut` method.".to_string(),
                 ),
-                timestamp: ago_days(1) - Duration::hours(5) - Duration::minutes(55),
+                timestamp: ago_dhm(1, 5, 55),
                 attachments: vec![],
                 reactions: vec![],
                 reply_to: None,
@@ -3309,7 +3337,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "```rust\nlet view = data.iter().find(|x| x.id == id);\ndata.push(new_item); // ← borrow error here\n```\n\nI need both at the same time 😬".to_string(),
                 ),
-                timestamp: ago_days(1) - Duration::hours(5) - Duration::minutes(40),
+                timestamp: ago_dhm(1, 5, 40),
                 attachments: vec![],
                 reactions: vec![],
                 reply_to: None,
@@ -3323,7 +3351,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "You need to clone the result from `find` before calling `push`:\n\n```rust\nlet view = data.iter().find(|x| x.id == id).cloned();\ndata.push(new_item); // ✓ now works\n```\n\nThe `find` returns a `&T` which keeps the borrow alive unless you clone it.".to_string(),
                 ),
-                timestamp: ago_days(1) - Duration::hours(5) - Duration::minutes(20),
+                timestamp: ago_dhm(1, 5, 20),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "🙏".to_string(), count: 1, me: false }],
                 reply_to: None,
@@ -3337,7 +3365,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "That fixed it! Rust ownership never stops surprising me... but I'm getting there 💪".to_string(),
                 ),
-                timestamp: ago_days(1) - Duration::hours(4),
+                timestamp: ago_dh(1, 4),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "🦀".to_string(), count: 2, me: true }],
                 reply_to: None,
@@ -3377,7 +3405,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "Honestly I like it! The saturation is a bit lower than Discord's so it feels distinct. Maybe bump up the contrast on the sidebar icons slightly?".to_string(),
                 ),
-                timestamp: ago_hours(9) - Duration::minutes(50),
+                timestamp: ago_hm(9, 50),
                 attachments: vec![],
                 reactions: vec![],
                 reply_to: None,
@@ -3391,7 +3419,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "Good idea. I'll also add a subtle gradient on the server sidebar. The flat single-color bg feels a bit stark in dark mode.".to_string(),
                 ),
-                timestamp: ago_hours(9) - Duration::minutes(30),
+                timestamp: ago_hm(9, 30),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "✨".to_string(), count: 1, me: false }],
                 reply_to: None,
@@ -3435,7 +3463,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 id: "dm-eve-1".to_string(),
                 author: demo_session().user,
                 content: MessageContent::Text("Thanks! I've got it blocked. Agenda finalized?".to_string()),
-                timestamp: ago_hours(5) - Duration::minutes(50),
+                timestamp: ago_hm(5, 50),
                 attachments: vec![],
                 reactions: vec![],
                 reply_to: None,
@@ -3449,7 +3477,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "Yes — three items:\n1. WebRTC crate selection (webrtc-rs vs browser native)\n2. Mobile camera/mic bindings\n3. Voice UI component layout\n\nShould take ~45 min.".to_string(),
                 ),
-                timestamp: ago_hours(5) - Duration::minutes(30),
+                timestamp: ago_hm(5, 30),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "👌".to_string(), count: 1, me: true }],
                 reply_to: None,
@@ -3515,7 +3543,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                     "bark bark!! 🐕 LOL pedestrian?? My PRs actually PASS CI cat!! unlike SOME libraries we know 😏"
                         .to_string(),
                 ),
-                timestamp: ago_hours(5) - Duration::minutes(50),
+                timestamp: ago_hm(5, 50),
                 attachments: vec![],
                 reactions: vec![],
                 reply_to: None,
@@ -3530,7 +3558,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                     "oh PLEASE 😹 remember that time your Tokio buffer overflowed? i was THERE, i saw it with my OWN EYES"
                         .to_string(),
                 ),
-                timestamp: ago_hours(5) - Duration::minutes(30),
+                timestamp: ago_hm(5, 30),
                 attachments: vec![],
                 reactions: vec![],
                 reply_to: None,
@@ -3587,7 +3615,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                     "not better than YOUR message queueing!! at least mine have RTFM docs 📚 you just have vibes and prayer 😼💀"
                         .to_string(),
                 ),
-                timestamp: ago_hours(3) - Duration::minutes(45),
+                timestamp: ago_hm(3, 45),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "💀".to_string(), count: 1, me: false }],
                 reply_to: None,
@@ -3657,7 +3685,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                     "bark bark!! 🐕 LOL pedestrian?? My PRs actually PASS CI cat!! unlike SOME libraries we know 😏"
                         .to_string(),
                 ),
-                timestamp: ago_hours(5) - Duration::minutes(50),
+                timestamp: ago_hm(5, 50),
                 attachments: vec![],
                 reactions: vec![],
                 reply_to: None,
@@ -3672,7 +3700,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                     "oh PLEASE 😹 remember that time your Tokio buffer overflowed? i was THERE, i saw it with my OWN EYES"
                         .to_string(),
                 ),
-                timestamp: ago_hours(5) - Duration::minutes(30),
+                timestamp: ago_hm(5, 30),
                 attachments: vec![],
                 reactions: vec![],
                 reply_to: None,
@@ -3717,7 +3745,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                     "not better than YOUR message queueing!! at least mine have RTFM docs 📚 you just have vibes and prayer 😼💀"
                         .to_string(),
                 ),
-                timestamp: ago_hours(3) - Duration::minutes(45),
+                timestamp: ago_hm(3, 45),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "💀".to_string(), count: 1, me: false }],
                 reply_to: None,
@@ -3783,7 +3811,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                         "Oh yes! I remember — you had the great question about Tokio task budgets. Small world! 😄"
                             .to_string(),
                     ),
-                    timestamp: ago_hours(4) - Duration::minutes(30),
+                    timestamp: ago_hm(4, 30),
                     attachments: vec![],
                     reactions: vec![],
                     reply_to: None,
@@ -3835,7 +3863,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                     content: MessageContent::Text(
                         "Amazing shots! The energy at that keynote was incredible 🙌".to_string(),
                     ),
-                    timestamp: ago_hours(2) - Duration::minutes(45),
+                    timestamp: ago_hm(2, 45),
                     attachments: vec![],
                     reactions: vec![],
                     reply_to: None,
@@ -4096,7 +4124,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "Hey team! I started experimenting with `async-trait` 0.2 — the new built-in async trait syntax in Rust 1.85 is a game changer.".to_string(),
                 ),
-                timestamp: ago_days(1) - Duration::hours(4),
+                timestamp: ago_dh(1, 4),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "🦀".to_string(), count: 3, me: true }],
                 reply_to: None,
@@ -4110,7 +4138,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "Yeah, no more `#[async_trait]` proc macro! The desugaring is so much cleaner now.".to_string(),
                 ),
-                timestamp: ago_days(1) - Duration::hours(3) - Duration::minutes(50),
+                timestamp: ago_dhm(1, 3, 50),
                 attachments: vec![],
                 reactions: vec![],
                 reply_to: None,
@@ -4124,7 +4152,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "Found a great blog post on async Rust patterns — heavy read but worth it:\nhttps://blog.therust.cafe/async-patterns-2025".to_string(),
                 ),
-                timestamp: ago_days(1) - Duration::hours(2),
+                timestamp: ago_dh(1, 2),
                 attachments: vec![],
                 reactions: vec![
                     Reaction { emoji: "📖".to_string(), count: 2, me: false },
@@ -4172,7 +4200,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "Who's up for a game night this Saturday? 🎮".to_string(),
                 ),
-                timestamp: ago_days(2) - Duration::hours(5),
+                timestamp: ago_dh(2, 5),
                 attachments: vec![],
                 reactions: vec![
                     Reaction { emoji: "🙋".to_string(), count: 2, me: true },
@@ -4186,7 +4214,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 id: "grp-ww-1".to_string(),
                 author: u(&users, 5),
                 content: MessageContent::Text("I'm in! Valorant or Minecraft?".to_string()),
-                timestamp: ago_days(2) - Duration::hours(4) - Duration::minutes(50),
+                timestamp: ago_dhm(2, 4, 50),
                 attachments: vec![],
                 reactions: vec![],
                 reply_to: None,
@@ -4200,7 +4228,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "Minecraft survival — let's finish that castle we started. 🏰".to_string(),
                 ),
-                timestamp: ago_days(2) - Duration::hours(4) - Duration::minutes(30),
+                timestamp: ago_dhm(2, 4, 30),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "🙌".to_string(), count: 3, me: false }],
                 reply_to: None,
@@ -4212,7 +4240,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 id: "grp-ww-3".to_string(),
                 author: u(&users, 3),
                 content: MessageContent::Text("Minecraft it is! 8pm EST?".to_string()),
-                timestamp: ago_days(2) - Duration::hours(3),
+                timestamp: ago_dh(2, 3),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "👍".to_string(), count: 2, me: true }],
                 reply_to: None,
@@ -4241,7 +4269,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "Anyone else been listening to that new synthwave album? The \"Chromatic Bloom\" one?".to_string(),
                 ),
-                timestamp: ago_days(1) - Duration::hours(3),
+                timestamp: ago_dh(1, 3),
                 attachments: vec![],
                 reactions: vec![],
                 reply_to: None,
@@ -4255,7 +4283,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "Yes!! Track 4 is pure nostalgia 🎧 Can't stop listening.".to_string(),
                 ),
-                timestamp: ago_days(1) - Duration::hours(2) - Duration::minutes(55),
+                timestamp: ago_dhm(1, 2, 55),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "🎶".to_string(), count: 2, me: true }],
                 reply_to: None,
@@ -4298,7 +4326,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "Phase 2.12 shipped! Status dots and diagnostics are live. 🎉".to_string(),
                 ),
-                timestamp: ago_days(1) - Duration::hours(8),
+                timestamp: ago_dh(1, 8),
                 attachments: vec![],
                 reactions: vec![
                     Reaction { emoji: "🎉".to_string(), count: 4, me: true },
@@ -4315,7 +4343,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "Great work! The favorites persistence was a real pain point. Glad it's sorted.".to_string(),
                 ),
-                timestamp: ago_days(1) - Duration::hours(7) - Duration::minutes(50),
+                timestamp: ago_dhm(1, 7, 50),
                 attachments: vec![],
                 reactions: vec![],
                 reply_to: None,
@@ -4329,7 +4357,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "2.13 scope is clear — DMs/Groups + rich demo data. Anything we should prioritise?".to_string(),
                 ),
-                timestamp: ago_days(1) - Duration::hours(6),
+                timestamp: ago_dh(1, 6),
                 attachments: vec![],
                 reactions: vec![],
                 reply_to: None,
@@ -4343,7 +4371,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "Group member management would be a big UX win. Even just the list panel with a remove button would go a long way.".to_string(),
                 ),
-                timestamp: ago_days(1) - Duration::hours(5) - Duration::minutes(45),
+                timestamp: ago_dhm(1, 5, 45),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "👍".to_string(), count: 3, me: true }],
                 reply_to: None,
@@ -4375,7 +4403,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "Just pushed new CI pipeline for the Open Source Hub project. Builds are 40% faster now 🚀".to_string(),
                 ),
-                timestamp: ago_days(1) - Duration::hours(5),
+                timestamp: ago_dh(1, 5),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "🔥".to_string(), count: 3, me: false }],
                 reply_to: None,
@@ -4389,7 +4417,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "Nice! I've been stuck on that weird flaky test in the integration suite. Any ideas?".to_string(),
                 ),
-                timestamp: ago_days(1) - Duration::hours(4) - Duration::minutes(50),
+                timestamp: ago_dhm(1, 4, 50),
                 attachments: vec![],
                 reactions: vec![],
                 reply_to: None,
@@ -4420,7 +4448,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "Okay I'm halfway through the book and I can already tell the ending is going to be devastating 😭".to_string(),
                 ),
-                timestamp: ago_days(2) - Duration::hours(6),
+                timestamp: ago_dh(2, 6),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "😭".to_string(), count: 1, me: false }],
                 reply_to: None,
@@ -4448,7 +4476,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "Chapter 23?! I'm only on 18 aaaaah 😱".to_string(),
                 ),
-                timestamp: ago_hours(6) - Duration::minutes(45),
+                timestamp: ago_hm(6, 45),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "😱".to_string(), count: 1, me: false }],
                 reply_to: None,
@@ -4465,7 +4493,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "Sunday meal prep done! Chicken tikka, roasted veg, overnight oats 🍱".to_string(),
                 ),
-                timestamp: ago_days(1) - Duration::hours(12),
+                timestamp: ago_dh(1, 12),
                 attachments: vec![
                     Attachment::remote(
                         "att-meal-prep".to_string(),
@@ -4490,7 +4518,7 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "Looks incredible! Can you share the tikka recipe? I've been trying to perfect it.".to_string(),
                 ),
-                timestamp: ago_days(1) - Duration::hours(11) - Duration::minutes(50),
+                timestamp: ago_dhm(1, 11, 50),
                 attachments: vec![],
                 reactions: vec![],
                 reply_to: None,
@@ -4541,12 +4569,13 @@ pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
 /// These supplement/override the sparse data in `demo2_messages` for channels that
 /// previously returned only minimal content.
 fn demo2_general_attachment(index: usize) -> Attachment {
+    let size = 320_000_u64.saturating_add(u64::try_from(index).unwrap_or(0).saturating_mul(37));
     Attachment::remote(
         format!("att-general-{index}"),
         format!("screenshot-{index}.jpg"),
         "image/jpeg".to_string(),
         format!("https://picsum.photos/seed/poly-general-{index}/640/420"),
-        320_000 + (index as u64 * 37),
+        size,
     )
 }
 
@@ -4593,45 +4622,71 @@ fn demo2_opensource_general_messages() -> Vec<Message> {
         "Let's save a screenshot once this is visually locked in.",
     ];
 
-    (0..560)
+    (0_usize..560)
         .map(|index| {
-            let topic = topics.get(index % topics.len()).copied().unwrap_or("");
-            let action = actions.get((index / 3) % actions.len()).copied().unwrap_or("");
-            let detail = details.get((index / 7) % details.len()).copied().unwrap_or("");
-            let author = authors.get(index % authors.len()).cloned().unwrap_or_else(|| u(&users, 0));
+            let topic = topics
+                .get(index.checked_rem(topics.len()).unwrap_or(0))
+                .copied()
+                .unwrap_or("");
+            let action = actions
+                .get(
+                    index.checked_div(3)
+                        .and_then(|v| v.checked_rem(actions.len()))
+                        .unwrap_or(0),
+                )
+                .copied()
+                .unwrap_or("");
+            let detail = details
+                .get(
+                    index.checked_div(7)
+                        .and_then(|v| v.checked_rem(details.len()))
+                        .unwrap_or(0),
+                )
+                .copied()
+                .unwrap_or("");
+            let author = authors
+                .get(index.checked_rem(authors.len()).unwrap_or(0))
+                .cloned()
+                .unwrap_or_else(|| u(&users, 0));
+            // lint-allow-unused: Duration arithmetic on bounded fixture range (≤ 560 * 43 minutes).
+            #[allow(clippy::arithmetic_side_effects)]
             let timestamp = ago_minutes(24_000)
-                + Duration::minutes(i64::try_from(index).unwrap_or(0) * 43);
+                + Duration::minutes(i64::try_from(index).unwrap_or(0).saturating_mul(43));
             let mut text = format!("Daily check-in #{index}: {topic} {action}. {detail}",);
 
-            if index % 17 == 0 {
+            if index.checked_rem(17) == Some(0) {
                 text.push_str(&format!(
                     "\nhttps://github.com/polyglot-messenger/poly/issues/{}",
-                    400 + index
+                    400_usize.saturating_add(index)
                 ));
             }
 
-            if index % 29 == 0 {
+            if index.checked_rem(29) == Some(0) {
                 text.push_str(
                     "\nCan someone validate the scroll position after loading older messages?",
                 );
             }
 
-            let attachments = if index % 37 == 0 || index % 53 == 0 {
+            let attachments = if index.checked_rem(37) == Some(0) || index.checked_rem(53) == Some(0) {
                 vec![demo2_general_attachment(index)]
             } else {
                 Vec::new()
             };
 
-            let reactions = if index % 19 == 0 {
+            let reactions = if index.checked_rem(19) == Some(0) {
                 vec![Reaction {
                     emoji: "🔥".to_string(),
-                    count: 1 + u32::try_from(index % 5).unwrap_or(0),
-                    me: index % 2 == 0,
+                    count: u32::try_from(index.checked_rem(5).unwrap_or(0))
+                        .unwrap_or(0)
+                        .saturating_add(1),
+                    me: index.checked_rem(2) == Some(0),
                 }]
-            } else if index % 23 == 0 {
+            } else if index.checked_rem(23) == Some(0) {
                 vec![Reaction {
                     emoji: "✅".to_string(),
-                    count: 1 + u32::try_from(index % 3).unwrap_or(0),
+                    count: u32::try_from(index.checked_rem(3).unwrap_or(0))
+                        .unwrap_or(0)
+                        .saturating_add(1),
                     me: false,
                 }]
             } else {
@@ -4667,7 +4722,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "Merged 3 PRs this week! The issue tracker is looking much cleaner.".to_string(),
                 ),
-                timestamp: ago_days(2) - Duration::hours(4),
+                timestamp: ago_dh(2, 4),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "🎉".to_string(), count: 3, me: true }],
                 reply_to: None,
@@ -4681,7 +4736,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "Working on the documentation overhaul. The README was last updated in 2023 😅".to_string(),
                 ),
-                timestamp: ago_days(1) - Duration::hours(6),
+                timestamp: ago_dh(1, 6),
                 attachments: vec![],
                 reactions: vec![],
                 reply_to: None,
@@ -4711,7 +4766,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "Just finished \"The Midnight Library\" — absolutely recommend it if you like contemplative fiction. 📖".to_string(),
                 ),
-                timestamp: ago_days(3) - Duration::hours(5),
+                timestamp: ago_dh(3, 5),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "📚".to_string(), count: 4, me: true }],
                 reply_to: None,
@@ -4725,7 +4780,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "I've been meaning to read that! Currently on \"Project Hail Mary\" — hard sci-fi that reads like a thriller.".to_string(),
                 ),
-                timestamp: ago_days(2) - Duration::hours(3),
+                timestamp: ago_dh(2, 3),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "🚀".to_string(), count: 2, me: false }],
                 reply_to: None,
@@ -4755,7 +4810,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "Made a 5-ingredient pasta last night and it turned out amazing!\n\n**Recipe:**\n- 400g spaghetti\n- 200g guanciale (or pancetta)\n- 4 egg yolks\n- 100g Pecorino Romano\n- Black pepper\n\nThe key is to use the pasta water to emulsify the sauce — no cream!".to_string(),
                 ),
-                timestamp: ago_days(2) - Duration::hours(6),
+                timestamp: ago_dh(2, 6),
                 attachments: vec![
                     Attachment::remote(
                         "att-pasta".to_string(),
@@ -4780,7 +4835,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "Classic carbonara! The guanciale makes all the difference, I can't go back to using bacon anymore.".to_string(),
                 ),
-                timestamp: ago_days(2) - Duration::hours(5) - Duration::minutes(45),
+                timestamp: ago_dhm(2, 5, 45),
                 attachments: vec![],
                 reactions: vec![],
                 reply_to: None,
@@ -4808,7 +4863,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "The trick is room temperature water (never tap cold) and 12h between feedings. Also 50/50 bread flour + whole wheat feed works better than just white flour.".to_string(),
                 ),
-                timestamp: ago_hours(4) - Duration::minutes(30),
+                timestamp: ago_hm(4, 30),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "🙏".to_string(), count: 2, me: false }],
                 reply_to: None,
@@ -4824,7 +4879,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "Anyone else do the salt-baking technique for whole fish? Completely seals in moisture — game changer. 🐟".to_string(),
                 ),
-                timestamp: ago_days(1) - Duration::hours(8),
+                timestamp: ago_dh(1, 8),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "🐟".to_string(), count: 2, me: false }],
                 reply_to: None,
@@ -4838,7 +4893,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "Tried it with sea bass last weekend! The crust comes off perfectly and the fish stays so juicy.".to_string(),
                 ),
-                timestamp: ago_days(1) - Duration::hours(7) - Duration::minutes(50),
+                timestamp: ago_dhm(1, 7, 50),
                 attachments: vec![],
                 reactions: vec![],
                 reply_to: None,
@@ -4868,7 +4923,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "Week 3 of tracking macros — 150g protein/day feels more achievable than I expected. Chicken + Greek yoghurt + cottage cheese gets you there pretty easily.".to_string(),
                 ),
-                timestamp: ago_days(2) - Duration::hours(5),
+                timestamp: ago_dh(2, 5),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "💪".to_string(), count: 2, me: false }],
                 reply_to: None,
@@ -4882,7 +4937,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "Protein timing matters too — spreading it across 4+ meals seems to help muscle synthesis more than 2-3 large portions.".to_string(),
                 ),
-                timestamp: ago_days(2) - Duration::hours(4) - Duration::minutes(50),
+                timestamp: ago_dhm(2, 4, 50),
                 attachments: vec![],
                 reactions: vec![],
                 reply_to: None,
@@ -4910,7 +4965,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "Meal logged: 3,200 kcal, 145g protein. Slightly over on carbs but had a hard leg day so it balances out.".to_string(),
                 ),
-                timestamp: ago_hours(2) - Duration::minutes(30),
+                timestamp: ago_hm(2, 30),
                 attachments: vec![],
                 reactions: vec![],
                 reply_to: None,
@@ -4926,7 +4981,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "5K run this morning! 💪 New personal best — 22:14. Beat my previous by 45 seconds.".to_string(),
                 ),
-                timestamp: ago_days(1) - Duration::hours(7),
+                timestamp: ago_dh(1, 7),
                 attachments: vec![],
                 reactions: vec![
                     Reaction { emoji: "🔥".to_string(), count: 6, me: false },
@@ -4941,7 +4996,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 id: "msg2-wk-1".to_string(),
                 author: u(&users, 8),
                 content: MessageContent::Text("That's incredible progress! What's your training plan?".to_string()),
-                timestamp: ago_days(1) - Duration::hours(6) - Duration::minutes(50),
+                timestamp: ago_dhm(1, 6, 50),
                 attachments: vec![],
                 reactions: vec![],
                 reply_to: None,
@@ -4955,7 +5010,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "3 runs/week — one tempo, one long slow, one interval. Followed the 12-week Garmin plan. Surprisingly beginner-friendly.".to_string(),
                 ),
-                timestamp: ago_days(1) - Duration::hours(6) - Duration::minutes(30),
+                timestamp: ago_dhm(1, 6, 30),
                 attachments: vec![],
                 reactions: vec![],
                 reply_to: None,
@@ -4988,7 +5043,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "I keep hitting E0502 when trying to use a slice and mutate the Vec at the same time. The borrow checker is not happy 😅".to_string(),
                 ),
-                timestamp: ago_days(2) - Duration::hours(5),
+                timestamp: ago_dh(2, 5),
                 attachments: vec![],
                 reactions: vec![],
                 reply_to: None,
@@ -5002,7 +5057,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "Classic borrow issue! You need to use `split_at_mut` or restructure to avoid overlapping borrows. Or collect the indices first, then mutate.".to_string(),
                 ),
-                timestamp: ago_days(2) - Duration::hours(4) - Duration::minutes(55),
+                timestamp: ago_dhm(2, 4, 55),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "🦀".to_string(), count: 2, me: false }],
                 reply_to: None,
@@ -5016,7 +5071,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "The `polonius` borrow checker (now in nightly) handles some of these NLL limitations. Worth trying on nightly if you want to unblock.".to_string(),
                 ),
-                timestamp: ago_days(2) - Duration::hours(3),
+                timestamp: ago_dh(2, 3),
                 attachments: vec![],
                 reactions: vec![],
                 reply_to: None,
@@ -5044,7 +5099,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "That's exactly the pattern we use in Poly. `poly-client` uses `thiserror`, the apps use `anyhow` internally. Works great.".to_string(),
                 ),
-                timestamp: ago_hours(5) - Duration::minutes(45),
+                timestamp: ago_hm(5, 45),
                 attachments: vec![],
                 reactions: vec![],
                 reply_to: None,
@@ -5060,7 +5115,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "Dioxus 0.7 hot-reload is genuinely magical. RSX changes reflect subsecond without losing any state. How is this even possible? 🤯".to_string(),
                 ),
-                timestamp: ago_days(1) - Duration::hours(7),
+                timestamp: ago_dh(1, 7),
                 attachments: vec![],
                 reactions: vec![
                     Reaction { emoji: "🤯".to_string(), count: 4, me: true },
@@ -5076,7 +5131,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "The `subsecond` hotpatch library. It relinks only the changed functions at runtime — similar to how Swift playgrounds work. Genuinely impressive engineering.".to_string(),
                 ),
-                timestamp: ago_days(1) - Duration::hours(6) - Duration::minutes(50),
+                timestamp: ago_dhm(1, 6, 50),
                 attachments: vec![],
                 reactions: vec![],
                 reply_to: None,
@@ -5090,7 +5145,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "One thing I've learned: keep `#[component]` fns under ~150 lines or the RSX macro gets confused during hot-reload. Works great when you respect the limit.".to_string(),
                 ),
-                timestamp: ago_days(1) - Duration::hours(5),
+                timestamp: ago_dh(1, 5),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "✏️".to_string(), count: 2, me: false }],
                 reply_to: None,
@@ -5120,7 +5175,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "Just got my first hardware synth! A Novation MiniNova. The learning curve is steep but the sound design possibilities are endless 🎹".to_string(),
                 ),
-                timestamp: ago_days(2) - Duration::hours(6),
+                timestamp: ago_dh(2, 6),
                 attachments: vec![
                     Attachment::remote(
                         "att-synth".to_string(),
@@ -5145,7 +5200,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "Beautiful! Are you going to run it through your DAW or use it standalone? I hook mine directly into Ableton and use MIDI automation heavily.".to_string(),
                 ),
-                timestamp: ago_days(2) - Duration::hours(5) - Duration::minutes(50),
+                timestamp: ago_dhm(2, 5, 50),
                 attachments: vec![],
                 reactions: vec![],
                 reply_to: None,
@@ -5187,7 +5242,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 id: "msg-valorant-0".to_string(),
                 author: u(&users, 3),
                 content: MessageContent::Text("Just hit Diamond! Finally 💎".to_string()),
-                timestamp: ago_days(1) - Duration::hours(6),
+                timestamp: ago_dh(1, 6),
                 attachments: vec![],
                 reactions: vec![
                     Reaction { emoji: "💎".to_string(), count: 5, me: true },
@@ -5204,7 +5259,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "Let's goooo!! What agent did you climb with?".to_string(),
                 ),
-                timestamp: ago_days(1) - Duration::hours(5) - Duration::minutes(55),
+                timestamp: ago_dhm(1, 5, 55),
                 attachments: vec![],
                 reactions: vec![],
                 reply_to: None,
@@ -5218,7 +5273,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
                 content: MessageContent::Text(
                     "Mostly Sage and Killjoy on defense. Sentinel playstyle + info gathering wins more rounds than fragging in my experience.".to_string(),
                 ),
-                timestamp: ago_days(1) - Duration::hours(5) - Duration::minutes(40),
+                timestamp: ago_dhm(1, 5, 40),
                 attachments: vec![],
                 reactions: vec![Reaction { emoji: "🧠".to_string(), count: 2, me: false }],
                 reply_to: None,
@@ -5248,8 +5303,7 @@ pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
 /// Extract plain searchable text from a demo message.
 fn demo_message_text(message: &Message) -> String {
     match &message.content {
-        MessageContent::Text(text) => text.clone(),
-        MessageContent::WithAttachments { text, .. } => text.clone(),
+        MessageContent::Text(text) | MessageContent::WithAttachments { text, .. } => text.clone(),
     }
 }
 
@@ -5285,9 +5339,9 @@ fn apply_message_query(mut messages: Vec<Message>, query: &MessageQuery) -> Vec<
         && let Some(index) = messages.iter().position(|message| &message.id == around_id)
     {
         let limit = usize::try_from(query.limit.unwrap_or(48)).unwrap_or(48);
-        let before = limit / 2;
+        let before = limit.checked_div(2).unwrap_or(0);
         let start = index.saturating_sub(before);
-        let end = (start + limit).min(messages.len());
+        let end = start.saturating_add(limit).min(messages.len());
         return messages.get(start..end).map(<[_]>::to_vec).unwrap_or_default();
     }
 
@@ -5304,14 +5358,14 @@ fn apply_message_query(mut messages: Vec<Message>, query: &MessageQuery) -> Vec<
     {
         let limit = usize::try_from(query.limit.unwrap_or(50)).unwrap_or(50);
         let start = index.saturating_add(1);
-        let end = (start + limit).min(messages.len());
+        let end = start.saturating_add(limit).min(messages.len());
         return messages.get(start..end).map(<[_]>::to_vec).unwrap_or_default();
     }
 
     if let Some(limit) = query.limit {
         let limit = usize::try_from(limit).unwrap_or(messages.len());
         if limit < messages.len() {
-            let start = messages.len() - limit;
+            let start = messages.len().saturating_sub(limit);
             return messages.get(start..).map(<[_]>::to_vec).unwrap_or_default();
         }
     }
