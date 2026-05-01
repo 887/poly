@@ -65,7 +65,8 @@ pub async fn server_info(State(state): State<AppState>) -> Result<Json<ServerInf
             .as_ref()
             .and_then(|v| v.get("cnt"))
             .and_then(serde_json::Value::as_i64)
-            .unwrap_or(0) as usize;
+            .and_then(|v| usize::try_from(v).ok())
+            .unwrap_or(0);
 
         current < state.config.max_accounts
     };

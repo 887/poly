@@ -73,8 +73,7 @@ impl Config {
                 .unwrap_or(16),
             bind,
             data_dir: std::env::var("POLY_DATA_DIR")
-                .map(PathBuf::from)
-                .unwrap_or_else(|_| PathBuf::from("./data")),
+                .map_or_else(|_| PathBuf::from("./data"), PathBuf::from),
             rate_limit_max: std::env::var("POLY_RATE_LIMIT_MAX")
                 .ok()
                 .and_then(|v| v.parse().ok())

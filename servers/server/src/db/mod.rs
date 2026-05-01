@@ -20,7 +20,7 @@ mod sqlite;
 // When db-sqlite is enabled (including when both are on, e.g. rust-analyzer),
 // prefer sqlite. Only use surreal when it is the sole backend.
 #[cfg(feature = "db-sqlite")]
-pub use sqlite::Db;
+pub use sqlite::{Db, ModlogInsert};
 
 #[cfg(all(feature = "db-surreal", not(feature = "db-sqlite")))]
 pub use surreal::Db;

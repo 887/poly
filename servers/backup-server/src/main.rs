@@ -88,7 +88,10 @@ async fn main() -> anyhow::Result<()> {
                 admin.sessions.retain(|_, exp| exp.elapsed().as_secs() == 0);
                 let after = admin.challenges.len();
                 if before != after {
-                    tracing::debug!("Pruned {} stale admin challenges", before - after);
+                    tracing::debug!(
+                        "Pruned {} stale admin challenges",
+                        before.saturating_sub(after)
+                    );
                 }
             }
         });

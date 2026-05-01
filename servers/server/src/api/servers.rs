@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     AppState,
     auth::AuthUser,
+    db::ModlogInsert,
     error::{AppError, Result},
     models::Server,
 };
@@ -228,19 +229,29 @@ async fn kick_member(
     }
 
     // Cannot kick owner; mods cannot kick admins.
-    let is_target_owner = state.db.get_server(&server_id).await?.map(|s| s.owner == target_user_id).unwrap_or(false);
+    let is_target_owner = state.db.get_server(&server_id).await?.is_some_and(|s| s.owner == target_user_id);
     if is_target_owner {
         return Err(AppError::Forbidden);
     }
     if let Some(role_str) = state.db.get_member_role(&server_id, &target_user_id).await? {
-        let target_tier = RoleTier::from_str(&role_str);
+        let target_tier = RoleTier::parse(&role_str);
         if caller_tier <= target_tier {
             return Err(AppError::Forbidden);
         }
     }
 
     state.db.delete_membership(&target_user_id, &server_id).await?;
-    state.db.append_modlog(&server_id, &auth.user_id, Some(&target_user_id), "kick", None, None).await?;
+    state
+        .db
+        .append_modlog(ModlogInsert {
+            server_id: &server_id,
+            actor_id: &auth.user_id,
+            target_id: Some(&target_user_id),
+            action: "kick",
+            reason: None,
+            channel_id: None,
+        })
+        .await?;
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 

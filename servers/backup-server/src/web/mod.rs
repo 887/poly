@@ -59,6 +59,7 @@ pub struct AdminState {
 }
 
 impl AdminState {
+    #[must_use]
     pub fn new() -> Arc<Self> {
         Arc::new(Self {
             sessions: DashMap::new(),
@@ -171,7 +172,7 @@ fn check_session(
         None => return Some((StatusCode::UNAUTHORIZED, "session expired or invalid")),
     };
 
-    if entry.elapsed().as_secs() > session_hours * 3600 {
+    if entry.elapsed().as_secs() > session_hours.saturating_mul(3600) {
         drop(entry);
         admin.sessions.remove(&hash);
         return Some((StatusCode::UNAUTHORIZED, "session expired"));
@@ -191,7 +192,9 @@ async fn serve_ui() -> Html<&'static str> {
 async fn admin_challenge(State(state): State<AppState>) -> Json<serde_json::Value> {
     let nonce = Alphanumeric.sample_string(&mut rand::rng(), 32);
     let difficulty = state.config.admin_pow_difficulty;
-    let expiry = Instant::now() + std::time::Duration::from_secs(120);
+    let expiry = Instant::now()
+        .checked_add(std::time::Duration::from_secs(120))
+        .unwrap_or_else(Instant::now);
     state
         .admin
         .challenges
@@ -216,15 +219,14 @@ async fn admin_login(
         let mut tracker = state.admin.rate.lock().await;
         let window_elapsed = tracker
             .window_start
-            .map(|s| s.elapsed().as_secs())
-            .unwrap_or(u64::MAX);
+            .map_or(u64::MAX, |s| s.elapsed().as_secs());
 
         if window_elapsed >= 60 {
             tracker.attempts = 0;
             tracker.window_start = Some(Instant::now());
         }
 
-        tracker.attempts += 1;
+        tracker.attempts = tracker.attempts.saturating_add(1);
 
         if tracker.attempts > state.config.admin_rate_limit_per_minute {
             return (
@@ -285,8 +287,11 @@ async fn admin_login(
     // Issue session token.
     let raw = Alphanumeric.sample_string(&mut rand::rng(), 48);
     let hash = hash_session_token(&raw);
-    let expiry =
-        Instant::now() + std::time::Duration::from_secs(state.config.admin_session_hours * 3600);
+    let expiry = Instant::now()
+        .checked_add(std::time::Duration::from_secs(
+            state.config.admin_session_hours.saturating_mul(3600),
+        ))
+        .unwrap_or_else(Instant::now);
     state.admin.sessions.insert(hash, expiry);
 
     tracing::info!("Admin logged in successfully");
@@ -294,7 +299,7 @@ async fn admin_login(
     let cookie = format!(
         "poly_admin={}; HttpOnly; SameSite=Strict; Path=/; Max-Age={}",
         raw,
-        state.config.admin_session_hours * 3600
+        state.config.admin_session_hours.saturating_mul(3600)
     );
     (
         StatusCode::OK,

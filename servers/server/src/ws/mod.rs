@@ -31,6 +31,7 @@ pub struct WsState {
 
 impl WsState {
     /// Create a new empty state.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             channels: RwLock::new(HashMap::new()),
@@ -61,7 +62,7 @@ impl WsState {
         let guard = self.channels.read().await;
         if let Some(tx) = guard.get(user_id) {
             // Ignore send errors — no receivers means nobody is online.
-            let _ = tx.send(event);
+            drop(tx.send(event));
         }
     }
 
@@ -70,7 +71,7 @@ impl WsState {
         let guard = self.channels.read().await;
         for uid in user_ids {
             if let Some(tx) = guard.get(uid.as_str()) {
-                let _ = tx.send(event.clone());
+                drop(tx.send(event.clone()));
             }
         }
     }
@@ -122,7 +123,7 @@ async fn handle_socket(socket: WebSocket, token: String, state: AppState) {
             // Close immediately — invalid token.
             let (mut sink, _) = socket.split();
             let msg = serde_json::to_string(&ServerEvent::DeviceRevoked).unwrap_or_default();
-            let _ = sink.send(Message::Text(msg.into())).await;
+            drop(sink.send(Message::Text(msg.into())).await);
             return;
         }
     };
@@ -174,7 +175,7 @@ async fn handle_socket(socket: WebSocket, token: String, state: AppState) {
             }
             Message::Close(_) => break,
             // Ignore binary, ping/pong frames (axum handles pong automatically).
-            _ => {}
+            Message::Binary(_) | Message::Ping(_) | Message::Pong(_) => {}
         }
     }
 

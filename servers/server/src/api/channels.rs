@@ -276,7 +276,7 @@ async fn create_group(
     if !all_members.contains(&auth.user_id) {
         all_members.push(auth.user_id.clone());
     }
-    let refs: Vec<&str> = all_members.iter().map(|s| s.as_str()).collect();
+    let refs: Vec<&str> = all_members.iter().map(String::as_str).collect();
     state.db.create_participants(&refs, &ch_id).await?;
 
     Ok((StatusCode::CREATED, Json(channel_to_response(ch))))
@@ -393,6 +393,4 @@ pub async fn assert_channel_access(
 }
 
 // Suppress unused import warning — Participant is used in list_participants signature type.
-const _: fn() = || {
-    let _ = std::mem::size_of::<Participant>();
-};
+const _ASSERT_PARTICIPANT_REFERENCED: std::marker::PhantomData<Participant> = std::marker::PhantomData;

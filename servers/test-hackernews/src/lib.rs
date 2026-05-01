@@ -143,6 +143,7 @@ pub struct HnState {
 
 impl HnState {
     /// Create an empty state.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             items: Arc::new(dashmap::DashMap::new()),
@@ -221,7 +222,10 @@ async fn item_handler(
         Ok(n) => n,
         Err(_) => return axum::response::Json(Value::Null),
     };
-    let item = state.items.get(&id).map(|v| v.clone()).unwrap_or(Value::Null);
+    let item = state
+        .items
+        .get(&id)
+        .map_or(Value::Null, |v| v.clone());
     axum::response::Json(item)
 }
 
@@ -233,7 +237,7 @@ async fn user_handler(
     axum::response::Json(json!({
         "id": username,
         "created": 1_000_000_u64,
-        "karma": 100,
+        "karma": 100_u64,
         "about": null,
         "submitted": []
     }))
@@ -342,7 +346,7 @@ impl TestHnServer {
         tokio::spawn(async move {
             axum::serve(base.listener, app)
                 .with_graceful_shutdown(async {
-                    let _ = base.shutdown_rx.await;
+                    drop(base.shutdown_rx.await);
                 })
                 .await
                 .expect("serve mock HN");

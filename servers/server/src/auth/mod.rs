@@ -38,11 +38,11 @@ impl Claims {
         secret: &str,
         expiry_secs: u64,
     ) -> Result<String> {
-        let now = Utc::now().timestamp() as u64;
+        let now = u64::try_from(Utc::now().timestamp()).unwrap_or(0);
         let claims = Self {
             sub: user_id.to_owned(),
             device_id: device_id.to_owned(),
-            exp: now + expiry_secs,
+            exp: now.saturating_add(expiry_secs),
             iat: now,
         };
         encode(
@@ -61,7 +61,7 @@ impl Claims {
             &Validation::default(),
         )
         .map(|d| d.claims)
-        .map_err(|_| AppError::Unauthorized)
+        .map_err(|_e| AppError::Unauthorized)
     }
 }
 
@@ -106,6 +106,7 @@ pub async fn auth_middleware(
 
 /// Helper to extract `AuthUser` from request extensions (panics cleanly if
 /// middleware was not applied — should never happen in practice).
+#[must_use]
 pub fn require_auth(ext: axum::extract::Extension<AuthUser>) -> AuthUser {
     ext.0
 }

@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     AppState,
     auth::AuthUser,
+    db::ModlogInsert,
     error::{AppError, Result},
     models::Server,
 };
@@ -32,7 +33,8 @@ pub enum RoleTier {
 }
 
 impl RoleTier {
-    pub fn from_str(s: &str) -> Self {
+    #[must_use]
+    pub fn parse(s: &str) -> Self {
         match s {
             "owner" => Self::Owner,
             "admin" => Self::Admin,
@@ -41,6 +43,7 @@ impl RoleTier {
         }
     }
 
+    #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Owner => "owner",
@@ -70,7 +73,7 @@ pub async fn resolve_caller_tier(state: &AppState, user_id: &str, server_id: &st
         .get_member_role(server_id, user_id)
         .await?
         .ok_or(AppError::Forbidden)?;
-    Ok(RoleTier::from_str(&role_str))
+    Ok(RoleTier::parse(&role_str))
 }
 
 /// Reject with 403 if caller's tier is below `min`.
@@ -248,10 +251,10 @@ async fn ban_member(
     // Cannot ban someone with equal or higher role.
     let target_role_str = state.db.get_member_role(&server_id, &target_id).await?;
     if let Some(ref role_str) = target_role_str {
-        let target_tier = if state.db.get_server(&server_id).await?.map(|s| s.owner == target_id).unwrap_or(false) {
+        let target_tier = if state.db.get_server(&server_id).await?.is_some_and(|s| s.owner == target_id) {
             RoleTier::Owner
         } else {
-            RoleTier::from_str(role_str)
+            RoleTier::parse(role_str)
         };
         if caller_tier <= target_tier {
             return Err(AppError::Forbidden);
@@ -271,14 +274,14 @@ async fn ban_member(
 
     state
         .db
-        .append_modlog(
-            &server_id,
-            &auth.user_id,
-            Some(&target_id),
-            "ban",
-            req.reason.as_deref(),
-            None,
-        )
+        .append_modlog(ModlogInsert {
+            server_id: &server_id,
+            actor_id: &auth.user_id,
+            target_id: Some(&target_id),
+            action: "ban",
+            reason: req.reason.as_deref(),
+            channel_id: None,
+        })
         .await?;
 
     Ok(StatusCode::NO_CONTENT)
@@ -294,7 +297,14 @@ async fn unban_member(
     state.db.unban_member(&server_id, &target_id).await?;
     state
         .db
-        .append_modlog(&server_id, &auth.user_id, Some(&target_id), "unban", None, None)
+        .append_modlog(ModlogInsert {
+            server_id: &server_id,
+            actor_id: &auth.user_id,
+            target_id: Some(&target_id),
+            action: "unban",
+            reason: None,
+            channel_id: None,
+        })
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -307,7 +317,7 @@ async fn update_member_role(
     Json(req): Json<UpdateRoleRequest>,
 ) -> Result<StatusCode> {
     let caller_tier_val = require_tier(&state, &auth.user_id, &server_id, RoleTier::Admin).await?;
-    let new_tier = RoleTier::from_str(&req.role);
+    let new_tier = RoleTier::parse(&req.role);
 
     // Promoting to owner requires the caller to themselves be Owner.
     if new_tier == RoleTier::Owner && caller_tier_val < RoleTier::Owner {
@@ -321,7 +331,14 @@ async fn update_member_role(
     state.db.set_member_role(&server_id, &target_id, new_tier.as_str()).await?;
     state
         .db
-        .append_modlog(&server_id, &auth.user_id, Some(&target_id), "update-role", Some(&req.role), None)
+        .append_modlog(ModlogInsert {
+            server_id: &server_id,
+            actor_id: &auth.user_id,
+            target_id: Some(&target_id),
+            action: "update-role",
+            reason: Some(&req.role),
+            channel_id: None,
+        })
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -336,12 +353,12 @@ async fn kick_member(
 
     // Cannot kick owner; mods cannot kick admins.
     let target_role_str = state.db.get_member_role(&server_id, &target_id).await?;
-    let is_owner = state.db.get_server(&server_id).await?.map(|s| s.owner == target_id).unwrap_or(false);
+    let is_owner = state.db.get_server(&server_id).await?.is_some_and(|s| s.owner == target_id);
     if is_owner {
         return Err(AppError::Forbidden);
     }
     if let Some(ref role_str) = target_role_str {
-        let target_tier = RoleTier::from_str(role_str);
+        let target_tier = RoleTier::parse(role_str);
         if caller_tier_val <= target_tier {
             return Err(AppError::Forbidden);
         }
@@ -350,7 +367,14 @@ async fn kick_member(
     state.db.delete_membership(&target_id, &server_id).await?;
     state
         .db
-        .append_modlog(&server_id, &auth.user_id, Some(&target_id), "kick", None, None)
+        .append_modlog(ModlogInsert {
+            server_id: &server_id,
+            actor_id: &auth.user_id,
+            target_id: Some(&target_id),
+            action: "kick",
+            reason: None,
+            channel_id: None,
+        })
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -367,7 +391,14 @@ async fn set_timeout(
     let action = if req.until.is_some() { "timeout" } else { "untimeout" };
     state
         .db
-        .append_modlog(&server_id, &auth.user_id, Some(&target_id), action, None, None)
+        .append_modlog(ModlogInsert {
+            server_id: &server_id,
+            actor_id: &auth.user_id,
+            target_id: Some(&target_id),
+            action,
+            reason: None,
+            channel_id: None,
+        })
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -382,7 +413,14 @@ async fn delete_message_mod(
     state.db.soft_delete_message(&message_id).await?;
     state
         .db
-        .append_modlog(&server_id, &auth.user_id, None, "delete-message", None, Some(&channel_id))
+        .append_modlog(ModlogInsert {
+            server_id: &server_id,
+            actor_id: &auth.user_id,
+            target_id: None,
+            action: "delete-message",
+            reason: None,
+            channel_id: Some(&channel_id),
+        })
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -401,7 +439,14 @@ async fn update_channel_moderation(
         .await?;
     state
         .db
-        .append_modlog(&server_id, &auth.user_id, None, "update-channel", None, Some(&channel_id))
+        .append_modlog(ModlogInsert {
+            server_id: &server_id,
+            actor_id: &auth.user_id,
+            target_id: None,
+            action: "update-channel",
+            reason: None,
+            channel_id: Some(&channel_id),
+        })
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -415,14 +460,28 @@ async fn reorder_channels(
 ) -> Result<StatusCode> {
     require_tier(&state, &auth.user_id, &server_id, RoleTier::Admin).await?;
     for (pos, channel_id) in req.ordering.iter().enumerate() {
-        let _ = state
-            .db
-            .update_channel(channel_id, None, None, Some(pos as i64))
-            .await;
+        drop(
+            state
+                .db
+                .update_channel(
+                    channel_id,
+                    None,
+                    None,
+                    Some(i64::try_from(pos).unwrap_or(i64::MAX)),
+                )
+                .await,
+        );
     }
     state
         .db
-        .append_modlog(&server_id, &auth.user_id, None, "reorder-channels", None, None)
+        .append_modlog(ModlogInsert {
+            server_id: &server_id,
+            actor_id: &auth.user_id,
+            target_id: None,
+            action: "reorder-channels",
+            reason: None,
+            channel_id: None,
+        })
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }

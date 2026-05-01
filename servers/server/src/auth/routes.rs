@@ -123,12 +123,12 @@ pub struct ServerInfo {
 /// Decode a hex-encoded Ed25519 public key into a `VerifyingKey`.
 fn decode_public_key(hex_key: &str) -> Result<VerifyingKey> {
     let bytes = hex::decode(hex_key)
-        .map_err(|_| AppError::BadRequest("invalid hex in public_key".into()))?;
+        .map_err(|_e| AppError::BadRequest("invalid hex in public_key".into()))?;
     let key_bytes: [u8; 32] = bytes
         .try_into()
-        .map_err(|_| AppError::BadRequest("public_key must be 32 bytes (64 hex chars)".into()))?;
+        .map_err(|_e| AppError::BadRequest("public_key must be 32 bytes (64 hex chars)".into()))?;
     VerifyingKey::from_bytes(&key_bytes)
-        .map_err(|_| AppError::BadRequest("invalid Ed25519 public key".into()))
+        .map_err(|_e| AppError::BadRequest("invalid Ed25519 public key".into()))
 }
 
 /// Generate 32 random bytes, hex-encoded.
@@ -331,16 +331,16 @@ async fn verify(
 
     // Verify the Ed25519 signature over the raw challenge bytes.
     let challenge_bytes = hex::decode(&req.challenge)
-        .map_err(|_| AppError::BadRequest("invalid hex in challenge".into()))?;
+        .map_err(|_e| AppError::BadRequest("invalid hex in challenge".into()))?;
     let sig_bytes = hex::decode(&req.signature)
-        .map_err(|_| AppError::BadRequest("invalid hex in signature".into()))?;
+        .map_err(|_e| AppError::BadRequest("invalid hex in signature".into()))?;
     let sig_arr: [u8; 64] = sig_bytes
         .try_into()
-        .map_err(|_| AppError::BadRequest("signature must be 64 bytes (128 hex chars)".into()))?;
+        .map_err(|_e| AppError::BadRequest("signature must be 64 bytes (128 hex chars)".into()))?;
     let signature = Signature::from_bytes(&sig_arr);
 
     vk.verify_strict(&challenge_bytes, &signature)
-        .map_err(|_| AppError::Unauthorized)?;
+        .map_err(|_e| AppError::Unauthorized)?;
 
     // Mark the challenge as used.
     let challenge_id = challenge_record

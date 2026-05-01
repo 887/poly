@@ -13,6 +13,18 @@ use crate::config::Config;
 use crate::error::{AppError, Result};
 use crate::models::*;
 
+/// Bundled parameters for [`Db::append_modlog`] — keeps the call sites
+/// inside the `clippy::too_many_arguments` cap of 6.
+#[derive(Debug, Clone, Copy)]
+pub struct ModlogInsert<'a> {
+    pub server_id: &'a str,
+    pub actor_id: &'a str,
+    pub target_id: Option<&'a str>,
+    pub action: &'a str,
+    pub reason: Option<&'a str>,
+    pub channel_id: Option<&'a str>,
+}
+
 /// SQLite database handle.
 #[derive(Clone)]
 pub struct Db {
@@ -43,15 +55,15 @@ impl Db {
         // Migration: add banner_url column if it doesn't exist yet.
         // SQLite doesn't support "ADD COLUMN IF NOT EXISTS", so we ignore the
         // error if the column already exists (duplicate column error).
-        let _ = conn.execute("ALTER TABLE server ADD COLUMN banner_url TEXT");
+        drop(conn.execute("ALTER TABLE server ADD COLUMN banner_url TEXT"));
         // Migration B-PS: add role column to membership if not present.
-        let _ = conn.execute("ALTER TABLE membership ADD COLUMN role TEXT NOT NULL DEFAULT 'member'");
+        drop(conn.execute("ALTER TABLE membership ADD COLUMN role TEXT NOT NULL DEFAULT 'member'"));
         // Migration B-PS: add timeout_until column to membership if not present.
-        let _ = conn.execute("ALTER TABLE membership ADD COLUMN timeout_until TEXT");
+        drop(conn.execute("ALTER TABLE membership ADD COLUMN timeout_until TEXT"));
         // Migration B-PS: add moderation columns to channel if not present.
-        let _ = conn.execute("ALTER TABLE channel ADD COLUMN topic TEXT");
-        let _ = conn.execute("ALTER TABLE channel ADD COLUMN slow_mode_secs INTEGER NOT NULL DEFAULT 0");
-        let _ = conn.execute("ALTER TABLE channel ADD COLUMN nsfw INTEGER NOT NULL DEFAULT 0");
+        drop(conn.execute("ALTER TABLE channel ADD COLUMN topic TEXT"));
+        drop(conn.execute("ALTER TABLE channel ADD COLUMN slow_mode_secs INTEGER NOT NULL DEFAULT 0"));
+        drop(conn.execute("ALTER TABLE channel ADD COLUMN nsfw INTEGER NOT NULL DEFAULT 0"));
         // Migration B-PS: create bans and modlog tables.
         conn.execute(MODERATION_SCHEMA)?;
         // Migration: social ops — blocks, ignores, relationship meta, mutes, user invites.
@@ -153,14 +165,14 @@ impl Db {
         Ok(val
             .as_ref()
             .and_then(|v| v.get("revoked"))
-            .and_then(|v| v.as_bool())
+            .and_then(serde_json::Value::as_bool)
             .unwrap_or(false))
     }
 
     pub async fn update_device_heartbeat(&self, device_id: &str) -> Result<()> {
         let conn = self.inner.lock().await;
         let now = now_iso();
-        let _ = exec_bind(&conn, "UPDATE device SET last_seen = ?1 WHERE id = ?2", &[&now, device_id]);
+        drop(exec_bind(&conn, "UPDATE device SET last_seen = ?1 WHERE id = ?2", &[&now, device_id]));
         Ok(())
     }
 
@@ -196,8 +208,8 @@ impl Db {
                    JOIN user uf ON fr.\"from\" = uf.id \
                    JOIN user ut ON fr.\"to\" = ut.id \
                    WHERE fr.status = 'accepted' AND (fr.\"from\" = ?1 OR fr.\"to\" = ?1)";
-        let mut stmt = conn.prepare(sql).map_err(db_err)?;
-        stmt.bind((1, user_id)).map_err(db_err)?;
+        let mut stmt = conn.prepare(sql).map_err(|ref e| db_err(e))?;
+        stmt.bind((1, user_id)).map_err(|ref e| db_err(e))?;
         let mut results = vec![];
         while let Ok(State::Row) = stmt.next() {
             let from_obj = serde_json::json!({
@@ -300,14 +312,14 @@ impl Db {
 
     pub async fn delete_server_cascade(&self, id: &str) -> Result<()> {
         let conn = self.inner.lock().await;
-        let _ = exec_bind(&conn, "DELETE FROM reaction WHERE message IN (SELECT id FROM message WHERE channel IN (SELECT id FROM channel WHERE server = ?1))", &[id]);
-        let _ = exec_bind(&conn, "DELETE FROM attachment WHERE message IN (SELECT id FROM message WHERE channel IN (SELECT id FROM channel WHERE server = ?1))", &[id]);
-        let _ = exec_bind(&conn, "DELETE FROM message WHERE channel IN (SELECT id FROM channel WHERE server = ?1)", &[id]);
-        let _ = exec_bind(&conn, "DELETE FROM participant WHERE channel IN (SELECT id FROM channel WHERE server = ?1)", &[id]);
-        let _ = exec_bind(&conn, "DELETE FROM channel WHERE server = ?1", &[id]);
-        let _ = exec_bind(&conn, "DELETE FROM category WHERE server = ?1", &[id]);
-        let _ = exec_bind(&conn, "DELETE FROM membership WHERE server = ?1", &[id]);
-        let _ = exec_bind(&conn, "DELETE FROM invite WHERE server = ?1", &[id]);
+        drop(exec_bind(&conn, "DELETE FROM reaction WHERE message IN (SELECT id FROM message WHERE channel IN (SELECT id FROM channel WHERE server = ?1))", &[id]));
+        drop(exec_bind(&conn, "DELETE FROM attachment WHERE message IN (SELECT id FROM message WHERE channel IN (SELECT id FROM channel WHERE server = ?1))", &[id]));
+        drop(exec_bind(&conn, "DELETE FROM message WHERE channel IN (SELECT id FROM channel WHERE server = ?1)", &[id]));
+        drop(exec_bind(&conn, "DELETE FROM participant WHERE channel IN (SELECT id FROM channel WHERE server = ?1)", &[id]));
+        drop(exec_bind(&conn, "DELETE FROM channel WHERE server = ?1", &[id]));
+        drop(exec_bind(&conn, "DELETE FROM category WHERE server = ?1", &[id]));
+        drop(exec_bind(&conn, "DELETE FROM membership WHERE server = ?1", &[id]));
+        drop(exec_bind(&conn, "DELETE FROM invite WHERE server = ?1", &[id]));
         exec_bind(&conn, "DELETE FROM server WHERE id = ?1", &[id])
     }
 
@@ -457,7 +469,7 @@ impl Db {
 
     pub async fn delete_category(&self, id: &str) -> Result<()> {
         let conn = self.inner.lock().await;
-        let _ = exec_bind(&conn, "UPDATE channel SET category = NULL WHERE category = ?1", &[id]);
+        drop(exec_bind(&conn, "UPDATE channel SET category = NULL WHERE category = ?1", &[id]));
         exec_bind(&conn, "DELETE FROM category WHERE id = ?1", &[id])
     }
 
@@ -710,9 +722,11 @@ impl Db {
                 &[server_id, user_id, banned_by, reason_val, &now])?,
         }
         // Remove from server membership.
-        let _ = exec_bind(&conn,
+        drop(exec_bind(
+            &conn,
             "DELETE FROM membership WHERE user = ?1 AND server = ?2",
-            &[user_id, server_id]);
+            &[user_id, server_id],
+        ));
         Ok(())
     }
 
@@ -745,24 +759,16 @@ impl Db {
         query_many(&conn, &sql, &[server_id])
     }
 
-    /// Append a modlog entry.
-    pub async fn append_modlog(
-        &self,
-        server_id: &str,
-        actor_id: &str,
-        target_id: Option<&str>,
-        action: &str,
-        reason: Option<&str>,
-        channel_id: Option<&str>,
-    ) -> Result<()> {
+    /// Append a modlog entry. See [`ModlogInsert`] for the full param shape.
+    pub async fn append_modlog(&self, entry: ModlogInsert<'_>) -> Result<()> {
         let conn = self.inner.lock().await;
         let now = now_iso();
-        let target = target_id.unwrap_or("");
-        let reason_val = reason.unwrap_or("");
-        let channel = channel_id.unwrap_or("");
+        let target = entry.target_id.unwrap_or("");
+        let reason_val = entry.reason.unwrap_or("");
+        let channel = entry.channel_id.unwrap_or("");
         exec_bind(&conn,
             "INSERT INTO server_modlog (server_id, actor_id, target_id, action, reason, channel_id, timestamp) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-            &[server_id, actor_id, target, action, reason_val, channel, &now])
+            &[entry.server_id, entry.actor_id, target, entry.action, reason_val, channel, &now])
     }
 
     /// List modlog entries for a server, newest first.
@@ -798,15 +804,27 @@ impl Db {
     ) -> Result<()> {
         let conn = self.inner.lock().await;
         if let Some(t) = topic {
-            let _ = exec_bind(&conn, "UPDATE channel SET topic = ?1 WHERE id = ?2", &[t, channel_id]);
+            drop(exec_bind(
+                &conn,
+                "UPDATE channel SET topic = ?1 WHERE id = ?2",
+                &[t, channel_id],
+            ));
         }
         if let Some(sms) = slow_mode_secs {
             let s = sms.to_string();
-            let _ = exec_bind(&conn, "UPDATE channel SET slow_mode_secs = ?1 WHERE id = ?2", &[&s, channel_id]);
+            drop(exec_bind(
+                &conn,
+                "UPDATE channel SET slow_mode_secs = ?1 WHERE id = ?2",
+                &[&s, channel_id],
+            ));
         }
         if let Some(n) = nsfw {
             let n_str = if n { "1" } else { "0" };
-            let _ = exec_bind(&conn, "UPDATE channel SET nsfw = ?1 WHERE id = ?2", &[n_str, channel_id]);
+            drop(exec_bind(
+                &conn,
+                "UPDATE channel SET nsfw = ?1 WHERE id = ?2",
+                &[n_str, channel_id],
+            ));
         }
         Ok(())
     }
@@ -931,7 +949,7 @@ impl Db {
         }
         if let Some(av) = avatar_url {
             // avatar_url is stored in an optional column; add it if not present.
-            let _ = conn.execute("ALTER TABLE channel ADD COLUMN avatar_url TEXT");
+            drop(conn.execute("ALTER TABLE channel ADD COLUMN avatar_url TEXT"));
             exec_bind(&conn, "UPDATE channel SET avatar_url = ?1 WHERE id = ?2", &[av, channel_id])?;
         }
         Ok(())
@@ -994,7 +1012,7 @@ impl Db {
 
 // ── SQLite helpers ──────────────────────────────────────────────────────────────
 
-fn db_err(e: sqlite::Error) -> AppError {
+fn db_err(e: &sqlite::Error) -> AppError {
     AppError::Db(e.to_string())
 }
 
@@ -1020,14 +1038,17 @@ fn now_iso() -> String {
 }
 
 fn expires_iso(secs: i64) -> String {
-    (Utc::now() + chrono::Duration::seconds(secs)).to_rfc3339()
+    let now = Utc::now();
+    now.checked_add_signed(chrono::Duration::seconds(secs))
+        .unwrap_or(now)
+        .to_rfc3339()
 }
 
 /// Execute a parameterized statement (no return value).
 fn exec_bind(conn: &sqlite::Connection, sql: &str, binds: &[&str]) -> Result<()> {
-    let mut stmt = conn.prepare(sql).map_err(db_err)?;
+    let mut stmt = conn.prepare(sql).map_err(|ref e| db_err(e))?;
     for (i, val) in binds.iter().enumerate() {
-        stmt.bind((i + 1, *val)).map_err(db_err)?;
+        stmt.bind((i.wrapping_add(1), *val)).map_err(|ref e| db_err(e))?;
     }
     // Drive the statement to completion.
     while let Ok(State::Row) = stmt.next() {}
@@ -1051,9 +1072,9 @@ fn query_one<T: DeserializeOwned>(
     sql: &str,
     binds: &[&str],
 ) -> Result<Option<T>> {
-    let mut stmt = conn.prepare(sql).map_err(db_err)?;
+    let mut stmt = conn.prepare(sql).map_err(|ref e| db_err(e))?;
     for (i, val) in binds.iter().enumerate() {
-        stmt.bind((i + 1, *val)).map_err(db_err)?;
+        stmt.bind((i.wrapping_add(1), *val)).map_err(|ref e| db_err(e))?;
     }
     if let Ok(State::Row) = stmt.next() {
         let json = row_to_json(&stmt);
@@ -1071,9 +1092,9 @@ fn query_many<T: DeserializeOwned>(
     sql: &str,
     binds: &[&str],
 ) -> Result<Vec<T>> {
-    let mut stmt = conn.prepare(sql).map_err(db_err)?;
+    let mut stmt = conn.prepare(sql).map_err(|ref e| db_err(e))?;
     for (i, val) in binds.iter().enumerate() {
-        stmt.bind((i + 1, *val)).map_err(db_err)?;
+        stmt.bind((i.wrapping_add(1), *val)).map_err(|ref e| db_err(e))?;
     }
     let mut results = vec![];
     while let Ok(State::Row) = stmt.next() {
@@ -1100,10 +1121,9 @@ fn row_to_json(stmt: &sqlite::Statement) -> serde_json::Value {
                 }
             }
             Ok(sqlite::Type::Float) => {
-                let v = stmt.read::<f64, _>(i).unwrap_or(0.0);
+                let v = stmt.read::<f64, _>(i).unwrap_or(0.0_f64);
                 serde_json::Number::from_f64(v)
-                    .map(serde_json::Value::Number)
-                    .unwrap_or(serde_json::Value::Null)
+                    .map_or(serde_json::Value::Null, serde_json::Value::Number)
             }
             Ok(sqlite::Type::String) => {
                 let v = stmt.read::<String, _>(i).unwrap_or_default();

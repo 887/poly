@@ -108,7 +108,7 @@ pub async fn push(
 
     tracing::debug!(
         "Push from pk={}… hint={:?}",
-        &user.public_key[..8],
+        user.public_key.get(..8).unwrap_or(""),
         body.sequence_hint
     );
 
@@ -129,7 +129,7 @@ pub async fn push(
         .and_then(|v| v.get("max_seq"))
         .and_then(serde_json::Value::as_i64)
         .unwrap_or(0)
-        + 1;
+        .saturating_add(1);
 
     let now_str = chrono::Utc::now().to_rfc3339();
     state
@@ -172,7 +172,11 @@ pub async fn pull(
 ) -> Result<Json<PullResponse>> {
     let since = params.since.unwrap_or(0);
 
-    tracing::debug!("Pull from pk={}… since={}", &user.public_key[..8], since);
+    tracing::debug!(
+        "Pull from pk={}… since={}",
+        user.public_key.get(..8).unwrap_or(""),
+        since
+    );
 
     let records: Vec<serde_json::Value> = state
         .db
@@ -212,7 +216,7 @@ pub async fn pull(
         })
         .collect::<Vec<_>>();
 
-    let latest_sequence = blobs.last().map(|b| b.sequence).unwrap_or(since);
+    let latest_sequence = blobs.last().map_or(since, |b| b.sequence);
 
     Ok(Json(PullResponse {
         blobs,

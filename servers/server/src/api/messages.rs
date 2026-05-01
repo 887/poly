@@ -103,7 +103,7 @@ async fn create_message(
     Json(req): Json<CreateMessageRequest>,
 ) -> Result<(StatusCode, Json<MessageResponse>)> {
     require_readable_channel(&state, &channel_id, &auth.user_id).await?;
-    if req.content.trim().is_empty() && req.attachments.as_ref().is_none_or(|a| a.is_empty()) {
+    if req.content.trim().is_empty() && req.attachments.as_ref().is_none_or(Vec::is_empty) {
         return Err(AppError::BadRequest(
             "message must have content or attachment".into(),
         ));
@@ -353,7 +353,6 @@ async fn broadcast_to_channel(state: &AppState, channel_id: &str, event: ServerE
 }
 
 // Ensure Reaction and Attachment are used (avoids unused-import lints).
-const _: fn() = || {
-    let _ = std::mem::size_of::<Reaction>();
-    let _ = std::mem::size_of::<Attachment>();
-};
+const _ASSERT_REACTION_REFERENCED: std::marker::PhantomData<Reaction> = std::marker::PhantomData;
+const _ASSERT_ATTACHMENT_REFERENCED: std::marker::PhantomData<Attachment> =
+    std::marker::PhantomData;

@@ -63,12 +63,10 @@ async fn upload(
 
     let filename = field
         .file_name()
-        .map(str::to_owned)
-        .unwrap_or_else(|| "upload".to_owned());
+        .map_or_else(|| "upload".to_owned(), str::to_owned);
     let content_type = field
         .content_type()
-        .map(str::to_owned)
-        .unwrap_or_else(|| "application/octet-stream".to_owned());
+        .map_or_else(|| "application/octet-stream".to_owned(), str::to_owned);
 
     let data = field
         .bytes()
@@ -78,10 +76,10 @@ async fn upload(
     if data.len() > MAX_UPLOAD_BYTES {
         return Err(AppError::BadRequest(format!(
             "file too large ({} MiB max)",
-            MAX_UPLOAD_BYTES / 1024 / 1024
+            MAX_UPLOAD_BYTES.wrapping_div(1024).wrapping_div(1024)
         )));
     }
-    let size_bytes = data.len() as u64;
+    let size_bytes = u64::try_from(data.len()).unwrap_or(u64::MAX);
 
     // Sanitise filename — keep extension, replace everything else.
     let ext = std::path::Path::new(&filename)

@@ -26,6 +26,7 @@ pub struct Config {
 impl Config {
     /// Load configuration from environment variables, falling back to sensible
     /// development defaults.
+    #[must_use]
     pub fn from_env() -> Self {
         Self {
             bind_addr: std::env::var("BIND_ADDR").unwrap_or_else(|_| "127.0.0.1:7080".to_owned()),

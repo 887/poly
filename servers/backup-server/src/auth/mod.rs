@@ -110,7 +110,9 @@ pub async fn request_challenge(
 
     let nonce = Alphanumeric.sample_string(&mut rand::rng(), 64);
     let now = Utc::now();
-    let expires_at = now + chrono::Duration::seconds(60);
+    let expires_at = now
+        .checked_add_signed(chrono::Duration::seconds(60))
+        .unwrap_or(now);
 
     // Delete any previous pending challenge for this public key.
     state
@@ -131,7 +133,7 @@ pub async fn request_challenge(
         )
         .bind(("nonce", nonce.clone()))
         .bind(("pk", body.public_key))
-        .bind(("diff", state.config.pow_difficulty as i64))
+        .bind(("diff", i64::from(state.config.pow_difficulty)))
         .bind(("exp", expires_at.to_rfc3339()))
         .bind(("now", now.to_rfc3339()))
         .await?
@@ -193,7 +195,8 @@ async fn verify_and_consume_challenge(
     let difficulty = challenge
         .get("difficulty")
         .and_then(serde_json::Value::as_u64)
-        .unwrap_or(config.pow_difficulty as u64) as u32;
+        .and_then(|v| u32::try_from(v).ok())
+        .unwrap_or(config.pow_difficulty);
 
     if !verify_pow(&body.nonce, body.counter, difficulty) {
         tracing::warn!("PoW verification failed for pk={}", body.public_key);
@@ -236,7 +239,8 @@ async fn enforce_limit_and_upsert_account(
                 .as_ref()
                 .and_then(|v| v.get("n"))
                 .and_then(serde_json::Value::as_u64)
-                .unwrap_or(0) as usize;
+                .and_then(|v| usize::try_from(v).ok())
+                .unwrap_or(0);
             if n >= max_accounts {
                 return Err(AppError::Forbidden("account limit reached".into()));
             }
@@ -268,7 +272,10 @@ async fn issue_session_token(
 ) -> Result<(String, String)> {
     let raw_token = Alphanumeric.sample_string(&mut rand::rng(), 128);
     let token_hash = hash_token(&raw_token);
-    let expires_at = Utc::now() + chrono::Duration::days(token_expiry_days);
+    let now = Utc::now();
+    let expires_at = now
+        .checked_add_signed(chrono::Duration::days(token_expiry_days))
+        .unwrap_or(now);
     db.query(
         "CREATE token CONTENT { \
            token_hash: $hash, public_key: $pk, device_name: $dev, \
@@ -327,7 +334,7 @@ fn increment_rate_limit_failure(admin: &crate::web::AdminState, config: &crate::
                 *failures = 1;
                 *window_start = Instant::now();
             } else {
-                *failures += 1;
+                *failures = failures.saturating_add(1);
             }
         })
         .or_insert_with(|| (1, Instant::now()));
@@ -386,13 +393,13 @@ pub async fn authenticate(
         &state.db,
         &body.public_key,
         &body.device_name,
-        state.config.token_expiry_days as i64,
+        i64::try_from(state.config.token_expiry_days).unwrap_or(i64::MAX),
         &now_str,
     )
     .await?;
     tracing::info!(
         "Authenticated: pk={} device={}",
-        &body.public_key[..8],
+        body.public_key.get(..8).unwrap_or(""),
         body.device_name
     );
     Ok(Json(AuthResponse { token, expires_at }))
@@ -481,22 +488,28 @@ async fn refresh_token_and_account(
     public_key: &str,
     token_expiry_days: i64,
 ) {
-    let new_expiry = (Utc::now() + chrono::Duration::days(token_expiry_days)).to_rfc3339();
-    let now_str = Utc::now().to_rfc3339();
-    let _ = db
-        .query(
+    let now = Utc::now();
+    let new_expiry = now
+        .checked_add_signed(chrono::Duration::days(token_expiry_days))
+        .unwrap_or(now)
+        .to_rfc3339();
+    let now_str = now.to_rfc3339();
+    drop(
+        db.query(
             "UPDATE token SET last_seen_at = $now, expires_at = $exp \
              WHERE token_hash = $hash",
         )
         .bind(("exp", new_expiry))
         .bind(("now", now_str.clone()))
         .bind(("hash", token_hash.to_owned()))
-        .await;
-    let _ = db
-        .query("UPDATE account SET last_seen_at = $now WHERE public_key = $pk")
-        .bind(("now", now_str))
-        .bind(("pk", public_key.to_owned()))
-        .await;
+        .await,
+    );
+    drop(
+        db.query("UPDATE account SET last_seen_at = $now WHERE public_key = $pk")
+            .bind(("now", now_str))
+            .bind(("pk", public_key.to_owned()))
+            .await,
+    );
 }
 
 // ── Bearer token extractor ────────────────────────────────────────────────────
@@ -531,7 +544,7 @@ where
             &app_state.db,
             &token_hash,
             &public_key,
-            app_state.config.token_expiry_days as i64,
+            i64::try_from(app_state.config.token_expiry_days).unwrap_or(i64::MAX),
         )
         .await;
         Ok(AuthUser {
@@ -544,6 +557,7 @@ where
 // ── Utility functions ─────────────────────────────────────────────────────────
 
 /// Hash a raw token with SHA-256. This is what gets stored in the database.
+#[must_use]
 pub fn hash_token(raw: &str) -> String {
     let digest = Sha256::digest(raw.as_bytes());
     hex::encode(digest)
@@ -561,21 +575,22 @@ fn ct_passphrase_eq(submitted: &str, stored: &str) -> bool {
 
 /// Verify a PoW solution: SHA-256(`nonce` + `counter`) must have at least
 /// `difficulty` leading zero bits.
+#[must_use]
 pub fn verify_pow(nonce: &str, counter: u64, difficulty: u32) -> bool {
     if difficulty == 0 {
         return true;
     }
     let input = format!("{nonce}{counter}");
     let hash = Sha256::digest(input.as_bytes());
-    let full_bytes = (difficulty / 8) as usize;
-    let remaining_bits = difficulty % 8;
+    let full_bytes = usize::try_from(difficulty.wrapping_div(8)).unwrap_or(0);
+    let remaining_bits = difficulty.wrapping_rem(8);
     for byte in hash.iter().take(full_bytes) {
         if *byte != 0 {
             return false;
         }
     }
     if remaining_bits > 0 {
-        let mask = 0xFFu8 << (8 - remaining_bits);
+        let mask = 0xFF_u8 << (8_u32.wrapping_sub(remaining_bits));
         if hash.get(full_bytes).is_some_and(|b| b & mask != 0) {
             return false;
         }
