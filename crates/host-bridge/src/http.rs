@@ -83,7 +83,7 @@ impl HttpError {
     pub fn status(&self) -> Option<StatusCode> {
         match self {
             Self::Status { status, .. } => Some(*status),
-            _ => None,
+            Self::Build(_) | Self::Transport(_) | Self::Decode(_) => None,
         }
     }
 }
@@ -315,7 +315,7 @@ impl RequestBuilder {
 
     /// Replace the headers entirely with a `HeaderMap`.
     #[must_use]
-    pub fn headers(mut self, headers: HeaderMap) -> Self {
+    pub fn headers(mut self, headers: &HeaderMap) -> Self {
         if self.error.is_some() {
             return self;
         }
@@ -468,7 +468,11 @@ impl RequestBuilder {
                         "host bridge unreachable at {url}: {source}"
                     )),
                     BridgeError::Host(msg) => HttpError::Transport(msg),
-                    other => HttpError::Transport(other.to_string()),
+                    other @ (BridgeError::Transport(_)
+                        | BridgeError::ParseResponse(_)
+                        | BridgeError::VariantMismatch { .. }) => {
+                        HttpError::Transport(other.to_string())
+                    }
                 })?;
                 let HostOk::HttpResponse {
                     status,
@@ -553,7 +557,9 @@ impl Response {
     /// Returns the body length in bytes.
     #[must_use]
     pub fn content_length(&self) -> Option<u64> {
-        Some(self.body.len() as u64)
+        // usize → u64 is lossless on every supported target (max usize is
+        // 64-bit; 32-bit WASM is also <= u64::MAX). try_from documents intent.
+        Some(u64::try_from(self.body.len()).unwrap_or(u64::MAX))
     }
 
     /// Consume the response and return the raw body bytes.

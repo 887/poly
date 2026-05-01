@@ -816,7 +816,7 @@ async fn exec_command(program: String, args: Vec<String>) -> HostResponse {
 
     match cmd.output().await {
         Ok(output) => HostResponse::Ok(HostOk::ExecOutput {
-            exit_code: output.status.code().unwrap_or(-1),
+            exit_code: output.status.code().unwrap_or(-1_i32),
             stdout_b64: b64_encode(&output.stdout),
             stderr_b64: b64_encode(&output.stderr),
         }),

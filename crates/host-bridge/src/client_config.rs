@@ -358,7 +358,7 @@ mod tests {
     /// Non-string entries in the registry array are silently skipped.
     #[test]
     fn parse_mechanisms_registry_skips_non_strings() {
-        let json = serde_json::json!(["mech_a", 42, null, "mech_b"]);
+        let json = serde_json::json!(["mech_a", 42_i32, null, "mech_b"]);
         let arr = json.as_array().unwrap();
         let ids: Vec<String> = arr
             .iter()

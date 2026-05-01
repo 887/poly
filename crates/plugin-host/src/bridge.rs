@@ -27,7 +27,7 @@ use poly_client::{self as pc};
 // ─── PresenceStatus ────────────────────────────────────────────────
 
 /// Convert WIT `PresenceStatus` → poly-client `PresenceStatus`.
-pub fn from_wit_presence(ps: wit::PresenceStatus) -> pc::PresenceStatus {
+pub(crate) fn from_wit_presence(ps: wit::PresenceStatus) -> pc::PresenceStatus {
     match ps {
         wit::PresenceStatus::Online => pc::PresenceStatus::Online,
         wit::PresenceStatus::Idle => pc::PresenceStatus::Idle,
@@ -38,7 +38,7 @@ pub fn from_wit_presence(ps: wit::PresenceStatus) -> pc::PresenceStatus {
 }
 
 /// Convert poly-client `PresenceStatus` → WIT `PresenceStatus`.
-pub fn to_wit_presence(ps: pc::PresenceStatus) -> wit::PresenceStatus {
+pub(crate) fn to_wit_presence(ps: pc::PresenceStatus) -> wit::PresenceStatus {
     match ps {
         pc::PresenceStatus::Online => wit::PresenceStatus::Online,
         pc::PresenceStatus::Idle => wit::PresenceStatus::Idle,
@@ -51,7 +51,7 @@ pub fn to_wit_presence(ps: pc::PresenceStatus) -> wit::PresenceStatus {
 // ─── ChannelType ───────────────────────────────────────────────────
 
 /// Convert WIT `ChannelType` → poly-client `ChannelType`.
-pub fn from_wit_channel_type(ct: wit::ChannelType) -> pc::ChannelType {
+pub(crate) fn from_wit_channel_type(ct: wit::ChannelType) -> pc::ChannelType {
     match ct {
         wit::ChannelType::Text => pc::ChannelType::Text,
         wit::ChannelType::Voice => pc::ChannelType::Voice,
@@ -65,7 +65,7 @@ pub fn from_wit_channel_type(ct: wit::ChannelType) -> pc::ChannelType {
 }
 
 /// Convert WIT `ForumTag` → poly-client `ForumTag`.
-pub fn from_wit_forum_tag(t: wit::ForumTag) -> pc::ForumTag {
+pub(crate) fn from_wit_forum_tag(t: wit::ForumTag) -> pc::ForumTag {
     pc::ForumTag {
         id: t.id,
         name: t.name,
@@ -75,7 +75,7 @@ pub fn from_wit_forum_tag(t: wit::ForumTag) -> pc::ForumTag {
 }
 
 /// Convert WIT `ThreadMetadata` → poly-client `ThreadMetadata`.
-pub fn from_wit_thread_metadata(m: wit::ThreadMetadata) -> pc::ThreadMetadata {
+pub(crate) fn from_wit_thread_metadata(m: wit::ThreadMetadata) -> pc::ThreadMetadata {
     pc::ThreadMetadata {
         archived: m.archived,
         auto_archive_minutes: m.auto_archive_minutes,
@@ -92,7 +92,7 @@ pub fn from_wit_thread_metadata(m: wit::ThreadMetadata) -> pc::ThreadMetadata {
 }
 
 /// Convert WIT `ThreadInfo` → poly-client `ThreadInfo`.
-pub fn from_wit_thread_info(t: wit::ThreadInfo) -> pc::ThreadInfo {
+pub(crate) fn from_wit_thread_info(t: wit::ThreadInfo) -> pc::ThreadInfo {
     pc::ThreadInfo {
         thread_id: t.thread_id,
         parent_channel_id: t.parent_channel_id,
@@ -102,7 +102,7 @@ pub fn from_wit_thread_info(t: wit::ThreadInfo) -> pc::ThreadInfo {
 }
 
 /// Convert WIT `ForumPost` → poly-client `ForumPost`.
-pub fn from_wit_forum_post(p: wit::ForumPost) -> pc::ForumPost {
+pub(crate) fn from_wit_forum_post(p: wit::ForumPost) -> pc::ForumPost {
     pc::ForumPost {
         thread: from_wit_thread_info(p.thread),
         applied_tags: p.applied_tags,
@@ -113,7 +113,7 @@ pub fn from_wit_forum_post(p: wit::ForumPost) -> pc::ForumPost {
 // ─── File / code-explorer types ────────────────────────────────────
 
 /// Convert WIT `FileKind` → poly-client `FileKind`.
-pub fn from_wit_file_kind(k: wit::FileKind) -> pc::FileKind {
+pub(crate) fn from_wit_file_kind(k: wit::FileKind) -> pc::FileKind {
     match k {
         wit::FileKind::File => pc::FileKind::File,
         wit::FileKind::Directory => pc::FileKind::Directory,
@@ -123,7 +123,7 @@ pub fn from_wit_file_kind(k: wit::FileKind) -> pc::FileKind {
 }
 
 /// Convert WIT `FileEntry` → poly-client `FileEntry`.
-pub fn from_wit_file_entry(e: wit::FileEntry) -> pc::FileEntry {
+pub(crate) fn from_wit_file_entry(e: wit::FileEntry) -> pc::FileEntry {
     pc::FileEntry {
         path: e.path,
         name: e.name,
@@ -133,7 +133,7 @@ pub fn from_wit_file_entry(e: wit::FileEntry) -> pc::FileEntry {
 }
 
 /// Convert WIT `FileContent` → poly-client `FileContent`.
-pub fn from_wit_file_content(c: wit::FileContent) -> pc::FileContent {
+pub(crate) fn from_wit_file_content(c: wit::FileContent) -> pc::FileContent {
     pc::FileContent {
         path: c.path,
         bytes: c.bytes,
@@ -148,7 +148,7 @@ pub fn from_wit_file_content(c: wit::FileContent) -> pc::FileContent {
 /// The WIT interface still uses the legacy flat-bool shape. We project
 /// those bools onto the richer enum-based Rust shape conservatively:
 /// unknown axes (friends, notifications) default to `None`.
-pub fn from_wit_backend_capabilities(c: wit::BackendCapabilities) -> pc::BackendCapabilities {
+pub(crate) fn from_wit_backend_capabilities(c: wit::BackendCapabilities) -> pc::BackendCapabilities {
     pc::BackendCapabilities {
         messaging: if c.supports_send_messages {
             pc::MessagingModel::Full
@@ -187,7 +187,7 @@ pub fn from_wit_backend_capabilities(c: wit::BackendCapabilities) -> pc::Backend
 // ─── PluginManifest ────────────────────────────────────────────────
 
 /// Convert WIT `PluginManifest` → poly-client `PluginManifest`.
-pub fn from_wit_plugin_manifest(m: wit_meta::PluginManifest) -> pc::PluginManifest {
+pub(crate) fn from_wit_plugin_manifest(m: wit_meta::PluginManifest) -> pc::PluginManifest {
     pc::PluginManifest {
         exec_programs: m.exec_programs,
         http_hosts: m.http_hosts,
@@ -199,7 +199,7 @@ pub fn from_wit_plugin_manifest(m: wit_meta::PluginManifest) -> pc::PluginManife
 // ─── User ──────────────────────────────────────────────────────────
 
 /// Convert WIT `User` → poly-client `User`.
-pub fn from_wit_user(u: wit::User) -> pc::User {
+pub(crate) fn from_wit_user(u: wit::User) -> pc::User {
     pc::User {
         id: u.id,
         display_name: u.display_name,
@@ -210,7 +210,7 @@ pub fn from_wit_user(u: wit::User) -> pc::User {
 }
 
 /// Convert poly-client `User` → WIT `User`.
-pub fn to_wit_user(u: &pc::User) -> wit::User {
+pub(crate) fn to_wit_user(u: &pc::User) -> wit::User {
     wit::User {
         id: u.id.clone(),
         display_name: u.display_name.clone(),
@@ -223,7 +223,7 @@ pub fn to_wit_user(u: &pc::User) -> wit::User {
 // ─── Category ──────────────────────────────────────────────────────
 
 /// Convert WIT `Category` → poly-client `Category`.
-pub fn from_wit_category(c: wit::Category) -> pc::Category {
+pub(crate) fn from_wit_category(c: wit::Category) -> pc::Category {
     pc::Category {
         id: c.id,
         name: c.name,
@@ -234,7 +234,7 @@ pub fn from_wit_category(c: wit::Category) -> pc::Category {
 // ─── Server ────────────────────────────────────────────────────────
 
 /// Convert WIT `Server` → poly-client `Server`.
-pub fn from_wit_server(s: wit::Server) -> pc::Server {
+pub(crate) fn from_wit_server(s: wit::Server) -> pc::Server {
     pc::Server {
         id: s.id,
         name: s.name,
@@ -258,7 +258,7 @@ pub fn from_wit_server(s: wit::Server) -> pc::Server {
 // ─── Channel ───────────────────────────────────────────────────────
 
 /// Convert WIT `Channel` → poly-client `Channel`.
-pub fn from_wit_channel(c: wit::Channel) -> pc::Channel {
+pub(crate) fn from_wit_channel(c: wit::Channel) -> pc::Channel {
     pc::Channel {
         id: c.id,
         name: c.name,
@@ -278,12 +278,12 @@ pub fn from_wit_channel(c: wit::Channel) -> pc::Channel {
 // ─── Attachment ────────────────────────────────────────────────────
 
 /// Convert WIT `Attachment` → poly-client `Attachment`.
-pub fn from_wit_attachment(a: wit::Attachment) -> pc::Attachment {
+pub(crate) fn from_wit_attachment(a: wit::Attachment) -> pc::Attachment {
     pc::Attachment::remote(a.id, a.filename, a.content_type, a.url, a.size)
 }
 
 /// Convert WIT `MessageReplyPreview` → poly-client `MessageReplyPreview`.
-pub fn from_wit_message_reply_preview(r: wit::MessageReplyPreview) -> pc::MessageReplyPreview {
+pub(crate) fn from_wit_message_reply_preview(r: wit::MessageReplyPreview) -> pc::MessageReplyPreview {
     pc::MessageReplyPreview {
         message_id: r.message_id,
         author_id: r.author_id,
@@ -294,7 +294,7 @@ pub fn from_wit_message_reply_preview(r: wit::MessageReplyPreview) -> pc::Messag
 }
 
 /// Convert WIT `CustomEmoji` → poly-client `CustomEmoji`.
-pub fn from_wit_custom_emoji(e: wit::CustomEmoji) -> pc::CustomEmoji {
+pub(crate) fn from_wit_custom_emoji(e: wit::CustomEmoji) -> pc::CustomEmoji {
     pc::CustomEmoji {
         id: e.id,
         shortcode: e.shortcode,
@@ -307,7 +307,7 @@ pub fn from_wit_custom_emoji(e: wit::CustomEmoji) -> pc::CustomEmoji {
 }
 
 /// Convert WIT `StickerItem` → poly-client `StickerItem`.
-pub fn from_wit_sticker_item(s: wit::StickerItem) -> pc::StickerItem {
+pub(crate) fn from_wit_sticker_item(s: wit::StickerItem) -> pc::StickerItem {
     pc::StickerItem {
         id: s.id,
         name: s.name,
@@ -323,7 +323,7 @@ pub fn from_wit_sticker_item(s: wit::StickerItem) -> pc::StickerItem {
 // ─── Reaction ──────────────────────────────────────────────────────
 
 /// Convert WIT `Reaction` → poly-client `Reaction`.
-pub fn from_wit_reaction(r: wit::Reaction) -> pc::Reaction {
+pub(crate) fn from_wit_reaction(r: wit::Reaction) -> pc::Reaction {
     pc::Reaction {
         emoji: r.emoji,
         count: r.count,
@@ -334,7 +334,7 @@ pub fn from_wit_reaction(r: wit::Reaction) -> pc::Reaction {
 // ─── MessageContent ────────────────────────────────────────────────
 
 /// Convert WIT `MessageContent` → poly-client `MessageContent`.
-pub fn from_wit_message_content(mc: wit::MessageContent) -> pc::MessageContent {
+pub(crate) fn from_wit_message_content(mc: wit::MessageContent) -> pc::MessageContent {
     match mc {
         wit::MessageContent::Text(text) => pc::MessageContent::Text(text),
         wit::MessageContent::WithAttachments(ta) => pc::MessageContent::WithAttachments {
@@ -349,7 +349,7 @@ pub fn from_wit_message_content(mc: wit::MessageContent) -> pc::MessageContent {
 }
 
 /// Convert poly-client `MessageContent` → WIT `MessageContent`.
-pub fn to_wit_message_content(mc: pc::MessageContent) -> wit::MessageContent {
+pub(crate) fn to_wit_message_content(mc: pc::MessageContent) -> wit::MessageContent {
     match mc {
         pc::MessageContent::Text(text) => wit::MessageContent::Text(text),
         pc::MessageContent::WithAttachments { text, attachments } => {
@@ -373,7 +373,7 @@ pub fn to_wit_message_content(mc: pc::MessageContent) -> wit::MessageContent {
 // ─── Message ───────────────────────────────────────────────────────
 
 /// Convert WIT `Message` → poly-client `Message`.
-pub fn from_wit_message(m: wit::Message) -> pc::Message {
+pub(crate) fn from_wit_message(m: wit::Message) -> pc::Message {
     pc::Message {
         id: m.id,
         author: from_wit_user(m.author),
@@ -394,7 +394,7 @@ pub fn from_wit_message(m: wit::Message) -> pc::Message {
 // ─── Session ───────────────────────────────────────────────────────
 
 /// Convert WIT `Session` → poly-client `Session`.
-pub fn from_wit_session(s: wit::Session) -> pc::Session {
+pub(crate) fn from_wit_session(s: wit::Session) -> pc::Session {
     pc::Session {
         id: s.id,
         user: from_wit_user(s.user),
@@ -409,7 +409,7 @@ pub fn from_wit_session(s: wit::Session) -> pc::Session {
 // ─── AuthCredentials ───────────────────────────────────────────────
 
 /// Convert poly-client `AuthCredentials` → WIT `AuthCredentials`.
-pub fn to_wit_auth_credentials(creds: pc::AuthCredentials) -> wit::AuthCredentials {
+pub(crate) fn to_wit_auth_credentials(creds: pc::AuthCredentials) -> wit::AuthCredentials {
     match creds {
         pc::AuthCredentials::Token(token) => wit::AuthCredentials::Token(token),
         pc::AuthCredentials::EmailPassword { email, password } => {
@@ -440,7 +440,7 @@ pub fn to_wit_auth_credentials(creds: pc::AuthCredentials) -> wit::AuthCredentia
 // ─── MessageQuery ──────────────────────────────────────────────────
 
 /// Convert poly-client `MessageQuery` → WIT `MessageQuery`.
-pub fn to_wit_message_query(q: pc::MessageQuery) -> wit::MessageQuery {
+pub(crate) fn to_wit_message_query(q: pc::MessageQuery) -> wit::MessageQuery {
     wit::MessageQuery {
         before: q.before,
         after: q.after,
@@ -450,7 +450,7 @@ pub fn to_wit_message_query(q: pc::MessageQuery) -> wit::MessageQuery {
 }
 
 /// Convert poly-client `MessageSearchQuery` → WIT `MessageSearchQuery`.
-pub fn to_wit_message_search_query(q: pc::MessageSearchQuery) -> wit::MessageSearchQuery {
+pub(crate) fn to_wit_message_search_query(q: pc::MessageSearchQuery) -> wit::MessageSearchQuery {
     wit::MessageSearchQuery {
         text: q.text,
         channel_id: q.channel_id,
@@ -463,7 +463,7 @@ pub fn to_wit_message_search_query(q: pc::MessageSearchQuery) -> wit::MessageSea
 }
 
 /// Convert WIT `MessageSearchHit` → poly-client `MessageSearchHit`.
-pub fn from_wit_message_search_hit(hit: wit::MessageSearchHit) -> pc::MessageSearchHit {
+pub(crate) fn from_wit_message_search_hit(hit: wit::MessageSearchHit) -> pc::MessageSearchHit {
     pc::MessageSearchHit {
         channel_id: hit.channel_id,
         channel_name: hit.channel_name,
@@ -475,7 +475,7 @@ pub fn from_wit_message_search_hit(hit: wit::MessageSearchHit) -> pc::MessageSea
 // ─── ClientError ───────────────────────────────────────────────────
 
 /// Convert WIT `ClientError` → poly-client `ClientError`.
-pub fn from_wit_client_error(e: wit::ClientError) -> pc::ClientError {
+pub(crate) fn from_wit_client_error(e: wit::ClientError) -> pc::ClientError {
     match e {
         wit::ClientError::AuthFailed(msg) => pc::ClientError::AuthFailed(msg),
         wit::ClientError::Network(msg) => pc::ClientError::Network(msg),
@@ -490,7 +490,7 @@ pub fn from_wit_client_error(e: wit::ClientError) -> pc::ClientError {
 // ─── Group ─────────────────────────────────────────────────────────
 
 /// Convert WIT `Group` → poly-client `Group`.
-pub fn from_wit_group(g: wit::Group) -> pc::Group {
+pub(crate) fn from_wit_group(g: wit::Group) -> pc::Group {
     pc::Group {
         id: g.id,
         members: g.members.into_iter().map(from_wit_user).collect(),
@@ -504,7 +504,7 @@ pub fn from_wit_group(g: wit::Group) -> pc::Group {
 // ─── DmChannel ─────────────────────────────────────────────────────
 
 /// Convert WIT `DmChannel` → poly-client `DmChannel`.
-pub fn from_wit_dm_channel(dm: wit::DmChannel) -> pc::DmChannel {
+pub(crate) fn from_wit_dm_channel(dm: wit::DmChannel) -> pc::DmChannel {
     pc::DmChannel {
         id: dm.id,
         user: from_wit_user(dm.user),
@@ -518,7 +518,7 @@ pub fn from_wit_dm_channel(dm: wit::DmChannel) -> pc::DmChannel {
 // ─── Notification ──────────────────────────────────────────────────
 
 /// Convert WIT `NotificationKind` → poly-client `NotificationKind`.
-pub fn from_wit_notification_kind(nk: wit::NotificationKind) -> pc::NotificationKind {
+pub(crate) fn from_wit_notification_kind(nk: wit::NotificationKind) -> pc::NotificationKind {
     match nk {
         wit::NotificationKind::Mention(info) => pc::NotificationKind::Mention {
             channel_id: info.channel_id,
@@ -546,7 +546,7 @@ pub fn from_wit_notification_kind(nk: wit::NotificationKind) -> pc::Notification
 }
 
 /// Convert WIT `Notification` → poly-client `Notification`.
-pub fn from_wit_notification(n: wit::Notification) -> pc::Notification {
+pub(crate) fn from_wit_notification(n: wit::Notification) -> pc::Notification {
     pc::Notification {
         id: n.id,
         kind: from_wit_notification_kind(n.kind),
@@ -563,7 +563,7 @@ pub fn from_wit_notification(n: wit::Notification) -> pc::Notification {
 // ─── VoiceParticipant ──────────────────────────────────────────────
 
 /// Convert WIT `VoiceParticipant` → poly-client `VoiceParticipant`.
-pub fn from_wit_voice_participant(vp: wit::VoiceParticipant) -> pc::VoiceParticipant {
+pub(crate) fn from_wit_voice_participant(vp: wit::VoiceParticipant) -> pc::VoiceParticipant {
     pc::VoiceParticipant {
         user: from_wit_user(vp.user),
         is_muted: vp.is_muted,
@@ -577,7 +577,7 @@ pub fn from_wit_voice_participant(vp: wit::VoiceParticipant) -> pc::VoicePartici
 // ─── ClientEvent ───────────────────────────────────────────────────
 
 /// Convert WIT `ClientEvent` → poly-client `ClientEvent`.
-pub fn from_wit_client_event(ev: wit::ClientEvent) -> pc::ClientEvent {
+pub(crate) fn from_wit_client_event(ev: wit::ClientEvent) -> pc::ClientEvent {
     match ev {
         wit::ClientEvent::MessageReceived(e) => pc::ClientEvent::MessageReceived {
             channel_id: e.channel_id,
@@ -641,7 +641,7 @@ pub fn from_wit_client_event(ev: wit::ClientEvent) -> pc::ClientEvent {
 
 // ─── Common (custom-block / icon-source / cursor) ──────────────────
 
-pub fn from_wit_custom_block(b: wit_ui_common::CustomBlock) -> pc::CustomBlock {
+pub(crate) fn from_wit_custom_block(b: wit_ui_common::CustomBlock) -> pc::CustomBlock {
     pc::CustomBlock {
         sanitized_html: b.sanitized_html,
         stylesheet: b.stylesheet,
@@ -649,14 +649,14 @@ pub fn from_wit_custom_block(b: wit_ui_common::CustomBlock) -> pc::CustomBlock {
     }
 }
 
-pub fn from_wit_icon_source(i: wit_ui_common::IconSource) -> pc::IconSource {
+pub(crate) fn from_wit_icon_source(i: wit_ui_common::IconSource) -> pc::IconSource {
     match i {
         wit_ui_common::IconSource::Emoji(s) => pc::IconSource::Emoji(s),
         wit_ui_common::IconSource::Svg(s) => pc::IconSource::Svg(s),
     }
 }
 
-pub fn from_wit_cursor_kind(k: wit_ui_common::CursorKind) -> pc::CursorKind {
+pub(crate) fn from_wit_cursor_kind(k: wit_ui_common::CursorKind) -> pc::CursorKind {
     match k {
         wit_ui_common::CursorKind::Offset => pc::CursorKind::Offset,
         wit_ui_common::CursorKind::Timestamp => pc::CursorKind::Timestamp,
@@ -665,7 +665,7 @@ pub fn from_wit_cursor_kind(k: wit_ui_common::CursorKind) -> pc::CursorKind {
     }
 }
 
-pub fn to_wit_cursor_kind(k: pc::CursorKind) -> wit_ui_common::CursorKind {
+pub(crate) fn to_wit_cursor_kind(k: pc::CursorKind) -> wit_ui_common::CursorKind {
     match k {
         pc::CursorKind::Offset => wit_ui_common::CursorKind::Offset,
         pc::CursorKind::Timestamp => wit_ui_common::CursorKind::Timestamp,
@@ -674,14 +674,14 @@ pub fn to_wit_cursor_kind(k: pc::CursorKind) -> wit_ui_common::CursorKind {
     }
 }
 
-pub fn from_wit_cursor(c: wit_ui_common::Cursor) -> pc::Cursor {
+pub(crate) fn from_wit_cursor(c: wit_ui_common::Cursor) -> pc::Cursor {
     pc::Cursor {
         kind: from_wit_cursor_kind(c.kind),
         value: c.value,
     }
 }
 
-pub fn to_wit_cursor(c: pc::Cursor) -> wit_ui_common::Cursor {
+pub(crate) fn to_wit_cursor(c: pc::Cursor) -> wit_ui_common::Cursor {
     wit_ui_common::Cursor {
         kind: to_wit_cursor_kind(c.kind),
         value: c.value,
@@ -690,7 +690,7 @@ pub fn to_wit_cursor(c: pc::Cursor) -> wit_ui_common::Cursor {
 
 // ─── Menus ─────────────────────────────────────────────────────────
 
-pub fn from_wit_menu_target_kind(t: wit_menus::MenuTargetKind) -> pc::MenuTargetKind {
+pub(crate) fn from_wit_menu_target_kind(t: wit_menus::MenuTargetKind) -> pc::MenuTargetKind {
     match t {
         wit_menus::MenuTargetKind::Category => pc::MenuTargetKind::Category,
         wit_menus::MenuTargetKind::Channel => pc::MenuTargetKind::Channel,
@@ -701,7 +701,7 @@ pub fn from_wit_menu_target_kind(t: wit_menus::MenuTargetKind) -> pc::MenuTarget
     }
 }
 
-pub fn to_wit_menu_target_kind(t: pc::MenuTargetKind) -> wit_menus::MenuTargetKind {
+pub(crate) fn to_wit_menu_target_kind(t: pc::MenuTargetKind) -> wit_menus::MenuTargetKind {
     match t {
         pc::MenuTargetKind::Category => wit_menus::MenuTargetKind::Category,
         pc::MenuTargetKind::Channel => wit_menus::MenuTargetKind::Channel,
@@ -712,7 +712,7 @@ pub fn to_wit_menu_target_kind(t: pc::MenuTargetKind) -> wit_menus::MenuTargetKi
     }
 }
 
-pub fn from_wit_menu_slot(s: wit_menus::MenuSlot) -> pc::MenuSlot {
+pub(crate) fn from_wit_menu_slot(s: wit_menus::MenuSlot) -> pc::MenuSlot {
     match s {
         wit_menus::MenuSlot::Top => pc::MenuSlot::Top,
         wit_menus::MenuSlot::AfterFavorites => pc::MenuSlot::AfterFavorites,
@@ -721,7 +721,7 @@ pub fn from_wit_menu_slot(s: wit_menus::MenuSlot) -> pc::MenuSlot {
     }
 }
 
-pub fn from_wit_menu_item_variant(v: wit_menus::MenuItemVariant) -> pc::MenuItemVariant {
+pub(crate) fn from_wit_menu_item_variant(v: wit_menus::MenuItemVariant) -> pc::MenuItemVariant {
     match v {
         wit_menus::MenuItemVariant::Normal => pc::MenuItemVariant::Normal,
         wit_menus::MenuItemVariant::Destructive => pc::MenuItemVariant::Destructive,
@@ -740,7 +740,7 @@ pub fn from_wit_menu_item_variant(v: wit_menus::MenuItemVariant) -> pc::MenuItem
 // local alias for the type (they're the same at the component-model
 // level). We normalise by converting through `wit_ui_common`.
 
-pub fn from_wit_menu_item(item: wit_menus::MenuItem) -> pc::MenuItem {
+pub(crate) fn from_wit_menu_item(item: wit_menus::MenuItem) -> pc::MenuItem {
     pc::MenuItem {
         id: item.id,
         parent_id: item.parent_id,
@@ -760,7 +760,7 @@ pub fn from_wit_menu_item(item: wit_menus::MenuItem) -> pc::MenuItem {
     }
 }
 
-pub fn from_wit_toast_tone(t: wit_menus::ToastTone) -> pc::ToastTone {
+pub(crate) fn from_wit_toast_tone(t: wit_menus::ToastTone) -> pc::ToastTone {
     match t {
         wit_menus::ToastTone::Info => pc::ToastTone::Info,
         wit_menus::ToastTone::Success => pc::ToastTone::Success,
@@ -769,14 +769,14 @@ pub fn from_wit_toast_tone(t: wit_menus::ToastTone) -> pc::ToastTone {
     }
 }
 
-pub fn from_wit_toast_payload(p: wit_menus::ToastPayload) -> pc::ToastPayload {
+pub(crate) fn from_wit_toast_payload(p: wit_menus::ToastPayload) -> pc::ToastPayload {
     pc::ToastPayload {
         label_key: p.label_key,
         tone: from_wit_toast_tone(p.tone),
     }
 }
 
-pub fn from_wit_settings_anchor(a: wit_menus::SettingsAnchor) -> pc::SettingsAnchor {
+pub(crate) fn from_wit_settings_anchor(a: wit_menus::SettingsAnchor) -> pc::SettingsAnchor {
     pc::SettingsAnchor {
         scope: a.scope,
         scope_id: a.scope_id,
@@ -784,28 +784,28 @@ pub fn from_wit_settings_anchor(a: wit_menus::SettingsAnchor) -> pc::SettingsAnc
     }
 }
 
-pub fn from_wit_modal_ref(m: wit_menus::ModalRef) -> pc::ModalRef {
+pub(crate) fn from_wit_modal_ref(m: wit_menus::ModalRef) -> pc::ModalRef {
     pc::ModalRef {
         modal_id: m.modal_id,
         context: m.context,
     }
 }
 
-pub fn from_wit_pending_handle(h: wit_menus::PendingHandle) -> pc::PendingHandle {
+pub(crate) fn from_wit_pending_handle(h: wit_menus::PendingHandle) -> pc::PendingHandle {
     pc::PendingHandle {
         action_ref: h.action_ref,
         progress_hint: h.progress_hint,
     }
 }
 
-pub fn to_wit_pending_handle(h: pc::PendingHandle) -> wit_menus::PendingHandle {
+pub(crate) fn to_wit_pending_handle(h: pc::PendingHandle) -> wit_menus::PendingHandle {
     wit_menus::PendingHandle {
         action_ref: h.action_ref,
         progress_hint: h.progress_hint,
     }
 }
 
-pub fn from_wit_action_outcome(o: wit_menus::ActionOutcome) -> pc::ActionOutcome {
+pub(crate) fn from_wit_action_outcome(o: wit_menus::ActionOutcome) -> pc::ActionOutcome {
     match o {
         wit_menus::ActionOutcome::Noop => pc::ActionOutcome::Noop,
         wit_menus::ActionOutcome::Pending(h) => pc::ActionOutcome::Pending(from_wit_pending_handle(h)),
@@ -821,7 +821,7 @@ pub fn from_wit_action_outcome(o: wit_menus::ActionOutcome) -> pc::ActionOutcome
 
 // ─── Settings ──────────────────────────────────────────────────────
 
-pub fn from_wit_setting_kind(k: wit_settings::SettingKind) -> pc::SettingKind {
+pub(crate) fn from_wit_setting_kind(k: wit_settings::SettingKind) -> pc::SettingKind {
     match k {
         wit_settings::SettingKind::Toggle => pc::SettingKind::Toggle,
         wit_settings::SettingKind::TextInput => pc::SettingKind::TextInput,
@@ -831,7 +831,7 @@ pub fn from_wit_setting_kind(k: wit_settings::SettingKind) -> pc::SettingKind {
     }
 }
 
-pub fn from_wit_setting_descriptor(d: wit_settings::SettingDescriptor) -> pc::SettingDescriptor {
+pub(crate) fn from_wit_setting_descriptor(d: wit_settings::SettingDescriptor) -> pc::SettingDescriptor {
     pc::SettingDescriptor {
         key: d.key,
         kind: from_wit_setting_kind(d.kind),
@@ -840,7 +840,7 @@ pub fn from_wit_setting_descriptor(d: wit_settings::SettingDescriptor) -> pc::Se
     }
 }
 
-pub fn from_wit_settings_scope(s: wit_settings::SettingsScope) -> pc::SettingsScope {
+pub(crate) fn from_wit_settings_scope(s: wit_settings::SettingsScope) -> pc::SettingsScope {
     match s {
         wit_settings::SettingsScope::AccountGlobal => pc::SettingsScope::AccountGlobal,
         wit_settings::SettingsScope::PerServer => pc::SettingsScope::PerServer,
@@ -849,7 +849,7 @@ pub fn from_wit_settings_scope(s: wit_settings::SettingsScope) -> pc::SettingsSc
     }
 }
 
-pub fn to_wit_settings_scope(s: pc::SettingsScope) -> wit_settings::SettingsScope {
+pub(crate) fn to_wit_settings_scope(s: pc::SettingsScope) -> wit_settings::SettingsScope {
     match s {
         pc::SettingsScope::AccountGlobal => wit_settings::SettingsScope::AccountGlobal,
         pc::SettingsScope::PerServer => wit_settings::SettingsScope::PerServer,
@@ -858,7 +858,7 @@ pub fn to_wit_settings_scope(s: pc::SettingsScope) -> wit_settings::SettingsScop
     }
 }
 
-pub fn from_wit_settings_section(s: wit_settings::SettingsSection) -> pc::SettingsSection {
+pub(crate) fn from_wit_settings_section(s: wit_settings::SettingsSection) -> pc::SettingsSection {
     pc::SettingsSection {
         scope: from_wit_settings_scope(s.scope),
         section_key: s.section_key,
@@ -874,7 +874,7 @@ pub fn from_wit_settings_section(s: wit_settings::SettingsSection) -> pc::Settin
 
 // ─── Sidebar ───────────────────────────────────────────────────────
 
-pub fn from_wit_sidebar_layout_kind(k: wit_sidebar::SidebarLayoutKind) -> pc::SidebarLayoutKind {
+pub(crate) fn from_wit_sidebar_layout_kind(k: wit_sidebar::SidebarLayoutKind) -> pc::SidebarLayoutKind {
     match k {
         wit_sidebar::SidebarLayoutKind::ChannelList => pc::SidebarLayoutKind::ChannelList,
         wit_sidebar::SidebarLayoutKind::SpacesRooms => pc::SidebarLayoutKind::SpacesRooms,
@@ -885,7 +885,7 @@ pub fn from_wit_sidebar_layout_kind(k: wit_sidebar::SidebarLayoutKind) -> pc::Si
     }
 }
 
-pub fn from_wit_sidebar_route_kind(k: wit_sidebar::SidebarRouteKind) -> pc::SidebarRouteKind {
+pub(crate) fn from_wit_sidebar_route_kind(k: wit_sidebar::SidebarRouteKind) -> pc::SidebarRouteKind {
     match k {
         wit_sidebar::SidebarRouteKind::Channel => pc::SidebarRouteKind::Channel,
         wit_sidebar::SidebarRouteKind::Forum => pc::SidebarRouteKind::Forum,
@@ -898,7 +898,7 @@ pub fn from_wit_sidebar_route_kind(k: wit_sidebar::SidebarRouteKind) -> pc::Side
     }
 }
 
-pub fn from_wit_sidebar_item(it: wit_sidebar::SidebarItem) -> pc::SidebarItem {
+pub(crate) fn from_wit_sidebar_item(it: wit_sidebar::SidebarItem) -> pc::SidebarItem {
     pc::SidebarItem {
         id: it.id,
         parent_id: it.parent_id,
@@ -912,7 +912,7 @@ pub fn from_wit_sidebar_item(it: wit_sidebar::SidebarItem) -> pc::SidebarItem {
     }
 }
 
-pub fn from_wit_sidebar_section(s: wit_sidebar::SidebarSection) -> pc::SidebarSection {
+pub(crate) fn from_wit_sidebar_section(s: wit_sidebar::SidebarSection) -> pc::SidebarSection {
     pc::SidebarSection {
         header_key: s.header_key,
         collapsible: s.collapsible,
@@ -921,7 +921,7 @@ pub fn from_wit_sidebar_section(s: wit_sidebar::SidebarSection) -> pc::SidebarSe
     }
 }
 
-pub fn from_wit_sidebar_declaration(d: wit_sidebar::SidebarDeclaration) -> pc::SidebarDeclaration {
+pub(crate) fn from_wit_sidebar_declaration(d: wit_sidebar::SidebarDeclaration) -> pc::SidebarDeclaration {
     pc::SidebarDeclaration {
         layout: from_wit_sidebar_layout_kind(d.layout),
         sections: d.sections.into_iter().map(from_wit_sidebar_section).collect(),
@@ -935,7 +935,7 @@ pub fn from_wit_sidebar_declaration(d: wit_sidebar::SidebarDeclaration) -> pc::S
 
 // ─── Views ─────────────────────────────────────────────────────────
 
-pub fn from_wit_view_kind(k: wit_views::ViewKind) -> pc::ViewKind {
+pub(crate) fn from_wit_view_kind(k: wit_views::ViewKind) -> pc::ViewKind {
     match k {
         wit_views::ViewKind::FlatList => pc::ViewKind::FlatList,
         wit_views::ViewKind::CardGrid => pc::ViewKind::CardGrid,
@@ -944,7 +944,7 @@ pub fn from_wit_view_kind(k: wit_views::ViewKind) -> pc::ViewKind {
     }
 }
 
-pub fn from_wit_toolbar_option(o: wit_views::ToolbarOption) -> pc::ToolbarOption {
+pub(crate) fn from_wit_toolbar_option(o: wit_views::ToolbarOption) -> pc::ToolbarOption {
     pc::ToolbarOption {
         id: o.id,
         label_key: o.label_key,
@@ -953,7 +953,7 @@ pub fn from_wit_toolbar_option(o: wit_views::ToolbarOption) -> pc::ToolbarOption
     }
 }
 
-pub fn from_wit_row_template(r: wit_views::RowTemplate) -> pc::RowTemplate {
+pub(crate) fn from_wit_row_template(r: wit_views::RowTemplate) -> pc::RowTemplate {
     pc::RowTemplate {
         primary_field: r.primary_field,
         secondary_field: r.secondary_field,
@@ -962,32 +962,32 @@ pub fn from_wit_row_template(r: wit_views::RowTemplate) -> pc::RowTemplate {
     }
 }
 
-pub fn from_wit_list_spec(l: wit_views::ListSpec) -> pc::ListSpec {
+pub(crate) fn from_wit_list_spec(l: wit_views::ListSpec) -> pc::ListSpec {
     pc::ListSpec {
         row_template: from_wit_row_template(l.row_template),
         page_size: l.page_size,
     }
 }
 
-pub fn from_wit_card_spec(c: wit_views::CardSpec) -> pc::CardSpec {
+pub(crate) fn from_wit_card_spec(c: wit_views::CardSpec) -> pc::CardSpec {
     pc::CardSpec { primary_field: c.primary_field }
 }
 
-pub fn from_wit_tree_spec(t: wit_views::TreeSpec) -> pc::TreeSpec {
+pub(crate) fn from_wit_tree_spec(t: wit_views::TreeSpec) -> pc::TreeSpec {
     pc::TreeSpec {
         root_page_size: t.root_page_size,
         max_depth: t.max_depth,
     }
 }
 
-pub fn from_wit_split_spec(s: wit_views::SplitSpec) -> pc::SplitSpec {
+pub(crate) fn from_wit_split_spec(s: wit_views::SplitSpec) -> pc::SplitSpec {
     pc::SplitSpec {
         list_side: from_wit_list_spec(s.list_side),
         detail_view_kind: from_wit_view_kind(s.detail_view_kind),
     }
 }
 
-pub fn from_wit_view_body(b: wit_views::ViewBody) -> pc::ViewBody {
+pub(crate) fn from_wit_view_body(b: wit_views::ViewBody) -> pc::ViewBody {
     match b {
         wit_views::ViewBody::ListBody(l) => pc::ViewBody::ListBody(from_wit_list_spec(l)),
         wit_views::ViewBody::CardBody(c) => pc::ViewBody::CardBody(from_wit_card_spec(c)),
@@ -996,7 +996,7 @@ pub fn from_wit_view_body(b: wit_views::ViewBody) -> pc::ViewBody {
     }
 }
 
-pub fn from_wit_view_header(h: wit_views::ViewHeader) -> pc::ViewHeader {
+pub(crate) fn from_wit_view_header(h: wit_views::ViewHeader) -> pc::ViewHeader {
     pc::ViewHeader {
         title_key: h.title_key,
         subtitle_key: h.subtitle_key,
@@ -1008,7 +1008,7 @@ pub fn from_wit_view_header(h: wit_views::ViewHeader) -> pc::ViewHeader {
     }
 }
 
-pub fn from_wit_view_toolbar(t: wit_views::ViewToolbar) -> pc::ViewToolbar {
+pub(crate) fn from_wit_view_toolbar(t: wit_views::ViewToolbar) -> pc::ViewToolbar {
     pc::ViewToolbar {
         sort_options: t.sort_options.into_iter().map(from_wit_toolbar_option).collect(),
         filter_options: t.filter_options.into_iter().map(from_wit_toolbar_option).collect(),
@@ -1024,11 +1024,11 @@ pub fn from_wit_view_toolbar(t: wit_views::ViewToolbar) -> pc::ViewToolbar {
 /// `client-views::view-toolbar.action-items` re-uses `menu-item` from
 /// `client-menus` — bindgen keeps the *same* generated struct, so this
 /// is just a thin forwarder to [`from_wit_menu_item`].
-pub fn from_wit_view_menu_item(item: wit_menus::MenuItem) -> pc::MenuItem {
+pub(crate) fn from_wit_view_menu_item(item: wit_menus::MenuItem) -> pc::MenuItem {
     from_wit_menu_item(item)
 }
 
-pub fn from_wit_view_descriptor(d: wit_views::ViewDescriptor) -> pc::ViewDescriptor {
+pub(crate) fn from_wit_view_descriptor(d: wit_views::ViewDescriptor) -> pc::ViewDescriptor {
     pc::ViewDescriptor {
         kind: from_wit_view_kind(d.kind),
         header: d.header.map(from_wit_view_header),
@@ -1039,11 +1039,11 @@ pub fn from_wit_view_descriptor(d: wit_views::ViewDescriptor) -> pc::ViewDescrip
 
 /// Forwarder: `client-views` re-uses `menu-target-kind` from
 /// `client-menus`. Bindgen preserves identity so this is a pass-through.
-pub fn from_wit_view_menu_target_kind(k: wit_menus::MenuTargetKind) -> pc::MenuTargetKind {
+pub(crate) fn from_wit_view_menu_target_kind(k: wit_menus::MenuTargetKind) -> pc::MenuTargetKind {
     from_wit_menu_target_kind(k)
 }
 
-pub fn from_wit_view_row(r: wit_views::ViewRow) -> pc::ViewRow {
+pub(crate) fn from_wit_view_row(r: wit_views::ViewRow) -> pc::ViewRow {
     pc::ViewRow {
         id: r.id,
         primary_text: r.primary_text,
@@ -1060,22 +1060,22 @@ pub fn from_wit_view_row(r: wit_views::ViewRow) -> pc::ViewRow {
 
 /// `client-views::cursor` is re-used from `client-ui-common`; forward
 /// through the shared helpers.
-pub fn to_wit_view_cursor(c: pc::Cursor) -> wit_ui_common::Cursor {
+pub(crate) fn to_wit_view_cursor(c: pc::Cursor) -> wit_ui_common::Cursor {
     to_wit_cursor(c)
 }
 
-pub fn from_wit_view_cursor(c: wit_ui_common::Cursor) -> pc::Cursor {
+pub(crate) fn from_wit_view_cursor(c: wit_ui_common::Cursor) -> pc::Cursor {
     from_wit_cursor(c)
 }
 
-pub fn from_wit_view_rows_page(p: wit_views::ViewRowsPage) -> pc::ViewRowsPage {
+pub(crate) fn from_wit_view_rows_page(p: wit_views::ViewRowsPage) -> pc::ViewRowsPage {
     pc::ViewRowsPage {
         rows: p.rows.into_iter().map(from_wit_view_row).collect(),
         next_cursor: p.next_cursor.map(from_wit_view_cursor),
     }
 }
 
-pub fn from_wit_view_detail(d: wit_views::ViewDetail) -> pc::ViewDetail {
+pub(crate) fn from_wit_view_detail(d: wit_views::ViewDetail) -> pc::ViewDetail {
     pc::ViewDetail {
         body_block: pc::CustomBlock {
             sanitized_html: d.body_block.sanitized_html,
@@ -1091,7 +1091,7 @@ pub fn from_wit_view_detail(d: wit_views::ViewDetail) -> pc::ViewDetail {
 
 // ─── Composer ──────────────────────────────────────────────────────
 
-pub fn from_wit_composer_slot(s: wit_composer::ComposerSlot) -> pc::ComposerSlot {
+pub(crate) fn from_wit_composer_slot(s: wit_composer::ComposerSlot) -> pc::ComposerSlot {
     match s {
         wit_composer::ComposerSlot::LeftOfInput => pc::ComposerSlot::LeftOfInput,
         wit_composer::ComposerSlot::RightOfInput => pc::ComposerSlot::RightOfInput,
@@ -1099,7 +1099,7 @@ pub fn from_wit_composer_slot(s: wit_composer::ComposerSlot) -> pc::ComposerSlot
     }
 }
 
-pub fn from_wit_composer_button(b: wit_composer::ComposerButton) -> pc::ComposerButton {
+pub(crate) fn from_wit_composer_button(b: wit_composer::ComposerButton) -> pc::ComposerButton {
     pc::ComposerButton {
         id: b.id,
         label_key: b.label_key,
@@ -1110,25 +1110,25 @@ pub fn from_wit_composer_button(b: wit_composer::ComposerButton) -> pc::Composer
 
 /// `client-composer::get-message-actions` returns `list<menu-item>` where
 /// `menu-item` is re-used from `client-menus` (bindgen preserves identity).
-pub fn from_wit_composer_menu_item(item: wit_menus::MenuItem) -> pc::MenuItem {
+pub(crate) fn from_wit_composer_menu_item(item: wit_menus::MenuItem) -> pc::MenuItem {
     from_wit_menu_item(item)
 }
 
 /// `client-composer::invoke-*-action` returns the same `action-outcome`
 /// type declared in `client-menus`.
-pub fn from_wit_composer_action_outcome(o: wit_menus::ActionOutcome) -> pc::ActionOutcome {
+pub(crate) fn from_wit_composer_action_outcome(o: wit_menus::ActionOutcome) -> pc::ActionOutcome {
     from_wit_action_outcome(o)
 }
 
 /// `client-sidebar::invoke-sidebar-action` — same re-use pattern.
-pub fn from_wit_sidebar_action_outcome(o: wit_menus::ActionOutcome) -> pc::ActionOutcome {
+pub(crate) fn from_wit_sidebar_action_outcome(o: wit_menus::ActionOutcome) -> pc::ActionOutcome {
     from_wit_action_outcome(o)
 }
 
 // ─── ForumSortOrder ────────────────────────────────────────────────
 
 /// Convert poly-client `ForumSortOrder` → WIT `ForumSortOrder`.
-pub fn to_wit_forum_sort_order(s: pc::ForumSortOrder) -> wit::ForumSortOrder {
+pub(crate) fn to_wit_forum_sort_order(s: pc::ForumSortOrder) -> wit::ForumSortOrder {
     match s {
         pc::ForumSortOrder::LatestActivity => wit::ForumSortOrder::LatestActivity,
         pc::ForumSortOrder::CreationDate => wit::ForumSortOrder::CreationDate,
