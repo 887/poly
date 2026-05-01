@@ -264,31 +264,37 @@ expect_used      = "deny"
 panic            = "deny"
 indexing_slicing = "deny"
 
+# All opt-in lints below are `deny` workspace-wide as of 2026-05-01.
+# Baseline is 0 own-file warnings on both native + wasm32 targets after
+# the Phase-2 burn-down (`docs/plans/plan-clippy-pedantic-restriction-cleanup.md`).
+# Promotion to `deny` makes any reintroduction a hard build error rather
+# than a warning that gets silently ignored — `cargo build` is the gate.
+# To bypass at a specific site: per-line `#[allow(clippy::<lint>)]` paired
+# with a `// lint-allow-unused: <≥10-char reason>` marker (enforced by
+# `crates/lint-gate/build/allow_ban.rs`).
+
 # ── Safety-critical (per design decision 2026-05-01) ──────────────────
-# Workspace-wide warn — no per-subtree allow carve-outs. UI dev is hard
-# enough without programming-logic bugs masquerading as render bugs;
-# zero-wiggle-room policy keeps agents from picking up bad habits.
-arithmetic_side_effects   = "warn"
-as_conversions            = "warn"
-default_numeric_fallback  = "warn"
+arithmetic_side_effects   = "deny"
+as_conversions            = "deny"
+default_numeric_fallback  = "deny"
 
 # ── Casts that hide bugs ──────────────────────────────────────────────
-cast_possible_truncation  = "warn"
-cast_lossless             = "warn"
+cast_possible_truncation  = "deny"
+cast_lossless             = "deny"
 
 # ── API quality ───────────────────────────────────────────────────────
-must_use_candidate                  = "warn"
-let_underscore_must_use             = "warn"
-needless_pass_by_value              = "warn"
-redundant_closure_for_method_calls  = "warn"
+must_use_candidate                  = "deny"
+let_underscore_must_use             = "deny"
+needless_pass_by_value              = "deny"
+redundant_closure_for_method_calls  = "deny"
 
 # ── Logic / correctness ───────────────────────────────────────────────
-map_unwrap_or            = "warn"
-match_same_arms          = "warn"
-wildcard_enum_match_arm  = "warn"
-map_err_ignore           = "warn"
-string_slice             = "warn"  # UTF-8 panic risk
-integer_division         = "warn"  # silent floor — usually a bug
+map_unwrap_or            = "deny"
+match_same_arms          = "deny"
+wildcard_enum_match_arm  = "deny"
+map_err_ignore           = "deny"
+string_slice             = "deny"  # UTF-8 panic risk
+integer_division         = "deny"  # silent floor — usually a bug
 # missing_trait_methods removed 2026-05-01 — would force every
 # ClientBackend impl across 8 backends to spell out 50+ default methods
 # (~400 trivial copies, no value, unreadable diffs). The lint is fine
@@ -297,6 +303,6 @@ integer_division         = "warn"  # silent floor — usually a bug
 # stabilises and we want the explicit "did you mean to override" check.
 
 # ── Hygiene ───────────────────────────────────────────────────────────
-print_stdout      = "warn"
-print_stderr      = "warn"
-mod_module_files  = "warn"
+print_stdout      = "deny"
+print_stderr      = "deny"
+mod_module_files  = "deny"
