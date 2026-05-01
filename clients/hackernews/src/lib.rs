@@ -11,6 +11,8 @@
 #[cfg(feature = "native")]
 mod api;
 #[cfg(feature = "native")]
+pub mod auth;
+#[cfg(feature = "native")]
 mod cache;
 #[cfg(feature = "native")]
 mod mapping;
@@ -137,9 +139,29 @@ impl Default for HackerNewsClient {
 impl ClientBackend for HackerNewsClient {
     // --- Authentication ---
 
-    async fn authenticate(&mut self, _credentials: AuthCredentials) -> ClientResult<Session> {
-        // HN does not require authentication — always succeed with a guest session.
-        Ok(self.guest_session())
+    /// HN supports two modes:
+    /// - **Anonymous read-only** — pass any unrecognised variant (or no
+    ///   credentials at all) and you get a guest session. Read API works,
+    ///   write APIs return `NotSupported`.
+    /// - **Logged-in** — pass `EmailPassword { email: <hn username>, password }`.
+    ///   We POST to `news.ycombinator.com/login`, capture the `user` cookie
+    ///   into `Session.token`, and use it for write requests
+    ///   (comments, submissions). Multiple accounts are managed by the host
+    ///   spawning multiple `HackerNewsClient` instances.
+    async fn authenticate(&mut self, credentials: AuthCredentials) -> ClientResult<Session> {
+        match credentials {
+            AuthCredentials::EmailPassword { email, password } if !email.is_empty() => {
+                let cookie = auth::login(self.api.http_client(), &self.api.ua(), &email, &password)
+                    .await?;
+                let mut session = self.named_session(email);
+                session.token = cookie.clone();
+                self.session = Some(session.clone());
+                Ok(session)
+            }
+            // Anonymous fallback (Token(""), OAuth{token:""}, or anything else
+            // we don't have a real login flow for) — guest session, read-only.
+            _ => Ok(self.guest_session()),
+        }
     }
 
     async fn logout(&mut self) -> ClientResult<()> {
@@ -148,6 +170,9 @@ impl ClientBackend for HackerNewsClient {
     }
 
     fn is_authenticated(&self) -> bool {
+        // Both guest sessions and logged-in sessions count as "authenticated"
+        // for the purpose of having a session at all. Write-capability is a
+        // separate check based on `session.token`.
         self.session.is_some()
     }
 
@@ -206,13 +231,70 @@ impl ClientBackend for HackerNewsClient {
 
     async fn send_message(
         &self,
-        _channel_id: &str,
-        _content: MessageContent,
+        channel_id: &str,
+        content: MessageContent,
     ) -> ClientResult<Message> {
-        Err(ClientError::NotSupported(
-            "Hacker News is read-only; posting requires authentication via news.ycombinator.com"
-                .to_string(),
-        ))
+        // Need a logged-in session: guest sessions have an empty token.
+        let session = self.session.as_ref().ok_or_else(|| {
+            ClientError::AuthFailed(
+                "Sign in with your news.ycombinator.com account to post comments.".to_string(),
+            )
+        })?;
+        if session.token.is_empty() {
+            return Err(ClientError::AuthFailed(
+                "This is an anonymous Hacker News session — sign in with a \
+                 news.ycombinator.com account to post comments."
+                    .to_string(),
+            ));
+        }
+
+        // Channel must be a post comment thread (`hn-post-{id}`); replying
+        // to a specific comment is a future enhancement.
+        let parent_id = post_id_from_channel(channel_id).ok_or_else(|| {
+            ClientError::NotSupported(format!(
+                "Posting from this channel is not supported yet (channel: {channel_id})"
+            ))
+        })?;
+
+        let text = match content {
+            MessageContent::Text(s) => s,
+            // HN comments are plain text + URLs; markdown / attachments are
+            // not supported by the site form.
+            other => return Err(ClientError::NotSupported(format!(
+                "Hacker News comments only accept plain text (got: {other:?})"
+            ))),
+        };
+
+        let http = self.api.http_client();
+        let ua = self.api.ua();
+        let cookie = &session.token;
+
+        let hmac = auth::fetch_reply_hmac(http, &ua, parent_id, cookie).await?;
+        auth::post_comment(http, &ua, parent_id, &text, cookie, &hmac).await?;
+
+        // HN doesn't return the new item ID. Fabricate a placeholder so the
+        // host can render a "sent" optimistic message; the real comment
+        // will surface on the next channel reload.
+        let now = chrono::Utc::now();
+        let _ = channel_id; // referenced via parent_id; kept to clarify intent
+        Ok(Message {
+            id: format!("hn-pending-{}", now.timestamp_millis()),
+            author: User {
+                id: session.user.id.clone(),
+                display_name: session.user.display_name.clone(),
+                avatar_url: session.user.avatar_url.clone(),
+                presence: session.user.presence.clone(),
+                backend: session.user.backend.clone(),
+            },
+            content: MessageContent::Text(text),
+            timestamp: now,
+            attachments: Vec::new(),
+            reactions: Vec::new(),
+            reply_to: None,
+            edited: false,
+            thread: None,
+            preview_image_url: None,
+        })
     }
 
     async fn get_messages(

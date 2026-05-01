@@ -57,6 +57,13 @@ impl HnApiClient {
     }
 
 
+    /// Borrow the underlying HTTP client — used by `auth` module for
+    /// non-Firebase requests (login at news.ycombinator.com, comment POST).
+    /// Public-in-crate so external consumers go through `HackerNewsClient`.
+    pub(crate) fn http_client(&self) -> &HttpClient {
+        &self.http
+    }
+
     /// Update the User-Agent string.
     pub fn set_user_agent(&self, ua: String) {
         if let Ok(mut lock) = self.user_agent.lock() {
@@ -64,7 +71,9 @@ impl HnApiClient {
         }
     }
 
-    fn ua(&self) -> String {
+    /// Read the current User-Agent string. Public-in-crate so the `auth`
+    /// module can use the same UA for write-path POSTs to HN.
+    pub(crate) fn ua(&self) -> String {
         self.user_agent
             .lock()
             .ok()
