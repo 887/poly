@@ -195,7 +195,7 @@ impl GhCli {
 
         use poly_host_bridge::{BridgeError, Client};
 
-        let mut args: Vec<String> = Vec::with_capacity(4 + extra_args.len());
+        let mut args: Vec<String> = Vec::with_capacity(4_usize.saturating_add(extra_args.len()));
         args.push("api".to_string());
         if let Some(host) = &self.hostname {
             args.push("--hostname".to_string());
@@ -213,10 +213,13 @@ impl GhCli {
                  needs a native shell (apps/desktop-web, apps/desktop-electron-web, …) \
                  to forward gh CLI calls."
             )),
-            other => GhError::Spawn(other.to_string()),
+            other @ (BridgeError::Transport(_)
+            | BridgeError::ParseResponse(_)
+            | BridgeError::Host(_)
+            | BridgeError::VariantMismatch { .. }) => GhError::Spawn(other.to_string()),
         })?;
 
-        if exit_code != 0 {
+        if exit_code != 0_i32 {
             return Err(GhError::Exit {
                 code: exit_code,
                 stderr: String::from_utf8_lossy(&stderr).into_owned(),
@@ -248,7 +251,7 @@ impl GhCli {
 
         if !status.is_success() {
             return Err(GhError::Exit {
-                code: status.as_u16() as i32,
+                code: i32::from(status.as_u16()),
                 stderr: String::from_utf8_lossy(&bytes).into_owned(),
             });
         }
@@ -321,7 +324,7 @@ impl GhCli {
         let endpoint = format!("/user/starred/{owner}/{repo}");
         match self.api_raw(&endpoint, &[]).await {
             Ok(_) => Ok(true),
-            Err(GhError::Exit { code: 404, .. }) => Ok(false),
+            Err(GhError::Exit { code: 404_i32, .. }) => Ok(false),
             Err(e) => Err(e),
         }
     }
@@ -464,7 +467,7 @@ impl GhCli {
 
         if !status.is_success() {
             return Err(GhError::Exit {
-                code: status.as_u16() as i32,
+                code: i32::from(status.as_u16()),
                 stderr: String::from_utf8_lossy(&bytes).into_owned(),
             });
         }
@@ -522,9 +525,12 @@ impl GhCli {
                     BridgeError::Unreachable { url, source } => GhError::Spawn(format!(
                         "host bridge unreachable at {url}: {source}"
                     )),
-                    other => GhError::Spawn(other.to_string()),
+                    other @ (BridgeError::Transport(_)
+                    | BridgeError::ParseResponse(_)
+                    | BridgeError::Host(_)
+                    | BridgeError::VariantMismatch { .. }) => GhError::Spawn(other.to_string()),
                 })?;
-            if exit_code != 0 {
+            if exit_code != 0_i32 {
                 return Err(GhError::Exit {
                     code: exit_code,
                     stderr: String::from_utf8_lossy(&stderr).into_owned(),
@@ -556,7 +562,7 @@ impl GhCli {
                 .await
                 .unwrap_or_default();
             return Err(GhError::Exit {
-                code: status.as_u16() as i32,
+                code: i32::from(status.as_u16()),
                 stderr: String::from_utf8_lossy(&bytes).into_owned(),
             });
         }
@@ -577,7 +583,7 @@ impl GhCli {
         let p = v.get("permissions").and_then(|p| p.as_object());
         let bool_field = |obj: Option<&serde_json::Map<String, serde_json::Value>>, key: &str| {
             obj.and_then(|o| o.get(key))
-                .and_then(|v| v.as_bool())
+                .and_then(serde_json::Value::as_bool)
                 .unwrap_or(false)
         };
         Ok(RepoPermissions {

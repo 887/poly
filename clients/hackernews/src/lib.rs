@@ -40,6 +40,7 @@ use std::pin::Pin;
 use types::HnFeed;
 
 /// Return FTL translation source for the HN client plugin.
+#[must_use]
 pub fn plugin_translations(locale: &str) -> String {
     match locale {
         "en" => include_str!("../locales/en/plugin.ftl").to_string(),
@@ -84,17 +85,17 @@ impl HackerNewsClient {
     }
 
     /// Build a named session for a named HN user.
-    pub fn named_session(&mut self, username: String) -> Session {
+    pub fn named_session(&mut self, username: &str) -> Session {
         let session = Session {
-            id: format!("hn-{}", username),
+            id: format!("hn-{username}"),
             user: User {
-                id: username.clone(),
-                display_name: username.clone(),
+                id: username.to_string(),
+                display_name: username.to_string(),
                 avatar_url: Some("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='8' fill='%23ff6600'/%3E%3Ctext x='20' y='27' font-family='sans-serif' font-size='15' font-weight='bold' text-anchor='middle' fill='white'%3EHN%3C/text%3E%3C/svg%3E".to_string()),
                 presence: PresenceStatus::Offline,
                 backend: BackendType::from("hackernews"),
             },
-            token: username.clone(),
+            token: username.to_string(),
             backend: BackendType::from("hackernews"),
             icon_emoji: Some("🔶".to_string()),
             instance_id: "news.ycombinator.com".to_string(),
@@ -153,14 +154,18 @@ impl ClientBackend for HackerNewsClient {
             AuthCredentials::EmailPassword { email, password } if !email.is_empty() => {
                 let cookie = auth::login(self.api.http_client(), &self.api.ua(), &email, &password)
                     .await?;
-                let mut session = self.named_session(email);
+                let mut session = self.named_session(&email);
                 session.token = cookie.clone();
                 self.session = Some(session.clone());
                 Ok(session)
             }
             // Anonymous fallback (Token(""), OAuth{token:""}, or anything else
             // we don't have a real login flow for) — guest session, read-only.
-            _ => Ok(self.guest_session()),
+            AuthCredentials::Token(_)
+            | AuthCredentials::EmailPassword { .. }
+            | AuthCredentials::OAuth { .. }
+            | AuthCredentials::DeviceCode { .. }
+            | AuthCredentials::PolyServer { .. } => Ok(self.guest_session()),
         }
     }
 
@@ -195,13 +200,13 @@ impl ClientBackend for HackerNewsClient {
     // --- Servers ---
 
     async fn get_servers(&self) -> ClientResult<Vec<Server>> {
-        let account_id = self.session.as_ref().map(|s| s.id.as_str()).unwrap_or("hn-anonymous");
+        let account_id = self.session.as_ref().map_or("hn-anonymous", |s| s.id.as_str());
         Ok(vec![build_server(account_id)])
     }
 
     async fn get_server(&self, id: &str) -> ClientResult<Server> {
         if id == "hn" {
-            let account_id = self.session.as_ref().map(|s| s.id.as_str()).unwrap_or("hn-anonymous");
+            let account_id = self.session.as_ref().map_or("hn-anonymous", |s| s.id.as_str());
             Ok(build_server(account_id))
         } else {
             Err(ClientError::NotFound(format!("server not found: {id}")))
@@ -283,7 +288,7 @@ impl ClientBackend for HackerNewsClient {
                 id: session.user.id.clone(),
                 display_name: session.user.display_name.clone(),
                 avatar_url: session.user.avatar_url.clone(),
-                presence: session.user.presence.clone(),
+                presence: session.user.presence,
                 backend: session.user.backend.clone(),
             },
             content: MessageContent::Text(text),
@@ -302,14 +307,16 @@ impl ClientBackend for HackerNewsClient {
         channel_id: &str,
         query: MessageQuery,
     ) -> ClientResult<Vec<Message>> {
-        let limit = query.limit.unwrap_or(20) as usize;
+        let limit = usize::try_from(query.limit.unwrap_or(20)).unwrap_or(20);
 
         // Check if this is a post's comment thread channel (hn-post-{id}).
         // F6 — bump the comment-thread default from 20 (the feed-page default)
         // to 300 so the recursive BFS fetches enough rows to populate a real
         // discussion. Host can still pass an explicit query.limit to override.
         if let Some(post_id) = post_id_from_channel(channel_id) {
-            let comment_limit = query.limit.map_or(300, |l| l as usize);
+            let comment_limit = query
+                .limit
+                .map_or(300, |l| usize::try_from(l).unwrap_or(300));
             return self.get_comment_thread(post_id, comment_limit).await;
         }
 
@@ -325,7 +332,7 @@ impl ClientBackend for HackerNewsClient {
             && let Ok(before_num) = before_id.parse::<u64>()
             && let Some(pos) = ids.iter().position(|&id| id == before_num)
         {
-            if let Some(tail) = ids.get(pos + 1..) {
+            if let Some(tail) = ids.get(pos.saturating_add(1)..) {
                 ids = tail.to_vec();
             } else {
                 ids.clear();
@@ -607,7 +614,7 @@ impl ClientBackend for HackerNewsClient {
         let next_cursor = if slice.len() == page_size {
             Some(Cursor {
                 kind: CursorKind::Offset,
-                value: (offset + page_size).to_string(),
+                value: offset.saturating_add(page_size).to_string(),
             })
         } else {
             None
@@ -635,7 +642,7 @@ impl ClientBackend for HackerNewsClient {
         _channel_id: &str,
         row_id: &str,
     ) -> ClientResult<ViewDetail> {
-        let story_id: u64 = row_id.parse().map_err(|_| {
+        let story_id: u64 = row_id.parse().map_err(|_e| {
             ClientError::NotFound(format!("invalid story id: {row_id}"))
         })?;
 
@@ -774,7 +781,7 @@ impl HackerNewsClient {
         let max = limit.clamp(1, 1000);
 
         while !queue.is_empty() && collected.len() < max {
-            let remaining = max - collected.len();
+            let remaining = max.saturating_sub(collected.len());
             let batch_pairs: Vec<(u64, u64)> = queue
                 .drain(..queue.len().min(remaining))
                 .collect();

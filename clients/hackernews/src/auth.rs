@@ -174,11 +174,11 @@ fn extract_hmac(html: &str) -> Option<String> {
     // uses double-quoted attributes consistently, but tolerate both).
     let needle = "name=\"hmac\"";
     let idx = html.find(needle)?;
-    let rest = &html[idx + needle.len()..];
+    let rest = html.get(idx.checked_add(needle.len())?..)?;
     let val_idx = rest.find("value=\"")?;
-    let after_val = &rest[val_idx + 7..];
+    let after_val = rest.get(val_idx.checked_add(7)?..)?;
     let end = after_val.find('"')?;
-    Some(after_val[..end].to_string())
+    Some(after_val.get(..end)?.to_string())
 }
 
 /// `application/x-www-form-urlencoded` body builder — minimal, no
@@ -199,7 +199,7 @@ fn percent_encode(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for b in s.bytes() {
         if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.' | b'_' | b'~') {
-            out.push(b as char);
+            out.push(char::from(b));
         } else {
             out.push('%');
             out.push_str(&format!("{:02X}", b));

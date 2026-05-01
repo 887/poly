@@ -281,13 +281,13 @@ pub fn issue_to_view_detail(issue: &GhIssue, comments: &[GhIssueComment]) -> Vie
             stylesheet: None,
             max_height_px: None,
         },
-        comments_section: if !comments.is_empty() {
+        comments_section: if comments.is_empty() {
+            None
+        } else {
             Some(poly_client::TreeSpec {
-                root_page_size: comments.len() as u32,
+                root_page_size: u32::try_from(comments.len()).unwrap_or(u32::MAX),
                 max_depth: 1,
             })
-        } else {
-            None
         },
     }
 }
@@ -300,7 +300,11 @@ pub fn humanize_age(created_at: &str) -> String {
     let Ok(dt) = DateTime::parse_from_rfc3339(created_at) else {
         return "unknown".to_string();
     };
+    // lint-allow-unused: chrono Duration sub of (now - past) — bounded by i64 secs range
+    #[allow(clippy::arithmetic_side_effects)]
     let secs = (Utc::now() - dt.with_timezone(&Utc)).num_seconds().max(0);
+    // lint-allow-unused: human-readable age — integer truncation is the intent
+    #[allow(clippy::integer_division)]
     match secs {
         s if s < 60 => "just now".to_string(),
         s if s < 3600 => format!("{}m", s / 60),
@@ -582,9 +586,7 @@ mod tests {
 }
 
 fn parse_ts(s: &str) -> DateTime<Utc> {
-    DateTime::parse_from_rfc3339(s)
-        .map(|dt| dt.with_timezone(&Utc))
-        .unwrap_or_else(|_| Utc::now())
+    DateTime::parse_from_rfc3339(s).map_or_else(|_| Utc::now(), |dt| dt.with_timezone(&Utc))
 }
 
 /// Filter a slice of repos to those with `pushed_at` within the last `years`.
@@ -592,7 +594,9 @@ fn parse_ts(s: &str) -> DateTime<Utc> {
 /// Repos with no `pushed_at` (rare) are kept.
 #[must_use]
 pub fn filter_active_repos(repos: Vec<GhRepo>, years: i64) -> Vec<GhRepo> {
-    let cutoff = Utc::now() - chrono::Duration::days(365 * years);
+    // lint-allow-unused: chrono::Duration sub from now — bounded by caller-supplied years (i64)
+    #[allow(clippy::arithmetic_side_effects)]
+    let cutoff = Utc::now() - chrono::Duration::days(365_i64.saturating_mul(years));
     repos
         .into_iter()
         .filter(|r| match &r.pushed_at {

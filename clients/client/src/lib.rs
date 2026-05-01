@@ -1065,6 +1065,7 @@ pub struct SignupCompleted {
 impl SignupCompleted {
     /// Build a legacy-shaped completion (no OAuth metadata) — most signup
     /// flows (Bearer tokens, email+password against test servers) use this.
+    #[must_use]
     pub fn new(session: Session, backend: Box<dyn ClientBackend + Send + Sync>) -> Self {
         Self {
             session,

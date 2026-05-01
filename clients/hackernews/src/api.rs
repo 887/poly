@@ -41,12 +41,10 @@ impl HnApiClient {
         // timeout knob is silently ignored on wasm32. Falling back to the
         // default client when the builder errors keeps construction
         // infallible at the call site.
-        let mut builder = poly_host_bridge::http::HttpClientBuilder::new();
+        let builder = poly_host_bridge::http::HttpClientBuilder::new();
         #[cfg(not(target_arch = "wasm32"))]
-        {
-            builder = builder.timeout(std::time::Duration::from_secs(10));
-        }
-        let http = builder.build().unwrap_or_else(|_| HttpClient::new());
+        let builder = builder.timeout(std::time::Duration::from_secs(10));
+        let http = builder.build().unwrap_or_else(|_e| HttpClient::new());
 
         Self {
             http,
@@ -77,8 +75,7 @@ impl HnApiClient {
         self.user_agent
             .lock()
             .ok()
-            .map(|g| g.clone())
-            .unwrap_or_else(|| DEFAULT_CLIENT_VERSION.to_string())
+            .map_or_else(|| DEFAULT_CLIENT_VERSION.to_string(), |g| g.clone())
     }
 
     fn item_url(&self, id: u64) -> String {
@@ -96,7 +93,7 @@ impl HnApiClient {
     /// Fetch the list of story IDs for a feed. Uses cache when available.
     pub async fn get_feed_ids(&self, feed: HnFeed) -> ClientResult<Vec<u64>> {
         {
-            let cache = self.cache.lock().map_err(|_| {
+            let cache = self.cache.lock().map_err(|_e| {
                 ClientError::Internal("cache lock poisoned".to_string())
             })?;
             if let Some(ids) = cache.get_feed(feed) {
@@ -117,7 +114,7 @@ impl HnApiClient {
             .map_err(|e| ClientError::Internal(e.to_string()))?;
 
         {
-            let mut cache = self.cache.lock().map_err(|_| {
+            let mut cache = self.cache.lock().map_err(|_e| {
                 ClientError::Internal("cache lock poisoned".to_string())
             })?;
             cache.put_feed(feed, ids.clone());
@@ -129,7 +126,7 @@ impl HnApiClient {
     /// Fetch a single item by ID. Uses cache when available.
     pub async fn get_item(&self, id: u64) -> ClientResult<Option<HnItem>> {
         {
-            let cache = self.cache.lock().map_err(|_| {
+            let cache = self.cache.lock().map_err(|_e| {
                 ClientError::Internal("cache lock poisoned".to_string())
             })?;
             if let Some(item) = cache.get_item(id) {
@@ -150,7 +147,7 @@ impl HnApiClient {
             .map_err(|e| ClientError::Internal(e.to_string()))?;
 
         if let Some(ref item) = response {
-            let mut cache = self.cache.lock().map_err(|_| {
+            let mut cache = self.cache.lock().map_err(|_e| {
                 ClientError::Internal("cache lock poisoned".to_string())
             })?;
             cache.put_item(item.clone());
@@ -180,7 +177,7 @@ impl HnApiClient {
     /// Fetch a user profile by username.
     pub async fn get_user(&self, username: &str) -> ClientResult<Option<HnUser>> {
         {
-            let cache = self.cache.lock().map_err(|_| {
+            let cache = self.cache.lock().map_err(|_e| {
                 ClientError::Internal("cache lock poisoned".to_string())
             })?;
             if let Some(user) = cache.get_user(username) {
@@ -201,7 +198,7 @@ impl HnApiClient {
             .map_err(|e| ClientError::Internal(e.to_string()))?;
 
         if let Some(ref user) = response {
-            let mut cache = self.cache.lock().map_err(|_| {
+            let mut cache = self.cache.lock().map_err(|_e| {
                 ClientError::Internal("cache lock poisoned".to_string())
             })?;
             cache.put_user(user.clone());

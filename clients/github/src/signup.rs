@@ -61,6 +61,7 @@ fn chameleon_auth(
 }
 
 /// Test accounts for the GitHub local dev server (port 9107).
+#[must_use]
 pub fn get_test_accounts() -> &'static [poly_client::TestAccountEntry] {
     use poly_client::TestAccountEntry;
     const ACCOUNTS: &[TestAccountEntry] = &[

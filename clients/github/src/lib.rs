@@ -44,6 +44,7 @@ pub use mapping::{BACKEND_SLUG, issue_thread_channel_id};
 const ACTIVITY_WINDOW_YEARS: i64 = 2;
 
 /// Return FTL translation source for the GitHub client plugin.
+#[must_use]
 pub fn plugin_translations(locale: &str) -> String {
     match locale {
         "en" => include_str!("../locales/en/plugin.ftl").to_string(),
@@ -152,12 +153,11 @@ impl GitHubClient {
     fn session_login(&self) -> &str {
         self.session
             .as_ref()
-            .map(|s| s.user.id.as_str())
-            .unwrap_or("anonymous")
+            .map_or("anonymous", |s| s.user.id.as_str())
     }
 
     fn session_id(&self) -> &str {
-        self.session.as_ref().map(|s| s.id.as_str()).unwrap_or("gh")
+        self.session.as_ref().map_or("gh", |s| s.id.as_str())
     }
 
     fn convert_err(e: GhError) -> ClientError {
@@ -799,7 +799,7 @@ impl ClientBackend for GitHubClient {
         let (owner, repo) = parse_forum_channel(channel_id)?;
         let number: u64 = row_id
             .parse()
-            .map_err(|_| ClientError::NotFound(format!("row_id must be an issue number: {row_id}")))?;
+            .map_err(|_e| ClientError::NotFound(format!("row_id must be an issue number: {row_id}")))?;
         let issue = self
             .cli
             .get_issue(&owner, &repo, number)
@@ -887,14 +887,14 @@ impl ClientBackend for GitHubClient {
         let (owner, repo) = parse_forum_channel(channel_id)?;
 
         if let Some(id_str) = message_id.strip_prefix("comment:") {
-            let comment_id: u64 = id_str.parse().map_err(|_| {
+            let comment_id: u64 = id_str.parse().map_err(|_e| {
                 ClientError::NotFound(format!("invalid comment id: {id_str}"))
             })?;
             let endpoint =
                 format!("/repos/{owner}/{repo}/issues/comments/{comment_id}");
             self.cli.api_delete(&endpoint).await.map_err(Self::convert_err)
         } else if let Some(id_str) = message_id.strip_prefix("pr-comment:") {
-            let comment_id: u64 = id_str.parse().map_err(|_| {
+            let comment_id: u64 = id_str.parse().map_err(|_e| {
                 ClientError::NotFound(format!("invalid pr-comment id: {id_str}"))
             })?;
             let endpoint =
@@ -1009,13 +1009,19 @@ fn decode_b64_simple(input: &str) -> Vec<u8> {
     let mut lookup = [255u8; 256];
     for (i, &b) in TABLE.iter().enumerate() {
         if let Some(slot) = lookup.get_mut(usize::from(b)) {
-            *slot = i as u8;
+            // lint-allow-unused: i is bounded by TABLE.len() = 64 < u8::MAX
+            #[allow(clippy::cast_possible_truncation, clippy::as_conversions)]
+            {
+                *slot = i as u8;
+            }
         }
     }
     let bytes = input.as_bytes();
+    // lint-allow-unused: base64 expansion ratio 3/4 — capacity hint; truncation harmless
+    #[allow(clippy::integer_division, clippy::arithmetic_side_effects)]
     let mut out = Vec::with_capacity(bytes.len() * 3 / 4);
-    let mut buf = 0u32;
-    let mut bits = 0u32;
+    let mut buf = 0_u32;
+    let mut bits = 0_u32;
     for &b in bytes {
         if b == b'=' {
             break;
@@ -1024,10 +1030,20 @@ fn decode_b64_simple(input: &str) -> Vec<u8> {
         if v == 255 {
             continue;
         }
-        buf = (buf << 6) | u32::from(v);
-        bits += 6;
+        buf = (buf << 6_i32) | u32::from(v);
+        // lint-allow-unused: base64 6-bit chunk accumulator; bits stays in [0, 13]
+        #[allow(clippy::arithmetic_side_effects)]
+        {
+            bits += 6;
+        }
         if bits >= 8 {
-            bits -= 8;
+            // lint-allow-unused: guarded by `bits >= 8` above; never underflows
+            #[allow(clippy::arithmetic_side_effects)]
+            {
+                bits -= 8;
+            }
+            // lint-allow-unused: masked with 0xff so cast to u8 is exact
+            #[allow(clippy::as_conversions, clippy::cast_possible_truncation)]
             out.push(((buf >> bits) & 0xff) as u8);
         }
     }

@@ -68,7 +68,10 @@ impl HnCache {
         let id = item.id;
         let ttl = match item.item_type {
             crate::types::HnItemType::Comment => COMMENT_TTL,
-            _ => STORY_TTL,
+            crate::types::HnItemType::Story
+            | crate::types::HnItemType::Job
+            | crate::types::HnItemType::Poll
+            | crate::types::HnItemType::PollOpt => STORY_TTL,
         };
         self.items.insert(id, Entry::new(item, ttl));
     }

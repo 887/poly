@@ -23,6 +23,7 @@ impl BackendId {
     }
 
     /// Return the slug as a string slice.
+    #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -38,6 +39,7 @@ impl BackendId {
     /// fallback for call sites that only have a `BackendType` (slug) in
     /// hand, and simply returns the slug itself — never a hardcoded brand
     /// name.
+    #[must_use]
     pub fn display_name(&self) -> &str {
         self.0.as_str()
     }
@@ -46,6 +48,7 @@ impl BackendId {
     ///
     /// These slugs appear in every account-scoped URL:
     /// `/:backend/:account_id/dms`, `/:backend/:account_id/channels/…`, etc.
+    #[must_use]
     pub fn slug(&self) -> &str {
         self.as_str()
     }
@@ -53,6 +56,7 @@ impl BackendId {
     /// Parse a backend slug from a URL path segment.
     ///
     /// All strings are valid — returns `Self` directly (no `Option`).
+    #[must_use]
     pub fn from_slug(s: &str) -> Self {
         Self(s.to_string())
     }
@@ -62,6 +66,7 @@ impl BackendId {
     /// between the chat-style and forum-style channel list / badge rules.
     ///
     /// Capability-derived, not a hard-coded slug list — see [`capabilities_for_slug`].
+    #[must_use]
     pub fn uses_forum_layout(&self) -> bool {
         capabilities_for_slug(self.0.as_str()).is_forum_layout()
     }
@@ -72,7 +77,10 @@ impl BackendId {
 /// Mirrors each plugin's `ClientBackend::backend_capabilities()` override so
 /// the UI can read a backend's shape without holding a live client instance
 /// (e.g. from a `BackendType` in a server list).
+#[must_use]
 pub fn capabilities_for_slug(slug: &str) -> BackendCapabilities {
+    // lint-allow-unused: explicit "hackernews" arm documents intent vs the wildcard fallback
+    #[allow(clippy::match_same_arms)]
     match slug {
         "hackernews" => BackendCapabilities::READ_ONLY_FEED,
         "github" | "forgejo" => BackendCapabilities {
@@ -237,6 +245,7 @@ pub enum ConnectionStatus {
 
 impl ConnectionStatus {
     /// Short CSS class suffix for styling, e.g. `"status-dot--connected"`.
+    #[must_use]
     pub fn css_class(&self) -> &'static str {
         match self {
             Self::Connected => "connected",
@@ -248,6 +257,7 @@ impl ConnectionStatus {
     }
 
     /// Small indicator emoji shown on the account icon top-left badge.
+    #[must_use]
     pub fn emoji(&self) -> &'static str {
         match self {
             Self::Connected => "●",
@@ -261,6 +271,7 @@ impl ConnectionStatus {
     /// True when the UI should surface a reauthentication affordance for this
     /// account (prominent icon + toast notification). Forge/forum backends
     /// never show a connection-status badge, but they DO show this one.
+    #[must_use]
     pub fn needs_reauth(&self) -> bool {
         matches!(self, Self::Unauthenticated(_))
     }
@@ -292,6 +303,7 @@ pub enum AccountPresence {
 
 impl AccountPresence {
     /// Short CSS class suffix, e.g. `"presence-dot--online"`.
+    #[must_use]
     pub fn css_class(self) -> &'static str {
         match self {
             Self::Online => "online",
@@ -303,17 +315,18 @@ impl AccountPresence {
     }
 
     /// Small indicator emoji shown on the account icon bottom-left badge.
+    #[must_use]
     pub fn emoji(self) -> &'static str {
         match self {
             Self::Online => "●",
             Self::Away => "◑",
             Self::DoNotDisturb => "⊗",
-            Self::AppearOffline => "○",
-            Self::Offline => "○",
+            Self::AppearOffline | Self::Offline => "○",
         }
     }
 
     /// Display name for UI labels.
+    #[must_use]
     pub fn display_name(self) -> &'static str {
         match self {
             Self::Online => "Online",
@@ -784,6 +797,7 @@ impl BackendCapabilities {
     /// no DMs, no voice, no friend graph. Drives badge hiding and channel-list
     /// rendering in the host. Does not depend on the messaging model — both
     /// read-only feeds (HN) and writeable forums (Lemmy) return `true`.
+    #[must_use]
     pub const fn is_forum_layout(&self) -> bool {
         matches!(self.dms, DmSupport::None)
             && matches!(self.voice, VoiceSupport::None)
@@ -802,21 +816,25 @@ impl BackendCapabilities {
     // (`clients/<name>/tests/capabilities.rs`).
 
     /// `true` if the DMs tab / sidebar column should be rendered.
+    #[must_use]
     pub const fn should_show_dms(&self) -> bool {
         !matches!(self.dms, DmSupport::None)
     }
 
     /// `true` if the Friends tab / management page should be rendered.
+    #[must_use]
     pub const fn should_show_friends(&self) -> bool {
         !matches!(self.friends, FriendModel::None)
     }
 
     /// `true` if the Notifications tab / inbox should be rendered.
+    #[must_use]
     pub const fn should_show_notifications(&self) -> bool {
         !matches!(self.notifications, NotificationSupport::None)
     }
 
     /// `true` if voice affordances (mic, deafen, voice bar) should render.
+    #[must_use]
     pub const fn should_show_voice(&self) -> bool {
         !matches!(self.voice, VoiceSupport::None)
     }
@@ -824,6 +842,7 @@ impl BackendCapabilities {
     /// `true` if the message composer (textarea + send button) should be
     /// writable. `false` for read-only feeds (HN, GitHub) — the composer
     /// is replaced by a static "this channel is read-only" notice.
+    #[must_use]
     pub const fn composer_writable(&self) -> bool {
         matches!(self.messaging, MessagingModel::Full)
     }
@@ -848,31 +867,37 @@ impl BackendCapabilities {
     // ── Moderation capability predicates ──────────────────────────────────
 
     /// `true` if the Roles tab in server settings should be rendered.
+    #[must_use]
     pub const fn should_show_roles(&self) -> bool {
         self.has_roles
     }
 
     /// `true` if the Bans tab and Ban button should be rendered.
+    #[must_use]
     pub const fn should_show_bans(&self) -> bool {
         self.has_ban
     }
 
     /// `true` if the Mod Log tab in server settings should be rendered.
+    #[must_use]
     pub const fn should_show_modlog(&self) -> bool {
         self.has_moderation_log
     }
 
     /// `true` if the Kick button in the member context menu should be rendered.
+    #[must_use]
     pub const fn should_show_kick(&self) -> bool {
         self.has_kick
     }
 
     /// `true` if the Timeout button in the member context menu should be rendered.
+    #[must_use]
     pub const fn should_show_timeout(&self) -> bool {
         self.has_timed_ban
     }
 
     /// `true` if the Edit Channel dialog and reorder drag-handle should be rendered.
+    #[must_use]
     pub const fn should_show_channel_mgmt(&self) -> bool {
         self.has_channel_mgmt
     }
@@ -1389,6 +1414,7 @@ pub enum SensitiveContentLevel {
 
 impl SensitiveContentLevel {
     /// Display label for this level.
+    #[must_use]
     pub fn label(self) -> &'static str {
         match self {
             Self::Show => "Show",
@@ -1412,6 +1438,7 @@ pub enum DmSpamFilterLevel {
 
 impl DmSpamFilterLevel {
     /// Display label for this level.
+    #[must_use]
     pub fn label(self) -> &'static str {
         match self {
             Self::FilterAll => "Filter all messages from non-friends",

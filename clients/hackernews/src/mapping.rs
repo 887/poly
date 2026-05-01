@@ -116,42 +116,42 @@ pub fn strip_html(html: &str) -> String {
                 let entity: String = chars.clone().take(6).collect();
                 if entity.starts_with("amp;") {
                     result.push('&');
-                    for _ in 0..4 {
+                    for _ in 0_u32..4 {
                         chars.next();
                     }
                 } else if entity.starts_with("lt;") {
                     result.push('<');
-                    for _ in 0..3 {
+                    for _ in 0_u32..3 {
                         chars.next();
                     }
                 } else if entity.starts_with("gt;") {
                     result.push('>');
-                    for _ in 0..3 {
+                    for _ in 0_u32..3 {
                         chars.next();
                     }
                 } else if entity.starts_with("quot;") {
                     result.push('"');
-                    for _ in 0..5 {
+                    for _ in 0_u32..5 {
                         chars.next();
                     }
                 } else if entity.starts_with("#39;") {
                     result.push('\'');
-                    for _ in 0..4 {
+                    for _ in 0_u32..4 {
                         chars.next();
                     }
                 } else if entity.starts_with("#x27;") {
                     result.push('\'');
-                    for _ in 0..5 {
+                    for _ in 0_u32..5 {
                         chars.next();
                     }
                 } else if entity.starts_with("#x2F;") || entity.starts_with("#x2f;") {
                     result.push('/');
-                    for _ in 0..5 {
+                    for _ in 0_u32..5 {
                         chars.next();
                     }
                 } else if entity.starts_with("apos;") {
                     result.push('\'');
-                    for _ in 0..5 {
+                    for _ in 0_u32..5 {
                         chars.next();
                     }
                 } else {
@@ -182,7 +182,7 @@ pub fn strip_html(html: &str) -> String {
 }
 
 fn timestamp_from_unix(unix: Option<u64>) -> DateTime<Utc> {
-    unix.and_then(|t| Utc.timestamp_opt(t as i64, 0).single())
+    unix.and_then(|t| Utc.timestamp_opt(i64::try_from(t).unwrap_or(i64::MAX), 0).single())
         .unwrap_or_else(Utc::now)
 }
 
@@ -222,7 +222,7 @@ pub fn format_story_text(item: &HnItem) -> String {
             }
             lines.join("\n")
         }
-        _ => {
+        HnItemType::Story | HnItemType::Comment | HnItemType::Poll | HnItemType::PollOpt => {
             let score = item.score.unwrap_or(0);
             let comments = item.descendants.unwrap_or(0);
 
@@ -359,8 +359,10 @@ pub fn humanize_age(unix_secs: Option<u64>) -> String {
     let Some(t) = unix_secs else {
         return "?".to_string();
     };
-    let now = Utc::now().timestamp() as u64;
+    let now = u64::try_from(Utc::now().timestamp()).unwrap_or(0);
     let secs = now.saturating_sub(t);
+    // lint-allow-unused: human-readable age — integer truncation is intentional
+    #[allow(clippy::integer_division)]
     if secs < 60 {
         format!("{secs}s")
     } else if secs < 3_600 {
@@ -409,7 +411,7 @@ pub fn hn_item_to_view_row(item: &HnItem) -> ViewRow {
 fn domain_from_url(url: &str) -> Option<String> {
     // Strip scheme (e.g. "https://")
     let after_scheme = if let Some(pos) = url.find("://") {
-        &url[pos + 3..]
+        url.get(pos.saturating_add(3)..).unwrap_or(url)
     } else {
         url
     };

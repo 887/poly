@@ -16,6 +16,7 @@ use crate::HackerNewsClient;
 use poly_ui_macros::{context_menu, ui_action};
 
 /// Build a guest SignupCompleted immediately (no network call needed).
+#[must_use]
 pub fn complete_as_guest() -> SignupCompleted {
     let mut backend = HackerNewsClient::new();
     let session = backend.guest_session();
