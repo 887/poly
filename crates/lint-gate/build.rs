@@ -17,28 +17,46 @@
 //!
 //! Existing violations are grandfathered via `baseline.json`.
 
+// Build-script scanners parse ASCII Rust source: string slicing on ASCII bytes,
+// `as`-cast line/column numbers, and integer arithmetic for offsets/counters are
+// intentional throughout. Each scanner runs once per `cargo check`; overflow and
+// truncation are unreachable in practice. Per-item allow on each `mod` declaration
+// (not a file-level inner attribute).
+
+#[allow(clippy::arithmetic_side_effects, clippy::string_slice, clippy::as_conversions, clippy::cast_possible_truncation, clippy::default_numeric_fallback, clippy::integer_division)]
 #[path = "build/action_enum_coverage.rs"]
 mod action_enum_coverage;
+#[allow(clippy::arithmetic_side_effects, clippy::string_slice, clippy::as_conversions, clippy::cast_possible_truncation, clippy::default_numeric_fallback, clippy::integer_division)]
 #[path = "build/action_id_naming.rs"]
 mod action_id_naming;
+#[allow(clippy::arithmetic_side_effects, clippy::string_slice, clippy::as_conversions, clippy::cast_possible_truncation, clippy::default_numeric_fallback, clippy::integer_division)]
 #[path = "build/allow_ban.rs"]
 mod allow_ban;
+#[allow(clippy::arithmetic_side_effects, clippy::string_slice, clippy::as_conversions, clippy::cast_possible_truncation, clippy::default_numeric_fallback, clippy::integer_division)]
 #[path = "build/baseline.rs"]
 mod baseline;
+#[allow(clippy::arithmetic_side_effects, clippy::string_slice, clippy::as_conversions, clippy::cast_possible_truncation, clippy::default_numeric_fallback, clippy::integer_division)]
 #[path = "build/context_menu_coverage.rs"]
 mod context_menu_coverage;
+#[allow(clippy::arithmetic_side_effects, clippy::string_slice, clippy::as_conversions, clippy::cast_possible_truncation, clippy::default_numeric_fallback, clippy::integer_division)]
 #[path = "build/custom_block_usage.rs"]
 mod custom_block_usage;
+#[allow(clippy::arithmetic_side_effects, clippy::string_slice, clippy::as_conversions, clippy::cast_possible_truncation, clippy::default_numeric_fallback, clippy::integer_division)]
 #[path = "build/forbid_backend_slug_match.rs"]
 mod forbid_backend_slug_match;
+#[allow(clippy::arithmetic_side_effects, clippy::string_slice, clippy::as_conversions, clippy::cast_possible_truncation, clippy::default_numeric_fallback, clippy::integer_division)]
 #[path = "build/ftl_label_key_coverage.rs"]
 mod ftl_label_key_coverage;
+#[allow(clippy::arithmetic_side_effects, clippy::string_slice, clippy::as_conversions, clippy::cast_possible_truncation, clippy::default_numeric_fallback, clippy::integer_division)]
 #[path = "build/nav_push_ban.rs"]
 mod nav_push_ban;
+#[allow(clippy::arithmetic_side_effects, clippy::string_slice, clippy::as_conversions, clippy::cast_possible_truncation, clippy::default_numeric_fallback, clippy::integer_division)]
 #[path = "build/route_graph.rs"]
 mod route_graph;
+#[allow(clippy::arithmetic_side_effects, clippy::string_slice, clippy::as_conversions, clippy::cast_possible_truncation, clippy::default_numeric_fallback, clippy::integer_division)]
 #[path = "build/ui_action_coverage.rs"]
 mod ui_action_coverage;
+#[allow(clippy::arithmetic_side_effects, clippy::string_slice, clippy::as_conversions, clippy::cast_possible_truncation, clippy::default_numeric_fallback, clippy::integer_division)]
 #[path = "build/walk.rs"]
 mod walk;
 
@@ -105,15 +123,15 @@ fn main() {
         return;
     }
 
-    let mut new_count = 0u32;
-    let mut grandfathered = 0u32;
+    let mut new_count = 0_u32;
+    let mut grandfathered = 0_u32;
     for v in &violations {
         if baseline.contains(v) {
-            grandfathered += 1;
+            grandfathered = grandfathered.saturating_add(1);
             continue;
         }
         println!("cargo::error={}", v.to_error_line());
-        new_count += 1;
+        new_count = new_count.saturating_add(1);
     }
 
     if grandfathered > 0 {

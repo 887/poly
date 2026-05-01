@@ -126,7 +126,7 @@ fn parse_variants(src: &str) -> Vec<RouteVariant> {
             let s = line.trim_start();
             if s.starts_with("#[connected(") {
                 has_connected = true;
-                let (ep, progs) = parse_connected_args(collect_attr_block(&lines, up));
+                let (ep, progs) = parse_connected_args(&collect_attr_block(&lines, up));
                 if ep {
                     entry_point = true;
                 }
@@ -145,7 +145,7 @@ fn parse_variants(src: &str) -> Vec<RouteVariant> {
             let s = line.trim_start();
             if s.starts_with("#[connected(") {
                 has_connected = true;
-                let (ep, progs) = parse_connected_args(collect_attr_block(&lines, j));
+                let (ep, progs) = parse_connected_args(&collect_attr_block(&lines, j));
                 if ep {
                     entry_point = true;
                 }
@@ -193,7 +193,7 @@ fn collect_attr_block(lines: &[&str], start: usize) -> String {
     buf
 }
 
-fn parse_connected_args(block: String) -> (bool, Vec<String>) {
+fn parse_connected_args(block: &str) -> (bool, Vec<String>) {
     // Extract contents between `#[connected(` and the matching `)]`.
     let start = block.find("#[connected(").map(|i| i + "#[connected(".len());
     let Some(start) = start else {

@@ -12,16 +12,17 @@ use poly_plugin_host::host_impl::PluginHostState;
 ///
 /// This crate lives at `crates/plugin-host-tests/`,
 /// so the workspace root is `../../`.
+#[must_use]
 pub fn workspace_root() -> PathBuf {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     manifest
         .parent()
-        .and_then(|p| p.parent())
-        .map(|p| p.to_path_buf())
-        .unwrap_or_else(|| PathBuf::from("."))
+        .and_then(Path::parent)
+        .map_or_else(|| PathBuf::from("."), Path::to_path_buf)
 }
 
 /// Directory containing the compiled WASM plugin binaries.
+#[must_use]
 pub fn wasm_dir() -> PathBuf {
     workspace_root().join("target/wasm32-wasip1/debug")
 }
@@ -29,13 +30,13 @@ pub fn wasm_dir() -> PathBuf {
 /// Map a plugin id → the crate name `cargo component build` expects.
 fn plugin_crate_name(plugin_id: &str) -> &'static str {
     match plugin_id {
-        "demo" => "poly-demo",
         "stoat" => "poly-stoat",
         "matrix" => "poly-matrix",
         "discord" => "poly-discord",
         "teams" => "poly-teams",
         "lemmy" => "poly-lemmy",
         "server" | "poly-server" | "server-client" => "poly-server-client",
+        // "demo" and any unknown plugin id both map to poly-demo
         _ => "poly-demo",
     }
 }

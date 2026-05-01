@@ -42,7 +42,7 @@ impl Parse for Edge {
             "linked" => Ok(Edge::Linked),
             "entry_point" => Ok(Edge::EntryPoint),
             "programmatic" => {
-                input.parse::<Token![<]>().map_err(|_| {
+                input.parse::<Token![<]>().map_err(|_orig| {
                     Error::new(
                         ident.span(),
                         "`programmatic` must be followed by `<Tag>` \

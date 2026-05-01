@@ -217,12 +217,13 @@ pub fn resolve_data_dir() -> PathBuf {
     }
     #[cfg(target_os = "linux")]
     {
-        let base: PathBuf = std::env::var("XDG_DATA_HOME")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| {
+        let base: PathBuf = std::env::var("XDG_DATA_HOME").map_or_else(
+            |_| {
                 let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
                 PathBuf::from(home).join(".local").join("share")
-            });
+            },
+            PathBuf::from,
+        );
         base.join("poly")
     }
     #[cfg(target_os = "macos")]
@@ -505,13 +506,12 @@ async fn plugins_add(
         let bundled = poly_host_bridge::is_bundled_url(&url);
         // Tombstone clearance — re-adding a previously-removed bundled
         // plugin lifts the user's intent so subsequent restarts keep it.
-        if let Some(slug) = poly_host_bridge::bundled_slug_from_url(&url) {
-            if let Some(arr) = settings
+        if let Some(slug) = poly_host_bridge::bundled_slug_from_url(&url)
+            && let Some(arr) = settings
                 .get_mut("removed_bundled_plugins")
                 .and_then(|v| v.as_array_mut())
-            {
-                arr.retain(|s| s.as_str() != Some(slug));
-            }
+        {
+            arr.retain(|s| s.as_str() != Some(slug));
         }
 
         let plugins = wasm_plugins_array_mut(settings)?;
@@ -533,8 +533,7 @@ async fn plugins_add(
             "name".into(),
             req.name
                 .clone()
-                .map(serde_json::Value::String)
-                .unwrap_or(serde_json::Value::Null),
+                .map_or(serde_json::Value::Null, serde_json::Value::String),
         );
         entry.insert("enabled".into(), serde_json::Value::Bool(true));
         entry.insert("bundled".into(), serde_json::Value::Bool(bundled));
@@ -545,8 +544,7 @@ async fn plugins_add(
             ok: true,
             added,
             slug: poly_host_bridge::bundled_slug_from_url(&url)
-                .map(str::to_string)
-                .unwrap_or_default(),
+                .map_or_else(String::new, str::to_string),
             url: url.clone(),
             err: None,
         },
@@ -585,30 +583,30 @@ async fn plugins_remove(
             if matched {
                 let bundled = e
                     .get("bundled")
-                    .and_then(|v| v.as_bool())
+                    .and_then(serde_json::Value::as_bool)
                     .unwrap_or(false);
-                if bundled {
-                    if let Some(slug) = poly_host_bridge::bundled_slug_from_url(url_str) {
-                        removed_was_bundled = Some(slug.to_string());
-                    }
+                if bundled
+                    && let Some(slug) = poly_host_bridge::bundled_slug_from_url(url_str)
+                {
+                    removed_was_bundled = Some(slug.to_string());
                 }
             }
             !matched
         });
         let removed = before != plugins.len();
-        if removed {
-            if let Some(slug) = removed_was_bundled {
-                let arr = settings
-                    .as_object_mut()
-                    .and_then(|m| {
-                        m.entry("removed_bundled_plugins")
-                            .or_insert_with(|| serde_json::Value::Array(Vec::new()))
-                            .as_array_mut()
-                    })
-                    .ok_or_else(|| "settings is not an object".to_string())?;
-                if !arr.iter().any(|v| v.as_str() == Some(&slug)) {
-                    arr.push(serde_json::Value::String(slug));
-                }
+        if removed
+            && let Some(slug) = removed_was_bundled
+        {
+            let arr = settings
+                .as_object_mut()
+                .and_then(|m| {
+                    m.entry("removed_bundled_plugins")
+                        .or_insert_with(|| serde_json::Value::Array(Vec::new()))
+                        .as_array_mut()
+                })
+                .ok_or_else(|| "settings is not an object".to_string())?;
+            if !arr.iter().any(|v| v.as_str() == Some(&slug)) {
+                arr.push(serde_json::Value::String(slug));
             }
         }
         Ok(removed)
@@ -709,11 +707,10 @@ async fn plugins_list(State(state): State<HostState>) -> Json<PluginListResponse
                 .to_string();
             let bundled = entry
                 .get("bundled")
-                .and_then(|v| v.as_bool())
+                .and_then(serde_json::Value::as_bool)
                 .unwrap_or(false);
             let slug = poly_host_bridge::bundled_slug_from_url(&url)
-                .map(str::to_string)
-                .unwrap_or_else(|| url.clone());
+                .map_or_else(|| url.clone(), str::to_string);
             out.push(PluginListEntry {
                 kind: "sideloaded".into(),
                 slug,
@@ -724,7 +721,7 @@ async fn plugins_list(State(state): State<HostState>) -> Json<PluginListResponse
                     .map(str::to_string),
                 enabled: entry
                     .get("enabled")
-                    .and_then(|v| v.as_bool())
+                    .and_then(serde_json::Value::as_bool)
                     .unwrap_or(true),
                 available: true,
                 bundled,
@@ -931,22 +928,21 @@ fn available_backend_slugs(settings: &serde_json::Value) -> Vec<String> {
         for entry in plugins {
             let bundled = entry
                 .get("bundled")
-                .and_then(|v| v.as_bool())
+                .and_then(serde_json::Value::as_bool)
                 .unwrap_or(false);
             let enabled = entry
                 .get("enabled")
-                .and_then(|v| v.as_bool())
+                .and_then(serde_json::Value::as_bool)
                 .unwrap_or(true);
             if !bundled || !enabled {
                 continue;
             }
             let url = entry.get("url").and_then(|v| v.as_str()).unwrap_or("");
-            if let Some(slug) = poly_host_bridge::bundled_slug_from_url(url) {
-                if !out.iter().any(|s| s == slug)
-                    && !disabled.iter().any(|d| d == slug)
-                {
-                    out.push(slug.to_string());
-                }
+            if let Some(slug) = poly_host_bridge::bundled_slug_from_url(url)
+                && !out.iter().any(|s| s == slug)
+                && !disabled.iter().any(|d| d == slug)
+            {
+                out.push(slug.to_string());
             }
         }
     }
@@ -1043,7 +1039,7 @@ fn lock_db(
     state
         .db
         .lock()
-        .map_err(|_| "sqlite mutex poisoned".to_string())
+        .map_err(|_poison| "sqlite mutex poisoned".to_string())
 }
 
 fn sqlite_get(state: &HostState, key: &str) -> Result<Option<serde_json::Value>, String> {
@@ -2029,7 +2025,7 @@ mod tests {
 
 async fn shutdown_signal() {
     let ctrl_c = async {
-        let _ = tokio::signal::ctrl_c().await;
+        drop(tokio::signal::ctrl_c().await);
     };
     #[cfg(unix)]
     let terminate = async {

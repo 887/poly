@@ -82,33 +82,33 @@ pub fn scan_src(src: &str, path: &str) -> Vec<Violation> {
 
         let currently_in_decl = in_decl_depth.is_some() || was_in_decl;
 
-        if currently_in_decl {
+        if currently_in_decl
+            && let Some(id) = extract_id_field(trimmed)
+            && !id.is_empty()
+            && !is_kebab_case(&id)
+        {
             // Scan for `id: "<value>"` on this line.
-            if let Some(id) = extract_id_field(trimmed) {
-                if !id.is_empty() && !is_kebab_case(&id) {
-                    out.push(Violation {
-                        rule: "action_id_naming".into(),
-                        path: path.to_string(),
-                        line: (line_idx as u32) + 1,
-                        detail: format!(
-                            "action ID '{id}' is not kebab-case — use lowercase letters, digits, \
-                             and hyphens only, starting with a letter (e.g. 'invite-user'); \
-                             file: {path}:{}",
-                            line_idx + 1
-                        ),
-                    });
-                }
-            }
+            out.push(Violation {
+                rule: "action_id_naming".into(),
+                path: path.to_string(),
+                line: (line_idx as u32) + 1,
+                detail: format!(
+                    "action ID '{id}' is not kebab-case — use lowercase letters, digits, \
+                     and hyphens only, starting with a letter (e.g. 'invite-user'); \
+                     file: {path}:{}",
+                    line_idx + 1
+                ),
+            });
         }
 
         // Update brace depth after processing the line.
         brace_depth += line_delta;
 
         // Exit declaration scope if brace depth drops back to the entry depth - 1.
-        if let Some(entry_depth) = in_decl_depth {
-            if brace_depth < entry_depth {
-                in_decl_depth = None;
-            }
+        if let Some(entry_depth) = in_decl_depth
+            && brace_depth < entry_depth
+        {
+            in_decl_depth = None;
         }
     }
 

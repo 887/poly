@@ -87,6 +87,8 @@ enum Command {
 }
 
 #[tokio::main]
+// poly-cli is a user-facing CLI binary; println!/eprintln! is the production output channel.
+#[allow(clippy::print_stdout, clippy::print_stderr)]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let client = McpClient::new(&cli.url);
@@ -143,7 +145,7 @@ async fn main() -> anyhow::Result<()> {
 
                     if result
                         .get("isError")
-                        .and_then(|e| e.as_bool())
+                        .and_then(serde_json::Value::as_bool)
                         .unwrap_or(false)
                     {
                         std::process::exit(1);
@@ -170,6 +172,8 @@ async fn main() -> anyhow::Result<()> {
 ///   current UTC timestamp on the first call, then advances it to the latest
 ///   `occurred_at` seen after each successful poll.
 /// - Runs until SIGINT (Ctrl+C).
+// poly-cli is a user-facing CLI binary; println!/eprintln! is the production output channel.
+#[allow(clippy::print_stdout, clippy::print_stderr)]
 async fn run_watch(
     client: &McpClient,
     tool: &str,
@@ -215,7 +219,7 @@ async fn run_watch(
 
                         for row in &rows {
                             // Dedupe by id field.
-                            let id = row.get("id").and_then(|v| v.as_i64());
+                            let id = row.get("id").and_then(serde_json::Value::as_i64);
                             if let Some(id_val) = id {
                                 if seen_ids.contains(&id_val) {
                                     continue;
@@ -242,10 +246,10 @@ async fn run_watch(
                         }
 
                         // Advance `since` to the latest occurred_at seen.
-                        if has_since_auto {
-                            if let Some(lat) = latest_occurred_at {
-                                since_value = lat;
-                            }
+                        if has_since_auto
+                            && let Some(lat) = latest_occurred_at
+                        {
+                            since_value = lat;
                         }
                     }
                     _ => {
@@ -274,6 +278,8 @@ async fn run_watch(
 }
 
 /// Replace the value of `--since auto` with `replacement` in a raw arg list.
+// Index loop over `args.len()`; arithmetic on `i` is bounded by the loop guard.
+#[allow(clippy::arithmetic_side_effects)]
 fn replace_since_auto(args: &[String], replacement: &str) -> Vec<String> {
     let mut out = Vec::with_capacity(args.len());
     let mut i = 0;
@@ -295,6 +301,8 @@ fn replace_since_auto(args: &[String], replacement: &str) -> Vec<String> {
 }
 
 /// Return the current UTC time as an ISO-8601 string (seconds precision).
+// Integer-arithmetic time decomposition; modular reductions cannot overflow.
+#[allow(clippy::integer_division, clippy::arithmetic_side_effects)]
 fn current_utc_iso8601() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
     let secs = SystemTime::now()
@@ -310,6 +318,8 @@ fn current_utc_iso8601() -> String {
 }
 
 /// Integer-arithmetic Gregorian calendar conversion (same algorithm as memory.rs).
+// Howard Hinnant's date algorithm requires exact integer arithmetic.
+#[allow(clippy::integer_division, clippy::arithmetic_side_effects)]
 fn days_to_ymd(days: u64) -> (u64, u64, u64) {
     let z   = days + 719_468;
     let era = z / 146_097;
@@ -328,6 +338,8 @@ fn days_to_ymd(days: u64) -> (u64, u64, u64) {
 /// Values that look like JSON objects/arrays are parsed as JSON.
 /// Boolean strings "true"/"false" become JSON booleans.
 /// Numeric strings become JSON numbers.
+// Index loop bounded by args.get; overflow only at usize::MAX args (unreachable).
+#[allow(clippy::arithmetic_side_effects)]
 fn parse_tool_args(args: &[String]) -> anyhow::Result<Value> {
     let mut map = serde_json::Map::new();
     let mut i = 0;
@@ -374,6 +386,8 @@ fn extract_tool_result(result: &Value) -> String {
 }
 
 /// Show the schema/help for a specific tool.
+// poly-cli is a user-facing CLI binary; println!/eprintln! is the production output channel.
+#[allow(clippy::print_stdout, clippy::print_stderr)]
 async fn show_tool_help(client: &McpClient, tool_name: &str) -> anyhow::Result<()> {
     let tools = client.list_tools().await?;
     let tool = tools
@@ -433,6 +447,8 @@ async fn show_tool_help(client: &McpClient, tool_name: &str) -> anyhow::Result<(
     Ok(())
 }
 
+// poly-cli is a user-facing CLI binary; println! is the production output channel.
+#[allow(clippy::print_stdout)]
 fn print_result_text(text: &str, fmt: OutputFormat) {
     match fmt {
         OutputFormat::Pretty => {
@@ -452,6 +468,8 @@ fn print_result_text(text: &str, fmt: OutputFormat) {
     }
 }
 
+// poly-cli is a user-facing CLI binary; println! is the production output channel.
+#[allow(clippy::print_stdout)]
 fn print_value(value: &Value, fmt: OutputFormat) {
     match fmt {
         OutputFormat::Pretty => {

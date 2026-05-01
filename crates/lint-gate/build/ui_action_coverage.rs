@@ -82,7 +82,7 @@ fn scan_rule_a(src: &str, path: &str, out: &mut Vec<Violation>) {
             };
             let rest = after_colon.trim_start();
             // Strip optional `move`
-            let rest = rest.strip_prefix("move").map(str::trim_start).unwrap_or(rest);
+            let rest = rest.strip_prefix("move").map_or(rest, str::trim_start);
             // Must start with `|`
             if !rest.starts_with('|') {
                 continue;

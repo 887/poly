@@ -84,22 +84,22 @@ impl Parse for Arg {
         // Try to parse as a bare ident first for the keyword forms.
         // Accept both `none` (preferred) and `None` (legacy) case-insensitively.
         let fork = input.fork();
-        if let Ok(ident) = fork.parse::<Ident>() {
-            if fork.is_empty() {
-                let s = ident.to_string();
-                // case-insensitive `none` / `None`
-                if s.eq_ignore_ascii_case("none") {
-                    input.parse::<Ident>()?;
-                    return Ok(Arg::None);
-                }
-                if s == "allow_default" {
-                    input.parse::<Ident>()?;
-                    return Ok(Arg::AllowDefault);
-                }
-                if s == "inherit" {
-                    input.parse::<Ident>()?;
-                    return Ok(Arg::Inherit);
-                }
+        if let Ok(ident) = fork.parse::<Ident>()
+            && fork.is_empty()
+        {
+            let s = ident.to_string();
+            // case-insensitive `none` / `None`
+            if s.eq_ignore_ascii_case("none") {
+                input.parse::<Ident>()?;
+                return Ok(Arg::None);
+            }
+            if s == "allow_default" {
+                input.parse::<Ident>()?;
+                return Ok(Arg::AllowDefault);
+            }
+            if s == "inherit" {
+                input.parse::<Ident>()?;
+                return Ok(Arg::Inherit);
             }
         }
 
@@ -128,7 +128,7 @@ impl Parse for Arg {
 /// ```
 fn wrap_fn_body(
     mut func: ItemFn,
-    handler: proc_macro2::TokenStream,
+    handler: &proc_macro2::TokenStream,
 ) -> proc_macro2::TokenStream {
     let original_stmts = &func.block.stmts;
     let new_block: syn::Block = syn::parse_quote! {
@@ -143,7 +143,7 @@ fn wrap_fn_body(
             }
         }
     };
-    func.block = Box::new(new_block);
+    *func.block = new_block;
     quote! { #func }
 }
 
@@ -183,7 +183,7 @@ pub(crate) fn expand2(
             let handler = quote! {
                 |__evt: ::dioxus::prelude::Event<::dioxus::prelude::MouseData>| __evt.stop_propagation()
             };
-            wrap_fn_body(func, handler)
+            wrap_fn_body(func, &handler)
         }
 
         // Typed menu: inject prevent_default (keeps the global guard's effect)
@@ -205,7 +205,7 @@ pub(crate) fn expand2(
             let handler = quote! {
                 |__evt: ::dioxus::prelude::Event<::dioxus::prelude::MouseData>| __evt.prevent_default()
             };
-            wrap_fn_body(func, handler)
+            wrap_fn_body(func, &handler)
         }
     }
 }

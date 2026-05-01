@@ -62,6 +62,7 @@ impl HostSandbox for StubSandbox {
 /// SUPPORTED. v1: empty (no real sandbox impl). The UI Phase F reads
 /// this to render mechanism toggles as DISABLED when their
 /// `requires-host-cap` isn't in this list.
+#[must_use]
 pub fn advertised_host_caps() -> &'static [HostCap] {
     &[]
 }

@@ -73,7 +73,7 @@ fn scan_for_rsx(stream: proc_macro2::TokenStream) -> Option<(usize, usize)> {
                     return Some(hit);
                 }
             }
-            _ => {}
+            TokenTree::Ident(_) | TokenTree::Punct(_) | TokenTree::Literal(_) => {}
         }
     }
     None

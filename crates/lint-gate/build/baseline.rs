@@ -58,7 +58,7 @@ impl Baseline {
             return;
         };
         if let Some(dir) = path.parent() {
-            let _ = std::fs::create_dir_all(dir);
+            drop(std::fs::create_dir_all(dir));
         }
         if let Err(e) = std::fs::write(path, json) {
             println!("cargo::warning=lint-gate: failed to write baseline: {e}");
