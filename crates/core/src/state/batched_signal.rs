@@ -225,7 +225,7 @@ impl<T: 'static> BatchedSignal<T> {
     /// need to mutate, call `.batch(|v| …)` — one closure, one guard,
     /// one cascade.
     #[deprecated(
-        since = "phase-2",
+        since = "0.2.0",
         note = "use .batch(|v| ...) — consecutive .write() calls hang the WASM scheduler. See CLAUDE.md § Common WASM-hang causes #1."
     )]
     pub fn write(&self) -> ! {
@@ -331,10 +331,18 @@ impl<T: 'static> Drop for PendingUpdate<T> {
         // killing the tab.
         #[cfg(debug_assertions)]
         {
-            panic!(
-                "PendingUpdate<{type_name}> dropped with {pending} unapplied mutations — \
-                 call .apply() or .discard() explicitly"
-            );
+            // Intentional dev-only panic: makes the misuse loud in `cargo
+            // test` so the bug doesn't slip into prod. The whole branch is
+            // `#[cfg(debug_assertions)]`-gated so release builds use the
+            // tracing::warn! path below.
+            // lint-allow-unused: dev-only loud-fail for PendingUpdate misuse
+            #[allow(clippy::panic)]
+            {
+                panic!(
+                    "PendingUpdate<{type_name}> dropped with {pending} unapplied mutations — \
+                     call .apply() or .discard() explicitly"
+                );
+            }
         }
         #[cfg(not(debug_assertions))]
         {
@@ -365,7 +373,7 @@ pub fn use_batched_context<T: 'static>() -> BatchedSignal<T> {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
     use super::*;
     use dioxus::prelude::*;

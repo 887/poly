@@ -297,7 +297,9 @@ pub async fn add_wasm_plugin_with_storage(
         .iter()
         .find(|e| e.url == url_trim)
         .cloned()
-        .expect("just-added entry must be present");
+        .ok_or_else(|| PluginAdminError::NotFound(format!(
+            "just-added plugin entry not found in settings: {url_trim} (race or storage write failed)"
+        )))?;
     Ok((outcome, entry))
 }
 
@@ -411,8 +413,8 @@ pub enum PluginAdminError {
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
     use super::*;
     use crate::storage::AppSettings;
 

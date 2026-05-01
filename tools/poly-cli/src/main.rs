@@ -180,7 +180,10 @@ async fn run_watch(
     use tokio::signal;
 
     // Detect `--since auto` in the raw args.
-    let has_since_auto = raw_args.windows(2).any(|w| w[0] == "--since" && w[1] == "auto");
+    let has_since_auto = raw_args
+        .windows(2)
+        .any(|w| w.first().map(String::as_str) == Some("--since")
+              && w.get(1).map(String::as_str) == Some("auto"));
 
     // Start `since` at the current UTC timestamp.
     let mut since_value: String = current_utc_iso8601();
@@ -275,13 +278,17 @@ fn replace_since_auto(args: &[String], replacement: &str) -> Vec<String> {
     let mut out = Vec::with_capacity(args.len());
     let mut i = 0;
     while i < args.len() {
-        if args[i] == "--since" && args.get(i + 1).map(|s| s.as_str()) == Some("auto") {
+        let cur = args.get(i).map(String::as_str);
+        let next = args.get(i + 1).map(String::as_str);
+        if cur == Some("--since") && next == Some("auto") {
             out.push("--since".to_string());
             out.push(replacement.to_string());
             i += 2;
-        } else {
-            out.push(args[i].clone());
+        } else if let Some(arg) = args.get(i) {
+            out.push(arg.clone());
             i += 1;
+        } else {
+            break;
         }
     }
     out

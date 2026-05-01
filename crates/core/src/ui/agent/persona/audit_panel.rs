@@ -165,11 +165,16 @@ pub fn PersonaAuditPanel(props: PersonaAuditPanelProps) -> Element {
                 "slug":  slug_load,
                 "limit": f.time_range.limit(),
             });
-            if !f.action.is_empty() {
-                qargs["action"] = serde_json::Value::String(f.action.clone());
-            }
-            if !f.target_account.is_empty() {
-                qargs["target_account"] = serde_json::Value::String(f.target_account.clone());
+            if let Some(obj) = qargs.as_object_mut() {
+                if !f.action.is_empty() {
+                    obj.insert("action".to_string(), serde_json::Value::String(f.action.clone()));
+                }
+                if !f.target_account.is_empty() {
+                    obj.insert(
+                        "target_account".to_string(),
+                        serde_json::Value::String(f.target_account.clone()),
+                    );
+                }
             }
 
             match call_persona_mcp("meta_persona_audit_query", qargs).await {

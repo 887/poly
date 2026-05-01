@@ -173,7 +173,7 @@ pub fn forum_humanize_age(ts: chrono::DateTime<chrono::Utc>) -> String {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 mod forum_helper_tests {
     use super::*;
 

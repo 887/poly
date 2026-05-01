@@ -6,7 +6,7 @@
 //! `set_client_version_override`, makes an authenticated request, then
 //! verifies the captured `User-Agent` via `/test/inspect/last-headers`.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
 use std::sync::Arc;
 

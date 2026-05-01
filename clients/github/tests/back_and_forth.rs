@@ -20,7 +20,7 @@
 //! cargo test -p poly-github --test back_and_forth
 //! ```
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
 use poly_client::{AuthCredentials, ClientBackend, ClientError, MessageContent, MessageQuery};
 use poly_github::GitHubClient;

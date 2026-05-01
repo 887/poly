@@ -2503,14 +2503,14 @@ async fn handle_draft_approve(args: &Value, pool: &BackendPool, mem: &MemoryDb) 
         Err(e)      => return err_result(format!("draft_approve failed: {e}")),
     };
 
-    let status = draft["status"].as_str().unwrap_or("");
+    let status = draft.get("status").and_then(|v| v.as_str()).unwrap_or("");
     if status != "pending" {
         return err_result(format!("draft {draft_id} has status={status}, must be pending to approve"));
     }
 
-    let account_id = draft["account_id"].as_str().unwrap_or("").to_string();
-    let chat_id    = draft["chat_id"].as_str().unwrap_or("").to_string();
-    let body       = draft["body"].as_str().unwrap_or("").to_string();
+    let account_id = draft.get("account_id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let chat_id    = draft.get("chat_id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let body       = draft.get("body").and_then(|v| v.as_str()).unwrap_or("").to_string();
 
     // Send via the active backend.
     // Verify the backend exists before attempting send.
@@ -3542,7 +3542,7 @@ async fn handle_client_settings_set_mechanism(args: &Value, pool: &BackendPool, 
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 mod tests {
     //! Table-driven coverage for `should_expose_tool` (polish plan P51).
     //! Every known backend slug × every known tool name is exercised against

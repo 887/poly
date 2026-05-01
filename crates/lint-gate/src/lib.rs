@@ -5,6 +5,19 @@
 //! See `docs/plans/plan-component-lints.md`, `plan-context-menu-quality-control.md`,
 //! and `plan-connected-routes-static-check.md`.
 
+// Test-only allow: this crate's lib has many scattered `#[cfg(test)]` mod
+// blocks that mirror build-script logic; tests use direct indexing /
+// unwrap as the canonical "if this fails, fail the test" pattern.
+// Production-only `#[allow(clippy::indexing_slicing)]` etc. would be
+// banned by the allow_ban check, but `cfg_attr(test, ...)` is an
+// explicit escape hatch in `crates/lint-gate/build/allow_ban.rs:30-32`.
+#![cfg_attr(test, allow(
+    clippy::indexing_slicing,
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+))]
+
 pub const VERSION: &str = "1";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -641,7 +654,7 @@ pub mod action_enum_coverage {
 
 #[cfg(test)]
 mod action_enum_coverage_tests {
-    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
     #[test]
     fn missing_ui_action_is_violation() {
@@ -755,7 +768,7 @@ mod action_enum_coverage_tests {
 
 #[cfg(test)]
 mod ui_action_tests {
-    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
     #[test]
     fn empty_onclick_is_violation() {
@@ -925,7 +938,7 @@ pub mod forbid_backend_slug_match {
 
 #[cfg(test)]
 mod forbid_backend_slug_match_tests {
-    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
     const UI_PATH: &str = "crates/core/src/ui/fixture.rs";
 
@@ -1114,7 +1127,7 @@ pub mod ftl_label_key_coverage {
 
 #[cfg(test)]
 mod ftl_label_key_tests {
-    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
     fn make_ftl_keys(keys: &[&str]) -> std::collections::HashSet<String> {
         keys.iter().map(|s| s.to_string()).collect()
@@ -1171,7 +1184,7 @@ mod ftl_label_key_tests {
 
 #[cfg(test)]
 mod action_id_naming_tests {
-    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
     #[test]
     fn action_id_kebab_case_is_ok() {
@@ -1241,7 +1254,7 @@ mod action_id_naming_tests {
 // ─────────────────────────────────────────────────────────────────────────────
 #[cfg(test)]
 mod kebab_case_tests {
-    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
     use super::action_id_naming::is_kebab_case;
 

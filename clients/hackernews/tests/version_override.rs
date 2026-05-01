@@ -7,7 +7,7 @@
 //! stored on `HnApiClient` behind an `Arc<Mutex<String>>`; every outbound
 //! request adds `header("User-Agent", self.ua())`.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
 use poly_client::{AuthCredentials, ClientBackend, MessageQuery};
 use poly_hackernews::HackerNewsClient;

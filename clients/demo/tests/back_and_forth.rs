@@ -19,7 +19,7 @@
 //! cargo test -p poly-demo --test back_and_forth
 //! ```
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
 use poly_client::{AuthCredentials, ClientBackend, MessageContent, MessageQuery};
 use poly_demo::{DemoClient, DemoClient2};

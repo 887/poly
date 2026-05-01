@@ -7,7 +7,7 @@
 //! `self.http.set_user_agent(ua)` which updates the RwLock-backed field.
 //! All subsequent `request()` / `authenticated_request()` calls pick it up.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
 use std::sync::Arc;
 

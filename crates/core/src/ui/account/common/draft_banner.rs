@@ -31,12 +31,12 @@ fn secs_until(ts: &str) -> Option<i64> {
     let parse = |slice: &[u8]| -> Option<u64> {
         std::str::from_utf8(slice).ok()?.parse().ok()
     };
-    let y = parse(&bytes[0..4])?;
-    let mo = parse(&bytes[5..7])?;
-    let d = parse(&bytes[8..10])?;
-    let h = parse(&bytes[11..13])?;
-    let m = parse(&bytes[14..16])?;
-    let s = parse(&bytes[17..19])?;
+    let y = parse(bytes.get(0..4)?)?;
+    let mo = parse(bytes.get(5..7)?)?;
+    let d = parse(bytes.get(8..10)?)?;
+    let h = parse(bytes.get(11..13)?)?;
+    let m = parse(bytes.get(14..16)?)?;
+    let s = parse(bytes.get(17..19)?)?;
 
     // Convert to epoch seconds (Julian day arithmetic).
     let a = (14u64.wrapping_sub(mo)) / 12;

@@ -1130,20 +1130,22 @@ impl ClientBackend for DiscordClient {
         update: UpdateChannelParams,
     ) -> ClientResult<()> {
         let mut body = serde_json::json!({});
-        if let Some(name) = &update.name {
-            body["name"] = serde_json::json!(name);
-        }
-        if let Some(topic) = &update.topic {
-            body["topic"] = serde_json::json!(topic);
-        }
-        if let Some(slow) = update.slow_mode_secs {
-            body["rate_limit_per_user"] = serde_json::json!(slow);
-        }
-        if let Some(nsfw) = update.nsfw {
-            body["nsfw"] = serde_json::json!(nsfw);
-        }
-        if let Some(pos) = update.position {
-            body["position"] = serde_json::json!(pos);
+        if let Some(obj) = body.as_object_mut() {
+            if let Some(name) = &update.name {
+                obj.insert("name".to_string(), serde_json::json!(name));
+            }
+            if let Some(topic) = &update.topic {
+                obj.insert("topic".to_string(), serde_json::json!(topic));
+            }
+            if let Some(slow) = update.slow_mode_secs {
+                obj.insert("rate_limit_per_user".to_string(), serde_json::json!(slow));
+            }
+            if let Some(nsfw) = update.nsfw {
+                obj.insert("nsfw".to_string(), serde_json::json!(nsfw));
+            }
+            if let Some(pos) = update.position {
+                obj.insert("position".to_string(), serde_json::json!(pos));
+            }
         }
         self.http.patch_channel(channel_id, body).await.map(|_| ())
     }
@@ -2009,11 +2011,13 @@ impl ClientBackend for DiscordClient {
         avatar_url: Option<&str>,
     ) -> ClientResult<()> {
         let mut body = serde_json::json!({});
-        if let Some(n) = name {
-            body["name"] = serde_json::json!(n);
-        }
-        if let Some(icon) = avatar_url {
-            body["icon"] = serde_json::json!(icon);
+        if let Some(obj) = body.as_object_mut() {
+            if let Some(n) = name {
+                obj.insert("name".to_string(), serde_json::json!(n));
+            }
+            if let Some(icon) = avatar_url {
+                obj.insert("icon".to_string(), serde_json::json!(icon));
+            }
         }
         self.http.patch_channel(channel_id, body).await.map(|_| ())
     }

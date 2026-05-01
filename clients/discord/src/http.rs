@@ -382,7 +382,12 @@ impl DiscordHttpClient {
         let path = format!("/api/v10/guilds/{guild_id}/bans/{user_id}");
         let mut body = serde_json::json!({});
         if let Some(secs) = delete_message_seconds {
-            body["delete_message_seconds"] = serde_json::json!(secs.min(604800));
+            if let Some(obj) = body.as_object_mut() {
+                obj.insert(
+                    "delete_message_seconds".to_string(),
+                    serde_json::json!(secs.min(604800)),
+                );
+            }
         }
         let mut req = self
             .apply_version_headers(self.http.put(self.api_url(&path)))

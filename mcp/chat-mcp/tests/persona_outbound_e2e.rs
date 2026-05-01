@@ -7,7 +7,7 @@
 //! 4. Check check_persona_outbound_cap returns (2, 2) → cap exceeded.
 //! 5. Verify a fresh chat (not in allowlist) returns None.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
 use poly_chat_mcp::memory::MemoryDb;
 

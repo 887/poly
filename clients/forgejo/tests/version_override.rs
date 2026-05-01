@@ -7,7 +7,7 @@
 //! propagates into the live `ForgejoApi` UA field via `self.api.set_user_agent(ua)`.
 //! Every `get()` call in `ForgejoApi` reads the lock and injects the header.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
 use poly_client::{AuthCredentials, ClientBackend};
 use poly_forgejo::ForgejoClient;

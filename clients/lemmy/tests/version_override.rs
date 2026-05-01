@@ -6,7 +6,7 @@
 //! `Arc<RwLock<String>>` field. `set_client_version_override` propagates to the
 //! field via `self.http.set_user_agent(ua)`.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
 use poly_client::{AuthCredentials, ClientBackend};
 use poly_lemmy::LemmyClient;

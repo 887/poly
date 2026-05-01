@@ -187,19 +187,19 @@ async fn run_autosend_engine(
         };
 
         for draft in due {
-            let draft_id = match draft["id"].as_i64() {
+            let draft_id = match draft.get("id").and_then(|v| v.as_i64()) {
                 Some(id) => id,
                 None     => continue,
             };
-            let account_id = match draft["account_id"].as_str() {
+            let account_id = match draft.get("account_id").and_then(|v| v.as_str()) {
                 Some(a) => a.to_string(),
                 None    => continue,
             };
-            let chat_id = match draft["chat_id"].as_str() {
+            let chat_id = match draft.get("chat_id").and_then(|v| v.as_str()) {
                 Some(c) => c.to_string(),
                 None    => continue,
             };
-            let body = match draft["body"].as_str() {
+            let body = match draft.get("body").and_then(|v| v.as_str()) {
                 Some(b) => b.to_string(),
                 None    => continue,
             };

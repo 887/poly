@@ -79,14 +79,14 @@ pub fn count_custom_block_literals(src: &str) -> usize {
     let mut i = 0usize;
 
     while i + needle.len() <= bytes.len() {
-        if &bytes[i..i + needle.len()] == needle {
-            let prev_ok = i == 0 || !is_ident_char(bytes[i - 1]);
+        if bytes.get(i..i + needle.len()) == Some(needle) {
+            let prev_ok = i == 0 || bytes.get(i - 1).is_none_or(|&b| !is_ident_char(b));
             // After the identifier, skip whitespace; expect '{'.
             let mut j = i + needle.len();
-            while j < bytes.len() && (bytes[j] == b' ' || bytes[j] == b'\t') {
+            while bytes.get(j).is_some_and(|&b| b == b' ' || b == b'\t') {
                 j += 1;
             }
-            let next_ok = j < bytes.len() && bytes[j] == b'{';
+            let next_ok = bytes.get(j) == Some(&b'{');
             if prev_ok && next_ok {
                 count += 1;
                 i = j + 1;

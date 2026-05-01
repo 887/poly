@@ -514,7 +514,7 @@ async fn plugins_add(
             }
         }
 
-        let plugins = wasm_plugins_array_mut(settings);
+        let plugins = wasm_plugins_array_mut(settings)?;
 
         // Idempotent re-add: existing entry → flip `enabled` true, no insert.
         if let Some(existing) = plugins
@@ -577,7 +577,7 @@ async fn plugins_remove(
             vec![raw.clone(), format!("{}{raw}", poly_host_bridge::BUNDLED_URL_SCHEME)]
         };
         let mut removed_was_bundled: Option<String> = None;
-        let plugins = wasm_plugins_array_mut(settings);
+        let plugins = wasm_plugins_array_mut(settings)?;
         let before = plugins.len();
         plugins.retain(|e| {
             let url_str = e.get("url").and_then(|v| v.as_str()).unwrap_or("");
@@ -639,7 +639,7 @@ async fn plugins_set_enabled(
         });
     }
     Json(match mutate_app_settings(&state, |settings| {
-        let plugins = wasm_plugins_array_mut(settings);
+        let plugins = wasm_plugins_array_mut(settings)?;
         let entry = plugins
             .iter_mut()
             .find(|e| e.get("url").and_then(|v| v.as_str()) == Some(url.as_str()))
@@ -980,10 +980,16 @@ where
 
 /// Get `wasm_plugins` from a settings JSON object as a `&mut Vec<Value>`,
 /// inserting an empty array if it's missing or the wrong type.
-fn wasm_plugins_array_mut(settings: &mut serde_json::Value) -> &mut Vec<serde_json::Value> {
+///
+/// Returns `Err` only if `settings` isn't a JSON object — `mutate_app_settings`
+/// normalises that, so callers can usually `?` and not worry about the
+/// failure path.
+fn wasm_plugins_array_mut(
+    settings: &mut serde_json::Value,
+) -> Result<&mut Vec<serde_json::Value>, String> {
     let map = settings
         .as_object_mut()
-        .expect("settings was normalised to an object by mutate_app_settings");
+        .ok_or_else(|| "app_settings root is not a JSON object".to_string())?;
     let entry = map
         .entry("wasm_plugins")
         .or_insert_with(|| serde_json::Value::Array(Vec::new()));
@@ -992,7 +998,7 @@ fn wasm_plugins_array_mut(settings: &mut serde_json::Value) -> &mut Vec<serde_js
     }
     entry
         .as_array_mut()
-        .expect("just-set value is an array")
+        .ok_or_else(|| "wasm_plugins entry was just set to array but is not".to_string())
 }
 
 /// Lock + read-modify-write the `account_tokens` JSON array.

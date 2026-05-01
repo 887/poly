@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 //! Integration tests for Phase 6: forum channels + thread seed data and routes.
 
 use axum::body::Body;

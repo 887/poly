@@ -7,7 +7,7 @@
 //! `apply_version_headers()` is now called from all request methods in
 //! `DiscordHttpClient` — both `get()` / `post_json()` and the ad-hoc builders.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
 use std::sync::Arc;
 

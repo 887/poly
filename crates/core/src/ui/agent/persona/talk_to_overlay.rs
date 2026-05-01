@@ -134,34 +134,41 @@ fn render_bundle_summary(json_str: &str) -> Element {
         Err(_) => return rsx! { p { class: "talk-line-content", "Context bundle (parse error)." } },
     };
 
-    let system_excerpt = parsed["system_prompt"]
-        .as_str()
+    let system_excerpt = parsed
+        .get("system_prompt")
+        .and_then(|v| v.as_str())
         .unwrap_or("")
         .chars()
         .take(120)
         .collect::<String>();
 
-    let pinned_count = parsed["pinned_facts"]
-        .as_array()
-        .map(|a| a.len())
+    let pinned_count = parsed
+        .get("pinned_facts")
+        .and_then(|v| v.as_array())
+        .map(Vec::len)
         .unwrap_or(0);
 
-    let chat_count = parsed["chats"]
-        .as_array()
-        .map(|a| a.len())
+    let chat_count = parsed
+        .get("chats")
+        .and_then(|v| v.as_array())
+        .map(Vec::len)
         .unwrap_or(0);
 
-    let total_messages: usize = parsed["chats"]
-        .as_array()
-        .unwrap_or(&vec![])
-        .iter()
-        .map(|c| {
-            c["recent_messages"]
-                .as_array()
-                .map(|m| m.len())
-                .unwrap_or(0)
+    let total_messages: usize = parsed
+        .get("chats")
+        .and_then(|v| v.as_array())
+        .map(|chats| {
+            chats
+                .iter()
+                .map(|c| {
+                    c.get("recent_messages")
+                        .and_then(|m| m.as_array())
+                        .map(Vec::len)
+                        .unwrap_or(0)
+                })
+                .sum()
         })
-        .sum();
+        .unwrap_or(0);
 
     rsx! {
         div { class: "talk-bundle-summary",

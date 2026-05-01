@@ -142,10 +142,9 @@ fn strip_data_href_on_anchors(html: &str) -> String {
     let bytes = html.as_bytes();
     let mut i = 0;
     while i < bytes.len() {
-        if bytes[i] == b'<'
-            && i + 2 < bytes.len()
-            && bytes[i + 1].eq_ignore_ascii_case(&b'a')
-            && (bytes[i + 2] == b' ' || bytes[i + 2] == b'\t' || bytes[i + 2] == b'\n')
+        if bytes.get(i) == Some(&b'<')
+            && bytes.get(i + 1).is_some_and(|b| b.eq_ignore_ascii_case(&b'a'))
+            && bytes.get(i + 2).is_some_and(|b| *b == b' ' || *b == b'\t' || *b == b'\n')
         {
             // Find the closing '>'.
             if let Some(end_rel) = html[i..].find('>') {
@@ -363,6 +362,7 @@ pub fn CustomBlock(block: CustomBlockData) -> Element {
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
     use super::*;
 
     #[test]
