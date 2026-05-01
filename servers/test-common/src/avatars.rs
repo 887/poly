@@ -17,6 +17,7 @@ use axum::response::{IntoResponse, Response};
 /// `name` is the bare animal name without extension (e.g. `"sheep"`).
 /// Returns PNG for animals that have a PNG asset, SVG for SVG-only animals.
 /// Returns 404 for unknown names.
+#[must_use]
 pub fn serve_animal(name: &str) -> Response {
     // PNG assets
     static KOALA_PNG: &[u8] = include_bytes!("../../../clients/demo/assets/koala.png");

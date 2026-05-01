@@ -57,7 +57,9 @@ async fn wait_for_health(port: u16, timeout: Duration) -> bool {
         .timeout(Duration::from_secs(2))
         .build()
         .expect("reqwest client");
-    let url = format!("http://127.0.0.1:{}/health", port);
+    let url = format!("http://127.0.0.1:{port}/health");
+    // lint-allow-unused: Instant + Duration addition cannot overflow within a test runner timeout
+    #[allow(clippy::arithmetic_side_effects)]
     let deadline = tokio::time::Instant::now() + timeout;
     while tokio::time::Instant::now() < deadline {
         if let Ok(resp) = client.get(&url).send().await
@@ -68,6 +70,36 @@ async fn wait_for_health(port: u16, timeout: Duration) -> bool {
         sleep(Duration::from_millis(500)).await;
     }
     false
+}
+
+/// Print the user-facing CLI banner summarizing each backend's status.
+///
+/// Uses `println!` intentionally — this is the runner's interactive output
+/// (humans grep for the table after `cargo run`), not application logging.
+// lint-allow-unused: CLI summary table is the user-facing output; tracing would not render the box-drawing chars
+#[allow(clippy::print_stdout)]
+fn print_summary_banner(statuses: &[(String, u16, bool)]) {
+    println!();
+    println!("┌──────────────────────┬───────┬──────────┐");
+    println!("│ Backend              │ Port  │ Status   │");
+    println!("├──────────────────────┼───────┼──────────┤");
+    for (name, port, healthy) in statuses {
+        let marker = if *healthy { "up  " } else { "DOWN" };
+        println!("│ {name:<20} │ {port:<5} │ {marker}     │");
+    }
+    println!("└──────────────────────┴───────┴──────────┘");
+    println!();
+    println!("Test animals available in poly-web:");
+    println!("  Matrix   → Owl, Axolotl       (localhost:9100)");
+    println!("  Stoat    → Stoat, Raccoon     (localhost:9101)");
+    println!("  Discord  → Koala, Kangaroo    (localhost:9102)");
+    println!("  Teams    → Sheep, Walrus      (localhost:9103)");
+    println!("  Lemmy    → Beaver, Hedgehog   (localhost:9104)");
+    println!("  HN       → (read-only feed)   (localhost:9105)");
+    println!("  Forgejo  → Otter, Flamingo    (localhost:9106)");
+    println!("  GitHub   → Penguin, Chameleon (localhost:9107)");
+    println!();
+    println!("Press Ctrl+C to stop all servers.");
 }
 
 #[tokio::main]
@@ -104,27 +136,7 @@ async fn main() -> anyhow::Result<()> {
         statuses.push((name.clone(), *port, healthy));
     }
 
-    println!();
-    println!("┌──────────────────────┬───────┬──────────┐");
-    println!("│ Backend              │ Port  │ Status   │");
-    println!("├──────────────────────┼───────┼──────────┤");
-    for (name, port, healthy) in &statuses {
-        let marker = if *healthy { "up  " } else { "DOWN" };
-        println!("│ {:<20} │ {:<5} │ {}     │", name, port, marker);
-    }
-    println!("└──────────────────────┴───────┴──────────┘");
-    println!();
-    println!("Test animals available in poly-web:");
-    println!("  Matrix   → Owl, Axolotl       (localhost:9100)");
-    println!("  Stoat    → Stoat, Raccoon     (localhost:9101)");
-    println!("  Discord  → Koala, Kangaroo    (localhost:9102)");
-    println!("  Teams    → Sheep, Walrus      (localhost:9103)");
-    println!("  Lemmy    → Beaver, Hedgehog   (localhost:9104)");
-    println!("  HN       → (read-only feed)   (localhost:9105)");
-    println!("  Forgejo  → Otter, Flamingo    (localhost:9106)");
-    println!("  GitHub   → Penguin, Chameleon (localhost:9107)");
-    println!();
-    println!("Press Ctrl+C to stop all servers.");
+    print_summary_banner(&statuses);
 
     // Wait for Ctrl+C, then kill all children.
     tokio::signal::ctrl_c().await?;

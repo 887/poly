@@ -16,6 +16,7 @@ pub struct CliArgs {
 
 impl CliArgs {
     /// Parse from `std::env::args()`. Simple hand-rolled parser (no clap dependency).
+    #[must_use]
     pub fn parse() -> Self {
         let args: Vec<String> = std::env::args().collect();
         let mut port = 0u16;
@@ -25,19 +26,27 @@ impl CliArgs {
 
         let mut i = 1;
         while i < args.len() {
-            match args.get(i).map(|s| s.as_str()) {
+            match args.get(i).map(String::as_str) {
                 Some("--port") => {
-                    i += 1;
+                    // lint-allow-unused: index walk over argv, max args.len() < usize::MAX
+                    #[allow(clippy::arithmetic_side_effects)]
+                    {
+                        i += 1;
+                    }
                     if let Some(p) = args.get(i) {
                         port = p.parse().unwrap_or(0);
                     }
                 }
                 Some("--seed") => seed = true,
-                Some("--verbose") | Some("-v") => verbose = true,
+                Some("--verbose" | "-v") => verbose = true,
                 Some("--reset") => reset = true,
                 _ => {}
             }
-            i += 1;
+            // lint-allow-unused: index walk over argv, max args.len() < usize::MAX
+            #[allow(clippy::arithmetic_side_effects)]
+            {
+                i += 1;
+            }
         }
 
         Self {
@@ -83,6 +92,7 @@ impl CliArgs {
     }
 
     /// Absolute path to the persisted auth-token file for this backend.
+    #[must_use]
     pub fn auth_path(&self, backend: &str) -> PathBuf {
         self.persist_dir(backend).join("auth.json")
     }

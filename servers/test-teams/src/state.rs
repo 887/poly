@@ -128,6 +128,7 @@ impl Default for TeamsState {
 }
 
 impl TeamsState {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             auth: AuthState::new(),

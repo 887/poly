@@ -50,11 +50,13 @@ pub struct EventBus<T: Clone + Send + 'static> {
 
 impl<T: Clone + Send + 'static> EventBus<T> {
     /// Create a new event bus with the default buffer capacity (256).
+    #[must_use]
     pub fn new() -> Self {
         Self::with_capacity(DEFAULT_CAPACITY)
     }
 
     /// Create a new event bus with a custom buffer capacity.
+    #[must_use]
     pub fn with_capacity(capacity: usize) -> Self {
         let (tx, _) = broadcast::channel(capacity);
         Self { tx }
@@ -69,11 +71,13 @@ impl<T: Clone + Send + 'static> EventBus<T> {
 
     /// Subscribe to events. Returns a receiver that will get all events
     /// published after this call.
+    #[must_use]
     pub fn subscribe(&self) -> broadcast::Receiver<T> {
         self.tx.subscribe()
     }
 
     /// Get the current number of active subscribers.
+    #[must_use]
     pub fn subscriber_count(&self) -> usize {
         self.tx.receiver_count()
     }

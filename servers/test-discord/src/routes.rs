@@ -352,8 +352,7 @@ pub async fn get_guild_active_threads(
                         && is_thread_type(c.channel_type)
                         && c.thread_metadata
                             .as_ref()
-                            .map(|m| !m.archived)
-                            .unwrap_or(false)
+                            .is_some_and(|m| !m.archived)
                 })
                 .map(|c| channel_to_json(&c))
                 .collect();
@@ -395,8 +394,7 @@ pub async fn get_channel_archived_threads(
                         && c.channel_type == ChannelType::PublicThread
                         && c.thread_metadata
                             .as_ref()
-                            .map(|m| m.archived)
-                            .unwrap_or(false)
+                            .is_some_and(|m| m.archived)
                 })
                 .map(|c| channel_to_json(&c))
                 .collect();
@@ -437,7 +435,7 @@ pub async fn get_messages(
                 }
             };
             let msgs = state.messages.get(&ch_id).map(|v| v.clone()).unwrap_or_default();
-            let limit = query.limit.unwrap_or(50).min(100) as usize;
+            let limit = usize::try_from(query.limit.unwrap_or(50).min(100)).unwrap_or(50);
             let slice: Vec<serde_json::Value> = msgs
                 .iter()
                 .rev()
@@ -475,7 +473,7 @@ pub async fn send_message(
                 }
             };
             let content = body.content.unwrap_or_default();
-            let msg_id_u64 = 1_000_u64 + state.messages.len() as u64;
+            let msg_id_u64 = 1_000_u64.saturating_add(u64::try_from(state.messages.len()).unwrap_or(u64::MAX));
             let msg = Message {
                 id: Id::new(msg_id_u64),
                 content: content.clone(),
@@ -538,7 +536,7 @@ pub async fn open_dm(
                 .and_then(Id::<UserMarker>::new_checked)
                 .unwrap_or_else(|| Id::new(1));
             // Stable synthetic DM channel id: combine user halves into a u64.
-            let dm_id_u64 = 10_000_u64 + user_id.get().wrapping_mul(31).wrapping_add(recipient_id.get());
+            let dm_id_u64 = 10_000_u64.saturating_add(user_id.get().wrapping_mul(31).wrapping_add(recipient_id.get()));
             let dm_id = Id::<ChannelMarker>::new_checked(dm_id_u64).unwrap_or_else(|| Id::new(10_001));
             let ch = state.channels.entry(dm_id).or_insert_with(|| Channel {
                 id: dm_id,
@@ -599,6 +597,8 @@ pub async fn gateway_ws(
     ws.on_upgrade(move |socket| handle_gateway_socket(socket, state))
 }
 
+// lint-allow-unused: Discord Gateway WS opcodes/sequences are bare integer literals in serde_json::json! payloads
+#[allow(clippy::default_numeric_fallback)]
 async fn handle_gateway_socket(mut socket: WebSocket, state: Arc<DiscordState>) {
     // Subscribe to events before sending READY so no events are missed.
     let mut rx: broadcast::Receiver<DiscordEvent> = state.events.subscribe();
@@ -631,10 +631,10 @@ async fn handle_gateway_socket(mut socket: WebSocket, state: Arc<DiscordState>) 
                 match event_result {
                     Ok(event) => {
                         let frame = discord_event_to_ws_frame(&event);
-                        if let Some(text) = frame {
-                            if socket.send(WsMessage::Text(text.into())).await.is_err() {
-                                break;
-                            }
+                        if let Some(text) = frame
+                            && socket.send(WsMessage::Text(text.into())).await.is_err()
+                        {
+                            break;
                         }
                     }
                     Err(broadcast::error::RecvError::Lagged(n)) => {
@@ -648,7 +648,7 @@ async fn handle_gateway_socket(mut socket: WebSocket, state: Arc<DiscordState>) 
                 match msg {
                     Some(Ok(WsMessage::Text(txt))) => {
                         if let Ok(v) = serde_json::from_str::<serde_json::Value>(&txt) {
-                            let op = v.get("op").and_then(|o| o.as_u64()).unwrap_or(0);
+                            let op = v.get("op").and_then(serde_json::Value::as_u64).unwrap_or(0);
                             // op 1 = HEARTBEAT → reply with HEARTBEAT_ACK (op 11)
                             if op == 1 {
                                 let ack = serde_json::json!({ "op": 11 });
@@ -659,8 +659,9 @@ async fn handle_gateway_socket(mut socket: WebSocket, state: Arc<DiscordState>) 
                             // op 2 = IDENTIFY → accepted silently
                         }
                     }
-                    Some(Ok(WsMessage::Close(_))) | None => break,
-                    Some(Err(_)) => break,
+                    Some(Ok(WsMessage::Close(_)) | Err(_)) | None => break,
+                    // lint-allow-unused: any other ws frame (Binary/Ping/Pong) is silently ignored
+                    #[allow(clippy::wildcard_enum_match_arm)]
                     _ => {}
                 }
             }
@@ -670,6 +671,8 @@ async fn handle_gateway_socket(mut socket: WebSocket, state: Arc<DiscordState>) 
 
 /// Convert a `DiscordEvent` into a Discord gateway JSON frame string.
 /// Returns `None` for events that don't have a gateway representation yet.
+// lint-allow-unused: Gateway WS opcodes are bare integer literals + new event variants intentionally drop
+#[allow(clippy::default_numeric_fallback, clippy::wildcard_enum_match_arm)]
 fn discord_event_to_ws_frame(event: &DiscordEvent) -> Option<String> {
     let (event_name, data) = match event {
         DiscordEvent::ThreadCreate { thread } => (
@@ -802,7 +805,7 @@ pub async fn get_guild_member_me(
         .get(&(guild_id_parsed, user_id))
         .map(|v| v.clone())
         .unwrap_or_default();
-    let role_ids: Vec<String> = roles.iter().map(|r| r.to_string()).collect();
+    let role_ids: Vec<String> = roles.iter().map(std::string::ToString::to_string).collect();
     Json(serde_json::json!({
         "user": { "id": user_id.to_string() },
         "roles": role_ids,
@@ -817,9 +820,8 @@ pub async fn get_guild_roles(
     headers: HeaderMap,
     Path(guild_id): Path<String>,
 ) -> impl IntoResponse {
-    match auth_user(&state, &headers) {
-        Err(e) => return e.into_response(),
-        Ok(_) => {}
+    if let Err(e) = auth_user(&state, &headers) {
+        return e.into_response();
     }
     let guild_id_parsed = match guild_id
         .parse::<u64>()
@@ -989,9 +991,8 @@ pub async fn get_bans(
     headers: HeaderMap,
     Path(guild_id): Path<String>,
 ) -> impl IntoResponse {
-    match auth_user(&state, &headers) {
-        Err(e) => return e.into_response(),
-        Ok(_) => {}
+    if let Err(e) = auth_user(&state, &headers) {
+        return e.into_response();
     }
     let guild_id_parsed = match guild_id
         .parse::<u64>()
@@ -1009,13 +1010,14 @@ pub async fn get_bans(
     let json: Vec<serde_json::Value> = bans
         .iter()
         .map(|b| {
-            let user = state.users.get(&b.user_id).map(|u| user_to_json(&u)).unwrap_or_else(|| {
-                serde_json::json!({
+            let user = state.users.get(&b.user_id).map_or_else(
+                || serde_json::json!({
                     "id": b.user_id.to_string(),
                     "username": b.user_id.to_string(),
                     "discriminator": "0000",
-                })
-            });
+                }),
+                |u| user_to_json(&u),
+            );
             serde_json::json!({
                 "reason": b.reason,
                 "user": user,
@@ -1032,9 +1034,8 @@ pub async fn patch_guild_member(
     Path((guild_id, user_id)): Path<(String, String)>,
     Json(body): Json<serde_json::Value>,
 ) -> impl IntoResponse {
-    match auth_user(&state, &headers) {
-        Err(e) => return e.into_response(),
-        Ok(_) => {}
+    if let Err(e) = auth_user(&state, &headers) {
+        return e.into_response();
     }
     // For the test server we just acknowledge the request.
     // A real implementation would store the timeout on the member record.
@@ -1048,9 +1049,8 @@ pub async fn delete_message(
     headers: HeaderMap,
     Path((channel_id, message_id)): Path<(String, String)>,
 ) -> impl IntoResponse {
-    match auth_user(&state, &headers) {
-        Err(e) => return e.into_response(),
-        Ok(_) => {}
+    if let Err(e) = auth_user(&state, &headers) {
+        return e.into_response();
     }
     let ch_id = match channel_id
         .parse::<u64>()
@@ -1085,9 +1085,8 @@ pub async fn patch_channel(
     Path(channel_id): Path<String>,
     Json(body): Json<serde_json::Value>,
 ) -> impl IntoResponse {
-    match auth_user(&state, &headers) {
-        Err(e) => return e.into_response(),
-        Ok(_) => {}
+    if let Err(e) = auth_user(&state, &headers) {
+        return e.into_response();
     }
     let ch_id = match channel_id
         .parse::<u64>()
@@ -1120,9 +1119,8 @@ pub async fn reorder_guild_channels(
     Path(guild_id): Path<String>,
     Json(body): Json<Vec<serde_json::Value>>,
 ) -> impl IntoResponse {
-    match auth_user(&state, &headers) {
-        Err(e) => return e.into_response(),
-        Ok(_) => {}
+    if let Err(e) = auth_user(&state, &headers) {
+        return e.into_response();
     }
     let _ = (guild_id, body, state);
     StatusCode::NO_CONTENT.into_response()
@@ -1134,9 +1132,8 @@ pub async fn get_audit_log(
     headers: HeaderMap,
     Path(guild_id): Path<String>,
 ) -> impl IntoResponse {
-    match auth_user(&state, &headers) {
-        Err(e) => return e.into_response(),
-        Ok(_) => {}
+    if let Err(e) = auth_user(&state, &headers) {
+        return e.into_response();
     }
     let guild_id_parsed = match guild_id
         .parse::<u64>()
@@ -1198,21 +1195,20 @@ pub async fn put_relationship(
     Path(user_id): Path<String>,
     Json(body): Json<serde_json::Value>,
 ) -> impl IntoResponse {
-    match auth_user(&state, &headers) {
-        Err(e) => return e.into_response(),
-        Ok(_) => {}
+    if let Err(e) = auth_user(&state, &headers) {
+        return e.into_response();
     }
     // Validate the user_id parses as a known user (404 if not found).
     let parsed = user_id
         .parse::<u64>()
         .ok()
         .and_then(Id::<UserMarker>::new_checked);
-    if let Some(uid) = parsed {
-        if state.users.get(&uid).is_none() {
-            return discord_error(StatusCode::NOT_FOUND, 10013, "Unknown User").into_response();
-        }
+    if let Some(uid) = parsed
+        && state.users.get(&uid).is_none()
+    {
+        return discord_error(StatusCode::NOT_FOUND, 10013, "Unknown User").into_response();
     }
-    let rel_type = body.get("type").and_then(|v| v.as_u64()).unwrap_or(1);
+    let rel_type = body.get("type").and_then(serde_json::Value::as_u64).unwrap_or(1);
     tracing::debug!(target: "poly_test_discord::relationships", user_id, rel_type, "PUT relationship");
     StatusCode::NO_CONTENT.into_response()
 }
@@ -1223,18 +1219,17 @@ pub async fn delete_relationship(
     headers: HeaderMap,
     Path(user_id): Path<String>,
 ) -> impl IntoResponse {
-    match auth_user(&state, &headers) {
-        Err(e) => return e.into_response(),
-        Ok(_) => {}
+    if let Err(e) = auth_user(&state, &headers) {
+        return e.into_response();
     }
     let parsed = user_id
         .parse::<u64>()
         .ok()
         .and_then(Id::<UserMarker>::new_checked);
-    if let Some(uid) = parsed {
-        if state.users.get(&uid).is_none() {
-            return discord_error(StatusCode::NOT_FOUND, 10013, "Unknown User").into_response();
-        }
+    if let Some(uid) = parsed
+        && state.users.get(&uid).is_none()
+    {
+        return discord_error(StatusCode::NOT_FOUND, 10013, "Unknown User").into_response();
     }
     tracing::debug!(target: "poly_test_discord::relationships", user_id, "DELETE relationship");
     StatusCode::NO_CONTENT.into_response()
@@ -1247,9 +1242,8 @@ pub async fn put_user_note(
     Path(user_id): Path<String>,
     Json(body): Json<serde_json::Value>,
 ) -> impl IntoResponse {
-    match auth_user(&state, &headers) {
-        Err(e) => return e.into_response(),
-        Ok(_) => {}
+    if let Err(e) = auth_user(&state, &headers) {
+        return e.into_response();
     }
     let note = body.get("note").and_then(|v| v.as_str()).unwrap_or("");
     tracing::debug!(target: "poly_test_discord::notes", user_id, note, "PUT user note");
@@ -1262,9 +1256,8 @@ pub async fn delete_channel(
     headers: HeaderMap,
     Path(channel_id): Path<String>,
 ) -> impl IntoResponse {
-    match auth_user(&state, &headers) {
-        Err(e) => return e.into_response(),
-        Ok(_) => {}
+    if let Err(e) = auth_user(&state, &headers) {
+        return e.into_response();
     }
     let ch_id = match channel_id
         .parse::<u64>()
@@ -1299,9 +1292,8 @@ pub async fn put_group_dm_recipient(
     headers: HeaderMap,
     Path((channel_id, user_id)): Path<(String, String)>,
 ) -> impl IntoResponse {
-    match auth_user(&state, &headers) {
-        Err(e) => return e.into_response(),
-        Ok(_) => {}
+    if let Err(e) = auth_user(&state, &headers) {
+        return e.into_response();
     }
     tracing::debug!(target: "poly_test_discord::group_dm", channel_id, user_id, "PUT group DM recipient");
     StatusCode::NO_CONTENT.into_response()
@@ -1310,15 +1302,16 @@ pub async fn put_group_dm_recipient(
 /// `POST /api/v10/channels/{channel_id}/invites` — create a channel invite.
 ///
 /// Returns a minimal invite object with a synthetic code.
+// lint-allow-unused: serde_json::json! macros use bare integer literals for invite metadata fields
+#[allow(clippy::default_numeric_fallback)]
 pub async fn create_invite(
     State(state): State<Arc<DiscordState>>,
     headers: HeaderMap,
     Path(channel_id): Path<String>,
     Json(_body): Json<serde_json::Value>,
 ) -> impl IntoResponse {
-    match auth_user(&state, &headers) {
-        Err(e) => return e.into_response(),
-        Ok(_) => {}
+    if let Err(e) = auth_user(&state, &headers) {
+        return e.into_response();
     }
     let ch_id = match channel_id
         .parse::<u64>()
@@ -1444,6 +1437,8 @@ fn attachment_to_json(a: &Attachment) -> serde_json::Value {
     })
 }
 
+// lint-allow-unused: serde_json::json! macros use bare integer literals for channel position/type fields
+#[allow(clippy::default_numeric_fallback)]
 fn channel_to_json(c: &Channel) -> serde_json::Value {
     let mut obj = serde_json::json!({
         "id": c.id.to_string(),
@@ -1489,14 +1484,17 @@ fn channel_to_json(c: &Channel) -> serde_json::Value {
     obj
 }
 
+// lint-allow-unused: serde_json::json! macros use bare integer literals for message type fields
+#[allow(clippy::default_numeric_fallback)]
 fn message_to_json(m: &Message, state: &DiscordState) -> serde_json::Value {
-    let author = state.users.get(&m.author_id).map(|u| user_to_json(&u)).unwrap_or_else(|| {
-        serde_json::json!({
+    let author = state.users.get(&m.author_id).map_or_else(
+        || serde_json::json!({
             "id": m.author_id.to_string(),
             "username": m.author_id.to_string(),
             "discriminator": "0000"
-        })
-    });
+        }),
+        |u| user_to_json(&u),
+    );
 
     let attachments: Vec<serde_json::Value> = m.attachments.iter().map(attachment_to_json).collect();
 
@@ -1514,10 +1512,10 @@ fn message_to_json(m: &Message, state: &DiscordState) -> serde_json::Value {
     });
 
     // Inline thread reference
-    if let Some(thread_id) = m.thread_id {
-        if let Some(thread_ch) = state.channels.get(&thread_id) {
-            obj["thread"] = channel_to_json(&thread_ch);
-        }
+    if let Some(thread_id) = m.thread_id
+        && let Some(thread_ch) = state.channels.get(&thread_id)
+    {
+        obj["thread"] = channel_to_json(&thread_ch);
     }
 
     obj

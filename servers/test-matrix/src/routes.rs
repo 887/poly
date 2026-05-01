@@ -316,14 +316,14 @@ pub async fn get_messages(
         timeline.get(start..from_idx).unwrap_or_default().iter().rev().cloned().collect()
     } else {
         // Forwards: take `limit` events from `from_idx`
-        let end = (from_idx + limit).min(timeline.len());
+        let end = from_idx.saturating_add(limit).min(timeline.len());
         timeline.get(from_idx..end).unwrap_or_default().to_vec()
     };
 
     let end_token = if dir == "b" {
         from_idx.saturating_sub(limit).to_string()
     } else {
-        (from_idx + chunk.len()).to_string()
+        from_idx.saturating_add(chunk.len()).to_string()
     };
 
     Json(serde_json::json!({
@@ -420,6 +420,8 @@ pub async fn sync(
     // If we have a since token and timeout, do long-poll: wait for new events
     if since > 0 && timeout_ms > 0 {
         let mut rx = state.events.subscribe();
+        // lint-allow-unused: Instant + bounded Duration cannot overflow within long-poll budget
+        #[allow(clippy::arithmetic_side_effects)]
         let deadline = tokio::time::Instant::now() + tokio::time::Duration::from_millis(timeout_ms);
 
         // Wait for an event or timeout
@@ -563,7 +565,7 @@ pub async fn space_hierarchy(
         .state_events
         .iter()
         .filter(|ev| ev.get("type").and_then(|t| t.as_str()) == Some("m.space.child"))
-        .filter_map(|ev| ev.get("state_key").and_then(|k| k.as_str()).map(|s| s.to_string()))
+        .filter_map(|ev| ev.get("state_key").and_then(|k| k.as_str()).map(std::string::ToString::to_string))
         .collect();
 
     let space_name = space.name.clone();
@@ -852,11 +854,11 @@ pub async fn redact_event(
     // Mark the event as redacted in the timeline.
     if let Some(mut timeline) = state.timelines.get_mut(&room_id) {
         for ev in timeline.iter_mut() {
-            if ev.get("event_id").and_then(serde_json::Value::as_str) == Some(&event_id) {
-                if let Some(obj) = ev.as_object_mut() {
-                    obj.insert("redacted".to_string(), serde_json::json!(true));
-                    obj.insert("content".to_string(), serde_json::json!({}));
-                }
+            if ev.get("event_id").and_then(serde_json::Value::as_str) == Some(&event_id)
+                && let Some(obj) = ev.as_object_mut()
+            {
+                obj.insert("redacted".to_string(), serde_json::json!(true));
+                obj.insert("content".to_string(), serde_json::json!({}));
             }
         }
     }

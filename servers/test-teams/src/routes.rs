@@ -48,8 +48,7 @@ pub async fn test_auth_token(
         .users
         .iter()
         .find(|u| u.display_name == identifier || u.email == identifier)
-        .map(|u| u.id.clone())
-        .unwrap_or_else(|| identifier.to_string());
+        .map_or_else(|| identifier.to_string(), |u| u.id.clone());
     let token = state.auth.create_token(&user_id);
     Json(serde_json::json!({
         "result": "Success",
@@ -221,7 +220,7 @@ pub async fn get_channel_messages(
         Err(e) => e.into_response(),
         Ok(_) => {
             let msgs = state.messages.get(&channel_id).map(|v| v.clone()).unwrap_or_default();
-            let top = query.top.unwrap_or(50).min(100) as usize;
+            let top = usize::try_from(query.top.unwrap_or(50).min(100)).unwrap_or(0);
             let value: Vec<serde_json::Value> = msgs.iter().rev().take(top)
                 .map(|m| message_to_json(m, &state))
                 .collect();
@@ -246,9 +245,9 @@ pub async fn send_channel_message(
         Err(e) => e.into_response(),
         Ok(user_id) => {
             let content = body.body
-                .and_then(|b| b.get("content").and_then(|c| c.as_str()).map(|s| s.to_string()))
+                .and_then(|b| b.get("content").and_then(|c| c.as_str()).map(std::string::ToString::to_string))
                 .unwrap_or_default();
-            let msg_id = format!("MSG{}", state.messages.len() + 100);
+            let msg_id = format!("MSG{}", state.messages.len().saturating_add(100));
             let msg = Message {
                 id: msg_id.clone(),
                 body_content: content,
@@ -286,7 +285,7 @@ pub async fn edit_channel_message(
         Err(e) => e.into_response(),
         Ok(user_id) => {
             let new_content = body.body
-                .and_then(|b| b.get("content").and_then(|c| c.as_str()).map(|s| s.to_string()));
+                .and_then(|b| b.get("content").and_then(|c| c.as_str()).map(std::string::ToString::to_string));
             let Some(new_content) = new_content else {
                 return graph_error(StatusCode::BAD_REQUEST, "InvalidRequest", "Missing body.content").into_response();
             };
@@ -403,8 +402,7 @@ pub async fn long_poll_events(
         Ok(Ok(event)) => Json(serde_json::json!({
             "events": [event_to_json(&event)]
         })).into_response(),
-        Ok(Err(_)) => Json(serde_json::json!({ "events": [] })).into_response(),
-        Err(_) => Json(serde_json::json!({ "events": [] })).into_response(),
+        Ok(Err(_)) | Err(_) => Json(serde_json::json!({ "events": [] })).into_response(),
     }
 }
 
@@ -484,7 +482,7 @@ pub async fn get_team_members(
                 .unwrap_or_default();
             let value: Vec<serde_json::Value> = members
                 .iter()
-                .map(|m| membership_to_json(m))
+                .map(membership_to_json)
                 .collect();
             Json(serde_json::json!({ "value": value })).into_response()
         }
@@ -618,7 +616,7 @@ pub async fn get_chat_messages(
             }
             drop(chat);
             let msgs = state.messages.get(&chat_id).map(|v| v.clone()).unwrap_or_default();
-            let top = query.top.unwrap_or(50).min(100) as usize;
+            let top = usize::try_from(query.top.unwrap_or(50).min(100)).unwrap_or(0);
             let value: Vec<serde_json::Value> = msgs.iter().rev().take(top)
                 .map(|m| message_to_json(m, &state))
                 .collect();
@@ -645,9 +643,9 @@ pub async fn send_chat_message(
             }
             drop(chat);
             let content = body.body
-                .and_then(|b| b.get("content").and_then(|c| c.as_str()).map(|s| s.to_string()))
+                .and_then(|b| b.get("content").and_then(|c| c.as_str()).map(std::string::ToString::to_string))
                 .unwrap_or_default();
-            let msg_id = format!("MSG{}", state.messages.len() + 100);
+            let msg_id = format!("MSG{}", state.messages.len().saturating_add(100));
             let msg = Message {
                 id: msg_id.clone(),
                 body_content: content,
@@ -743,8 +741,7 @@ fn channel_to_json(c: &crate::state::Channel) -> serde_json::Value {
 fn chat_to_json_with_state(c: &crate::state::Chat, state: &TeamsState) -> serde_json::Value {
     let members: Vec<serde_json::Value> = c.members.iter().map(|uid| {
         let display_name = state.users.get(uid)
-            .map(|u| u.display_name.clone())
-            .unwrap_or_else(|| uid.clone());
+            .map_or_else(|| uid.clone(), |u| u.display_name.clone());
         serde_json::json!({
             "id": format!("member-{uid}"),
             "userId": uid,
@@ -794,11 +791,14 @@ fn membership_to_json(m: &crate::state::TeamMembership) -> serde_json::Value {
 }
 
 fn message_to_json(m: &Message, state: &TeamsState) -> serde_json::Value {
-    let from_user = state.users.get(&m.from_user_id).map(|u| serde_json::json!({
-        "user": { "id": u.id, "displayName": u.display_name }
-    })).unwrap_or_else(|| serde_json::json!({
-        "user": { "id": m.from_user_id, "displayName": m.from_user_id }
-    }));
+    let from_user = state.users.get(&m.from_user_id).map_or_else(
+        || serde_json::json!({
+            "user": { "id": m.from_user_id, "displayName": m.from_user_id }
+        }),
+        |u| serde_json::json!({
+            "user": { "id": u.id, "displayName": u.display_name }
+        }),
+    );
     let reactions: Vec<serde_json::Value> = m.reactions.iter().map(|r| serde_json::json!({
         "reactionType": r.reaction_type,
         "createdDateTime": r.created_date_time,

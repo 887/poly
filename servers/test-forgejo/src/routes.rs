@@ -284,10 +284,10 @@ pub async fn get_issue(
     }
 
     let full_name = format!("{owner}/{repo}");
-    if let Some(issues) = state.issues.get(&full_name) {
-        if let Some(issue) = issues.iter().find(|i| i.number == index) {
-            return Json(issue_json(issue)).into_response();
-        }
+    if let Some(issues) = state.issues.get(&full_name)
+        && let Some(issue) = issues.iter().find(|i| i.number == index)
+    {
+        return Json(issue_json(issue)).into_response();
     }
 
     (
@@ -315,8 +315,7 @@ pub async fn check_starred(
     let is_starred = state
         .starred
         .get(&user_id)
-        .map(|set| set.contains(&full_name))
-        .unwrap_or(false);
+        .is_some_and(|set| set.contains(&full_name));
 
     if is_starred {
         (StatusCode::NO_CONTENT, "").into_response()
@@ -390,8 +389,7 @@ pub async fn delete_issue_comment(
     let is_owner = state
         .repos
         .get(&full_name)
-        .map(|r| r.owner.login == user_id)
-        .unwrap_or(false);
+        .is_some_and(|r| r.owner.login == user_id);
 
     if !is_owner {
         return (
@@ -404,12 +402,12 @@ pub async fn delete_issue_comment(
     // Search all issue comment lists for this repo and remove the comment.
     let mut found = false;
     for mut entry in state.comments.iter_mut() {
-        if entry.key().starts_with(&format!("{full_name}/")) {
-            if let Some(pos) = entry.value().iter().position(|c| c.id == comment_id) {
-                entry.value_mut().remove(pos);
-                found = true;
-                break;
-            }
+        if entry.key().starts_with(&format!("{full_name}/"))
+            && let Some(pos) = entry.value().iter().position(|c| c.id == comment_id)
+        {
+            entry.value_mut().remove(pos);
+            found = true;
+            break;
         }
     }
 

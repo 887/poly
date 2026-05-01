@@ -59,6 +59,7 @@ pub struct HeaderInspectBuffer {
 
 impl HeaderInspectBuffer {
     /// Create an empty buffer.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             inner: Arc::new(Mutex::new(VecDeque::new())),
@@ -81,6 +82,7 @@ impl HeaderInspectBuffer {
     }
 
     /// Return all captured entries, most-recent first.
+    #[must_use]
     pub fn recent(&self) -> Vec<HeaderEntry> {
         let buf = self.inner.lock().expect("inspect buffer lock poisoned");
         buf.iter().rev().cloned().collect()
@@ -116,9 +118,10 @@ pub async fn header_inspect_middleware(
     next: Next,
 ) -> impl IntoResponse {
     let method = req.method().to_string();
-    let path = req.uri().path_and_query()
-        .map(|pq| pq.as_str().to_string())
-        .unwrap_or_else(|| req.uri().path().to_string());
+    let path = req.uri().path_and_query().map_or_else(
+        || req.uri().path().to_string(),
+        |pq| pq.as_str().to_string(),
+    );
 
     let headers: HashMap<String, String> = req
         .headers()

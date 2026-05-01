@@ -84,6 +84,7 @@ impl Default for MatrixState {
 }
 
 impl MatrixState {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             auth: AuthState::new(),
@@ -100,17 +101,21 @@ impl MatrixState {
     }
 
     /// Get next event ID like "$evt1", "$evt2", etc.
+    #[must_use]
     pub fn next_event_id(&self) -> String {
         let n = self.event_counter.fetch_add(1, Ordering::Relaxed);
         format!("$evt{n}")
     }
 
     /// Get current sync token (stringified counter).
+    #[must_use]
     pub fn sync_token(&self) -> String {
         self.event_counter.load(Ordering::Relaxed).to_string()
     }
 
     /// Seed demo data: Owl + Axolotl, 2 spaces, rooms, messages, DMs.
+    // lint-allow-unused: serde_json::json! macros use bare integer literals for power-level values
+    #[allow(clippy::default_numeric_fallback)]
     pub fn seed(&self) {
         if !self.users.is_empty() {
             tracing::info!("Matrix demo data already seeded, skipping");
@@ -386,11 +391,11 @@ impl MatrixState {
             Room {
                 room_id: room_id.to_string(),
                 name: name.to_string(),
-                topic: topic.map(|s| s.to_string()),
+                topic: topic.map(std::string::ToString::to_string),
                 avatar_url: None,
-                members: members.iter().map(|s| s.to_string()).collect(),
+                members: members.iter().map(|s| (*s).to_string()).collect(),
                 is_space,
-                parent_space_id: parent_space_id.map(|s| s.to_string()),
+                parent_space_id: parent_space_id.map(std::string::ToString::to_string),
                 state_events,
             },
         );

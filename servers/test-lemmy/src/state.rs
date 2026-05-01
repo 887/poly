@@ -112,6 +112,7 @@ pub struct ModlogEntry {
 }
 
 impl LemmyState {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             auth: AuthState::new(),
@@ -300,6 +301,7 @@ impl LemmyState {
     }
 
     /// Allocate the next auto-increment modlog id.
+    #[must_use]
     pub fn next_modlog_id(&self) -> i64 {
         self.modlog_seq.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     }

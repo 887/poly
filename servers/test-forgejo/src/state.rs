@@ -92,6 +92,7 @@ pub struct ContentEntry {
 }
 
 impl ForgejoState {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             auth: AuthState::new(),
@@ -348,7 +349,7 @@ impl ForgejoState {
             name: "README.md".to_string(),
             path: "README.md".to_string(),
             kind: "file".to_string(),
-            size: readme_text.len() as u64,
+            size: u64::try_from(readme_text.len()).unwrap_or(u64::MAX),
             content: Some(readme_b64),
             encoding: Some("base64".to_string()),
         };

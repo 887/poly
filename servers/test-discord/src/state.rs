@@ -109,6 +109,9 @@ pub struct Attachment {
     pub height: Option<u32>,
 }
 
+/// Map from `(guild_id, user_id)` to the role IDs assigned to that member.
+pub type MemberRolesMap = DashMap<(Id<GuildMarker>, Id<UserMarker>), Vec<Id<RoleMarker>>>;
+
 /// All mock Discord state.
 #[derive(Clone)]
 pub struct DiscordState {
@@ -124,7 +127,7 @@ pub struct DiscordState {
     /// Roles per guild (guild_id → Vec<Role>).
     pub guild_roles: DashMap<Id<GuildMarker>, Vec<Role>>,
     /// Member roles per (guild, user) — role IDs assigned to that member.
-    pub member_roles: DashMap<(Id<GuildMarker>, Id<UserMarker>), Vec<Id<RoleMarker>>>,
+    pub member_roles: MemberRolesMap,
     /// Bans per guild (guild_id → Vec<Ban>).
     pub bans: DashMap<Id<GuildMarker>, Vec<Ban>>,
     /// Audit log per guild (guild_id → Vec<AuditLogEntry>), newest first.
@@ -201,6 +204,7 @@ impl Default for DiscordState {
 }
 
 impl DiscordState {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             auth: AuthState::new(),
@@ -748,14 +752,14 @@ impl DiscordState {
         let next_id = self.next_audit_id.fetch_add(3, std::sync::atomic::Ordering::Relaxed);
         self.audit_log.insert(Id::new(100), vec![
             AuditLogEntry {
-                id: next_id + 2,
+                id: next_id.saturating_add(2),
                 action_type: 22, // ban_add
                 user_id: Some(Id::new(1)),
                 target_id: Some("3".to_string()),
                 reason: Some("spamming".into()),
             },
             AuditLogEntry {
-                id: next_id + 1,
+                id: next_id.saturating_add(1),
                 action_type: 20, // kick
                 user_id: Some(Id::new(1)),
                 target_id: Some("2".to_string()),

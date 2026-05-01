@@ -27,6 +27,7 @@ struct OnDisk {
 }
 
 impl AuthState {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -36,12 +37,13 @@ impl AuthState {
     pub fn load(path: impl Into<PathBuf>) -> Self {
         let path = path.into();
         let tokens = match std::fs::read(&path) {
-            Ok(bytes) => serde_json::from_slice::<OnDisk>(&bytes)
-                .map(|d| d.tokens.into_iter().collect::<DashMap<_, _>>())
-                .unwrap_or_else(|e| {
+            Ok(bytes) => serde_json::from_slice::<OnDisk>(&bytes).map_or_else(
+                |e| {
                     tracing::warn!("auth file {} is malformed ({e}); starting empty", path.display());
                     DashMap::new()
-                }),
+                },
+                |d| d.tokens.into_iter().collect::<DashMap<_, _>>(),
+            ),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => DashMap::new(),
             Err(e) => {
                 tracing::warn!("could not read auth file {}: {e}", path.display());
@@ -93,6 +95,7 @@ impl AuthState {
     }
 
     /// Create a new token for the given user ID. Returns the token string.
+    #[must_use]
     pub fn create_token(&self, user_id: &str) -> String {
         let token = Uuid::new_v4().to_string();
         self.tokens.insert(token.clone(), user_id.to_string());
@@ -101,6 +104,7 @@ impl AuthState {
     }
 
     /// Validate a token and return the associated user ID.
+    #[must_use]
     pub fn validate(&self, token: &str) -> Option<String> {
         self.tokens.get(token).map(|entry| entry.value().clone())
     }

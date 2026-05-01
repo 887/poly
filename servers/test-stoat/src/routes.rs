@@ -155,6 +155,8 @@ pub async fn get_me(
 }
 
 /// GET /users/@me/servers — list servers the authenticated user belongs to
+// lint-allow-unused: serde_json::json! macros use bare integer literals for size/dimension fields
+#[allow(clippy::default_numeric_fallback)]
 pub async fn get_my_servers(
     State(state): State<std::sync::Arc<StoatState>>,
     headers: HeaderMap,
@@ -214,6 +216,8 @@ fn user_to_json(user: &crate::state::User) -> serde_json::Value {
     user_to_json_with_relations(user, &[])
 }
 
+// lint-allow-unused: serde_json::json! macros use bare integer literals for size/dimension fields
+#[allow(clippy::default_numeric_fallback)]
 fn user_to_json_with_relations(user: &crate::state::User, relations: &[(&str, &str)]) -> serde_json::Value {
     serde_json::json!({
         "_id": user.id,
@@ -505,10 +509,10 @@ pub async fn edit_member(
     let key = crate::state::StoatState::member_key(&server_id, &member_id);
 
     // Handle remove: ["Timeout"] to clear a timeout.
-    if let Some(remove) = body.get("remove").and_then(|r| r.as_array()) {
-        if remove.iter().any(|v| v.as_str() == Some("Timeout")) {
-            state.member_mod.entry(key.clone()).and_modify(|m| m.timeout = None);
-        }
+    if let Some(remove) = body.get("remove").and_then(|r| r.as_array())
+        && remove.iter().any(|v| v.as_str() == Some("Timeout"))
+    {
+        state.member_mod.entry(key.clone()).and_modify(|m| m.timeout = None);
     }
 
     // Handle timeout field to set a timeout.
@@ -718,9 +722,8 @@ pub async fn get_messages(
         let idx = timeline
             .iter()
             .position(|m| &m.id == after)
-            .map(|i| i + 1)
-            .unwrap_or(0);
-        let end = (idx + limit).min(timeline.len());
+            .map_or(0, |i| i.saturating_add(1));
+        let end = idx.saturating_add(limit).min(timeline.len());
         timeline.get(idx..end).unwrap_or_default().iter().map(message_to_json).collect()
     } else {
         // Most recent messages
@@ -732,7 +735,7 @@ pub async fn get_messages(
         // Return object with messages + users
         let user_ids: std::collections::HashSet<String> = messages
             .iter()
-            .filter_map(|m| m.get("author").and_then(|a| a.as_str()).map(|s| s.to_string()))
+            .filter_map(|m| m.get("author").and_then(|a| a.as_str()).map(std::string::ToString::to_string))
             .collect();
         let users: Vec<serde_json::Value> = user_ids
             .iter()
@@ -794,7 +797,7 @@ pub async fn send_message(
     let nonce = body
         .get("nonce")
         .and_then(|n| n.as_str())
-        .map(|s| s.to_string());
+        .map(std::string::ToString::to_string);
     let replies: Option<Vec<String>> = body
         .get("replies")
         .and_then(|r| r.as_array())
@@ -803,7 +806,7 @@ pub async fn send_message(
                 .filter_map(|v| {
                     v.get("id")
                         .and_then(|id| id.as_str())
-                        .map(|s| s.to_string())
+                        .map(std::string::ToString::to_string)
                 })
                 .collect()
         });
@@ -1013,11 +1016,11 @@ async fn bonfire_handler(mut socket: WebSocket, state: std::sync::Arc<StoatState
     let _user_id = match state.auth.validate(&token) {
         Some(uid) => uid,
         None => {
-            let _ = socket
+            drop(socket
                 .send(WsMessage::Text(
                     serde_json::json!({"type":"InvalidSession"}).to_string().into(),
                 ))
-                .await;
+                .await);
             return;
         }
     };

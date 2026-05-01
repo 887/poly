@@ -157,6 +157,7 @@ impl Default for StoatState {
 }
 
 impl StoatState {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             auth: AuthState::new(),
@@ -175,11 +176,13 @@ impl StoatState {
     }
 
     /// Composite key for ban/member-mod maps.
+    #[must_use]
     pub fn member_key(server_id: &str, user_id: &str) -> String {
         format!("{server_id}/{user_id}")
     }
 
     /// Get next unique message ID (ULID-like format).
+    #[must_use]
     pub fn next_message_id(&self) -> String {
         let n = self.msg_counter.fetch_add(1, Ordering::Relaxed);
         format!("01HMSG{n:010}")
@@ -430,8 +433,8 @@ impl StoatState {
             Channel {
                 id: id.to_string(),
                 name: name.to_string(),
-                description: description.map(|s| s.to_string()),
-                server_id: server_id.map(|s| s.to_string()),
+                description: description.map(std::string::ToString::to_string),
+                server_id: server_id.map(std::string::ToString::to_string),
                 channel_type: channel_type.to_string(),
                 recipients: vec![],
                 last_message_id: None,
@@ -440,7 +443,10 @@ impl StoatState {
         self.messages.insert(id.to_string(), Vec::new());
     }
 
-    /// Helper: add a message to a channel.
+    /// Helper: add a message to a channel. Returns the new message ID,
+    /// which seed code may discard (mutation is the primary effect).
+    // lint-allow-unused: returned id is convenience for callers; seed callers intentionally drop it
+    #[allow(clippy::must_use_candidate)]
     pub fn add_message(&self, channel_id: &str, author: &str, content: &str) -> String {
         let msg_id = self.next_message_id();
         let msg = Message {

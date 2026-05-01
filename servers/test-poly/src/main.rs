@@ -99,7 +99,7 @@ async fn main() -> anyhow::Result<()> {
 
     axum::serve(base.listener, app)
         .with_graceful_shutdown(async {
-            let _ = base.shutdown_rx.await;
+            drop(base.shutdown_rx.await);
         })
         .await?;
 

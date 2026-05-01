@@ -111,6 +111,7 @@ pub struct ContentEntry {
 }
 
 impl GitHubState {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             auth: AuthState::new(),
@@ -438,7 +439,7 @@ impl GitHubState {
                 name: "README.md".to_string(),
                 path: "README.md".to_string(),
                 kind: "file".to_string(),
-                size: readme_text.len() as u64,
+                size: u64::try_from(readme_text.len()).unwrap_or(u64::MAX),
                 content: Some(readme_b64),
                 encoding: Some("base64".to_string()),
             },
@@ -453,7 +454,7 @@ impl GitHubState {
                 name: "main.rs".to_string(),
                 path: "src/main.rs".to_string(),
                 kind: "file".to_string(),
-                size: main_text.len() as u64,
+                size: u64::try_from(main_text.len()).unwrap_or(u64::MAX),
                 content: Some(main_b64),
                 encoding: Some("base64".to_string()),
             },

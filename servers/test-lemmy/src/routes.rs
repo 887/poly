@@ -406,6 +406,8 @@ pub struct GetUserQuery {
 }
 
 /// GET /api/v3/user
+// lint-allow-unused: serde_json::json! macros use bare integer literals for IDs/counts
+#[allow(clippy::default_numeric_fallback)]
 pub async fn get_user(
     State(state): State<Arc<LemmyState>>,
     headers: HeaderMap,
@@ -464,6 +466,8 @@ pub async fn get_user(
 // ---------------------------------------------------------------------------
 
 /// GET /api/v3/site — returns current logged-in user info.
+// lint-allow-unused: serde_json::json! macros use bare integer literals for IDs
+#[allow(clippy::default_numeric_fallback)]
 pub async fn get_site(
     State(state): State<Arc<LemmyState>>,
     headers: HeaderMap,
@@ -613,7 +617,7 @@ pub async fn create_comment(
             .flat_map(|e| e.value().iter().map(|c| c.id).collect::<Vec<_>>())
             .max()
             .unwrap_or(0);
-        max + 1
+        max.saturating_add(1)
     };
 
     let comment = crate::state::Comment {
@@ -641,16 +645,16 @@ fn comment_view(comment: &crate::state::Comment, state: &LemmyState) -> Value {
     let creator = state
         .users
         .get(&comment.creator_name)
-        .map(|u| {
-            json!({
+        .map_or_else(
+            || json!({ "id": comment.creator_id, "name": comment.creator_name }),
+            |u| json!({
                 "id": u.id,
                 "name": u.name,
                 "display_name": u.display_name,
                 "avatar": u.avatar,
                 "actor_id": u.actor_id,
-            })
-        })
-        .unwrap_or_else(|| json!({ "id": comment.creator_id, "name": comment.creator_name }));
+            }),
+        );
 
     json!({
         "comment": {
@@ -727,7 +731,7 @@ pub async fn register(
             .into_response();
     }
 
-    let next_id = (state.users.len() as i64) + 1;
+    let next_id = i64::try_from(state.users.len()).unwrap_or(i64::MAX).saturating_add(1);
     state.users.insert(
         username.clone(),
         crate::state::User {
@@ -768,7 +772,7 @@ pub async fn edit_community(
         return auth_error().into_response();
     }
 
-    let community_id = match body.get("community_id").and_then(|v| v.as_i64()) {
+    let community_id = match body.get("community_id").and_then(serde_json::Value::as_i64) {
         Some(id) => id,
         None => {
             return (
@@ -835,6 +839,8 @@ pub struct BanFromCommunityRequest {
 }
 
 /// POST /api/v3/community/ban_user
+// lint-allow-unused: serde_json::json! macros use bare integer literals for IDs/counts
+#[allow(clippy::default_numeric_fallback)]
 pub async fn community_ban_user(
     State(state): State<Arc<LemmyState>>,
     headers: HeaderMap,
@@ -973,7 +979,7 @@ pub async fn post_remove(
         commenter_name: None,
         reason: body.reason.clone(),
         removed: body.removed,
-        when_: when_,
+        when_,
     };
 
     state
@@ -1048,7 +1054,7 @@ pub async fn comment_remove(
         commenter_name: commenter.as_ref().map(|u| u.name.clone()),
         reason: body.reason.clone(),
         removed: body.removed,
-        when_: when_,
+        when_,
     };
 
     state
@@ -1231,27 +1237,27 @@ pub async fn get_modlog(
     };
 
     for cid in &community_ids {
-        if type_filter == "All" || type_filter == "ModBanFromCommunity" {
-            if let Some(entries) = state.bans.get(cid) {
-                for be in entries.iter() {
-                    banned_from_community.push(build_ban_entry(be));
-                }
+        if (type_filter == "All" || type_filter == "ModBanFromCommunity")
+            && let Some(entries) = state.bans.get(cid)
+        {
+            for be in entries.iter() {
+                banned_from_community.push(build_ban_entry(be));
             }
         }
 
-        if type_filter == "All" || type_filter == "ModRemovePost" {
-            if let Some(entries) = state.modlog.get(cid) {
-                for me in entries.iter().filter(|e| e.action == "ModRemovePost") {
-                    removed_posts.push(build_remove_post_entry(me));
-                }
+        if (type_filter == "All" || type_filter == "ModRemovePost")
+            && let Some(entries) = state.modlog.get(cid)
+        {
+            for me in entries.iter().filter(|e| e.action == "ModRemovePost") {
+                removed_posts.push(build_remove_post_entry(me));
             }
         }
 
-        if type_filter == "All" || type_filter == "ModRemoveComment" {
-            if let Some(entries) = state.modlog.get(cid) {
-                for me in entries.iter().filter(|e| e.action == "ModRemoveComment") {
-                    removed_comments.push(build_remove_comment_entry(me));
-                }
+        if (type_filter == "All" || type_filter == "ModRemoveComment")
+            && let Some(entries) = state.modlog.get(cid)
+        {
+            for me in entries.iter().filter(|e| e.action == "ModRemoveComment") {
+                removed_comments.push(build_remove_comment_entry(me));
             }
         }
     }
