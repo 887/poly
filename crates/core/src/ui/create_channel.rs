@@ -168,8 +168,8 @@ fn do_create_channel(
     info!("do_create_channel: name={name:?} server_id={server_id:?}");
     let CreateChannelSignals {
         client_manager,
-        mut app_state,
-        mut chat_data,
+        app_state: _,
+        chat_data,
         mut creating,
         mut error_msg,
     } = signals;

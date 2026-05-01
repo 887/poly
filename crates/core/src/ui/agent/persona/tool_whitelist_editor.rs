@@ -133,16 +133,16 @@ pub fn PersonaToolWhitelistEditor(props: PersonaToolWhitelistEditorProps) -> Ele
         KNOWN_TOOLS
             .iter()
             .filter(|t| categorise(t) != ToolCategory::Outbound)
-            .map(|s| s.to_string())
+            .map(std::string::ToString::to_string)
             .collect()
     } else {
         props.existing_whitelist.iter().cloned().collect()
     };
-    let mut whitelist: Signal<BTreeSet<String>> = use_signal(move || initial);
+    let whitelist: Signal<BTreeSet<String>> = use_signal(move || initial);
     let mut saving = use_signal(|| false);
     let mut save_error: Signal<Option<String>> = use_signal(|| None);
 
-    let on_saved = props.on_saved.clone();
+    let on_saved = props.on_saved;
 
     // Group tools by category for rendering.
     let mut by_category: Vec<(ToolCategory, Vec<&str>)> = vec![
@@ -198,7 +198,7 @@ pub fn PersonaToolWhitelistEditor(props: PersonaToolWhitelistEditorProps) -> Ele
                         move |_| {
                             let slug_save = slug_save.clone();
                             let tools: Vec<String> = whitelist.read().iter().cloned().collect();
-                            let on_saved = on_saved.clone();
+                            let on_saved = on_saved;
                             saving.set(true);
                             save_error.set(None);
                             spawn(async move {

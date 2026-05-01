@@ -79,9 +79,7 @@ fn ConversationSearchInput(query: Signal<String>) -> Element {
 fn AvatarIcon(url: Option<String>, label: String, color: String) -> Element {
     let initial = label
         .chars()
-        .next()
-        .map(|c| c.to_uppercase().to_string())
-        .unwrap_or_else(|| "?".to_string());
+        .next().map_or_else(|| "?".to_string(), |c| c.to_uppercase().to_string());
     rsx! {
         if let Some(img_url) = url {
             img {
@@ -176,7 +174,7 @@ pub fn ConversationSearchView() -> Element {
     let enabled_types: Signal<std::collections::HashSet<String>> = use_signal(|| {
         ["dms", "groups"]
             .iter()
-            .map(|s| s.to_string())
+            .map(std::string::ToString::to_string)
             .collect()
     });
     let mut dm_visible: Signal<usize> = use_signal(|| 20_usize);
@@ -239,9 +237,7 @@ pub fn ConversationSearchView() -> Element {
     let account_label = chat_data
         .read()
         .account_sessions
-        .get(&active_account_id)
-        .map(|session| session.user.display_name.clone())
-        .unwrap_or_else(|| active_account_id.clone());
+        .get(&active_account_id).map_or_else(|| active_account_id.clone(), |session| session.user.display_name.clone());
     let instance_id = chat_data
         .read()
         .account_sessions
@@ -251,9 +247,7 @@ pub fn ConversationSearchView() -> Element {
     let backend_slug = chat_data
         .read()
         .account_sessions
-        .get(&active_account_id)
-        .map(|session| session.user.backend.slug().to_string())
-        .unwrap_or_else(|| "demo".to_string());
+        .get(&active_account_id).map_or_else(|| "demo".to_string(), |session| session.user.backend.slug().to_string());
 
     rsx! {
         main { class: "search-page-results search-page-results-embedded",

@@ -21,11 +21,13 @@ pub fn bisect_log(msg: &str) {
         init.set_method("POST");
         init.set_body(&wasm_bindgen::JsValue::from_str(&body));
         if let Ok(headers) = web_sys::Headers::new() {
-            let _ = headers.set("content-type", "application/json");
+            drop(headers.set("content-type", "application/json"));
+
             init.set_headers(&headers);
         }
         if let Ok(req) = web_sys::Request::new_with_str_and_init("/host/kv/set", &init) {
-            let _ = window.fetch_with_request(&req);
+            drop(window.fetch_with_request(&req));
+
         }
     }
 }

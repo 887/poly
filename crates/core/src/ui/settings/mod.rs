@@ -281,7 +281,7 @@ fn install_settings_scroll_spy(
             ]
             .into_iter()
             .map(ToString::to_string)
-            .chain(_plugin_section_ids.into_iter())
+            .chain(_plugin_section_ids)
             .collect(),
             plugin_section_prefix: Some("settings-section-plugin-"),
         };

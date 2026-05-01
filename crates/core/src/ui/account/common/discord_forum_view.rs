@@ -180,7 +180,7 @@ pub fn DiscordForumView() -> Element {
     let all_posts: Vec<ForumPost> = posts_res
         .read_unchecked()
         .as_ref()
-        .and_then(|opt| opt.clone())
+        .and_then(std::clone::Clone::clone)
         .unwrap_or_default();
 
     let loading = posts_res.read_unchecked().is_none();
@@ -208,9 +208,7 @@ pub fn DiscordForumView() -> Element {
         .read()
         .nav
         .active_backend
-        .cloned()
-        .map(|b| b.slug().to_string())
-        .unwrap_or_else(|| "demo".to_string());
+        .cloned().map_or_else(|| "demo".to_string(), |b| b.slug().to_string());
     let instance_id = app_state
         .read()
         .nav

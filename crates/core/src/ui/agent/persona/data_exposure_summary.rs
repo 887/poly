@@ -36,7 +36,7 @@ fn compute_summary(json: &serde_json::Value) -> SourceSummary {
     let mut channels = 0usize;
 
     for row in arr {
-        let include = row.get("include").and_then(|v| v.as_i64()).unwrap_or(0);
+        let include = row.get("include").and_then(serde_json::Value::as_i64).unwrap_or(0);
         if include != 1 {
             continue;
         }

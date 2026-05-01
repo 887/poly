@@ -151,6 +151,7 @@ pub enum SyncError {
 /// `SHA-256(nonce + counter.to_string())` has `difficulty` leading zero bits.
 ///
 /// Matches the server-side `verify_pow()` in `poly-backup-server/src/auth/mod.rs`.
+#[must_use] 
 pub fn solve_pow(nonce: &str, difficulty: u32) -> u64 {
     let mut counter: u64 = 0;
     loop {
@@ -194,6 +195,7 @@ pub struct SyncClient {
 
 impl SyncClient {
     /// Create a new sync client for a backup server.
+    #[must_use] 
     pub fn new(config: BackupServerConfig) -> Self {
         Self {
             http: reqwest::Client::new(),
@@ -202,16 +204,19 @@ impl SyncClient {
     }
 
     /// Base URL of the server.
+    #[must_use] 
     pub fn url(&self) -> &str {
         &self.config.url
     }
 
     /// Current stored session token (`None` if not yet authenticated).
+    #[must_use] 
     pub fn token(&self) -> Option<&str> {
         self.config.token.as_deref()
     }
 
     /// Reference to the current config (e.g. to persist after auth).
+    #[must_use] 
     pub fn config(&self) -> &BackupServerConfig {
         &self.config
     }

@@ -150,9 +150,7 @@ pub fn ChannelSettingsPage(
         .read()
         .channels
         .iter()
-        .find(|c| c.id == channel_id)
-        .map(|c| c.name.clone())
-        .unwrap_or_else(|| channel_id.clone());
+        .find(|c| c.id == channel_id).map_or_else(|| channel_id.clone(), |c| c.name.clone());
 
     rsx! {
         SplitMenuShell {

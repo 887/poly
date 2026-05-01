@@ -142,11 +142,10 @@ pub async fn restore_native_accounts(
                 return false;
             }
             // Apply the optional slug filter.
-            if let Some(slug) = slug_filter {
-                if t.backend != slug {
+            if let Some(slug) = slug_filter
+                && t.backend != slug {
                     return false;
                 }
-            }
             // Skip disabled backends.
             if disabled.contains(&t.backend) {
                 return false;

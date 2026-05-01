@@ -116,7 +116,7 @@ pub fn PersonaSourcesEditor(props: PersonaSourcesEditorProps) -> Element {
 
     // Build initial node map from existing_sources.
     let initial_nodes = build_initial_nodes(&props.existing_sources);
-    let mut nodes: Signal<Vec<SourceNode>> = use_signal(move || initial_nodes);
+    let nodes: Signal<Vec<SourceNode>> = use_signal(move || initial_nodes);
     let mut active_account: Signal<String> = use_signal(|| {
         props.account_ids.first().cloned().unwrap_or_default()
     });
@@ -124,7 +124,7 @@ pub fn PersonaSourcesEditor(props: PersonaSourcesEditorProps) -> Element {
     let mut save_error: Signal<Option<String>> = use_signal(|| None);
 
     let account_ids = props.account_ids.clone();
-    let on_saved = props.on_saved.clone();
+    let on_saved = props.on_saved;
 
     // Snapshot active account to avoid render-time subscription for the filter.
     let active = active_account.peek().clone();
@@ -198,7 +198,7 @@ pub fn PersonaSourcesEditor(props: PersonaSourcesEditorProps) -> Element {
                         move |_| {
                             let slug_save = slug_save.clone();
                             let current_nodes = nodes.read().clone();
-                            let on_saved = on_saved.clone();
+                            let on_saved = on_saved;
                             saving.set(true);
                             save_error.set(None);
                             spawn(async move {
@@ -209,7 +209,7 @@ pub fn PersonaSourcesEditor(props: PersonaSourcesEditorProps) -> Element {
                                         "account_id": n.account_id,
                                         "selector_kind": n.selector_kind,
                                         "selector_value": n.selector_value,
-                                        "include": if n.state == IncludeState::Allow { 1 } else { 0 },
+                                        "include": if n.state == IncludeState::Allow { 1_i32 } else { 0_i32 },
                                     }))
                                     .collect();
                                 match call_persona_mcp("meta_persona_set_sources", serde_json::json!({

@@ -156,9 +156,7 @@ pub fn AccountOverviewView(account_id: String) -> Element {
             let title = desc
                 .header
                 .as_ref()
-                .and_then(|h| h.title_key.clone())
-                .map(|k| t(&k))
-                .unwrap_or_else(|| t("overview-default-title"));
+                .and_then(|h| h.title_key.clone()).map_or_else(|| t("overview-default-title"), |k| t(&k));
             let subtitle = desc
                 .header
                 .as_ref()

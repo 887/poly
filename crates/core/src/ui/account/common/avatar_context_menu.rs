@@ -75,7 +75,7 @@ pub fn AvatarContextMenu() -> Element {
             {
                 let uid = user_id.clone();
                 let dname = display_name.clone();
-                let mut close = close;
+                let close = close;
                 rsx! {
                     AvatarMenuItem {
                         label: t("avatar-menu-view-profile"),
@@ -99,7 +99,7 @@ pub fn AvatarContextMenu() -> Element {
             // Stub logs a debug message until the nav path is available.
             {
                 let uid = user_id.clone();
-                let mut close = close;
+                let close = close;
                 rsx! {
                     AvatarMenuItem {
                         label: t("avatar-menu-send-dm"),
@@ -117,7 +117,7 @@ pub fn AvatarContextMenu() -> Element {
             // Mention — copies `@username` to clipboard
             {
                 let mention_text = format!("@{display_name}");
-                let mut close = close;
+                let close = close;
                 rsx! {
                     AvatarMenuItem {
                         label: t("avatar-menu-mention"),

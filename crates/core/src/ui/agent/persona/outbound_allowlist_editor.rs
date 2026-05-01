@@ -5,13 +5,13 @@
 //!
 //! Responsibilities:
 //! - G.1  Render per-(account, chat) allow/deny rows loaded via
-//!        `meta_persona_list_outbound_allows`.
+//!   `meta_persona_list_outbound_allows`.
 //! - G.2  Per-row `max_messages_per_day` stepper (1–20, default 1).
 //! - G.4  Dry-run posture banner when `rate_limit_per_hour == 0`.
 //! - G.6  Quiet-hours per-persona toggle stored in a Signal; persisted on
-//!        save by the parent modal via `meta_persona_update`.
-//!        (The DB column `quiet_hours_disabled` is added as an ALTER TABLE
-//!         guard-or-ignore migration in memory.rs Phase G.6 extension.)
+//!   save by the parent modal via `meta_persona_update`.
+//!   (The DB column `quiet_hours_disabled` is added as an ALTER TABLE
+//!   guard-or-ignore migration in memory.rs Phase G.6 extension.)
 //!
 //! ## Reactive hygiene
 //! - All signals are single-component-scoped local `Signal<T>`.
@@ -40,7 +40,7 @@ impl OutboundAllowEntry {
             chat_id: v.get("chat_id")?.as_str()?.to_string(),
             max_messages_per_day: v
                 .get("max_messages_per_day")
-                .and_then(|x| x.as_i64())
+                .and_then(serde_json::Value::as_i64)
                 .unwrap_or(1),
         })
     }
@@ -95,7 +95,7 @@ fn AllowRow(
                     disabled: cap <= 1,
                     onclick: {
                         let a = acct.clone(); let c = chat.clone();
-                        let on_cap_change = on_cap_change.clone();
+                        let on_cap_change = on_cap_change;
                         move |_| on_cap_change.call((a.clone(), c.clone(), (cap - 1).max(1)))
                     },
                     "−"
@@ -106,7 +106,7 @@ fn AllowRow(
                     disabled: cap >= 20,
                     onclick: {
                         let a = acct.clone(); let c = chat.clone();
-                        let on_cap_change = on_cap_change.clone();
+                        let on_cap_change = on_cap_change;
                         move |_| on_cap_change.call((a.clone(), c.clone(), (cap + 1).min(20)))
                     },
                     "+"
@@ -129,7 +129,7 @@ fn AllowRow(
 /// - `persona_slug`        — slug of the persona being edited.
 /// - `rate_limit_per_hour` — used to decide whether to show the dry-run banner.
 /// - `quiet_hours_disabled`— initial value from the persona row; updates fire
-///                           `on_quiet_hours_changed` so the parent can persist.
+///   `on_quiet_hours_changed` so the parent can persist.
 /// - `on_quiet_hours_changed` — called when the user toggles quiet-hours.
 #[derive(Props, Clone, PartialEq)]
 pub struct PersonaOutboundAllowlistEditorProps {
@@ -287,7 +287,7 @@ pub fn PersonaOutboundAllowlistEditor(
     };
 
     // G.6 — quiet-hours toggle handler.
-    let on_quiet_hours_changed = props.on_quiet_hours_changed.clone();
+    let on_quiet_hours_changed = props.on_quiet_hours_changed;
     let on_quiet_toggle = move |_| {
         let next = !*quiet_hours_disabled.read();
         quiet_hours_disabled.set(next);

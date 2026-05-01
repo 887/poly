@@ -212,7 +212,7 @@ pub fn signup_entry_for_bundled_slug(slug: &str) -> Option<SignupEntry> {
 pub fn sync_bundled_signup_entries(cm: &mut ClientManager, settings: &AppSettings) {
     let enabled = bundled_enabled_slugs(settings);
     for plugin in BUNDLED_PLUGINS {
-        let is_enabled = enabled.iter().any(|s| *s == plugin.slug);
+        let is_enabled = enabled.contains(&plugin.slug);
         match (is_enabled, signup_entry_for_bundled_slug(plugin.slug)) {
             (true, Some(entry)) => cm.register_signup_entry(entry),
             (false, _) => cm.unregister_signup_entry(plugin.slug),

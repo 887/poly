@@ -90,7 +90,8 @@ fn install_service_worker_force_reloader() {
             console.warn('[poly] ServiceWorker registration failed — no hang auto-reload', err);
         });
 })();"#;
-    let _ = js_sys::eval(js);
+    drop(js_sys::eval(js));
+
 }
 
 /// Inject a JS heartbeat that detects post-boot main-thread deadlocks.
@@ -219,7 +220,8 @@ fn install_interaction_hang_watchdog(timeout_ms: u32) {
         timeout = timeout_ms,
         auto_reload = OVERLAY_AUTO_RELOAD_MS,
     );
-    let _ = js_sys::eval(&js);
+    drop(js_sys::eval(&js));
+
 }
 
 /// Inject a JS `setTimeout` that shows the crash overlay if the startup
@@ -297,7 +299,8 @@ fn install_boot_hang_watchdog(timeout_ms: u32) {
 }})();"#,
         timeout = timeout_ms,
     );
-    let _ = js_sys::eval(&js);
+    drop(js_sys::eval(&js));
+
 }
 
 fn install_panic_hook() {
@@ -312,16 +315,16 @@ fn install_panic_hook() {
 
         // Write to localStorage so the info survives the page reload caused
         // by the subsequent `unreachable` opcode clearing the JS context.
-        if let Some(window) = web_sys::window() {
-            if let Ok(Some(storage)) = window.local_storage() {
+        if let Some(window) = web_sys::window()
+            && let Ok(Some(storage)) = window.local_storage() {
                 let entry = format!(
                     "PANIC|{}|{}",
                     location.as_deref().unwrap_or("unknown"),
                     message
                 );
-                let _ = storage.set_item("poly.lastPanic", &entry);
+                drop(storage.set_item("poly.lastPanic", &entry));
+
             }
-        }
 
         report_crash("panic", &message, location.as_deref());
     }));
@@ -344,7 +347,8 @@ fn install_window_error_listener() {
         report_crash("window-error", &message, location.as_deref());
     }));
 
-    let _ = window.add_event_listener_with_callback("error", closure.as_ref().unchecked_ref());
+    drop(window.add_event_listener_with_callback("error", closure.as_ref().unchecked_ref()));
+
     closure.forget();
 }
 
@@ -362,8 +366,8 @@ fn install_unhandled_rejection_listener() {
         report_crash("unhandled-rejection", &message, None);
     }));
 
-    let _ = window
-        .add_event_listener_with_callback("unhandledrejection", closure.as_ref().unchecked_ref());
+    drop(window
+        .add_event_listener_with_callback("unhandledrejection", closure.as_ref().unchecked_ref()));
     closure.forget();
 }
 
@@ -399,7 +403,8 @@ fn clear_previous_crash_state() {
         return;
     };
 
-    let _ = Reflect::delete_property(&window, &wasm_bindgen::JsValue::from_str(CRASH_STATE_KEY));
+    drop(Reflect::delete_property(&window, &wasm_bindgen::JsValue::from_str(CRASH_STATE_KEY)));
+
 
     let Some(document) = window.document() else {
         return;
@@ -408,7 +413,8 @@ fn clear_previous_crash_state() {
     if let Some(existing) = document.get_element_by_id(OVERLAY_ID)
         && let Some(body) = document.body()
     {
-        let _ = body.remove_child(&existing);
+        drop(body.remove_child(&existing));
+
     }
 }
 
@@ -417,23 +423,16 @@ fn report_crash(kind: &str, message: &str, location: Option<&str>) {
     // The panic hook fires first and carries the real source location;
     // window.onerror fires immediately after (triggered by the `unreachable`
     // opcode wasm-bindgen executes after the hook) and would clobber it.
-    if kind != "panic" {
-        if let Some(window) = web_sys::window() {
-            if let Ok(state) =
+    if kind != "panic"
+        && let Some(window) = web_sys::window()
+            && let Ok(state) =
                 Reflect::get(&window, &wasm_bindgen::JsValue::from_str(CRASH_STATE_KEY))
-            {
-                if !state.is_undefined() && !state.is_null() {
-                    if let Ok(existing_kind) =
+                && !state.is_undefined() && !state.is_null()
+                    && let Ok(existing_kind) =
                         Reflect::get(&state, &wasm_bindgen::JsValue::from_str("kind"))
-                    {
-                        if existing_kind.as_string().as_deref() == Some("panic") {
+                        && existing_kind.as_string().as_deref() == Some("panic") {
                             return;
                         }
-                    }
-                }
-            }
-        }
-    }
 
     let title = crate::i18n::t("wasm-crash-title");
     let description = crate::i18n::t("wasm-crash-description");
@@ -471,10 +470,10 @@ fn report_crash(kind: &str, message: &str, location: Option<&str>) {
     let Some(card) = element(&document, "div") else {
         return;
     };
-    let _ = card.set_attribute(
+    drop(card.set_attribute(
         "style",
         "max-width: 920px; margin: 0 auto; background: #1a1f2b; border: 1px solid rgba(255,255,255,0.14); border-radius: 16px; padding: 24px; box-shadow: 0 16px 48px rgba(0,0,0,0.45);",
-    );
+    ));
 
     append_text_block(
         &document,
@@ -525,20 +524,23 @@ fn report_crash(kind: &str, message: &str, location: Option<&str>) {
     }
 
     if let Some(button) = element(&document, "button") {
-        let _ = button.set_attribute(
+        drop(button.set_attribute(
             "style",
             "border: 0; border-radius: 10px; padding: 12px 16px; background: #4f8cff; color: white; font-size: 14px; font-weight: 600; cursor: pointer;",
-        );
+        ));
         button.set_text_content(Some(&reload_label));
         // Use a plain JS inline onclick so the button works even after WASM
         // has terminated (e.g. after a Rust panic). A wasm-bindgen Closure
         // requires the WASM module to still be alive to dispatch the click,
         // which is never true after the panic hook has run.
-        let _ = button.set_attribute("onclick", "window.location.reload()");
-        let _ = card.append_child(&button);
+        drop(button.set_attribute("onclick", "window.location.reload()"));
+
+        drop(card.append_child(&button));
+
     }
 
-    let _ = overlay.append_child(&card);
+    drop(overlay.append_child(&card));
+
 }
 
 fn store_crash_state(
@@ -549,43 +551,43 @@ fn store_crash_state(
     location: Option<&str>,
 ) {
     let state = Object::new();
-    let _ = Reflect::set(
+    drop(Reflect::set(
         &state,
         &wasm_bindgen::JsValue::from_str("kind"),
         &wasm_bindgen::JsValue::from_str(kind),
-    );
-    let _ = Reflect::set(
+    ));
+    drop(Reflect::set(
         &state,
         &wasm_bindgen::JsValue::from_str("kindLabel"),
         &wasm_bindgen::JsValue::from_str(kind_text),
-    );
-    let _ = Reflect::set(
+    ));
+    drop(Reflect::set(
         &state,
         &wasm_bindgen::JsValue::from_str("message"),
         &wasm_bindgen::JsValue::from_str(message),
-    );
-    let _ = Reflect::set(
+    ));
+    drop(Reflect::set(
         &state,
         &wasm_bindgen::JsValue::from_str("locale"),
         &wasm_bindgen::JsValue::from_str(&crate::i18n::current_locale()),
-    );
-    let _ = Reflect::set(
+    ));
+    drop(Reflect::set(
         &state,
         &wasm_bindgen::JsValue::from_str("path"),
         &wasm_bindgen::JsValue::from_str(&window.location().pathname().unwrap_or_default()),
-    );
+    ));
     if let Some(location) = location {
-        let _ = Reflect::set(
+        drop(Reflect::set(
             &state,
             &wasm_bindgen::JsValue::from_str("location"),
             &wasm_bindgen::JsValue::from_str(location),
-        );
+        ));
     }
-    let _ = Reflect::set(
+    drop(Reflect::set(
         window,
         &wasm_bindgen::JsValue::from_str(CRASH_STATE_KEY),
         &state,
-    );
+    ));
 }
 
 fn ensure_overlay(document: &Document, body: &web_sys::HtmlElement) -> Element {
@@ -597,17 +599,19 @@ fn ensure_overlay(document: &Document, body: &web_sys::HtmlElement) -> Element {
         return body.clone().unchecked_into::<Element>();
     };
     overlay.set_id(OVERLAY_ID);
-    let _ = overlay.set_attribute(
+    drop(overlay.set_attribute(
         "style",
         "position: fixed; inset: 0; z-index: 2147483647; overflow: auto; padding: 28px; background: rgba(10, 12, 16, 0.96); color: #fff; font-family: Inter, system-ui, sans-serif;",
-    );
-    let _ = body.append_child(&overlay);
+    ));
+    drop(body.append_child(&overlay));
+
     overlay
 }
 
 fn clear_children(node: &Element) {
     while let Some(child) = node.first_child() {
-        let _ = node.remove_child(&child);
+        drop(node.remove_child(&child));
+
     }
 }
 
@@ -615,9 +619,11 @@ fn append_text_block(document: &Document, parent: &Element, tag: &str, text: &st
     let Some(child) = element(document, tag) else {
         return;
     };
-    let _ = child.set_attribute("style", style);
+    drop(child.set_attribute("style", style));
+
     child.set_text_content(Some(text));
-    let _ = parent.append_child(&child);
+    drop(parent.append_child(&child));
+
 }
 
 fn element(document: &Document, tag: &str) -> Option<Element> {

@@ -97,7 +97,7 @@ fn AccountRow(
     instance_id: String,
     icon_color: String,
 ) -> Element {
-    let icon_char: String = display_name.chars().next().map(|c| c.to_uppercase().to_string()).unwrap_or_else(|| "?".to_string());
+    let icon_char: String = display_name.chars().next().map_or_else(|| "?".to_string(), |c| c.to_uppercase().to_string());
     let emoji = backend_emoji(&backend_slug);
     rsx! {
         div { class: "accounts-settings-row",
@@ -157,18 +157,10 @@ pub(super) fn AccountsSettings() -> Element {
                             let aid = account_id.clone();
                             let cm = client_manager.read();
                             let session = cm.sessions.get(&aid);
-                            let display_name = session
-                                .map(|s| s.user.display_name.clone())
-                                .unwrap_or_else(|| aid.clone());
-                            let backend_slug = session
-                                .map(|s| s.backend.slug().to_string())
-                                .unwrap_or_else(|| "demo".to_string());
-                            let backend_label = session
-                                .map(|s| s.backend.display_name().to_string())
-                                .unwrap_or_else(|| "Demo".to_string());
-                            let instance_id = session
-                                .map(|s| s.instance_id.clone())
-                                .unwrap_or_else(|| "demo".to_string());
+                            let display_name = session.map_or_else(|| aid.clone(), |s| s.user.display_name.clone());
+                            let backend_slug = session.map_or_else(|| "demo".to_string(), |s| s.backend.slug().to_string());
+                            let backend_label = session.map_or_else(|| "Demo".to_string(), |s| s.backend.display_name().to_string());
+                            let instance_id = session.map_or_else(|| "demo".to_string(), |s| s.instance_id.clone());
                             let icon_color = account_color(&aid);
                             rsx! {
                                 AccountRow {

@@ -25,7 +25,7 @@ pub struct MessageMediaViewerOverlayProps {
 #[component]
 pub fn MessageMediaViewerOverlay(props: MessageMediaViewerOverlayProps) -> Element {
     let chat_data: BatchedSignal<ChatData> = use_context();
-    let mut app_state: BatchedSignal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let nav = navigator();
     let mut zoom = use_signal(|| 1.0_f32);
     let mut pan_x = use_signal(|| 0.0_f32);
@@ -97,8 +97,8 @@ pub fn MessageMediaViewerOverlay(props: MessageMediaViewerOverlayProps) -> Eleme
                         }
                         Ok(msg) if msg.starts_with("dp:") => {
                             let rest = &msg[3..];
-                            if let Some(colon) = rest.find(':') {
-                                if let (Ok(dx), Ok(dy)) = (
+                            if let Some(colon) = rest.find(':')
+                                && let (Ok(dx), Ok(dy)) = (
                                     rest[..colon].parse::<f32>(),
                                     rest[colon + 1..].parse::<f32>(),
                                 ) {
@@ -107,7 +107,6 @@ pub fn MessageMediaViewerOverlay(props: MessageMediaViewerOverlayProps) -> Eleme
                                     pan_x.set(new_x);
                                     pan_y.set(new_y);
                                 }
-                            }
                         }
                         _ => break,
                     }

@@ -48,6 +48,7 @@ impl Identity {
     }
 
     /// Restore an identity from Ed25519 private key bytes.
+    #[must_use] 
     pub fn from_private_key_bytes(bytes: &[u8; 32]) -> Self {
         let signing_key = SigningKey::from_bytes(bytes);
         Self { signing_key }
@@ -78,11 +79,13 @@ impl Identity {
     }
 
     /// Get the Ed25519 public (verifying) key.
+    #[must_use] 
     pub fn verifying_key(&self) -> VerifyingKey {
         self.signing_key.verifying_key()
     }
 
     /// Get the public identity (Account ID).
+    #[must_use] 
     pub fn public_identity(&self) -> PublicIdentity {
         let vk = self.verifying_key();
         let bytes = vk.to_bytes();
@@ -93,6 +96,7 @@ impl Identity {
     }
 
     /// Get the raw private key bytes.
+    #[must_use] 
     pub fn private_key_bytes(&self) -> [u8; 32] {
         self.signing_key.to_bytes()
     }
@@ -110,6 +114,7 @@ impl Identity {
     /// Derive an X25519 static secret from the Ed25519 key.
     ///
     /// Used for symmetric key derivation for backup encryption.
+    #[must_use] 
     pub fn derive_x25519_secret(&self) -> x25519_dalek::StaticSecret {
         // Hash the Ed25519 private key to get X25519-compatible bytes
         let mut hasher = Sha256::new();
@@ -124,6 +129,7 @@ impl Identity {
     /// Derive a symmetric encryption key for backup server data.
     ///
     /// Derives from the X25519 secret using HKDF-style derivation.
+    #[must_use] 
     pub fn derive_backup_key(&self) -> [u8; 32] {
         let secret = self.derive_x25519_secret();
         let public = x25519_dalek::PublicKey::from(&secret);

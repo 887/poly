@@ -161,7 +161,7 @@ async fn join_voice_channel(
     current_server: Option<poly_client::Server>,
     client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
-    mut app_state: BatchedSignal<AppState>,
+    app_state: BatchedSignal<AppState>,
 ) {
     // Step 1: Request microphone permission so browser shows the prompt now.
     let mut perm_eval = document::eval(JS_REQUEST_AUDIO_PERMISSION);
@@ -183,8 +183,7 @@ async fn join_voice_channel(
 
     let voice_backend = current_server
         .as_ref()
-        .map(|s| s.backend.clone())
-        .unwrap_or(poly_client::BackendType::from("demo"));
+        .map_or(poly_client::BackendType::from("demo"), |s| s.backend.clone());
 
     // Fetch current participants from backend
     let mut participants = {
@@ -315,8 +314,7 @@ pub fn VoiceChannelView() -> Element {
 
     let channel_type = current_channel
         .as_ref()
-        .map(|c| c.channel_type)
-        .unwrap_or(ChannelType::Voice);
+        .map_or(ChannelType::Voice, |c| c.channel_type);
 
     let type_icon = match channel_type {
         ChannelType::Voice => "🔊",

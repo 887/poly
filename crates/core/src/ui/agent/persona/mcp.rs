@@ -13,15 +13,12 @@ const DEFAULT_MCP_PORT: u16 = 3010;
 /// Resolve the MCP port: KV `agent.mcp.port` → env `POLY_CHAT_MCP_PORT` → 3010.
 async fn resolve_port() -> u16 {
     // Try KV first.
-    if let Some(storage) = crate::STORAGE.get() {
-        if let Ok(Some(v)) = storage.get("agent.mcp.port").await {
-            if let Some(p) = v.as_u64().and_then(|n| u16::try_from(n).ok()) {
-                if p >= 1024 {
+    if let Some(storage) = crate::STORAGE.get()
+        && let Ok(Some(v)) = storage.get("agent.mcp.port").await
+            && let Some(p) = v.as_u64().and_then(|n| u16::try_from(n).ok())
+                && p >= 1024 {
                     return p;
                 }
-            }
-        }
-    }
     // Env fallback (native only).
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -46,7 +43,7 @@ pub async fn call_persona_mcp(tool: &str, args: Value) -> Result<Value, String> 
     let url = format!("http://127.0.0.1:{port}/mcp");
     let body = serde_json::json!({
         "jsonrpc": "2.0",
-        "id": 1,
+        "id": 1_i32,
         "method": "tools/call",
         "params": {
             "name": tool,
@@ -123,7 +120,7 @@ fn extract_mcp_result(json: Value) -> Result<Value, String> {
 
     if result
         .get("isError")
-        .and_then(|v| v.as_bool())
+        .and_then(serde_json::Value::as_bool)
         .unwrap_or(false)
     {
         let msg = result

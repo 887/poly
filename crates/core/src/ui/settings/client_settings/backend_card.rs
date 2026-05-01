@@ -25,7 +25,7 @@ fn parse_mechanisms(json: &Value) -> Vec<(String, bool)> {
             arr.iter()
                 .filter_map(|m| {
                     let id = m.get("mechanism_id")?.as_str()?.to_owned();
-                    let enabled = m.get("enabled").and_then(|v| v.as_bool()).unwrap_or(false);
+                    let enabled = m.get("enabled").and_then(serde_json::Value::as_bool).unwrap_or(false);
                     Some((id, enabled))
                 })
                 .collect()
@@ -90,7 +90,7 @@ pub fn BackendCard(
                 current_version: effective_version.clone(),
                 current_override: version_override.clone(),
                 on_changed: {
-                    let mut reload = reload_mechs.clone();
+                    let reload = reload_mechs.clone();
                     move |_| reload()
                 },
             }

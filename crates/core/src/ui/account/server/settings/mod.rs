@@ -540,9 +540,7 @@ pub fn ServerSettingsPage(
         .read()
         .servers
         .iter()
-        .find(|s| s.id == server_id)
-        .map(|s| s.name.clone())
-        .unwrap_or_else(|| server_id.clone());
+        .find(|s| s.id == server_id).map_or_else(|| server_id.clone(), |s| s.name.clone());
 
     use_effect(move || {
         let slug = section.read().to_slug().to_string();

@@ -144,14 +144,17 @@ mod wasm_stub {
     pub struct DraftStore;
 
     impl DraftStore {
+        #[must_use] 
         pub fn try_open() -> Option<Self> {
             Some(Self)
         }
 
+        #[must_use] 
         pub fn pending_for_chat(&self, _account_id: &str, _chat_id: &str) -> Vec<Draft> {
             Vec::new()
         }
 
+        #[must_use] 
         pub fn pending_for_account(&self, _account_id: &str) -> Vec<Draft> {
             Vec::new()
         }

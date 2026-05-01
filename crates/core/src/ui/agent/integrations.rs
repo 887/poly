@@ -41,20 +41,18 @@ impl UiAction for IntegrationsAction {
         match self {
             Self::ToggleMcp(enabled) => {
                 spawn(async move {
-                    if let Some(storage) = crate::STORAGE.get() {
-                        if let Err(e) = storage.set(KV_MCP_ENABLED, serde_json::json!(enabled)).await {
+                    if let Some(storage) = crate::STORAGE.get()
+                        && let Err(e) = storage.set(KV_MCP_ENABLED, serde_json::json!(enabled)).await {
                             tracing::warn!("Failed to persist agent.mcp.enabled: {e}");
                         }
-                    }
                 });
             }
             Self::SetMcpPort(port) => {
                 spawn(async move {
-                    if let Some(storage) = crate::STORAGE.get() {
-                        if let Err(e) = storage.set(KV_MCP_PORT, serde_json::json!(port)).await {
+                    if let Some(storage) = crate::STORAGE.get()
+                        && let Err(e) = storage.set(KV_MCP_PORT, serde_json::json!(port)).await {
                             tracing::warn!("Failed to persist agent.mcp.port: {e}");
                         }
-                    }
                 });
             }
         }
@@ -100,11 +98,10 @@ fn McpToggleRow(mcp_enabled: Signal<bool>, mcp_port: Signal<u16>) -> Element {
                         let val = e.checked();
                         mcp_enabled.set(val);
                         spawn(async move {
-                            if let Some(storage) = crate::STORAGE.get() {
-                                if let Err(err) = storage.set(KV_MCP_ENABLED, serde_json::json!(val)).await {
+                            if let Some(storage) = crate::STORAGE.get()
+                                && let Err(err) = storage.set(KV_MCP_ENABLED, serde_json::json!(val)).await {
                                     tracing::warn!("Failed to persist agent.mcp.enabled: {err}");
                                 }
-                            }
                         });
                     },
                 }
@@ -122,18 +119,16 @@ fn McpToggleRow(mcp_enabled: Signal<bool>, mcp_port: Signal<u16>) -> Element {
                 max: "65535",
                 value: "{mcp_port.read()}",
                 onchange: move |e| {
-                    if let Ok(p) = e.value().parse::<u16>() {
-                        if p >= 1024 {
+                    if let Ok(p) = e.value().parse::<u16>()
+                        && p >= 1024 {
                             mcp_port.set(p);
                             spawn(async move {
-                                if let Some(storage) = crate::STORAGE.get() {
-                                    if let Err(err) = storage.set(KV_MCP_PORT, serde_json::json!(p)).await {
+                                if let Some(storage) = crate::STORAGE.get()
+                                    && let Err(err) = storage.set(KV_MCP_PORT, serde_json::json!(p)).await {
                                         tracing::warn!("Failed to persist agent.mcp.port: {err}");
                                     }
-                                }
                             });
                         }
-                    }
                 },
             }
         }
@@ -195,18 +190,15 @@ pub(super) fn Integrations() -> Element {
     // Load persisted values from KV on mount.
     use_future(move || async move {
         let Some(storage) = crate::STORAGE.get() else { return };
-        if let Ok(Some(v)) = storage.get(KV_MCP_ENABLED).await {
-            if let Some(b) = v.as_bool() {
+        if let Ok(Some(v)) = storage.get(KV_MCP_ENABLED).await
+            && let Some(b) = v.as_bool() {
                 mcp_enabled.set(b);
             }
-        }
-        if let Ok(Some(v)) = storage.get(KV_MCP_PORT).await {
-            if let Some(p) = v.as_u64().and_then(|n| u16::try_from(n).ok()) {
-                if p >= 1024 {
+        if let Ok(Some(v)) = storage.get(KV_MCP_PORT).await
+            && let Some(p) = v.as_u64().and_then(|n| u16::try_from(n).ok())
+                && p >= 1024 {
                     mcp_port.set(p);
                 }
-            }
-        }
     });
 
     rsx! {

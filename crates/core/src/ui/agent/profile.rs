@@ -18,11 +18,10 @@ impl UiAction for AgentProfileAction {
         match self {
             Self::Save(text) => {
                 spawn(async move {
-                    if let Some(storage) = crate::STORAGE.get() {
-                        if let Err(e) = storage.set(KV_KEY, serde_json::json!(text)).await {
+                    if let Some(storage) = crate::STORAGE.get()
+                        && let Err(e) = storage.set(KV_KEY, serde_json::json!(text)).await {
                             tracing::warn!("Failed to persist agent.profile.text: {e}");
                         }
-                    }
                 });
             }
         }
@@ -40,21 +39,19 @@ pub(super) fn AgentProfile() -> Element {
     // Load persisted profile text from KV on mount.
     use_future(move || async move {
         let Some(storage) = crate::STORAGE.get() else { return };
-        if let Ok(Some(v)) = storage.get(KV_KEY).await {
-            if let Some(s) = v.as_str() {
+        if let Ok(Some(v)) = storage.get(KV_KEY).await
+            && let Some(s) = v.as_str() {
                 profile_text.set(s.to_string());
             }
-        }
     });
 
     let on_save = move |_| {
         let text = profile_text.read().clone();
         spawn(async move {
-            if let Some(storage) = crate::STORAGE.get() {
-                if let Err(e) = storage.set(KV_KEY, serde_json::json!(text)).await {
+            if let Some(storage) = crate::STORAGE.get()
+                && let Err(e) = storage.set(KV_KEY, serde_json::json!(text)).await {
                     tracing::warn!("Failed to persist agent.profile.text: {e}");
                 }
-            }
         });
         saved.set(true);
     };

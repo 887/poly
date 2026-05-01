@@ -63,7 +63,7 @@ pub fn AttachmentContextMenu() -> Element {
             // Copy Image — fetch the bytes and put them on the clipboard as a blob.
             {
                 let u = url.clone();
-                let mut close = close;
+                let close = close;
                 rsx! {
                     AttachmentMenuItem {
                         label: t("attachment-menu-copy-image"),
@@ -83,7 +83,7 @@ pub fn AttachmentContextMenu() -> Element {
             {
                 let u = url.clone();
                 let f = filename.clone();
-                let mut close = close;
+                let close = close;
                 rsx! {
                     AttachmentMenuItem {
                         label: t("attachment-menu-save-image"),
@@ -105,7 +105,7 @@ pub fn AttachmentContextMenu() -> Element {
             // Copy Media Link.
             {
                 let u = url.clone();
-                let mut close = close;
+                let close = close;
                 rsx! {
                     AttachmentMenuItem {
                         label: t("attachment-menu-copy-link"),
@@ -124,7 +124,7 @@ pub fn AttachmentContextMenu() -> Element {
             // Open Media Link.
             {
                 let u = url.clone();
-                let mut close = close;
+                let close = close;
                 rsx! {
                     AttachmentMenuItem {
                         label: t("attachment-menu-open-link"),

@@ -82,7 +82,7 @@ pub fn ViewThreadButton(
     /// The `ThreadInfo` attached to the parent message.
     thread: ThreadInfo,
 ) -> Element {
-    let mut app_state: BatchedSignal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let nav = navigator();
     let thread_id = thread.thread_id.clone();
     let count = thread.message_count;
@@ -207,7 +207,7 @@ pub fn ActiveThreadsBar() -> Element {
 #[context_menu(inherit)]
 #[component]
 fn ActiveThreadChip(thread: ThreadInfo) -> Element {
-    let mut app_state: BatchedSignal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let nav = navigator();
     let thread_id = thread.thread_id.clone();
     let count = thread.message_count;
@@ -308,7 +308,7 @@ pub fn ThreadPanel() -> Element {
         },
     );
 
-    let channel = thread_channel.read().as_ref().and_then(|opt| opt.clone());
+    let channel = thread_channel.read().as_ref().and_then(std::clone::Clone::clone);
     let panel_thread_id = app_state.read().nav.thread_panel_open.clone();
 
     rsx! {
@@ -343,12 +343,10 @@ pub fn ThreadPanelHeader(
     /// Fallback thread ID shown when the channel name is not yet loaded.
     thread_id: String,
 ) -> Element {
-    let mut app_state: BatchedSignal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
 
     let name = channel
-        .as_ref()
-        .map(|c| c.name.clone())
-        .unwrap_or_else(|| thread_id.clone());
+        .as_ref().map_or_else(|| thread_id.clone(), |c| c.name.clone());
 
     let archived = channel
         .as_ref()
@@ -472,7 +470,7 @@ pub fn ThreadFullView(thread_id: String) -> Element {
         });
     });
 
-    let channel = thread_channel.read().as_ref().and_then(|o| o.clone());
+    let channel = thread_channel.read().as_ref().and_then(std::clone::Clone::clone);
     let tid_for_header = thread_id.clone();
 
     rsx! {

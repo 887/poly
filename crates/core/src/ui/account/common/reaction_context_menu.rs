@@ -63,7 +63,7 @@ pub fn ReactionContextMenu() -> Element {
             // Show who reacted — stub (reaction-details UI is out of scope for this phase)
             {
                 let e = emoji.clone();
-                let mut close = close;
+                let close = close;
                 rsx! {
                     ReactionMenuItem {
                         label: t("reaction-menu-show-reactors"),
@@ -84,7 +84,7 @@ pub fn ReactionContextMenu() -> Element {
             {
                 let mid = message_id.clone();
                 let e = emoji.clone();
-                let mut close = close;
+                let close = close;
                 rsx! {
                     ReactionMenuItem {
                         label: t("reaction-menu-remove"),

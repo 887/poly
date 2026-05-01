@@ -80,11 +80,10 @@ impl LongPress {
             let (x, y) = evt
                 .touches()
                 .first()
-                .map(|t| {
+                .map_or((0.0_f64, 0.0_f64), |t| {
                     let c = t.client_coordinates();
                     (c.x, c.y)
-                })
-                .unwrap_or((0.0, 0.0));
+                });
 
             let stamp = gen_sig.peek().wrapping_add(1);
             gen_sig.set(stamp);

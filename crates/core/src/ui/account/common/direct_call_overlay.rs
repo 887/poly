@@ -53,9 +53,7 @@ pub fn OutgoingDirectCallOverlay(
         });
 
     let target_name = target_user
-        .as_ref()
-        .map(|user| user.display_name.clone())
-        .unwrap_or_else(|| t("voice-direct-call"));
+        .as_ref().map_or_else(|| t("voice-direct-call"), |user| user.display_name.clone());
     let subtitle = if is_add_flow {
         if start_video {
             t("direct-call-adding-video")
@@ -119,7 +117,6 @@ pub fn OutgoingDirectCallOverlay(
                     path = expected_path_for_effect,
                 );
                 let _ = document::eval(&js);
-                return;
             }
             #[cfg(not(target_arch = "wasm32"))]
             {

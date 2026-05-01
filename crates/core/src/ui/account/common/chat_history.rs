@@ -49,6 +49,7 @@ pub struct ChatHistoryUiState {
 }
 
 /// Build the initial message query for a channel based on unread count.
+#[must_use] 
 pub fn initial_message_query(unread_count: u32) -> MessageQuery {
     let limit =
         INITIAL_MESSAGE_PAGE_SIZE.max(unread_count.saturating_add(UNREAD_CONTEXT_MESSAGE_COUNT));
@@ -60,6 +61,7 @@ pub fn initial_message_query(unread_count: u32) -> MessageQuery {
 }
 
 /// Return the message ID where the unread divider should appear.
+#[must_use] 
 pub fn unread_marker_message_id(messages: &[Message], unread_count: u32) -> Option<String> {
     if unread_count == 0 || messages.is_empty() {
         return None;

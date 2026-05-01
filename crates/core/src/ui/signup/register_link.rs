@@ -53,8 +53,7 @@ pub(crate) fn RegisterLink(backend_slug: String, server_url: Option<String>) -> 
     };
 
     let method = signup_method_fn
-        .map(|f| f(server_url.as_deref()))
-        .unwrap_or(SignupMethod::NotSupported);
+        .map_or(SignupMethod::NotSupported, |f| f(server_url.as_deref()));
 
     // use_route must be called unconditionally (hook rules).
     let current_route = use_route::<Route>();
@@ -125,7 +124,6 @@ fn extract_host(url: &str) -> String {
     // Pattern: `<scheme>://<host>[/...]`
     url.split("://")
         .nth(1)
-        .map(|after| after.split('/').next().unwrap_or(after))
-        .unwrap_or(url)
+        .map_or(url, |after| after.split('/').next().unwrap_or(after))
         .to_string()
 }

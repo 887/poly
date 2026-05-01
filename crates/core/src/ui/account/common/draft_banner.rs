@@ -39,20 +39,33 @@ fn secs_until(ts: &str) -> Option<i64> {
     let s = parse(bytes.get(17..19)?)?;
 
     // Convert to epoch seconds (Julian day arithmetic).
-    let a = (14u64.wrapping_sub(mo)) / 12;
-    let yr = y + 4800 - a;
-    let mon = mo + 12 * a - 3;
-    let jdn = d + (153 * mon + 2) / 5 + 365 * yr + yr / 4 - yr / 100 + yr / 400 - 32045;
-    let unix_epoch_jdn: u64 = 2440588;
-    let epoch_days = jdn.saturating_sub(unix_epoch_jdn);
-    let target_secs = epoch_days * 86400 + h * 3600 + m * 60 + s;
+    // lint-allow-unused: floor division — Julian-day algorithm requires integer truncation
+    #[allow(clippy::integer_division, clippy::arithmetic_side_effects)]
+    let target_secs = {
+        let a = 14u64.wrapping_sub(mo) / 12;
+        let yr = y.saturating_add(4800).saturating_sub(a);
+        let mon = mo.saturating_add(12u64.saturating_mul(a)).saturating_sub(3);
+        let jdn = d
+            + (153 * mon + 2) / 5
+            + 365 * yr
+            + yr / 4
+            - yr / 100
+            + yr / 400
+            - 32045;
+        let unix_epoch_jdn: u64 = 2_440_588_u64;
+        let epoch_days = jdn.saturating_sub(unix_epoch_jdn);
+        epoch_days * 86400 + h * 3600 + m * 60 + s
+    };
 
     // SystemTime::now() panics on wasm32-unknown-unknown — use Date.now()
     // there. On native, std SystemTime works fine.
     let now_secs: u64 = {
         #[cfg(target_arch = "wasm32")]
         {
-            (js_sys::Date::now() / 1000.0) as u64
+            // lint-allow-unused: JS epoch ms → u64 seconds, value bounded < 2^54
+            #[allow(clippy::cast_possible_truncation, clippy::as_conversions, clippy::cast_sign_loss, clippy::cast_precision_loss)]
+            let v = (js_sys::Date::now() / 1000.0_f64) as u64;
+            v
         }
         #[cfg(not(target_arch = "wasm32"))]
         {
@@ -64,7 +77,10 @@ fn secs_until(ts: &str) -> Option<i64> {
         }
     };
 
-    Some((target_secs as i64).saturating_sub(now_secs as i64))
+    // lint-allow-unused: u64 seconds → i64 for signed delta; both values bounded
+    #[allow(clippy::as_conversions, clippy::cast_possible_wrap)]
+    let delta = (target_secs as i64).saturating_sub(now_secs as i64);
+    Some(delta)
 }
 
 /// Open a loopback HTTP request to `poly-chat-mcp` to call a draft tool.
@@ -91,7 +107,7 @@ async fn call_draft_mcp(tool: &str, args: serde_json::Value) -> bool {
     let url = format!("http://127.0.0.1:{port}/mcp");
     let body = serde_json::json!({
         "jsonrpc": "2.0",
-        "id": 1,
+        "id": 1_i32,
         "method": "tools/call",
         "params": {
             "name": tool,
@@ -170,7 +186,7 @@ pub fn DraftBanner(props: DraftBannerProps) -> Element {
                     // web, tokio::time::sleep on native.
                     #[cfg(target_arch = "wasm32")]
                     {
-                        let _ = dioxus::document::eval("setTimeout(() => dioxus.send(true), 2000);").recv::<bool>().await;
+                        drop(dioxus::document::eval("setTimeout(() => dioxus.send(true), 2000);").recv::<bool>().await);
                     }
                     #[cfg(not(target_arch = "wasm32"))]
                     {
@@ -279,9 +295,9 @@ fn DraftBannerRow(props: DraftBannerRowProps) -> Element {
                     class: "btn btn-primary draft-btn-send",
                     title: t("agent-draft-send"),
                     onclick: {
-                        let on_refresh = props.on_refresh.clone();
+                        let on_refresh = props.on_refresh;
                         move |_| {
-                            let on_refresh = on_refresh.clone();
+                            let on_refresh = on_refresh;
                             spawn(async move {
                                 let ok = call_draft_mcp(
                                     "draft_approve",
@@ -300,11 +316,11 @@ fn DraftBannerRow(props: DraftBannerRowProps) -> Element {
                     // For MVP: discard the draft so user can retype it.
                     onclick: {
                         let body = draft.body.clone();
-                        let on_refresh = props.on_refresh.clone();
+                        let on_refresh = props.on_refresh;
                         move |_| {
                             // Copy draft body to clipboard / composer is handled by
                             // parent; for now we just discard and let user retype.
-                            let on_refresh = on_refresh.clone();
+                            let on_refresh = on_refresh;
                             let body_clone = body.clone();
                             spawn(async move {
                                 // Discard so banner clears.
@@ -334,9 +350,9 @@ fn DraftBannerRow(props: DraftBannerRowProps) -> Element {
                     class: "btn draft-btn-discard",
                     title: t("agent-draft-discard"),
                     onclick: {
-                        let on_refresh = props.on_refresh.clone();
+                        let on_refresh = props.on_refresh;
                         move |_| {
-                            let on_refresh = on_refresh.clone();
+                            let on_refresh = on_refresh;
                             spawn(async move {
                                 let ok = call_draft_mcp(
                                     "draft_discard",
@@ -353,9 +369,9 @@ fn DraftBannerRow(props: DraftBannerRowProps) -> Element {
                         class: "btn draft-btn-cancel-autosend",
                         title: t("agent-draft-cancel-autosend"),
                         onclick: {
-                            let on_refresh = props.on_refresh.clone();
+                            let on_refresh = props.on_refresh;
                             move |_| {
-                                let on_refresh = on_refresh.clone();
+                                let on_refresh = on_refresh;
                                 spawn(async move {
                                     let ok = call_draft_mcp(
                                         "draft_cancel_autosend",
@@ -408,7 +424,7 @@ pub fn DraftsSidebar(props: DraftsSidebarProps) -> Element {
                     drafts.set(loaded);
                     #[cfg(target_arch = "wasm32")]
                     {
-                        let _ = dioxus::document::eval("setTimeout(() => dioxus.send(true), 2000);").recv::<bool>().await;
+                        drop(dioxus::document::eval("setTimeout(() => dioxus.send(true), 2000);").recv::<bool>().await);
                     }
                     #[cfg(not(target_arch = "wasm32"))]
                     {
@@ -437,7 +453,7 @@ pub fn DraftsSidebar(props: DraftsSidebarProps) -> Element {
                             key: "{draft.id}",
                             draft: draft.clone(),
                             on_open: {
-                                let on_open_chat = props.on_open_chat.clone();
+                                let on_open_chat = props.on_open_chat;
                                 move |_| on_open_chat.call((draft.account_id.clone(), draft.chat_id.clone()))
                             },
                         }

@@ -69,17 +69,16 @@ fn reaction_count(msg: &Message, emoji: &str) -> u32 {
     msg.reactions
         .iter()
         .find(|r| r.emoji == emoji)
-        .map(|r| r.count)
-        .unwrap_or(0)
+        .map_or(0, |r| r.count)
 }
 
 fn post_score(msg: &Message) -> i64 {
-    let up = reaction_count(msg, "🔥")
+    let up = i64::from(reaction_count(msg, "🔥")
         .max(reaction_count(msg, "❤️"))
         .max(reaction_count(msg, "👍"))
         .max(reaction_count(msg, "🎉"))
-        .max(reaction_count(msg, "🦀")) as i64;
-    let down = reaction_count(msg, "👎") as i64;
+        .max(reaction_count(msg, "🦀")));
+    let down = i64::from(reaction_count(msg, "👎"));
     up - down
 }
 
@@ -398,7 +397,7 @@ fn ForumThreadView(post: Message, comments: Vec<Message>, loading: bool) -> Elem
 #[rustfmt::skip]
 #[component]
 fn ForumComment(node: ForumCommentNode) -> Element {
-    let mut app_state: BatchedSignal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let msg = &node.msg;
     let depth = node.depth;
     let children = node.children.clone();

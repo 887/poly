@@ -73,7 +73,6 @@ pub fn DmContextMenu() -> Element {
             // Greyed out (disabled) when there's nothing to mark.
             {
                 let cid = channel_id.clone();
-                let mut close = close;
                 rsx! {
                     DmMenuItem {
                         label: t("channel-menu-mark-read"),
@@ -93,7 +92,6 @@ pub fn DmContextMenu() -> Element {
             {
                 let uid = user_id.clone();
                 let dname = display_name.clone();
-                let mut close = close;
                 rsx! {
                     DmMenuItem {
                         label: t("dm-menu-profile"),
@@ -116,7 +114,6 @@ pub fn DmContextMenu() -> Element {
             {
                 let uid = user_id.clone();
                 let dname = display_name.clone();
-                let mut close = close;
                 rsx! {
                     DmMenuItem {
                         label: t("dm-menu-start-call"),
@@ -148,7 +145,6 @@ pub fn DmContextMenu() -> Element {
             // backend call with empty note clears, which is meaningless without
             // a text input. Stub-and-toast instead.)
             {
-                let mut close = close;
                 rsx! {
                     DmMenuItem {
                         label: t("dm-menu-add-note"),
@@ -164,7 +160,6 @@ pub fn DmContextMenu() -> Element {
 
             // Add Friend Nickname (same pattern as Add Note)
             {
-                let mut close = close;
                 rsx! {
                     DmMenuItem {
                         label: t("dm-menu-add-nickname"),
@@ -182,7 +177,6 @@ pub fn DmContextMenu() -> Element {
             {
                 let cid = channel_id.clone();
                 let aid = account_id.clone();
-                let mut close = close;
                 rsx! {
                     DmMenuItem {
                         label: t("dm-menu-close"),
@@ -195,7 +189,7 @@ pub fn DmContextMenu() -> Element {
                                         .read_with_timeout(Duration::from_secs(5))
                                         .await
                                 {
-                                    let _ = backend.close_dm_channel(&cid).await;
+                                    drop(backend.close_dm_channel(&cid).await);
                                 }
                             });
                             close();
@@ -208,7 +202,6 @@ pub fn DmContextMenu() -> Element {
 
             // Invite to Server (TODO: submenu of joined servers)
             {
-                let mut close = close;
                 rsx! {
                     DmMenuItem {
                         label: t("dm-menu-invite-to-server"),
@@ -226,7 +219,6 @@ pub fn DmContextMenu() -> Element {
             {
                 let uid = user_id.clone();
                 let aid = account_id.clone();
-                let mut close = close;
                 rsx! {
                     DmMenuItem {
                         label: t("dm-menu-remove-friend"),
@@ -239,7 +231,7 @@ pub fn DmContextMenu() -> Element {
                                         .read_with_timeout(Duration::from_secs(5))
                                         .await
                                 {
-                                    let _ = backend.remove_friend(&uid).await;
+                                    drop(backend.remove_friend(&uid).await);
                                 }
                             });
                             close();
@@ -252,7 +244,6 @@ pub fn DmContextMenu() -> Element {
             {
                 let uid = user_id.clone();
                 let aid = account_id.clone();
-                let mut close = close;
                 rsx! {
                     DmMenuItem {
                         label: t("dm-menu-ignore"),
@@ -265,7 +256,7 @@ pub fn DmContextMenu() -> Element {
                                         .read_with_timeout(Duration::from_secs(5))
                                         .await
                                 {
-                                    let _ = backend.ignore_user(&uid).await;
+                                    drop(backend.ignore_user(&uid).await);
                                 }
                             });
                             close();
@@ -278,7 +269,6 @@ pub fn DmContextMenu() -> Element {
             {
                 let uid = user_id.clone();
                 let aid = account_id.clone();
-                let mut close = close;
                 rsx! {
                     DmMenuItem {
                         label: t("dm-menu-block"),
@@ -292,7 +282,7 @@ pub fn DmContextMenu() -> Element {
                                         .read_with_timeout(Duration::from_secs(5))
                                         .await
                                 {
-                                    let _ = backend.block_user(&uid).await;
+                                    drop(backend.block_user(&uid).await);
                                 }
                             });
                             close();
@@ -326,11 +316,11 @@ pub fn DmContextMenu() -> Element {
                                         .read_with_timeout(Duration::from_secs(5))
                                         .await
                                 {
-                                    let _ = if was_muted {
+                                    drop(if was_muted {
                                         backend.unmute_conversation(&cid).await
                                     } else {
                                         backend.mute_conversation(&cid, None).await
-                                    };
+                                    });
                                 }
                             });
                         },
@@ -343,12 +333,13 @@ pub fn DmContextMenu() -> Element {
             // Copy Display Name
             {
                 let dname = display_name.clone();
-                let mut close = close;
                 rsx! {
                     DmMenuItem {
                         label: t("dm-menu-copy-name"),
                         onclick: move |_| {
                             let dn = dname.clone();
+                            // lint-allow-unused: Eval is Copy — drop() is no-op, intentionally fire-and-forget
+                            #[allow(let_underscore_drop, clippy::let_underscore_must_use)]
                             let _ = document::eval(&format!("navigator.clipboard.writeText('{dn}')"));
                             close();
                         },
@@ -359,12 +350,13 @@ pub fn DmContextMenu() -> Element {
             // Copy User ID
             {
                 let uid = user_id.clone();
-                let mut close = close;
                 rsx! {
                     DmMenuItem {
                         label: t("dm-menu-copy-user-id"),
                         onclick: move |_| {
                             let u = uid.clone();
+                            // lint-allow-unused: Eval is Copy — drop() is no-op, intentionally fire-and-forget
+                            #[allow(let_underscore_drop, clippy::let_underscore_must_use)]
                             let _ = document::eval(&format!("navigator.clipboard.writeText('{u}')"));
                             close();
                         },
@@ -375,12 +367,13 @@ pub fn DmContextMenu() -> Element {
             // Copy Channel ID
             {
                 let cid = channel_id.clone();
-                let mut close = close;
                 rsx! {
                     DmMenuItem {
                         label: t("channel-menu-copy-id"),
                         onclick: move |_| {
                             let c = cid.clone();
+                            // lint-allow-unused: Eval is Copy — drop() is no-op, intentionally fire-and-forget
+                            #[allow(let_underscore_drop, clippy::let_underscore_must_use)]
                             let _ = document::eval(&format!("navigator.clipboard.writeText('{c}')"));
                             close();
                         },

@@ -608,8 +608,8 @@ pub fn PluginsSettings() -> Element {
                             drop(wasm);
                             if let Some((url, enabled)) = target {
                                 spawn(async move {
-                                    if let Some(storage) = crate::STORAGE.get() {
-                                        if let Err(e) =
+                                    if let Some(storage) = crate::STORAGE.get()
+                                        && let Err(e) =
                                             crate::plugin_admin::set_plugin_enabled_with_storage(
                                                 storage, &url, enabled,
                                             )
@@ -617,7 +617,6 @@ pub fn PluginsSettings() -> Element {
                                         {
                                             tracing::warn!("Failed to toggle plugin: {e}");
                                         }
-                                    }
                                 });
                             }
                             let dis = disabled.read().clone();
@@ -673,8 +672,8 @@ pub fn PluginsSettings() -> Element {
                             // `/host/plugins/remove` endpoint uses.
                             if let Some(url) = removed_url {
                                 spawn(async move {
-                                    if let Some(storage) = crate::STORAGE.get() {
-                                        if let Err(e) =
+                                    if let Some(storage) = crate::STORAGE.get()
+                                        && let Err(e) =
                                             crate::plugin_admin::remove_wasm_plugin_with_storage(
                                                 storage, &url,
                                             )
@@ -682,7 +681,6 @@ pub fn PluginsSettings() -> Element {
                                         {
                                             tracing::warn!("Failed to remove plugin: {e}");
                                         }
-                                    }
                                 });
                             }
                             // Reconcile signup entries IMMEDIATELY against the
@@ -710,8 +708,8 @@ pub fn PluginsSettings() -> Element {
                     // endpoint uses — single source of truth).
                     wasm_plugins.write().push(entry.clone());
                     spawn(async move {
-                        if let Some(storage) = crate::STORAGE.get() {
-                            if let Err(e) = crate::plugin_admin::add_wasm_plugin_with_storage(
+                        if let Some(storage) = crate::STORAGE.get()
+                            && let Err(e) = crate::plugin_admin::add_wasm_plugin_with_storage(
                                 storage,
                                 &entry.url,
                                 entry.name.clone(),
@@ -720,7 +718,6 @@ pub fn PluginsSettings() -> Element {
                             {
                                 tracing::warn!("Failed to add plugin: {e}");
                             }
-                        }
                     });
                 },
             }

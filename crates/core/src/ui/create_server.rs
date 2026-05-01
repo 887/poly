@@ -155,8 +155,8 @@ fn do_create_server(
     signals: CreateSignals,
 ) {
     let CreateSignals {
-        mut client_manager,
-        mut chat_data,
+        client_manager,
+        chat_data,
         mut creating,
         mut error_msg,
     } = signals;

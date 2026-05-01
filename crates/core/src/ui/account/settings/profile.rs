@@ -49,7 +49,7 @@ impl crate::ui::actions::UiAction for PolyProfileSettingsAction {
 #[component]
 pub fn PolyProfileSettings(account_id: String) -> Element {
     let chat_data: BatchedSignal<ChatData> = use_context();
-    let mut client_manager: BatchedSignal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
 
     // Read session info for display name and avatar.
     let (display_name, avatar_url, first_char, color) = {

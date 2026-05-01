@@ -62,7 +62,7 @@ fn CustomSidebarSection(section: SidebarSection) -> Element {
                     SidebarItemRow {
                         key: "{idx}",
                         node: node,
-                        depth: 0,
+                        depth: 0_usize,
                     }
                 })}
             }

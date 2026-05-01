@@ -29,6 +29,7 @@ pub enum UnsupportedFeature {
 }
 
 impl UnsupportedFeature {
+    #[must_use] 
     pub fn label_key(self) -> &'static str {
         match self {
             Self::Friends => "feature-unsupported-friends",
@@ -39,6 +40,7 @@ impl UnsupportedFeature {
         }
     }
 
+    #[must_use] 
     pub fn test_id(self) -> &'static str {
         match self {
             Self::Friends => "feature-unsupported-friends",

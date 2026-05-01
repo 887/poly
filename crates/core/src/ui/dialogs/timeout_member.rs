@@ -39,7 +39,7 @@ pub fn TimeoutMemberDialog(
     let mut success = use_signal(|| false);
 
     let client_manager: BatchedSignal<ClientManager> = use_context();
-    let mut app_state: BatchedSignal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
 
     let title = t("dialog-timeout-title")
         .replace("{ $user }", &member_name)
@@ -112,7 +112,7 @@ pub fn TimeoutMemberDialog(
                             move |_| {
                                 if *submitting.read() { return; }
                                 let idx = *duration_idx.read();
-                                let minutes = TIMEOUT_OPTIONS.get(idx).map(|(_, m)| *m).unwrap_or(60);
+                                let minutes = TIMEOUT_OPTIONS.get(idx).map_or(60, |(_, m)| *m);
                                 let until = chrono::Utc::now() + chrono::Duration::minutes(minutes);
                                 let reason_str = reason.read().trim().to_string();
                                 let reason_opt = if reason_str.is_empty() { None } else { Some(reason_str) };

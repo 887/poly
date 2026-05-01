@@ -96,6 +96,7 @@ use poly_client::{BackendType, Channel, ChannelType};
 use poly_ui_macros::{context_menu, ui_action};
 
 /// Return the account id encoded by an account-scoped route, if any.
+#[must_use] 
 pub fn route_account_id(route: &Route) -> Option<&str> {
     match route {
         Route::DmsHome { account_id, .. }

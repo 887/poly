@@ -378,6 +378,7 @@ impl Default for ClientManager {
 
 impl ClientManager {
     /// Create a new empty client manager.
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             backends: HashMap::new(),
@@ -481,6 +482,7 @@ impl ClientManager {
     /// `backend` field is [`poly_client::BackendType::from("demo")`]. This keeps the
     /// UI layer free from any knowledge of hard-coded demo account IDs.
     #[cfg(feature = "demo")]
+    #[must_use] 
     pub fn demo_account_ids(&self) -> Vec<String> {
         self.sessions
             .iter()
@@ -531,11 +533,13 @@ impl ClientManager {
     }
 
     /// Get the backend for a specific account ID.
+    #[must_use] 
     pub fn get_backend(&self, account_id: &str) -> Option<BackendHandle> {
         self.backends.get(account_id).cloned()
     }
 
     /// Find which account owns a given server, return (account_id, backend_arc).
+    #[must_use] 
     pub fn get_backend_for_server(&self, server_id: &str) -> Option<(String, BackendHandle)> {
         let account_id = self.server_account_map.get(server_id)?;
         let backend = self.backends.get(account_id)?;
@@ -578,6 +582,7 @@ impl ClientManager {
     /// Both cases need to stay visible so the user can click through to
     /// reauthenticate. Live operations (send message, sync) still iterate
     /// `backends` directly and skip offline entries naturally.
+    #[must_use] 
     pub fn active_account_ids(&self) -> Vec<String> {
         let mut ids: Vec<String> = self.backends.keys().cloned().collect();
         for id in self.sessions.keys() {

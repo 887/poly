@@ -67,7 +67,7 @@ pub fn ChannelContextMenu() -> Element {
             // Mark as Read
             {
                 let channel_id = channel_id.clone();
-                let mut close = close;
+                let close = close;
                 rsx! {
                     ChannelMenuItem {
                         label: t("channel-menu-mark-read"),
@@ -98,16 +98,14 @@ pub fn ChannelContextMenu() -> Element {
                     .read()
                     .nav
                     .active_backend
-                    .cloned()
-                    .map(|b| b.slug().to_string())
-                    .unwrap_or_else(|| "demo".to_string());
+                    .cloned().map_or_else(|| "demo".to_string(), |b| b.slug().to_string());
                 let instance_id = app_state
                     .read()
                     .nav
                     .active_instance_id
                     .cloned()
                     .unwrap_or_default();
-                let mut close = close;
+                let close = close;
                 rsx! {
                     ChannelMenuItem {
                         label: t("channel-settings-title"),
@@ -130,7 +128,7 @@ pub fn ChannelContextMenu() -> Element {
             // Copy Channel ID
             {
                 let cid = channel_id.clone();
-                let mut close = close;
+                let close = close;
                 rsx! {
                     ChannelMenuItem {
                         label: t("channel-menu-copy-id"),

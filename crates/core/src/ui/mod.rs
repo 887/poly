@@ -176,11 +176,10 @@ fn startup_overlay_config_from_query() -> StartupOverlayConfig {
                 enabled = true;
             }
         }
-        if key == "bootmin" {
-            if let Ok(parsed) = value.parse::<u32>() {
+        if key == "bootmin"
+            && let Ok(parsed) = value.parse::<u32>() {
                 min_visible_ms = parsed;
             }
-        }
     }
 
     StartupOverlayConfig {
@@ -202,7 +201,7 @@ fn startup_overlay_compact_mode() -> bool {
     web_sys::window()
         .and_then(|window| window.inner_width().ok())
         .and_then(|value| value.as_f64())
-        .is_some_and(|width| width <= 640.0)
+        .is_some_and(|width| width <= 640.0_f64)
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -268,8 +267,7 @@ fn startup_log_lines(
             let status_class = client_manager
                 .connection_statuses
                 .get(account_id)
-                .map(poly_client::ConnectionStatus::css_class)
-                .unwrap_or("disconnected");
+                .map_or("disconnected", poly_client::ConnectionStatus::css_class);
             let verb = match status_class {
                 "connected" => "connected",
                 "connecting" => "connecting",
@@ -316,8 +314,7 @@ fn startup_overlay_state(
             let status_class = client_manager
                 .connection_statuses
                 .get(account_id)
-                .map(poly_client::ConnectionStatus::css_class)
-                .unwrap_or("disconnected")
+                .map_or("disconnected", poly_client::ConnectionStatus::css_class)
                 .to_string();
             StartupOverlayAccount {
                 id: account_id.clone(),
@@ -435,10 +432,10 @@ pub(crate) fn layout_query_override() -> Option<LayoutMode> {
     if let Some(override_mode) = layout_query_override_from_search(&window) {
         LAYOUT_OVERRIDE_BOOTSTRAPPED_THIS_PAGE.store(true, Ordering::SeqCst);
         if let Ok(Some(storage)) = window.session_storage() {
-            let _ = storage.set_item(
+            drop(storage.set_item(
                 LAYOUT_OVERRIDE_SESSION_KEY,
                 layout_mode_query_value(override_mode),
-            );
+            ));
         }
         return Some(override_mode);
     }
@@ -449,7 +446,8 @@ pub(crate) fn layout_query_override() -> Option<LayoutMode> {
     // same page lifetime skip this branch after the first bootstrap call.
     if !LAYOUT_OVERRIDE_BOOTSTRAPPED_THIS_PAGE.swap(true, Ordering::SeqCst) {
         if let Ok(Some(storage)) = window.session_storage() {
-            let _ = storage.remove_item(LAYOUT_OVERRIDE_SESSION_KEY);
+            drop(storage.remove_item(LAYOUT_OVERRIDE_SESSION_KEY));
+
         }
         return None;
     }
@@ -484,11 +482,11 @@ pub(crate) fn preserve_layout_override_query_in_url() {
     };
     let hash = window.location().hash().unwrap_or_default();
     if let Ok(history) = window.history() {
-        let _ = history.replace_state_with_url(
+        drop(history.replace_state_with_url(
             &wasm_bindgen::JsValue::NULL,
             "",
             Some(&format!("{pathname}{canonical_search}{hash}")),
-        );
+        ));
     }
 }
 
@@ -853,8 +851,7 @@ pub static AUTO_SIGNIN_DONE: std::sync::atomic::AtomicBool =
 fn auto_signin_opted_in() -> bool {
     web_sys::window()
         .and_then(|w| w.location().search().ok())
-        .map(|s| s.contains("auto_signin=1"))
-        .unwrap_or(false)
+        .is_some_and(|s| s.contains("auto_signin=1"))
 }
 
 #[cfg(all(debug_assertions, not(target_arch = "wasm32")))]
@@ -885,7 +882,7 @@ fn auto_signin_test_accounts(
         AUTO_SIGNIN_DONE.store(true, std::sync::atomic::Ordering::SeqCst);
         return;
     }
-    let mut client_manager_w = client_manager;
+    let client_manager_w = client_manager;
     let on_complete = crate::ui::signup::build_on_complete_no_nav(client_manager, chat_data);
     spawn(async move {
         for entry in entries {
@@ -1185,7 +1182,8 @@ async fn init_storage(
 ) {
     match crate::storage::Storage::init().await {
         Ok(storage) => {
-            let _ = crate::STORAGE.set(storage.clone());
+            drop(crate::STORAGE.set(storage.clone()));
+
             if let Err(e) = storage.run_migrations().await {
                 tracing::warn!("Storage migration error: {e}");
             }

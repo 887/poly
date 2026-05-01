@@ -238,9 +238,9 @@ pub fn ForumComposer(
     on_submit: EventHandler<SubmitPayload>,
     on_cancel: EventHandler<()>,
 ) -> Element {
-    let mut title = use_signal(String::new);
-    let mut body = use_signal(String::new);
-    let mut link_url = use_signal(String::new);
+    let title = use_signal(String::new);
+    let body = use_signal(String::new);
+    let link_url = use_signal(String::new);
 
     let mode_clone = mode.clone();
     let submit_handler = {

@@ -50,21 +50,16 @@ pub fn ChatStyleEditor(account_id: String, chat_id: String) -> Element {
         let cid = cid.clone();
         spawn(async move {
             if let Some(storage) = crate::STORAGE.get() {
-                if let Ok(Some(v)) = storage.get(&kv_key(&acc, &cid, "tone")).await {
-                    if let Some(s) = v.as_str() { tone.set(s.to_string()); }
-                }
-                if let Ok(Some(v)) = storage.get(&kv_key(&acc, &cid, "formality")).await {
-                    if let Some(s) = v.as_str() { formality.set(s.to_string()); }
-                }
-                if let Ok(Some(v)) = storage.get(&kv_key(&acc, &cid, "emoji_allowed")).await {
-                    if let Some(b) = v.as_bool() { emoji.set(b); }
-                }
-                if let Ok(Some(v)) = storage.get(&kv_key(&acc, &cid, "signature")).await {
-                    if let Some(s) = v.as_str() { signature.set(s.to_string()); }
-                }
-                if let Ok(Some(v)) = storage.get(&kv_key(&acc, &cid, "extra_notes")).await {
-                    if let Some(s) = v.as_str() { extra_notes.set(s.to_string()); }
-                }
+                if let Ok(Some(v)) = storage.get(&kv_key(&acc, &cid, "tone")).await
+                    && let Some(s) = v.as_str() { tone.set(s.to_string()); }
+                if let Ok(Some(v)) = storage.get(&kv_key(&acc, &cid, "formality")).await
+                    && let Some(s) = v.as_str() { formality.set(s.to_string()); }
+                if let Ok(Some(v)) = storage.get(&kv_key(&acc, &cid, "emoji_allowed")).await
+                    && let Some(b) = v.as_bool() { emoji.set(b); }
+                if let Ok(Some(v)) = storage.get(&kv_key(&acc, &cid, "signature")).await
+                    && let Some(s) = v.as_str() { signature.set(s.to_string()); }
+                if let Ok(Some(v)) = storage.get(&kv_key(&acc, &cid, "extra_notes")).await
+                    && let Some(s) = v.as_str() { extra_notes.set(s.to_string()); }
             }
         });
     });

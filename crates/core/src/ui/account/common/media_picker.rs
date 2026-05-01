@@ -59,7 +59,7 @@ pub(crate) fn build_emoji_sections(custom: &[CustomEmoji]) -> Vec<EmojiSection> 
             id: format!("emoji-section-{id}"),
             label: id.to_string(),
             icon: icon.to_string(),
-            items: EmojiSectionItems::Unicode(emojis.iter().map(|e| e.to_string()).collect()),
+            items: EmojiSectionItems::Unicode(emojis.iter().map(std::string::ToString::to_string).collect()),
         })
         .collect();
 

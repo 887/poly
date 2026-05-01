@@ -55,15 +55,13 @@ fn current_page(route: &Route) -> OverviewPage {
 #[component]
 pub fn OverviewSidebar() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
-    let nav = navigator();
+    let _nav = navigator();
     let route: Route = use_route();
     let active = current_page(&route);
 
     let (backend, instance_id, account_id) = {
         let nav_state = app_state.read();
-        let backend = nav_state.nav.active_backend.cloned()
-            .map(|b| b.slug().to_string())
-            .unwrap_or_else(|| "demo".to_string());
+        let backend = nav_state.nav.active_backend.cloned().map_or_else(|| "demo".to_string(), |b| b.slug().to_string());
         let instance = nav_state.nav.active_instance_id.cloned()
             .unwrap_or_else(|| "demo".to_string());
         let account = nav_state.nav.active_account_id.cloned()

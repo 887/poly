@@ -96,7 +96,7 @@ fn LeaveServerConfirm(
     account_id: String,
     oncancel: EventHandler<MouseEvent>,
 ) -> Element {
-    let mut app_state: BatchedSignal<AppState> = use_context();
+    let _app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
 
     let aid_nav = account_id.clone();

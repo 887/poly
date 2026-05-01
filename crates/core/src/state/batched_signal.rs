@@ -86,6 +86,7 @@ impl<T: 'static> BatchedSignal<T> {
     /// ```ignore
     /// use_context_provider(|| BatchedSignal::from_signal(Signal::new(ChatData::default())));
     /// ```
+    #[must_use] 
     pub fn from_signal(inner: Signal<T>) -> Self {
         Self { inner }
     }
@@ -120,9 +121,9 @@ impl<T: 'static> BatchedSignal<T> {
         // `WritableExt::write`, so shadow with a local `mut` copy.
         let mut inner = self.inner;
         let mut guard = inner.write();
-        let out = f(&mut *guard);
+        
         // guard drops here → exactly one reactive cascade
-        out
+        f(&mut *guard)
     }
 
     /// Read via a closure. Equivalent to `f(&*self.read())` but keeps
@@ -363,6 +364,7 @@ impl<T: 'static> Drop for PendingUpdate<T> {
 /// Hook — fetch a `BatchedSignal<T>` provided by an ancestor
 /// `use_context_provider`. Direct replacement for
 /// `use_context::<Signal<T>>()` in migrated subtrees.
+#[must_use] 
 pub fn use_batched_context<T: 'static>() -> BatchedSignal<T> {
     use_context::<BatchedSignal<T>>()
 }

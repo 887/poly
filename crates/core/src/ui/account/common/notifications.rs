@@ -128,6 +128,7 @@ impl NotificationMenuFilter {
     /// a new plugin can't accidentally grow a "Voice invites" filter just by
     /// showing up in the account list — the capability declaration is the single
     /// source of truth.
+    #[must_use] 
     pub fn supported_by(self, caps: &BackendCapabilities, slug: &str) -> bool {
         if matches!(caps.notifications, NotificationSupport::None) {
             return false;
@@ -202,9 +203,7 @@ pub fn NotificationsView(account_id: String, backend_slug: String) -> Element {
     let reauth_instance_id = chat_data
         .read()
         .account_sessions
-        .get(&account_id)
-        .map(|s| s.instance_id.clone())
-        .unwrap_or_else(|| "demo".to_string());
+        .get(&account_id).map_or_else(|| "demo".to_string(), |s| s.instance_id.clone());
 
     rsx! {
         SplitMenuShell {

@@ -117,6 +117,7 @@ fn build_sanitizer() -> ammonia::Builder<'static> {
 /// Also strips `data:` URLs from `<a href>` as a post-pass (ammonia's
 /// URL-scheme allowlist is global; we need `data:` on `<img>` but not on
 /// `<a>`).
+#[must_use] 
 pub fn sanitize_html(input: &str) -> String {
     let cleaned = build_sanitizer().clean(input).to_string();
     let out = strip_data_href_on_anchors(&cleaned);
@@ -212,6 +213,7 @@ fn replace_href_scheme(tag: &str, scheme: &str) -> String {
 /// but ammonia already sanitizes the HTML and the stylesheet cannot contain
 /// script, so the blast radius of a malformed prefix is a broken layout,
 /// not a security hole.
+#[must_use] 
 pub fn prefix_css_selectors(css: &str, scope_class: &str) -> String {
     let prefix = format!(".{}", scope_class);
     let mut out = String::with_capacity(css.len() + css.len() / 4);
@@ -277,6 +279,7 @@ const SHADOW_ATTACH_JS: &str = r#"(function(scope){var host=document.querySelect
 /// / `behavior:` / `-moz-binding` declarations before CSS enters either the
 /// scoped-prefix path or the shadow-root. Ammonia doesn't own CSS (the WIT
 /// stylesheet field is a raw string) so this is our only defense there.
+#[must_use] 
 pub fn sanitize_stylesheet(css: &str) -> String {
     if css.is_empty() {
         return String::new();

@@ -171,19 +171,20 @@ pub struct ChatData {
 }
 
 /// Format a file size in human-readable form.
+#[must_use] 
 pub fn format_file_size(bytes: u64) -> String {
     if bytes < 1024 {
         return format!("{bytes} B");
     }
-    let kb = bytes as f64 / 1024.0;
-    if kb < 1024.0 {
+    let kb = bytes as f64 / 1_024.0_f64;
+    if kb < 1_024.0_f64 {
         return format!("{kb:.1} KB");
     }
-    let mb = kb / 1024.0;
-    if mb < 1024.0 {
+    let mb = kb / 1_024.0_f64;
+    if mb < 1_024.0_f64 {
         return format!("{mb:.1} MB");
     }
-    let gb = mb / 1024.0;
+    let gb = mb / 1_024.0_f64;
     format!("{gb:.2} GB")
 }
 
@@ -197,6 +198,7 @@ pub fn format_file_size(bytes: u64) -> String {
 ///
 /// DECISION(D27): do not re-introduce slug→emoji mapping in this file —
 /// it belongs in the plugin's declaration.
+#[must_use] 
 pub fn backend_badge(_backend: &BackendType) -> &'static str {
     "⬜"
 }
@@ -204,6 +206,7 @@ pub fn backend_badge(_backend: &BackendType) -> &'static str {
 /// Get a deterministic color for a user ID (for avatar and username coloring).
 ///
 /// Returns a CSS color string.
+#[must_use] 
 pub fn user_color(user_id: &str) -> &'static str {
     let hash: u32 = user_id.bytes().fold(0u32, |acc, b| {
         acc.wrapping_mul(31).wrapping_add(u32::from(b))

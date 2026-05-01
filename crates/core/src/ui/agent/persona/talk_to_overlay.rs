@@ -145,30 +145,26 @@ fn render_bundle_summary(json_str: &str) -> Element {
     let pinned_count = parsed
         .get("pinned_facts")
         .and_then(|v| v.as_array())
-        .map(Vec::len)
-        .unwrap_or(0);
+        .map_or(0, Vec::len);
 
     let chat_count = parsed
         .get("chats")
         .and_then(|v| v.as_array())
-        .map(Vec::len)
-        .unwrap_or(0);
+        .map_or(0, Vec::len);
 
     let total_messages: usize = parsed
         .get("chats")
         .and_then(|v| v.as_array())
-        .map(|chats| {
+        .map_or(0, |chats| {
             chats
                 .iter()
                 .map(|c| {
                     c.get("recent_messages")
                         .and_then(|m| m.as_array())
-                        .map(Vec::len)
-                        .unwrap_or(0)
+                        .map_or(0, Vec::len)
                 })
                 .sum()
-        })
-        .unwrap_or(0);
+        });
 
     rsx! {
         div { class: "talk-bundle-summary",
@@ -300,7 +296,7 @@ pub fn PersonaTalkToOverlay(
     let mut draft: Signal<String> = use_signal(String::new);
 
     // Inflight send
-    let mut loading: Signal<bool> = use_signal(|| false);
+    let loading: Signal<bool> = use_signal(|| false);
 
     // Error string (toast)
     let mut error: Signal<Option<String>> = use_signal(|| None);
@@ -310,13 +306,11 @@ pub fn PersonaTalkToOverlay(
 
     // ── Dev mode — load persisted preference ──────────────────────────────
     use_future(move || async move {
-        if let Some(storage) = crate::STORAGE.get() {
-            if let Ok(Some(v)) = storage.get(kv_dev_mode_key()).await {
-                if let Some(b) = v.as_bool() {
+        if let Some(storage) = crate::STORAGE.get()
+            && let Ok(Some(v)) = storage.get(kv_dev_mode_key()).await
+                && let Some(b) = v.as_bool() {
                     dev_mode.set(b);
                 }
-            }
-        }
     });
 
     // ── Load existing sessions on (slug, session_id) change ───────────────
@@ -358,9 +352,9 @@ pub fn PersonaTalkToOverlay(
                         dev_mode.set(next);
                         spawn(async move {
                             if let Some(storage) = crate::STORAGE.get() {
-                                let _ = storage
+                                drop(storage
                                     .set(kv_dev_mode_key(), serde_json::json!(next))
-                                    .await;
+                                    .await);
                             }
                         });
                     },
@@ -484,11 +478,13 @@ pub fn PersonaTalkToOverlay(
 /// Append a user message, call `meta_persona_invoke`, append the result.
 ///
 /// Manages loading + error signals.  Persists transcript after each turn.
+// lint-allow-unused: 7 args is fewer than the alternative struct-of-signals plumbing
+#[allow(clippy::too_many_arguments)]
 async fn invoke_and_append(
     slug: &str,
     session_id: &str,
     user_msg: &str,
-    dev_mode: bool,
+    _dev_mode: bool,
     mut lines: Signal<Vec<TalkLine>>,
     mut loading: Signal<bool>,
     mut error: Signal<Option<String>>,
@@ -529,11 +525,8 @@ async fn invoke_and_append(
 
             // Prefix with `__bundle__:` so the transcript renderer knows to
             // display it in dev or normal mode specially.
-            let content = if dev_mode {
-                format!("__bundle__:{bundle_str}")
-            } else {
-                format!("__bundle__:{bundle_str}")
-            };
+            // dev/normal currently render the same prefix; renderer branches downstream.
+            let content = format!("__bundle__:{bundle_str}");
 
             let mut current = lines.peek().clone();
             current.push(TalkLine {
@@ -583,7 +576,7 @@ async fn update_session_index(slug: &str, session_id: &str, storage: &crate::sto
     if !sessions.contains(&session_id.to_string()) {
         sessions.push(session_id.to_string());
     }
-    let _ = storage.set(&idx_key, serde_json::to_value(&sessions).unwrap_or_default()).await;
+    drop(storage.set(&idx_key, serde_json::to_value(&sessions).unwrap_or_default()).await);
 }
 
 /// Load stored session IDs for a persona (ordered oldest-first by insertion).
@@ -624,7 +617,7 @@ async fn prune_old_sessions(slug: &str, new_sid: &str) {
     while sessions.len() >= MAX_SESSIONS {
         let oldest = sessions.remove(0);
         let data_key = kv_session_key(slug, &oldest);
-        let _ = storage.delete(&data_key).await;
+        drop(storage.delete(&data_key).await);
     }
 
     // Add the new session id to the index.
@@ -632,9 +625,9 @@ async fn prune_old_sessions(slug: &str, new_sid: &str) {
         sessions.push(new_sid.to_string());
     }
 
-    let _ = storage
+    drop(storage
         .set(&idx_key, serde_json::to_value(&sessions).unwrap_or_default())
-        .await;
+        .await);
 }
 
 /// Current Unix timestamp in milliseconds.
@@ -643,7 +636,10 @@ fn current_timestamp_ms() -> u64 {
     {
         // js_sys::Date::now() returns ms-since-epoch as f64 — works without
         // enabling the web-sys "Performance" feature.
-        js_sys::Date::now() as u64
+        // lint-allow-unused: JS epoch ms → u64; bounded < 2^53
+        #[allow(clippy::cast_possible_truncation, clippy::as_conversions, clippy::cast_sign_loss, clippy::cast_precision_loss)]
+        let v = js_sys::Date::now() as u64;
+        v
     }
     #[cfg(not(target_arch = "wasm32"))]
     {

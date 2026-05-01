@@ -840,9 +840,7 @@ pub(crate) fn ReauthAccountPage(
     let display_name = chat_data
         .read()
         .account_sessions
-        .get(&account_id)
-        .map(|s| s.user.display_name.clone())
-        .unwrap_or_else(|| account_id.clone());
+        .get(&account_id).map_or_else(|| account_id.clone(), |s| s.user.display_name.clone());
 
     let (render_fn, backend_name) = {
         let manager = client_manager.read();

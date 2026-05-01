@@ -68,9 +68,7 @@ pub fn OverviewMissedView(account_id: String) -> Element {
                                     let instance_id = chat_data
                                         .read()
                                         .account_sessions
-                                        .get(&dm_account_id)
-                                        .map(|s| s.instance_id.clone())
-                                        .unwrap_or_else(|| backend_slug.clone());
+                                        .get(&dm_account_id).map_or_else(|| backend_slug.clone(), |s| s.instance_id.clone());
                                     rsx! {
                                         button {
                                             key: "{dm.id}",
@@ -109,9 +107,7 @@ pub fn OverviewMissedView(account_id: String) -> Element {
                                     let instance_id = chat_data
                                         .read()
                                         .account_sessions
-                                        .get(&n_account)
-                                        .map(|s| s.instance_id.clone())
-                                        .unwrap_or_else(|| backend_slug.clone());
+                                        .get(&n_account).map_or_else(|| backend_slug.clone(), |s| s.instance_id.clone());
                                     let kind = n.kind.clone();
                                     rsx! {
                                         button {

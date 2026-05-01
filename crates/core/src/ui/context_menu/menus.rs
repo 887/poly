@@ -125,7 +125,7 @@ fn render_user_row(ctx_json: &serde_json::Value, close: EventHandler<()>) -> Ele
     let Ok(ctx) = serde_json::from_value::<UserRowCtx>(ctx_json.clone()) else {
         return rsx! {};
     };
-    let mut app_state: BatchedSignal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let user_for_profile = ctx.user.clone();
     let copy_id = ctx.user.id.clone();
     let display_name = ctx.user.display_name.clone();

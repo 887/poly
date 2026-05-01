@@ -52,9 +52,7 @@ pub fn CardBody(
         let backend = s
             .nav
             .active_backend
-            .cloned()
-            .map(|b| b.slug().to_string())
-            .unwrap_or_else(|| "demo".to_string());
+            .cloned().map_or_else(|| "demo".to_string(), |b| b.slug().to_string());
         let instance = s
             .nav
             .active_instance_id

@@ -32,8 +32,7 @@ pub(crate) fn PolySelect(
     let current_label = options
         .iter()
         .find(|o| o.value == value)
-        .map(|o| o.label.as_str())
-        .unwrap_or(value.as_str());
+        .map_or(value.as_str(), |o| o.label.as_str());
 
     rsx! {
         div { class: "poly-select",

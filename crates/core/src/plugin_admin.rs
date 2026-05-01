@@ -110,22 +110,20 @@ pub fn remove_wasm_plugin(settings: &mut AppSettings, url: &str) -> bool {
     let before = settings.wasm_plugins.len();
     settings.wasm_plugins.retain(|e| {
         if e.url == url {
-            if e.bundled {
-                if let Some(slug) = slug_from_url(&e.url) {
+            if e.bundled
+                && let Some(slug) = slug_from_url(&e.url) {
                     removed_slug = Some(slug.to_string());
                 }
-            }
             false
         } else {
             true
         }
     });
     let removed = before != settings.wasm_plugins.len();
-    if let Some(slug) = removed_slug {
-        if !settings.removed_bundled_plugins.iter().any(|s| s == &slug) {
+    if let Some(slug) = removed_slug
+        && !settings.removed_bundled_plugins.iter().any(|s| s == &slug) {
             settings.removed_bundled_plugins.push(slug);
         }
-    }
     removed
 }
 

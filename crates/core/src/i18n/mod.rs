@@ -399,6 +399,7 @@ pub fn current_locale() -> String {
 /// Translate a key to the current locale.
 ///
 /// Falls back to English if the key is not found in the current locale.
+#[must_use] 
 pub fn t(key: &str) -> String {
     t_args(key, &[])
 }
@@ -462,19 +463,16 @@ pub fn has_key(key: &str) -> bool {
         .read()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     // Try current locale first
-    if let Some(bundle) = state.bundles.get(&state.current_locale) {
-        if bundle.get_message(key).and_then(|m| m.value()).is_some() {
+    if let Some(bundle) = state.bundles.get(&state.current_locale)
+        && bundle.get_message(key).and_then(|m| m.value()).is_some() {
             return true;
         }
-    }
     // Fallback to English
-    if state.current_locale != DEFAULT_LOCALE {
-        if let Some(bundle) = state.bundles.get(DEFAULT_LOCALE) {
-            if bundle.get_message(key).and_then(|m| m.value()).is_some() {
+    if state.current_locale != DEFAULT_LOCALE
+        && let Some(bundle) = state.bundles.get(DEFAULT_LOCALE)
+            && bundle.get_message(key).and_then(|m| m.value()).is_some() {
                 return true;
             }
-        }
-    }
     false
 }
 
@@ -490,13 +488,14 @@ pub fn has_key(key: &str) -> bool {
 /// - `plugin-demo-menu-regenerate-demo-data-label` → `"Regenerate Demo Data"`
 /// - `plugin-stoat-setting-show-avatars-label`     → `"Show Avatars"`
 /// - `some-bare-key`                               → `"Some Bare Key"`
+#[must_use] 
 pub fn title_case_fallback(key: &str) -> String {
     // Strip plugin prefix: `plugin-<id>-<surface>-`
     let after_prefix = if let Some(rest) = key.strip_prefix("plugin-") {
         // Skip plugin-id segment
-        if let Some(after_id) = rest.splitn(2, '-').nth(1) {
+        if let Some(after_id) = rest.split_once('-').map(|x| x.1) {
             // Skip surface/section segment
-            if let Some(after_surface) = after_id.splitn(2, '-').nth(1) {
+            if let Some(after_surface) = after_id.split_once('-').map(|x| x.1) {
                 after_surface
             } else {
                 after_id
@@ -612,6 +611,7 @@ pub fn provide_locale_context() {
 /// let current = locale.read().clone(); // subscribes
 /// locale.set("de".to_string());         // updates + triggers re-render
 /// ```
+#[must_use] 
 pub fn use_locale() -> Signal<String> {
     use_context::<Signal<String>>()
 }

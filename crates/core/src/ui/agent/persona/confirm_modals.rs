@@ -77,7 +77,7 @@ pub fn ConfirmOutboundModal(
                         class: "btn btn-danger",
                         disabled: !matches,
                         onclick: {
-                            let on_confirm = on_confirm.clone();
+                            let on_confirm = on_confirm;
                             move |_| {
                                 if matches {
                                     on_confirm.call(());
@@ -147,7 +147,7 @@ pub fn ConfirmForgetMemoryModal(
                         class: "btn btn-danger",
                         disabled: !matches,
                         onclick: {
-                            let on_confirm = on_confirm.clone();
+                            let on_confirm = on_confirm;
                             move |_| {
                                 if matches {
                                     on_confirm.call(());
@@ -217,7 +217,7 @@ pub fn ConfirmDeletePersonaModal(
                         class: "btn btn-danger",
                         disabled: !matches,
                         onclick: {
-                            let on_confirm = on_confirm.clone();
+                            let on_confirm = on_confirm;
                             move |_| {
                                 if matches {
                                     on_confirm.call(());

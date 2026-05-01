@@ -189,7 +189,7 @@ fn direct_call_bucket_label(remote_count: usize) -> String {
     }
 }
 
-fn hold_active_call_if_needed(new_channel_id: &str, mut chat_data: BatchedSignal<ChatData>) {
+fn hold_active_call_if_needed(new_channel_id: &str, chat_data: BatchedSignal<ChatData>) {
     let current = chat_data.read().voice_connection.clone();
     let Some(current) = current else {
         return;
@@ -304,7 +304,7 @@ fn activate_existing_or_new_call(
     });
 }
 
-async fn maybe_start_video_camera(start_video: bool, mut chat_data: BatchedSignal<ChatData>) {
+async fn maybe_start_video_camera(start_video: bool, chat_data: BatchedSignal<ChatData>) {
     if !start_video {
         return;
     }
@@ -432,7 +432,7 @@ pub(crate) fn start_direct_call_from_active_account(
 }
 
 /// Swap the active call with the first held call, if any.
-pub(crate) fn swap_to_first_held_call(mut chat_data: BatchedSignal<ChatData>) {
+pub(crate) fn swap_to_first_held_call(chat_data: BatchedSignal<ChatData>) {
     let current = chat_data.read().voice_connection.clone();
     let Some(current) = current else {
         return;

@@ -144,6 +144,7 @@ pub enum GifProviderKind {
 
 impl GifProviderKind {
     /// Stable lowercase value for storage/UI selects.
+    #[must_use] 
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Klippy => "klippy",
@@ -153,6 +154,7 @@ impl GifProviderKind {
     }
 
     /// Parse a stored/provider select value (slug form).
+    #[must_use] 
     pub fn from_slug(value: &str) -> Option<Self> {
         match value {
             "klippy" => Some(Self::Klippy),

@@ -57,6 +57,7 @@ pub struct ActionOutcomeCx {
 
 impl ActionOutcomeCx {
     /// Resolve the backend handle for `self.account_id`, if present.
+    #[must_use] 
     pub fn backend(&self) -> Option<BackendHandle> {
         self.client_manager.read().get_backend(&self.account_id)
     }

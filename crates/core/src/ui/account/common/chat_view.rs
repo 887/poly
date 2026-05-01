@@ -191,8 +191,7 @@ fn apply_builtin_command(text: &str) -> Option<String> {
 /// Build a short snippet suitable for reply previews.
 fn reply_preview_snippet(content: &MessageContent) -> String {
     let raw = match content {
-        MessageContent::Text(text) => text.clone(),
-        MessageContent::WithAttachments { text, .. } => text.clone(),
+        MessageContent::Text(text) | MessageContent::WithAttachments { text, .. } => text.clone(),
     };
     raw.chars().take(80).collect()
 }
@@ -312,8 +311,7 @@ fn active_search_filter_term(raw_query: &str) -> &str {
     raw_query
         .split_whitespace()
         .last()
-        .map(str::trim)
-        .unwrap_or("")
+        .map_or("", str::trim)
 }
 
 fn filter_search_filter_options(
@@ -354,8 +352,7 @@ fn apply_search_filter_completion(existing: &str, completion_token: &str) -> Str
 
 fn message_plain_text(content: &MessageContent) -> String {
     match content {
-        MessageContent::Text(text) => text.clone(),
-        MessageContent::WithAttachments { text, .. } => text.clone(),
+        MessageContent::Text(text) | MessageContent::WithAttachments { text, .. } => text.clone(),
     }
 }
 
@@ -507,24 +504,24 @@ fn contextual_compose_placeholder(
 }
 
 fn build_search_query(
-    raw: String,
-    current_channel: Option<poly_client::Channel>,
-    current_server: Option<poly_client::Server>,
-    self_user_id: String,
+    raw: &str,
+    current_channel: Option<&poly_client::Channel>,
+    current_server: Option<&poly_client::Server>,
+    self_user_id: &str,
     is_dm_channel: bool,
     is_group_channel: bool,
 ) -> MessageSearchQuery {
     let mut query = MessageSearchQuery {
         text: String::new(),
         channel_id: if is_dm_channel || is_group_channel {
-            current_channel.as_ref().map(|channel| channel.id.clone())
+            current_channel.map(|channel| channel.id.clone())
         } else {
             None
         },
         server_id: if is_dm_channel || is_group_channel {
             None
         } else {
-            current_server.as_ref().map(|server| server.id.clone())
+            current_server.map(|server| server.id.clone())
         },
         author_id: None,
         has_link: false,
@@ -539,7 +536,7 @@ fn build_search_query(
                 query.author_id = Some(author.trim_start_matches('@').to_string());
             }
         } else if let Some(channel_name) = token.strip_prefix("in:") {
-            if let Some(channel) = current_channel.as_ref() {
+            if let Some(channel) = current_channel {
                 let normalized = channel_name.trim_start_matches('#');
                 if normalized.eq_ignore_ascii_case(&channel.name) {
                     query.channel_id = Some(channel.id.clone());
@@ -548,7 +545,7 @@ fn build_search_query(
         } else if token.eq_ignore_ascii_case("has:link") {
             query.has_link = true;
         } else if token.eq_ignore_ascii_case("mentions:me") {
-            query.mentions_user_id = Some(self_user_id.clone());
+            query.mentions_user_id = Some(self_user_id.to_string());
         } else {
             free_text.push(token.to_string());
         }
@@ -626,7 +623,7 @@ pub(crate) fn mark_channel_as_read_with_backend(
                 .read_with_timeout(std::time::Duration::from_secs(5))
                 .await
         {
-            let _ = backend.mark_channel_read(&cid).await;
+            drop(backend.mark_channel_read(&cid).await);
         }
     });
     cleared
@@ -850,7 +847,7 @@ struct MessageHitRouteCtx {
 }
 
 fn build_message_hit_route(
-    app_state: &mut BatchedSignal<AppState>,
+    _app_state: &mut BatchedSignal<AppState>,
     ctx: MessageHitRouteCtx,
 ) -> (Route, String) {
     let MessageHitRouteCtx {
@@ -1245,8 +1242,7 @@ fn current_dm_user_presence(
         .dm_channels
         .iter()
         .find(|dm| dm.id == cid)
-        .map(|dm| dm.user.presence)
-        .unwrap_or(PresenceStatus::Offline)
+        .map_or(PresenceStatus::Offline, |dm| dm.user.presence)
 }
 
 fn use_chat_view_effects(signals: &ChatViewSignals, ctx: &ChatViewMarkupCtx) {
@@ -1279,6 +1275,8 @@ fn use_mobile_layout_resize_rerender_effect(mobile_layout_resize_tick: Signal<u6
         // how many resize events fire (browsers fire resize at ~60 Hz).
         let raf_pending = Rc::new(Cell::new(false));
 
+        // lint-allow-unused: Box<dyn Fn> coercion via `as` is the wasm-bindgen idiom
+        #[allow(clippy::as_conversions)]
         let closure = Closure::wrap(Box::new(move |_evt: web_sys::Event| {
             if raf_pending.get() {
                 return;
@@ -1286,19 +1284,21 @@ fn use_mobile_layout_resize_rerender_effect(mobile_layout_resize_tick: Signal<u6
             raf_pending.set(true);
             let raf_pending2 = Rc::clone(&raf_pending);
             let mut tick_signal = mobile_layout_resize_tick;
+            // lint-allow-unused: Box<dyn FnOnce> coercion via `as` is the wasm-bindgen idiom
+            #[allow(clippy::as_conversions)]
             let raf_cb = Closure::once(Box::new(move || {
                 raf_pending2.set(false);
                 if let Ok(mut tick) = tick_signal.try_write() {
                     *tick = tick.wrapping_add(1);
                 }
             }) as Box<dyn FnOnce()>);
-            let _ = web_sys::window()
-                .unwrap()
-                .request_animation_frame(raf_cb.as_ref().unchecked_ref());
+            if let Some(window) = web_sys::window() {
+                drop(window.request_animation_frame(raf_cb.as_ref().unchecked_ref()));
+            }
             raf_cb.forget();
         }) as Box<dyn FnMut(web_sys::Event)>);
 
-        let _ = window.add_event_listener_with_callback("resize", closure.as_ref().unchecked_ref());
+        drop(window.add_event_listener_with_callback("resize", closure.as_ref().unchecked_ref()));
         closure.forget();
     });
 }
@@ -1474,7 +1474,7 @@ fn use_member_list_effect(signals: &ChatViewSignals) {
     // so channel switches still propagate.
     let active_channel_id = app_state.peek().nav.selected_channel.cloned();
     use_spawn_once(active_channel_id, move |active_channel_id| async move {
-        let mut chat_data = chat_data;
+        let chat_data = chat_data;
         let Some(active_channel_id) = active_channel_id else {
             chat_data.batch(|cd| {
                 cd.members = Vec::new();
@@ -1580,10 +1580,10 @@ fn use_search_messages_effect(signals: &ChatViewSignals, ctx: &ChatViewMarkupCtx
                     return;
                 };
                 let parsed_query = build_search_query(
-                    raw_query,
-                    current_channel,
-                    current_server,
-                    self_user_id,
+                    &raw_query,
+                    current_channel.as_ref(),
+                    current_server.as_ref(),
+                    &self_user_id,
                     is_dm_channel,
                     is_group_channel,
                 );
@@ -2005,7 +2005,11 @@ fn estimate_message_row_height(
         messages.get(idx.saturating_sub(1)).is_some_and(|prev| {
             prev.author.id == msg.author.id
                 && !show_date_sep
-                && (msg.timestamp - prev.timestamp).num_minutes() < GROUP_THRESHOLD_MINUTES
+                && msg
+                    .timestamp
+                    .signed_duration_since(prev.timestamp)
+                    .num_minutes()
+                    < GROUP_THRESHOLD_MINUTES
         })
     };
 
@@ -2052,7 +2056,7 @@ fn estimate_message_block_height(
     }
 
     let capped_end = end_idx.min(messages.len());
-    let mut total = 0.0;
+    let mut total = 0.0_f64;
     for idx in start_idx..capped_end {
         total += estimate_message_row_height(messages, idx, unread_marker_id, unread_count);
     }
@@ -2063,12 +2067,12 @@ fn recompute_history_spacers(history: &mut ChatHistoryUiState, _messages: &[Mess
     history.before_spacer_px = if history.has_more_before {
         MESSAGE_HISTORY_SENTINEL_PX
     } else {
-        0.0
+        0.0_f64
     };
     history.after_spacer_px = if history.has_more_after {
         MESSAGE_HISTORY_SENTINEL_PX
     } else {
-        0.0
+        0.0_f64
     };
 }
 
@@ -2082,26 +2086,26 @@ fn compute_message_virtual_window(
         return MessageVirtualWindowState::default();
     }
 
-    let mut prefix_heights = Vec::with_capacity(messages.len() + 1);
-    prefix_heights.push(0.0);
+    let mut prefix_heights = Vec::with_capacity(messages.len().saturating_add(1));
+    prefix_heights.push(0.0_f64);
     for idx in 0..messages.len() {
-        let next = prefix_heights.last().copied().unwrap_or(0.0)
-            + estimate_message_row_height(messages, idx, unread_marker_id, unread_count);
+        let prev = prefix_heights.last().copied().unwrap_or(0.0_f64);
+        let next = prev + estimate_message_row_height(messages, idx, unread_marker_id, unread_count);
         prefix_heights.push(next);
     }
 
-    let viewport_start = (metrics.scroll_top - MESSAGE_VIRTUALIZATION_OVERSCAN_PX).max(0.0);
+    let viewport_start = (metrics.scroll_top - MESSAGE_VIRTUALIZATION_OVERSCAN_PX).max(0.0_f64);
     let viewport_end =
         metrics.scroll_top + metrics.client_height + MESSAGE_VIRTUALIZATION_OVERSCAN_PX;
 
     let mut start_idx = 0_usize;
     while start_idx < messages.len()
         && prefix_heights
-            .get(start_idx + 1)
+            .get(start_idx.saturating_add(1))
             .copied()
             .is_some_and(|height| height < viewport_start)
     {
-        start_idx += 1;
+        start_idx = start_idx.saturating_add(1);
     }
 
     let mut end_idx = start_idx;
@@ -2111,19 +2115,21 @@ fn compute_message_virtual_window(
             .copied()
             .is_some_and(|height| height <= viewport_end)
     {
-        end_idx += 1;
+        end_idx = end_idx.saturating_add(1);
     }
 
     if end_idx.saturating_sub(start_idx) < MESSAGE_VIRTUALIZATION_MIN_RENDERED {
-        let extra = MESSAGE_VIRTUALIZATION_MIN_RENDERED - end_idx.saturating_sub(start_idx);
+        let extra = MESSAGE_VIRTUALIZATION_MIN_RENDERED.saturating_sub(end_idx.saturating_sub(start_idx));
+        // lint-allow-unused: floor division — splits leftover slack evenly above/below viewport
+        #[allow(clippy::integer_division)]
         let extra_before = extra / 2;
         start_idx = start_idx.saturating_sub(extra_before);
-        end_idx = (start_idx + MESSAGE_VIRTUALIZATION_MIN_RENDERED).min(messages.len());
+        end_idx = start_idx.saturating_add(MESSAGE_VIRTUALIZATION_MIN_RENDERED).min(messages.len());
         start_idx = end_idx.saturating_sub(MESSAGE_VIRTUALIZATION_MIN_RENDERED);
     }
 
-    let total_height = prefix_heights.last().copied().unwrap_or(0.0);
-    let top_spacer_px = prefix_heights.get(start_idx).copied().unwrap_or(0.0);
+    let total_height = prefix_heights.last().copied().unwrap_or(0.0_f64);
+    let top_spacer_px = prefix_heights.get(start_idx).copied().unwrap_or(0.0_f64);
     let bottom_spacer_px =
         total_height - prefix_heights.get(end_idx).copied().unwrap_or(total_height);
 
@@ -2276,7 +2282,7 @@ fn spawn_message_list_scroll_work(mut ctx: MessageListScrollWorkCtx) {
                 && dist_from_bottom <= bottom_spacer_boundary + MESSAGE_HISTORY_EDGE_THRESHOLD_PX;
 
             if !near_top {
-                let top_rearm_threshold = if history_snapshot.before_spacer_px > 0.0 {
+                let top_rearm_threshold = if history_snapshot.before_spacer_px > 0.0_f64 {
                     top_spacer_boundary + MESSAGE_HISTORY_EDGE_THRESHOLD_PX
                 } else {
                     MESSAGE_HISTORY_EDGE_REARM_PX
@@ -2286,7 +2292,7 @@ fn spawn_message_list_scroll_work(mut ctx: MessageListScrollWorkCtx) {
             }
 
             if !near_bottom {
-                let bottom_rearm_threshold = if history_snapshot.after_spacer_px > 0.0 {
+                let bottom_rearm_threshold = if history_snapshot.after_spacer_px > 0.0_f64 {
                     bottom_spacer_boundary + MESSAGE_HISTORY_EDGE_THRESHOLD_PX
                 } else {
                     MESSAGE_HISTORY_EDGE_REARM_PX
@@ -2383,8 +2389,7 @@ fn render_drag_overlay(is_drag_over: bool) -> Element {
 fn render_chat_layout_shell(ctx: ChatViewMarkupCtx) -> Element {
     let show_side_column = ctx.utility_panel.read().is_some()
         || ctx.member_list_visible
-        || mobile_server_right_wing_active(&ctx)
-        || false;
+        || mobile_server_right_wing_active(&ctx);
     let mobile_layout = runtime_mobile_ui_active();
 
     rsx! {
@@ -2415,6 +2420,8 @@ fn render_chat_header(ctx: ChatViewMarkupCtx) -> Element {
     }
 }
 
+// lint-allow-unused: ChatViewMarkupCtx is Clone; render_* fns own their copy by convention
+#[allow(clippy::needless_pass_by_value)]
 fn render_chat_header_info(ctx: ChatViewMarkupCtx) -> Element {
     let current_channel = ctx.current_channel.clone();
     let current_server = ctx.current_server.clone();
@@ -2545,12 +2552,13 @@ fn close_chat_side_column_state(
     });
 }
 
+// lint-allow-unused: ChatViewMarkupCtx is Clone; render_* fns own their copy by convention
+#[allow(clippy::needless_pass_by_value)]
 fn render_mobile_chat_header_right_toggle(ctx: ChatViewMarkupCtx) -> Element {
-    let mut app_state = ctx.app_state;
+    let app_state = ctx.app_state;
     let mut utility_panel = ctx.utility_panel;
     let mut show_search_filters = ctx.show_search_filters;
-    let right_wing_open = ctx.member_list_visible || ctx.utility_panel.read().is_some()
-        || false;
+    let right_wing_open = ctx.member_list_visible || ctx.utility_panel.read().is_some();
     let current_server = ctx.current_server.clone();
     let current_channel = ctx.current_channel.clone();
     let dm_user = ctx.dm_user.clone();
@@ -2574,19 +2582,13 @@ fn render_mobile_chat_header_right_toggle(ctx: ChatViewMarkupCtx) -> Element {
 
     let toggle_label = if is_dm_channel {
         current_channel
-            .as_ref()
-            .map(|channel| channel.name.clone())
-            .unwrap_or_else(|| t("chat-toggle-contact"))
+            .as_ref().map_or_else(|| t("chat-toggle-contact"), |channel| channel.name.clone())
     } else if is_group_channel {
         current_channel
-            .as_ref()
-            .map(|channel| channel.name.clone())
-            .unwrap_or_else(|| t("chat-toggle-members"))
+            .as_ref().map_or_else(|| t("chat-toggle-members"), |channel| channel.name.clone())
     } else {
         current_server
-            .as_ref()
-            .map(|server| server.name.clone())
-            .unwrap_or_else(|| t("chat-toggle-members"))
+            .as_ref().map_or_else(|| t("chat-toggle-members"), |server| server.name.clone())
     };
     let toggle_fallback = if is_dm_channel {
         // On mobile, DMs show "@" symbol instead of first character
@@ -2595,9 +2597,7 @@ fn render_mobile_chat_header_right_toggle(ctx: ChatViewMarkupCtx) -> Element {
         "👥".to_string()
     } else {
         current_server
-            .as_ref()
-            .map(|server| server.name.chars().next().unwrap_or('#').to_string())
-            .unwrap_or_else(|| "#".to_string())
+            .as_ref().map_or_else(|| "#".to_string(), |server| server.name.chars().next().unwrap_or('#').to_string())
     };
 
     rsx! {
@@ -2750,7 +2750,7 @@ fn ChatHeaderActions(
 ) -> Element {
     use_header_actions_overflow_effect(header_actions_overflow, header_actions_menu_open, mobile_layout_resize_tick);
 
-    let mut app_state = app_state;
+    let app_state = app_state;
     let mut utility_panel = utility_panel;
     let notifications_muted = notifications_muted;
     let mut show_search_filters = show_search_filters;
@@ -3208,6 +3208,8 @@ fn render_member_toggle_button(
     }
 }
 
+// lint-allow-unused: ChatViewMarkupCtx is Clone; render_* fns own their copy by convention
+#[allow(clippy::needless_pass_by_value)]
 fn render_chat_header_search(ctx: ChatViewMarkupCtx) -> Element {
     let search_placeholder = ctx.search_placeholder.clone();
     let search_query_input_value = ctx.search_query_input_value.clone();
@@ -3259,8 +3261,8 @@ fn render_chat_header_search(ctx: ChatViewMarkupCtx) -> Element {
                 },
                 onkeydown: move |evt: KeyboardEvent| {
                     handle_search_filter_keydown(
-                        evt,
-                        filtered_search_filter_options.clone(),
+                        &evt,
+                        &filtered_search_filter_options,
                         search_query,
                         active_search_filter_idx,
                         show_search_filters,
@@ -3296,9 +3298,11 @@ fn render_chat_header_search(ctx: ChatViewMarkupCtx) -> Element {
     }
 }
 
+// lint-allow-unused: Dioxus Key has too many variants to enumerate; explicit Escape/Arrow handling intentional
+#[allow(clippy::wildcard_enum_match_arm)]
 fn handle_search_filter_keydown(
-    evt: KeyboardEvent,
-    filtered_search_filter_options: Vec<SearchFilterOption>,
+    evt: &KeyboardEvent,
+    filtered_search_filter_options: &[SearchFilterOption],
     mut search_query: Signal<String>,
     mut active_search_filter_idx: Signal<usize>,
     mut show_search_filters: Signal<bool>,
@@ -3315,22 +3319,22 @@ fn handle_search_filter_keydown(
     match evt.key() {
         Key::ArrowDown => {
             evt.prevent_default();
-            let next = (*active_search_filter_idx.read() + 1) % item_count;
+            let next = active_search_filter_idx.read().wrapping_add(1).checked_rem(item_count).unwrap_or(0);
             active_search_filter_idx.set(next);
         }
         Key::ArrowUp => {
             evt.prevent_default();
             let current = *active_search_filter_idx.read();
             let next = if current == 0 {
-                item_count - 1
+                item_count.saturating_sub(1)
             } else {
-                current - 1
+                current.saturating_sub(1)
             };
             active_search_filter_idx.set(next);
         }
         Key::Enter | Key::Tab => {
             evt.prevent_default();
-            let current = (*active_search_filter_idx.read()).min(item_count - 1);
+            let current = (*active_search_filter_idx.read()).min(item_count.saturating_sub(1));
             if let Some(option) = filtered_search_filter_options.get(current) {
                 let existing_query = search_query.read().clone();
                 let next_query =
@@ -3349,6 +3353,8 @@ fn handle_search_filter_keydown(
     }
 }
 
+// lint-allow-unused: signal/text helper-style render fn called inline from rsx!
+#[allow(clippy::needless_pass_by_value)]
 fn render_search_clear_button(
     search_query_value: String,
     mut search_query: Signal<String>,
@@ -3379,8 +3385,7 @@ fn render_search_clear_button(
 
 fn render_chat_body_shell(ctx: ChatViewMarkupCtx) -> Element {
     let show_side_column = ctx.utility_panel.read().is_some()
-        || ctx.member_list_visible
-        || false;
+        || ctx.member_list_visible;
     let mobile_layout = runtime_mobile_ui_active();
     // 5.2 — Thread panel is visible when a thread_id is stored in nav state
     // and we are not in mobile layout (mobile uses the full-page ThreadView route).
@@ -3413,6 +3418,8 @@ fn render_chat_content_column(ctx: ChatViewMarkupCtx) -> Element {
     }
 }
 
+// lint-allow-unused: ChatViewMarkupCtx is Clone; render_* fns own their copy by convention
+#[allow(clippy::needless_pass_by_value)]
 fn render_message_list(ctx: ChatViewMarkupCtx) -> Element {
     let loading = ctx.loading;
     let app_state = ctx.app_state;
@@ -3519,6 +3526,8 @@ fn render_message_list(ctx: ChatViewMarkupCtx) -> Element {
     }
 }
 
+// lint-allow-unused: ChatViewMarkupCtx is Clone; render_* fns own their copy by convention
+#[allow(clippy::needless_pass_by_value)]
 fn render_message_list_loading_overlays(ctx: ChatViewMarkupCtx) -> Element {
     let history_snapshot = ctx.history_state.read().clone();
 
@@ -3600,7 +3609,7 @@ async fn load_older_messages(
         history_state.batch(|history| {
             history.loading_before = false;
             history.has_more_before = false;
-            history.before_spacer_px = 0.0;
+            history.before_spacer_px = 0.0_f64;
         });
         return;
     }
@@ -3728,7 +3737,7 @@ async fn load_newer_messages(
         history_state.batch(|history| {
             history.loading_after = false;
             history.has_more_after = !reached_latest_message;
-            history.after_spacer_px = 0.0;
+            history.after_spacer_px = 0.0_f64;
         });
         return;
     }
@@ -3758,6 +3767,8 @@ async fn load_newer_messages(
     history_state.batch(|h| h.loading_after = false);
 }
 
+// lint-allow-unused: ChatViewMarkupCtx is Clone; render_* fns own their copy by convention
+#[allow(clippy::needless_pass_by_value)]
 fn render_message_list_content(ctx: ChatViewMarkupCtx) -> Element {
     if ctx.loading {
         return rsx! {
@@ -3803,12 +3814,12 @@ fn render_message_list_content(ctx: ChatViewMarkupCtx) -> Element {
     let top_virtual_spacer_px = if virtual_window.enabled {
         virtual_window.top_spacer_px
     } else {
-        0.0
+        0.0_f64
     };
     let bottom_virtual_spacer_px = if virtual_window.enabled {
         virtual_window.bottom_spacer_px
     } else {
-        0.0
+        0.0_f64
     };
     let total_top_spacer_px = top_history_spacer_px + top_virtual_spacer_px;
     let total_bottom_spacer_px = bottom_history_spacer_px + bottom_virtual_spacer_px;
@@ -3872,6 +3883,8 @@ fn render_message_list_content(ctx: ChatViewMarkupCtx) -> Element {
 /// `scrolled_from_bottom`) or when `has_more_after = true` (newer unloaded messages exist).
 /// Clicking it scrolls to the bottom and, if `has_more_after`, the scroll sentinel will
 /// automatically chain-load newer message pages to bring the user to the live tail.
+// lint-allow-unused: ChatViewMarkupCtx is Clone; render_* fns own their copy by convention
+#[allow(clippy::needless_pass_by_value)]
 fn render_jump_to_present(ctx: ChatViewMarkupCtx) -> Element {
     let is_scrolled = *ctx.scrolled_from_bottom.read();
     let has_more_after = ctx.history_state.read().has_more_after;
@@ -3918,6 +3931,8 @@ fn render_jump_to_present(ctx: ChatViewMarkupCtx) -> Element {
     }
 }
 
+// lint-allow-unused: ChatViewMarkupCtx is Clone; render_* fns own their copy by convention
+#[allow(clippy::needless_pass_by_value)]
 fn render_unread_banner(ctx: ChatViewMarkupCtx) -> Element {
     // Only show the banner if there are unread messages AND the unread marker is not visible on screen
     if !ctx.unread_banner_visible || *ctx.unread_marker_on_screen.read() {
@@ -3952,6 +3967,8 @@ fn render_unread_banner(ctx: ChatViewMarkupCtx) -> Element {
     }
 }
 
+// lint-allow-unused: ChatViewMarkupCtx is Clone; render_* fns own their copy by convention
+#[allow(clippy::needless_pass_by_value)]
 fn render_message_row(ctx: ChatViewMarkupCtx, msg: Message, prev_msg: Option<Message>) -> Element {
     let show_date_sep = match prev_msg.as_ref() {
         Some(prev) => msg.timestamp.date_naive() != prev.timestamp.date_naive(),
@@ -3961,7 +3978,8 @@ fn render_message_row(ctx: ChatViewMarkupCtx, msg: Message, prev_msg: Option<Mes
         Some(prev) => {
             prev.author.id == msg.author.id
                 && !show_date_sep
-                && (msg.timestamp - prev.timestamp).num_minutes() < GROUP_THRESHOLD_MINUTES
+                && msg.timestamp.signed_duration_since(prev.timestamp).num_minutes()
+                    < GROUP_THRESHOLD_MINUTES
         }
         None => false,
     };
@@ -4032,6 +4050,8 @@ fn render_message_row(ctx: ChatViewMarkupCtx, msg: Message, prev_msg: Option<Mes
     }
 }
 
+// lint-allow-unused: ChatViewMarkupCtx is Clone; render_* fns own their copy by convention
+#[allow(clippy::needless_pass_by_value)]
 fn render_message_actions(
     ctx: ChatViewMarkupCtx,
     msg: Message,
@@ -4042,7 +4062,7 @@ fn render_message_actions(
     let mut edit_draft = ctx.edit_draft;
     let mut editing_msg_id = ctx.editing_msg_id;
     let mut reply_target = ctx.reply_target;
-    let mut chat_data = ctx.chat_data;
+    let chat_data = ctx.chat_data;
     let msg_id = msg.id.clone();
     let ctx_text = message_plain_text(&msg.content);
 
@@ -4133,6 +4153,8 @@ fn render_message_actions(
     }
 }
 
+// lint-allow-unused: ChatViewMarkupCtx is Clone; render_* fns own their copy by convention
+#[allow(clippy::needless_pass_by_value)]
 fn render_full_message_body(
     ctx: ChatViewMarkupCtx,
     msg: Message,
@@ -4169,6 +4191,8 @@ fn render_full_message_body(
     }
 }
 
+// lint-allow-unused: ChatViewMarkupCtx is Clone; render_* fns own their copy by convention
+#[allow(clippy::needless_pass_by_value)]
 fn render_grouped_message_body(
     ctx: ChatViewMarkupCtx,
     msg: Message,
@@ -4183,6 +4207,8 @@ fn render_grouped_message_body(
     }
 }
 
+// lint-allow-unused: ChatViewMarkupCtx is Clone; render_* fns own their copy by convention
+#[allow(clippy::needless_pass_by_value)]
 fn render_message_content_stack(ctx: ChatViewMarkupCtx, msg: Message, is_editing: bool) -> Element {
     rsx! {
         if let Some(reply) = msg.reply_to.clone() {
@@ -4226,9 +4252,7 @@ fn render_message_input_area(ctx: ChatViewMarkupCtx) -> Element {
         .read()
         .nav
         .active_backend
-        .cloned()
-        .map(|b| b.slug().to_string())
-        .unwrap_or_else(|| "demo".to_string());
+        .cloned().map_or_else(|| "demo".to_string(), |b| b.slug().to_string());
     let composer_writable =
         poly_client::capabilities_for_slug(&backend_slug).composer_writable();
 
@@ -4284,6 +4308,8 @@ fn render_message_input_enabled(ctx: ChatViewMarkupCtx) -> Element {
     }
 }
 
+// lint-allow-unused: ChatViewMarkupCtx is Clone; render_* fns own their copy by convention
+#[allow(clippy::needless_pass_by_value)]
 fn render_attachment_preview_strip(ctx: ChatViewMarkupCtx) -> Element {
     let previews = ctx.pending_attachments.read().clone();
     if previews.is_empty() {
@@ -4323,6 +4349,8 @@ fn render_attachment_preview_strip(ctx: ChatViewMarkupCtx) -> Element {
     }
 }
 
+// lint-allow-unused: ChatViewMarkupCtx is Clone; render_* fns own their copy by convention
+#[allow(clippy::needless_pass_by_value)]
 fn render_slash_command_popup(ctx: ChatViewMarkupCtx) -> Element {
     let all_cmds = ctx.command_suggestions.read().clone();
     let text = ctx.message_input.read().clone();
@@ -4432,7 +4460,7 @@ fn render_message_input_row(ctx: ChatViewMarkupCtx) -> Element {
                             let real_typing_channel = channel_id.clone();
                             move |evt| {
                                 handle_composer_input(
-                                    evt.value(),
+                                    &evt.value(),
                                     message_input,
                                     command_suggestions,
                                     show_command_popup,
@@ -4451,7 +4479,7 @@ fn render_message_input_row(ctx: ChatViewMarkupCtx) -> Element {
                         onkeydown: {
                             let channel_id_send = channel_id.clone();
                             move |evt: KeyboardEvent| {
-                                handle_composer_keydown(evt, channel_id_send.clone(), composer_runtime);
+                                handle_composer_keydown(&evt, channel_id_send.clone(), composer_runtime);
                             }
                         },
                     }
@@ -4517,7 +4545,7 @@ fn maybe_send_real_typing(
                 .read_with_timeout(std::time::Duration::from_secs(2))
                 .await
         {
-            let _ = backend.send_typing(&channel_id).await;
+            drop(backend.send_typing(&channel_id).await);
         }
         #[cfg(target_arch = "wasm32")]
         gloo_timers::future::TimeoutFuture::new(5_000).await;
@@ -4591,7 +4619,7 @@ fn TypingModeButton(mut typing_mode: Signal<TypingMode>) -> Element {
                 let Some(channel_id) = channel_id else { return };
                 let mode_signal = typing_mode;
                 spawn(async move {
-                    for _ in 0..12 {
+                    for _ in 0_i32..12_i32 {
                         if *mode_signal.peek() != TypingMode::Simulator { break; }
                         let handle = if let Some(ref sid) = server_id {
                             client_manager.read().get_backend_for_server(sid).map(|(_, b)| b)
@@ -4605,7 +4633,7 @@ fn TypingModeButton(mut typing_mode: Signal<TypingMode>) -> Element {
                                 .read_with_timeout(std::time::Duration::from_secs(2))
                                 .await
                         {
-                            let _ = backend.send_typing(&channel_id).await;
+                            drop(backend.send_typing(&channel_id).await);
                         }
                         #[cfg(target_arch = "wasm32")]
                         gloo_timers::future::TimeoutFuture::new(5_000).await;
@@ -4629,22 +4657,25 @@ fn open_composer_file_picker() {
 }
 
 fn handle_composer_input(
-    value: String,
+    value: &str,
     mut message_input: Signal<String>,
     command_suggestions: Signal<Vec<ChatCommand>>,
     mut show_command_popup: Signal<bool>,
     mut active_command_idx: Signal<usize>,
 ) {
-    message_input.set(value.clone());
-    if value.trim_start().starts_with('/') && !value.trim_start()[1..].contains(' ') {
-        let query = &value.trim_start()[1..];
-        let all_cmds = command_suggestions.read().clone();
-        let matches = filtered_slash_commands(query, &all_cmds);
-        show_command_popup.set(!matches.is_empty());
-        active_command_idx.set(0);
-    } else {
-        show_command_popup.set(false);
+    message_input.set(value.to_string());
+    let trimmed = value.trim_start();
+    if trimmed.starts_with('/') {
+        let after_slash = trimmed.get(1..).unwrap_or("");
+        if !after_slash.contains(' ') {
+            let all_cmds = command_suggestions.read().clone();
+            let matches = filtered_slash_commands(after_slash, &all_cmds);
+            show_command_popup.set(!matches.is_empty());
+            active_command_idx.set(0);
+            return;
+        }
     }
+    show_command_popup.set(false);
 }
 
 #[derive(Clone, Copy)]
@@ -4662,7 +4693,7 @@ struct ComposerRuntimeCtx {
 }
 
 fn handle_composer_keydown(
-    evt: KeyboardEvent,
+    evt: &KeyboardEvent,
     channel_id_send: Option<String>,
     ctx: ComposerRuntimeCtx,
 ) {
@@ -4671,7 +4702,7 @@ fn handle_composer_keydown(
     let mut reply_target = ctx.reply_target;
     let show_command_popup = ctx.show_command_popup;
 
-    if *show_command_popup.read() && handle_slash_popup_navigation(&evt, ctx) {
+    if *show_command_popup.read() && handle_slash_popup_navigation(evt, ctx) {
         return;
     }
 
@@ -4723,6 +4754,8 @@ fn handle_composer_keydown(
     }
 }
 
+// lint-allow-unused: Dioxus Key has too many variants to enumerate; explicit Arrow/Esc/Tab/Enter handling intentional
+#[allow(clippy::wildcard_enum_match_arm)]
 fn handle_slash_popup_navigation(evt: &KeyboardEvent, ctx: ComposerRuntimeCtx) -> bool {
     let message_input = ctx.message_input;
     let command_suggestions = ctx.command_suggestions;
@@ -4734,7 +4767,7 @@ fn handle_slash_popup_navigation(evt: &KeyboardEvent, ctx: ComposerRuntimeCtx) -
             evt.prevent_default();
             let cur = *active_command_idx.read();
             if cur > 0 {
-                active_command_idx.set(cur - 1);
+                active_command_idx.set(cur.saturating_sub(1));
             }
             true
         }
@@ -4745,8 +4778,8 @@ fn handle_slash_popup_navigation(evt: &KeyboardEvent, ctx: ComposerRuntimeCtx) -
             let query = slash_command_query(&text);
             let matches = filtered_slash_commands(query, &all_cmds);
             let cur = *active_command_idx.read();
-            if cur + 1 < matches.len() {
-                active_command_idx.set(cur + 1);
+            if cur.saturating_add(1) < matches.len() {
+                active_command_idx.set(cur.saturating_add(1));
             }
             true
         }
@@ -4780,6 +4813,8 @@ fn apply_selected_slash_command(ctx: ComposerRuntimeCtx) {
     }
 }
 
+// lint-allow-unused: ChatViewMarkupCtx is Clone; render_* fns own their copy by convention
+#[allow(clippy::needless_pass_by_value)]
 fn render_send_button(ctx: ChatViewMarkupCtx) -> Element {
     let channel_id = ctx.channel_id.clone();
     let mut message_input = ctx.message_input;
@@ -4835,6 +4870,8 @@ fn render_send_button(ctx: ChatViewMarkupCtx) -> Element {
     }
 }
 
+// lint-allow-unused: ChatViewMarkupCtx is Clone; render_* fns own their copy by convention
+#[allow(clippy::needless_pass_by_value)]
 fn render_hidden_file_input(ctx: ChatViewMarkupCtx) -> Element {
     let pending_attachments = ctx.pending_attachments;
     rsx! {
@@ -4855,6 +4892,8 @@ fn render_hidden_file_input(ctx: ChatViewMarkupCtx) -> Element {
     }
 }
 
+// lint-allow-unused: ChatViewMarkupCtx is Clone; render_* fns own their copy by convention
+#[allow(clippy::needless_pass_by_value)]
 fn render_input_emoji_picker(ctx: ChatViewMarkupCtx) -> Element {
     let mut message_input = ctx.message_input;
     let mut show_input_emoji = ctx.show_input_emoji;
@@ -4940,8 +4979,10 @@ fn render_chat_side_column(ctx: ChatViewMarkupCtx) -> Element {
     }
 }
 
+// lint-allow-unused: ChatViewMarkupCtx is Clone; render_* fns own their copy by convention
+#[allow(clippy::needless_pass_by_value)]
 fn render_chat_tools_panel(ctx: ChatViewMarkupCtx) -> Element {
-    let mut app_state = ctx.app_state;
+    let app_state = ctx.app_state;
     let mut utility_panel = ctx.utility_panel;
     let notifications_muted = ctx.notifications_muted;
     let mut show_search_filters = ctx.show_search_filters;
@@ -5061,6 +5102,8 @@ fn render_chat_tools_panel(ctx: ChatViewMarkupCtx) -> Element {
     }
 }
 
+// lint-allow-unused: ChatViewMarkupCtx is Clone; render_* fns own their copy by convention
+#[allow(clippy::needless_pass_by_value)]
 fn render_chat_utility_rail(
     ctx: ChatViewMarkupCtx,
     panel: ChatUtilityPanel,
@@ -5162,11 +5205,13 @@ fn render_chat_utility_rail(
     }
 }
 
+// lint-allow-unused: ChatViewMarkupCtx is Clone; render_* fns own their copy by convention
+#[allow(clippy::needless_pass_by_value)]
 fn render_chat_overlays(ctx: ChatViewMarkupCtx) -> Element {
     let reaction_picker_id = ctx.reaction_picker_id.clone();
     let mut reaction_picker_msg = ctx.reaction_picker_msg;
     let msg_context_menu = ctx.msg_context_menu;
-    let mut chat_data = ctx.chat_data;
+    let chat_data = ctx.chat_data;
 
     rsx! {
         if let Some(ref picker_msg_id) = reaction_picker_id {
@@ -5432,7 +5477,7 @@ pub(crate) fn catch_up_clipboard_text(chat_data: &ChatData, channel_name: &str, 
 #[component]
 fn ChatSettingsPanel(mut notifications_muted: Signal<bool>) -> Element {
     use crate::ui::settings::common::{PolySelect, SelectOption};
-    let mut app_state: BatchedSignal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let muted    = *notifications_muted.read();
     let grouping = app_state.read().member_list_grouping;
     let sort     = app_state.read().member_list_sort_order;
@@ -5699,7 +5744,7 @@ fn SearchPreviewText(text: String, search_terms: Vec<String>) -> Element {
         let lowercase_term = term.to_lowercase();
         lowercase_text
             .find(&lowercase_term)
-            .map(|index| (index, index + lowercase_term.len()))
+            .map(|index| (index, index.saturating_add(lowercase_term.len())))
     });
 
     if let Some((start, end)) = found_match {
@@ -6008,7 +6053,12 @@ fn format_timestamp(ts: chrono::DateTime<chrono::Utc>) -> String {
 
     if local.date_naive() == now.date_naive() {
         local.format("%I:%M %p").to_string()
-    } else if local.date_naive() == (now - chrono::Duration::days(1)).date_naive() {
+    } else if local.date_naive()
+        == now
+            .checked_sub_signed(chrono::Duration::days(1))
+            .unwrap_or(now)
+            .date_naive()
+    {
         format!("Yesterday {}", local.format("%I:%M %p"))
     } else {
         local.format("%m/%d/%Y %I:%M %p").to_string()
@@ -6063,7 +6113,7 @@ pub(crate) fn toggle_reaction_on_message(chat_data: BatchedSignal<ChatData>, mes
                     }
                 } else {
                     // Add our reaction
-                    reaction.count += 1;
+                    reaction.count = reaction.count.saturating_add(1);
                     reaction.me = true;
                 }
             } else {
@@ -6099,7 +6149,7 @@ async fn send_message(ctx: SendMessageCtx) {
         attachments,
         reply_to_message_id,
         client_manager,
-        mut chat_data,
+        chat_data,
         app_state,
         mut new_messages_while_scrolled_up,
     } = ctx;
@@ -6314,6 +6364,8 @@ fn MsgContextMenuOverlay(
     }
 }
 
+// lint-allow-unused: signal/text helper-style render fn called inline from rsx!
+#[allow(clippy::needless_pass_by_value)]
 fn render_context_menu_quick_reactions(
     message_id: String,
     mut msg_context_menu: Signal<Option<MsgContextMenu>>,
@@ -6390,6 +6442,8 @@ fn render_context_menu_copy_text_item(
     }
 }
 
+// lint-allow-unused: signal/text helper-style render fn called inline from rsx!; 8 args is fewer than the alternative struct-of-signals
+#[allow(clippy::needless_pass_by_value, clippy::too_many_arguments)]
 fn render_context_menu_danger_item(
     is_own: bool,
     last_known_perms: Option<poly_client::MemberPermissions>,

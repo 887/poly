@@ -61,8 +61,8 @@ fn new_session_id() -> String {
     #[cfg(target_arch = "wasm32")]
     {
         // On WASM use Math.random via js_sys for randomness.
-        let r1 = (js_sys::Math::random() * u32::MAX as f64) as u32;
-        let r2 = (js_sys::Math::random() * u32::MAX as f64) as u32;
+        let r1 = (js_sys::Math::random() * f64::from(u32::MAX)) as u32;
+        let r2 = (js_sys::Math::random() * f64::from(u32::MAX)) as u32;
         // js_sys::Date::now() returns ms-since-epoch as f64 — works without
         // enabling the web-sys "Performance" feature.
         let ts = js_sys::Date::now() as u64;
@@ -312,11 +312,10 @@ pub fn AgentPanel(
         let key = kv_key_for_load.clone();
         async move {
             let Some(storage) = crate::STORAGE.get() else { return };
-            if let Ok(Some(v)) = storage.get(&key).await {
-                if let Some(b) = v.as_bool() {
+            if let Ok(Some(v)) = storage.get(&key).await
+                && let Some(b) = v.as_bool() {
                     access_enabled.set(b);
                 }
-            }
         }
     });
 

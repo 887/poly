@@ -27,9 +27,7 @@ fn current_title(app_state: &AppState, chat_data: &ChatData) -> String {
         View::Overview => t("account-bar-overview-tooltip"),
         View::DmsFriends => chat_data
             .current_channel
-            .as_ref()
-            .map(|ch| ch.name.clone())
-            .unwrap_or_else(|| t("nav-dms")),
+            .as_ref().map_or_else(|| t("nav-dms"), |ch| ch.name.clone()),
         View::Friends => t("nav-friends"),
         View::Notifications => t("notifications-title"),
         View::Settings => t("settings-title"),

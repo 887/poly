@@ -47,6 +47,7 @@ pub enum MemberListGrouping {
 
 impl MemberListGrouping {
     /// Stable slug used in storage and HTML select values.
+    #[must_use] 
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::ByStatus => "by-status",
@@ -55,6 +56,7 @@ impl MemberListGrouping {
     }
 
     /// Parse from a stored slug.
+    #[must_use] 
     pub fn from_slug(value: &str) -> Self {
         match value {
             "by-status" => Self::ByStatus,
@@ -78,6 +80,7 @@ pub enum MemberListSortOrder {
 
 impl MemberListSortOrder {
     /// Stable slug.
+    #[must_use] 
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Alphabetical => "alphabetical",
@@ -87,6 +90,7 @@ impl MemberListSortOrder {
     }
 
     /// Parse from a stored slug.
+    #[must_use] 
     pub fn from_slug(value: &str) -> Self {
         match value {
             "alphabetical" => Self::Alphabetical,
@@ -284,6 +288,7 @@ pub enum SettingsSection {
 
 impl SettingsSection {
     /// Convert to a URL-friendly slug used in `/settings/:section` routes.
+    #[must_use] 
     pub fn to_slug(self) -> &'static str {
         match self {
             Self::Accounts | Self::Notifications => "accounts",
@@ -303,6 +308,7 @@ impl SettingsSection {
 
     /// Parse a URL slug back into a `SettingsSection`.
     /// Returns `Self::Accounts` as the default for unknown slugs.
+    #[must_use] 
     pub fn from_slug(slug: &str) -> Self {
         match slug {
             "accounts" => Self::Accounts,

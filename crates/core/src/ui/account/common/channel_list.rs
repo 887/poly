@@ -839,7 +839,7 @@ fn DMFriendsView() -> Element {
 #[ui_action(inherit)]
 #[component]
 fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
-    let mut app_state: BatchedSignal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let _client_manager: BatchedSignal<ClientManager> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
 
@@ -1148,7 +1148,7 @@ fn DMChannelItem(
 ) -> Element {
     use crate::state::chat_data::user_color;
     use poly_client::PresenceStatus;
-    let mut app_state: BatchedSignal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
 
@@ -1307,7 +1307,7 @@ fn GroupChannelItem(
     /// Instance ID for federated routing (e.g. `"demo"`, `"matrix.org"`).
     instance_id: String,
 ) -> Element {
-    let mut app_state: BatchedSignal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
 
@@ -1511,7 +1511,7 @@ fn CategorySection(
 #[ui_action(inherit)]
 #[component]
 fn ChannelItemRow(channel: Channel) -> Element {
-    let mut app_state: BatchedSignal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
 
@@ -1531,9 +1531,7 @@ fn ChannelItemRow(channel: Channel) -> Element {
         .read()
         .nav
         .active_backend
-        .cloned()
-        .map(|b| b.slug().to_string())
-        .unwrap_or_else(|| "demo".to_string());
+        .cloned().map_or_else(|| "demo".to_string(), |b| b.slug().to_string());
     let instance_id_for_menu = app_state.read().nav.active_instance_id.cloned().unwrap_or_default();
 
     let type_icon = match ch_type {

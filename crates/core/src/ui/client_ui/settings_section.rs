@@ -84,6 +84,7 @@ impl UiAction for PluginSettingFieldAction {
 /// when `t()` echoes back the raw key (indicating the plugin omitted the FTL
 /// entry). Callers use this to omit the desc `<p>` entirely rather than
 /// showing a raw kebab-case key in the UI.
+#[must_use] 
 pub fn lookup_optional_desc(key: &str) -> Option<String> {
     if has_key(key) { Some(t(key)) } else { None }
 }
@@ -414,13 +415,13 @@ fn render_slider(
     scope: SettingsScope,
     scope_id: String,
 ) -> Element {
-    let value = serde_json::from_str::<f64>(&current_json).unwrap_or(0.0);
+    let value = serde_json::from_str::<f64>(&current_json).unwrap_or(0.0_f64);
     // `extra` is a JSON object like {"min":0,"max":100,"step":1}
     let bounds: serde_json::Value =
         serde_json::from_str(&field.extra).unwrap_or_else(|_| serde_json::json!({}));
-    let min = bounds.get("min").and_then(|v| v.as_f64()).unwrap_or(0.0);
-    let max = bounds.get("max").and_then(|v| v.as_f64()).unwrap_or(100.0);
-    let step = bounds.get("step").and_then(|v| v.as_f64()).unwrap_or(1.0);
+    let min = bounds.get("min").and_then(serde_json::Value::as_f64).unwrap_or(0.0_f64);
+    let max = bounds.get("max").and_then(serde_json::Value::as_f64).unwrap_or(100.0_f64);
+    let step = bounds.get("step").and_then(serde_json::Value::as_f64).unwrap_or(1.0_f64);
     let key = field.key.clone();
     rsx! {
         div { class: "settings-slider-row",
@@ -449,7 +450,7 @@ fn render_slider(
                     let scope_id = scope_id.clone();
                     let key = key.clone();
                     spawn(async move {
-                        let parsed: f64 = raw.parse().unwrap_or(0.0);
+                        let parsed: f64 = raw.parse().unwrap_or(0.0_f64);
                         let json = serde_json::to_string(&parsed)
                             .unwrap_or_else(|_| "0".to_string());
                         save_value(&account_id, scope, &scope_id, &key, &json).await;

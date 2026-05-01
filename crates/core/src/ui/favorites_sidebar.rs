@@ -122,13 +122,13 @@ pub fn FavoritesBar() -> Element {
     let servers = chat_data.read().servers.clone();
     let demo_active = client_manager.read().demo_active;
     let active_account = app_state.read().nav.active_account_id.cloned();
-    let active_backend_slug = app_state
+    let _active_backend_slug = app_state
         .read()
         .nav
         .active_backend
         .cloned()
         .map(|b| b.slug().to_string());
-    let active_instance_id = app_state.read().nav.active_instance_id.cloned();
+    let _active_instance_id = app_state.read().nav.active_instance_id.cloned();
 
     // Collect distinct active account IDs for account icons, applying the
     // user-saved order from `ChatData.account_order` (hydrated at startup
@@ -285,8 +285,7 @@ pub fn FavoritesBar() -> Element {
                             .read()
                             .account_sessions
                             .get(&server.account_id)
-                            .map(|s| s.instance_id.clone())
-                            .unwrap_or_else(|| "demo".to_string());
+                            .map_or_else(|| "demo".to_string(), |s| s.instance_id.clone());
                         rsx! {
                             FavoriteServerIcon {
                                 server_id: server.id.clone(),
@@ -394,8 +393,7 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
         .read()
         .connection_statuses
         .get(&account_id)
-        .map(ConnectionStatus::css_class)
-        .unwrap_or("disconnected");
+        .map_or("disconnected", ConnectionStatus::css_class);
     let presence_class: &'static str = client_manager
         .read()
         .presence_statuses
@@ -425,15 +423,13 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
         .read()
         .account_sessions
         .get(&account_id)
-        .map(|s| s.user.display_name.clone())
-        .unwrap_or_else(|| account_id.clone());
+        .map_or_else(|| account_id.clone(), |s| s.user.display_name.clone());
 
     let backend_name: String = chat_data
         .read()
         .account_sessions
         .get(&account_id)
-        .map(|s| s.backend.display_name().to_string())
-        .unwrap_or_else(|| "Unknown".to_string());
+        .map_or_else(|| "Unknown".to_string(), |s| s.backend.display_name().to_string());
 
     // Use icon_emoji from session if available, else fall back to the first
     // letter of the account's display name (NOT the account_id, which starts
@@ -453,12 +449,15 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
 
     // Show unread notification count only — matches the bell badge in account server bar.
     // DM unread counts are surfaced separately in Bar 2.
-    let total_unreads = chat_data
-        .read()
-        .notifications
-        .iter()
-        .filter(|n| n.account_id == account_id)
-        .count() as u32;
+    let total_unreads = u32::try_from(
+        chat_data
+            .read()
+            .notifications
+            .iter()
+            .filter(|n| n.account_id == account_id)
+            .count(),
+    )
+    .unwrap_or(u32::MAX);
 
     // Resolve backend slug and instance_id for routing — read from the session.
     let aid_for_click = account_id.clone();
@@ -590,8 +589,10 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
             let cd = menu_chat_data.read();
             cd.account_sessions
                 .get(&menu_aid)
-                .map(|s| (s.backend.slug().to_string(), s.instance_id.clone()))
-                .unwrap_or_else(|| ("demo".to_string(), "demo".to_string()))
+                .map_or_else(
+                    || ("demo".to_string(), "demo".to_string()),
+                    |s| (s.backend.slug().to_string(), s.instance_id.clone()),
+                )
         };
         menu_app_state.batch(|st| {
             st.account_context_menu = Some(crate::state::AccountContextMenuState {
@@ -731,8 +732,7 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                             .servers
                             .iter()
                             .find(|s| s.account_id == aid)
-                            .map(|s| s.backend.slug().to_string())
-                            .unwrap_or_else(|| "demo".to_string());
+                            .map_or_else(|| "demo".to_string(), |s| s.backend.slug().to_string());
                         (slug, "demo".to_string())
                     };
                     let first_server = guard
@@ -869,7 +869,7 @@ fn FavoriteServerIcon(
     /// `None`, falls back to a colored first-letter placeholder.
     icon_url: Option<String>,
 ) -> Element {
-    let mut app_state: BatchedSignal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
 
@@ -878,8 +878,7 @@ fn FavoriteServerIcon(
         .read()
         .connection_statuses
         .get(&account_id)
-        .map(ConnectionStatus::css_class)
-        .unwrap_or("disconnected");
+        .map_or("disconnected", ConnectionStatus::css_class);
     let account_presence_class: &'static str = client_manager
         .read()
         .presence_statuses
@@ -1167,7 +1166,7 @@ pub async fn load_server_shell_data(
 
 async fn load_server_data_internal(
     server_id: String,
-    mut app_state: BatchedSignal<AppState>,
+    app_state: BatchedSignal<AppState>,
     client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
     auto_select_first_text_channel: bool,
@@ -1276,12 +1275,10 @@ async fn load_server_data_internal(
         {
             pending.set(move |cd| cd.messages = messages);
             request_restore_scroll_position_or_bottom(&ch.id);
-        } else {
         }
         // Load members
         if let Ok(members) = guard.get_channel_members(&ch.id).await {
             pending.set(move |cd| cd.members = members);
-        } else {
         }
     }
     if !auto_select_first_text_channel {

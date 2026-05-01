@@ -57,14 +57,13 @@ pub fn VersionOverrideEditor(
                         if e.checked() {
                             let bid = bid_get.clone();
                             spawn(async move {
-                                if let Ok(json) = client_settings_get_version(&bid).await {
-                                    if let Some(v) = json
+                                if let Ok(json) = client_settings_get_version(&bid).await
+                                    && let Some(v) = json
                                         .get("effective_version")
                                         .and_then(|v| v.as_str())
                                     {
                                         draft.set(v.to_string());
                                     }
-                                }
                             });
                         } else {
                             // Clear the override when toggling off.

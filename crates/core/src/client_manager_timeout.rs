@@ -44,11 +44,13 @@ pub struct BackendReadTimeout {
 
 impl BackendReadTimeout {
     /// Original budget the caller passed in.
+    #[must_use] 
     pub fn duration(&self) -> Duration {
         self.duration
     }
 
     /// Source location of the `read_with_timeout` call site.
+    #[must_use] 
     pub fn location(&self) -> &'static Location<'static> {
         self.location
     }

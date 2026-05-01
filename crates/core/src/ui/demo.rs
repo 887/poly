@@ -95,7 +95,7 @@ pub(crate) async fn toggle_demo(
             // Phase 2: synchronous state writes — batched into the fewest possible
             // `write()` guards to minimise dirty notifications.
             // No `.await` may appear between the first write and the end of this block.
-            client_manager.batch(|cm| cm.deactivate_demo());
+            client_manager.batch(super::super::client_manager::ClientManager::deactivate_demo);
             {
                 let new_fav_ids_c = new_fav_ids.clone();
                 let demo_ids_c = demo_ids.clone();
@@ -520,7 +520,7 @@ pub(crate) async fn toggle_demo_forum_on(
 pub(crate) fn spawn_event_stream_listener(
     account_id: String,
     backend: BackendHandle,
-    mut app_state: BatchedSignal<AppState>,
+    app_state: BatchedSignal<AppState>,
     chat_data: BatchedSignal<ChatData>,
     client_manager: BatchedSignal<ClientManager>,
 ) {
@@ -578,7 +578,7 @@ pub(crate) fn spawn_event_stream_listener(
                                 // We check the simpler: scrollHeight - scrollTop <= a large value
                                 // that catches "near bottom".  Use scrollHeight - scrollTop < threshold
                                 // where threshold accounts for typical viewport heights.
-                                scroll_height - scroll_top < AUTO_SCROLL_THRESHOLD_PX + 800.0
+                                scroll_height - scroll_top < AUTO_SCROLL_THRESHOLD_PX + 800.0_f64
                             },
                         );
                         if at_bottom {

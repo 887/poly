@@ -100,7 +100,7 @@ pub(crate) fn CreateForumPostPage(
                         let channel = channel_id_clone.clone();
                         let title = payload.title.unwrap_or_default();
                         let body_text = payload.body;
-                        let nav2 = nav.clone();
+                        let nav2 = nav;
                         let dest = back_route_submit.clone();
                         spawn(async move {
                             if let Some(bh) = backend_handle {

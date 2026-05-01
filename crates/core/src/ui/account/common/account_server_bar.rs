@@ -123,9 +123,7 @@ pub fn AccountServerBar() -> Element {
         return rsx! {};
     };
 
-    let backend_slug = active_backend
-        .map(|b| b.slug().to_string())
-        .unwrap_or_else(|| "demo".to_string());
+    let backend_slug = active_backend.map_or_else(|| "demo".to_string(), |b| b.slug().to_string());
 
     let instance_id = active_instance_id.unwrap_or_else(|| "demo".to_string());
 
@@ -328,8 +326,8 @@ fn AccountServerIcon(
     /// `None`, falls back to a colored first-letter placeholder.
     icon_url: Option<String>,
 ) -> Element {
-    let mut app_state: BatchedSignal<AppState> = use_context();
-    let client_manager: BatchedSignal<ClientManager> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
+    let _client_manager: BatchedSignal<ClientManager> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
 
     let is_drag_over = chat_data.read().drag_over_id.as_deref() == Some(server_id.as_str());
@@ -631,7 +629,7 @@ fn AccountBarFriendsButton(
     instance_id: String,
     account_id: String,
 ) -> Element {
-    let mut app_state: BatchedSignal<AppState> = use_context();
+    let _app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
 
     rsx! {
@@ -670,7 +668,7 @@ fn AccountBarFriendsButton(
 #[context_menu(inherit)]
 #[component]
 fn AccountBarNotifsButton(current_view: View, notif_count: usize) -> Element {
-    let mut app_state: BatchedSignal<AppState> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let backend_slug = app_state
         .read()
@@ -739,9 +737,7 @@ fn CreateServerButton(account_id: String) -> Element {
         .read()
         .nav
         .active_backend
-        .cloned()
-        .map(|b| b.slug().to_string())
-        .unwrap_or_else(|| "poly".to_string());
+        .cloned().map_or_else(|| "poly".to_string(), |b| b.slug().to_string());
     let instance_id = app_state
         .read()
         .nav

@@ -75,14 +75,11 @@ fn account_attribution(
 ) -> String {
     let display_name = chat_data
         .account_sessions
-        .get(account_id)
-        .map(|s| s.user.display_name.clone())
-        .unwrap_or_else(|| account_id.to_string());
+        .get(account_id).map_or_else(|| account_id.to_string(), |s| s.user.display_name.clone());
     let backend_name = client_manager
         .sessions
         .get(account_id)
-        .map(|s| s.backend.display_name())
-        .unwrap_or("");
+        .map_or("", |s| s.backend.display_name());
     if backend_name.is_empty() {
         display_name
     } else {
@@ -160,9 +157,7 @@ fn SearchInput(query: Signal<String>) -> Element {
 fn AvatarIcon(url: Option<String>, label: String, color: String) -> Element {
     let initial = label
         .chars()
-        .next()
-        .map(|c| c.to_uppercase().to_string())
-        .unwrap_or_else(|| "?".to_string());
+        .next().map_or_else(|| "?".to_string(), |c| c.to_uppercase().to_string());
     rsx! {
         if let Some(img_url) = url {
             img {
@@ -579,7 +574,7 @@ pub fn SearchPage(
             .unwrap_or_else(|| {
                 ["servers", "dms", "groups"]
                     .iter()
-                    .map(|s| s.to_string())
+                    .map(std::string::ToString::to_string)
                     .collect::<std::collections::HashSet<_>>()
             })
     });
@@ -685,13 +680,11 @@ pub fn SearchPage(
                             let cd = chat_data.read();
                             let cm = client_manager.read();
                             let session = cd.account_sessions.get(aid);
-                            let display_name = session
-                                .map(|s| s.user.display_name.clone())
-                                .unwrap_or_else(|| aid.clone());
+                            let display_name = session.map_or_else(|| aid.clone(), |s| s.user.display_name.clone());
                             let avatar_url = session
                                 .and_then(|s| s.user.avatar_url.clone());
                             let icon_color = user_color(aid);
-                            let bt = cm.sessions.get(aid).map(|s| s.backend.clone()).unwrap_or(BackendType::from("demo"));
+                            let bt = cm.sessions.get(aid).map_or(BackendType::from("demo"), |s| s.backend.clone());
                             let backend_name = bt.display_name().to_string();
                             let backend_icon_str = backend_icon(&bt).to_string();
                             let enabled = enabled_accounts.read().contains(aid);
@@ -764,9 +757,7 @@ pub fn SearchPage(
                             let instance_id = chat_data
                                 .read()
                                 .account_sessions
-                                .get(&server.account_id)
-                                .map(|s| s.instance_id.clone())
-                                .unwrap_or_else(|| "demo".to_string());
+                                .get(&server.account_id).map_or_else(|| "demo".to_string(), |s| s.instance_id.clone());
                             rsx! {
                                 ServerNode {
                                     key: "{server.id}-{server.account_id}",
@@ -813,9 +804,7 @@ pub fn SearchPage(
                             let iid = chat_data
                                 .read()
                                 .account_sessions
-                                .get(&dm.account_id)
-                                .map(|s| s.instance_id.clone())
-                                .unwrap_or_else(|| "demo".to_string());
+                                .get(&dm.account_id).map_or_else(|| "demo".to_string(), |s| s.instance_id.clone());
                             let aid = dm.account_id.clone();
                             let dm_avatar_url = dm.user.avatar_url.clone();
                             let dm_display_name = dm.user.display_name.clone();
@@ -886,9 +875,7 @@ pub fn SearchPage(
                             let iid = chat_data
                                 .read()
                                 .account_sessions
-                                .get(&group.account_id)
-                                .map(|s| s.instance_id.clone())
-                                .unwrap_or_else(|| "demo".to_string());
+                                .get(&group.account_id).map_or_else(|| "demo".to_string(), |s| s.instance_id.clone());
                             let aid = group.account_id.clone();
                             let grp_avatar_url = group.members.first().and_then(|m| m.avatar_url.clone());
                             let grp_label = name.clone();

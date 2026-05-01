@@ -167,6 +167,7 @@ pub const ALL_CSS_VARS: &[(&str, &str)] = &[
 ///
 /// For [`ColorMode::FollowDevice`] this returns **both** variants wrapped
 /// in `@media (prefers-color-scheme: …)` blocks so the browser can choose.
+#[must_use] 
 pub fn preset_css(preset: ThemePreset, mode: ColorMode) -> String {
     let preset = preset.canonical();
     match mode {
@@ -218,6 +219,7 @@ fn light_css(preset: ThemePreset) -> &'static str {
 ///
 /// Scans the dark-mode base CSS for `--var-name: <value>;` and returns the
 /// value (trimmed). Returns `None` if not found.
+#[must_use] 
 pub fn extract_var_value(preset: ThemePreset, mode: ColorMode, var_name: &str) -> Option<String> {
     let css = match mode {
         ColorMode::Dark | ColorMode::FollowDevice => dark_css(preset.canonical()),
@@ -237,6 +239,7 @@ pub fn extract_var_value(preset: ThemePreset, mode: ColorMode, var_name: &str) -
 /// Generate the complete CSS string for a theme config.
 ///
 /// Layers: preset CSS → color overrides → custom CSS (if enabled).
+#[must_use] 
 pub fn generate_css(config: &ThemeConfig) -> String {
     let mut css = String::new();
 
@@ -267,6 +270,7 @@ pub fn generate_css(config: &ThemeConfig) -> String {
 /// All variables from the current preset are listed (commented out),
 /// each with a description. The user can uncomment lines to override.
 /// Color-picker overrides appear as uncommented lines.
+#[must_use] 
 pub fn build_css_template(config: &ThemeConfig) -> String {
     let mut out = String::from(
         "/* ═══════════════════════════════════════\n\
@@ -314,6 +318,7 @@ const EXPORT_PREFIX: &str = "@poly-var";
 ///
 /// Overrides are written as `/* @poly-var --name: value */` comments so
 /// import can reconstruct them without touching the CSS body.
+#[must_use] 
 pub fn export_theme(config: &ThemeConfig) -> String {
     let mut output = format!(
         "/* Poly Theme Export */\n\
@@ -346,6 +351,7 @@ pub fn export_theme(config: &ThemeConfig) -> String {
 ///
 /// Parses `@poly-var`, `@poly-preset`, `@poly-mode` comments and the
 /// custom CSS block. Returns an updated [`ThemeConfig`].
+#[must_use] 
 pub fn import_theme(exported: &str) -> ThemeConfig {
     let mut config = ThemeConfig::default();
     let mut in_css_block = false;

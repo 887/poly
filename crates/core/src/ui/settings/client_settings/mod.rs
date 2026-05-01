@@ -43,7 +43,7 @@ fn parse_backend_list(json: &Value) -> Vec<(String, String, Option<String>)> {
             let version_override = item
                 .get("version_override")
                 .and_then(|v| v.as_str())
-                .map(|s| s.to_owned());
+                .map(std::borrow::ToOwned::to_owned);
             // The snapshot doesn't carry `effective_version` directly —
             // use the override if set, otherwise use the fallback "default".
             let effective = version_override
@@ -93,7 +93,7 @@ pub fn ClientSettingsForBackend(
                     let over = json
                         .get("override")
                         .and_then(|v| v.as_str())
-                        .map(|s| s.to_owned());
+                        .map(std::borrow::ToOwned::to_owned);
                     let eff = over
                         .clone()
                         .or(dflt)

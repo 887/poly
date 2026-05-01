@@ -137,13 +137,11 @@ fn BehaviourSection(detail: Option<PersonaDetail>) -> Element {
     let interval = detail
         .as_ref()
         .and_then(|d| d.heartbeat_interval_secs)
-        .map(|s| format!("{s}s"))
-        .unwrap_or_else(|| "Off".to_string());
+        .map_or_else(|| "Off".to_string(), |s| format!("{s}s"));
     let proactivity = detail
         .as_ref()
-        .map(|d| d.proactivity.clone())
-        .unwrap_or_else(|| "drafts-only".to_string());
-    let rate = detail.as_ref().map(|d| d.rate_limit_per_hour).unwrap_or(4);
+        .map_or_else(|| "drafts-only".to_string(), |d| d.proactivity.clone());
+    let rate = detail.as_ref().map_or(4, |d| d.rate_limit_per_hour);
 
     rsx! {
         div { class: "persona-modal-section",
@@ -268,17 +266,15 @@ fn MemorySection(
                     on_cancel: move |_| show_delete_confirm.set(false),
                     on_confirm: {
                         let slug = persona_slug.clone();
-                        let on_deleted = on_deleted.clone();
                         move |_| {
                             show_delete_confirm.set(false);
                             let slug_inner = slug.clone();
-                            let on_del = on_deleted.clone();
                             spawn(async move {
                                 match call_persona_mcp(
                                     "meta_persona_delete",
                                     serde_json::json!({ "slug": slug_inner }),
                                 ).await {
-                                    Ok(_) => on_del.call(()),
+                                    Ok(_) => on_deleted.call(()),
                                     Err(e) => op_error.set(Some(e)),
                                 }
                             });
@@ -381,7 +377,7 @@ pub fn PersonaEditModal(props: PersonaEditModalProps) -> Element {
     let mut field_quiet_hours_disabled: Signal<bool> = use_signal(|| false);
 
     // G.5 — show typed-confirm before first outbound-mode enable.
-    let mut show_outbound_confirm: Signal<bool> = use_signal(|| false);
+    let _show_outbound_confirm: Signal<bool> = use_signal(|| false);
 
     // Loaded detail (None until loaded)
     let mut detail: Signal<Option<PersonaDetail>> = use_signal(|| None);
@@ -423,9 +419,9 @@ pub fn PersonaEditModal(props: PersonaEditModalProps) -> Element {
         });
     });
 
-    let on_close = props.on_close.clone();
-    let on_saved = props.on_saved.clone();
-    let on_close_after_delete = props.on_close.clone();
+    let on_close = props.on_close;
+    let on_saved = props.on_saved;
+    let on_close_after_delete = props.on_close;
     let slug_save = slug.clone();
 
     // Snapshot for sub-editors (use peek — just data, no subscription needed here).
@@ -433,15 +429,13 @@ pub fn PersonaEditModal(props: PersonaEditModalProps) -> Element {
     let tools = detail.peek().as_ref().map(|d| d.tool_whitelist.clone()).unwrap_or_default();
     let facts = detail.peek().as_ref().map(|d| d.pinned_facts.clone()).unwrap_or_default();
     let cur_proactivity = detail.peek().as_ref()
-        .map(|d| d.proactivity.clone())
-        .unwrap_or_else(|| "drafts-only".to_string());
-    let cur_rate_limit = detail.peek().as_ref().map(|d| d.rate_limit_per_hour).unwrap_or(4);
+        .map_or_else(|| "drafts-only".to_string(), |d| d.proactivity.clone());
+    let cur_rate_limit = detail.peek().as_ref().map_or(4, |d| d.rate_limit_per_hour);
 
     // G.5 — track whether the persona was previously in outbound mode so we
     // only show the typed-confirm on first switch (not on re-open).
-    let was_outbound_before = detail.peek().as_ref()
-        .map(|d| d.proactivity == "outbound-allowlisted")
-        .unwrap_or(false);
+    let _was_outbound_before = detail.peek().as_ref()
+        .is_some_and(|d| d.proactivity == "outbound-allowlisted");
 
     rsx! {
         div { class: "persona-modal-overlay",
@@ -601,7 +595,6 @@ pub fn PersonaEditModal(props: PersonaEditModalProps) -> Element {
                                     let notes = field_notes.read().clone();
                                     let enabled = *field_enabled.read();
                                     let slug_inner = slug_s.clone();
-                                    let on_saved = on_saved.clone();
                                     saving.set(true);
                                     save_error.set(None);
                                     spawn(async move {

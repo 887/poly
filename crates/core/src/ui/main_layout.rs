@@ -89,7 +89,7 @@ pub(crate) fn mobile_left_drawer_open() -> bool {
             return false;
         };
 
-        return window
+        window
             .document()
             .and_then(|document| document.query_selector(".poly-app").ok().flatten())
             .and_then(|root| root.get_attribute("class"))
@@ -97,7 +97,7 @@ pub(crate) fn mobile_left_drawer_open() -> bool {
                 classes.split_whitespace().any(|class| {
                     class == MOBILE_LEFT_OPEN_CLASS || class == MOBILE_LEFT_DRAGGING_CLASS
                 })
-            });
+            })
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -133,7 +133,7 @@ pub(crate) fn runtime_mobile_ui_active() -> bool {
                         .inner_width()
                         .ok()
                         .and_then(|value| value.as_f64())
-                        .is_some_and(|width| width <= 640.0))
+                        .is_some_and(|width| width <= 640.0_f64))
                 || (classes
                     .split_whitespace()
                     .any(|class| class == "poly-layout-mode-auto-portrait")

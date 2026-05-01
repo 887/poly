@@ -54,8 +54,7 @@ fn current_account_bar_user(app_state: &AppState, chat_data: &ChatData) -> Accou
 
     let conn_class: &'static str = aid
         .and_then(|id| cm.connection_statuses.get(id))
-        .map(ConnectionStatus::css_class)
-        .unwrap_or("disconnected");
+        .map_or("disconnected", ConnectionStatus::css_class);
     let is_connected = conn_class == "connected";
     let presence: AccountPresence = aid
         .and_then(|id| cm.presence_statuses.get(id).copied())
@@ -193,7 +192,7 @@ fn AccountProfilePopup(
     account_id: String,
     on_close: EventHandler<()>,
 ) -> Element {
-    let mut client_manager: BatchedSignal<ClientManager> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
     let options: &[AccountPresence] = &[
         AccountPresence::Online,
         AccountPresence::Away,
@@ -292,9 +291,7 @@ fn AccountBarControls(
     let nav = app_state.read().nav.clone();
     let backend_slug = nav
         .active_backend
-        .cloned()
-        .map(|backend| backend.slug().to_string())
-        .unwrap_or_else(|| "demo".to_string());
+        .cloned().map_or_else(|| "demo".to_string(), |backend| backend.slug().to_string());
     // Pack F (P61) — hide mic/deafen on backends with no voice support.
     let show_voice = poly_client::capabilities_for_slug(&backend_slug).should_show_voice();
     let settings_target = nav.active_account_id.cloned().map(|account_id| {

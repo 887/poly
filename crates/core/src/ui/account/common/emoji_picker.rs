@@ -324,8 +324,7 @@ pub(crate) fn emoji_shortcode_matches(emoji: &str, query: &str) -> bool {
     EMOJI_SHORTCODES
         .iter()
         .find(|(e, _)| *e == emoji)
-        .map(|(_, names)| names.split_whitespace().any(|n| n.contains(q.as_str())))
-        .unwrap_or(false)
+        .is_some_and(|(_, names)| names.split_whitespace().any(|n| n.contains(q.as_str())))
 }
 
 /// Emoji picker component (used for reactions).
