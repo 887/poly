@@ -17,20 +17,20 @@ use crate::types::TaskStatus;
 
 // ─── JSON-RPC helpers ─────────────────────────────────────────────────────────
 
-fn ok_result(text: impl ToString) -> Value {
-    json!({ "content": [{"type": "text", "text": text.to_string()}], "isError": false })
+fn ok_result(text: &str) -> Value {
+    json!({ "content": [{"type": "text", "text": text}], "isError": false })
 }
 
-fn err_result(text: impl ToString) -> Value {
-    json!({ "content": [{"type": "text", "text": text.to_string()}], "isError": true })
+fn err_result(text: &str) -> Value {
+    json!({ "content": [{"type": "text", "text": text}], "isError": true })
 }
 
-fn mcp_response(id: Option<Value>, result: Value) -> String {
+fn mcp_response(id: Option<&Value>, result: &Value) -> String {
     serde_json::to_string(&json!({ "jsonrpc": "2.0", "id": id, "result": result }))
         .unwrap_or_default()
 }
 
-fn mcp_error(id: Option<Value>, code: i64, msg: &str) -> String {
+fn mcp_error(id: Option<&Value>, code: i64, msg: &str) -> String {
     serde_json::to_string(
         &json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": msg } }),
     )
@@ -259,8 +259,8 @@ pub fn tool_list() -> Vec<Value> {
 async fn dispatch_tool(name: &str, params: &Value, data_dir: &Path) -> Value {
     let res = dispatch_inner(name, params, data_dir).await;
     match res {
-        Ok(msg) => ok_result(msg),
-        Err(e) => err_result(format!("Error in {name}: {e}")),
+        Ok(msg) => ok_result(&msg),
+        Err(e) => err_result(&format!("Error in {name}: {e}")),
     }
 }
 
@@ -335,8 +335,8 @@ async fn dispatch_inner(name: &str, params: &Value, data_dir: &Path) -> anyhow::
             let count = params
                 .get("count")
                 .and_then(Value::as_u64)
-                .map(|n| n as usize)
-                .unwrap_or(3);
+                .and_then(|n| usize::try_from(n).ok())
+                .unwrap_or(3_usize);
             ops::work_plan(data_dir, count).await
         }
         other => Err(anyhow::anyhow!("Unknown tool: {other}")),
@@ -375,7 +375,9 @@ fn u32_param(params: &Value, key: &str) -> anyhow::Result<u32> {
         .get(key)
         .and_then(Value::as_u64)
         .ok_or_else(|| anyhow::anyhow!("Missing or invalid integer parameter: '{key}'"))?;
-    Ok(v as u32)
+    u32::try_from(v).map_err(|err| {
+        anyhow::anyhow!("Integer parameter '{key}' too large for u32: {v} ({err})")
+    })
 }
 
 // ─── Formatting helpers ───────────────────────────────────────────────────────
@@ -439,7 +441,7 @@ async fn handle_request(line: &str, data_dir: &Path) -> String {
     let method = match req.get("method").and_then(Value::as_str) {
         Some(m) => m.to_string(),
         None => {
-            return mcp_error(id, -32_600, "Missing method field");
+            return mcp_error(id.as_ref(), -32_600, "Missing method field");
         }
     };
     let params = req.get("params").cloned().unwrap_or(json!({}));
@@ -448,10 +450,11 @@ async fn handle_request(line: &str, data_dir: &Path) -> String {
 
 /// Dispatch by JSON-RPC method.
 async fn handle_method(method: &str, id: Option<Value>, params: &Value, data_dir: &Path) -> String {
+    let id_ref = id.as_ref();
     match method {
         "initialize" => mcp_response(
-            id,
-            json!({
+            id_ref,
+            &json!({
                 "protocolVersion": "2024-11-05",
                 "capabilities": { "tools": {} },
                 "serverInfo": {
@@ -460,7 +463,7 @@ async fn handle_method(method: &str, id: Option<Value>, params: &Value, data_dir
                 }
             }),
         ),
-        "tools/list" => mcp_response(id, json!({ "tools": tool_list() })),
+        "tools/list" => mcp_response(id_ref, &json!({ "tools": tool_list() })),
         "tools/call" => {
             let empty_obj = json!({});
             let tool_name = params
@@ -469,9 +472,9 @@ async fn handle_method(method: &str, id: Option<Value>, params: &Value, data_dir
                 .unwrap_or("<unknown>");
             let tool_params = params.get("arguments").unwrap_or(&empty_obj);
             let result = dispatch_tool(tool_name, tool_params, data_dir).await;
-            mcp_response(id, result)
+            mcp_response(id_ref, &result)
         }
         "notifications/initialized" | "$/cancelRequest" => String::new(),
-        other => mcp_error(id, -32_601, &format!("Unknown method: {other}")),
+        other => mcp_error(id_ref, -32_601, &format!("Unknown method: {other}")),
     }
 }

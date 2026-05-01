@@ -13,11 +13,13 @@ use serde_json::{Value, json};
 // ─── Response Helpers ─────────────────────────────────────────────────────────
 
 /// Build a text tool result.
-pub fn text_result(text: impl ToString, is_err: bool) -> Value {
-    json!({ "content": [{"type": "text", "text": text.to_string()}], "isError": is_err })
+#[must_use]
+pub fn text_result(text: &str, is_err: bool) -> Value {
+    json!({ "content": [{"type": "text", "text": text}], "isError": is_err })
 }
 
 /// Build a multi-text tool result (e.g. action result + snapshot).
+#[must_use]
 pub fn multi_text_result(texts: &[String], is_err: bool) -> Value {
     let content: Vec<Value> = texts
         .iter()
@@ -27,6 +29,7 @@ pub fn multi_text_result(texts: &[String], is_err: bool) -> Value {
 }
 
 /// Build an image tool result from raw image bytes.
+#[must_use]
 pub fn image_result(image_bytes: &[u8], mime_type: &str) -> Value {
     use base64::Engine as _;
     let b64 = base64::engine::general_purpose::STANDARD.encode(image_bytes);
@@ -34,6 +37,7 @@ pub fn image_result(image_bytes: &[u8], mime_type: &str) -> Value {
 }
 
 /// Build a mixed result: text message + screenshot image.
+#[must_use]
 pub fn text_and_image_result(text: &str, image_bytes: &[u8], mime_type: &str) -> Value {
     use base64::Engine as _;
     let b64 = base64::engine::general_purpose::STANDARD.encode(image_bytes);
@@ -44,18 +48,21 @@ pub fn text_and_image_result(text: &str, image_bytes: &[u8], mime_type: &str) ->
 }
 
 /// Wrap a value in a JSON-RPC response envelope.
-pub fn mcp_response(id: Option<Value>, result: Value) -> String {
+#[must_use]
+pub fn mcp_response(id: Option<&Value>, result: &Value) -> String {
     let resp = json!({ "jsonrpc": "2.0", "id": id, "result": result });
     serde_json::to_string(&resp).unwrap_or_default()
 }
 
 /// Build a JSON-RPC error response.
-pub fn mcp_error(id: Option<Value>, code: i64, msg: &str) -> String {
+#[must_use]
+pub fn mcp_error(id: Option<&Value>, code: i64, msg: &str) -> String {
     let resp = json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": msg } });
     serde_json::to_string(&resp).unwrap_or_default()
 }
 
 /// Parse a JSON-RPC request line into (id, method, params).
+#[must_use]
 pub fn parse_request(line: &str) -> Option<(Option<Value>, String, Value)> {
     let v: Value = serde_json::from_str(line).ok()?;
     let id = v.get("id").cloned();
@@ -71,6 +78,7 @@ pub fn parse_request(line: &str) -> Option<(Option<Value>, String, Value)> {
 ///
 /// The tool names, descriptions, and schemas follow the conventions from
 /// chrome-devtools-mcp. Annotations include category and readOnlyHint.
+#[must_use]
 pub fn standard_tool_list() -> Vec<Value> {
     vec![
         // ── Lifecycle (Poly-specific) ────────────────────────────────
@@ -349,7 +357,7 @@ pub fn standard_tool_list() -> Vec<Value> {
 
 fn timeout_result(tool_name: &str, timeout_ms: u64) -> Value {
     text_result(
-        format!(
+        &format!(
             "{tool_name} timed out after {timeout_ms} ms. The app, browser page, or devtools transport may be hung. If this happened after a rebuild, inspect get_last_build_status and get_last_build_log for the most recent Dioxus output."
         ),
         true,
@@ -373,43 +381,43 @@ pub async fn dispatch_tool(backend: &dyn DevtoolsBackend, name: &str, args: &Val
 async fn dispatch_tool_inner(backend: &dyn DevtoolsBackend, name: &str, args: &Value) -> Value {
     let ws = args
         .get("workspace")
-        .and_then(|v| v.as_str())
+        .and_then(serde_json::Value::as_str)
         .or_else(|| std::env::var("POLY_WORKSPACE").ok().as_deref().map(|_| ""))
         .unwrap_or(default_workspace());
 
     match name {
         // ── Lifecycle ────────────────────────────────────────────────
         "launch_app" => match backend.launch_app(ws).await {
-            Ok(r) => text_result(r, false),
-            Err(e) => text_result(format!("launch error: {e}"), true),
+            Ok(r) => text_result(&r, false),
+            Err(e) => text_result(&format!("launch error: {e}"), true),
         },
         "kill_app" => match backend.kill_app().await {
-            Ok(r) => text_result(r, false),
-            Err(e) => text_result(format!("kill error: {e}"), true),
+            Ok(r) => text_result(&r, false),
+            Err(e) => text_result(&format!("kill error: {e}"), true),
         },
         "connect_cdp" | "cdp_status" => match backend.connect().await {
-            Ok(r) => text_result(r, false),
-            Err(e) => text_result(e.to_string(), true),
+            Ok(r) => text_result(&r, false),
+            Err(e) => text_result(&e.to_string(), true),
         },
         "hard_kill" => match backend.hard_kill().await {
-            Ok(r) => text_result(r, false),
-            Err(e) => text_result(format!("hard_kill error: {e}"), true),
+            Ok(r) => text_result(&r, false),
+            Err(e) => text_result(&format!("hard_kill error: {e}"), true),
         },
         "rebuild_app" => match backend.rebuild_app(ws).await {
-            Ok(r) => text_result(r, false),
-            Err(e) => text_result(format!("rebuild error: {e}"), true),
+            Ok(r) => text_result(&r, false),
+            Err(e) => text_result(&format!("rebuild error: {e}"), true),
         },
         "get_last_build_status" => match backend.get_last_build_status().await {
-            Ok(r) => text_result(r, false),
-            Err(e) => text_result(format!("last build status error: {e}"), true),
+            Ok(r) => text_result(&r, false),
+            Err(e) => text_result(&format!("last build status error: {e}"), true),
         },
         "get_last_build_log" => match backend.get_last_build_log().await {
-            Ok(r) => text_result(r, false),
-            Err(e) => text_result(format!("last build log error: {e}"), true),
+            Ok(r) => text_result(&r, false),
+            Err(e) => text_result(&format!("last build log error: {e}"), true),
         },
         "reset_app" => match backend.reset_app().await {
-            Ok(r) => text_result(r, false),
-            Err(e) => text_result(format!("reset error: {e}"), true),
+            Ok(r) => text_result(&r, false),
+            Err(e) => text_result(&format!("reset error: {e}"), true),
         },
 
         // ── Screenshot & Snapshot ────────────────────────────────────
@@ -417,21 +425,21 @@ async fn dispatch_tool_inner(backend: &dyn DevtoolsBackend, name: &str, args: &V
             let params = ScreenshotParams {
                 format: args
                     .get("format")
-                    .and_then(|v| v.as_str())
+                    .and_then(serde_json::Value::as_str)
                     .unwrap_or("png")
                     .to_string(),
                 quality: args
                     .get("quality")
-                    .and_then(|v| v.as_u64())
-                    .map(|v| v as u32),
+                    .and_then(serde_json::Value::as_u64)
+                    .and_then(|v| u32::try_from(v).ok()),
                 full_page: args
                     .get("fullPage")
-                    .and_then(|v| v.as_bool())
+                    .and_then(serde_json::Value::as_bool)
                     .unwrap_or(false),
                 file_path: args
                     .get("filePath")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string()),
+                    .and_then(serde_json::Value::as_str)
+                    .map(std::string::ToString::to_string),
             };
 
             match backend.take_screenshot(&params).await {
@@ -442,20 +450,22 @@ async fn dispatch_tool_inner(backend: &dyn DevtoolsBackend, name: &str, args: &V
                     // Save to file if requested
                     if let Some(ref path) = params.file_path {
                         match std::fs::write(path, &image_bytes) {
-                            Ok(()) => text_result(format!("Screenshot saved to {path}"), false),
-                            Err(e) => text_result(format!("Failed to save screenshot: {e}"), true),
+                            Ok(()) => text_result(&format!("Screenshot saved to {path}"), false),
+                            Err(e) => text_result(&format!("Failed to save screenshot: {e}"), true),
                         }
                     } else {
                         // Also save to devtools-screenshots/ for reference
                         let dir = "devtools-screenshots";
-                        let _ = std::fs::create_dir_all(dir);
+                        drop(std::fs::create_dir_all(dir));
                         let ts = std::time::SystemTime::now()
                             .duration_since(std::time::UNIX_EPOCH)
                             .unwrap_or_default()
                             .as_millis();
                         let ext = &params.format;
-                        let _ =
-                            std::fs::write(format!("{dir}/screenshot-{ts}.{ext}"), &image_bytes);
+                        drop(std::fs::write(
+                            format!("{dir}/screenshot-{ts}.{ext}"),
+                            &image_bytes,
+                        ));
 
                         // Include CSS viewport dimensions so caller knows the coordinate
                         // space.  The screenshot image pixels = CSS pixels when DPR=1.
@@ -484,7 +494,7 @@ async fn dispatch_tool_inner(backend: &dyn DevtoolsBackend, name: &str, args: &V
                         // an empty/corrupt PNG that the API cannot process.
                         if viewport_info.contains("0x0") || image_bytes.len() < 100 {
                             return text_result(
-                                format!(
+                                &format!(
                                     "Screenshot skipped: viewport is 0×0 or image is empty ({} bytes). \
                                      The window may not be visible or the page hasn't loaded yet. \
                                      Use take_snapshot instead, or wait for the page to load.",
@@ -502,17 +512,17 @@ async fn dispatch_tool_inner(backend: &dyn DevtoolsBackend, name: &str, args: &V
                         ], "isError": false })
                     }
                 }
-                Err(e) => text_result(format!("screenshot error: {e}"), true),
+                Err(e) => text_result(&format!("screenshot error: {e}"), true),
             }
         }
         "take_snapshot" => {
             let verbose = args
                 .get("verbose")
-                .and_then(|v| v.as_bool())
+                .and_then(serde_json::Value::as_bool)
                 .unwrap_or(false);
             match backend.take_snapshot(verbose).await {
-                Ok(r) => text_result(r, false),
-                Err(e) => text_result(format!("snapshot error: {e}"), true),
+                Ok(r) => text_result(&r, false),
+                Err(e) => text_result(&format!("snapshot error: {e}"), true),
             }
         }
 
@@ -520,23 +530,24 @@ async fn dispatch_tool_inner(backend: &dyn DevtoolsBackend, name: &str, args: &V
         "evaluate_script" => {
             let function = args
                 .get("function")
-                .and_then(|v| v.as_str())
+                .and_then(serde_json::Value::as_str)
                 .unwrap_or("() => null");
             match backend.evaluate_script(function).await {
                 Ok(r) => {
                     let mut result = String::from("Script ran on page and returned:\n```json\n");
                     result.push_str(&r);
                     result.push_str("\n```");
-                    text_result(result, false)
+                    text_result(&result, false)
                 }
-                Err(e) => text_result(format!("evaluate error: {e}"), true),
+                Err(e) => text_result(&format!("evaluate error: {e}"), true),
             }
         }
 
         // ── Console ──────────────────────────────────────────────────
-        "list_console_messages" => match backend.list_console_messages().await {
-            Ok(r) => text_result(r, false),
-            Err(e) => text_result(format!("console error: {e}"), true),
+        // `get_console` is a legacy alias merged here per clippy::match_same_arms.
+        "list_console_messages" | "get_console" => match backend.list_console_messages().await {
+            Ok(r) => text_result(&r, false),
+            Err(e) => text_result(&format!("console error: {e}"), true),
         },
 
         // ── Navigation ───────────────────────────────────────────────
@@ -544,20 +555,20 @@ async fn dispatch_tool_inner(backend: &dyn DevtoolsBackend, name: &str, args: &V
             let params = NavigateParams {
                 nav_type: args
                     .get("type")
-                    .and_then(|v| v.as_str())
+                    .and_then(serde_json::Value::as_str)
                     .unwrap_or(if args.get("url").is_some() { "url" } else { "" })
                     .to_string(),
                 url: args
                     .get("url")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string()),
+                    .and_then(serde_json::Value::as_str)
+                    .map(std::string::ToString::to_string),
                 ignore_cache: args
                     .get("ignoreCache")
-                    .and_then(|v| v.as_bool())
+                    .and_then(serde_json::Value::as_bool)
                     .unwrap_or(false),
                 timeout_ms: args
                     .get("timeout")
-                    .and_then(|v| v.as_u64())
+                    .and_then(serde_json::Value::as_u64)
                     .unwrap_or(30_000),
             };
 
@@ -565,8 +576,8 @@ async fn dispatch_tool_inner(backend: &dyn DevtoolsBackend, name: &str, args: &V
                 text_result("Either URL or a type is required.", true)
             } else {
                 match backend.navigate_page(&params).await {
-                    Ok(r) => text_result(r, false),
-                    Err(e) => text_result(format!("navigate error: {e}"), true),
+                    Ok(r) => text_result(&r, false),
+                    Err(e) => text_result(&format!("navigate error: {e}"), true),
                 }
             }
         }
@@ -576,13 +587,13 @@ async fn dispatch_tool_inner(backend: &dyn DevtoolsBackend, name: &str, args: &V
                 .and_then(|v| v.as_array())
                 .map(|arr| {
                     arr.iter()
-                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .filter_map(|v| v.as_str().map(std::string::ToString::to_string))
                         .collect()
                 })
                 .unwrap_or_default();
             let timeout = args
                 .get("timeout")
-                .and_then(|v| v.as_u64())
+                .and_then(serde_json::Value::as_u64)
                 .unwrap_or(10_000);
 
             if texts.is_empty() {
@@ -597,17 +608,17 @@ async fn dispatch_tool_inner(backend: &dyn DevtoolsBackend, name: &str, args: &V
                         }
                         multi_text_result(&parts, false)
                     }
-                    Err(e) => text_result(format!("wait_for error: {e}"), true),
+                    Err(e) => text_result(&format!("wait_for error: {e}"), true),
                 }
             }
         }
 
         // ── Input ────────────────────────────────────────────────────
         "click" => {
-            let selector = args.get("selector").and_then(|v| v.as_str()).unwrap_or("");
+            let selector = args.get("selector").and_then(serde_json::Value::as_str).unwrap_or("");
             let include_snapshot = args
                 .get("includeSnapshot")
-                .and_then(|v| v.as_bool())
+                .and_then(serde_json::Value::as_bool)
                 .unwrap_or(false);
 
             match backend.click_element(selector).await {
@@ -619,22 +630,28 @@ async fn dispatch_tool_inner(backend: &dyn DevtoolsBackend, name: &str, args: &V
                         }
                         multi_text_result(&parts, false)
                     } else {
-                        text_result(r, false)
+                        text_result(&r, false)
                     }
                 }
-                Err(e) => text_result(format!("click error: {e}"), true),
+                Err(e) => text_result(&format!("click error: {e}"), true),
             }
         }
         "click_at" => {
-            let x = args.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0);
-            let y = args.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            let x = args
+                .get("x")
+                .and_then(serde_json::Value::as_f64)
+                .unwrap_or(0.0_f64);
+            let y = args
+                .get("y")
+                .and_then(serde_json::Value::as_f64)
+                .unwrap_or(0.0_f64);
             let dbl = args
                 .get("dblClick")
-                .and_then(|v| v.as_bool())
+                .and_then(serde_json::Value::as_bool)
                 .unwrap_or(false);
             let include_snapshot = args
                 .get("includeSnapshot")
-                .and_then(|v| v.as_bool())
+                .and_then(serde_json::Value::as_bool)
                 .unwrap_or(false);
 
             match backend.click_at(x, y, dbl).await {
@@ -646,17 +663,17 @@ async fn dispatch_tool_inner(backend: &dyn DevtoolsBackend, name: &str, args: &V
                         }
                         multi_text_result(&parts, false)
                     } else {
-                        text_result(r, false)
+                        text_result(&r, false)
                     }
                 }
-                Err(e) => text_result(format!("click_at error: {e}"), true),
+                Err(e) => text_result(&format!("click_at error: {e}"), true),
             }
         }
         "hover" => {
-            let selector = args.get("selector").and_then(|v| v.as_str()).unwrap_or("");
+            let selector = args.get("selector").and_then(serde_json::Value::as_str).unwrap_or("");
             let include_snapshot = args
                 .get("includeSnapshot")
-                .and_then(|v| v.as_bool())
+                .and_then(serde_json::Value::as_bool)
                 .unwrap_or(false);
 
             match backend.hover_element(selector).await {
@@ -668,18 +685,18 @@ async fn dispatch_tool_inner(backend: &dyn DevtoolsBackend, name: &str, args: &V
                         }
                         multi_text_result(&parts, false)
                     } else {
-                        text_result(r, false)
+                        text_result(&r, false)
                     }
                 }
-                Err(e) => text_result(format!("hover error: {e}"), true),
+                Err(e) => text_result(&format!("hover error: {e}"), true),
             }
         }
         "fill" => {
-            let selector = args.get("selector").and_then(|v| v.as_str()).unwrap_or("");
-            let value = args.get("value").and_then(|v| v.as_str()).unwrap_or("");
+            let selector = args.get("selector").and_then(serde_json::Value::as_str).unwrap_or("");
+            let value = args.get("value").and_then(serde_json::Value::as_str).unwrap_or("");
             let include_snapshot = args
                 .get("includeSnapshot")
-                .and_then(|v| v.as_bool())
+                .and_then(serde_json::Value::as_bool)
                 .unwrap_or(false);
 
             match backend.fill_element(selector, value).await {
@@ -691,31 +708,31 @@ async fn dispatch_tool_inner(backend: &dyn DevtoolsBackend, name: &str, args: &V
                         }
                         multi_text_result(&parts, false)
                     } else {
-                        text_result(r, false)
+                        text_result(&r, false)
                     }
                 }
-                Err(e) => text_result(format!("fill error: {e}"), true),
+                Err(e) => text_result(&format!("fill error: {e}"), true),
             }
         }
         "type_text" => {
-            let text = args.get("text").and_then(|v| v.as_str()).unwrap_or("");
-            let submit_key = args.get("submitKey").and_then(|v| v.as_str());
+            let text = args.get("text").and_then(serde_json::Value::as_str).unwrap_or("");
+            let submit_key = args.get("submitKey").and_then(serde_json::Value::as_str);
 
             match backend.type_text(text, submit_key).await {
-                Ok(r) => text_result(r, false),
-                Err(e) => text_result(format!("type_text error: {e}"), true),
+                Ok(r) => text_result(&r, false),
+                Err(e) => text_result(&format!("type_text error: {e}"), true),
             }
         }
         "handle_dialog" => {
             let action = args
                 .get("action")
-                .and_then(|v| v.as_str())
+                .and_then(serde_json::Value::as_str)
                 .unwrap_or("accept");
-            let prompt_text = args.get("promptText").and_then(|v| v.as_str());
+            let prompt_text = args.get("promptText").and_then(serde_json::Value::as_str);
 
             match backend.handle_dialog(action, prompt_text).await {
-                Ok(r) => text_result(r, false),
-                Err(e) => text_result(format!("handle_dialog error: {e}"), true),
+                Ok(r) => text_result(&r, false),
+                Err(e) => text_result(&format!("handle_dialog error: {e}"), true),
             }
         }
 
@@ -728,26 +745,29 @@ async fn dispatch_tool_inner(backend: &dyn DevtoolsBackend, name: &str, args: &V
                     mime_type,
                 }) => {
                     let dir = "devtools-screenshots";
-                    let _ = std::fs::create_dir_all(dir);
+                    drop(std::fs::create_dir_all(dir));
                     let ts = std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
                         .unwrap_or_default()
                         .as_millis();
-                    let _ = std::fs::write(format!("{dir}/screenshot-{ts}.png"), &image_bytes);
+                    drop(std::fs::write(
+                        format!("{dir}/screenshot-{ts}.png"),
+                        &image_bytes,
+                    ));
                     image_result(&image_bytes, &mime_type)
                 }
-                Err(e) => text_result(format!("screenshot error: {e}"), true),
+                Err(e) => text_result(&format!("screenshot error: {e}"), true),
             }
         }
         "js_eval" => {
             // Old name → redirect to evaluate_script
             let expr = args
                 .get("expression")
-                .and_then(|v| v.as_str())
+                .and_then(serde_json::Value::as_str)
                 .unwrap_or("");
             match backend.js_eval(expr).await {
-                Ok(r) => text_result(r, false),
-                Err(e) => text_result(format!("eval error: {e}"), true),
+                Ok(r) => text_result(&r, false),
+                Err(e) => text_result(&format!("eval error: {e}"), true),
             }
         }
         "get_dom" => {
@@ -755,24 +775,20 @@ async fn dispatch_tool_inner(backend: &dyn DevtoolsBackend, name: &str, args: &V
             // same behaviour as the old per-backend get_dom methods.
             // For structured page inspection use take_snapshot instead.
             match backend.js_eval("document.documentElement.outerHTML").await {
-                Ok(r) => text_result(r, false),
-                Err(e) => text_result(format!("dom error: {e}"), true),
+                Ok(r) => text_result(&r, false),
+                Err(e) => text_result(&format!("dom error: {e}"), true),
             }
         }
-        "get_console" => match backend.list_console_messages().await {
-            Ok(r) => text_result(r, false),
-            Err(e) => text_result(format!("console error: {e}"), true),
-        },
         "navigate" => {
-            let route = args.get("route").and_then(|v| v.as_str()).unwrap_or("/");
+            let route = args.get("route").and_then(serde_json::Value::as_str).unwrap_or("/");
             let params = NavigateParams {
                 nav_type: "url".to_string(),
                 url: Some(route.to_string()),
                 ..Default::default()
             };
             match backend.navigate_page(&params).await {
-                Ok(r) => text_result(r, false),
-                Err(e) => text_result(format!("navigate error: {e}"), true),
+                Ok(r) => text_result(&r, false),
+                Err(e) => text_result(&format!("navigate error: {e}"), true),
             }
         }
         "browser_reload" => {
@@ -781,8 +797,8 @@ async fn dispatch_tool_inner(backend: &dyn DevtoolsBackend, name: &str, args: &V
                 ..Default::default()
             };
             match backend.navigate_page(&params).await {
-                Ok(r) => text_result(r, false),
-                Err(e) => text_result(format!("browser_reload error: {e}"), true),
+                Ok(r) => text_result(&r, false),
+                Err(e) => text_result(&format!("browser_reload error: {e}"), true),
             }
         }
 
@@ -790,11 +806,11 @@ async fn dispatch_tool_inner(backend: &dyn DevtoolsBackend, name: &str, args: &V
         other => {
             if let Some(result) = backend.handle_extension_tool(other, args).await {
                 match result {
-                    Ok(r) => text_result(r, false),
-                    Err(e) => text_result(format!("{other} error: {e}"), true),
+                    Ok(r) => text_result(&r, false),
+                    Err(e) => text_result(&format!("{other} error: {e}"), true),
                 }
             } else {
-                text_result(format!("Unknown tool: {other}"), true)
+                text_result(&format!("Unknown tool: {other}"), true)
             }
         }
     }
@@ -871,25 +887,28 @@ pub async fn run_mcp_loop(backend: &dyn DevtoolsBackend, server_name: &str) {
             }
 
             "tools/call" => {
-                let name = params.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                let name = params.get("name").and_then(serde_json::Value::as_str).unwrap_or("");
                 let args = params.get("arguments").cloned().unwrap_or(json!({}));
                 dispatch_tool(backend, name, &args).await
             }
 
             _ => {
-                let _ = stdout
-                    .write_all(
-                        (mcp_error(id, -32601, &format!("Method not found: {method}")) + "\n")
-                            .as_bytes(),
-                    )
-                    .await;
-                let _ = stdout.flush().await;
+                drop(
+                    stdout
+                        .write_all(
+                            (mcp_error(id.as_ref(), -32601, &format!("Method not found: {method}"))
+                                + "\n")
+                                .as_bytes(),
+                        )
+                        .await,
+                );
+                drop(stdout.flush().await);
                 continue;
             }
         };
 
-        let response = mcp_response(id, result) + "\n";
-        let _ = stdout.write_all(response.as_bytes()).await;
-        let _ = stdout.flush().await;
+        let response = mcp_response(id.as_ref(), &result) + "\n";
+        drop(stdout.write_all(response.as_bytes()).await);
+        drop(stdout.flush().await);
     }
 }

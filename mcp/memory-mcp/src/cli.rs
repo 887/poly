@@ -63,7 +63,7 @@ DATA:
 
 /// Dispatch CLI arguments to the appropriate operation.
 pub async fn run(data_dir: PathBuf, args: &[String]) -> anyhow::Result<()> {
-    let subcmd = args.first().map(String::as_str).unwrap_or("");
+    let subcmd = args.first().map_or("", String::as_str);
     let rest = args.get(1..).unwrap_or(&[]);
     let result = match subcmd {
         "tasks" => dispatch_tasks(&data_dir, rest).await,
@@ -94,7 +94,7 @@ pub async fn run(data_dir: PathBuf, args: &[String]) -> anyhow::Result<()> {
 // ─── Sub-dispatchers ──────────────────────────────────────────────────────────
 
 async fn dispatch_tasks(data_dir: &Path, args: &[String]) -> anyhow::Result<String> {
-    let sub = args.first().map(String::as_str).unwrap_or("");
+    let sub = args.first().map_or("", String::as_str);
     let rest = args.get(1..).unwrap_or(&[]);
     match sub {
         "list" | "" => ops::list_tasks(data_dir).await,
@@ -133,7 +133,7 @@ async fn dispatch_task_status(data_dir: &Path, args: &[String]) -> anyhow::Resul
 }
 
 async fn dispatch_task_item(data_dir: &Path, args: &[String]) -> anyhow::Result<String> {
-    let sub = args.first().map(String::as_str).unwrap_or("");
+    let sub = args.first().map_or("", String::as_str);
     let rest = args.get(1..).unwrap_or(&[]);
     match sub {
         "add" => {
@@ -144,9 +144,9 @@ async fn dispatch_task_item(data_dir: &Path, args: &[String]) -> anyhow::Result<
         "check" | "toggle" => {
             let id = require_arg(rest, 0, "tasks item check <id|name> <item_id>")?;
             let item_id_str = require_arg(rest, 1, "tasks item check <id|name> <item_id>")?;
-            let item_id: u32 = item_id_str
-                .parse()
-                .map_err(|_| anyhow::anyhow!("item_id must be a number, got: {item_id_str}"))?;
+            let item_id: u32 = item_id_str.parse().map_err(|err| {
+                anyhow::anyhow!("item_id must be a number, got: {item_id_str} ({err})")
+            })?;
             ops::check_task_item(data_dir, id, item_id).await
         }
         other => Err(anyhow::anyhow!("Unknown tasks item subcommand: '{other}'")),
@@ -154,7 +154,7 @@ async fn dispatch_task_item(data_dir: &Path, args: &[String]) -> anyhow::Result<
 }
 
 async fn dispatch_memory(data_dir: &Path, args: &[String]) -> anyhow::Result<String> {
-    let sub = args.first().map(String::as_str).unwrap_or("");
+    let sub = args.first().map_or("", String::as_str);
     let rest = args.get(1..).unwrap_or(&[]);
     match sub {
         "store" => {
@@ -172,7 +172,7 @@ async fn dispatch_memory(data_dir: &Path, args: &[String]) -> anyhow::Result<Str
 }
 
 async fn dispatch_finding(data_dir: &Path, args: &[String]) -> anyhow::Result<String> {
-    let sub = args.first().map(String::as_str).unwrap_or("");
+    let sub = args.first().map_or("", String::as_str);
     let rest = args.get(1..).unwrap_or(&[]);
     match sub {
         "store" => {
@@ -189,7 +189,7 @@ async fn dispatch_finding(data_dir: &Path, args: &[String]) -> anyhow::Result<St
 }
 
 async fn dispatch_knowledge(data_dir: &Path, args: &[String]) -> anyhow::Result<String> {
-    let sub = args.first().map(String::as_str).unwrap_or("");
+    let sub = args.first().map_or("", String::as_str);
     let rest = args.get(1..).unwrap_or(&[]);
     match sub {
         "store" => {
@@ -258,7 +258,7 @@ fn require_arg<'a>(args: &'a [String], index: usize, usage: &str) -> anyhow::Res
 /// Extract the value of a `--flag <value>` pair from the args list.
 fn extract_flag_value(args: &[String], flag: &str) -> Option<String> {
     let pos = args.iter().position(|a| a == flag)?;
-    args.get(pos + 1).cloned()
+    args.get(pos.saturating_add(1)).cloned()
 }
 
 // ─── Output helpers ───────────────────────────────────────────────────────────

@@ -72,8 +72,8 @@ pub async fn load_next_id(data_dir: &Path) -> anyhow::Result<u32> {
     if path.exists() {
         let bytes = tokio::fs::read(&path).await?;
         let val: serde_json::Value = serde_json::from_slice(&bytes)?;
-        if let Some(n) = val.get("next_id").and_then(|v| v.as_u64()) {
-            return Ok(n as u32);
+        if let Some(n) = val.get("next_id").and_then(serde_json::Value::as_u64) {
+            return Ok(u32::try_from(n).unwrap_or(u32::MAX));
         }
     }
 
@@ -88,12 +88,12 @@ pub async fn load_next_id(data_dir: &Path) -> anyhow::Result<u32> {
         let name = entry.file_name().to_string_lossy().into_owned();
         if name.ends_with(".json") {
             // Filenames look like `001_my_task.json`; parse the numeric prefix.
-            if let Some(Ok(id)) = name.split('_').next().map(|s| s.parse::<u32>()) {
+            if let Some(Ok(id)) = name.split('_').next().map(str::parse::<u32>) {
                 max_id = max_id.max(id);
             }
         }
     }
-    Ok(max_id + 1)
+    Ok(max_id.saturating_add(1))
 }
 
 /// Persist the next available task ID to `poly-memory.json`.
@@ -169,7 +169,12 @@ async fn migrate_legacy_tasks_json(data_dir: &Path, old_path: &PathBuf) -> anyho
     // Write counter only if it doesn't already exist.
     let meta = meta_path(data_dir);
     if !meta.exists() {
-        let next_id = tasks.iter().map(|t| t.id).max().unwrap_or(0) + 1;
+        let next_id = tasks
+            .iter()
+            .map(|t| t.id)
+            .max()
+            .unwrap_or(0)
+            .saturating_add(1);
         save_next_id(data_dir, next_id).await?;
     }
 

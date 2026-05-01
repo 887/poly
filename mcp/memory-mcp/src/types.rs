@@ -137,7 +137,10 @@ impl Task {
         let slug = self.slug.replace('-', "_");
         let slug = if slug.len() > max_slug_len {
             // Truncate then strip any dangling trailing underscore.
-            slug[..max_slug_len].trim_end_matches('_').to_string()
+            slug.get(..max_slug_len)
+                .unwrap_or(&slug)
+                .trim_end_matches('_')
+                .to_string()
         } else {
             slug
         };

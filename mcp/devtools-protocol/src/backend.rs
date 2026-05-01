@@ -177,7 +177,7 @@ impl RollingBuildLog {
     /// Append a new log line and return its sequence number.
     pub fn push_line(&mut self, line: impl Into<String>) -> u64 {
         let seq = self.next_seq;
-        self.next_seq += 1;
+        self.next_seq = self.next_seq.saturating_add(1);
         self.lines.push_back((seq, line.into()));
         while self.lines.len() > self.max_lines {
             let _ = self.lines.pop_front();
@@ -504,7 +504,13 @@ pub trait DevtoolsBackend: Send + Sync {
     /// Returns a JSON object `{"found": "<matched text>"}` on success.
     async fn wait_for_text(&self, texts: &[String], timeout_ms: u64) -> anyhow::Result<String> {
         let texts_json = serde_json::to_string(texts).unwrap_or_default();
-        let deadline = std::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
+        let deadline = std::time::Instant::now()
+            .checked_add(std::time::Duration::from_millis(timeout_ms))
+            .unwrap_or_else(|| {
+                std::time::Instant::now()
+                    .checked_add(std::time::Duration::from_secs(60))
+                    .unwrap_or_else(std::time::Instant::now)
+            });
 
         loop {
             let check_js = format!(
@@ -570,7 +576,7 @@ pub trait DevtoolsBackend: Send + Sync {
     /// Dispatches pointer and mouse events at the given position.
     /// Set `dbl_click` to `true` for double-clicks.
     async fn click_at(&self, x: f64, y: f64, dbl_click: bool) -> anyhow::Result<String> {
-        let count = if dbl_click { 2 } else { 1 };
+        let count: u32 = if dbl_click { 2 } else { 1 };
         self.js_eval(&format!(
             r#"(function(){{
                 var x={x},y={y};
@@ -711,28 +717,38 @@ pub trait DevtoolsBackend: Send + Sync {
             // launch_app / rebuild_app / force_rebuild are NON-BLOCKING: they spawn a background
             // build task and return in ~1 s. 30 s is a generous budget. reset_app does a data
             // directory wipe (+sync) then delegates to launch_app — still completes quickly.
-            "launch_app" | "rebuild_app" | "reset_app" | "force_rebuild" => 30_000,
-            "kill_app" | "hard_kill" => 30_000,
-            "connect_cdp" | "cdp_status" => 30_000,
+            // Merged with kill/connect arms (clippy::match_same_arms) and the
+            // wildcard fallback below at 30 s.
             "get_last_build_status" | "get_last_build_log" | "get_generation" => 10_000,
-            "take_screenshot" | "take_snapshot" => 20_000,
             "evaluate_script" | "js_eval" | "get_dom" | "list_console_messages" | "get_console" => {
                 15_000
             }
+            "take_screenshot"
+            | "take_snapshot"
+            | "click"
+            | "click_at"
+            | "hover"
+            | "fill"
+            | "type_text"
+            | "handle_dialog"
+            | "page_reload"
+            | "set_viewport"
+            | "navigate"
+            | "browser_reload"
+            | "screenshot" => 20_000,
             "navigate_page" => args
                 .get("timeout")
-                .and_then(|value| value.as_u64())
+                .and_then(serde_json::Value::as_u64)
                 .unwrap_or(30_000)
                 .saturating_add(5_000),
             "wait_for" => args
                 .get("timeout")
-                .and_then(|value| value.as_u64())
+                .and_then(serde_json::Value::as_u64)
                 .unwrap_or(10_000)
                 .saturating_add(5_000),
-            "click" | "click_at" | "hover" | "fill" | "type_text" | "handle_dialog"
-            | "page_reload" | "set_viewport" | "navigate" | "browser_reload" | "screenshot" => {
-                20_000
-            }
+            // launch_app / rebuild_app / reset_app / force_rebuild / kill_app
+            // / hard_kill / connect_cdp / cdp_status all share the 30 s budget
+            // with the wildcard fallback for unknown tools.
             _ => 30_000,
         }
     }

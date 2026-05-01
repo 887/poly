@@ -411,7 +411,7 @@ impl DesktopHttpBackend {
     /// crashed at startup the wait aborts immediately instead of blocking for
     /// the full `max_seconds`.
     async fn wait_for_bridge(&self, max_seconds: u64) -> anyhow::Result<()> {
-        let polls = max_seconds * 2; // poll every 500 ms
+        let polls = max_seconds.saturating_mul(2); // poll every 500 ms
         for _ in 0..polls {
             if self.is_bridge_alive().await {
                 return Ok(());
@@ -438,14 +438,14 @@ impl DesktopHttpBackend {
             .ok()
             .and_then(|s| s.trim().parse::<u64>().ok())
             .unwrap_or(0);
-        std::fs::write(path, (current + 1).to_string())?;
+        std::fs::write(path, current.saturating_add(1).to_string())?;
         Ok(())
     }
 
     /// Poll `http://127.0.0.1:<port>/` until it returns any HTTP response.
     async fn wait_for_port(&self, port: u16, max_seconds: u64) -> anyhow::Result<()> {
         let url = format!("http://127.0.0.1:{port}/");
-        let polls = max_seconds * 2; // 500 ms intervals
+        let polls = max_seconds.saturating_mul(2); // 500 ms intervals
         for _ in 0..polls {
             let ok = self
                 .client
@@ -473,33 +473,33 @@ impl DesktopHttpBackend {
     /// Kill the tracked dx serve process (web shell mode).
     async fn kill_dx_serve(&self) {
         if let Some(pid) = self.dx_serve_pid.lock().await.take() {
-            let _ = tokio::process::Command::new("kill")
+            drop(tokio::process::Command::new("kill")
                 .args(["-15", &pid.to_string()])
                 .status()
-                .await;
+                .await);
         }
-        let _ = tokio::process::Command::new("pkill")
+        drop(tokio::process::Command::new("pkill")
             .args([
                 "-f",
                 &format!("dx.*serve.*--port.*{WEB_SERVE_PORT}"),
             ])
             .status()
-            .await;
+            .await);
         tokio::time::sleep(std::time::Duration::from_millis(400)).await;
     }
 
     /// Kill the poly-desktop-web shell process.
     async fn kill_web_shell(&self) {
         if let Some(pid) = self.shell_pid.lock().await.take() {
-            let _ = tokio::process::Command::new("kill")
+            drop(tokio::process::Command::new("kill")
                 .args(["-15", &pid.to_string()])
                 .status()
-                .await;
+                .await);
         }
-        let _ = tokio::process::Command::new("pkill")
+        drop(tokio::process::Command::new("pkill")
             .args(["-f", WEB_SHELL_PATTERN])
             .status()
-            .await;
+            .await);
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
     }
 
@@ -576,12 +576,12 @@ impl DesktopHttpBackend {
         // Auto-clear when dx serve exits.
         let pid_ref = self.dx_serve_pid.clone();
         tokio::spawn(async move {
-            let _ = serve_child.wait().await;
+            drop(serve_child.wait().await);
             *pid_ref.lock().await = None;
             tracing::info!("[bg] dx serve exited");
         });
 
-        let _ = Self::increment_rebuild_counter().await;
+        drop(Self::increment_rebuild_counter().await);
 
         // ── Wait for dx serve port ────────────────────────────────────────────
         match self.wait_for_port(WEB_SERVE_PORT, 120).await {
@@ -646,7 +646,7 @@ impl DesktopHttpBackend {
         let shell_pid_ref = self.shell_pid.clone();
         tokio::spawn(async move {
             let status = shell_child.wait().await;
-            let code = status.as_ref().ok().and_then(|s| s.code());
+            let code = status.as_ref().ok().and_then(std::process::ExitStatus::code);
             *shell_pid_ref.lock().await = None;
             tracing::info!("poly-desktop-web exited (code {code:?})");
         });
@@ -744,7 +744,7 @@ impl DesktopHttpBackend {
 
         let pid_ref = self.dx_serve_pid.clone();
         tokio::spawn(async move {
-            let _ = serve_child.wait().await;
+            drop(serve_child.wait().await);
             *pid_ref.lock().await = None;
         });
 
@@ -849,11 +849,11 @@ impl DesktopHttpBackend {
         // Auto-clear the handle when dx serve exits (build failure, etc.).
         let app_ref = self.app_process.clone();
         tokio::spawn(async move {
-            let _ = child.wait().await;
+            drop(child.wait().await);
             *app_ref.lock().await = None;
         });
 
-        let _ = Self::increment_rebuild_counter().await;
+        drop(Self::increment_rebuild_counter().await);
 
         // ── Wait for the eval bridge ──────────────────────────────────────────
         // Allow up to 120 s: dx serve must compile before launching the app.
@@ -909,14 +909,14 @@ impl DevtoolsBackend for DesktopHttpBackend {
         if is_legacy_mode() {
             // ── Legacy hotpatch mode ──────────────────────────────────────────
             let app_dir = format!("{workspace}/apps/desktop-devtools");
-            let _ = tokio::process::Command::new("pkill")
+            drop(tokio::process::Command::new("pkill")
                 .args(["-f", "dx.*serve.*hotpatch"])
                 .status()
-                .await;
-            let _ = tokio::process::Command::new("pkill")
+                .await);
+            drop(tokio::process::Command::new("pkill")
                 .args(["-f", APP_PROCESS_PATTERN])
                 .status()
-                .await;
+                .await);
             *self.app_process.lock().await = None;
             tokio::time::sleep(std::time::Duration::from_millis(600)).await;
 
@@ -987,19 +987,19 @@ impl DevtoolsBackend for DesktopHttpBackend {
         if is_legacy_mode() {
             // Legacy: SIGTERM dx serve (which also terminates the devtools binary).
             if let Some(proc) = self.app_process.lock().await.take() {
-                let _ = tokio::process::Command::new("kill")
+                drop(tokio::process::Command::new("kill")
                     .args(["-15", &proc.pid.to_string()])
                     .status()
-                    .await;
+                    .await);
             }
-            let _ = tokio::process::Command::new("pkill")
+            drop(tokio::process::Command::new("pkill")
                 .args(["-f", "dx.*serve.*hotpatch"])
                 .status()
-                .await;
-            let _ = tokio::process::Command::new("pkill")
+                .await);
+            drop(tokio::process::Command::new("pkill")
                 .args(["-f", APP_PROCESS_PATTERN])
                 .status()
-                .await;
+                .await);
             Ok("Killed dx serve and poly-desktop-devtools. Call launch_app to restart.".to_string())
         } else {
             // Web-shell mode: kill dx serve and the shell separately.
@@ -1048,19 +1048,19 @@ impl DevtoolsBackend for DesktopHttpBackend {
     async fn hard_kill(&self) -> anyhow::Result<String> {
         if is_legacy_mode() {
             if let Some(proc) = self.app_process.lock().await.take() {
-                let _ = tokio::process::Command::new("kill")
+                drop(tokio::process::Command::new("kill")
                     .args(["-9", &proc.pid.to_string()])
                     .status()
-                    .await;
+                    .await);
             }
-            let _ = tokio::process::Command::new("pkill")
+            drop(tokio::process::Command::new("pkill")
                 .args(["-9", "-f", "dx.*serve.*hotpatch"])
                 .status()
-                .await;
-            let _ = tokio::process::Command::new("pkill")
+                .await);
+            drop(tokio::process::Command::new("pkill")
                 .args(["-9", "-f", APP_PROCESS_PATTERN])
                 .status()
-                .await;
+                .await);
             Ok(
                 "Hard-killed dx serve and poly-desktop-devtools (SIGKILL). Call launch_app to restart."
                     .to_string(),
@@ -1068,29 +1068,29 @@ impl DevtoolsBackend for DesktopHttpBackend {
         } else {
             // Web-shell mode: SIGKILL both dx serve and shell.
             if let Some(pid) = self.dx_serve_pid.lock().await.take() {
-                let _ = tokio::process::Command::new("kill")
+                drop(tokio::process::Command::new("kill")
                     .args(["-9", &pid.to_string()])
                     .status()
-                    .await;
+                    .await);
             }
             if let Some(pid) = self.shell_pid.lock().await.take() {
-                let _ = tokio::process::Command::new("kill")
+                drop(tokio::process::Command::new("kill")
                     .args(["-9", &pid.to_string()])
                     .status()
-                    .await;
+                    .await);
             }
-            let _ = tokio::process::Command::new("pkill")
+            drop(tokio::process::Command::new("pkill")
                 .args([
                     "-9",
                     "-f",
                     &format!("dx.*serve.*--port.*{WEB_SERVE_PORT}"),
                 ])
                 .status()
-                .await;
-            let _ = tokio::process::Command::new("pkill")
+                .await);
+            drop(tokio::process::Command::new("pkill")
                 .args(["-9", "-f", WEB_SHELL_PATTERN])
                 .status()
-                .await;
+                .await);
             *self.app_process.lock().await = None;
             Ok(
                 "Hard-killed dx serve and poly-desktop-web shell (SIGKILL). Call launch_app to restart."
@@ -1119,7 +1119,7 @@ impl DevtoolsBackend for DesktopHttpBackend {
 
         let app_dir = format!("{workspace}/apps/desktop");
 
-        let _ = Self::increment_rebuild_counter().await;
+        drop(Self::increment_rebuild_counter().await);
 
         self.start_build_record(
             "rebuild_app",
@@ -1268,7 +1268,7 @@ impl DevtoolsBackend for DesktopHttpBackend {
     //   3. Falling back to a `getBoundingClientRect()` scan over all elements.
 
     async fn click_at(&self, x: f64, y: f64, dbl_click: bool) -> anyhow::Result<String> {
-        let count = if dbl_click { 2 } else { 1 };
+        let count: u32 = if dbl_click { 2 } else { 1 };
         // Starts with `return ` → do_eval passes it through without double-wrapping.
         //
         // IMPORTANT: x,y must be CSS pixel coordinates (same space as
@@ -1492,9 +1492,10 @@ fn cli_detect_workspace() -> String {
     if let Ok(ws) = std::env::var("POLY_WORKSPACE") {
         return ws;
     }
-    std::env::current_dir()
-        .map(|p| p.to_string_lossy().into_owned())
-        .unwrap_or_else(|_| ".".to_string())
+    std::env::current_dir().map_or_else(
+        |_| ".".to_string(),
+        |p| p.to_string_lossy().into_owned(),
+    )
 }
 
 /// Commands that trigger CLI mode instead of MCP server mode.
@@ -1520,8 +1521,7 @@ const CLI_COMMANDS: &[&str] = &[
 /// Check if the first argument selects CLI mode.
 fn is_cli_mode(args: &[String]) -> bool {
     args.get(1)
-        .map(|a| CLI_COMMANDS.contains(&a.as_str()))
-        .unwrap_or(false)
+        .is_some_and(|a| CLI_COMMANDS.contains(&a.as_str()))
 }
 
 /// Write a line to stdout without using `println!`.
@@ -1534,7 +1534,7 @@ fn cli_write(text: &str) -> anyhow::Result<()> {
 /// Extract value of `--flag <value>` from args.
 fn extract_cli_flag<'a>(args: &'a [String], flag: &str) -> Option<&'a str> {
     let pos = args.iter().position(|a| a == flag)?;
-    args.get(pos + 1).map(String::as_str)
+    args.get(pos.saturating_add(1)).map(String::as_str)
 }
 
 /// CLI help text for the desktop MCP.
@@ -1590,11 +1590,7 @@ async fn dispatch_desktop_cli(
     match cmd {
         "status" | "connect" => backend.connect().await,
         "launch" => {
-            let ws = args
-                .first()
-                .map(String::as_str)
-                .map(str::to_string)
-                .unwrap_or_else(cli_detect_workspace);
+            let ws = args.first().map_or_else(cli_detect_workspace, std::clone::Clone::clone);
             // launch_app is non-blocking — poll until background build finishes,
             // otherwise the process exits and kills the tokio task.
             let initial_msg = backend.launch_app(&ws).await?;
@@ -1617,11 +1613,7 @@ async fn dispatch_desktop_cli(
         }
         "kill" => backend.kill_app().await,
         "rebuild" => {
-            let ws = args
-                .first()
-                .map(String::as_str)
-                .map(str::to_string)
-                .unwrap_or_else(cli_detect_workspace);
+            let ws = args.first().map_or_else(cli_detect_workspace, std::clone::Clone::clone);
             // rebuild_app is non-blocking — poll until background rebuild finishes.
             let initial_msg = backend.rebuild_app(&ws).await?;
             cli_write(&initial_msg)?;
@@ -1700,18 +1692,18 @@ async fn main() {
     let args: Vec<String> = std::env::args().collect();
     let backend = DesktopHttpBackend::new();
     if is_cli_mode(&args) {
-        let cmd = args.get(1).map(String::as_str).unwrap_or("help");
+        let cmd = args.get(1).map_or("help", String::as_str);
         let rest = args.get(2..).unwrap_or(&[]).to_vec();
         match dispatch_desktop_cli(&backend, cmd, &rest).await {
             Ok(out) => {
                 if let Err(e) = cli_write(&out) {
                     use std::io::Write as _;
-                    let _ = writeln!(std::io::stderr().lock(), "Output error: {e}");
+                    drop(writeln!(std::io::stderr().lock(), "Output error: {e}"));
                 }
             }
             Err(e) => {
                 use std::io::Write as _;
-                let _ = writeln!(std::io::stderr().lock(), "Error: {e}");
+                drop(writeln!(std::io::stderr().lock(), "Error: {e}"));
                 std::process::exit(1);
             }
         }

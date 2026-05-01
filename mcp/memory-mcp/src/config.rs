@@ -43,7 +43,7 @@ fn default_data_dir() -> anyhow::Result<PathBuf> {
             if cur.join("Cargo.toml").exists() || cur.join(".git").exists() {
                 return Some(cur);
             }
-            p = cur.parent().map(|d| d.to_path_buf());
+            p = cur.parent().map(Path::to_path_buf);
         }
         None
     }

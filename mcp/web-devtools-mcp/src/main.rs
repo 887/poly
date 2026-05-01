@@ -220,7 +220,7 @@ impl ChromeCdpBackend {
     /// undefined symbol, missing `.so`, etc.). Aborts immediately instead of
     /// blocking for 120 s when the build already failed.
     async fn wait_for_web_server(&self, max_seconds: u64) -> anyhow::Result<()> {
-        let polls = max_seconds * 2;
+        let polls = max_seconds.saturating_mul(2);
         for _ in 0..polls {
             let ok = self
                 .client
@@ -633,11 +633,14 @@ impl ChromeCdpBackend {
                                 "CDP WebSocket closed — Chrome may have crashed. Call connect_cdp to reconnect."
                             );
                         }
-                        _ => continue,
+                        Message::Binary(_)
+                        | Message::Ping(_)
+                        | Message::Pong(_)
+                        | Message::Frame(_) => continue,
                     };
 
                     let resp: Value = serde_json::from_str(&text)?;
-                    if resp.get("id").and_then(|v| v.as_i64()) == Some(id) {
+                    if resp.get("id").and_then(Value::as_i64) == Some(id) {
                         if let Some(err) = resp.get("error") {
                             anyhow::bail!("CDP error: {}", err);
                         }
@@ -725,7 +728,10 @@ impl ChromeCdpBackend {
             .ok()
             .and_then(|s| s.trim().parse::<u64>().ok())
             .unwrap_or(0);
-        let _ = std::fs::write(path, (current + 1).to_string());
+        drop(std::fs::write(
+            path,
+            current.saturating_add(1).to_string(),
+        ));
     }
 
     /// Read the current rebuild counter from `/tmp/poly-devtools-web-rebuild-counter`.
@@ -773,10 +779,10 @@ impl ChromeCdpBackend {
     async fn bg_build_and_launch(&self, app_dir: &str) {
         // ── Kill any existing dx serve process ────────────────────────────────
         if let Some(pid) = self.dx_serve_pid.lock().await.take() {
-            let _ = tokio::process::Command::new("kill")
+            drop(tokio::process::Command::new("kill")
                 .args(["-9", &pid.to_string()])
                 .status()
-                .await;
+                .await);
         }
 
         // ── Spawn dx serve as a long-running background process ───────────────
@@ -837,7 +843,7 @@ impl ChromeCdpBackend {
         }
         let pid_ref = self.dx_serve_pid.clone();
         tokio::spawn(async move {
-            let _ = child.wait().await;
+            drop(child.wait().await);
             *pid_ref.lock().await = None;
         });
 
@@ -885,15 +891,15 @@ impl ChromeCdpBackend {
     async fn bg_rebuild(&self, app_dir: &str) {
         // ── Kill current dx serve ─────────────────────────────────────────────
         if let Some(pid) = self.dx_serve_pid.lock().await.take() {
-            let _ = tokio::process::Command::new("kill")
+            drop(tokio::process::Command::new("kill")
                 .args(["-9", &pid.to_string()])
                 .status()
-                .await;
+                .await);
         }
-        let _ = tokio::process::Command::new("pkill")
+        drop(tokio::process::Command::new("pkill")
             .args(["-f", "dx.*serve.*web"])
             .status()
-            .await;
+            .await);
         tokio::time::sleep(std::time::Duration::from_millis(400)).await;
 
         // ── Invalidate stale CSS: clean poly-core if any CSS is newer than WASM ──
@@ -914,17 +920,19 @@ impl ChromeCdpBackend {
             let any_css_newer = std::fs::read_dir(&css_dir)
                 .map(|rd| {
                     rd.flatten().any(|e| {
-                        e.path().extension().map(|x| x == "css").unwrap_or(false)
+                        e.path().extension().is_some_and(|x| x == "css")
                             && e.metadata().and_then(|m| m.modified()).ok() > wasm_mtime
                     })
                 })
                 .unwrap_or(false);
             if any_css_newer {
-                let _ = tokio::process::Command::new("cargo")
-                    .args(["clean", "-p", "poly-core"])
-                    .current_dir(ws)
-                    .status()
-                    .await;
+                drop(
+                    tokio::process::Command::new("cargo")
+                        .args(["clean", "-p", "poly-core"])
+                        .current_dir(ws)
+                        .status()
+                        .await,
+                );
             }
         }
 
@@ -979,7 +987,7 @@ impl ChromeCdpBackend {
         }
         let pid_ref = self.dx_serve_pid.clone();
         tokio::spawn(async move {
-            let _ = child.wait().await;
+            drop(child.wait().await);
             *pid_ref.lock().await = None;
         });
 
@@ -1046,19 +1054,19 @@ impl DevtoolsBackend for ChromeCdpBackend {
             handle.abort();
         }
         *self.ws.lock().await = None;
-        let _ = tokio::process::Command::new("pkill")
+        drop(tokio::process::Command::new("pkill")
             .args(["-f", &format!("remote-debugging-port={CDP_PORT}")])
             .status()
-            .await;
-        let _ = tokio::process::Command::new("pkill")
+            .await);
+        drop(tokio::process::Command::new("pkill")
             .args(["-f", "dx.*serve.*web"])
             .status()
-            .await;
+            .await);
         if let Some(pid) = self.dx_serve_pid.lock().await.take() {
-            let _ = tokio::process::Command::new("kill")
+            drop(tokio::process::Command::new("kill")
                 .args(["-9", &pid.to_string()])
                 .status()
-                .await;
+                .await);
         }
         tokio::time::sleep(std::time::Duration::from_millis(600)).await;
 
@@ -1068,16 +1076,15 @@ impl DevtoolsBackend for ChromeCdpBackend {
         // block this MCP response long enough for VS Code to drop the connection.
         // We set state = Running, return immediately (\u2248 50 ms), and the agent
         // polls get_last_build_status until Running \u2192 Succeeded/Failed.
-        let _ = self
-            .start_build_record(
-                "launch_app",
-                "dx serve --platform web",
-                &app_dir,
-                "dx serve --platform web",
-                "dx serve started in background (state: Running). \
-                 Poll get_last_build_status for progress.",
-            )
-            .await;
+        self.start_build_record(
+            "launch_app",
+            "dx serve --platform web",
+            &app_dir,
+            "dx serve --platform web",
+            "dx serve started in background (state: Running). \
+             Poll get_last_build_status for progress.",
+        )
+        .await;
 
         let ctx = self.clone(); // cheap Arc clone — shares all state
         let handle = tokio::spawn(async move {
@@ -1105,22 +1112,22 @@ impl DevtoolsBackend for ChromeCdpBackend {
         }
 
         // Kill Chrome.
-        let _ = tokio::process::Command::new("pkill")
+        drop(tokio::process::Command::new("pkill")
             .args(["-f", "remote-debugging-port=9222"])
             .status()
-            .await;
+            .await);
         // Kill static file server by PID if we have it.
         if let Some(pid) = self.dx_serve_pid.lock().await.take() {
-            let _ = tokio::process::Command::new("kill")
+            drop(tokio::process::Command::new("kill")
                 .args(["-9", &pid.to_string()])
                 .status()
-                .await;
+                .await);
         }
         // Kill any stale dx serve from previous sessions.
-        let _ = tokio::process::Command::new("pkill")
+        drop(tokio::process::Command::new("pkill")
             .args(["-f", "dx serve"])
             .status()
-            .await;
+            .await);
 
         Ok(
             "Killed Chrome and static file server. Watchdog stopped. Call launch_app to restart."
@@ -1137,7 +1144,7 @@ impl DevtoolsBackend for ChromeCdpBackend {
         let ws_url = {
             let mut last_err = anyhow::anyhow!("CDP not available");
             let mut url = None;
-            for attempt in 1..=10 {
+            for attempt in 1_u32..=10_u32 {
                 match self.discover_ws_url().await {
                     Ok(u) => {
                         url = Some(u);
@@ -1158,7 +1165,7 @@ impl DevtoolsBackend for ChromeCdpBackend {
         let ws = {
             let mut last_err = anyhow::anyhow!("WebSocket connect failed");
             let mut ws = None;
-            for attempt in 1..=5 {
+            for attempt in 1_u32..=5_u32 {
                 match tokio_tungstenite::connect_async(&ws_url).await {
                     Ok((stream, _)) => {
                         ws = Some(stream);
@@ -1202,11 +1209,12 @@ impl DevtoolsBackend for ChromeCdpBackend {
             // Close all page targets except the first one
             for extra in page_targets.iter().skip(1) {
                 if let Some(id) = extra.get("id").and_then(|v| v.as_str()) {
-                    let _ = self
-                        .client
-                        .get(format!("http://127.0.0.1:{CDP_PORT}/json/close/{id}"))
-                        .send()
-                        .await;
+                    drop(
+                        self.client
+                            .get(format!("http://127.0.0.1:{CDP_PORT}/json/close/{id}"))
+                            .send()
+                            .await,
+                    );
                 }
             }
         }
@@ -1243,16 +1251,16 @@ impl DevtoolsBackend for ChromeCdpBackend {
             {
                 let width = content_size
                     .get("width")
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(1440.0);
+                    .and_then(serde_json::Value::as_f64)
+                    .unwrap_or(1440.0_f64);
                 let height = content_size
                     .get("height")
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(900.0);
+                    .and_then(serde_json::Value::as_f64)
+                    .unwrap_or(900.0_f64);
                 if let Some(m) = cdp_params.as_object_mut() {
                     m.insert(
                         "clip".to_string(),
-                        json!({"x": 0, "y": 0, "width": width, "height": height, "scale": 1}),
+                        json!({"x": 0_i32, "y": 0_i32, "width": width, "height": height, "scale": 1_i32}),
                     );
                 }
             }
@@ -1301,16 +1309,37 @@ impl DevtoolsBackend for ChromeCdpBackend {
 
         Ok(match value {
             Value::String(s) => s,
-            other => other.to_string(),
+            other @ (Value::Null
+            | Value::Bool(_)
+            | Value::Number(_)
+            | Value::Array(_)
+            | Value::Object(_)) => other.to_string(),
         })
     }
 
     async fn click_at(&self, x: f64, y: f64, dbl_click: bool) -> anyhow::Result<String> {
-        let count: i64 = if dbl_click { 2 } else { 1 };
-        let xi = x as i64;
-        let yi = y as i64;
+        let count: i64 = if dbl_click { 2_i64 } else { 1_i64 };
+        // CSS-pixel viewport coords are bounded; CDP wants integers.
+        fn f64_to_i64(v: f64) -> i64 {
+            if v.is_nan() {
+                return 0;
+            }
+            if v >= 9_223_372_036_854_775_807.0_f64 {
+                return i64::MAX;
+            }
+            if v <= -9_223_372_036_854_775_808.0_f64 {
+                return i64::MIN;
+            }
+            // SAFETY: bounds checked above.
+            // lint-allow-unused: bounds checked + intentional truncation
+            #[allow(clippy::cast_possible_truncation, clippy::as_conversions)]
+            let out = v.round() as i64;
+            out
+        }
+        let xi = f64_to_i64(x);
+        let yi = f64_to_i64(y);
         // Use CDP Input.dispatchMouseEvent for precise clicking.
-        for click_num in 1..=count {
+        for click_num in 1_i64..=count {
             self.cdp_send(
                 "Input.dispatchMouseEvent",
                 json!({ "type": "mousePressed", "x": xi, "y": yi, "button": "left", "clickCount": click_num }),
@@ -1397,23 +1426,23 @@ impl DevtoolsBackend for ChromeCdpBackend {
 
         // SIGKILL static file server by PID.
         if let Some(pid) = self.dx_serve_pid.lock().await.take() {
-            let _ = tokio::process::Command::new("kill")
+            drop(tokio::process::Command::new("kill")
                 .args(["-9", &pid.to_string()])
                 .status()
-                .await;
+                .await);
         }
 
         // SIGKILL Chrome.
-        let _ = tokio::process::Command::new("pkill")
+        drop(tokio::process::Command::new("pkill")
             .args(["-9", "-f", &format!("remote-debugging-port={CDP_PORT}")])
             .status()
-            .await;
+            .await);
 
         // SIGKILL any stale dx serve from previous sessions (pattern fallback).
-        let _ = tokio::process::Command::new("bash")
+        drop(tokio::process::Command::new("bash")
             .args(["-c", "pkill -9 -f 'dx.*serve.*web' 2>/dev/null || true"])
             .status()
-            .await;
+            .await);
 
         Ok("Hard-killed Chrome and static file server (SIGKILL). \
              Watchdog stopped. Call launch_app to rebuild and restart."
@@ -1477,16 +1506,15 @@ impl DevtoolsBackend for ChromeCdpBackend {
         // Increment counter before build so build_id advances on every rebuild_app call.
         Self::increment_rebuild_counter();
 
-        let _ = self
-            .start_build_record(
-                "rebuild_app",
-                "dx serve --platform web",
-                &app_dir,
-                "dx serve --platform web",
-                "dx serve restarting in background (state: Running). \
-                 Poll get_last_build_status for progress.",
-            )
-            .await;
+        self.start_build_record(
+            "rebuild_app",
+            "dx serve --platform web",
+            &app_dir,
+            "dx serve --platform web",
+            "dx serve restarting in background (state: Running). \
+             Poll get_last_build_status for progress.",
+        )
+        .await;
 
         // ── Spawn background rebuild task (returns immediately to avoid MCP timeout)
         //
@@ -1592,7 +1620,7 @@ impl DevtoolsBackend for ChromeCdpBackend {
             "page_reload" => {
                 let ignore_cache = args
                     .get("ignoreCache")
-                    .and_then(|v| v.as_bool())
+                    .and_then(serde_json::Value::as_bool)
                     .unwrap_or(false);
                 Some(
                     self.cdp_send("Page.reload", json!({ "ignoreCache": ignore_cache }))
@@ -1601,19 +1629,25 @@ impl DevtoolsBackend for ChromeCdpBackend {
                 )
             }
             "set_viewport" => {
-                let width = args.get("width").and_then(|v| v.as_i64()).unwrap_or(1440);
-                let height = args.get("height").and_then(|v| v.as_i64()).unwrap_or(900);
+                let width = args
+                    .get("width")
+                    .and_then(serde_json::Value::as_i64)
+                    .unwrap_or(1440_i64);
+                let height = args
+                    .get("height")
+                    .and_then(serde_json::Value::as_i64)
+                    .unwrap_or(900_i64);
                 let mobile = args
                     .get("mobile")
-                    .and_then(|v| v.as_bool())
+                    .and_then(serde_json::Value::as_bool)
                     .unwrap_or(false);
                 let device_scale_factor = args
                     .get("deviceScaleFactor")
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(if mobile { 3.0 } else { 1.0 });
+                    .and_then(serde_json::Value::as_f64)
+                    .unwrap_or(if mobile { 3.0_f64 } else { 1.0_f64 });
                 let touch = args
                     .get("touch")
-                    .and_then(|v| v.as_bool())
+                    .and_then(serde_json::Value::as_bool)
                     .unwrap_or(mobile);
                 let user_agent = args
                     .get("userAgent")
@@ -1639,7 +1673,7 @@ impl DevtoolsBackend for ChromeCdpBackend {
                             "Emulation.setTouchEmulationEnabled",
                             json!({
                                 "enabled": touch,
-                                "maxTouchPoints": if touch { 5 } else { 1 },
+                                "maxTouchPoints": if touch { 5_i32 } else { 1_i32 },
                             }),
                         )
                         .await?;
@@ -1773,7 +1807,7 @@ async fn web_cli_screenshot(backend: &ChromeCdpBackend, args: &[String]) -> anyh
     let save_path = args
         .iter()
         .position(|a| a == "--save")
-        .and_then(|p| args.get(p + 1))
+        .and_then(|p| args.get(p.saturating_add(1)))
         .map(String::as_str);
     let params = poly_devtools_protocol::backend::ScreenshotParams::default();
     let result = backend.take_screenshot(&params).await?;
@@ -1791,9 +1825,10 @@ fn web_detect_workspace() -> String {
     if let Ok(ws) = std::env::var("POLY_WORKSPACE") {
         return ws;
     }
-    std::env::current_dir()
-        .map(|p| p.to_string_lossy().into_owned())
-        .unwrap_or_else(|_| ".".to_string())
+    std::env::current_dir().map_or_else(
+        |_| ".".to_string(),
+        |p| p.to_string_lossy().into_owned(),
+    )
 }
 
 /// Dispatch a CLI command for the web backend.
@@ -1808,9 +1843,7 @@ async fn dispatch_web_cli(
         "launch" => {
             let ws = args
                 .first()
-                .map(String::as_str)
-                .map(str::to_string)
-                .unwrap_or_else(web_detect_workspace);
+                .map_or_else(web_detect_workspace, std::clone::Clone::clone);
             // launch_app is non-blocking — poll until background build finishes,
             // otherwise the process exits and kills the tokio task.
             let initial_msg = backend.launch_app(&ws).await?;
@@ -1835,9 +1868,7 @@ async fn dispatch_web_cli(
         "rebuild" => {
             let ws = args
                 .first()
-                .map(String::as_str)
-                .map(str::to_string)
-                .unwrap_or_else(web_detect_workspace);
+                .map_or_else(web_detect_workspace, std::clone::Clone::clone);
             // rebuild_app is non-blocking — poll until background rebuild finishes.
             let initial_msg = backend.rebuild_app(&ws).await?;
             web_cli_write(&initial_msg)?;
@@ -1921,18 +1952,18 @@ async fn main() {
 
     if let Some(cli_args) = config.cli_command {
         let backend = ChromeCdpBackend::new(config.headless);
-        let cmd = cli_args.first().map(String::as_str).unwrap_or("help");
+        let cmd = cli_args.first().map_or("help", String::as_str);
         let rest = cli_args.get(1..).unwrap_or(&[]).to_vec();
         match dispatch_web_cli(&backend, cmd, &rest).await {
             Ok(out) => {
                 if let Err(e) = web_cli_write(&out) {
                     use std::io::Write as _;
-                    let _ = writeln!(std::io::stderr().lock(), "Output error: {e}");
+                    drop(writeln!(std::io::stderr().lock(), "Output error: {e}"));
                 }
             }
             Err(e) => {
                 use std::io::Write as _;
-                let _ = writeln!(std::io::stderr().lock(), "Error: {e}");
+                drop(writeln!(std::io::stderr().lock(), "Error: {e}"));
                 std::process::exit(1);
             }
         }

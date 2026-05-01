@@ -23,7 +23,7 @@ pub async fn create_task(
     let task = Task::new(next_id, title, description);
     let line = task.summary_line();
     store::save_task(data_dir, &task).await?;
-    store::save_next_id(data_dir, next_id + 1).await?;
+    store::save_next_id(data_dir, next_id.saturating_add(1)).await?;
     Ok(format!("✅ Created task: {line}"))
 }
 
@@ -182,7 +182,13 @@ pub async fn add_task_item(
     let mut tasks = store::load_tasks(data_dir).await?;
     let task = find_task_mut(&mut tasks, id_or_name)
         .ok_or_else(|| anyhow::anyhow!("Task not found: {id_or_name}"))?;
-    let next_item_id = task.checklist.iter().map(|i| i.id).max().unwrap_or(0) + 1;
+    let next_item_id = task
+        .checklist
+        .iter()
+        .map(|i| i.id)
+        .max()
+        .unwrap_or(0)
+        .saturating_add(1);
     let item = ChecklistItem {
         id: next_item_id,
         text: text.to_string(),
@@ -236,7 +242,7 @@ pub async fn store_memory(
     let path = store::store_memory(data_dir, &task, title, content).await?;
     let task_mut = find_task_mut(&mut tasks, id_or_name)
         .ok_or_else(|| anyhow::anyhow!("Task not found: {id_or_name}"))?;
-    task_mut.memory_count += 1;
+    task_mut.memory_count = task_mut.memory_count.saturating_add(1);
     task_mut.updated_at = chrono::Utc::now();
     store::save_task(data_dir, task_mut).await?;
     Ok(format!(
@@ -261,7 +267,7 @@ pub async fn store_finding(
     // Mutate and save only the affected task (no need to rewrite all task files).
     let task_mut = find_task_mut(&mut tasks, id_or_name)
         .ok_or_else(|| anyhow::anyhow!("Task not found: {id_or_name}"))?;
-    task_mut.finding_count += 1;
+    task_mut.finding_count = task_mut.finding_count.saturating_add(1);
     task_mut.updated_at = chrono::Utc::now();
     let count = task_mut.finding_count;
     store::save_task(data_dir, task_mut).await?;
@@ -385,7 +391,7 @@ pub async fn work_plan(data_dir: &Path, count: usize) -> anyhow::Result<String> 
         pending.len()
     )];
     for (i, task) in pending.iter().enumerate() {
-        lines.push(format!("{}. {}", i + 1, task.summary_line()));
+        lines.push(format!("{}. {}", i.saturating_add(1), task.summary_line()));
     }
     lines.push(String::new());
     lines.push(

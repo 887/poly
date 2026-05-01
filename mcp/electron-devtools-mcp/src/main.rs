@@ -405,11 +405,14 @@ impl ElectronCdpBackend {
                                  Call connect_cdp to reconnect."
                             );
                         }
-                        _ => continue,
+                        Message::Binary(_)
+                        | Message::Ping(_)
+                        | Message::Pong(_)
+                        | Message::Frame(_) => continue,
                     };
 
                     let resp: Value = serde_json::from_str(&text)?;
-                    if resp.get("id").and_then(|v| v.as_i64()) == Some(id) {
+                    if resp.get("id").and_then(Value::as_i64) == Some(id) {
                         if let Some(err) = resp.get("error") {
                             anyhow::bail!("CDP error from method '{method}': {err}");
                         }
@@ -498,7 +501,10 @@ impl ElectronCdpBackend {
             .ok()
             .and_then(|s| s.trim().parse::<u64>().ok())
             .unwrap_or(0);
-        let _ = std::fs::write(path, (current + 1).to_string());
+        drop(std::fs::write(
+            path,
+            current.saturating_add(1).to_string(),
+        ));
     }
 
     /// Read the current value of the rebuild counter.
@@ -538,7 +544,7 @@ impl ElectronCdpBackend {
     /// detecting early dx-serve crashes via the build log.
     async fn wait_for_port(&self, port: u16, max_seconds: u64) -> anyhow::Result<()> {
         let url = format!("http://127.0.0.1:{port}/");
-        let polls = max_seconds * 2; // 500 ms intervals
+        let polls = max_seconds.saturating_mul(2); // 500 ms intervals
         for _ in 0..polls {
             let ok = self
                 .client
@@ -562,16 +568,16 @@ impl ElectronCdpBackend {
     /// Kill the tracked `dx serve` process and wait briefly for it to exit.
     async fn kill_dx_serve(&self) {
         if let Some(pid) = self.dx_serve_pid.lock().await.take() {
-            let _ = tokio::process::Command::new("kill")
+            drop(tokio::process::Command::new("kill")
                 .args(["-15", &pid.to_string()])
                 .status()
-                .await;
+                .await);
         }
         // Pattern fallback.
-        let _ = tokio::process::Command::new("pkill")
+        drop(tokio::process::Command::new("pkill")
             .args(["-f", &format!("dx.*serve.*--port.*{DX_SERVE_PORT}")])
             .status()
-            .await;
+            .await);
         tokio::time::sleep(Duration::from_millis(400)).await;
     }
 
@@ -668,7 +674,7 @@ impl ElectronCdpBackend {
         // Auto-clear when dx serve exits.
         let pid_ref = self.dx_serve_pid.clone();
         tokio::spawn(async move {
-            let _ = serve_child.wait().await;
+            drop(serve_child.wait().await);
             *pid_ref.lock().await = None;
             tracing::info!("[bg] dx serve exited");
         });
@@ -749,9 +755,9 @@ impl ElectronCdpBackend {
         let shutting_down = self.shutting_down.clone();
         tokio::spawn(async move {
             let status = child.wait().await;
-            let exit_code = status.as_ref().ok().and_then(|s| s.code());
+            let exit_code = status.as_ref().ok().and_then(std::process::ExitStatus::code);
             *pid_ref.lock().await = None;
-            if !shutting_down.load(Ordering::Relaxed) && exit_code != Some(0) {
+            if !shutting_down.load(Ordering::Relaxed) && exit_code != Some(0_i32) {
                 tracing::warn!(
                     "Electron exited unexpectedly (code {exit_code:?}). \
                      Call launch_app to restart."
@@ -856,7 +862,7 @@ impl ElectronCdpBackend {
 
         let pid_ref = self.dx_serve_pid.clone();
         tokio::spawn(async move {
-            let _ = serve_child.wait().await;
+            drop(serve_child.wait().await);
             *pid_ref.lock().await = None;
         });
 
@@ -934,22 +940,22 @@ impl DevtoolsBackend for ElectronCdpBackend {
         // Kill existing dx serve and ALL Electron processes from this app.
         self.kill_dx_serve().await;
         if let Some(pid) = self.electron_pid.lock().await.take() {
-            let _ = tokio::process::Command::new("kill")
+            drop(tokio::process::Command::new("kill")
                 .args(["-15", &pid.to_string()])
                 .status()
-                .await;
+                .await);
         }
         // Kill orphaned Electron processes from previous MCP sessions.
         // Match by CDP port (renderer) AND by the thin-shell app path (catches
         // main, GPU, network utility, and renderer processes).
-        let _ = tokio::process::Command::new("pkill")
+        drop(tokio::process::Command::new("pkill")
             .args(["-f", &format!("remote-debugging-port={CDP_PORT}")])
             .status()
-            .await;
-        let _ = tokio::process::Command::new("pkill")
+            .await);
+        drop(tokio::process::Command::new("pkill")
             .args(["-f", "poly-desktop-electron-web"])
             .status()
-            .await;
+            .await);
         tokio::time::sleep(Duration::from_millis(600)).await;
 
         // Drop the stale CDP connection.
@@ -987,19 +993,19 @@ impl DevtoolsBackend for ElectronCdpBackend {
         self.kill_dx_serve().await;
 
         if let Some(pid) = self.electron_pid.lock().await.take() {
-            let _ = tokio::process::Command::new("kill")
+            drop(tokio::process::Command::new("kill")
                 .args(["-15", &pid.to_string()])
                 .status()
-                .await;
+                .await);
         }
-        let _ = tokio::process::Command::new("pkill")
+        drop(tokio::process::Command::new("pkill")
             .args(["-f", "remote-debugging-port=9224"])
             .status()
-            .await;
-        let _ = tokio::process::Command::new("pkill")
+            .await);
+        drop(tokio::process::Command::new("pkill")
             .args(["-f", "poly-desktop-electron-web"])
             .status()
-            .await;
+            .await);
 
         Ok("Killed dx serve and Electron. Call launch_app to restart.".to_string())
     }
@@ -1009,19 +1015,19 @@ impl DevtoolsBackend for ElectronCdpBackend {
         self.kill_dx_serve().await;
 
         if let Some(pid) = self.electron_pid.lock().await.take() {
-            let _ = tokio::process::Command::new("kill")
+            drop(tokio::process::Command::new("kill")
                 .args(["-9", &pid.to_string()])
                 .status()
-                .await;
+                .await);
         }
-        let _ = tokio::process::Command::new("pkill")
+        drop(tokio::process::Command::new("pkill")
             .args(["-9", "-f", "remote-debugging-port=9224"])
             .status()
-            .await;
-        let _ = tokio::process::Command::new("pkill")
+            .await);
+        drop(tokio::process::Command::new("pkill")
             .args(["-9", "-f", "poly-desktop-electron-web"])
             .status()
-            .await;
+            .await);
 
         Ok("Hard-killed dx serve and Electron (SIGKILL). Call launch_app to restart.".to_string())
     }
@@ -1111,7 +1117,7 @@ impl DevtoolsBackend for ElectronCdpBackend {
         let ws_url = {
             let mut last_err = anyhow::anyhow!("CDP not yet available");
             let mut found_url: Option<String> = None;
-            for attempt in 1..=10 {
+            for attempt in 1_u32..=10_u32 {
                 match self.discover_ws_url().await {
                     Ok(u) => {
                         found_url = Some(u);
@@ -1133,7 +1139,7 @@ impl DevtoolsBackend for ElectronCdpBackend {
         let ws = {
             let mut last_err = anyhow::anyhow!("WebSocket connect failed");
             let mut found_ws: Option<WsStream> = None;
-            for attempt in 1..=5 {
+            for attempt in 1_u32..=5_u32 {
                 match tokio_tungstenite::connect_async(&ws_url).await {
                     Ok((stream, _)) => {
                         found_ws = Some(stream);
@@ -1191,25 +1197,25 @@ impl DevtoolsBackend for ElectronCdpBackend {
             {
                 let width = content_size
                     .get("width")
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(1440.0);
+                    .and_then(serde_json::Value::as_f64)
+                    .unwrap_or(1440.0_f64);
                 let height = content_size
                     .get("height")
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(900.0);
+                    .and_then(serde_json::Value::as_f64)
+                    .unwrap_or(900.0_f64);
                 if let Some(m) = cdp_params.as_object_mut() {
                     m.insert(
                         "clip".to_string(),
-                        json!({"x": 0, "y": 0, "width": width, "height": height, "scale": 1}),
+                        json!({"x": 0_i32, "y": 0_i32, "width": width, "height": height, "scale": 1_i32}),
                     );
                 }
             }
         }
 
         let mut last_err: Option<anyhow::Error> = None;
-        for attempt in 1..=5 {
-            let _ = self.cdp_send("Page.enable", json!({})).await;
-            let _ = self.cdp_send("Page.bringToFront", json!({})).await;
+        for attempt in 1_u32..=5_u32 {
+            drop(self.cdp_send("Page.enable", json!({})).await);
+            drop(self.cdp_send("Page.bringToFront", json!({})).await);
 
             match self
                 .cdp_send("Page.captureScreenshot", cdp_params.clone())
@@ -1272,18 +1278,39 @@ impl DevtoolsBackend for ElectronCdpBackend {
 
         Ok(match value {
             Value::String(s) => s,
-            other => other.to_string(),
+            other @ (Value::Null
+            | Value::Bool(_)
+            | Value::Number(_)
+            | Value::Array(_)
+            | Value::Object(_)) => other.to_string(),
         })
     }
 
     // ── Input ───────────────────────────────────────────────────────────────
 
     async fn click_at(&self, x: f64, y: f64, dbl_click: bool) -> anyhow::Result<String> {
-        let count: i64 = if dbl_click { 2 } else { 1 };
-        let xi = x as i64;
-        let yi = y as i64;
+        let count: i64 = if dbl_click { 2_i64 } else { 1_i64 };
+        // CSS-pixel viewport coords are bounded; CDP wants integers.
+        fn f64_to_i64(v: f64) -> i64 {
+            if v.is_nan() {
+                return 0;
+            }
+            if v >= 9_223_372_036_854_775_807.0_f64 {
+                return i64::MAX;
+            }
+            if v <= -9_223_372_036_854_775_808.0_f64 {
+                return i64::MIN;
+            }
+            // SAFETY: bounds checked above.
+            // lint-allow-unused: bounds checked + intentional truncation
+            #[allow(clippy::cast_possible_truncation, clippy::as_conversions)]
+            let out = v.round() as i64;
+            out
+        }
+        let xi = f64_to_i64(x);
+        let yi = f64_to_i64(y);
 
-        for click_num in 1..=count {
+        for click_num in 1_i64..=count {
             self.cdp_send(
                 "Input.dispatchMouseEvent",
                 json!({
@@ -1445,7 +1472,7 @@ impl DevtoolsBackend for ElectronCdpBackend {
             "page_reload" => {
                 let ignore_cache = args
                     .get("ignoreCache")
-                    .and_then(|v| v.as_bool())
+                    .and_then(serde_json::Value::as_bool)
                     .unwrap_or(false);
                 let result = self
                     .cdp_send("Page.reload", json!({ "ignoreCache": ignore_cache }))
@@ -1509,8 +1536,7 @@ const ELECTRON_CLI_COMMANDS: &[&str] = &[
 /// Check if the first argument selects CLI mode.
 fn is_electron_cli_mode(args: &[String]) -> bool {
     args.get(1)
-        .map(|a| ELECTRON_CLI_COMMANDS.contains(&a.as_str()))
-        .unwrap_or(false)
+        .is_some_and(|a| ELECTRON_CLI_COMMANDS.contains(&a.as_str()))
 }
 
 /// Write a line to stdout without `println!`.
@@ -1550,9 +1576,10 @@ fn electron_detect_workspace() -> String {
     if let Ok(ws) = std::env::var("POLY_WORKSPACE") {
         return ws;
     }
-    std::env::current_dir()
-        .map(|p| p.to_string_lossy().into_owned())
-        .unwrap_or_else(|_| ".".to_string())
+    std::env::current_dir().map_or_else(
+        |_| ".".to_string(),
+        |p| p.to_string_lossy().into_owned(),
+    )
 }
 
 /// Handle `screenshot` CLI command for electron backend.
@@ -1564,7 +1591,7 @@ async fn electron_cli_screenshot(
     let save_path = args
         .iter()
         .position(|a| a == "--save")
-        .and_then(|p| args.get(p + 1))
+        .and_then(|p| args.get(p.saturating_add(1)))
         .map(String::as_str);
     let params = ScreenshotParams::default();
     let result = backend.take_screenshot(&params).await?;
@@ -1584,13 +1611,13 @@ async fn dispatch_electron_cli(
     args: &[String],
 ) -> anyhow::Result<String> {
     match cmd {
-        "status" | "connect" => backend.connect().await,
+        // `generation` originally had its own handler; it now alias-resolves to
+        // `connect` like `status`, merged here per clippy::match_same_arms.
+        "status" | "connect" | "generation" => backend.connect().await,
         "launch" => {
             let ws = args
                 .first()
-                .map(String::as_str)
-                .map(str::to_string)
-                .unwrap_or_else(electron_detect_workspace);
+                .map_or_else(electron_detect_workspace, std::clone::Clone::clone);
             // launch_app is non-blocking — it returns immediately.  In CLI mode we
             // must poll until the background build finishes, otherwise the process
             // exits and kills the spawned task before the build completes.
@@ -1616,9 +1643,7 @@ async fn dispatch_electron_cli(
         "rebuild" => {
             let ws = args
                 .first()
-                .map(String::as_str)
-                .map(str::to_string)
-                .unwrap_or_else(electron_detect_workspace);
+                .map_or_else(electron_detect_workspace, std::clone::Clone::clone);
             // rebuild_app is non-blocking — poll until background build finishes.
             let initial_msg = backend.rebuild_app(&ws).await?;
             electron_cli_write(&initial_msg)?;
@@ -1675,7 +1700,6 @@ async fn dispatch_electron_cli(
                 })
                 .await
         }
-        "generation" => backend.connect().await,
         "build-status" => backend.get_last_build_status().await,
         "build-log" => backend.get_last_build_log().await,
         "screenshot" => electron_cli_screenshot(backend, args).await,
@@ -1698,19 +1722,19 @@ async fn main() {
     let args: Vec<String> = std::env::args().collect();
 
     if is_electron_cli_mode(&args) {
-        let cmd = args.get(1).map(String::as_str).unwrap_or("help");
+        let cmd = args.get(1).map_or("help", String::as_str);
         let rest = args.get(2..).unwrap_or(&[]).to_vec();
         let backend = ElectronCdpBackend::new();
         match dispatch_electron_cli(&backend, cmd, &rest).await {
             Ok(out) => {
                 if let Err(e) = electron_cli_write(&out) {
                     use std::io::Write as _;
-                    let _ = writeln!(std::io::stderr().lock(), "Output error: {e}");
+                    drop(writeln!(std::io::stderr().lock(), "Output error: {e}"));
                 }
             }
             Err(e) => {
                 use std::io::Write as _;
-                let _ = writeln!(std::io::stderr().lock(), "Error: {e}");
+                drop(writeln!(std::io::stderr().lock(), "Error: {e}"));
                 std::process::exit(1);
             }
         }
