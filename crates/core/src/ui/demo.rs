@@ -561,6 +561,10 @@ pub(crate) fn spawn_event_stream_listener(
                 break;
             }
 
+            // lint-allow-unused: ClientEvent has dozens of variants; this demo
+            // event handler only wires the events it cares about and intentionally
+            // drops everything else (incl. future-added variants).
+            #[allow(clippy::wildcard_enum_match_arm, clippy::match_same_arms)]
             match event {
                 ClientEvent::MessageReceived {
                     ref channel_id,

@@ -360,10 +360,10 @@ mod baked_locales;
 /// Get embedded FTL source for a locale.
 fn get_embedded_ftl(locale: &str) -> String {
     match locale {
-        "en" => baked_locales::FTL_EN.to_string(),
         "de" => baked_locales::FTL_DE.to_string(),
         "fr" => baked_locales::FTL_FR.to_string(),
         "es" => baked_locales::FTL_ES.to_string(),
+        // "en" + unknown both fall through to English (the default locale).
         _ => baked_locales::FTL_EN.to_string(),
     }
 }

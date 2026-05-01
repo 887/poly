@@ -275,7 +275,6 @@ impl<T: 'static> BatchedSignal<T> {
 /// pending.set(move |cd| cd.channels = channels);
 /// pending.apply(); // ONE cascade, no matter how many .set() calls
 /// ```
-#[must_use = "a PendingUpdate does nothing unless you call .apply() (or .discard() to abort)"]
 /// Type alias for a queued mutation closure on a `PendingUpdate<T>`.
 type Mutator<T> = Box<dyn FnOnce(&mut T)>;
 

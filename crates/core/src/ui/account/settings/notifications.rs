@@ -37,7 +37,13 @@ impl crate::ui::actions::UiAction for NotificationsSettingsAction {
     fn apply(self, _cx: crate::ui::actions::ActionCx<'_>) {
         match self {
             Self::Save => todo!("phase-E: persist notification settings"),
-            _ => todo!("phase-E: update notification state"),
+            Self::ToggleStreams(_)
+            | Self::ToggleFriendsVoice(_)
+            | Self::ToggleReactions(_)
+            | Self::ToggleSoundNewMessage(_)
+            | Self::ToggleSoundDm(_)
+            | Self::ToggleSoundRing(_)
+            | Self::ToggleBadgeUnread(_) => todo!("phase-E: update notification state"),
         }
     }
 }

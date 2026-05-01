@@ -59,7 +59,7 @@ impl std::fmt::Debug for PolyServerHttpClient {
 impl PolyServerHttpClient {
     /// Create a new HTTP client for the given server.
     #[must_use]
-    pub fn new(config: PolyServerConfig) -> Self {
+    pub fn new(config: &PolyServerConfig) -> Self {
         let signing_key = SigningKey::from_bytes(&config.private_key_bytes);
         Self {
             base_url: config.base_url.trim_end_matches('/').to_string(),

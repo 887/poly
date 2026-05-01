@@ -568,15 +568,15 @@ pub fn SearchPage(
         }
     });
     let mut enabled_types: Signal<std::collections::HashSet<String>> = use_signal(|| {
-        initial_type_seed
-            .clone()
-            .map(|seed| seed.into_iter().collect::<std::collections::HashSet<_>>())
-            .unwrap_or_else(|| {
+        initial_type_seed.clone().map_or_else(
+            || {
                 ["servers", "dms", "groups"]
                     .iter()
                     .map(std::string::ToString::to_string)
                     .collect::<std::collections::HashSet<_>>()
-            })
+            },
+            |seed| seed.into_iter().collect::<std::collections::HashSet<_>>(),
+        )
     });
     // Infinite-scroll visible counts (incremented on scroll near bottom)
     let mut dm_visible: Signal<usize> = use_signal(|| 20_usize);

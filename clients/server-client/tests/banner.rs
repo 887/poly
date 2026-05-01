@@ -103,7 +103,7 @@ impl TestServer {
 fn make_client(srv: &TestServer) -> PolyServerHttpClient {
     let mut rng = rand::rng();
     let key: [u8; 32] = rng.random();
-    PolyServerHttpClient::new(PolyServerConfig {
+    PolyServerHttpClient::new(&PolyServerConfig {
         base_url: srv.base_url(),
         private_key_bytes: key,
     })

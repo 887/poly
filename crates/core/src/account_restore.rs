@@ -346,16 +346,15 @@ pub async fn restore_native_accounts(
                     // triggering an unconditional app_state.write() loop on
                     // every navigation and freezing the WASM main thread
                     // (CLAUDE.md hang class #1 / PageNotFound redirect cascade).
-                    instance_id: token
-                        .instance_id
-                        .as_deref()
-                        .map(|u| {
+                    instance_id: token.instance_id.as_deref().map_or_else(
+                        || backend_slug.clone(),
+                        |u| {
                             u.trim_start_matches("https://")
                                 .trim_start_matches("http://")
                                 .trim_end_matches('/')
                                 .to_string()
-                        })
-                        .unwrap_or_else(|| backend_slug.clone()),
+                        },
+                    ),
                     backend_url: token.instance_id.clone(),
                 };
 

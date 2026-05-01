@@ -760,6 +760,11 @@ fn register_native_test_accounts(client_manager: &mut BatchedSignal<ClientManage
     // signup + plugin-settings cascades and overwhelm the Dioxus interpreter
     // (textContent on freed node-id race).
     client_manager.batch(|cm| {
+        // `cm` is referenced by every per-feature branch below; if every client
+        // feature is disabled on this build target, the closure body is empty
+        // and the binding looks unused. Bind a discarding shadow to keep rustc
+        // quiet without using #[allow(unused_variables)] (banned by lint-gate).
+        let _ = &cm;
         #[cfg(feature = "discord")]
         for entry in poly_discord::signup::get_test_accounts() {
             cm.register_test_account(*entry);
@@ -999,6 +1004,9 @@ async fn restore_poly_accounts(
         match backend.authenticate(credentials).await {
             Ok(session) => {
                 let account_id = session.id.clone();
+                // lint-allow-unused: trait-object coercion `Box<T> as Box<dyn Trait>`
+                // is the standard Rust idiom; not a numeric cast.
+                #[allow(clippy::as_conversions)]
                 let backend_handle: BackendHandle = Arc::new(tokio::sync::RwLock::new(Box::new(
                     backend,
                 )
@@ -1566,6 +1574,9 @@ fn StartupOverlay(state: StartupOverlayState) -> Element {
 #[ui_action(None)]
 #[context_menu(inherit)]
 #[component]
+// lint-allow-unused: native target returns early with empty shell; the rest of
+// the body is wasm32-only — rustc sees it as unreachable on native builds.
+#[cfg_attr(not(target_arch = "wasm32"), allow(unreachable_code, unused_variables))]
 pub fn App() -> Element {
     // SSR-side render: produce an EMPTY shell so the WASM client doesn't have
     // to hydrate a server-rendered tree. The dioxus-fullstack server pre-renders

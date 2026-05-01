@@ -97,6 +97,10 @@ use poly_ui_macros::{context_menu, ui_action};
 
 /// Return the account id encoded by an account-scoped route, if any.
 #[must_use] 
+// lint-allow-unused: ReauthAccount returns None separately from the catchall
+// None group — the comment on its arm documents why the reauth flow needs an
+// independent arm even though the body is identical.
+#[allow(clippy::match_same_arms)]
 pub fn route_account_id(route: &Route) -> Option<&str> {
     match route {
         Route::DmsHome { account_id, .. }

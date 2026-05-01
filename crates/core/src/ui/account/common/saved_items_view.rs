@@ -31,8 +31,7 @@ struct SavedSourceSummary {
 
 fn channel_preview_text(content: &MessageContent) -> String {
     match content {
-        MessageContent::Text(text) => text.clone(),
-        MessageContent::WithAttachments { text, .. } => text.clone(),
+        MessageContent::Text(text) | MessageContent::WithAttachments { text, .. } => text.clone(),
     }
 }
 

@@ -311,7 +311,6 @@ impl SettingsSection {
     #[must_use] 
     pub fn from_slug(slug: &str) -> Self {
         match slug {
-            "accounts" => Self::Accounts,
             "voice-video" => Self::VoiceVideo,
             "backup" => Self::Backup,
             "identity" => Self::Identity,
@@ -323,6 +322,7 @@ impl SettingsSection {
             "general" => Self::General,
             "plugins" => Self::Plugins,
             "diagnostics" => Self::Diagnostics,
+            // "accounts" + unknown both fall through to Accounts (the default section).
             _ => Self::Accounts,
         }
     }

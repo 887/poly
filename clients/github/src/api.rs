@@ -508,7 +508,7 @@ impl GhCli {
                     stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
                 });
             }
-            return Ok(());
+            Ok(())
         }
         #[cfg(target_arch = "wasm32")]
         {

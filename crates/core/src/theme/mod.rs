@@ -58,7 +58,7 @@ impl ThemePreset {
         match self {
             Self::NeutralDark | Self::Bright => Self::Blue,
             Self::Custom => Self::Monotone,
-            other => other,
+            other @ (Self::Blue | Self::Purple | Self::Red | Self::Green | Self::Monotone) => other,
         }
     }
 }
@@ -364,11 +364,11 @@ pub fn import_theme(exported: &str) -> ThemeConfig {
         if let Some(rest) = trimmed.strip_prefix("/* @poly-preset:") {
             let val = rest.trim().trim_end_matches("*/").trim();
             config.preset = match val {
-                "Blue" => ThemePreset::Blue,
                 "Purple" => ThemePreset::Purple,
                 "Red" => ThemePreset::Red,
                 "Green" => ThemePreset::Green,
                 "Monotone" => ThemePreset::Monotone,
+                // "Blue" + unknown both fall through to Blue (the default preset).
                 _ => ThemePreset::Blue,
             };
             continue;
@@ -378,9 +378,9 @@ pub fn import_theme(exported: &str) -> ThemeConfig {
         if let Some(rest) = trimmed.strip_prefix("/* @poly-mode:") {
             let val = rest.trim().trim_end_matches("*/").trim();
             config.color_mode = match val {
-                "Dark" => ColorMode::Dark,
                 "Light" => ColorMode::Light,
                 "FollowDevice" => ColorMode::FollowDevice,
+                // "Dark" + unknown both fall through to Dark (the default mode).
                 _ => ColorMode::Dark,
             };
             continue;

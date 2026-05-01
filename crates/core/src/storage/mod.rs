@@ -103,12 +103,13 @@ impl From<serde_json::Error> for StorageError {
 pub(crate) fn poly_data_dir() -> std::path::PathBuf {
     #[cfg(target_os = "linux")]
     {
-        let base: std::path::PathBuf = std::env::var("XDG_DATA_HOME")
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|_| {
+        let base: std::path::PathBuf = std::env::var("XDG_DATA_HOME").map_or_else(
+            |_| {
                 let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
                 std::path::PathBuf::from(home).join(".local").join("share")
-            });
+            },
+            std::path::PathBuf::from,
+        );
         base.join("poly")
     }
     #[cfg(target_os = "macos")]

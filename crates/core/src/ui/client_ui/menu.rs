@@ -191,6 +191,10 @@ pub fn ClientMenu(
                 if count == 0 {
                     return;
                 }
+                // lint-allow-unused: dioxus Key has 200+ variants from web-sys;
+                // only Up/Down arrows participate in menu navigation, all
+                // others (incl. future-added) intentionally ignored.
+                #[allow(clippy::wildcard_enum_match_arm)]
                 match evt.key() {
                     Key::ArrowDown => {
                         let next = (*focused_index.read() + 1) % count;
@@ -203,9 +207,6 @@ pub fn ClientMenu(
                         focused_index.set(next);
                         evt.prevent_default();
                     }
-                    // lint-allow-unused: dioxus Key has many variants; only Up/Down
-                    // arrow keys participate in menu navigation, others ignored.
-                    #[allow(clippy::wildcard_enum_match_arm)]
                     _ => {}
                 }
             },
@@ -480,6 +481,8 @@ fn render_leaf(
     }
 }
 
+// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
+#[allow(clippy::needless_pass_by_value)]
 fn render_submenu(
     item: MenuItem,
     children_by_parent: &HashMap<String, Vec<MenuItem>>,
@@ -533,6 +536,10 @@ fn render_submenu(
             onmouseleave: move |_| open.set(false),
             onkeydown: move |evt| {
                 let _typed = ClientMenuAction::KeyboardNav;
+                // lint-allow-unused: dioxus Key has 200+ variants; only the
+                // explicit submenu navigation keys participate, all others
+                // (incl. future-added) intentionally ignored.
+                #[allow(clippy::wildcard_enum_match_arm)]
                 match evt.key() {
                     Key::ArrowRight => {
                         open.set(true);
@@ -542,9 +549,6 @@ fn render_submenu(
                         open.set(false);
                         evt.prevent_default();
                     }
-                    // lint-allow-unused: dioxus Key has many variants;
-                    // only the explicit submenu navigation keys participate.
-                    #[allow(clippy::wildcard_enum_match_arm)]
                     _ => {}
                 }
             },

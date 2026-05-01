@@ -64,7 +64,7 @@ impl PolyServerBackend {
             base_url: base_url.to_string(),
             private_key_bytes,
         };
-        let http = PolyServerHttpClient::new(config);
+        let http = PolyServerHttpClient::new(&config);
         #[cfg(feature = "native")]
         let ws = PolyServerWsClient::new(base_url, http.session_lock());
         Self {

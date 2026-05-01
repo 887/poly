@@ -182,13 +182,13 @@ impl StoatHttpClient {
             .request(Method::GET, "/")
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
         }
 
-        response.json().await.map_err(Self::network_error)
+        response.json().await.map_err(|e| Self::network_error(&e))
     }
 
     /// Authenticate with email/password and populate session state.
@@ -207,7 +207,7 @@ impl StoatHttpClient {
             })
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
@@ -216,7 +216,7 @@ impl StoatHttpClient {
         let login = response
             .json::<StoatLoginResponse>()
             .await
-            .map_err(Self::network_error)?
+            .map_err(|e| Self::network_error(&e))?
             .into_success()?;
 
         let (user, root_config) = tokio::try_join!(
@@ -293,7 +293,7 @@ impl StoatHttpClient {
             .authenticated_request(Method::GET, "/users/@me/servers")?
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(ClientError::NotSupported(
@@ -301,7 +301,7 @@ impl StoatHttpClient {
             ));
         }
 
-        response.json().await.map_err(Self::network_error)
+        response.json().await.map_err(|e| Self::network_error(&e))
     }
 
     pub async fn fetch_server(&self, server_id: &str) -> ClientResult<StoatServer> {
@@ -309,13 +309,13 @@ impl StoatHttpClient {
             .authenticated_request(Method::GET, &format!("/servers/{server_id}"))?
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
         }
 
-        response.json().await.map_err(Self::network_error)
+        response.json().await.map_err(|e| Self::network_error(&e))
     }
 
     /// Fetch all members for a Stoat server.
@@ -327,13 +327,13 @@ impl StoatHttpClient {
             .authenticated_request(Method::GET, &format!("/servers/{server_id}/members"))?
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
         }
 
-        response.json().await.map_err(Self::network_error)
+        response.json().await.map_err(|e| Self::network_error(&e))
     }
 
     /// Fetch a Stoat channel by ID.
@@ -342,13 +342,13 @@ impl StoatHttpClient {
             .authenticated_request(Method::GET, &format!("/channels/{channel_id}"))?
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
         }
 
-        response.json().await.map_err(Self::network_error)
+        response.json().await.map_err(|e| Self::network_error(&e))
     }
 
     /// Fetch the authenticated account's DM and group channels.
@@ -357,13 +357,13 @@ impl StoatHttpClient {
             .authenticated_request(Method::GET, "/users/dms")?
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
         }
 
-        response.json().await.map_err(Self::network_error)
+        response.json().await.map_err(|e| Self::network_error(&e))
     }
 
     /// Open or create a direct-message-like channel with the target user.
@@ -376,13 +376,13 @@ impl StoatHttpClient {
             .authenticated_request(Method::GET, &format!("/users/{user_id}/dm"))?
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
         }
 
-        response.json().await.map_err(Self::network_error)
+        response.json().await.map_err(|e| Self::network_error(&e))
     }
 
     /// Fetch all members in a Stoat group DM.
@@ -391,13 +391,13 @@ impl StoatHttpClient {
             .authenticated_request(Method::GET, &format!("/channels/{channel_id}/members"))?
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
         }
 
-        response.json().await.map_err(Self::network_error)
+        response.json().await.map_err(|e| Self::network_error(&e))
     }
 
     /// Add a member to a Stoat group DM.
@@ -409,7 +409,7 @@ impl StoatHttpClient {
             )?
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
@@ -427,7 +427,7 @@ impl StoatHttpClient {
             )?
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
@@ -442,13 +442,13 @@ impl StoatHttpClient {
             .authenticated_request(Method::GET, &format!("/users/{user_id}"))?
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
         }
 
-        response.json().await.map_err(Self::network_error)
+        response.json().await.map_err(|e| Self::network_error(&e))
     }
 
     /// Send a Stoat friend request by username/discriminator.
@@ -460,13 +460,13 @@ impl StoatHttpClient {
             })
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
         }
 
-        response.json().await.map_err(Self::network_error)
+        response.json().await.map_err(|e| Self::network_error(&e))
     }
 
     /// Accept a pending Stoat friend request.
@@ -475,13 +475,13 @@ impl StoatHttpClient {
             .authenticated_request(Method::PUT, &format!("/users/{user_id}/friend"))?
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
         }
 
-        response.json().await.map_err(Self::network_error)
+        response.json().await.map_err(|e| Self::network_error(&e))
     }
 
     /// Deny a pending Stoat friend request or remove an existing friend.
@@ -490,13 +490,13 @@ impl StoatHttpClient {
             .authenticated_request(Method::DELETE, &format!("/users/{user_id}/friend"))?
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
         }
 
-        response.json().await.map_err(Self::network_error)
+        response.json().await.map_err(|e| Self::network_error(&e))
     }
 
     /// Fetch unread metadata for the authenticated account.
@@ -505,13 +505,13 @@ impl StoatHttpClient {
             .authenticated_request(Method::GET, "/sync/unreads")?
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
         }
 
-        response.json().await.map_err(Self::network_error)
+        response.json().await.map_err(|e| Self::network_error(&e))
     }
 
     /// Fetch messages for a channel using Poly's generic message query.
@@ -560,13 +560,13 @@ impl StoatHttpClient {
             .authenticated_request(Method::GET, &path)?
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
         }
 
-        response.json().await.map_err(Self::network_error)
+        response.json().await.map_err(|e| Self::network_error(&e))
     }
 
     /// Fetch a single Stoat message by channel and message ID.
@@ -582,13 +582,13 @@ impl StoatHttpClient {
             )?
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
         }
 
-        response.json().await.map_err(Self::network_error)
+        response.json().await.map_err(|e| Self::network_error(&e))
     }
 
     /// Send a text/reply message to a Stoat channel.
@@ -602,13 +602,13 @@ impl StoatHttpClient {
             .json(payload)
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
         }
 
-        response.json().await.map_err(Self::network_error)
+        response.json().await.map_err(|e| Self::network_error(&e))
     }
 
     /// Upload one outbound attachment to the Stoat Autumn file service.
@@ -650,7 +650,7 @@ impl StoatHttpClient {
             .body(body)
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
@@ -660,7 +660,7 @@ impl StoatHttpClient {
             .json::<StoatAutumnUploadResponse>()
             .await
             .map(|upload| upload.file_id)
-            .map_err(Self::network_error)
+            .map_err(|e| Self::network_error(&e))
     }
 
     // ── Moderation (B-ST) ────────────────────────────────────────────────────
@@ -680,13 +680,13 @@ impl StoatHttpClient {
             )?
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
         }
 
-        response.json().await.map_err(Self::network_error)
+        response.json().await.map_err(|e| Self::network_error(&e))
     }
 
     /// Kick a member from a server (`DELETE /servers/{server_id}/members/{member_id}`).
@@ -698,7 +698,7 @@ impl StoatHttpClient {
             )?
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !(response.status().is_success() || response.status().as_u16() == 204) {
             return Err(Self::parse_error(response).await);
@@ -721,7 +721,7 @@ impl StoatHttpClient {
             .json(ban)
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !(response.status().is_success() || response.status().as_u16() == 204) {
             return Err(Self::parse_error(response).await);
@@ -738,7 +738,7 @@ impl StoatHttpClient {
             )?
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !(response.status().is_success() || response.status().as_u16() == 204) {
             return Err(Self::parse_error(response).await);
@@ -752,13 +752,13 @@ impl StoatHttpClient {
             .authenticated_request(Method::GET, &format!("/servers/{server_id}/bans"))?
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
         }
 
-        response.json().await.map_err(Self::network_error)
+        response.json().await.map_err(|e| Self::network_error(&e))
     }
 
     /// Edit a server member's record (`PATCH /servers/{server_id}/members/{member_id}`).
@@ -778,7 +778,7 @@ impl StoatHttpClient {
             .json(edit)
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !(response.status().is_success() || response.status().as_u16() == 204) {
             return Err(Self::parse_error(response).await);
@@ -799,7 +799,7 @@ impl StoatHttpClient {
             )?
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !(response.status().is_success() || response.status().as_u16() == 204) {
             return Err(Self::parse_error(response).await);
@@ -818,7 +818,7 @@ impl StoatHttpClient {
             .json(edit)
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !(response.status().is_success() || response.status().as_u16() == 204) {
             return Err(Self::parse_error(response).await);
@@ -834,7 +834,7 @@ impl StoatHttpClient {
             .authenticated_request(Method::PUT, &format!("/users/{user_id}/block"))?
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !(response.status().is_success() || response.status().as_u16() == 204) {
             return Err(Self::parse_error(response).await);
@@ -848,7 +848,7 @@ impl StoatHttpClient {
             .authenticated_request(Method::DELETE, &format!("/users/{user_id}/block"))?
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !(response.status().is_success() || response.status().as_u16() == 204) {
             return Err(Self::parse_error(response).await);
@@ -865,7 +865,7 @@ impl StoatHttpClient {
             .authenticated_request(Method::PUT, &format!("/users/{user_id}/friend"))?
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !(response.status().is_success() || response.status().as_u16() == 204) {
             return Err(Self::parse_error(response).await);
@@ -883,7 +883,7 @@ impl StoatHttpClient {
             .authenticated_request(Method::DELETE, &format!("/users/{user_id}/friend"))?
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !(response.status().is_success() || response.status().as_u16() == 204) {
             return Err(Self::parse_error(response).await);
@@ -905,7 +905,7 @@ impl StoatHttpClient {
             )?
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !(response.status().is_success() || response.status().as_u16() == 204) {
             return Err(Self::parse_error(response).await);
@@ -924,7 +924,7 @@ impl StoatHttpClient {
             .json(edit)
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !(response.status().is_success() || response.status().as_u16() == 204) {
             return Err(Self::parse_error(response).await);
@@ -938,13 +938,13 @@ impl StoatHttpClient {
             .header(STOAT_SESSION_TOKEN_HEADER, token)
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
         }
 
-        response.json().await.map_err(Self::network_error)
+        response.json().await.map_err(|e| Self::network_error(&e))
     }
 
     /// Log out the current Stoat session.
@@ -957,7 +957,7 @@ impl StoatHttpClient {
             .authenticated_request(Method::POST, "/auth/session/logout")?
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !(response.status().is_success() || response.status().as_u16() == 204) {
             return Err(Self::parse_error(response).await);
@@ -966,7 +966,7 @@ impl StoatHttpClient {
         self.clear_session()
     }
 
-    fn network_error(error: HttpError) -> ClientError {
+    fn network_error(error: &HttpError) -> ClientError {
         ClientError::Network(error.to_string())
     }
 

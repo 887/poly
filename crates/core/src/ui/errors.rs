@@ -44,11 +44,11 @@ pub fn is_session_expired(err: &ClientError) -> bool {
                 || lower.contains("token")
                 || lower.contains("expired")
         }
-        // lint-allow-unused: ClientError has many variants; only auth-related
-        // failures count as a session-expired condition. New variants default
-        // to "not expired" — UI treats them as transient operational errors.
-        #[allow(clippy::wildcard_enum_match_arm)]
-        _ => false,
+        ClientError::Network(_)
+        | ClientError::NotFound(_)
+        | ClientError::RateLimited { .. }
+        | ClientError::Internal(_)
+        | ClientError::NotSupported(_) => false,
     }
 }
 

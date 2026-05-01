@@ -128,7 +128,7 @@ fn make_client(srv: &TestServer) -> PolyServerHttpClient {
         base_url: srv.base_url(),
         private_key_bytes: random_key(),
     };
-    PolyServerHttpClient::new(config)
+    PolyServerHttpClient::new(&config)
 }
 
 /// Build a client with a specific key.
@@ -137,7 +137,7 @@ fn make_client_with_key(srv: &TestServer, key: [u8; 32]) -> PolyServerHttpClient
         base_url: srv.base_url(),
         private_key_bytes: key,
     };
-    PolyServerHttpClient::new(config)
+    PolyServerHttpClient::new(&config)
 }
 
 fn test_email(username: &str) -> String {

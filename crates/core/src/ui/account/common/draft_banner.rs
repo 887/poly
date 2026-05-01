@@ -321,6 +321,7 @@ fn DraftBannerRow(props: DraftBannerRowProps) -> Element {
                             // Copy draft body to clipboard / composer is handled by
                             // parent; for now we just discard and let user retype.
                             let on_refresh = on_refresh;
+                            #[cfg_attr(not(target_arch = "wasm32"), allow(unused_variables))]
                             let body_clone = body.clone();
                             spawn(async move {
                                 // Discard so banner clears.

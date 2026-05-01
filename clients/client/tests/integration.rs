@@ -138,7 +138,7 @@ async fn test_signup_and_server_info() {
         base_url: srv.base_url(),
         private_key_bytes: random_key(),
     };
-    let client = PolyServerHttpClient::new(config);
+    let client = PolyServerHttpClient::new(&config);
 
     // Server info (no auth).
     let info = client.server_info().await.expect("server_info");
@@ -174,14 +174,14 @@ async fn test_signin_challenge_response() {
     };
 
     // First signup.
-    let client1 = PolyServerHttpClient::new(config.clone());
+    let client1 = PolyServerHttpClient::new(&config.clone());
     client1
         .signup("bob", &test_email("bob"), None)
         .await
         .expect("signup");
 
     // Now signin with the same key on a fresh client.
-    let client2 = PolyServerHttpClient::new(config);
+    let client2 = PolyServerHttpClient::new(&config);
     let auth = client2.signin(None).await.expect("signin");
     assert!(!auth.token.is_empty());
     assert!(client2.is_authenticated().await);
@@ -195,7 +195,7 @@ async fn test_create_server_invite_join() {
     let srv = TestServer::start().await;
 
     // Alice creates a server.
-    let alice_client = PolyServerHttpClient::new(PolyServerConfig {
+    let alice_client = PolyServerHttpClient::new(&PolyServerConfig {
         base_url: srv.base_url(),
         private_key_bytes: random_key(),
     });
@@ -229,7 +229,7 @@ async fn test_create_server_invite_join() {
     assert!(!invite_code.is_empty());
 
     // Bob joins via invite.
-    let bob_client = PolyServerHttpClient::new(PolyServerConfig {
+    let bob_client = PolyServerHttpClient::new(&PolyServerConfig {
         base_url: srv.base_url(),
         private_key_bytes: random_key(),
     });
@@ -260,7 +260,7 @@ async fn test_send_and_read_messages() {
     let srv = TestServer::start().await;
 
     // Alice creates server + Bob joins.
-    let alice_client = PolyServerHttpClient::new(PolyServerConfig {
+    let alice_client = PolyServerHttpClient::new(&PolyServerConfig {
         base_url: srv.base_url(),
         private_key_bytes: random_key(),
     });
@@ -317,7 +317,7 @@ async fn test_send_and_read_messages() {
 async fn test_friend_requests() {
     let srv = TestServer::start().await;
 
-    let alice_client = PolyServerHttpClient::new(PolyServerConfig {
+    let alice_client = PolyServerHttpClient::new(&PolyServerConfig {
         base_url: srv.base_url(),
         private_key_bytes: random_key(),
     });
@@ -326,7 +326,7 @@ async fn test_friend_requests() {
         .await
         .expect("signup");
 
-    let bob_client = PolyServerHttpClient::new(PolyServerConfig {
+    let bob_client = PolyServerHttpClient::new(&PolyServerConfig {
         base_url: srv.base_url(),
         private_key_bytes: random_key(),
     });
@@ -362,7 +362,7 @@ async fn test_websocket_message_event() {
 
     // Alice signs up and creates server.
     let alice_key = random_key();
-    let alice_http = PolyServerHttpClient::new(PolyServerConfig {
+    let alice_http = PolyServerHttpClient::new(&PolyServerConfig {
         base_url: srv.base_url(),
         private_key_bytes: alice_key,
     });
@@ -388,7 +388,7 @@ async fn test_websocket_message_event() {
     let invite_code = invite_val.code.clone();
 
     let bob_key = random_key();
-    let bob_http = PolyServerHttpClient::new(PolyServerConfig {
+    let bob_http = PolyServerHttpClient::new(&PolyServerConfig {
         base_url: srv.base_url(),
         private_key_bytes: bob_key,
     });
@@ -628,7 +628,7 @@ async fn test_backend_two_users_communicate() {
 async fn test_debug_raw_server_response() {
     let srv = TestServer::start().await;
 
-    let client = PolyServerHttpClient::new(PolyServerConfig {
+    let client = PolyServerHttpClient::new(&PolyServerConfig {
         base_url: srv.base_url(),
         private_key_bytes: random_key(),
     });

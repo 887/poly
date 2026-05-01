@@ -41,13 +41,14 @@ enum OverviewPage {
 }
 
 fn current_page(route: &Route) -> OverviewPage {
+    // lint-allow-unused: Route has dozens of variants; this is the
+    // overview-page selector and any non-overview route deliberately maps
+    // to the General page (incl. future-added route variants).
+    #[allow(clippy::wildcard_enum_match_arm)]
     match route {
         Route::ServerOverviewMissedRoute { .. } => OverviewPage::Missed,
         Route::ServerOverviewStatsRoute { .. } => OverviewPage::Stats,
         Route::ServerOverviewAgentsRoute { .. } => OverviewPage::Agents,
-        // lint-allow-unused: Route has dozens of variants; we deliberately
-        // map any non-overview route to the General page.
-        #[allow(clippy::wildcard_enum_match_arm)]
         _ => OverviewPage::General,
     }
 }

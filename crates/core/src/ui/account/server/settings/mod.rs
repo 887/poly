@@ -430,10 +430,12 @@ fn ServerSettingsContent(
                                                     account_id: account_id.clone(),
                                                 }
                                             },
-                                            // lint-allow-unused: ServerSettingsSection has many variants;
-                                            // unhandled tabs render nothing as a forward-compat default.
-                                            #[allow(clippy::wildcard_enum_match_arm)]
-                                            _ => rsx! {},
+                                            // Other sections (Overview/Notifications/Profile/General) render
+                                            // an empty fragment in this scaffold.
+                                            ServerSettingsSection::Overview
+                                            | ServerSettingsSection::Notifications
+                                            | ServerSettingsSection::Profile
+                                            | ServerSettingsSection::General => rsx! {},
                                         }
                                     }
                                 }
