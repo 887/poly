@@ -61,10 +61,17 @@ fn new_session_id() -> String {
     #[cfg(target_arch = "wasm32")]
     {
         // On WASM use Math.random via js_sys for randomness.
+        // lint-allow-unused: f64-to-u32/u64 casts on bounded random/timestamp
+        // values (clamped 0..=u32::MAX / 0..=u64::MAX before cast).
+        #[allow(clippy::cast_possible_truncation, clippy::as_conversions)]
         let r1 = (js_sys::Math::random() * f64::from(u32::MAX)) as u32;
+        // lint-allow-unused: same as above (random u32).
+        #[allow(clippy::cast_possible_truncation, clippy::as_conversions)]
         let r2 = (js_sys::Math::random() * f64::from(u32::MAX)) as u32;
         // js_sys::Date::now() returns ms-since-epoch as f64 — works without
         // enabling the web-sys "Performance" feature.
+        // lint-allow-unused: ms-since-epoch fits in u64 for next ~580M years.
+        #[allow(clippy::cast_possible_truncation, clippy::as_conversions, clippy::cast_sign_loss)]
         let ts = js_sys::Date::now() as u64;
         format!("{ts:016x}-{r1:08x}-{r2:08x}")
     }

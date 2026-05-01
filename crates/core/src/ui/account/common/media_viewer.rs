@@ -78,29 +78,33 @@ pub fn MessageMediaViewerOverlay(props: MessageMediaViewerOverlayProps) -> Eleme
                         Ok(msg) if msg == "prev" => {
                             let cur = *active_pos.read();
                             if cur > 0 {
-                                active_pos.set(cur - 1);
+                                active_pos.set(cur.saturating_sub(1));
                                 zoom.set(1.0); pan_x.set(0.0); pan_y.set(0.0);
                             }
                         }
                         Ok(msg) if msg == "next" => {
                             let cur = *active_pos.read();
-                            if cur + 1 < img_count {
-                                active_pos.set(cur + 1);
+                            if cur.saturating_add(1) < img_count {
+                                active_pos.set(cur.saturating_add(1));
                                 zoom.set(1.0); pan_x.set(0.0); pan_y.set(0.0);
                             }
                         }
                         Ok(msg) if msg.starts_with("zf:") => {
-                            if let Ok(f) = msg[3..].parse::<f32>() {
+                            if let Some(rest) = msg.get(3..)
+                                && let Ok(f) = rest.parse::<f32>() {
                                 let s = (*zoom.read() * f).clamp(0.1, 10.0);
                                 zoom.set(s);
                             }
                         }
                         Ok(msg) if msg.starts_with("dp:") => {
+                            // lint-allow-unused: msg is ASCII numeric protocol "dp:X:Y";
+                            // the msg.get(3..) prefix-strip ensures we're on a char boundary.
+                            #[allow(clippy::string_slice)]
                             let rest = &msg[3..];
                             if let Some(colon) = rest.find(':')
                                 && let (Ok(dx), Ok(dy)) = (
-                                    rest[..colon].parse::<f32>(),
-                                    rest[colon + 1..].parse::<f32>(),
+                                    rest.get(..colon).unwrap_or("").parse::<f32>(),
+                                    rest.get(colon.saturating_add(1)..).unwrap_or("").parse::<f32>(),
                                 ) {
                                     let new_x = *pan_x.read() + dx;
                                     let new_y = *pan_y.read() + dy;

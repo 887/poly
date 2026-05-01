@@ -361,7 +361,7 @@ fn startup_overlay_state(
 // In release builds: single concatenated tailwind.css.
 // In debug builds: individual CSS partial files (no giant tailwind.css to confuse agents).
 // This file is .gitignored — do NOT edit it, it is overwritten on every build.
-include!("css.rs");
+include!("ui/css.rs");
 
 #[cfg(target_arch = "wasm32")]
 const LAYOUT_OVERRIDE_SESSION_KEY: &str = "poly_layout_query_override";
@@ -427,9 +427,7 @@ fn layout_query_override_from_search(window: &web_sys::Window) -> Option<LayoutM
 
 #[cfg(target_arch = "wasm32")]
 pub(crate) fn layout_query_override() -> Option<LayoutMode> {
-    let Some(window) = web_sys::window() else {
-        return None;
-    };
+    let window = web_sys::window()?;
 
     if let Some(override_mode) = layout_query_override_from_search(&window) {
         LAYOUT_OVERRIDE_BOOTSTRAPPED_THIS_PAGE.store(true, Ordering::SeqCst);
@@ -519,7 +517,7 @@ pub(crate) fn layout_mode_is_mobile(mode: LayoutMode) -> bool {
         LayoutMode::AutoWidth => web_sys::window()
             .and_then(|window| window.inner_width().ok())
             .and_then(|value| value.as_f64())
-            .is_some_and(|width| width <= 640.0),
+            .is_some_and(|width| width <= 640.0_f64),
     }
 }
 
@@ -922,6 +920,8 @@ fn auto_signin_test_accounts(
             // cascade settles before the next one fires.
             #[cfg(target_arch = "wasm32")]
             {
+                // lint-allow-unused: fire-and-forget JS timer; recv() ignored.
+                #[allow(clippy::let_underscore_must_use)]
                 let _ = dioxus::document::eval(
                     "setTimeout(() => dioxus.send(true), 100);",
                 )
@@ -1711,9 +1711,14 @@ pub fn App() -> Element {
             #[cfg(target_arch = "wasm32")]
             {
                 let elapsed_ms = js_sys::Date::now() - *startup_overlay_started.read();
+                // lint-allow-unused: ms time delta is bounded; max(0.0) clamps
+                // sign and the value is small (<60s typically).
+                #[allow(clippy::cast_possible_truncation, clippy::as_conversions, clippy::cast_sign_loss)]
                 let remaining_ms = startup_overlay_config
                     .min_visible_ms
                     .saturating_sub(elapsed_ms.max(0.0) as u32);
+                // lint-allow-unused: fire-and-forget JS timer; recv() ignored.
+                #[allow(clippy::let_underscore_must_use)]
                 let _ = document::eval(&format!(
                     "setTimeout(() => requestAnimationFrame(() => requestAnimationFrame(() => dioxus.send(true))), {});",
                     remaining_ms
@@ -1730,10 +1735,12 @@ pub fn App() -> Element {
                 #[cfg(debug_assertions)]
                 {
                     use std::sync::atomic::Ordering;
-                    let deadline_ms = js_sys::Date::now() + 8000.0;
+                    let deadline_ms = js_sys::Date::now() + 8_000.0_f64;
                     while !AUTO_SIGNIN_DONE.load(Ordering::SeqCst)
                         && js_sys::Date::now() < deadline_ms
                     {
+                        // lint-allow-unused: fire-and-forget JS timer; recv() ignored.
+                        #[allow(clippy::let_underscore_must_use)]
                         let _ = document::eval(
                             "setTimeout(() => dioxus.send(true), 100);",
                         )

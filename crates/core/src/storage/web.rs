@@ -30,7 +30,7 @@ async fn open_db() -> Result<Database, StorageError> {
     Database::open(DB_NAME)
         .with_version(1u32)
         .with_on_upgrade_needed(|event, db| {
-            if event.old_version() < 1.0 {
+            if event.old_version() < 1.0_f64 {
                 db.create_object_store(STORE_NAME)
                     .with_key_path(KeyPath::from("key"))
                     .build()?;

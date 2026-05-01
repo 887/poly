@@ -593,10 +593,10 @@ async fn gateway_connect_loop(
 
     // Send a minimal IDENTIFY frame so the server knows we connected.
     let identify = serde_json::json!({
-        "op": 2,
+        "op": 2_i32,
         "d": {
             "token": "",
-            "intents": 513,
+            "intents": 513_i32,
             "properties": { "os": "linux", "browser": "poly", "device": "poly" }
         }
     });
@@ -621,7 +621,10 @@ async fn gateway_connect_loop(
         let text = match msg {
             TungsteniteMsg::Text(t) => t.to_string(),
             TungsteniteMsg::Close(_) => break,
-            _ => continue,
+            TungsteniteMsg::Binary(_)
+            | TungsteniteMsg::Ping(_)
+            | TungsteniteMsg::Pong(_)
+            | TungsteniteMsg::Frame(_) => continue,
         };
 
         let frame: serde_json::Value = match serde_json::from_str(&text) {
@@ -629,7 +632,10 @@ async fn gateway_connect_loop(
             Err(_) => continue,
         };
 
-        let op = frame.get("op").and_then(|v| v.as_u64()).unwrap_or(0);
+        let op = frame
+            .get("op")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(0);
 
         // op 0 = DISPATCH — parse and forward.
         if op == 0 {

@@ -26,6 +26,9 @@ fn route_session_id() -> String {
     }
     #[cfg(target_arch = "wasm32")]
     {
+        // lint-allow-unused: f64-to-u64 cast on bounded random value
+        // (clamped 0..=u64::MAX before cast).
+        #[allow(clippy::cast_possible_truncation, clippy::as_conversions, clippy::cast_sign_loss, clippy::cast_precision_loss)]
         let r = (js_sys::Math::random() * u64::MAX as f64) as u64;
         format!("{r:016x}")
     }

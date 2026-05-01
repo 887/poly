@@ -172,6 +172,9 @@ async fn poll_until_resolved(
     loop {
         #[cfg(target_arch = "wasm32")]
         {
+            // lint-allow-unused: fire-and-forget timer eval; the recv() result
+            // can be ignored — the loop continues regardless of the JS reply.
+            #[allow(clippy::let_underscore_must_use)]
             let _ = document::eval("setTimeout(() => dioxus.send(true), 500);")
                 .recv::<bool>()
                 .await;

@@ -189,13 +189,13 @@ pub fn preset_css(preset: ThemePreset, mode: ColorMode) -> String {
 fn dark_css(preset: ThemePreset) -> &'static str {
     match preset {
         ThemePreset::Blue | ThemePreset::NeutralDark | ThemePreset::Bright => {
-            include_str!("../../assets/styling/themes/blue-dark.css")
+            include_str!("../assets/styling/themes/blue-dark.css")
         }
-        ThemePreset::Purple => include_str!("../../assets/styling/themes/purple-dark.css"),
-        ThemePreset::Red => include_str!("../../assets/styling/themes/red-dark.css"),
-        ThemePreset::Green => include_str!("../../assets/styling/themes/green-dark.css"),
+        ThemePreset::Purple => include_str!("../assets/styling/themes/purple-dark.css"),
+        ThemePreset::Red => include_str!("../assets/styling/themes/red-dark.css"),
+        ThemePreset::Green => include_str!("../assets/styling/themes/green-dark.css"),
         ThemePreset::Monotone | ThemePreset::Custom => {
-            include_str!("../../assets/styling/themes/monotone-dark.css")
+            include_str!("../assets/styling/themes/monotone-dark.css")
         }
     }
 }
@@ -204,13 +204,13 @@ fn dark_css(preset: ThemePreset) -> &'static str {
 fn light_css(preset: ThemePreset) -> &'static str {
     match preset {
         ThemePreset::Blue | ThemePreset::NeutralDark | ThemePreset::Bright => {
-            include_str!("../../assets/styling/themes/blue-light.css")
+            include_str!("../assets/styling/themes/blue-light.css")
         }
-        ThemePreset::Purple => include_str!("../../assets/styling/themes/purple-light.css"),
-        ThemePreset::Red => include_str!("../../assets/styling/themes/red-light.css"),
-        ThemePreset::Green => include_str!("../../assets/styling/themes/green-light.css"),
+        ThemePreset::Purple => include_str!("../assets/styling/themes/purple-light.css"),
+        ThemePreset::Red => include_str!("../assets/styling/themes/red-light.css"),
+        ThemePreset::Green => include_str!("../assets/styling/themes/green-light.css"),
         ThemePreset::Monotone | ThemePreset::Custom => {
-            include_str!("../../assets/styling/themes/monotone-light.css")
+            include_str!("../assets/styling/themes/monotone-light.css")
         }
     }
 }

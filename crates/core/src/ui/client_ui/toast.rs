@@ -168,6 +168,8 @@ fn ToastRow(msg: ToastMessage) -> Element {
 async fn schedule_dismiss(id: u64, delay_ms: u64) {
     #[cfg(target_arch = "wasm32")]
     {
+        // lint-allow-unused: fire-and-forget timer eval; recv() reply ignored.
+        #[allow(clippy::let_underscore_must_use)]
         let _ = document::eval(&format!(
             "setTimeout(() => dioxus.send(true), {delay_ms});"
         ))

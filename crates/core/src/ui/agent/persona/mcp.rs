@@ -92,7 +92,7 @@ pub async fn call_persona_mcp(tool: &str, args: Value) -> Result<Value, String> 
             .await
             .map_err(|e| format!("fetch: {e:?}"))?
             .dyn_into()
-            .map_err(|_| "not a Response".to_string())?;
+            .map_err(|_e| "not a Response".to_string())?;
 
         let text_promise = resp.text().map_err(|e| format!("resp.text(): {e:?}"))?;
         let text = JsFuture::from(text_promise)
