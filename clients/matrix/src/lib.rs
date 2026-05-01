@@ -664,6 +664,19 @@ impl ClientBackend for MatrixClient {
         self.http.is_authenticated()
     }
 
+    fn plugin_manifest(&self) -> PluginManifest {
+        PluginManifest {
+            exec_programs: vec![],
+            http_hosts: vec!["<homeserver from account>".to_string()],
+            description: "Matrix backend. Federated, end-to-end-encrypted \
+                          messaging via the client-server API. Connects to \
+                          whichever homeserver each signed-in account specifies \
+                          (matrix.org, your own, or any compliant server)."
+                .to_string(),
+            homepage: Some("https://matrix.org".to_string()),
+        }
+    }
+
     async fn get_servers(&self) -> ClientResult<Vec<Server>> {
         let joined = self.http.fetch_joined_rooms().await?;
         let account_id = self.current_account_id()?;

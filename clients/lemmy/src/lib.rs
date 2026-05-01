@@ -284,6 +284,19 @@ impl ClientBackend for LemmyClient {
         self.http.is_authenticated()
     }
 
+    fn plugin_manifest(&self) -> PluginManifest {
+        PluginManifest {
+            exec_programs: vec![],
+            http_hosts: vec!["<lemmy instance from account>".to_string()],
+            description: "Lemmy backend. Federated link aggregator — connects \
+                          to any Lemmy / Kbin instance (lemmy.world, lemmy.ml, \
+                          beehaw.org, your own). Browse communities, comment, \
+                          and submit posts when signed in."
+                .to_string(),
+            homepage: Some("https://join-lemmy.org".to_string()),
+        }
+    }
+
     // ── Servers / Communities ───────────────────────────────────────────────
 
     async fn get_servers(&self) -> ClientResult<Vec<Server>> {

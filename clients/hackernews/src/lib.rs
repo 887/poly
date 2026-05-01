@@ -151,6 +151,22 @@ impl ClientBackend for HackerNewsClient {
         self.session.is_some()
     }
 
+    fn plugin_manifest(&self) -> PluginManifest {
+        PluginManifest {
+            exec_programs: vec![],
+            http_hosts: vec![
+                "hacker-news.firebaseio.com".to_string(),
+                "news.ycombinator.com".to_string(),
+            ],
+            description: "Hacker News client. Anonymous read-only browsing of \
+                          top stories, Ask HN, Show HN, and job posts via the \
+                          Firebase API; signed-in accounts can comment and \
+                          submit via news.ycombinator.com."
+                .to_string(),
+            homepage: Some("https://news.ycombinator.com".to_string()),
+        }
+    }
+
     // --- Servers ---
 
     async fn get_servers(&self) -> ClientResult<Vec<Server>> {
