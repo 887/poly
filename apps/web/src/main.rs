@@ -83,8 +83,14 @@ async fn main() -> anyhow::Result<()> {
 
 #[cfg(all(not(target_arch = "wasm32"), not(feature = "server")))]
 fn main() {
-    eprintln!(
+    // No tracing subscriber installed in this no-server fallback build, so
+    // emit the diagnostic via `writeln!` to stderr directly (avoids the
+    // workspace-wide `print_stderr` lint).
+    use std::io::Write as _;
+    let mut stderr = std::io::stderr().lock();
+    drop(writeln!(
+        stderr,
         "poly-web binary built without the `server` feature; nothing to run. \
          Build with `--features server` or use `dx serve --platform web`."
-    );
+    ));
 }

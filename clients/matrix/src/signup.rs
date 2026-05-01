@@ -41,6 +41,7 @@ fn axolotl_auth(
 }
 
 /// Test accounts for the Matrix local dev server (port 9100).
+#[must_use]
 pub fn get_test_accounts() -> &'static [poly_client::TestAccountEntry] {
     use poly_client::TestAccountEntry;
     const ACCOUNTS: &[TestAccountEntry] = &[

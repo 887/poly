@@ -182,7 +182,7 @@ async fn back_and_forth_owl_axolotl() {
 
     // Step 6 — Mention: Owl sends a mention of Axolotl.
     // Matrix mentions use the display name in the message body.
-    let mention_text = format!("@axolotl great to hear from you!");
+    let mention_text = "@axolotl great to hear from you!".to_string();
     let mention_msg = owl
         .send_message(arena_id, MessageContent::Text(mention_text.clone()))
         .await

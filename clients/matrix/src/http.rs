@@ -135,11 +135,10 @@ impl MatrixHttpClient {
     }
 
     fn ua(&self) -> String {
-        self.user_agent
-            .read()
-            .ok()
-            .map(|g| g.clone())
-            .unwrap_or_else(|| DEFAULT_CLIENT_VERSION.to_string())
+        self.user_agent.read().ok().map_or_else(
+            || DEFAULT_CLIENT_VERSION.to_string(),
+            |g| g.clone(),
+        )
     }
 
     /// Build an unauthenticated request to a Matrix client-server API path.
@@ -188,13 +187,13 @@ impl MatrixHttpClient {
             })
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
         }
 
-        let login: LoginResponse = response.json().await.map_err(Self::network_error)?;
+        let login: LoginResponse = response.json().await.map_err(|e| Self::network_error(&e))?;
 
         self.set_session(MatrixSessionState {
             access_token: login.access_token.clone(),
@@ -219,13 +218,13 @@ impl MatrixHttpClient {
             .bearer_auth(&access_token)
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
         }
 
-        let whoami: WhoAmIResponse = response.json().await.map_err(Self::network_error)?;
+        let whoami: WhoAmIResponse = response.json().await.map_err(|e| Self::network_error(&e))?;
 
         self.set_session(MatrixSessionState {
             access_token,
@@ -248,13 +247,13 @@ impl MatrixHttpClient {
             )?
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
         }
 
-        response.json().await.map_err(Self::network_error)
+        response.json().await.map_err(|e| Self::network_error(&e))
     }
 
     /// Fetch joined rooms via `GET /_matrix/client/v3/joined_rooms`.
@@ -263,13 +262,13 @@ impl MatrixHttpClient {
             .authenticated_request(Method::GET, "/_matrix/client/v3/joined_rooms")?
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
         }
 
-        response.json().await.map_err(Self::network_error)
+        response.json().await.map_err(|e| Self::network_error(&e))
     }
 
     /// Fetch space hierarchy via `GET /_matrix/client/v1/rooms/{roomId}/hierarchy`.
@@ -284,13 +283,13 @@ impl MatrixHttpClient {
             )?
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
         }
 
-        response.json().await.map_err(Self::network_error)
+        response.json().await.map_err(|e| Self::network_error(&e))
     }
 
     /// Incremental sync via `GET /_matrix/client/v3/sync`.
@@ -312,13 +311,13 @@ impl MatrixHttpClient {
             .authenticated_request(Method::GET, &path)?
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
         }
 
-        response.json().await.map_err(Self::network_error)
+        response.json().await.map_err(|e| Self::network_error(&e))
     }
 
     /// Send a message event via
@@ -337,13 +336,13 @@ impl MatrixHttpClient {
             .json(content)
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
         }
 
-        response.json().await.map_err(Self::network_error)
+        response.json().await.map_err(|e| Self::network_error(&e))
     }
 
     /// Fetch paginated messages via
@@ -371,13 +370,13 @@ impl MatrixHttpClient {
             .authenticated_request(Method::GET, &path)?
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
         }
 
-        response.json().await.map_err(Self::network_error)
+        response.json().await.map_err(|e| Self::network_error(&e))
     }
 
     /// Fetch room members via `GET /_matrix/client/v3/rooms/{roomId}/members`.
@@ -392,13 +391,13 @@ impl MatrixHttpClient {
             )?
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
         }
 
-        response.json().await.map_err(Self::network_error)
+        response.json().await.map_err(|e| Self::network_error(&e))
     }
 
     /// Fetch room state via `GET /_matrix/client/v3/rooms/{roomId}/state`.
@@ -413,13 +412,13 @@ impl MatrixHttpClient {
             )?
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
         }
 
-        response.json().await.map_err(Self::network_error)
+        response.json().await.map_err(|e| Self::network_error(&e))
     }
 
     // -----------------------------------------------------------------------
@@ -444,7 +443,7 @@ impl MatrixHttpClient {
             })
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
@@ -470,7 +469,7 @@ impl MatrixHttpClient {
             })
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
@@ -490,7 +489,7 @@ impl MatrixHttpClient {
             })
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
@@ -518,7 +517,7 @@ impl MatrixHttpClient {
             })
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
@@ -538,7 +537,7 @@ impl MatrixHttpClient {
             )?
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if response.status().as_u16() == 404 {
             // Room has no explicit power_levels state event — use spec defaults.
@@ -549,7 +548,7 @@ impl MatrixHttpClient {
             return Err(Self::parse_error(response).await);
         }
 
-        response.json().await.map_err(Self::network_error)
+        response.json().await.map_err(|e| Self::network_error(&e))
     }
 
     /// Fetch banned members via `GET /_matrix/client/v3/rooms/{roomId}/members?membership=ban`.
@@ -559,13 +558,13 @@ impl MatrixHttpClient {
             .authenticated_request(Method::GET, &path)?
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
         }
 
-        response.json().await.map_err(Self::network_error)
+        response.json().await.map_err(|e| Self::network_error(&e))
     }
 
     /// Update a room's name via `PUT /_matrix/client/v3/rooms/{roomId}/state/m.room.name`.
@@ -580,7 +579,7 @@ impl MatrixHttpClient {
             })
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
@@ -600,7 +599,7 @@ impl MatrixHttpClient {
             })
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
@@ -626,7 +625,7 @@ impl MatrixHttpClient {
             .authenticated_request(Method::GET, &path)?
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if response.status().as_u16() == 404 {
             return Ok(IgnoredUserListContent::default());
@@ -634,7 +633,7 @@ impl MatrixHttpClient {
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
         }
-        response.json().await.map_err(Self::network_error)
+        response.json().await.map_err(|e| Self::network_error(&e))
     }
 
     /// Write `m.ignored_user_list` account data via
@@ -652,7 +651,7 @@ impl MatrixHttpClient {
             .json(content)
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
@@ -680,7 +679,7 @@ impl MatrixHttpClient {
             })
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
@@ -696,7 +695,7 @@ impl MatrixHttpClient {
             .authenticated_request(Method::DELETE, &path)?
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         // 404 is acceptable — the rule did not exist; treat as success.
         if response.status().as_u16() == 404 {
@@ -720,7 +719,7 @@ impl MatrixHttpClient {
             .json(&serde_json::Value::Object(serde_json::Map::new()))
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
@@ -739,7 +738,7 @@ impl MatrixHttpClient {
             .json(&serde_json::Value::Object(serde_json::Map::new()))
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
@@ -758,7 +757,7 @@ impl MatrixHttpClient {
             })
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
@@ -781,7 +780,7 @@ impl MatrixHttpClient {
             })
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
@@ -802,7 +801,7 @@ impl MatrixHttpClient {
             .authenticated_request(Method::GET, &path)?
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if response.status().as_u16() == 404 {
             return Ok(serde_json::Value::Object(serde_json::Map::new()));
@@ -810,7 +809,7 @@ impl MatrixHttpClient {
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
         }
-        response.json().await.map_err(Self::network_error)
+        response.json().await.map_err(|e| Self::network_error(&e))
     }
 
     /// Write `m.direct` account data via
@@ -826,7 +825,7 @@ impl MatrixHttpClient {
             .json(content)
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
@@ -844,7 +843,7 @@ impl MatrixHttpClient {
             .authenticated_request(Method::POST, "/_matrix/client/v3/logout")?
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
@@ -867,13 +866,13 @@ impl MatrixHttpClient {
             )?
             .send()
             .await
-            .map_err(Self::network_error)?;
+            .map_err(|e| Self::network_error(&e))?;
 
         if !response.status().is_success() {
             return Err(Self::parse_error(response).await);
         }
 
-        response.json().await.map_err(Self::network_error)
+        response.json().await.map_err(|e| Self::network_error(&e))
     }
 
     /// Get the current sync batch token.
@@ -898,7 +897,7 @@ impl MatrixHttpClient {
     // Error handling
     // -----------------------------------------------------------------------
 
-    fn network_error(error: poly_host_bridge::http::HttpError) -> ClientError {
+    fn network_error(error: &poly_host_bridge::http::HttpError) -> ClientError {
         ClientError::Network(error.to_string())
     }
 
@@ -915,8 +914,7 @@ impl MatrixHttpClient {
             .as_ref()
             .and_then(|v| v.get("error"))
             .and_then(serde_json::Value::as_str)
-            .map(str::to_string)
-            .unwrap_or_else(|| format!("HTTP {}", status.as_u16()));
+            .map_or_else(|| format!("HTTP {}", status.as_u16()), str::to_string);
 
         match status.as_u16() {
             401 => ClientError::AuthFailed(detail),

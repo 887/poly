@@ -104,15 +104,12 @@ async fn test_version_override_reaches_wire() {
     );
 
     // Trigger any authenticated request.
-    let _ = client.get_servers().await;
+    drop(client.get_servers().await);
     tokio::time::sleep(std::time::Duration::from_millis(20)).await;
 
     let entries = srv.captured_headers().await;
     let found = entries.iter().any(|e| {
-        e["headers"]["user-agent"]
-            .as_str()
-            .map(|ua| ua == "test-version/1.2.3")
-            .unwrap_or(false)
+        e["headers"]["user-agent"].as_str() == Some("test-version/1.2.3")
     });
 
     assert!(
@@ -151,15 +148,12 @@ async fn test_version_override_clear_restores_default() {
         "client_version() must return the default after clearing"
     );
 
-    let _ = client.get_servers().await;
+    drop(client.get_servers().await);
     tokio::time::sleep(std::time::Duration::from_millis(20)).await;
 
     let entries = srv.captured_headers().await;
     let found = entries.iter().any(|e| {
-        e["headers"]["user-agent"]
-            .as_str()
-            .map(|ua| ua == DEFAULT_UA)
-            .unwrap_or(false)
+        e["headers"]["user-agent"].as_str() == Some(DEFAULT_UA)
     });
 
     assert!(

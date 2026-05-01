@@ -54,6 +54,7 @@ use std::collections::HashSet;
 use std::pin::Pin;
 
 /// Return Fluent translations for the given locale.
+#[must_use]
 pub fn plugin_translations(locale: &str) -> String {
     match locale {
         "de" => include_str!("../locales/de/plugin.ftl").to_string(),
@@ -221,8 +222,10 @@ impl MatrixClient {
                 backend: BackendType::from("matrix"),
             },
             content: MessageContent::Text(body),
-            timestamp: chrono::DateTime::from_timestamp_millis(ts as i64)
-                .unwrap_or_default(),
+            timestamp: chrono::DateTime::from_timestamp_millis(
+                i64::try_from(ts).unwrap_or(i64::MAX),
+            )
+            .unwrap_or_default(),
             edited: false,
             attachments: vec![],
             reactions: vec![],
@@ -327,7 +330,7 @@ impl MatrixClient {
             .avatar_url
             .as_deref()
             .map(|raw| mxc_to_http_thumbnail(raw, self.homeserver_url()));
-        let _ = self.http.update_session_profile(display_name, avatar_url);
+        drop(self.http.update_session_profile(display_name, avatar_url));
     }
 
     fn build_message_from_send(
@@ -364,8 +367,8 @@ impl MatrixClient {
 
     fn extract_body(content: &MessageContent) -> String {
         match content {
-            MessageContent::Text(text) => text.clone(),
-            MessageContent::WithAttachments { text, .. } => text.clone(),
+            MessageContent::Text(text)
+            | MessageContent::WithAttachments { text, .. } => text.clone(),
         }
     }
 
@@ -439,6 +442,7 @@ pub struct SpaceTreeEntry {
 /// this produces an acceptable label.  Hyphens in room names will be replaced
 /// by spaces in the rendered label — a known limitation documented here.
 #[cfg(feature = "native")]
+#[must_use]
 pub fn build_sidebar_items(entries: Vec<SpaceTreeEntry>) -> Vec<SidebarItem> {
     let known_ids: std::collections::HashSet<String> =
         entries.iter().map(|e| e.id.clone()).collect();
@@ -1058,12 +1062,13 @@ impl ClientBackend for MatrixClient {
                                                 if let Some(msg) =
                                                     MatrixClient::room_event_to_message(event)
                                                 {
-                                                    let _ = tx
-                                                        .send(ClientEvent::MessageReceived {
+                                                    drop(
+                                                        tx.send(ClientEvent::MessageReceived {
                                                             channel_id: room_id.clone(),
                                                             message: msg,
                                                         })
-                                                        .await;
+                                                        .await,
+                                                    );
                                                 }
                                             }
                                         }
@@ -1081,8 +1086,8 @@ impl ClientBackend for MatrixClient {
                                                 {
                                                     for uid in user_ids {
                                                         if let Some(user_id) = uid.as_str() {
-                                                            let _ = tx
-                                                                .send(
+                                                            drop(
+                                                                tx.send(
                                                                     ClientEvent::TypingStarted {
                                                                         channel_id: room_id
                                                                             .clone(),
@@ -1091,7 +1096,8 @@ impl ClientBackend for MatrixClient {
                                                                         timestamp: chrono::Utc::now(),
                                                                     },
                                                                 )
-                                                                .await;
+                                                                .await,
+                                                            );
                                                         }
                                                     }
                                                 }
@@ -1416,7 +1422,7 @@ impl ClientBackend for MatrixClient {
                 }
             }
             // Remove entries whose room list became empty.
-            obj.retain(|_, v| v.as_array().map_or(true, |a| !a.is_empty()));
+            obj.retain(|_, v| v.as_array().is_none_or(|a| !a.is_empty()));
         }
         self.http.put_m_direct(&me, &m_direct).await?;
         Ok(())
@@ -1635,13 +1641,24 @@ impl ClientBackend for MatrixClient {
         target_id: &str,
     ) -> ClientResult<ActionOutcome> {
         match action_id {
-            // ── Server / Space ──────────────────────────────────────────────
+            // ── Noop actions (Server/Space, leave-room/dm, message ops, profile views)
+            // All return Ok(Noop); merged into one arm to satisfy
+            // clippy::match_same_arms.
             "space-settings"
             | "edit-per-space-profile"
             | "e2ee-verification"
             | "browse-rooms-in-space"
             | "add-room-to-space"
-            | "leave-space" => Ok(ActionOutcome::Noop),
+            | "leave-space"
+            | "leave-room"
+            | "leave-dm"
+            | "open-dm"
+            | "view-profile"
+            | "verify-user"
+            | "react-message"
+            | "reply-in-thread"
+            | "copy-permalink"
+            | "redact-message" => Ok(ActionOutcome::Noop),
 
             // ── Channel / Room — state mutations ────────────────────────────
             // Poisoned lock treated as a no-op write — silent, non-panicking.
@@ -1669,10 +1686,7 @@ impl ClientBackend for MatrixClient {
                 }
                 Ok(ActionOutcome::Noop)
             }
-            "leave-room" | "leave-dm" => Ok(ActionOutcome::Noop),
-
             // ── User — state mutations ───────────────────────────────────────
-            "open-dm" | "view-profile" | "verify-user" => Ok(ActionOutcome::Noop),
             "ignore-user" => {
                 if let Ok(mut g) = self.ignored_users.write() {
                     g.insert(target_id.to_string());
@@ -1685,12 +1699,6 @@ impl ClientBackend for MatrixClient {
                 }
                 Ok(ActionOutcome::Noop)
             }
-
-            // ── Message ───────────────────────────────────────────────────────
-            "react-message"
-            | "reply-in-thread"
-            | "copy-permalink"
-            | "redact-message" => Ok(ActionOutcome::Noop),
 
             _ => Err(ClientError::NotFound(format!("unknown action: {action_id}"))),
         }

@@ -707,12 +707,11 @@ async fn test_event_stream_receives_sent_message() {
                 break false;
             }
             Ok(Some(ClientEvent::MessageReceived { channel_id, message })) => {
-                if channel_id == "!general1:localhost" {
-                    if let MessageContent::Text(ref text) = message.content {
-                        if text == body {
-                            break true;
-                        }
-                    }
+                if channel_id == "!general1:localhost"
+                    && let MessageContent::Text(ref text) = message.content
+                    && text == body
+                {
+                    break true;
                 }
                 // Different event (seeded or wrong channel) — keep scanning.
             }

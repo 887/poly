@@ -39,7 +39,7 @@ impl MatrixConfig {
 
     /// Create configuration for a custom homeserver.
     pub fn new(homeserver_url: impl Into<String>) -> Result<Self, MatrixConfigError> {
-        let normalized = normalize_homeserver_url(homeserver_url.into())?;
+        let normalized = normalize_homeserver_url(&homeserver_url.into())?;
         Ok(Self {
             homeserver_url: normalized,
         })
@@ -93,7 +93,9 @@ impl TryFrom<AuthCredentials> for MatrixAuthInput {
                     password,
                 })
             }
-            _ => Err(ClientError::AuthFailed(
+            AuthCredentials::OAuth { .. }
+            | AuthCredentials::DeviceCode { .. }
+            | AuthCredentials::PolyServer { .. } => Err(ClientError::AuthFailed(
                 "Matrix only supports token or username/password authentication".into(),
             )),
         }
@@ -102,7 +104,7 @@ impl TryFrom<AuthCredentials> for MatrixAuthInput {
 
 /// Normalize a homeserver URL: trim whitespace, strip trailing slashes,
 /// validate scheme.
-fn normalize_homeserver_url(raw: String) -> Result<String, MatrixConfigError> {
+fn normalize_homeserver_url(raw: &str) -> Result<String, MatrixConfigError> {
     let trimmed = raw.trim().trim_end_matches('/').to_string();
 
     if trimmed.is_empty() {
