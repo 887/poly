@@ -1,9 +1,25 @@
 # Plan — Clippy `pedantic` + `restriction` Cleanup (Workspace-Wide Triage)
 
-## Status: 🚧 PLANNED — not started (audit run 2026-04-30)
+## Status: 🚧 PLANNED — not started (audit run 2026-04-30; design decisions resolved 2026-05-01)
 
-> Last updated: 2026-04-30
+> Last updated: 2026-05-01
 > Audit logs: `/tmp/audit/workspace-clippy.log` + `/tmp/audit/audit-<crate>-{clippy,test}.log`
+
+## Design decisions (frozen 2026-05-01)
+
+User-confirmed answers to the two open design questions:
+
+- **`servers/test-*` strategy:** **per-lint cleanup** (option b). NO blanket
+  `#![allow(clippy::pedantic, clippy::restriction)]` on the test-server
+  crates. Test fixtures get the same pedantic+restriction discipline as
+  production code — agents pick up bad habits from any wiggle-room and
+  carry them into prod paths. Yes, this is more work; it's required work.
+- **Safety-critical lints (`arithmetic_side_effects`, `as_conversions`,
+  `default_numeric_fallback`):** **workspace-wide `warn`** (option ii). One
+  global level. NO per-subtree allow carve-outs. UI dev is hard enough
+  without programming-logic bugs masquerading as render bugs; the lint
+  noise is preferable to the bug-hunting it would prevent. Same
+  zero-wiggle-room rationale: agents will mimic any `allow` they find.
 
 ---
 
@@ -131,14 +147,14 @@ Bucketed by inferred lint name from the warning message text:
 | 10 | `str_to_string` | 143 | restriction | **ALLOW** — `.to_string()` and `.to_owned()` are interchangeable; not a bug. |
 | 11 | `missing_errors_doc` | 122 | pedantic | **ALLOW workspace-wide**; opt-in per public-API crate (Phase 6 candidate). |
 | 12 | `doc_markdown` | 110 | pedantic | **ALLOW** — too many false positives on identifiers, URLs, version strings. |
-| 13 | `arithmetic_side_effects` | 107 | restriction | **ALLOW** — would require wrapping every `+` in `checked_add`; not a real-world bug. |
+| 13 | `arithmetic_side_effects` | 107 | restriction | **KEEP as warn** — workspace-wide, per design decision 2026-05-01. Yes, every `+` either becomes `checked_add` or gets a tightly-scoped `#[allow]` with rationale. Catches real overflow bugs that masquerade as render glitches in WASM. |
 | 14 | `let_underscore_untyped` | 91 | restriction | **ALLOW** — `let _ = x;` is idiomatic ignore. |
 | 15 | `non_ascii_literal` | 55 | restriction | **ALLOW** — emoji + unicode in test strings + UI messages is intentional. |
 | 16 | `must_use_candidate` | 54 | pedantic | **KEEP as warn** — it's actually useful for builder-style methods. Migrate per-crate (Tier 1 first). |
 | 17 | `let_underscore_must_use` | 38 | restriction | **KEEP as warn** — borderline signal; catches forgotten `Result`s. |
 | 18 | `std_instead_of_core` / `std_instead_of_alloc` | 47 | restriction | **ALLOW** — we are not `no_std`; meaningless here. |
 | 19 | `pattern_type_mismatch` | 36 | restriction | **ALLOW** — pedantic about `&Some(x)` vs `Some(&x)`; not a bug. |
-| 20 | `as_conversions` | 30 | restriction | **ALLOW** — `as` is fine for explicit narrowing; `cast_lossless`/`cast_possible_truncation` (kept) catch the actual bugs. |
+| 20 | `as_conversions` | 30 | restriction | **KEEP as warn** — workspace-wide, per design decision 2026-05-01. Use `From`/`TryFrom`/`u32::try_from()` instead of bare `as`; the latter silently truncates. `cast_lossless`/`cast_possible_truncation` overlap but `as_conversions` catches the cases where the user wrote `as` to bypass the type system at all. |
 
 **KEEP as warn (signal lints)** that survive Phase 0:
 
@@ -149,7 +165,9 @@ Bucketed by inferred lint name from the warning message text:
 - `map_unwrap_or` (19) — pedantic, real signal.
 - `redundant_closure_for_method_calls` (28) — pedantic, real signal.
 - `needless_pass_by_value` (14) — pedantic, real signal (clones are expensive).
-- `default_numeric_fallback` (20) — restriction, real signal in numeric code.
+- `default_numeric_fallback` (20) — restriction, **real signal everywhere** (not just numeric code). Workspace-wide warn per design decision 2026-05-01.
+- `arithmetic_side_effects` (107) — restriction, **promoted from ALLOW to KEEP** per design decision 2026-05-01.
+- `as_conversions` (30) — restriction, **promoted from ALLOW to KEEP** per design decision 2026-05-01.
 - `string_slice` (28) — restriction, real signal (UTF-8 panics).
 - `integer_division` (15) — restriction, sometimes signal — review per crate.
 - `map_err_ignore` (10) — restriction, real signal (loses error context).
@@ -224,8 +242,15 @@ Each site is a small refactor (`bytes.get(i)` / `as_object_mut()` /
 
 ## Phase 2 — Tier 1: Load-bearing crates
 
-**Crates:** `crates/core`, `clients/discord`, `clients/matrix`,
-`mcp/chat-mcp`, `apps/web`.
+**Crates:** `crates/core`, `crates/host-bridge`, `crates/plugin-host`,
+`clients/discord`, `clients/matrix`, `mcp/chat-mcp`, `apps/web`.
+
+Promoted to Tier 1 per user direction 2026-05-01: `plugin-host` and
+`host-bridge` are foundational + small enough that high-signal lints
+(`arithmetic_side_effects`, `as_conversions`,
+`default_numeric_fallback`) catch real bugs that would otherwise leak
+into every UI path that uses them. Do them first; the rest of the
+workspace benefits from cleaner foundations.
 
 **Effort:** L (4-6 hours per crate, total ~20-30 h) | **Depends on:** Phase 1.
 
@@ -235,13 +260,24 @@ them on every edit.
 
 Per-crate sub-step:
 
-- [ ] **C.1** `crates/core` — apply `must_use_candidate`, `redundant_closure_for_method_calls`, `map_unwrap_or`, `cast_lossless`. Effort: L (~6h, ~50-100 sites). Hang-class cross-check: see §2 (don't blindly apply `redundant_clone` on Signal guards, don't apply `needless_pass_by_value` on `Signal<T>` params without checking).
-- [ ] **C.2** `clients/discord` — also fix `string_slice` + `cast_possible_truncation` from JSON parsing. Effort: M (~3h).
-- [ ] **C.3** `clients/matrix` — same pattern. Effort: M (~2-3h).
-- [ ] **C.4** `mcp/chat-mcp` — large surface, lots of HTTP handlers; focus on `wildcard_enum_match_arm` + `must_use_candidate`. Effort: L (~4h).
-- [ ] **C.5** `apps/web` — small bin crate; mostly `single_call_fn` (allow per-file) and `must_use_candidate` on the WASM entry. Effort: S (~30m).
-- [ ] **C.6** Per-crate acceptance: `cargo clippy -p <crate> --all-targets 2>&1 | grep -c '^warning:'` is 0.
-- [ ] **C.7** Commits: one per crate, e.g. `chore(core): clippy pedantic cleanup (tier 1)`.
+- [ ] **C.1** `crates/host-bridge` — start here. Foundational, ~500 warns.
+      Focus on `arithmetic_side_effects` (KV byte offsets), `as_conversions`
+      (length casts), `default_numeric_fallback`. Effort: L (~6h).
+- [ ] **C.2** `crates/plugin-host` — second. Sandboxing + WIT plumbing —
+      every UI plugin call goes through here, so any cast/overflow bug
+      cascades. Effort: L (~5h).
+- [ ] **C.3** `crates/core` — third. Apply `must_use_candidate`,
+      `redundant_closure_for_method_calls`, `map_unwrap_or`, `cast_lossless`,
+      plus the three safety lints. Effort: L (~6-10h, ~50-200 sites).
+      Hang-class cross-check: see §2 (don't blindly apply `redundant_clone`
+      on Signal guards, don't apply `needless_pass_by_value` on `Signal<T>`
+      params without checking).
+- [ ] **C.4** `clients/discord` — also fix `string_slice` + `cast_possible_truncation` from JSON parsing. Effort: M (~3h).
+- [ ] **C.5** `clients/matrix` — same pattern as discord. Effort: M (~2-3h).
+- [ ] **C.6** `mcp/chat-mcp` — large surface, lots of HTTP handlers; focus on `wildcard_enum_match_arm` + `must_use_candidate`. Effort: L (~4h).
+- [ ] **C.7** `apps/web` — small bin crate; mostly `single_call_fn` (allow per-file) and `must_use_candidate` on the WASM entry. Effort: S (~30m).
+- [ ] **C.8** Per-crate acceptance: `cargo clippy -p <crate> --all-targets 2>&1 | grep -c '^warning:'` is 0.
+- [ ] **C.9** Commits: one per crate, e.g. `chore(core): clippy pedantic cleanup (tier 1)`.
 
 ---
 
@@ -271,11 +307,14 @@ expected.
 
 ## Phase 4 — Tier 3: Support / infrastructure
 
-**Crates:** `crates/host-bridge`, `crates/host-sandbox`, `apps/poly-host`,
-`tools/poly-cli`, `crates/plugin-host`, `crates/plugin-host-tests`,
+**Crates:** `crates/host-sandbox`, `apps/poly-host`,
+`tools/poly-cli`, `crates/plugin-host-tests`,
 `crates/ui-types`, `crates/ui-macros`, `crates/lint-gate`,
 `mcp/devtools-protocol`, `mcp/desktop-devtools-mcp`,
 `mcp/web-devtools-mcp`, `mcp/electron-devtools-mcp`, `mcp/memory-mcp`.
+
+(`crates/host-bridge` and `crates/plugin-host` moved to Tier 1 — they're
+foundational and gate every UI path.)
 
 **Effort:** M (1-2h per crate, total ~14-20h) | **Depends on:** Phases 1-2.
 
@@ -285,11 +324,10 @@ allow-per-file is the realistic strategy for many sites (e.g. allow
 `module_name_repetitions` in the bridge route module, allow
 `single_call_fn` in MCP tool handlers).
 
-- [ ] **E.1** `crates/host-bridge` (501 lib + 483 lib-test warns post-Phase-0 review) — Effort L.
-- [ ] **E.2** `crates/host-sandbox` — Effort M.
-- [ ] **E.3** `apps/poly-host` — Effort S.
-- [ ] **E.4** `tools/poly-cli` (188 + 200 warns) — Effort M.
-- [ ] **E.5** `crates/plugin-host` + `crates/plugin-host-tests` — Effort M (combined).
+- [ ] **E.1** `crates/host-sandbox` — Effort M.
+- [ ] **E.2** `apps/poly-host` — Effort S.
+- [ ] **E.3** `tools/poly-cli` (188 + 200 warns) — Effort M.
+- [ ] **E.4** `crates/plugin-host-tests` — Effort M.
 - [ ] **E.6** `crates/ui-types`, `crates/ui-macros`, `crates/lint-gate` — Effort M (combined; macros heavy on `pub_use` + `absolute_paths`).
 - [ ] **E.7** `mcp/devtools-protocol` (476 lib + 479 lib-test warns) — Effort M; mostly `implicit_return` + `?` operator already allow-listed in Phase 0, so this should drop dramatically.
 - [ ] **E.8** `mcp/desktop-devtools-mcp` + `mcp/web-devtools-mcp` + `mcp/electron-devtools-mcp` — Effort S (each).
@@ -313,16 +351,26 @@ workspace (3,041 across lib + lib-test). Phase 0 will collapse most of
 it; remaining signal lints will be `must_use_candidate` on builder API
 and `wildcard_enum_match_arm` in match dispatchers.
 
-For test-* crates, add a `#![allow(clippy::pedantic, clippy::restriction)]`
-crate-level escape hatch (test code is expressive on purpose, and the
-tier 0-2 work would not transfer). Document the escape hatch with a
-top-level rationale comment.
+For test-* crates: **NO blanket `#![allow(...)]` escape hatch** per design
+decision 2026-05-01. Test fixtures earn the same per-lint cleanup as
+production code. Specific lints (`unwrap_used`, `expect_used`, `panic`)
+already get test-only `#![allow(...)]` per existing user feedback (see
+`feedback_test_lints.md`); pedantic+restriction do NOT get added to
+that list.
 
 - [ ] **F.1** `servers/server` (3,041 warns total) — Effort L (~6h post-Phase-0).
 - [ ] **F.2** `servers/backup-server` (949 warns) — Effort M.
 - [ ] **F.3** `servers/test-common` (377 warns) — Effort M.
-- [ ] **F.4** `servers/test-*` (10 crates) — bulk `#![allow(...)]` in lib root + per-file rationale comment. Effort S total.
-- [ ] **F.5** `servers/test-runner` — Effort S.
+- [ ] **F.4** `servers/test-discord` — per-lint cleanup, not blanket allow. Effort M.
+- [ ] **F.5** `servers/test-matrix` — per-lint cleanup. Effort M.
+- [ ] **F.6** `servers/test-stoat` — per-lint cleanup. Effort M.
+- [ ] **F.7** `servers/test-teams` — per-lint cleanup. Effort M.
+- [ ] **F.8** `servers/test-poly` — per-lint cleanup. Effort M.
+- [ ] **F.9** `servers/test-lemmy` — per-lint cleanup. Effort M.
+- [ ] **F.10** `servers/test-hackernews` — per-lint cleanup. Effort M.
+- [ ] **F.11** `servers/test-forgejo` — per-lint cleanup. Effort M.
+- [ ] **F.12** `servers/test-github` — per-lint cleanup. Effort M.
+- [ ] **F.13** `servers/test-runner` — per-lint cleanup. Effort S.
 
 ---
 
@@ -369,18 +417,24 @@ exits 0 on a clean checkout.
 1. **Should `must_use_candidate` apply to internal helpers?** The lint
    has 54 hits; many are private fn that don't benefit from `#[must_use]`.
    Per-crate override may be more sensible than annotating each fn.
-2. **`servers/test-*` blanket allow** — preferred over per-lint cleanup for
-   throwaway test fixtures, but the user may want consistency. Confirm
-   before Phase 5.
-3. **`exhaustive_structs`/`exhaustive_enums`** — currently allow-listed
+2. **`exhaustive_structs`/`exhaustive_enums`** — currently allow-listed
    workspace-wide. If the `clients/client` trait surface stabilises into
    a public API, opt those crates back in to enforce
    `#[non_exhaustive]` on wire types.
-4. **`crates/core/src/ui/`** — the existing 6 hang-class lint scripts
+3. **`crates/core/src/ui/`** — the existing 6 hang-class lint scripts
    may flag pedantic suggestions as conflicting (e.g. `redundant_clone`
    suggests removing a clone that's load-bearing for guard-drop timing).
    Triage HIGH-impact pedantic suggestions per-file with reference to
    `docs/dev/reactive-state.md`.
+
+## 4.1 Resolved questions (2026-05-01)
+
+- ✅ **`servers/test-*` blanket allow** — DECIDED **per-lint cleanup**.
+  Test fixtures get the same scrutiny as production code. Phase 5
+  updated.
+- ✅ **Safety-critical lint scope** — DECIDED **workspace-wide warn** for
+  `arithmetic_side_effects`, `as_conversions`, `default_numeric_fallback`.
+  No per-subtree allow carve-outs. §3.2 updated.
 
 ---
 
