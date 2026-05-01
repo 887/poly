@@ -54,67 +54,67 @@ The combination buys defense-in-depth: the lint catches the regression at PR tim
 
 Each phase lands independently. Phase N blocks on phase N−1.
 
-### Phase 1 — Formalise `BatchedSignal::with` as the preferred read closure API
+### Phase 1 — Formalise `BatchedSignal::with` as the preferred read closure API — ✅ DONE (`5c1e13c7`)
 
 **Deliverable:** docs change + canonical example, no behaviour change.
 
 Tasks:
-- [ ] Add a §3 to `docs/dev/reactive-state.md` (created in `plan-batched-signal.md` Phase 6) titled "Read-guard scoping" covering the four safe shapes:
+- [x] Add a §3 to `docs/dev/reactive-state.md` (created in `plan-batched-signal.md` Phase 6) titled "Read-guard scoping" covering the four safe shapes:
   - Inline `sig.read().field.clone()` (single-statement temporary).
   - `sig.with(|v| { … })` (closure-scoped multi-field read).
   - Explicit `let var = { let g = sig.read(); … (g, …) };` block.
   - Explicit `drop(g)` before subsequent write (only for cross-block patterns where the block form is awkward).
-- [ ] Add a "do not" example showing the panic shape: `let g = chat_data.read(); … chat_data.batch(|cd| ...);`.
-- [ ] Add doc-link from `BatchedSignal::with` rustdoc into the new section.
-- [ ] Verify all current `.with` / `.map` examples still compile (they do — these are existing methods).
+- [x] Add a "do not" example showing the panic shape: `let g = chat_data.read(); … chat_data.batch(|cd| ...);`.
+- [x] Add doc-link from `BatchedSignal::with` rustdoc into the new section.
+- [x] Verify all current `.with` / `.map` examples still compile (they do — these are existing methods).
 
 Verification: `cargo doc --no-deps -p poly-core` clean.
 
-### Phase 2 — Migrate the three MEDIUM sites
+### Phase 2 — Migrate the three MEDIUM sites — ✅ DONE (`5c1e13c7`)
 
 **Deliverable:** the three MEDIUM call sites identified in the audit each move to a no-guard-across-helper-call shape.
 
 Tasks:
-- [ ] `crates/core/src/ui/mod.rs:1254-1272` — collapse the `let cm = client_manager.read();` + nested `app_state.read()` into either two explicit blocks or one `client_manager.with(|cm| { … app_state.peek()… })` shape. Justify with a comment why the explicit `drop(cm)` was necessary.
-- [ ] `crates/core/src/ui/account/common/account_bar.rs:371` — change the `current_account_bar_user(&app_state.read(), &chat_data.read())` call to bind via `with`:
+- [x] `crates/core/src/ui/mod.rs:1254-1272` — collapse the `let cm = client_manager.read();` + nested `app_state.read()` into either two explicit blocks or one `client_manager.with(|cm| { … app_state.peek()… })` shape. Justify with a comment why the explicit `drop(cm)` was necessary.
+- [x] `crates/core/src/ui/account/common/account_bar.rs:371` — change the `current_account_bar_user(&app_state.read(), &chat_data.read())` call to bind via `with`:
   ```rust
   let user = chat_data.with(|cd| {
       app_state.with(|st| current_account_bar_user(st, cd))
   });
   ```
   Or rewrite the helper to take `BatchedSignal<…>` handles and read internally — preferred if the helper is the only caller.
-- [ ] `crates/core/src/ui/electron_titlebar.rs:132` — same treatment as account_bar.
+- [x] `crates/core/src/ui/electron_titlebar.rs:132` — same treatment as account_bar.
 
 Verification: `cargo check --workspace --target wasm32-unknown-unknown`, smoke-test electron titlebar (Phase-2 desktop build) and the AccountBar render path on each backend.
 
-### Phase 3 — Ship the lint script
+### Phase 3 — Ship the lint script — ✅ DONE (`5c1e13c7`)
 
 **Deliverable:** `tools/scripts/forbid-long-read-guard.sh` + allowlist + CI wiring.
 
 Tasks:
-- [ ] Create `tools/scripts/forbid-long-read-guard.sh`. Algorithm:
+- [x] Create `tools/scripts/forbid-long-read-guard.sh`. Algorithm:
   - Walk `crates/core/src/ui/**/*.rs`.
   - For each `let <var> = <sig>.read();` (or `.peek();`) line:
     - Find the closing `}` of the enclosing block (cheap heuristic: count braces forward).
     - Inside that range, look for `<sig>.batch(`, `<sig>.pending_update(`, or `<sig>.write(`.
     - If found AND the `let` is NOT followed within 1-2 lines by a `}` (the explicit-block pattern), AND no `drop(<var>);` appears between the `let` and the write call, fail.
   - Print file:line for every fail.
-- [ ] Create `tools/scripts/long-read-guard-allowlist.txt` seeded with the LOW sites that the regex misclassifies (mostly inline `.read().field.clone()` patterns where the regex sees the `.read();` token but no binding actually escapes).
-- [ ] Wire into `.github/workflows/lint-test.yml` alongside the existing three lint scripts.
-- [ ] Document in `tools/scripts/README.md` (or wherever the existing lint scripts are documented).
+- [x] Create `tools/scripts/long-read-guard-allowlist.txt` seeded with the LOW sites that the regex misclassifies (mostly inline `.read().field.clone()` patterns where the regex sees the `.read();` token but no binding actually escapes).
+- [x] Wire into `.github/workflows/lint-test.yml` alongside the existing three lint scripts.
+- [x] Document in `tools/scripts/README.md` (or wherever the existing lint scripts are documented).
 
 Verification:
 - Manually inject a HIGH-severity regression: edit a sample file to introduce `let g = chat_data.read(); chat_data.batch(|cd| { cd.loading = false; });` and confirm the script fails.
 - Run against current main; confirm only the 3 MEDIUM sites flag (and that they're allowlisted post-Phase-2).
 
-### Phase 4 — (Optional) Dylint upgrade path
+### Phase 4 — (Optional) Dylint upgrade path — ⏸ SKIPPED (intentional)
 
-Same pattern as `plan-batched-signal.md` Phase 5b — re-implement the regex check as a `cargo dylint` HIR-aware lint so it can distinguish `Signal::read` from `RwLock::read` / `std::io::Read::read`. Deferred until the regex script proves insufficient (i.e. emits false positives that the allowlist can't keep up with).
+Same pattern as `plan-batched-signal.md` Phase 5b — re-implement the regex check as a `cargo dylint` HIR-aware lint so it can distinguish `Signal::read` from `RwLock::read` / `std::io::Read::read`. Deferred until the regex script proves insufficient (i.e. emits false positives that the allowlist can't keep up with). As of 2026-05-02 the regex script is keeping pace with no allowlist churn, so this phase remains skipped.
 
-### Phase 5 — Documentation cleanup
+### Phase 5 — Documentation cleanup — ✅ DONE (`5c1e13c7`)
 
-- [ ] Update `CLAUDE.md` "Common WASM-hang causes" #2 to point at this plan + the lint as the prevention.
-- [ ] Add a row to the "lint scripts" table in `docs/dev/reactive-state.md` (or wherever the existing scripts are catalogued).
+- [x] Update `CLAUDE.md` "Common WASM-hang causes" #2 to point at this plan + the lint as the prevention.
+- [x] Add a row to the "lint scripts" table in `docs/dev/reactive-state.md` (or wherever the existing scripts are catalogued).
 
 ---
 

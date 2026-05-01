@@ -59,31 +59,31 @@ For multi-dep cases, callers wrap in a tuple: `use_reactive_effect((server_id.cl
 
 ## 3. Phases
 
-### Phase 1 — Introduce `use_reactive_effect` hook
+### Phase 1 — Introduce `use_reactive_effect` hook — ✅ DONE (`de6411f8`)
 
-- [ ] `crates/core/src/state/use_reactive_effect.rs` — implementation + tests.
-- [ ] Re-export from `crates/core/src/state/mod.rs`.
-- [ ] Tests: same-deps re-render → no re-fire; different-deps → re-fire; tuple deps work; deps drop semantics documented.
+- [x] `crates/core/src/state/use_reactive_effect.rs` — implementation + tests.
+- [x] Re-export from `crates/core/src/state/mod.rs`.
+- [x] Tests: same-deps re-render → no re-fire; different-deps → re-fire; tuple deps work; deps drop semantics documented.
 
-### Phase 2 — Audit + migrate stale-capture sites
+### Phase 2 — Audit + migrate stale-capture sites — ✅ DONE (`cb4cf07`)
 
-- [ ] Audit subagent grep + manual review of every `use_effect(move || { … })` in `crates/core/src/ui/**/*.rs`. Classify by capture shape:
+- [x] Audit subagent grep + manual review of every `use_effect(move || { … })` in `crates/core/src/ui/**/*.rs`. Classify by capture shape:
   - **HIGH**: captures a non-Signal prop / local that varies across renders. Migrate to `use_reactive_effect` or `use_spawn_once`.
   - **MEDIUM**: captures a Signal but reads it only in `peek()` — won't re-fire on signal changes; might be intentional. Manual review.
   - **LOW**: captures only Signals (read), `Copy` primitives, or mounts a one-shot side effect that genuinely should run once.
-- [ ] Migrate every HIGH site.
+- [x] Migrate every HIGH site.
 
-### Phase 3 — Update `docs/dev/reactive-state.md`
+### Phase 3 — Update `docs/dev/reactive-state.md` — ✅ DONE (`de6411f8`)
 
-- [ ] New section: "When to use `use_reactive_effect` vs `use_effect`."
-- [ ] Document the stale-capture footgun + the `use_reactive_effect` recipe.
-- [ ] Cross-link to `use_spawn_once` for async cases.
+- [x] New section: "When to use `use_reactive_effect` vs `use_effect`."
+- [x] Document the stale-capture footgun + the `use_reactive_effect` recipe.
+- [x] Cross-link to `use_spawn_once` for async cases.
 
-### Phase 5 — Regex CI lint
+### Phase 5 — Regex CI lint — ✅ DONE (`de6411f8`)
 
-- [ ] `tools/scripts/forbid-stale-effect-capture.sh` flags `use_effect(move || { … })` whose closure captures a value that is not obviously a Signal/Copy. Heuristic: scan the closure body for identifier references that don't end in `.read()`, `.peek()`, `.with(`, `.batch(`. If any identifier is captured but only USED via `.clone()` or pass-by-value, flag.
-- [ ] Inline-allowlist: `// poly-lint: allow stale-effect-capture — <reason>`.
-- [ ] Wire into `lint-test.yml`.
+- [x] `tools/scripts/forbid-stale-effect-capture.sh` flags `use_effect(move || { … })` whose closure captures a value that is not obviously a Signal/Copy. Heuristic: scan the closure body for identifier references that don't end in `.read()`, `.peek()`, `.with(`, `.batch(`. If any identifier is captured but only USED via `.clone()` or pass-by-value, flag.
+- [x] Inline-allowlist: `// poly-lint: allow stale-effect-capture — <reason>`.
+- [x] Wire into `lint-test.yml`.
 
 ---
 
