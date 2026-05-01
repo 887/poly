@@ -19,7 +19,11 @@ default = ["dev-plugins", "web"]
 # Stripped in production builds via `--no-default-features --features production`.
 dev-plugins = ["poly-core/discord", "poly-core/teams"]
 production = []
-web = ["dioxus/web", "dioxus/fullstack"]
+# We DELIBERATELY do NOT enable `dioxus/fullstack` on the client — see
+# apps/web/Cargo.toml for the textContent/listening hydration crash
+# writeup. Client renders fresh into the empty `#poly-app-shell` from
+# the server's App() cfg(not(wasm32)) branch.
+web = ["dioxus/web"]
 server = ["dioxus/fullstack", "dioxus/server", "dep:axum", "dep:tokio", "dep:poly-host", "dep:dioxus-cli-config", "dep:anyhow"]
 
 [dependencies]

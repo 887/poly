@@ -19,10 +19,16 @@ path = "src/main.rs"
 default = ["desktop-native"]
 desktop-native = ["dioxus/desktop"]
 # `dx serve --platform web` builds apps/desktop as a WASM bundle that the
-# Wry webview in apps/desktop-web loads on port 3002. `dioxus/fullstack`
-# activates `dioxus-web/hydrate` so the client hydrates the SSR output
-# from the fullstack server instead of re-rendering alongside it.
-web = ["dioxus/web", "dioxus/fullstack"]
+# Wry webview in apps/desktop-web loads on port 3002. We DELIBERATELY do
+# NOT enable `dioxus/fullstack` here — that would activate
+# `dioxus-web/hydrate` which produces the
+# "Cannot set properties of undefined (setting 'textContent')"
+# (and the related "reading 'listening'") crash on boot. The client
+# renders fresh into the empty `#poly-app-shell` emitted by the server
+# (see App() cfg(not(wasm32)) branch in crates/core/src/ui/mod.rs).
+# Apps are shipped as native shells (Wry / Electron / Chromium); we
+# never benefited from SSR pre-rendering anyway.
+web = ["dioxus/web"]
 # Mirrors apps/web: opt-in Discord/Teams surfaced under WASM plugins.
 # Stripped in production builds via `--no-default-features --features production`.
 dev-plugins = ["poly-core/discord", "poly-core/teams"]
