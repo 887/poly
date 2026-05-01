@@ -109,6 +109,7 @@ pub struct WsInboundData {
 
 impl PluginHostState {
     /// Create a new host state for a plugin instance with default in-memory storage.
+    #[must_use]
     pub fn new(plugin_id: &str) -> Self {
         Self::new_with_storage(plugin_id, Arc::new(InMemoryPluginStorage::default()))
     }
@@ -235,7 +236,7 @@ impl host_api::Host for PluginHostState {
         use tokio_tungstenite::connect_async;
 
         let handle_id = self.next_ws_handle;
-        self.next_ws_handle += 1;
+        self.next_ws_handle = self.next_ws_handle.wrapping_add(1);
 
         // Build the request with custom headers
         // TODO(phase-2.14.3): implement full WS with custom headers
@@ -482,7 +483,7 @@ impl host_api::Host for PluginHostState {
             .map_err(|e| format!("failed to spawn `{program}`: {e}"))?;
 
         Ok(types::ExecOutput {
-            exit_code: output.status.code().unwrap_or(-1),
+            exit_code: output.status.code().unwrap_or(-1_i32),
             stdout: output.stdout,
             stderr: output.stderr,
         })
@@ -519,7 +520,7 @@ mod tests {
     ///
     /// `RouteBuildError` is WIT-generated and doesn't derive `PartialEq`, so we
     /// use `matches!` instead of `assert_eq!`.
-    fn assert_unknown_kind(result: Result<String, host_api::RouteBuildError>, label: &str) {
+    fn assert_unknown_kind(result: &Result<String, host_api::RouteBuildError>, label: &str) {
         assert!(
             matches!(result, Err(host_api::RouteBuildError::UnknownKind)),
             "{label}: expected Err(UnknownKind), got Ok(_) or different variant"
@@ -534,7 +535,7 @@ mod tests {
         let result = state
             .build_route(host_api::RouteKind::ServerHome, vec![])
             .await;
-        assert_unknown_kind(result, "ServerHome");
+        assert_unknown_kind(&result, "ServerHome");
     }
 
     #[tokio::test]
@@ -546,21 +547,21 @@ mod tests {
                 vec![("channel-id".to_string(), "abc123".to_string())],
             )
             .await;
-        assert_unknown_kind(result, "Channel");
+        assert_unknown_kind(&result, "Channel");
     }
 
     #[tokio::test]
     async fn build_route_dm_returns_unknown_kind() {
         let mut state = PluginHostState::new("test");
         let result = state.build_route(host_api::RouteKind::Dm, vec![]).await;
-        assert_unknown_kind(result, "Dm");
+        assert_unknown_kind(&result, "Dm");
     }
 
     #[tokio::test]
     async fn build_route_friends_returns_unknown_kind() {
         let mut state = PluginHostState::new("test");
         let result = state.build_route(host_api::RouteKind::Friends, vec![]).await;
-        assert_unknown_kind(result, "Friends");
+        assert_unknown_kind(&result, "Friends");
     }
 
     #[tokio::test]
@@ -569,7 +570,7 @@ mod tests {
         let result = state
             .build_route(host_api::RouteKind::Notifications, vec![])
             .await;
-        assert_unknown_kind(result, "Notifications");
+        assert_unknown_kind(&result, "Notifications");
     }
 
     #[tokio::test]
@@ -578,7 +579,7 @@ mod tests {
         let result = state
             .build_route(host_api::RouteKind::SettingsAccount, vec![])
             .await;
-        assert_unknown_kind(result, "SettingsAccount");
+        assert_unknown_kind(&result, "SettingsAccount");
     }
 
     #[tokio::test]
@@ -587,7 +588,7 @@ mod tests {
         let result = state
             .build_route(host_api::RouteKind::SettingsServer, vec![])
             .await;
-        assert_unknown_kind(result, "SettingsServer");
+        assert_unknown_kind(&result, "SettingsServer");
     }
 
     #[tokio::test]
@@ -596,14 +597,14 @@ mod tests {
         let result = state
             .build_route(host_api::RouteKind::SettingsChannel, vec![])
             .await;
-        assert_unknown_kind(result, "SettingsChannel");
+        assert_unknown_kind(&result, "SettingsChannel");
     }
 
     #[tokio::test]
     async fn build_route_voice_returns_unknown_kind() {
         let mut state = PluginHostState::new("test");
         let result = state.build_route(host_api::RouteKind::Voice, vec![]).await;
-        assert_unknown_kind(result, "Voice");
+        assert_unknown_kind(&result, "Voice");
     }
 
     #[tokio::test]
@@ -612,7 +613,7 @@ mod tests {
         let result = state
             .build_route(host_api::RouteKind::Search, vec![])
             .await;
-        assert_unknown_kind(result, "Search");
+        assert_unknown_kind(&result, "Search");
     }
 
     #[tokio::test]
@@ -621,6 +622,6 @@ mod tests {
         let result = state
             .build_route(host_api::RouteKind::SidebarItem, vec![])
             .await;
-        assert_unknown_kind(result, "SidebarItem");
+        assert_unknown_kind(&result, "SidebarItem");
     }
 }

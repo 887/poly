@@ -169,7 +169,7 @@ impl PluginRegistry {
         let cached_backend_type = BackendType::from_slug(&wit_backend_type);
 
         // Refuel before the next call
-        let _ = store.set_fuel(1_000_000_000);
+        drop(store.set_fuel(1_000_000_000));
 
         let cached_backend_name = instance
             .poly_messenger_messenger_client()
@@ -180,12 +180,12 @@ impl PluginRegistry {
         // Load plugin translations and settings schema via the plugin-metadata interface.
         // FTL strings are stored in PluginBackend.plugin_ftl; the host (poly-core) reads
         // them after instantiation and calls i18n::register_plugin_ftl().
-        let _ = store.set_fuel(1_000_000_000);
+        drop(store.set_fuel(1_000_000_000));
         let meta = instance.poly_messenger_plugin_metadata();
         let mut plugin_ftl: std::collections::HashMap<String, String> =
             std::collections::HashMap::new();
         for locale in SUPPORTED_LOCALES {
-            let _ = store.set_fuel(1_000_000_000);
+            drop(store.set_fuel(1_000_000_000));
             match meta.call_get_translations(&mut store, locale).await {
                 Ok(ftl_src) if !ftl_src.trim().is_empty() => {
                     plugin_ftl.insert(locale.to_string(), ftl_src);
@@ -210,16 +210,16 @@ impl PluginRegistry {
         //
         // TODO(WP 1.C): call client-settings::get-settings-sections and
         // pick the `scope == account-global` section to build this list.
-        let _ = store.set_fuel(1_000_000_000);
+        drop(store.set_fuel(1_000_000_000));
         let schema: Vec<SettingDescriptor> = Vec::new();
 
-        let _ = store.set_fuel(1_000_000_000);
+        drop(store.set_fuel(1_000_000_000));
         let display_name_key = match meta.call_get_display_name_key(&mut store).await {
             Ok(k) => k,
             Err(_) => format!("plugin-{plugin_id}-title"),
         };
 
-        let _ = store.set_fuel(1_000_000_000);
+        drop(store.set_fuel(1_000_000_000));
         let icon = meta.call_get_icon(&mut store).await.unwrap_or_default();
 
         tracing::info!(
@@ -243,11 +243,13 @@ impl PluginRegistry {
     }
 
     /// Get the IDs of all loaded plugins.
+    #[must_use]
     pub fn loaded_plugins(&self) -> Vec<String> {
         self.components.keys().cloned().collect()
     }
 
     /// Check if a plugin is loaded.
+    #[must_use]
     pub fn is_loaded(&self, plugin_id: &str) -> bool {
         self.components.contains_key(plugin_id)
     }
@@ -331,7 +333,7 @@ impl std::fmt::Debug for PluginBackend {
 async fn refuel(store: &Arc<Mutex<Store<PluginHostState>>>) {
     let mut guard = store.lock().await;
     // Ignore fuel errors — fuel is best-effort
-    let _ = guard.set_fuel(1_000_000_000);
+    drop(guard.set_fuel(1_000_000_000));
 }
 
 /// Convert a WIT result with no conversion needed on the value.
@@ -824,7 +826,7 @@ impl ClientBackend for PluginBackend {
                     // Refuel before calling into guest
                     {
                         let mut guard = store.lock().await;
-                        let _ = guard.set_fuel(1_000_000_000);
+                        drop(guard.set_fuel(1_000_000_000));
                     }
 
                     // Forward WS data to guest — guest parses it and calls emit-event

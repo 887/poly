@@ -8,6 +8,13 @@
 //! Convention: `from_wit_*` converts WIT→poly-client, `to_wit_*` converts
 //! poly-client→WIT.
 
+// Bridge surface is complete by design — every WIT type that crosses the
+// boundary has a converter, even if a specific direction has no current
+// callers. Adding `#[allow(dead_code)]` per fn would be 8+ annotations
+// of pure noise; one file-level allow keeps the surface intact.
+// lint-allow-unused: complete WIT↔native conversion surface
+#![allow(dead_code)]
+
 use super::engine::exports::poly::messenger::client_composer as wit_composer;
 use super::engine::exports::poly::messenger::client_menus as wit_menus;
 use super::engine::exports::poly::messenger::client_settings as wit_settings;
@@ -86,8 +93,7 @@ pub(crate) fn from_wit_thread_metadata(m: wit::ThreadMetadata) -> pc::ThreadMeta
         }),
         locked: m.locked,
         created_at: chrono::DateTime::parse_from_rfc3339(&m.created_at)
-            .map(|dt| dt.with_timezone(&chrono::Utc))
-            .unwrap_or_else(|_| chrono::Utc::now()),
+            .map_or_else(|_| chrono::Utc::now(), |dt| dt.with_timezone(&chrono::Utc)),
     }
 }
 
@@ -379,8 +385,7 @@ pub(crate) fn from_wit_message(m: wit::Message) -> pc::Message {
         author: from_wit_user(m.author),
         content: from_wit_message_content(m.content),
         timestamp: chrono::DateTime::parse_from_rfc3339(&m.timestamp)
-            .map(|dt| dt.with_timezone(&chrono::Utc))
-            .unwrap_or_else(|_| chrono::Utc::now()),
+            .map_or_else(|_| chrono::Utc::now(), |dt| dt.with_timezone(&chrono::Utc)),
         attachments: m.attachments.into_iter().map(from_wit_attachment).collect(),
         reactions: m.reactions.into_iter().map(from_wit_reaction).collect(),
         reply_to: m.reply_to.map(from_wit_message_reply_preview),
@@ -553,8 +558,7 @@ pub(crate) fn from_wit_notification(n: wit::Notification) -> pc::Notification {
         backend: pc::BackendType::from_slug(&n.backend),
         account_id: n.account_id,
         timestamp: chrono::DateTime::parse_from_rfc3339(&n.timestamp)
-            .map(|dt| dt.with_timezone(&chrono::Utc))
-            .unwrap_or_else(|_| chrono::Utc::now()),
+            .map_or_else(|_| chrono::Utc::now(), |dt| dt.with_timezone(&chrono::Utc)),
         read: n.read,
         preview: n.preview,
     }
@@ -602,8 +606,7 @@ pub(crate) fn from_wit_client_event(ev: wit::ClientEvent) -> pc::ClientEvent {
             channel_id: e.channel_id,
             user_id: e.user_id,
             timestamp: chrono::DateTime::parse_from_rfc3339(&e.timestamp)
-                .map(|dt| dt.with_timezone(&chrono::Utc))
-                .unwrap_or_else(|_| chrono::Utc::now()),
+                .map_or_else(|_| chrono::Utc::now(), |dt| dt.with_timezone(&chrono::Utc)),
         },
         wit::ClientEvent::ChannelUpdated(c) => pc::ClientEvent::ChannelUpdated(from_wit_channel(c)),
         wit::ClientEvent::ServerUpdated(s) => pc::ClientEvent::ServerUpdated(from_wit_server(s)),

@@ -74,6 +74,7 @@ pub struct InMemoryPluginStorage {
 
 impl InMemoryPluginStorage {
     /// Create a new empty in-memory storage.
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
