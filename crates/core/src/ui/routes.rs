@@ -2124,9 +2124,17 @@ fn ChannelSettingsRoute(
 #[component]
 fn Root() -> Element {
     let client_manager: BatchedSignal<crate::client_manager::ClientManager> = use_context();
-    use_effect(move || {
-        let cm = client_manager.read();
-        if cm.demo_active {
+    // CRITICAL: use_hook (not use_effect) so this fires EXACTLY ONCE on mount.
+    // The previous use_effect captured client_manager.read() which subscribed
+    // the effect to ClientManager. Boot registers ~38 signup/plugin-settings/
+    // test-account entries — each one re-fires this effect, which re-calls
+    // navigator().replace() mid-cascade. The repeated route-replace inside an
+    // active render scrambles Dioxus's node-id table and surfaces as the
+    // "Cannot set properties of undefined (setting 'textContent')" crash on
+    // the next text-edit opcode.
+    use_hook(|| {
+        let demo_active = client_manager.peek().demo_active;
+        if demo_active {
             navigator().replace(Route::DmsHome {
                 backend: "demo".to_string(),
                 instance_id: "demo".to_string(),

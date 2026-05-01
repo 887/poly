@@ -136,6 +136,13 @@ body {
     border-radius: 3px;
 }
 
+/* Hidden via class instead of conditional rendering — see StartupOverlay
+ * comment in crates/core/src/ui/mod.rs for the textContent crash this
+ * pattern fixes. */
+.poly-startup-account-hidden {
+    display: none !important;
+}
+
 .poly-startup-account {
     display: flex;
     align-items: center;

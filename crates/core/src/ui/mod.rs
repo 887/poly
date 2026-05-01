@@ -607,31 +607,38 @@ fn app_root_class(app_state: &AppState) -> String {
 /// This mirrors the WIT `plugin-metadata` pattern: the host has zero
 /// compile-time knowledge of specific backends — each plugin registers itself.
 fn register_native_signup_entries(client_manager: &mut BatchedSignal<ClientManager>) {
-    #[cfg(feature = "stoat")]
-    client_manager.batch(|cm| cm.register_signup_entry(SignupEntry {
-        slug: "stoat",
-        icon: "🦦",
-        name_key: "plugin-stoat-signup-name",
-        desc_key: "plugin-stoat-signup-desc",
-        render: poly_stoat::signup::signup_render_fn,
-        signup_method: |server_url| {
-            poly_client::SignupMethod::External(
-                server_url.unwrap_or("https://app.stoat.chat").to_string(),
-            )
-        },
-    }));
+    // Single batch — every per-entry .batch() triggers a separate reactive
+    // re-render across all subscribers. With ~38 boot-time registrations
+    // (signup + plugin-settings + test-accounts) this used to overwhelm the
+    // Dioxus interpreter and produce the "Cannot set properties of undefined
+    // (setting 'textContent')" race in the diff phase.
+    client_manager.batch(|cm| {
+        #[cfg(feature = "stoat")]
+        cm.register_signup_entry(SignupEntry {
+            slug: "stoat",
+            icon: "🦦",
+            name_key: "plugin-stoat-signup-name",
+            desc_key: "plugin-stoat-signup-desc",
+            render: poly_stoat::signup::signup_render_fn,
+            signup_method: |server_url| {
+                poly_client::SignupMethod::External(
+                    server_url.unwrap_or("https://app.stoat.chat").to_string(),
+                )
+            },
+        });
 
-    // Register the Poly Server backend when compiled with the `server` feature.
-    // The render fn lives in poly-server-client — core has no knowledge of the form.
-    #[cfg(feature = "server")]
-    client_manager.batch(|cm| cm.register_signup_entry(SignupEntry {
-        slug: "poly",
-        icon: "🔷",
-        name_key: "plugin-poly-signup-name",
-        desc_key: "plugin-poly-signup-desc",
-        render: poly_server_client::signup::signup_render_fn,
-        signup_method: |_| poly_client::SignupMethod::InApp("/signup/poly".to_string()),
-    }));
+        // Register the Poly Server backend when compiled with the `server` feature.
+        // The render fn lives in poly-server-client — core has no knowledge of the form.
+        #[cfg(feature = "server")]
+        cm.register_signup_entry(SignupEntry {
+            slug: "poly",
+            icon: "🔷",
+            name_key: "plugin-poly-signup-name",
+            desc_key: "plugin-poly-signup-desc",
+            render: poly_server_client::signup::signup_render_fn,
+            signup_method: |_| poly_client::SignupMethod::InApp("/signup/poly".to_string()),
+        });
+    });
 }
 
 /// Register all native backend plugin settings pages into `ClientManager`.
@@ -649,85 +656,88 @@ fn register_native_signup_entries(client_manager: &mut BatchedSignal<ClientManag
 fn register_native_plugin_settings(client_manager: &mut BatchedSignal<ClientManager>) {
     use crate::client_manager::PluginSettingsEntry;
 
-    #[cfg(feature = "demo")]
-    client_manager.batch(|cm| cm.register_plugin_settings(PluginSettingsEntry {
-        slug: "demo",
-        nav_label_key: "plugin-demo-title",
-        nav_icon: "🧪",
-        render: demo_settings_render_fn,
-    }));
+    // Single batch — see note in `register_native_signup_entries`.
+    client_manager.batch(|cm| {
+        #[cfg(feature = "demo")]
+        cm.register_plugin_settings(PluginSettingsEntry {
+            slug: "demo",
+            nav_label_key: "plugin-demo-title",
+            nav_icon: "🧪",
+            render: demo_settings_render_fn,
+        });
 
-    #[cfg(feature = "stoat")]
-    client_manager.batch(|cm| cm.register_plugin_settings(PluginSettingsEntry {
-        slug: "stoat",
-        nav_label_key: "plugin-stoat-title",
-        nav_icon: "🦦",
-        render: stoat_settings_render_fn,
-    }));
+        #[cfg(feature = "stoat")]
+        cm.register_plugin_settings(PluginSettingsEntry {
+            slug: "stoat",
+            nav_label_key: "plugin-stoat-title",
+            nav_icon: "🦦",
+            render: stoat_settings_render_fn,
+        });
 
-    #[cfg(feature = "server")]
-    client_manager.batch(|cm| cm.register_plugin_settings(PluginSettingsEntry {
-        slug: "poly",
-        nav_label_key: "plugin-poly-title",
-        nav_icon: "🔷",
-        render: poly_settings_render_fn,
-    }));
+        #[cfg(feature = "server")]
+        cm.register_plugin_settings(PluginSettingsEntry {
+            slug: "poly",
+            nav_label_key: "plugin-poly-title",
+            nav_icon: "🔷",
+            render: poly_settings_render_fn,
+        });
 
-    #[cfg(feature = "matrix")]
-    client_manager.batch(|cm| cm.register_plugin_settings(PluginSettingsEntry {
-        slug: "matrix",
-        nav_label_key: "plugin-matrix-title",
-        nav_icon: "🟩",
-        render: settings::matrix_settings_render_fn,
-    }));
+        #[cfg(feature = "matrix")]
+        cm.register_plugin_settings(PluginSettingsEntry {
+            slug: "matrix",
+            nav_label_key: "plugin-matrix-title",
+            nav_icon: "🟩",
+            render: settings::matrix_settings_render_fn,
+        });
 
-    #[cfg(feature = "lemmy")]
-    client_manager.batch(|cm| cm.register_plugin_settings(PluginSettingsEntry {
-        slug: "lemmy",
-        nav_label_key: "plugin-lemmy-title",
-        nav_icon: "🦫",
-        render: settings::lemmy_settings_render_fn,
-    }));
+        #[cfg(feature = "lemmy")]
+        cm.register_plugin_settings(PluginSettingsEntry {
+            slug: "lemmy",
+            nav_label_key: "plugin-lemmy-title",
+            nav_icon: "🦫",
+            render: settings::lemmy_settings_render_fn,
+        });
 
-    #[cfg(feature = "hackernews")]
-    client_manager.batch(|cm| cm.register_plugin_settings(PluginSettingsEntry {
-        slug: "hackernews",
-        nav_label_key: "plugin-hackernews-title",
-        nav_icon: "📰",
-        render: settings::hackernews_settings_render_fn,
-    }));
+        #[cfg(feature = "hackernews")]
+        cm.register_plugin_settings(PluginSettingsEntry {
+            slug: "hackernews",
+            nav_label_key: "plugin-hackernews-title",
+            nav_icon: "📰",
+            render: settings::hackernews_settings_render_fn,
+        });
 
-    #[cfg(feature = "discord")]
-    client_manager.batch(|cm| cm.register_plugin_settings(PluginSettingsEntry {
-        slug: "discord",
-        nav_label_key: "plugin-discord-title",
-        nav_icon: "🟣",
-        render: settings::discord_settings_render_fn,
-    }));
+        #[cfg(feature = "discord")]
+        cm.register_plugin_settings(PluginSettingsEntry {
+            slug: "discord",
+            nav_label_key: "plugin-discord-title",
+            nav_icon: "🟣",
+            render: settings::discord_settings_render_fn,
+        });
 
-    #[cfg(feature = "teams")]
-    client_manager.batch(|cm| cm.register_plugin_settings(PluginSettingsEntry {
-        slug: "teams",
-        nav_label_key: "plugin-teams-title",
-        nav_icon: "🟦",
-        render: settings::teams_settings_render_fn,
-    }));
+        #[cfg(feature = "teams")]
+        cm.register_plugin_settings(PluginSettingsEntry {
+            slug: "teams",
+            nav_label_key: "plugin-teams-title",
+            nav_icon: "🟦",
+            render: settings::teams_settings_render_fn,
+        });
 
-    #[cfg(feature = "github")]
-    client_manager.batch(|cm| cm.register_plugin_settings(PluginSettingsEntry {
-        slug: "github",
-        nav_label_key: "plugin-github-title",
-        nav_icon: "🐙",
-        render: settings::github_settings_render_fn,
-    }));
+        #[cfg(feature = "github")]
+        cm.register_plugin_settings(PluginSettingsEntry {
+            slug: "github",
+            nav_label_key: "plugin-github-title",
+            nav_icon: "🐙",
+            render: settings::github_settings_render_fn,
+        });
 
-    #[cfg(feature = "forgejo")]
-    client_manager.batch(|cm| cm.register_plugin_settings(PluginSettingsEntry {
-        slug: "forgejo",
-        nav_label_key: "plugin-forgejo-title",
-        nav_icon: "🦊",
-        render: settings::forgejo_settings_render_fn,
-    }));
+        #[cfg(feature = "forgejo")]
+        cm.register_plugin_settings(PluginSettingsEntry {
+            slug: "forgejo",
+            nav_label_key: "plugin-forgejo-title",
+            nav_icon: "🦊",
+            render: settings::forgejo_settings_render_fn,
+        });
+    });
 }
 
 /// Register test accounts from each compiled-in native plugin into `ClientManager`.
@@ -743,55 +753,42 @@ fn register_native_test_accounts(client_manager: &mut BatchedSignal<ClientManage
     // re-render loop (downstream readers subscribe to test_account_entries,
     // re-render fires the effect, clear writes the signal, repeat). The
     // boot-hang watchdog catches the loop after 20s.
-    #[cfg(feature = "discord")]
-    {
+    //
+    // Single batch — see note in `register_native_signup_entries`. Without
+    // this, the 14 sequential `client_manager.batch(register_test_account)`
+    // calls produce 14 reactive cascades during boot, which stack with the
+    // signup + plugin-settings cascades and overwhelm the Dioxus interpreter
+    // (textContent on freed node-id race).
+    client_manager.batch(|cm| {
+        #[cfg(feature = "discord")]
         for entry in poly_discord::signup::get_test_accounts() {
-            let e = *entry;
-            client_manager.batch(move |cm| cm.register_test_account(e));
+            cm.register_test_account(*entry);
         }
-    }
-    #[cfg(feature = "teams")]
-    {
+        #[cfg(feature = "teams")]
         for entry in poly_teams::signup::get_test_accounts() {
-            let e = *entry;
-            client_manager.batch(move |cm| cm.register_test_account(e));
+            cm.register_test_account(*entry);
         }
-    }
-    #[cfg(feature = "matrix")]
-    {
+        #[cfg(feature = "matrix")]
         for entry in poly_matrix::signup::get_test_accounts() {
-            let e = *entry;
-            client_manager.batch(move |cm| cm.register_test_account(e));
+            cm.register_test_account(*entry);
         }
-    }
-    #[cfg(feature = "stoat")]
-    {
+        #[cfg(feature = "stoat")]
         for entry in poly_stoat::signup::get_test_accounts() {
-            let e = *entry;
-            client_manager.batch(move |cm| cm.register_test_account(e));
+            cm.register_test_account(*entry);
         }
-    }
-    #[cfg(feature = "lemmy")]
-    {
+        #[cfg(feature = "lemmy")]
         for entry in poly_lemmy::signup::get_test_accounts() {
-            let e = *entry;
-            client_manager.batch(move |cm| cm.register_test_account(e));
+            cm.register_test_account(*entry);
         }
-    }
-    #[cfg(feature = "github")]
-    {
+        #[cfg(feature = "github")]
         for entry in poly_github::signup::get_test_accounts() {
-            let e = *entry;
-            client_manager.batch(move |cm| cm.register_test_account(e));
+            cm.register_test_account(*entry);
         }
-    }
-    #[cfg(feature = "forgejo")]
-    {
+        #[cfg(feature = "forgejo")]
         for entry in poly_forgejo::signup::get_test_accounts() {
-            let e = *entry;
-            client_manager.batch(move |cm| cm.register_test_account(e));
+            cm.register_test_account(*entry);
         }
-    }
+    });
     let n = client_manager.read().test_account_entries.len();
     if n > 0 {
         tracing::info!("registered {n} test accounts");
@@ -849,11 +846,39 @@ fn offline_session_from_entry(entry: &poly_client::TestAccountEntry) -> poly_cli
 pub static AUTO_SIGNIN_DONE: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
 
+/// Returns true when the URL query string contains `auto_signin=1`. Used to
+/// gate the test-account auto-signin loop because it triggers a heavy
+/// reactive cascade that can wedge the WASM main thread on cold boot.
+#[cfg(all(debug_assertions, target_arch = "wasm32"))]
+fn auto_signin_opted_in() -> bool {
+    web_sys::window()
+        .and_then(|w| w.location().search().ok())
+        .map(|s| s.contains("auto_signin=1"))
+        .unwrap_or(false)
+}
+
+#[cfg(all(debug_assertions, not(target_arch = "wasm32")))]
+fn auto_signin_opted_in() -> bool {
+    // Native shells (Wry/Electron) — auto-signin remains on by default
+    // since they don't have the WASM single-thread starvation problem.
+    true
+}
+
 #[cfg(debug_assertions)]
 fn auto_signin_test_accounts(
     client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
 ) {
+    if !auto_signin_opted_in() {
+        // Skipped — flip the flag so route_targets_unknown_account stops
+        // deferring on missing test accounts. Add `?auto_signin=1` to the
+        // URL to re-enable for testing scenarios.
+        tracing::info!(
+            "auto-signin: skipped (opt-in via ?auto_signin=1; see crates/core/src/ui/mod.rs)"
+        );
+        AUTO_SIGNIN_DONE.store(true, std::sync::atomic::Ordering::SeqCst);
+        return;
+    }
     let entries: Vec<poly_client::TestAccountEntry> =
         client_manager.read().test_account_entries.to_vec();
     if entries.is_empty() {
@@ -1432,6 +1457,7 @@ fn StartupOverlay(state: StartupOverlayState) -> Element {
         "poly-startup-overlay"
     };
 
+    let accounts_empty = state.accounts.is_empty();
     rsx! {
         div {
             class: "{root_class}",
@@ -1444,35 +1470,57 @@ fn StartupOverlay(state: StartupOverlayState) -> Element {
                         p { class: "poly-startup-subline", "{state.subline}" }
                     }
                     div { class: "poly-startup-accounts",
-                        if state.accounts.is_empty() {
-                            div { class: "poly-startup-account poly-startup-account-placeholder",
-                                span { class: "poly-startup-account-avatar poly-startup-account-avatar-placeholder", "P" }
-                                div { class: "poly-startup-account-copy",
-                                    span { class: "poly-startup-account-name", "Preparing workspace" }
-                                    span { class: "poly-startup-account-status idle", "waiting" }
-                                }
+                        // The placeholder is rendered as a permanent (key-stable)
+                        // first child, hidden via CSS when real accounts exist.
+                        // Letting `if/else` swap between "single unkeyed div" and
+                        // "for-loop of keyed divs" inside the same parent caused
+                        // Dioxus 0.7's diff to emit a SetText edit pointing at a
+                        // node it had just removed — surfacing as the
+                        // "Cannot set properties of undefined (setting 'textContent')"
+                        // crash mid-boot as test accounts streamed in.
+                        div {
+                            key: "placeholder",
+                            class: if accounts_empty {
+                                "poly-startup-account poly-startup-account-placeholder"
+                            } else {
+                                "poly-startup-account poly-startup-account-placeholder poly-startup-account-hidden"
+                            },
+                            span { class: "poly-startup-account-avatar poly-startup-account-avatar-placeholder", "P" }
+                            div { class: "poly-startup-account-copy",
+                                span { class: "poly-startup-account-name", "Preparing workspace" }
+                                span { class: "poly-startup-account-status idle", "waiting" }
                             }
-                        } else {
-                            for account in state.accounts {
-                                div { class: "poly-startup-account", key: "{account.id}",
-                                    div { class: "poly-startup-account-avatar-wrap",
-                                        if let Some(url) = account.avatar_url.clone() {
-                                            img {
-                                                class: "poly-startup-account-avatar",
-                                                src: "{url}",
-                                                alt: "{account.label}",
-                                            }
+                        }
+                        for account in state.accounts {
+                            div { class: "poly-startup-account", key: "{account.id}",
+                                div { class: "poly-startup-account-avatar-wrap",
+                                    // Always render BOTH img and span — toggle via class
+                                    // so the diff never has to swap element types at the
+                                    // same position (same hang-class as the placeholder).
+                                    img {
+                                        class: if account.avatar_url.is_some() {
+                                            "poly-startup-account-avatar"
                                         } else {
-                                            span { class: "poly-startup-account-avatar poly-startup-account-avatar-placeholder", "{account.label.chars().next().unwrap_or('?')}" }
-                                        }
-                                        span { class: "poly-startup-account-indicator {account.status_class}",
-                                            span { class: "poly-startup-indicator-symbol", "{account.status_symbol}" }
-                                        }
+                                            "poly-startup-account-avatar poly-startup-account-hidden"
+                                        },
+                                        src: "{account.avatar_url.clone().unwrap_or_default()}",
+                                        alt: "{account.label}",
                                     }
-                                    div { class: "poly-startup-account-copy",
-                                        span { class: "poly-startup-account-name", "{account.label}" }
-                                        span { class: "poly-startup-account-status {account.status_class}", "{account.status_class}" }
+                                    span {
+                                        class: if account.avatar_url.is_none() {
+                                            "poly-startup-account-avatar poly-startup-account-avatar-placeholder"
+                                        } else {
+                                            "poly-startup-account-avatar poly-startup-account-avatar-placeholder poly-startup-account-hidden"
+                                        },
+                                        "{account.label.chars().next().unwrap_or('?')}"
                                     }
+                                    span { class: "poly-startup-account-indicator {account.status_class}",
+                                        span { class: "poly-startup-indicator-symbol", "{account.status_symbol}" }
+                                    }
+                                }
+                                div { class: "poly-startup-account-copy",
+                                    span { class: "poly-startup-account-name", "{account.label}" }
+                                    span { class: "poly-startup-account-status {account.status_class}", "{account.status_class}" }
                                 }
                             }
                         }
