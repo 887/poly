@@ -18,9 +18,22 @@ name: Persona E2E (mock-claude)
 
 on:
   pull_request:
+    paths:
+      - 'mcp/chat-mcp/**'
+      - 'crates/core/src/ui/agent/persona/**'
+      - 'tests/e2e/**'
+      - '.github/workflows/persona-e2e.yml'
   push:
     branches:
       - main
+    paths:
+      - 'mcp/chat-mcp/**'
+      - 'crates/core/src/ui/agent/persona/**'
+      - 'tests/e2e/**'
+      - '.github/workflows/persona-e2e.yml'
+  # Manual trigger so you can still run it on demand without waiting
+  # for a persona-touching commit.
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
