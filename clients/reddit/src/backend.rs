@@ -331,7 +331,13 @@ impl ClientBackend for RedditBackend {
         let bt = Self::backend_type();
         Ok(subs
             .iter()
-            .map(|sub| build_sub_server(sub, account_id, account_display_name, &bt))
+            .map(|sub| {
+                let mut server = build_sub_server(&sub.name, account_id, account_display_name, &bt);
+                if let Some(url) = &sub.icon_url {
+                    server.icon_url = Some(url.clone());
+                }
+                server
+            })
             .collect())
     }
 

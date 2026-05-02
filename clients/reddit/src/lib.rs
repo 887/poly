@@ -68,6 +68,17 @@ impl From<reqwest::Error> for RedditError {
     }
 }
 
+/// Display-relevant info about a subscribed subreddit.
+#[cfg(feature = "native")]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SubredditInfo {
+    /// `display_name` (without the `r/` prefix).
+    pub name: String,
+    /// Optional resolved icon URL (community_icon preferred, icon_img
+    /// fallback, HTML entities decoded).
+    pub icon_url: Option<String>,
+}
+
 /// Sort options for subreddit listings.
 #[cfg(feature = "native")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -328,7 +339,7 @@ impl RedditClient {
     /// # Errors
     ///
     /// `RedditError::Status` on 5xx; `RedditError::Http` on transport.
-    pub async fn list_subscribed_subreddits(&self) -> Result<Vec<String>, RedditError> {
+    pub async fn list_subscribed_subreddits(&self) -> Result<Vec<SubredditInfo>, RedditError> {
         let url = self.resolve_url("/subreddits/mine/subscriber/.json");
         let resp = self.with_session_cookie(self.http.get(&url)).send().await?;
         if !resp.status().is_success() {
@@ -345,10 +356,26 @@ impl RedditClient {
         Ok(children
             .iter()
             .filter_map(|c| {
-                c.get("data")
-                    .and_then(|d| d.get("display_name"))
-                    .and_then(|n| n.as_str())
-                    .map(str::to_owned)
+                let data = c.get("data")?;
+                let name = data.get("display_name").and_then(|n| n.as_str())?;
+                // Reddit emits two icon fields and either may be empty:
+                //   `community_icon` is the new-style large round icon
+                //   `icon_img` is the legacy uploaded image
+                // Prefer community_icon when populated, fall back to icon_img.
+                // Reddit also HTML-entity-encodes `&` in the URLs (`&amp;`)
+                // — decode so reqwest / browser fetch parses the URL.
+                let icon_url = ["community_icon", "icon_img"]
+                    .iter()
+                    .find_map(|field| {
+                        data.get(*field)
+                            .and_then(|v| v.as_str())
+                            .filter(|s| !s.is_empty())
+                            .map(|s| s.replace("&amp;", "&"))
+                    });
+                Some(SubredditInfo {
+                    name: name.to_string(),
+                    icon_url,
+                })
             })
             .collect())
     }

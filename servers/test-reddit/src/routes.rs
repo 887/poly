@@ -225,6 +225,16 @@ pub async fn subreddits_mine_json(
         .iter()
         .enumerate()
         .map(|(i, sub)| {
+            // Map test subs to existing animal avatars so the icon path
+            // resolves to a real PNG via test-common::avatars::serve_animal.
+            // r/rust → cat, r/programming → dog, anything else → koala
+            // (deterministic visual so the UI smoke test can sanity-check
+            // icons render).
+            let animal = match sub.as_str() {
+                "rust" => "cat",
+                "programming" => "dog",
+                _ => "koala",
+            };
             json!({
                 "kind": "t5",
                 "data": {
@@ -234,6 +244,8 @@ pub async fn subreddits_mine_json(
                     "title": sub,
                     "subscribers": 1234,
                     "user_is_subscriber": true,
+                    "community_icon": format!("http://127.0.0.1:9108/avatars/{animal}"),
+                    "icon_img": format!("http://127.0.0.1:9108/avatars/{animal}"),
                 }
             })
         })
