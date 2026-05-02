@@ -374,18 +374,42 @@ pub struct GetModlogResponse {
 ///
 /// Returns `true` when `embed_video_url` is populated (the canonical Lemmy
 /// signal for video embeds) OR when `post.url` uses a recognised video
-/// file extension. This deliberately avoids domain-matching heuristics
-/// (PeerTube, Invidious, etc.) — those vary by instance.
+/// file extension OR a known video-host domain (YouTube / Vimeo /
+/// well-known PeerTube flagship instances). PeerTube federation is
+/// per-instance, so the host list is best-effort — instances missing
+/// from the list still get the right signal via `embed_video_url`,
+/// which is always trusted.
 pub fn post_is_video(post: &LemmyPost) -> bool {
     if post.embed_video_url.is_some() {
         return true;
     }
     post.url.as_deref().is_some_and(|u| {
         let lower = u.to_lowercase();
-        lower.ends_with(".mp4")
+        // File-extension match.
+        if lower.ends_with(".mp4")
             || lower.ends_with(".webm")
             || lower.ends_with(".ogv")
             || lower.ends_with(".mov")
+        {
+            return true;
+        }
+        // Domain-match for the well-known video hosts. `contains` to
+        // tolerate `www.` / `m.` prefixes and `https://` schemes.
+        const VIDEO_HOSTS: &[&str] = &[
+            "youtube.com/",
+            "youtu.be/",
+            "vimeo.com/",
+            // PeerTube flagship instances — federation makes a complete
+            // list impossible; this is the largest-traffic subset.
+            "peertube.tv/",
+            "tilvids.com/",
+            "kolektiva.media/",
+            "framatube.org/",
+            // Invidious frontends are youtube-equivalent.
+            "invidious.io/",
+            "yewtu.be/",
+        ];
+        VIDEO_HOSTS.iter().any(|host| lower.contains(host))
     })
 }
 

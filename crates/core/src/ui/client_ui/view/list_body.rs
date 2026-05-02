@@ -384,7 +384,15 @@ pub fn ListBodyRow(row: ViewRow, on_click: EventHandler<String>) -> Element {
                         div { class: "forum-post-meta", "{meta_rest}" }
                     }
                 }
-                if let Some(ref url) = preview_image_url {
+                // Bandwidth-aware preview gate: skip the thumbnail when
+                // the browser reports a slow-2g/2g connection (per
+                // navigator.connection.effectiveType). This is in
+                // addition to the per-backend `render-previews` mechanism,
+                // not a replacement — toggling that off in settings still
+                // hides previews unconditionally.
+                if let Some(ref url) = preview_image_url
+                    && !crate::ui::client_ui::view::is_bandwidth_constrained()
+                {
                     if is_video {
                         // Video post: wrap thumbnail in a relative-positioned
                         // container and add a play-button overlay (Phase 3).

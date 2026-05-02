@@ -27,6 +27,46 @@ pub use split_body::SplitBody;
 pub use toolbar::ViewToolbar;
 pub use tree_body::TreeBody;
 
+/// Returns `true` when the browser reports a bandwidth-constrained
+/// connection (`navigator.connection.effectiveType` ∈ {`slow-2g`, `2g`}).
+///
+/// Used by the forum-row preview rendering path to suppress thumbnail
+/// downloads on slow connections — orthogonal to the per-backend
+/// `render-previews` mechanism (which the user toggles manually).
+///
+/// On native (and on browsers that don't expose the Network Information
+/// API — currently Firefox + Safari) this always returns `false`,
+/// preserving the previous always-show behaviour.
+#[must_use]
+pub fn is_bandwidth_constrained() -> bool {
+    #[cfg(target_arch = "wasm32")]
+    {
+        // navigator.connection is non-standard but supported in
+        // Chromium-based browsers; access through js_sys to avoid
+        // pulling a heavyweight web-sys feature flag for one read.
+        use wasm_bindgen::JsValue;
+        let win = match web_sys::window() {
+            Some(w) => w,
+            None => return false,
+        };
+        // Reflect.get(navigator, "connection") then .effectiveType.
+        let nav: JsValue = win.navigator().into();
+        let conn = match js_sys::Reflect::get(&nav, &JsValue::from_str("connection")) {
+            Ok(v) if !v.is_undefined() && !v.is_null() => v,
+            _ => return false,
+        };
+        let effective = match js_sys::Reflect::get(&conn, &JsValue::from_str("effectiveType")) {
+            Ok(v) => v.as_string().unwrap_or_default(),
+            _ => return false,
+        };
+        matches!(effective.as_str(), "slow-2g" | "2g")
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        false
+    }
+}
+
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::state::{BatchedSignal, use_reactive_effect};
