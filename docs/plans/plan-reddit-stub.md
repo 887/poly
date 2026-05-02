@@ -1,4 +1,4 @@
-## Status: IN PROGRESS — Phase A shipped (commit a459cea2), F.2 fixtures captured, Phase B next
+## Status: IN PROGRESS — Phase A (a459cea2) + F.2 fixtures (a2c95418) + Phase B (commit pending) shipped, Phase C next
 
 ## Real-world findings from F.2 fixture capture (2026-05-02)
 
@@ -182,34 +182,61 @@ side effect.
       `cargo check -p poly-core --features reddit`, AND
       `cargo check -p poly-core` (default, no reddit) all pass clean.
 
-### Phase B — HTML parser layer
+### Phase B — HTML parser layer — ✅ shipped (commit pending)
 
-- [ ] **B.1** Create `clients/reddit/src/parser/` module tree:
-      `mod.rs`, `subreddit.rs` (subreddit listing → Vec<Post>),
-      `post.rs` (single post page → Post + Vec<Comment>), `inbox.rs` (DM
-      inbox), `user.rs` (user profile).
-- [ ] **B.2** Implement `parser::subreddit::parse_listing(html: &str) -> Result<Vec<RawPost>, ParseError>`:
-      `scraper::Selector` against `div.thing[data-fullname^="t3_"]`, extract
-      `data-fullname`, `data-author`, `data-subreddit`, `data-score`,
-      `data-timestamp`, post title from `.title a.title`, body from
-      `.usertext-body .md`.
-- [ ] **B.3** Implement `parser::post::parse_post_page(html: &str) -> Result<(RawPost, Vec<RawComment>), ParseError>`:
-      same `t3_` extraction for the OP, then walk `.commentarea > .sitetable >
-      .thing[data-fullname^="t1_"]` recursively (comments nest as
-      `.child > .listing > .thing`). Track parent IDs from the `data-parent-fullname` attr.
-- [ ] **B.4** Implement `parser::inbox::parse_inbox(html: &str) -> Result<Vec<RawDm>, ParseError>`:
-      `div.message[data-fullname^="t4_"]`, extract `data-author`,
-      `.subject`, `.md` body, `time.live-timestamp` for ISO timestamp.
-- [ ] **B.5** Implement `parser::user::parse_user_overview(html: &str) -> Result<UserProfile, ParseError>`:
-      `.titlebox` for karma + cake-day, `.profile-img` for avatar.
-- [ ] **B.6** Define `ParseError` enum with `MissingSelector(&'static str)`,
-      `ParseInt(...)`, `MalformedTimestamp(...)`, `LoggedOut` variants. Every
-      parser returns `LoggedOut` if the page contains
-      `.login-form` (Reddit redirects unauth'd to login on protected pages).
-- [ ] **B.7** Per-parser unit tests using fixture HTML files committed to
-      `clients/reddit/tests/fixtures/`. At minimum: `r_rust_hot.html`,
-      `comments_t3_xyz.html`, `inbox_empty.html`, `inbox_with_dms.html`,
-      `user_overview.html`, `login_redirect.html`.
+- [x] **B.1** Created `clients/reddit/src/parser/` module tree (mod.rs +
+      subreddit.rs + post.rs + inbox.rs + user.rs), wired via `pub mod
+      parser;` under `#[cfg(feature = "native")]` in lib.rs.
+- [x] **B.2** `parser::subreddit::parse_listing` — extracts every
+      `div.thing[data-fullname^="t3_"]` from a listing. Uses `data-*`
+      attribute access (`data-fullname`, `data-author`, `data-subreddit`,
+      `data-score`, `data-timestamp` epoch-ms, `data-permalink`,
+      `data-comments-count`, `data-url`) — more stable than text
+      scraping since these attrs are part of the public DOM contract.
+      Title from `a.title`, body from `div.usertext-body div.md`.
+- [x] **B.3** `parser::post::parse_post_page` — OP extracted via the
+      same `t3_` machinery, then walks `div.commentarea > div.sitetable
+      > div.thing.comment[data-fullname^="t1_"]` for top-level comments
+      and recurses on `:scope > div.child > div.listing >
+      div.thing.comment[data-fullname^="t1_"]` for replies. **Key
+      finding from real fixture:** the bare `div.thing[data-fullname^="t1_"]`
+      selector also matches `morechildren` "load more" placeholders
+      (24 of 211 t1_ containers in the test fixture). Adding `.comment`
+      class filter (`div.thing.comment[...]`) excludes them cleanly —
+      placeholders don't have the `comment` class.
+- [x] **B.4** `parser::inbox::parse_inbox` — extracts every
+      `div.message[data-fullname^="t4_"]`. Empty inbox returns
+      `Ok(Vec::new())` not an error. Subject from `a.subject`, body from
+      `div.md`, timestamp from `time.live-timestamp[datetime=...]`.
+- [x] **B.5** `parser::user::parse_user_overview` — extracts the user's
+      name from `<title>overview for <name></title>`, optional avatar
+      from `img.profile-img`, and a mixed `Vec<UserOverviewItem>` of
+      `Post(RawPost)` and `Comment(RawComment)` entries. Comments on
+      overview pages are flat (no reply nesting), so a local
+      `parse_user_comment` helper avoids pulling the full recursive
+      machinery.
+- [x] **B.6** `ParseError` enum with variants: `LoggedOut`,
+      `MissingElement(&'static str)`, `MalformedInt(&'static str)`,
+      `MalformedTimestamp(String)`. **LoggedOut detector** matches BOTH
+      legacy `.login-form` AND modern shreddit (`class="theme-beta"` +
+      `<title>Welcome to Reddit</title>` together) — the cheap byte-level
+      check runs as the first step of every parser. Per-helper
+      `data_attr` and `parse_timestamp_ms` (handles both epoch-ms and
+      RFC-3339 datestring) live in `mod.rs` as crate-private utilities.
+- [x] **B.7** Per-parser unit tests against fixtures. **15 passing
+      tests, 0 failures:**
+      - 6 unit tests in `mod.rs` (LoggedOut detection ×3,
+        `parse_html` short-circuit ×1, timestamp parser ×2)
+      - `tests/parser_subreddit.rs` ×4 (hot/new/top + LoggedOut
+        short-circuit on `login_redirect.html`)
+      - `tests/parser_post.rs` ×2 (OP + threaded comments + timestamp/
+        score sanity for the 211-comment fixture; got 170 real comments
+        after filtering 24 morechildren placeholders, which is within
+        the expected 150-200 band)
+      - `tests/parser_inbox.rs` ×2 (empty inbox + LoggedOut)
+      - `tests/parser_user.rs` ×1 (name + recent items extraction)
+      The `inbox_with_dms.html` fixture is still deferred (need
+      working compose endpoint or a second account to populate).
 
 ### Phase C — Cookie auth + modhash (REVISED post-F.2: cookie-only)
 

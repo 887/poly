@@ -20,6 +20,9 @@
 //! the explicit reason for keeping it out of release builds.
 
 #[cfg(feature = "native")]
+pub mod parser;
+
+#[cfg(feature = "native")]
 pub mod signup;
 
 /// Return Fluent translations for the given locale.
