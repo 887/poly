@@ -1,8 +1,8 @@
 # Plan — Read-Guard Scoping (Class #2 Hang Prevention)
 
-> Status: **✅ DONE** — Phases 1+2+5 shipped (`5c1e13c7`). `BatchedSignal::with(|v|)` documented as preferred read API; audit found zero live HIGH incidents (BatchedSignal Phases 2-3 disciplined the codebase); `forbid-long-read-guard.sh` lint ships as the regression gate. Canonical patterns at `docs/dev/reactive-state.md`.
+> Status: **✅ DONE** — Phases 1+2+3+5 shipped (`5c1e13c7`). `BatchedSignal::with(|v|)` documented as preferred read API; audit found zero live HIGH incidents (BatchedSignal Phases 2-3 disciplined the codebase); `forbid-long-read-guard.sh` lint ships as the regression gate. Phase 4 (Optional Dylint upgrade) marked OBSOLETE 2026-05-02 — the lint algorithm got smarter (brace-depth + `drop()` tracking) so the allowlist is empty by design and dylint's distinguish-`Signal::read`-from-other-`.read()`s value is theoretical. Canonical patterns at `docs/dev/reactive-state.md`.
 > Authors: orchestrator (audit at [`/tmp/poly-hang-class-2-audit.md`](file:///tmp/poly-hang-class-2-audit.md)).
-> Last updated: 2026-04-25.
+> Last updated: 2026-05-02.
 
 ---
 
@@ -107,22 +107,15 @@ Verification:
 - Manually inject a HIGH-severity regression: edit a sample file to introduce `let g = chat_data.read(); chat_data.batch(|cd| { cd.loading = false; });` and confirm the script fails.
 - Run against current main; confirm only the 3 MEDIUM sites flag (and that they're allowlisted post-Phase-2).
 
-### Phase 4 — (Optional) Dylint upgrade path — ⏸ SKIPPED (intentional, see real-fix note)
+### Phase 4 — (Optional) Dylint upgrade path — 🗑 OBSOLETE (2026-05-02)
 
-The original Phase 4 idea — re-implement the regex check as a `cargo dylint` HIR-aware lint — was framed as the way out of allowlist drift. **2026-05-02 update: the drift problem got solved at the source instead.**
+The original Phase 4 idea — replace the regex with a `cargo dylint` HIR-aware lint — had two stated rationales: (a) escape allowlist drift, (b) distinguish `Signal::read` from `RwLock::read` / `std::io::Read::read`. Both evaporated:
 
-**What actually shipped (commit pending):** `tools/scripts/forbid-long-read-guard.sh` got smarter. The awk algorithm now:
-- tracks brace depth from the `let g = sig.read();` line, treating `{` as +1 and `}` as -1 (excluding braces inside `//` comments + simple string literals).
-- watches for `drop(<var>);` between the read and any subsequent write.
-- only fires the hit when the write on the same signal happens **while** the guard is still in scope **and** hasn't been dropped.
+- **(a) Drift** was solved at the source. `tools/scripts/forbid-long-read-guard.sh` now tracks brace depth from the `let g = sig.read();` line (excluding braces in `//` comments + string literals) and watches for `drop(<var>);`. It only fires when the write on the same signal happens *while* the guard is still in scope *and* hasn't been dropped. Both safe patterns (`let X = { let g = sig.read(); … };` block-scoped + `let g = sig.read(); … drop(g); … sig.batch(…);` explicit-drop) are natively recognised. The 7-entry allowlist is now empty by design; production tree passes lint with no exceptions and zero drift to maintain.
 
-This natively recognises both safe patterns the original lint tripped on:
-- block-scoped reads: `let X = { let g = sig.read(); … };` — the `};` closes the inner block, depth goes negative, scan stops, no hit.
-- explicit drops: `let g = sig.read(); … drop(g); … sig.batch(…);` — the `drop()` ends the scan, no hit.
+- **(b) `Signal::read` vs other `.read()`s** was theoretical. `crates/core/src/ui/` doesn't use `RwLock::read` (those live in `clients/*/src/` behind `BackendHandleExt::read_with_timeout`). `std::io::Read::read()` returns `Result<usize>` — no guard to hold across a write. So the disambiguation dylint would provide has no actual collision to disambiguate in the scan scope.
 
-**Result:** the allowlist that previously had 7 line-anchored entries is now **empty by design**. The lint passes on the production tree with no allowlisted exceptions, no inline `// poly-lint: allow` comments, and **no drift to maintain**. Regression tests verify both safe patterns pass clean and a real `let g = sig.read(); sig.batch(…);` cycle still fires.
-
-**Verdict:** dylint upgrade is no longer the "way out" — there's nothing to escape. Keep Phase 4 ⏸ SKIPPED. Re-open only if a future Rust idiom emerges that the brace-depth + drop heuristic can't recognise (and inline `// poly-lint: allow long-read-guard` doesn't cover comfortably).
+**Verdict:** dylint adds no value the smarter regex doesn't already provide. This phase is dead, not deferred. Keep the entry for plan-history continuity; do not re-open without a concrete failure case the regex can't handle.
 
 ### Phase 5 — Documentation cleanup — ✅ DONE (`5c1e13c7`)
 
