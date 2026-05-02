@@ -91,3 +91,21 @@ crates/core/src/i18n/baked_locales.rs
 
 # E2E harness per-run artefacts (PID files, logs, isolated SQLite, results)
 tests/e2e/.run/
+
+# Reddit fixture binaries — captured HTML stays in the repo, but raw
+# PNGs / JPGs / favicons / award images scraped during fixture capture
+# don't need to ride along (parser layer doesn't read images).
+clients/reddit/tests/fixtures/*.png
+clients/reddit/tests/fixtures/*.jpg
+clients/reddit/tests/fixtures/*.jpeg
+clients/reddit/tests/fixtures/*.gif
+clients/reddit/tests/fixtures/*.webp
+clients/reddit/tests/fixtures/*.ico
+
+# Stray UUID-named drops in clients/demo/assets — defensive guard against
+# accidental screenshot writes (real demo avatars use named files like
+# `cat.png`, `lemming.png` — UUID names are always accidents). Existing
+# tracked UUID-named assets remain tracked; this rule only prevents
+# new ones.
+clients/demo/assets/[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]-*-*-*-*.png
+clients/demo/assets/[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]-*-*-*-*.jpg
