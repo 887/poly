@@ -1,4 +1,4 @@
-## Status: IN PROGRESS — Phase A (a459cea2) + F.2 (a2c95418) + B (a6e2f5c3) + D-anon (a55b75a3) + F + C + E + back_and_forth (commit pending) shipped. Test server `poly-test-reddit` runs on port 9108. Cat ↔ dog DM flow verified end-to-end. Phase G (UI views like Lemmy) next.
+## Status: ✅ MAJOR MILESTONE — Phases A (a459cea2) + B (a6e2f5c3) + D-anon (a55b75a3) + F.2 fixtures (a2c95418) + F+C+E+back_and_forth (21851b5a) + G ClientBackend impl + test-account signup (13739e13) all shipped. Reddit backend is wired into the Poly UI surface. Cat ↔ dog DM flow verified end-to-end. Remaining: top-level submit (E.1 send_message), in-UI sort dropdown polish, full UI smoke against test server.
 
 ## Real-world findings from F.2 fixture capture (2026-05-02)
 
