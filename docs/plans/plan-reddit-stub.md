@@ -1,4 +1,4 @@
-## Status: IN PROGRESS — Phase A shipped (first commit on branch — see git log), Phase B next
+## Status: IN PROGRESS — Phase A shipped (commit a459cea2), Phase B next
 
 # Plan: Reddit Backend (HTML scraping, dev-plugins gated)
 
@@ -61,7 +61,7 @@ side effect.
 
 ## Phases
 
-### Phase A — Crate scaffold + feature gating — ✅ shipped in first commit on branch — see git log
+### Phase A — Crate scaffold + feature gating — ✅ shipped in commit a459cea2
 
 - [x] **A.1** Created `clients/reddit/Cargo.toml` mirroring
       `clients/lemmy/Cargo.toml` (closer peer than discord — same forum +
