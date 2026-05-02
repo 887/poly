@@ -27,9 +27,13 @@ use std::sync::Arc;
 
 use axum::extract::State as AxumState;
 use axum::http::StatusCode;
+use axum::response::sse::{Event as SseEvent, KeepAlive, Sse};
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::Json;
+use futures_util::StreamExt;
+use std::convert::Infallible;
+use tokio_stream::wrappers::BroadcastStream;
 use tower_http::cors::CorsLayer;
 use clap::Parser;
 use poly_client::MessageContent;
@@ -99,6 +103,7 @@ async fn run_http(port: u16) -> anyhow::Result<()> {
 
     let app = axum::Router::new()
         .route("/mcp", post(handle_mcp_http))
+        .route("/mcp/sse", get(handle_mcp_sse))
         .route("/health", get(handle_health))
         .with_state(state)
         // Permissive CORS so the WASM UI (poly-web on :3000) and any
@@ -107,7 +112,8 @@ async fn run_http(port: u16) -> anyhow::Result<()> {
 
     let addr = format!("127.0.0.1:{port}");
     tracing::info!("poly-chat-mcp listening on http://{addr}");
-    tracing::info!("  POST http://{addr}/mcp  — JSON-RPC endpoint");
+    tracing::info!("  POST http://{addr}/mcp      — JSON-RPC endpoint (request/response)");
+    tracing::info!("  GET  http://{addr}/mcp/sse  — Server-Sent Events stream (server-push)");
     tracing::info!("  GET  http://{addr}/health");
 
     let listener = tokio::net::TcpListener::bind(&addr).await?;
@@ -155,6 +161,51 @@ async fn handle_mcp_http(
     };
 
     (StatusCode::OK, Json(result))
+}
+
+// ─── SSE event-stream endpoint (C.4) ─────────────────────────────────────────
+//
+// MCP server-push transport. Wraps each `McpEvent` from the broadcast channel
+// in a JSON-RPC `notifications/event` frame and writes it as a Server-Sent
+// Event. Compatible with MCP spec 2025-11-25's Streamable HTTP transport.
+//
+// Hosts that consume this endpoint do NOT need to call `poll_events`. Hosts
+// that don't (incl. Claude Desktop today — see anthropics/claude-code#4118
+// & #13646) keep using the existing `poll_events` tool over POST /mcp.
+//
+// The polling tool stays the source of truth for the event ring buffer; SSE
+// is a thin push wrapper on the same broadcast channel, so both paths see
+// the same event ordering.
+async fn handle_mcp_sse(
+    AxumState(state): AxumState<AppState>,
+) -> Sse<impl futures_core::Stream<Item = Result<SseEvent, Infallible>>> {
+    // Subscribe to the broadcast channel. The receiver is owned by the
+    // returned stream; when the SSE connection closes, the receiver drops
+    // and the broadcast slot is reclaimed.
+    let rx = {
+        let pool = state.pool.lock().await;
+        let store = pool.events.lock().await;
+        store.subscribe_broadcast()
+    };
+
+    let stream = BroadcastStream::new(rx).filter_map(|res| async move {
+        match res {
+            Ok(ev) => {
+                let frame = json!({
+                    "jsonrpc": "2.0",
+                    "method": "notifications/event",
+                    "params": ev,
+                });
+                Some(Ok(SseEvent::default().data(frame.to_string())))
+            }
+            // Lagged receiver — broadcast ring overran. Skip silently;
+            // the host can re-sync via `poll_events` with the cursor it
+            // last saw if it cares about gap detection.
+            Err(_) => None,
+        }
+    });
+
+    Sse::new(stream).keep_alive(KeepAlive::default())
 }
 
 // ─── Auto-send engine (B.3) ──────────────────────────────────────────────────
