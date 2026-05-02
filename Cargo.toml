@@ -18,6 +18,7 @@ members = [
     "clients/hackernews",
     "clients/github",
     "clients/forgejo",
+    "clients/reddit",
     "clients/server-client",
     "servers/backup-server",
     "servers/server",
@@ -226,6 +227,7 @@ poly-lemmy = { path = "clients/lemmy" }
 poly-hackernews = { path = "clients/hackernews" }
 poly-github = { path = "clients/github" }
 poly-forgejo = { path = "clients/forgejo" }
+poly-reddit = { path = "clients/reddit" }
 poly-backup-server = { path = "servers/backup-server" }
 poly-server = { path = "servers/server" }
 poly-test-common = { path = "servers/test-common" }

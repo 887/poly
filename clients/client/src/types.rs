@@ -94,6 +94,13 @@ pub fn capabilities_for_slug(slug: &str) -> BackendCapabilities {
             has_moderation_log: true,
             ..BackendCapabilities::MESSAGING_NO_SOCIAL
         },
+        "reddit" => BackendCapabilities {
+            // Reddit has no API for moderation actions on the user-client
+            // surface (mod actions live behind the modtools UI which we
+            // don't scrape). Leave moderation flags off; treat reddit as
+            // a forum + DMs backend.
+            ..BackendCapabilities::MESSAGING_NO_SOCIAL
+        },
         "matrix" => BackendCapabilities {
             voice: VoiceSupport::None,
             // B-MX moderation flags

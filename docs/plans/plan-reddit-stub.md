@@ -1,4 +1,4 @@
-## Status: PLANNED — not started
+## Status: IN PROGRESS — Phase A shipped (first commit on branch — see git log), Phase B next
 
 # Plan: Reddit Backend (HTML scraping, dev-plugins gated)
 
@@ -61,29 +61,56 @@ side effect.
 
 ## Phases
 
-### Phase A — Crate scaffold + dev-plugins gating
+### Phase A — Crate scaffold + feature gating — ✅ shipped in first commit on branch — see git log
 
-- [ ] **A.1** Create `clients/reddit/Cargo.toml` mirroring
-      `clients/discord/Cargo.toml`. Deps: `scraper` (HTML), `reqwest`
-      (HTTP, with `cookie_store` feature), `regex`, `chrono`, `serde`,
-      `tracing`, `async-trait`, `poly-client-types` (workspace), `thiserror`.
-- [ ] **A.2** Create `clients/reddit/src/lib.rs` with `RedditClient` struct
-      holding `client: reqwest::Client` (with cookie jar), `base_url:
-      &'static str = "https://old.reddit.com"`, `modhash: Mutex<Option<String>>`.
-- [ ] **A.3** Add WIT bindings module (`wit_bindings.rs`) and guest module
-      (`guest.rs`), both gated `cfg(target_os = "wasi")`, mirroring
-      `clients/discord/src/{wit_bindings,guest}.rs`.
-- [ ] **A.4** Add `Reddit` variant to `BackendType` enum in
-      `clients/client/src/types.rs`. Add arms for `display_name() -> "Reddit"`,
-      `slug() -> "reddit"`, `from_slug("reddit") => Some(Reddit)`,
-      `BackendType::all()` inclusion.
-- [ ] **A.5** Register in `crates/core/src/bundled_plugins.rs` under
-      `#[cfg(feature = "reddit")]` block, identical pattern to Discord (line
-      174) and Teams (line 185).
-- [ ] **A.6** Add `reddit` feature to root `Cargo.toml` `[features]` section,
-      grouped under `dev-plugins = ["discord", "teams", "reddit"]`.
-- [ ] **A.7** Add `poly-reddit` to workspace `Cargo.toml` members. Verify
-      `cargo check -p poly-reddit --features reddit` passes.
+- [x] **A.1** Created `clients/reddit/Cargo.toml` mirroring
+      `clients/lemmy/Cargo.toml` (closer peer than discord — same forum +
+      DMs profile). Deps: `scraper` 0.20 (HTML), `reqwest` (HTTP, with
+      `cookies` feature), `regex` 1, `chrono`, `serde`, `tracing`,
+      `async-trait`, `poly-host-bridge`. Crate type `cdylib + rlib`,
+      native feature gated.
+- [x] **A.2** Created `clients/reddit/src/lib.rs` with `RedditClient`
+      struct holding `http: reqwest::Client` (with cookie jar) and
+      `base_url: String`. Constructor returns `Result<Self,
+      reqwest::Error>` to surface TLS-backend init failures rather than
+      `unwrap` (workspace lints `unwrap_used = "deny"`). Modhash field
+      deferred to Phase C — workspace lint `feedback_cfg_gating.md` says
+      add fields when they're used, not now-with-`#[allow(dead_code)]`.
+- [ ] **A.3** ~~Add WIT bindings module + guest module~~ — **deferred to
+      its own future phase**. Reason: discord and lemmy DO have
+      `cfg(target_os = "wasi")` `wit_bindings.rs` + `guest.rs` modules,
+      but they're full plugin guest implementations (hundreds of lines
+      mirroring the `messenger-plugin` WIT world). For Phase A scaffold
+      this is overscope. The native `RedditClient` ships as the canonical
+      surface; WASI plugin packaging can come back as its own phase if
+      anyone needs reddit-as-WASM-plugin (currently no backend ships
+      that way in production — they're all native crates loaded by
+      poly-core's feature gates).
+- [x] **A.4** ~~Add `Reddit` variant to `BackendType` enum~~ — **plan was
+      wrong**. `BackendType` is a type alias for `BackendId` which is
+      `struct BackendId(String)` (clients/client/src/types.rs:12), a
+      string newtype not an enum. No variant to add — `BackendId::new("reddit")`
+      and `from_slug("reddit")` work directly. Instead added `"reddit"`
+      arm to `capabilities_for_slug` in clients/client/src/types.rs:96
+      (forum + DMs profile, mirrors lemmy without moderation flags
+      because reddit's mod actions live behind modtools we don't
+      scrape).
+- [x] **A.5** Registered in `crates/core/src/bundled_plugins.rs:197`
+      under `#[cfg(feature = "reddit")]` block, identical pattern to
+      Discord (line 174) and Teams (line 185). Icon 🤖 (the snoo
+      stand-in), name+desc keys `plugin-reddit-signup-{name,desc}`.
+- [x] **A.6** Added `reddit = ["dep:poly-reddit"]` feature + optional
+      `poly-reddit` dep to `crates/core/Cargo.toml`. **NOT in default
+      features** — same model as `discord` and `teams` (non-default
+      per-plugin features). There's no `dev-plugins` umbrella feature
+      in this codebase; the original plan's
+      `dev-plugins = ["discord", "teams", "reddit"]` was speculative
+      and not how the existing gating works.
+- [x] **A.7** Added `clients/reddit` to root `Cargo.toml`
+      workspace.members + `poly-reddit = { path = "clients/reddit" }`
+      to workspace.dependencies. Verified `cargo check -p poly-reddit`,
+      `cargo check -p poly-core --features reddit`, AND
+      `cargo check -p poly-core` (default, no reddit) all pass clean.
 
 ### Phase B — HTML parser layer
 

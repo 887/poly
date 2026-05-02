@@ -194,6 +194,17 @@ pub fn signup_entry_for_bundled_slug(slug: &str) -> Option<SignupEntry> {
                 poly_client::SignupMethod::External("https://signup.live.com/signup?lic=1".to_string())
             },
         }),
+        #[cfg(feature = "reddit")]
+        "reddit" => Some(SignupEntry {
+            slug: "reddit",
+            icon: "🤖",
+            name_key: "plugin-reddit-signup-name",
+            desc_key: "plugin-reddit-signup-desc",
+            render: poly_reddit::signup::signup_render_fn,
+            signup_method: |_server_url| {
+                poly_client::SignupMethod::External("https://www.reddit.com/register/".to_string())
+            },
+        }),
         _ => None,
     }
 }
