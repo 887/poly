@@ -1058,6 +1058,7 @@ pub(crate) fn from_wit_view_row(r: wit_views::ViewRow) -> pc::ViewRow {
         // WIT-side ViewRow has no preview_image_url yet (WASM plugin surface);
         // host-side previews are populated by native backends only.
         preview_image_url: None,
+        is_video: false,
     }
 }
 

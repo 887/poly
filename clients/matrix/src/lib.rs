@@ -1860,6 +1860,7 @@ impl ClientBackend for MatrixClient {
                 icon,
                 badge: None,
                 preview_image_url: None,
+                is_video: false,
                 context_menu_target_kind: if is_space {
                     MenuTargetKind::Server
                 } else {

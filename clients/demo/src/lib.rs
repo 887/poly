@@ -628,6 +628,7 @@ impl ClientBackend for DemoClient {
                         badge: None,
                         context_menu_target_kind: MenuTargetKind::Server,
                         preview_image_url: None,
+                        is_video: false,
                     }
                 })
                 .collect();
@@ -1121,6 +1122,7 @@ impl ClientBackend for DemoClient2 {
                         badge: None,
                         context_menu_target_kind: MenuTargetKind::Server,
                         preview_image_url: None,
+                        is_video: false,
                     }
                 })
                 .collect();
@@ -1613,6 +1615,7 @@ impl ClientBackend for DemoClient3 {
                         badge: None,
                         context_menu_target_kind: MenuTargetKind::Server,
                         preview_image_url: None,
+                        is_video: false,
                     }
                 })
                 .collect();
@@ -1668,6 +1671,7 @@ impl ClientBackend for DemoClient3 {
                     badge: None,
                     context_menu_target_kind: MenuTargetKind::Message,
                     preview_image_url: None,
+                    is_video: false,
                 }
             })
             .collect();

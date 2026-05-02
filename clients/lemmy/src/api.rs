@@ -173,6 +173,12 @@ pub struct LemmyPost {
     /// `"thumbnail_url": "https://lemmy.world/pictrs/image/<uuid>.png"`.
     #[serde(default)]
     pub thumbnail_url: Option<String>,
+    /// Video embed URL set by Lemmy when the post links to a video host
+    /// (YouTube, PeerTube, etc.). Present in the real Lemmy v3 API but
+    /// absent for non-video posts. We surface this to drive `is_video`
+    /// detection without URL-extension heuristics.
+    #[serde(default)]
+    pub embed_video_url: Option<String>,
 }
 
 /// A post view as returned in list responses.
@@ -364,6 +370,25 @@ pub struct GetModlogResponse {
 
 // ── Conversion helpers ───────────────────────────────────────────────────────
 
+/// Determine whether a `LemmyPost` links to a video source.
+///
+/// Returns `true` when `embed_video_url` is populated (the canonical Lemmy
+/// signal for video embeds) OR when `post.url` uses a recognised video
+/// file extension. This deliberately avoids domain-matching heuristics
+/// (PeerTube, Invidious, etc.) — those vary by instance.
+pub fn post_is_video(post: &LemmyPost) -> bool {
+    if post.embed_video_url.is_some() {
+        return true;
+    }
+    post.url.as_deref().is_some_and(|u| {
+        let lower = u.to_lowercase();
+        lower.ends_with(".mp4")
+            || lower.ends_with(".webm")
+            || lower.ends_with(".ogv")
+            || lower.ends_with(".mov")
+    })
+}
+
 /// Map a `LemmyPerson` to a Poly `User`.
 pub fn map_person(person: &LemmyPerson) -> User {
     User {
@@ -434,6 +459,7 @@ pub fn map_community_to_viewrow(view: &CommunityView, unread: u32) -> ViewRow {
         badge: if unread > 0 { Some(unread.to_string()) } else { None },
         context_menu_target_kind: MenuTargetKind::Server,
         preview_image_url: None,
+        is_video: false,
     }
 }
 
@@ -475,6 +501,25 @@ pub fn map_post_to_message(view: &PostView) -> Message {
             "link".to_string(),
             "text/uri-list".to_string(),
             url.clone(),
+            0,
+        ));
+    }
+    // Add a preview image attachment when the post has a pict-rs thumbnail.
+    // This lets the message-view layer render the image inline (not just
+    // the forum-row thumbnail). For video posts we hint video/mp4 so the
+    // host can choose a different render path if desired.
+    if let Some(thumb) = &post.thumbnail_url {
+        let is_vid = post_is_video(post);
+        let (content_type, filename) = if is_vid {
+            ("video/mp4", "video_preview.jpg")
+        } else {
+            ("image/png", "preview.png")
+        };
+        attachments.push(Attachment::remote(
+            format!("lemmy-post-preview-{}", post.id),
+            filename.to_string(),
+            content_type.to_string(),
+            thumb.clone(),
             0,
         ));
     }
@@ -561,6 +606,7 @@ pub fn map_post_to_viewrow(view: &PostView, now: DateTime<Utc>, render_previews:
         badge: None,
         context_menu_target_kind: MenuTargetKind::Message,
         preview_image_url,
+        is_video: post_is_video(post),
     }
 }
 

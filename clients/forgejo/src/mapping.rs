@@ -255,6 +255,7 @@ pub fn map_issue_to_viewrow(issue: &ForgejoIssue) -> ViewRow {
         badge: Some(issue.state.clone()),
         context_menu_target_kind: MenuTargetKind::Channel,
         preview_image_url: None,
+        is_video: false,
     }
 }
 

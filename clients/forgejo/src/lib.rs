@@ -767,6 +767,7 @@ impl ClientBackend for ForgejoClient {
                     badge: None,
                     context_menu_target_kind: MenuTargetKind::Server,
                     preview_image_url: None,
+                    is_video: false,
                 })
                 .collect();
             let next_cursor = if repos.len() > start.saturating_add(page_size) {

@@ -91,6 +91,57 @@ pub(crate) fn parse_post_thing(el: &ElementRef<'_>) -> Result<RawPost, ParseErro
         .map(|d| d.inner_html().trim().to_string())
         .filter(|s| !s.is_empty());
 
+    // ── Media detection ─────────────────────────────────────────────────────
+
+    let domain = data_attr(el, "data-domain").unwrap_or("");
+
+    // Image domains where `data-url` itself is a renderable image.
+    let is_image_domain = matches!(
+        domain,
+        "i.redd.it" | "i.imgur.com" | "imgur.com" | "preview.redd.it"
+    );
+    // URL-extension check for cases where the domain alone isn't conclusive
+    // (e.g. a post with `data-domain="i.imgur.com"` always has an image URL,
+    // but some posts on `imgur.com` only link to an album).
+    let url_is_image = url.as_deref().is_some_and(|u| {
+        let lower = u.to_lowercase();
+        lower.ends_with(".jpg")
+            || lower.ends_with(".jpeg")
+            || lower.ends_with(".png")
+            || lower.ends_with(".gif")
+            || lower.ends_with(".webp")
+    });
+
+    // Video domains — `v.redd.it` requires the HLS manifest, but other
+    // external video hosts link to an embeddable player page.
+    let is_video = matches!(
+        domain,
+        "v.redd.it" | "youtu.be" | "youtube.com" | "vimeo.com" | "gfycat.com"
+            | "streamable.com"
+    );
+
+    // Gallery: `data-is-gallery="true"`.
+    let is_gallery = data_attr(el, "data-is-gallery").is_some_and(|v| v == "true");
+
+    // Build preview_url:
+    // • For image posts, use `data-url` directly (it IS the image).
+    // • For video posts, attempt to find the listing thumbnail <img>.
+    // • Gallery posts: use data-url as a cover preview (single-image stub).
+    let preview_url: Option<String> = if is_image_domain || url_is_image {
+        url.clone()
+    } else if is_video || is_gallery {
+        // Try the listing thumbnail link: `<a class="thumbnail ..."><img src="..."></a>`
+        #[allow(clippy::unwrap_used)] // lint-allow-unused: static selector literal infallible
+        let thumb_sel = Selector::parse("a.thumbnail img").unwrap();
+        el.select(&thumb_sel)
+            .next()
+            .and_then(|img| img.value().attr("src"))
+            .filter(|s| !s.is_empty() && !s.contains("//www.redditstatic.com/icon"))
+            .map(str::to_owned)
+    } else {
+        None
+    };
+
     Ok(RawPost {
         id,
         author,
@@ -102,5 +153,8 @@ pub(crate) fn parse_post_thing(el: &ElementRef<'_>) -> Result<RawPost, ParseErro
         permalink,
         comment_count,
         url,
+        preview_url,
+        is_video,
+        is_gallery,
     })
 }

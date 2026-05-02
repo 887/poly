@@ -321,6 +321,7 @@ pub fn ListBodyRow(row: ViewRow, on_click: EventHandler<String>) -> Element {
     let badge = row.badge.clone();
 
     let preview_image_url = row.preview_image_url.clone();
+    let is_video = row.is_video;
     let (maybe_score, meta_rest): (Option<i64>, String) = meta_raw
         .as_deref()
         .map_or((None, String::new()), parse_score_meta);
@@ -384,11 +385,27 @@ pub fn ListBodyRow(row: ViewRow, on_click: EventHandler<String>) -> Element {
                     }
                 }
                 if let Some(ref url) = preview_image_url {
-                    img {
-                        class: "forum-post-preview",
-                        src: "{url}",
-                        alt: "Post preview",
-                        loading: "lazy",
+                    if is_video {
+                        // Video post: wrap thumbnail in a relative-positioned
+                        // container and add a play-button overlay (Phase 3).
+                        div { class: "forum-post-preview-wrap",
+                            img {
+                                class: "forum-post-preview",
+                                src: "{url}",
+                                alt: "Video post preview",
+                                loading: "lazy",
+                            }
+                            div { class: "forum-post-preview-video-overlay",
+                                "▶"
+                            }
+                        }
+                    } else {
+                        img {
+                            class: "forum-post-preview",
+                            src: "{url}",
+                            alt: "Post preview",
+                            loading: "lazy",
+                        }
                     }
                 }
             }
@@ -588,6 +605,7 @@ mod tests {
             badge: None,
             context_menu_target_kind: MenuTargetKind::Message,
             preview_image_url: None,
+            is_video: false,
         }
     }
 
@@ -614,6 +632,7 @@ mod tests {
             badge: Some("b".into()),
             context_menu_target_kind: MenuTargetKind::Message,
             preview_image_url: None,
+            is_video: false,
         };
         let parts = row_card_parts(&r);
         assert!(parts.has_primary);

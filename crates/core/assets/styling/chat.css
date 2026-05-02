@@ -1395,9 +1395,9 @@
     word-break: break-word;
 }
 
-/* Preview thumbnail shown on Lemmy forum post rows when
-   the per-account "render-previews" mechanism is enabled.
-   Auto-hides on narrow screens so the title stays readable. */
+/* Preview thumbnail shown on forum post rows (Lemmy, Reddit) when the
+   per-account "render-previews" / "show-media-previews" mechanism is
+   enabled. Auto-hides on narrow screens so the title stays readable. */
 .forum-post-preview {
     width: 64px;
     height: 64px;
@@ -1408,8 +1408,47 @@
     margin-left: auto;
 }
 
+/* Wrapper that allows the video play-button overlay to be positioned
+   relative to the thumbnail. Applied when ViewRow.is_video = true. */
+.forum-post-preview-wrap {
+    position: relative;
+    width: 64px;
+    height: 64px;
+    flex-shrink: 0;
+    align-self: center;
+    margin-left: auto;
+}
+
+.forum-post-preview-wrap .forum-post-preview {
+    /* Reset margin/flex when inside the wrap so the wrap controls layout. */
+    width: 100%;
+    height: 100%;
+    margin-left: 0;
+    flex-shrink: unset;
+    align-self: unset;
+}
+
+/* CSS-only play-button overlay rendered as a unicode ▶ on a
+   semi-transparent pill — no extra image assets required.
+   Pointer-events: none so the card's onclick still fires. */
+.forum-post-preview-video-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.35);
+    font-size: 20px;
+    color: #fff;
+    line-height: 1;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
 @media (max-width: 640px) {
-    .forum-post-preview {
+    .forum-post-preview,
+    .forum-post-preview-wrap {
         display: none;
     }
 }

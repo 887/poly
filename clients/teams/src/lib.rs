@@ -1164,6 +1164,7 @@ impl ClientBackend for TeamsClient {
                 },
                 context_menu_target_kind: MenuTargetKind::Server,
                 preview_image_url: None,
+                is_video: false,
             });
         }
 

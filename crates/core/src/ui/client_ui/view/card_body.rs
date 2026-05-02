@@ -183,6 +183,7 @@ mod tests {
             badge: None,
             context_menu_target_kind: MenuTargetKind::Message,
             preview_image_url: None,
+            is_video: false,
         }
     }
 

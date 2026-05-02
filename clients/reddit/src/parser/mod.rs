@@ -74,6 +74,18 @@ pub struct RawPost {
     pub comment_count: u32,
     /// External URL the link post points at; `None` for self-posts.
     pub url: Option<String>,
+    /// Preview/thumbnail image URL when this is an image post or a post with
+    /// a thumbnail available (i.e. `data-url` points to an image host like
+    /// `i.redd.it`, `i.imgur.com`, `imgur.com`, `preview.redd.it`).
+    /// `None` for text-only self-posts and link posts without an image.
+    pub preview_url: Option<String>,
+    /// `true` when `data-domain` indicates a video host (`v.redd.it`,
+    /// `youtu.be`, `youtube.com`, `vimeo.com`, `gfycat.com`,
+    /// `streamable.com`).
+    pub is_video: bool,
+    /// `true` when the post carries `data-is-gallery="true"` (Reddit
+    /// multi-image gallery posts).
+    pub is_gallery: bool,
 }
 
 /// A comment ("thing of type comment", `t1_`) — possibly with nested

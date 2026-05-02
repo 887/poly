@@ -403,6 +403,7 @@ pub fn hn_item_to_view_row(item: &HnItem) -> ViewRow {
         badge: None,
         context_menu_target_kind: MenuTargetKind::Message,
         preview_image_url: None,
+        is_video: false,
     }
 }
 
@@ -459,6 +460,7 @@ pub fn hn_item_to_overview_row(item: &HnItem) -> ViewRow {
         badge: None,
         context_menu_target_kind: MenuTargetKind::Message,
         preview_image_url: None,
+        is_video: false,
     }
 }
 

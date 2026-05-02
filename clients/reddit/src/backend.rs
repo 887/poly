@@ -97,6 +97,26 @@ fn raw_post_to_message(post: &RawPost, backend: &BackendType) -> Message {
         MessageContent::Text(post.title.clone())
     };
 
+    // Add an attachment for image previews so the message view can render them.
+    // For video posts we use the preview thumbnail (if available) and mark the
+    // attachment content-type as video/mp4 as a hint. Galleries get a single
+    // cover-image attachment.
+    let mut attachments = Vec::new();
+    if let Some(ref preview) = post.preview_url {
+        let (content_type, filename) = if post.is_video {
+            ("video/mp4", "video_preview.jpg")
+        } else {
+            ("image/png", "preview.png")
+        };
+        attachments.push(Attachment::remote(
+            format!("reddit-preview-{}", post.id),
+            filename.to_string(),
+            content_type.to_string(),
+            preview.clone(),
+            0,
+        ));
+    }
+
     Message {
         id: message_id_for_post(&post.id),
         author: User {
@@ -108,12 +128,12 @@ fn raw_post_to_message(post: &RawPost, backend: &BackendType) -> Message {
         },
         content,
         timestamp: post.timestamp,
-        attachments: Vec::new(),
+        attachments,
         reactions: Vec::new(),
         reply_to: None,
         edited: false,
         thread: None,
-        preview_image_url: None,
+        preview_image_url: post.preview_url.clone(),
     }
 }
 
@@ -160,6 +180,25 @@ fn user_profile_to_user(profile: &UserProfile, backend: &BackendType) -> User {
         avatar_url: profile.avatar_url.clone(),
         presence: PresenceStatus::Offline,
         backend: backend.clone(),
+    }
+}
+
+fn raw_post_to_viewrow(post: &RawPost, show_previews: bool) -> ViewRow {
+    let secondary = format!("by u/{}", post.author);
+    let preview_image_url = if show_previews { post.preview_url.clone() } else { None };
+
+    ViewRow {
+        id: message_id_for_post(&post.id),
+        primary_text: post.title.clone(),
+        secondary_text: Some(secondary),
+        // SCORE: prefix is load-bearing for the forum-post-card render path in
+        // list_body.rs — ListBodyRow renders the vote-card shape when it appears.
+        meta_text: Some(format!("SCORE:{} · {} comments", post.score, post.comment_count)),
+        icon: None,
+        badge: None,
+        context_menu_target_kind: MenuTargetKind::Message,
+        preview_image_url,
+        is_video: post.is_video,
     }
 }
 
@@ -214,12 +253,23 @@ fn build_sub_channel(sub: &str) -> Channel {
 pub struct RedditBackend {
     client: RedditClient,
     session: Option<Session>,
+    /// In-memory settings storage (mirrors Lemmy's stub pattern, Phase 4).
+    settings_storage: SettingsStorageCell,
 }
 
 impl RedditBackend {
     /// Create a new backend from an already-constructed `RedditClient`.
     pub fn new(client: RedditClient) -> Self {
-        Self { client, session: None }
+        Self { client, session: None, settings_storage: SettingsStorageCell::new() }
+    }
+
+    /// Read the `show-media-previews` mechanism state.
+    ///
+    /// Defaults to `true` (previews shown) when the user has never toggled it.
+    fn media_previews_enabled(&self) -> bool {
+        self.settings_storage
+            .get(SettingsScope::AccountGlobal, "", "show-media-previews")
+            .is_none_or(|v| v != "false")
     }
 
     fn backend_type() -> BackendType {
@@ -581,28 +631,64 @@ impl ClientBackend for RedditBackend {
     }
 
     async fn get_settings_sections(&self) -> ClientResult<Vec<SettingsSection>> {
+        // Reddit has no per-server / per-channel settings exposed yet.
         Ok(Vec::new())
     }
 
     async fn get_setting_value(
         &self,
-        _scope: SettingsScope,
-        _scope_id: &str,
+        scope: SettingsScope,
+        scope_id: &str,
         key: &str,
     ) -> ClientResult<String> {
+        if let Some(value) = self.settings_storage.get(scope, scope_id, key) {
+            return Ok(value);
+        }
         Err(ClientError::NotFound(format!("setting: {key}")))
     }
 
     async fn set_setting_value(
         &self,
-        _scope: SettingsScope,
-        _scope_id: &str,
-        _key: &str,
-        _value: &str,
+        scope: SettingsScope,
+        scope_id: &str,
+        key: &str,
+        value: &str,
     ) -> ClientResult<()> {
-        Err(ClientError::NotSupported(
-            "Reddit backend has no plugin settings".to_string(),
-        ))
+        self.settings_storage.set(scope, scope_id, key, value)
+    }
+
+    /// Declares the `show-media-previews` mechanism, which controls whether
+    /// image/video thumbnail previews are rendered next to forum post titles.
+    ///
+    /// Default ON. Set to `false` to hide all preview thumbnails.
+    ///
+    /// TODO: add `navigator.connection.effectiveType` auto-disable for
+    /// `slow-2g`/`2g` connections when the Web Connection API is available in
+    /// WASM contexts.
+    async fn client_mechanisms(&self) -> ClientResult<Vec<Mechanism>> {
+        let enabled = self.media_previews_enabled();
+        Ok(vec![Mechanism {
+            id: "show-media-previews".to_string(),
+            name_key: "plugin-reddit-mechanism-show-media-previews-label".to_string(),
+            enabled,
+            requires_host_cap: None,
+            description_key: Some(
+                "plugin-reddit-mechanism-show-media-previews-desc".to_string(),
+            ),
+        }])
+    }
+
+    /// Toggle the `show-media-previews` mechanism.
+    async fn set_client_mechanism(&self, id: &str, enabled: bool) -> ClientResult<()> {
+        match id {
+            "show-media-previews" => self.settings_storage.set(
+                SettingsScope::AccountGlobal,
+                "",
+                "show-media-previews",
+                if enabled { "true" } else { "false" },
+            ),
+            _ => Err(ClientError::NotFound(format!("unknown mechanism: {id}"))),
+        }
     }
 
     async fn get_sidebar_declaration(&self) -> ClientResult<SidebarDeclaration> {
@@ -638,16 +724,29 @@ impl ClientBackend for RedditBackend {
 
     async fn get_view_rows(
         &self,
-        _channel_id: &str,
+        channel_id: &str,
         _cursor: Option<Cursor>,
         _sort_id: Option<&str>,
         _filter_id: Option<&str>,
         _tab_id: Option<&str>,
     ) -> ClientResult<ViewRowsPage> {
-        Ok(ViewRowsPage {
-            rows: Vec::new(),
-            next_cursor: None,
-        })
+        let sub = sub_from_channel_id(channel_id)
+            .ok_or_else(|| ClientError::NotFound(format!("channel not found: {channel_id}")))?;
+
+        let posts = self
+            .client
+            .list_subreddit(sub, SortKind::Hot)
+            .await
+            .map_err(ClientError::from)?;
+
+        let show_previews = self.media_previews_enabled();
+
+        let rows = posts
+            .iter()
+            .map(|p| raw_post_to_viewrow(p, show_previews))
+            .collect();
+
+        Ok(ViewRowsPage { rows, next_cursor: None })
     }
 
     async fn get_view_detail(

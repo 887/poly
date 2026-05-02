@@ -532,9 +532,16 @@ pub struct ViewRow {
     /// Optional preview thumbnail URL for forum post rows. Populated by the
     /// Lemmy backend when `thumbnail_url` is present on the post AND the
     /// per-account `render-previews` mechanism is enabled.
+    /// Reddit sets this when the post's `data-domain` is an image/video host.
     /// Other backends leave this as `None`.
     #[serde(default)]
     pub preview_image_url: Option<String>,
+    /// `true` when the `preview_image_url` is a thumbnail for a video post
+    /// (e.g. `v.redd.it`, YouTube, Vimeo). The UI renders a play-button
+    /// overlay on top of the thumbnail when this is set.
+    /// Defaults to `false` (backward-compatible with existing serialised rows).
+    #[serde(default)]
+    pub is_video: bool,
 }
 
 /// D23 — one page of rows plus an optional next-cursor.
