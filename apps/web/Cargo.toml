@@ -20,7 +20,7 @@ path = "src/main.rs"
 # server half separately — see `Dioxus.toml [[features]]` for the
 # client/server feature split.
 default = ["dev-plugins", "web"]
-dev-plugins = ["poly-core/discord", "poly-core/teams"]
+dev-plugins = ["poly-core/discord", "poly-core/teams", "poly-core/reddit"]
 production = []
 # `web` brings in the WASM renderer; compiled when targeting wasm32.
 # We DELIBERATELY do NOT enable `dioxus/fullstack` here — that would
@@ -68,8 +68,12 @@ poly-host = { workspace = true, optional = true }
 dioxus-cli-config = { workspace = true, optional = true }
 anyhow = { workspace = true, optional = true }
 
-# getrandom 0.4 (pulled by rand 0.10 → poly-demo) needs wasm_js on WASM targets
+# getrandom 0.4 (pulled by rand 0.10 → poly-demo) needs wasm_js on WASM targets.
+# getrandom 0.3 (pulled by reqwest's `cookies` feature → cookie_store, used
+# by poly-reddit) ALSO needs wasm_js — must be explicitly added so feature
+# unification reaches the 0.3 dep on wasm32 targets.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { workspace = true }
 getrandom04-wasm = { workspace = true }
 web-sys = { workspace = true }
 # apps/web runs in a real browser — no native shell, no /host bridge.

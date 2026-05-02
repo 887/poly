@@ -636,6 +636,58 @@ fn register_native_signup_entries(client_manager: &mut BatchedSignal<ClientManag
             render: poly_server_client::signup::signup_render_fn,
             signup_method: |_| poly_client::SignupMethod::InApp("/signup/poly".to_string()),
         });
+
+        #[cfg(feature = "lemmy")]
+        cm.register_signup_entry(SignupEntry {
+            slug: "lemmy",
+            icon: "🦫",
+            name_key: "plugin-lemmy-signup-name",
+            desc_key: "plugin-lemmy-signup-desc",
+            render: poly_lemmy::signup::signup_render_fn,
+            signup_method: |server_url| {
+                poly_client::SignupMethod::External(
+                    server_url.unwrap_or("https://join-lemmy.org/instances").to_string(),
+                )
+            },
+        });
+
+        #[cfg(feature = "hackernews")]
+        cm.register_signup_entry(SignupEntry {
+            slug: "hackernews",
+            icon: "📰",
+            name_key: "plugin-hackernews-signup-name",
+            desc_key: "plugin-hackernews-signup-desc",
+            render: poly_hackernews::signup::signup_render_fn,
+            signup_method: |_| {
+                poly_client::SignupMethod::External("https://news.ycombinator.com/login".to_string())
+            },
+        });
+
+        #[cfg(feature = "github")]
+        cm.register_signup_entry(SignupEntry {
+            slug: "github",
+            icon: "🐙",
+            name_key: "plugin-github-signup-name",
+            desc_key: "plugin-github-signup-desc",
+            render: poly_github::signup::signup_render_fn,
+            signup_method: |_| {
+                poly_client::SignupMethod::External("https://github.com/signup".to_string())
+            },
+        });
+
+        #[cfg(feature = "forgejo")]
+        cm.register_signup_entry(SignupEntry {
+            slug: "forgejo",
+            icon: "🦊",
+            name_key: "plugin-forgejo-signup-name",
+            desc_key: "plugin-forgejo-signup-desc",
+            render: poly_forgejo::signup::signup_render_fn,
+            signup_method: |server_url| {
+                poly_client::SignupMethod::External(
+                    server_url.unwrap_or("https://codeberg.org/user/sign_up").to_string(),
+                )
+            },
+        });
     });
 }
 
@@ -789,6 +841,10 @@ fn register_native_test_accounts(client_manager: &mut BatchedSignal<ClientManage
         }
         #[cfg(feature = "forgejo")]
         for entry in poly_forgejo::signup::get_test_accounts() {
+            cm.register_test_account(*entry);
+        }
+        #[cfg(feature = "reddit")]
+        for entry in poly_reddit::signup::get_test_accounts() {
             cm.register_test_account(*entry);
         }
     });

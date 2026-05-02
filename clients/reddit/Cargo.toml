@@ -44,12 +44,19 @@ futures = { workspace = true, optional = true }
 thiserror = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
-reqwest = { workspace = true, optional = true, features = ["cookies"] }
+reqwest = { workspace = true, optional = true }
 scraper = { version = "0.20", optional = true }
 regex = { version = "1", optional = true }
 # Form-encoded body building. reqwest's `.form()` is workspace-disabled
 # (default-features = false drops serde_urlencoded), so we encode manually.
 serde_urlencoded = { version = "0.7", optional = true }
+
+# scraper → ahash transitively pulls getrandom 0.3 on wasm32 targets;
+# the wasm_js feature must be unified through this crate or the WASM
+# build fails with `--cfg getrandom_backend="wasm_js"` flagged but no
+# wasm_js backend module compiled.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time", "net"] }

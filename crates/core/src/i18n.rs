@@ -227,6 +227,17 @@ fn register_native_plugin_ftl() {
         }
         tracing::debug!("Native matrix plugin FTL registered for all locales");
     }
+
+    #[cfg(feature = "reddit")]
+    {
+        for locale in SUPPORTED_LOCALES {
+            let src = poly_reddit::plugin_translations(locale);
+            if !src.is_empty() {
+                register_plugin_ftl("reddit", locale, src);
+            }
+        }
+        tracing::debug!("Native reddit plugin FTL registered for all locales");
+    }
 }
 
 /// Load `.ftl` resources for a locale into the bundle store.

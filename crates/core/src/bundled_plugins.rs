@@ -71,6 +71,10 @@ pub const BUNDLED_PLUGINS: &[BundledPlugin] = &[
         slug: "teams",
         display_name: "Microsoft Teams",
     },
+    BundledPlugin {
+        slug: "reddit",
+        display_name: "Reddit",
+    },
 ];
 
 /// Returns `true` if the given URL targets a bundled plugin.

@@ -101,17 +101,21 @@ impl SortKind {
 
 /// Reddit HTML-scraping client.
 ///
-/// Holds the HTTP client (with cookie jar, populated by Phase C login)
-/// and the scraping base URL. Phase D-anonymous adds the read-only
-/// methods; Phase C+E will add cookie auth and write flows.
+/// Holds the HTTP client and the manually-tracked `reddit_session` cookie.
+/// We track the cookie manually instead of using `reqwest`'s `cookies`
+/// feature because that feature pulls in `cookie_store` → `getrandom 0.3`
+/// which can't compile cleanly on `wasm32-unknown-unknown` even with the
+/// `wasm_js` feature unification dance.
 #[cfg(feature = "native")]
 pub struct RedditClient {
-    /// HTTP client with cookie jar — login persists `reddit_session` here.
     http: reqwest::Client,
     /// Scraping base — production: `https://old.reddit.com`.
     /// Test backend (Phase F) overrides via `REDDIT_BASE_URL` env to
     /// `http://127.0.0.1:9108`.
     base_url: String,
+    /// `reddit_session` cookie value, set by login. Sent as a Cookie
+    /// header on every request.
+    session_cookie: std::sync::Mutex<Option<String>>,
 }
 
 #[cfg(feature = "native")]
@@ -142,10 +146,45 @@ impl RedditClient {
     /// Returns an error if `reqwest::Client` construction fails.
     pub fn with_base_url(base_url: String) -> Result<Self, reqwest::Error> {
         let http = reqwest::Client::builder()
-            .cookie_store(true)
             .user_agent(Self::DEFAULT_UA)
             .build()?;
-        Ok(Self { http, base_url })
+        Ok(Self {
+            http,
+            base_url,
+            session_cookie: std::sync::Mutex::new(None),
+        })
+    }
+
+    /// Apply the stored `reddit_session` cookie (if any) as a Cookie
+    /// header on a request builder.
+    fn with_session_cookie(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        let cookie = self
+            .session_cookie
+            .lock()
+            .ok()
+            .and_then(|g| g.clone());
+        match cookie {
+            Some(value) => req.header(reqwest::header::COOKIE, format!("reddit_session={value}")),
+            None => req,
+        }
+    }
+
+    /// Extract the `reddit_session` value from a response's Set-Cookie
+    /// headers, store it in the session field if present.
+    fn capture_session_cookie(&self, resp: &reqwest::Response) {
+        for raw in resp.headers().get_all(reqwest::header::SET_COOKIE) {
+            if let Ok(s) = raw.to_str() {
+                for pair in s.split(';') {
+                    let pair = pair.trim();
+                    if let Some(value) = pair.strip_prefix("reddit_session=") {
+                        if let Ok(mut g) = self.session_cookie.lock() {
+                            *g = Some(value.to_string());
+                        }
+                        return;
+                    }
+                }
+            }
+        }
     }
 
     /// The configured base URL.
@@ -170,7 +209,7 @@ impl RedditClient {
 
     /// Fetch a page and return its body, mapping non-2xx → `RedditError`.
     async fn fetch_text(&self, url: &str) -> Result<String, RedditError> {
-        let resp = self.http.get(url).send().await?;
+        let resp = self.with_session_cookie(self.http.get(url)).send().await?;
         let status = resp.status();
         if !status.is_success() {
             return Err(RedditError::Status(status.as_u16()));
@@ -188,16 +227,17 @@ impl RedditClient {
     ) -> Result<reqwest::Response, RedditError> {
         let body = serde_urlencoded::to_string(fields)
             .map_err(|e| RedditError::Http(e.to_string()))?;
-        Ok(self
+        let req = self
             .http
             .post(url)
             .header(
                 reqwest::header::CONTENT_TYPE,
                 "application/x-www-form-urlencoded",
             )
-            .body(body)
-            .send()
-            .await?)
+            .body(body);
+        let resp = self.with_session_cookie(req).send().await?;
+        self.capture_session_cookie(&resp);
+        Ok(resp)
     }
 
     /// List the posts in a subreddit at the given sort.
@@ -316,26 +356,10 @@ impl RedditClient {
     /// # Errors
     ///
     /// `RedditError::Http` if the cookie can't be parsed into the jar.
-    pub fn login_with_session_cookie(
-        &mut self,
-        cookie_value: &str,
-    ) -> Result<(), RedditError> {
-        // reqwest's default Client builder doesn't expose a way to
-        // re-seed cookies after construction. Rebuild the client with a
-        // fresh jar pre-populated.
-        let jar = std::sync::Arc::new(reqwest::cookie::Jar::default());
-        let url = self
-            .base_url
-            .parse::<reqwest::Url>()
-            .map_err(|e| RedditError::Http(e.to_string()))?;
-        jar.add_cookie_str(
-            &format!("reddit_session={cookie_value}; Path=/"),
-            &url,
-        );
-        self.http = reqwest::Client::builder()
-            .cookie_provider(jar)
-            .user_agent(Self::DEFAULT_UA)
-            .build()?;
+    pub fn login_with_session_cookie(&self, cookie_value: &str) -> Result<(), RedditError> {
+        if let Ok(mut g) = self.session_cookie.lock() {
+            *g = Some(cookie_value.to_string());
+        }
         Ok(())
     }
 
@@ -349,7 +373,10 @@ impl RedditClient {
     /// `RedditError::Http` / `Status` for transport-level failures.
     pub async fn is_logged_in(&self) -> Result<Option<String>, RedditError> {
         let url = self.resolve_url("/api/me.json");
-        let resp = self.http.get(&url).send().await?;
+        let resp = self
+            .with_session_cookie(self.http.get(&url))
+            .send()
+            .await?;
         if !resp.status().is_success() {
             return Err(RedditError::Status(resp.status().as_u16()));
         }

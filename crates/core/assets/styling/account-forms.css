@@ -522,3 +522,30 @@
     color: var(--accent-danger);
     margin: 0;
 }
+/* Register/signup-link affordance — used by every backend's signup card.
+ * Default browser anchor color (blue on dark) is illegibly low-contrast;
+ * route through the theme's --text-link token for proper dark-mode lift. */
+.register-link,
+.register-link:visited,
+.register-link:link {
+    color: var(--text-link);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.875rem;
+}
+.register-link:hover {
+    color: var(--accent-primary-hover);
+    text-decoration: underline;
+}
+.register-link__action {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+.register-link__arrow {
+    transition: transform 0.12s ease;
+}
+.register-link:hover .register-link__arrow {
+    transform: translateX(2px);
+}
