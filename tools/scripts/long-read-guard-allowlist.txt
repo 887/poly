@@ -13,15 +13,13 @@
 # would read awkwardly, or for whole-file suppression of mechanical test
 # scaffolding. Never add entries without a reason.
 
-# chat_view.rs L607 — guard is inside an explicit { ... } block that closes
-# before the `chat_data.batch(...)` call; block-scoped, safe. The heuristic
-# fires because the block body spans >6 lines (multi-field extraction).
-crates/core/src/ui/account/common/chat_view.rs:607
+# chat_view.rs — `mark_channel_as_read`. Guard is inside `let (...) = { let
+# data = chat_data.read(); ... }`; closes before any batch. Block-scoped, safe.
+crates/core/src/ui/account/common/chat_view.rs:634
 
-# chat_view.rs L1797 — same pattern: `let hs = history_state.read()` inside
-# a `{ ... }` block that extracts fields then drops. `history_state.batch`
-# executes after the closing `}`. Block-scoped, safe.
-crates/core/src/ui/account/common/chat_view.rs:1797
+# chat_view.rs — `let hs = history_state.read()` inside `let (...) = { ... }`;
+# closes before `history_state.batch(...)`. Block-scoped, safe.
+crates/core/src/ui/account/common/chat_view.rs:1878
 
 # thread_view.rs L103 — `drop(s)` called explicitly before `app_state.batch`.
 # The guard only lives in the `if is_mobile()` branch; the batch executes in
@@ -32,11 +30,17 @@ crates/core/src/ui/account/common/thread_view.rs:103
 # shape, different thread-chip button). Explicit `drop(s)` before batch.
 crates/core/src/ui/account/common/thread_view.rs:221
 
-# main_layout.rs L309 — guard is inside a `{ ... }` block that extracts
-# five boolean fields then drops. `app_state.batch(...)` executes after the
-# closing `}`. Block-scoped, safe.
-crates/core/src/ui/main_layout.rs:309
+# main_layout.rs — guard is inside `let (...) = { let st = app_state.read();
+# ... }` (8 boolean fields). Closes before `app_state.batch(...)`. Block-scoped.
+crates/core/src/ui/main_layout.rs:310
 
 # demo.rs L78 — guard is inside an explicit `{ ... }` block; closes before
 # `client_manager.batch(...)` and `chat_data.batch(...)`. Block-scoped, safe.
 crates/core/src/ui/demo.rs:78
+
+# signup.rs — explicit `drop(cm)` ~13 lines after the read, before
+# `client_manager.batch(...)`. Regex's 1-2-line drop window doesn't see it,
+# but the drop IS there and the pattern is safe. Real fix: switch to
+# `client_manager.with(|cm| ...)` next time someone touches this branch
+# (see CLAUDE.md hang class #2 prescribed pattern).
+crates/core/src/ui/signup.rs:154

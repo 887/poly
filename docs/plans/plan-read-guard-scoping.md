@@ -107,9 +107,21 @@ Verification:
 - Manually inject a HIGH-severity regression: edit a sample file to introduce `let g = chat_data.read(); chat_data.batch(|cd| { cd.loading = false; });` and confirm the script fails.
 - Run against current main; confirm only the 3 MEDIUM sites flag (and that they're allowlisted post-Phase-2).
 
-### Phase 4 — (Optional) Dylint upgrade path — ⏸ SKIPPED (intentional)
+### Phase 4 — (Optional) Dylint upgrade path — ⏸ SKIPPED (still optional, with caveats)
 
-Same pattern as `plan-batched-signal.md` Phase 5b — re-implement the regex check as a `cargo dylint` HIR-aware lint so it can distinguish `Signal::read` from `RwLock::read` / `std::io::Read::read`. Deferred until the regex script proves insufficient (i.e. emits false positives that the allowlist can't keep up with). As of 2026-05-02 the regex script is keeping pace with no allowlist churn, so this phase remains skipped.
+Same pattern as `plan-batched-signal.md` Phase 5b — re-implement the regex check as a `cargo dylint` HIR-aware lint so it can distinguish `Signal::read` from `RwLock::read` / `std::io::Read::read`, and so the "block-scoped drop" pattern doesn't need line-anchored allowlist entries.
+
+**2026-05-02 audit finding:** the regex caught 4 false positives that all turned out to be safe block-scoped or explicit-`drop()` patterns:
+- `chat_view.rs:634` (`mark_channel_as_read` — `let (a,b,c) = { let data = chat_data.read(); … }`)
+- `chat_view.rs:1878` (history-state extraction in same shape)
+- `main_layout.rs:310` (8-field context-menu boolean extraction)
+- `signup.rs:154` (explicit `drop(cm)` ~13 lines after the read — outside the regex's 1-2-line window)
+
+These are exactly the patterns Phase 1 documented as SAFE — the regex can't see them as such. Three of them shifted by 1-3 lines from the original Phase-2 allowlist entries (code drift; not actual regressions). Allowlist updated.
+
+**Verdict:** Phase 4 is **still optional but not zero-cost** — the allowlist needs maintenance every time the relevant block-scoped sites move (~3-line drift per major refactor). When (a) the allowlist exceeds ~15 entries OR (b) a real read-after-write bug slips through because everyone got desensitised to the false-positive churn, re-open this phase and replace the regex with a dylint HIR pass that recognises `let X = { let g = sig.read(); ... };` and explicit-`drop()` patterns natively.
+
+Until then the regex + maintained allowlist is acceptable — it just isn't "no churn" as the previous note claimed.
 
 ### Phase 5 — Documentation cleanup — ✅ DONE (`5c1e13c7`)
 
