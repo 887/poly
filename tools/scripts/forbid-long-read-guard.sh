@@ -51,22 +51,63 @@ trap 'rm -rf "$tmpdir"' EXIT
 hits_file="$tmpdir/hits"
 : > "$hits_file"
 
-# Heuristic (implemented in awk, per-file):
+# Algorithm (implemented in awk, per-file):
 #
-# For each `let <var> = <sig>.read();` line (bare guard — no trailing
-# `.field` / `.clone()` / `.method()` after the closing paren):
+# For each candidate `let <var> = <sig>.read();` line at line `i`:
 #
-#   1. Check that the line does NOT contain `// poly-lint: allow long-read-guard`.
-#   2. Scan the next 30 lines for `<sig>.(batch|write|set|pending_update)(`.
-#   3. Check that `<var>` appears in any line more than 6 lines after the `let`.
+#   1. Skip if the line has `// poly-lint: allow long-read-guard`.
+#   2. Walk forward from line i tracking:
+#      - relative brace depth (start at 0; +1 for each `{`, -1 for each `}`,
+#        excluding braces inside `//` comments and string literals on that line)
+#      - whether `drop(<var>);` has appeared (then `<var>` is dead)
+#      - whether `<sig>.(batch|write|set|pending_update)(` has appeared
+#   3. STOP walking when ANY of:
+#      - relative depth goes negative → enclosing block closed, guard dropped
+#        at the `}`. Anything after is safe. NOT A HIT.
+#      - `drop(<var>);` seen → guard explicitly dropped. NOT A HIT.
+#      - `<sig>.batch/.write/.set/.pending_update(` seen WHILE depth >= 0 AND
+#        no drop yet → guard is live across a write on the same signal. HIT.
+#      - 60-line window exceeded with neither end-of-scope nor write → not a
+#        hit (avoid scanning the whole file).
 #
-# If all three conditions are met, emit a hit record:
-#   path \t lineno \t offending_line
+# This catches the real bug pattern (read held live across a write of the
+# same signal) and recognises BOTH safe patterns:
+#   - `let X = { let g = sig.read(); ...field extraction... };` (block-scoped
+#     read, dropped at the `};` of the outer block)
+#   - `let g = sig.read(); ... drop(g); ... sig.batch(...);` (explicit drop)
 #
+# No line-anchored allowlist is needed for either safe pattern.
+
 while IFS= read -r -d '' f; do
     awk -v path="$f" '
     {
         lines[NR] = $0
+    }
+
+    # Strip line and block comments + string literals from a line so braces
+    # inside them are not counted toward depth. Approximate: handles `// ...`
+    # tail comments and naive `"..."` strings; does not handle `/* */` block
+    # comments spanning multiple lines (rare in this codebase outside doc
+    # comments, which use `///` and `//!`).
+    function strip(line,    s) {
+        s = line
+        # Drop line comments.
+        sub(/\/\/.*$/, "", s)
+        # Drop simple string literals (non-greedy approximation).
+        gsub(/"[^"]*"/, "", s)
+        return s
+    }
+
+    function count_braces(line,    s, opens, closes, n, ch) {
+        s = strip(line)
+        opens = 0; closes = 0
+        n = length(s)
+        for (k = 1; k <= n; k++) {
+            ch = substr(s, k, 1)
+            if (ch == "{") opens++
+            else if (ch == "}") closes++
+        }
+        return opens - closes
     }
 
     END {
@@ -76,57 +117,54 @@ while IFS= read -r -d '' f; do
             sub(/^[[:space:]]+/, "", trimmed)
 
             # Must be a bare `let <var> = <sig>.read();` pattern:
-            #   - starts with "let "
-            #   - contains ".read();"  (exactly, no trailing chain)
-            #   - the .read() must be at the end of the expression (followed
-            #     by semicolon, optional whitespace)
-            if (trimmed !~ /^let [A-Za-z_][A-Za-z0-9_]* = [A-Za-z_][A-Za-z0-9_]*[.]read[(][)];/) {
+            #   - starts with "let " (allow "let mut ")
+            #   - signal-side expression ends with `.read();` (no trailing chain)
+            if (trimmed !~ /^let (mut )?[A-Za-z_][A-Za-z0-9_]* = [A-Za-z_][A-Za-z0-9_.]*[.]read[(][)];/) {
                 continue
             }
 
-            # Inline allowlist: skip if line contains the magic comment.
+            # Inline allowlist: skip if line carries the magic comment.
             if (raw ~ /\/\/ poly-lint: allow long-read-guard/) {
                 continue
             }
 
-            # Extract variable name and signal name.
+            # Extract variable name and signal-receiver name.
             rest = trimmed
-            sub(/^let /, "", rest)
+            sub(/^let (mut )?/, "", rest)
             split(rest, parts, " = ")
             var_name = parts[1]
-
             rest2 = parts[2]
             sub(/\.read\(\);.*$/, "", rest2)
             sig_name = rest2
 
-            # Condition 2: scan next 30 lines for sig.(batch|write|set|pending_update)(
-            write_found = 0
-            write_line = 0
-            limit = i + 30
+            # Walk forward tracking brace depth + drop + write events.
+            depth = 0
+            limit = i + 60
             if (limit > NR) limit = NR
+            hit = 0
             for (j = i + 1; j <= limit; j++) {
-                if (lines[j] ~ sig_name "[.](batch|write|set|pending_update)[(]") {
-                    write_found = 1
-                    write_line = j
-                    break
-                }
-            }
-            if (!write_found) continue
+                line_j = lines[j]
 
-            # Condition 3: var_name appears more than 6 lines after the let.
-            var_late = 0
-            for (j = i + 7; j <= NR; j++) {
-                if (lines[j] ~ var_name) {
-                    # Make sure it is a real reference, not a redeclaration
-                    # and not inside a comment-only line.
-                    chk = lines[j]
-                    sub(/^[[:space:]]+/, "", chk)
-                    if (chk ~ /^\/\//) continue
-                    var_late = 1
+                # Explicit drop ends scope cleanly — not a hit.
+                if (line_j ~ "drop[(][[:space:]]*" var_name "[[:space:]]*[)]") {
                     break
                 }
+
+                # Write on the same signal — only a hit while guard is live
+                # (depth >= 0). If depth has already gone negative the enclosing
+                # block closed before we got here and `var_name` is gone.
+                if (depth >= 0 && line_j ~ sig_name "[.](batch|write|set|pending_update)[(]") {
+                    hit = 1
+                    break
+                }
+
+                depth += count_braces(line_j)
+
+                # Enclosing scope closed — guard dropped at the `}`. Safe.
+                if (depth < 0) break
             }
-            if (!var_late) continue
+
+            if (!hit) continue
 
             printf "%s\t%d\t%s\n", path, i, raw
         }

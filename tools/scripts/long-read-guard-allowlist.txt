@@ -9,38 +9,21 @@
 # Inline allowlist (preferred for single-line exceptions):
 #   let x = sig.read(); // poly-lint: allow long-read-guard — <reason>
 #
-# Add entries here only for multi-statement blocks where inline annotation
-# would read awkwardly, or for whole-file suppression of mechanical test
-# scaffolding. Never add entries without a reason.
-
-# chat_view.rs — `mark_channel_as_read`. Guard is inside `let (...) = { let
-# data = chat_data.read(); ... }`; closes before any batch. Block-scoped, safe.
-crates/core/src/ui/account/common/chat_view.rs:634
-
-# chat_view.rs — `let hs = history_state.read()` inside `let (...) = { ... }`;
-# closes before `history_state.batch(...)`. Block-scoped, safe.
-crates/core/src/ui/account/common/chat_view.rs:1878
-
-# thread_view.rs L103 — `drop(s)` called explicitly before `app_state.batch`.
-# The guard only lives in the `if is_mobile()` branch; the batch executes in
-# the `else` branch where `s` has already been dropped.
-crates/core/src/ui/account/common/thread_view.rs:103
-
-# thread_view.rs L221 — identical pattern to L103 (same onclick handler
-# shape, different thread-chip button). Explicit `drop(s)` before batch.
-crates/core/src/ui/account/common/thread_view.rs:221
-
-# main_layout.rs — guard is inside `let (...) = { let st = app_state.read();
-# ... }` (8 boolean fields). Closes before `app_state.batch(...)`. Block-scoped.
-crates/core/src/ui/main_layout.rs:310
-
-# demo.rs L78 — guard is inside an explicit `{ ... }` block; closes before
-# `client_manager.batch(...)` and `chat_data.batch(...)`. Block-scoped, safe.
-crates/core/src/ui/demo.rs:78
-
-# signup.rs — explicit `drop(cm)` ~13 lines after the read, before
-# `client_manager.batch(...)`. Regex's 1-2-line drop window doesn't see it,
-# but the drop IS there and the pattern is safe. Real fix: switch to
-# `client_manager.with(|cm| ...)` next time someone touches this branch
-# (see CLAUDE.md hang class #2 prescribed pattern).
-crates/core/src/ui/signup.rs:154
+# CURRENTLY EMPTY BY DESIGN.
+#
+# 2026-05-02: the lint algorithm was upgraded to track brace depth + explicit
+# `drop(<var>);` calls, which means it now natively recognises both safe
+# patterns and stops false-positiving them:
+#   - block-scoped read:  `let X = { let g = sig.read(); … };`
+#   - explicit drop:      `let g = sig.read(); … drop(g); … sig.batch(…);`
+#
+# Before the upgrade the allowlist had 7 line-anchored entries that drifted
+# every time someone touched the surrounding code. All 7 were removed when
+# the smarter algorithm shipped — the lint stays green on the production
+# tree without any of them.
+#
+# Add an entry here ONLY if you hit a genuinely intentional long-scoped read
+# the algorithm cannot recognise (e.g. a guard intentionally held across an
+# unrelated-signal write that the regex matches by coincidence). Prefer the
+# inline-allowlist comment over a line entry — comments move with the code,
+# line entries don't.
