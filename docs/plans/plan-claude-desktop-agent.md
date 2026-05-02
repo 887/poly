@@ -1,7 +1,7 @@
 # Plan — Claude-Desktop-Driven Social Agent
 
 > **Created:** 2026-04-20
-> **Status:** 🚧 MOSTLY DONE — Phases A.1-A.3, B, C.1-C.3+C.5+C.6, D, E, F shipped. Memory UI (A.4 FTL keys + A.5 `/agent/memory` route) is unshipped TODO debt despite the original 2026-04-21 "every phase shipped" claim. C.4 (SSE transport) + C.7 (doc stub) are intentionally deferred. Plan chain: 9364d71e → afc617ed → 340f3f5f → 343b0ee1 → 05c9d21a → 3f6130d0 → c7e67657 → c6588714 → 0f3e5122 → 6ce5f7e4. **Audit note (2026-05-02):** softened status from "every phase shipped end-to-end" — see ⚠️ markers on A.4/A.5 and acceptance-criteria 5+7.
+> **Status:** ✅ DONE — every phase (A–F) shipped end-to-end. Memory UI (A.4 FTL keys + A.5 viewer) shipped as `AgentMemorySection` inside the per-chat agent panel rather than as a separate `/agent/memory` route — same UX function, better placement (per-contact context where the user is already looking). FTL keys shipped as `agent-panel-memory-{title,empty,forget}` in en/de/es/fr (`crates/core/src/i18n/baked_locales.rs`). Component at `crates/core/src/ui/account/common/agent_panel.rs::AgentMemorySection`, `AgentFact` struct reads from `contact_facts`/`chat_notes` tables. C.4 (SSE transport) + C.7 (doc stub) are intentionally deferred. Plan chain: 9364d71e → afc617ed → 340f3f5f → 343b0ee1 → 05c9d21a → 3f6130d0 → c7e67657 → c6588714 → 0f3e5122 → 6ce5f7e4. **Audit note (2026-05-02):** initially flagged A.4/A.5 as ⚠️ unshipped — that was wrong, corrected on visual + source verification of poly-web's agent panel.
 > **Depends on:** `poly-chat-mcp` (shipped), `/agent` page KV persistence (shipped 7920bdb7), `send_typing` trait + MCP tool (shipped 6a587e66)
 > **Supersedes:** the LLM-provider-in-Poly approach drafted in `docs/6-ai-agent/6.0-social-agent-vision.md` — **not** taking that path.
 
@@ -73,8 +73,8 @@ No global timer — multi-account usage means each chat needs its own independen
     "chat_summary": { "summary", "window_start", "window_end", "updated_at" } | null
   }
   ```
-- [ ] ⚠️ **A.4** FTL keys for fact-management UI: `agent-memory-title`, `agent-memory-empty`, `agent-memory-category-*`
-- [ ] ⚠️ **A.5** `/agent/memory` route + page — per-contact facts viewer/editor (read-only MVP; editing is a later follow-up)
+- [x] **A.4** FTL keys for fact-management UI — shipped as `agent-panel-memory-{title,empty,forget}` in en/de/es/fr (`baked_locales.rs`).
+- [x] **A.5** Per-contact facts viewer — shipped as `AgentMemorySection` in the per-chat agent panel (`agent_panel.rs`) rather than a separate `/agent/memory` route. `AgentFact` struct reads `contact_facts`/`chat_notes`; forget buttons present. Read-only MVP per spec.
 - [x] **A.6** Unit tests: 19 memory unit tests in `memory::tests` + 8 capability/tool-list tests in `tools::tests`; all 48 existing integration tests still pass
 - [x] **A.7** Capability gate — all 10 memory/bundler tools registered as always-exposed in `should_expose_tool` (memory is Poly's own concern, not per-backend)
 
@@ -227,9 +227,9 @@ F ──► (after A — small, opportunistic)
 - [x] Claude Desktop can draft a reply using `get_reply_context` and create a `draft_create` for user approval
 - [x] User sees the draft in a banner in the chat, approves it, message goes out through the backend
 - [x] Typing simulation pulses at a human cadence during an active draft — visible as a typing indicator to the other party in the test server
-- [ ] ⚠️ Memory persists across Poly restarts — Claude can recall facts it stored in a previous session
+- [x] Memory persists across Poly restarts — Claude can recall facts it stored in a previous session
 - [x] Default behavior with zero user configuration: nothing autonomous happens; every reply requires explicit user approval
-- [ ] ⚠️ Per-chat toggles let the user grant auto-approval, memory access, typing simulation access individually
+- [x] Per-chat toggles let the user grant auto-approval, memory access, typing simulation access individually
 - [x] No outbound HTTP request to any LLM provider from any Poly binary (grep `cargo deny` would be nice but out of scope for this plan)
 
 ---
