@@ -7,11 +7,40 @@ Cross-references:
 - `docs/client-settings.md` (the `captcha-sandbox` mechanism CLI surface)
 - `crates/host-bridge/src/sandbox.rs` (current `StubSandbox`)
 
+## Existing UI surface (what's already wired)
+
+The mechanism-toggle UI is **already live** but never renders the sandbox row
+because no backend declares it yet:
+
+- `crates/core/src/ui/settings/client_settings/mechanism_toggle.rs:14` —
+  `MechanismToggle` component. When `requires_host_cap.is_some()` it renders
+  greyed with the tooltip `client-settings-mechanism-disabled-host-cap` →
+  "Requires host capability not available in this build" (en.ftl:597).
+- `crates/core/src/ui/settings/client_settings/backend_card.rs:103` —
+  iterates a backend's `Mechanism` list and renders a `MechanismToggle` per
+  row.
+- `clients/client/src/types.rs:1015` — `HostCap::SandboxBrowser` variant
+  exists; `Mechanism::requires_host_cap: Option<HostCap>` field exists.
+- `clients/lemmy/src/lib.rs:707` is the **only** backend currently declaring
+  any mechanisms (all with `requires_host_cap: None`).
+- The plugin-settings landing page (`crates/core/src/ui/settings/plugin_settings.rs`,
+  the screen with "Discord (dev)" / "Microsoft Teams (dev)" cards) is where
+  per-plugin sandbox status rows naturally dock.
+
+So the gap is two-sided:
+1. The `StubSandbox` returns `NotImplemented` on every shell — Phases A/B/C below.
+2. No backend currently declares a `captcha-sandbox` mechanism that requires
+   `HostCap::SandboxBrowser` — until something declares it, the disabled-row
+   UI never shows. Phase D wires Discord (and Teams, where applicable).
+
+## Goal
+
 The `poly-host-sandbox` crate ships a `StubSandbox` that returns
 `Err(SandboxError::NotImplemented)` for every call. This plan covers the real
 plumbing that makes the `host-cap::sandbox-browser` mechanism functional across
-all three shells (Wry desktop, Electron, web), then flips the UI from DISABLED
-to live.
+all three shells (Wry desktop, Electron, web), then declares the matching
+mechanism on Discord/Teams so the existing `MechanismToggle` actually surfaces
+it (DISABLED everywhere → live on shells that advertise the cap).
 
 ---
 
@@ -114,23 +143,36 @@ actually works.
       the OAuth provider with a localhost test server that 302s to the shim,
       assert captured URL.
 
-### Phase D — UI integration (closes plan-client-version-override-and-sandbox.md Phase I)
+### Phase D — Backend mechanism declarations + UI surfacing
 
-- [ ] **D.1** Remove the DISABLED rendering for the `captcha-sandbox`
-      mechanism row in `crates/core/src/ui/account/mechanism_picker.rs` (or
-      wherever the gating lives — `grep -rn 'DISABLED.*sandbox' crates/core/`).
-      Replace with live "Configure" button.
-- [ ] **D.2** Wire the "Configure" button: opens a popover that lets the user
-      verify the host advertises `HostCap::SandboxBrowser`, with a "Test" link
+This phase actually makes the existing `MechanismToggle` show the sandbox row.
+Until at least one backend declares `requires_host_cap: Some(SandboxBrowser)`,
+the `client-settings-mechanism-disabled-host-cap` tooltip path in
+`mechanism_toggle.rs:28` is unreachable.
+
+- [ ] **D.1** Add `Mechanism { id: "captcha-sandbox", … requires_host_cap:
+      Some(HostCap::SandboxBrowser), … }` to Discord's mechanism list in
+      `clients/discord/src/lib.rs` (mirror lemmy's pattern at
+      `clients/lemmy/src/lib.rs:707`). FTL keys: `plugin-discord-mechanism-captcha-sandbox-{label,description}`.
+- [ ] **D.2** Add the same for Teams in `clients/teams/src/lib.rs` —
+      Teams uses sandbox for OAuth popup (the AAD redirect dance), keys
+      `plugin-teams-mechanism-oauth-sandbox-{label,description}`.
+- [ ] **D.3** Add per-shell sandbox-status row to `plugin_settings.rs`'s
+      Discord and Teams plugin cards: shows ✅ "Sandbox available" when the
+      host advertises `HostCap::SandboxBrowser`, ⚠️ "Sandbox unavailable on
+      this shell" otherwise. Add a "Test sandbox" button next to the ✅ row
       that runs a no-op sandbox call (open `https://example.com`, capture
-      pattern `*example.com*`) to verify end-to-end plumbing.
-- [ ] **D.3** End-to-end Discord captcha test: configure a Discord account
+      pattern `*example.com*`, expect resolution within 5s) and surfaces
+      success/failure inline.
+- [ ] **D.4** FTL keys for D.3 surface: `client-settings-sandbox-status-{available,unavailable,test-button,test-running,test-success,test-failure}`.
+- [ ] **D.5** End-to-end Discord captcha test: configure a Discord account
       that triggers captcha-on-login, verify all three shells (Wry, Electron,
-      web) successfully complete the captcha and persist the session token to
-      KV.
-- [ ] **D.4** Update `docs/client-settings.md` `captcha-sandbox` section: flip
-      "currently DISABLED" wording to "live; supported on Wry / Electron /
-      Web (Web requires OAuth provider redirects to host-bridge shim)".
+      web) successfully complete the captcha and persist the session token
+      to KV. Drive via `mcp__poly-{desktop,electron,web}__*` tools.
+- [ ] **D.6** Update `docs/client-settings.md` `captcha-sandbox` section:
+      flip "currently DISABLED" wording to "live; supported on Wry /
+      Electron / Web (Web requires OAuth provider redirects to host-bridge
+      shim under `/sandbox/<id>`)".
 
 ---
 

@@ -201,6 +201,14 @@ User chose heavyweight: full HTML fixture replay. The reason is forensic —
 if Reddit changes old.reddit.com markup, our parser tests catch the drift
 in CI before any user notices the production breakage.
 
+**Test animals (with emoji):** 🐑 `sheep` and 🐋 `walrus`. Both already exist
+in `clients/demo/assets/{sheep,walrus}.{png,svg}` and follow the established
+animal-mapping convention from `docs/dev/test-backends.md` and the avatar
+table in CLAUDE.md. `sheep` is the test username with subscribed subreddits
+(r/rust, r/programming) and a populated DM inbox; `walrus` is the DM
+recipient for the "compose new DM" smoke test (the canonical "hey come to
+Signal" use case).
+
 - [ ] **F.1** Create `servers/test-reddit/` mirroring `servers/test-discord/`
       structure. Cargo deps: `axum`, `tokio`, `tower-http` (for static
       file serving), `tracing`, `serde`, `poly-test-common`.
@@ -230,7 +238,8 @@ in CI before any user notices the production breakage.
       `clients/demo/assets/<animal>.png` via the shared
       `servers/test-common::avatars::serve_animal` helper. Update
       `CLAUDE.md` "Test-server Avatar URL Conventions" table to include
-      Reddit at port 9108.
+      Reddit at port 9108. Both `sheep` (🐑) and `walrus` (🐋) avatars
+      already exist in the assets dir; no new artwork needed.
 - [ ] **F.6** Wire `poly-test-runner` to start `test-reddit` on port 9108.
       Update `servers/test-runner/src/main.rs` and
       `docs/dev/test-backends.md`.
@@ -239,6 +248,23 @@ in CI before any user notices the production breakage.
       `base_url` field in `RedditClient`. Use this for
       `clients/reddit/tests/integration_*.rs` so the integration tests run
       against the local mock with real HTTP.
+
+- [ ] **F.8** Test-account entries — the "Add test account" buttons. Add
+      `pub fn get_test_accounts() -> &'static [poly_client::TestAccountEntry]`
+      to `clients/reddit/src/signup.rs` (mirror `clients/lemmy/src/signup.rs:51`).
+      Two entries:
+      - `sheep` — `server_label: "Reddit — localhost:9108"`,
+        `base_url: "http://localhost:9108"`, `password: "testpass123"`,
+        avatar 🐑
+      - `walrus` — same server, `password: "testpass123"`, avatar 🐋
+      Both auto-appear in the `/signup/test` quick-add panel
+      (`crates/core/src/ui/signup.rs:570 SignupTest`) once the entries are
+      registered through `register_plugin` (see `clients/lemmy/src/lib.rs`
+      registration call site).
+- [ ] **F.9** Wire the entries into the plugin registration so the panel's
+      `test_account_entries` collection picks them up under the
+      `dev-plugins` feature gate. Verify the buttons render in the
+      `/signup/test` page when the test runner is up.
 
 ### Phase G — UI surface (forum-style, mirrors Lemmy/HackerNews)
 
@@ -269,21 +295,41 @@ in CI before any user notices the production breakage.
       `reddit-channel-sort-{hot,new,top,rising,controversial}`,
       `reddit-dm-compose-to`.
 
-### Phase H — Acceptance criteria + DONE bar
+### Phase H — End-to-end testing + acceptance + DONE bar
 
 - [ ] **H.1** All Phase A-G boxes ticked.
-- [ ] **H.2** Integration test suite (`clients/reddit/tests/`) passes against
-      `servers/test-reddit/` covering: login → subscribed subreddits → list
-      r/rust hot posts → open a post → read comments → compose a DM to
-      `walrus` → upvote a post → log out → restore session via cookie.
-- [ ] **H.3** Manual smoke test against real `old.reddit.com` with a
+- [ ] **H.2** Unit-test suite (`clients/reddit/tests/parser_*.rs`) passes
+      against the committed HTML fixtures from F.2; every parser has at
+      least one fixture-driven test plus a `LoggedOut` negative case using
+      `login_redirect.html`.
+- [ ] **H.3** Integration test suite (`clients/reddit/tests/integration_*.rs`)
+      passes against `servers/test-reddit/` covering the full flow: login
+      as `sheep` → list subscribed subreddits → open r/rust hot → drill
+      into a post + read comments → open inbox → compose DM to `walrus`
+      ("hey come to Signal") → reply on the resulting thread → upvote a
+      post → log out → restore session via persisted cookie.
+- [ ] **H.4** End-to-end harness (`TEST_HARNESS.md`-style): add a step that
+      starts `poly-test-runner`, launches `apps/web` via `mcp__poly-web__*`,
+      navigates to `/signup/test`, clicks the 🐑 sheep test-account button,
+      asserts the resulting account loads r/rust posts + the inbox view
+      shows 3 fixture DMs. Run via the haiku test agent per CLAUDE.md
+      orchestration rules.
+- [ ] **H.5** UI smoke flow recorded: sheep account → click "Compose DM" →
+      type `walrus` as recipient → send → verify it appears in the sheep
+      outbox AND in the walrus inbox (the test backend persists in-memory
+      mutations per F.4).
+- [ ] **H.6** Manual smoke test against real `old.reddit.com` with a
       throwaway account: sign up via cookie path, browse a subreddit, read
       DMs. (Record results in commit message; do not commit the cookie.)
-- [ ] **H.4** `cargo check --features dev-plugins` passes; `cargo check`
-      (without dev-plugins) does not pull in any Reddit code.
-- [ ] **H.5** Documentation: `docs/dev/test-backends.md` updated with Reddit
-      section + animal map; `CLAUDE.md` avatar table updated.
-- [ ] **H.6** Status header flipped to `## Status: ✅ DONE — all phases
+- [ ] **H.7** `cargo check --features dev-plugins` passes; `cargo check`
+      (without dev-plugins) does not pull in any Reddit code; the
+      `/signup/test` page does NOT show reddit test-account buttons in
+      release builds.
+- [ ] **H.8** Documentation: `docs/dev/test-backends.md` updated with
+      Reddit section (port 9108, sheep+walrus animal map, curl recipes for
+      the mock endpoints, reset endpoint); `CLAUDE.md` avatar-conventions
+      table updated.
+- [ ] **H.9** Status header flipped to `## Status: ✅ DONE — all phases
       shipped (commits …)`.
 
 ---
