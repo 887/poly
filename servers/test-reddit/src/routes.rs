@@ -60,6 +60,14 @@ fn cookie_value<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a str> {
 }
 
 fn current_user(state: &RedditState, headers: &HeaderMap) -> Option<String> {
+    // Prefer the custom X-Mock-Session header (works in WASM where the
+    // browser strips the Cookie header on cross-origin fetch). Fall back
+    // to the standard reddit_session cookie for native callers.
+    if let Some(value) = headers.get("X-Mock-Session").and_then(|v| v.to_str().ok())
+        && let Some(user) = state.user_for_cookie(value)
+    {
+        return Some(user);
+    }
     let cookie = cookie_value(headers, "reddit_session")?;
     state.user_for_cookie(cookie)
 }

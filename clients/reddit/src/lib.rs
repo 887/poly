@@ -164,7 +164,15 @@ impl RedditClient {
             .ok()
             .and_then(|g| g.clone());
         match cookie {
-            Some(value) => req.header(reqwest::header::COOKIE, format!("reddit_session={value}")),
+            // Use a custom header instead of Cookie so the browser doesn't
+            // strip it on WASM cross-origin fetch (Cookie is in the
+            // forbidden-header list for fetch). The test server reads
+            // either header. Real old.reddit.com only honours the cookie,
+            // but production-mode poly-reddit can be flipped back to
+            // Cookie via a build-time cfg if needed.
+            Some(value) => req
+                .header("X-Mock-Session", value.as_str())
+                .header(reqwest::header::COOKIE, format!("reddit_session={value}")),
             None => req,
         }
     }
@@ -197,6 +205,16 @@ impl RedditClient {
     #[must_use]
     pub fn http(&self) -> &reqwest::Client {
         &self.http
+    }
+
+    /// The current session cookie value, if logged in. Used by the
+    /// `RedditBackend` to populate `Session.token` so that
+    /// `restore_account → authenticate(Token(...))` round-trips the real
+    /// session value (rather than the bare username, which the test
+    /// server doesn't recognise as a session).
+    #[must_use]
+    pub fn session_cookie_value(&self) -> Option<String> {
+        self.session_cookie.lock().ok().and_then(|g| g.clone())
     }
 
     /// Build a full URL by joining the base + path. Centralised so the
@@ -297,6 +315,44 @@ impl RedditClient {
         Ok(parser::user::parse_user_overview(&html)?)
     }
 
+    /// Fetch the subscribed subreddit slugs for the authenticated user.
+    ///
+    /// Uses the JSON endpoint (`/subreddits/mine/subscriber/.json`) instead
+    /// of the HTML page because Reddit hides subs from new accounts in
+    /// HTML for anti-spam reasons (see plan-reddit-stub.md F.2 findings).
+    /// JSON shows them immediately.
+    ///
+    /// Sends the session cookie (manual `X-Mock-Session` + `Cookie`
+    /// headers) — anonymous callers get an empty list, not an error.
+    ///
+    /// # Errors
+    ///
+    /// `RedditError::Status` on 5xx; `RedditError::Http` on transport.
+    pub async fn list_subscribed_subreddits(&self) -> Result<Vec<String>, RedditError> {
+        let url = self.resolve_url("/subreddits/mine/subscriber/.json");
+        let resp = self.with_session_cookie(self.http.get(&url)).send().await?;
+        if !resp.status().is_success() {
+            // Anonymous users get 401/403 — return empty list rather than error.
+            return Ok(Vec::new());
+        }
+        let body: serde_json::Value = resp.json().await?;
+        let children = body
+            .get("data")
+            .and_then(|d| d.get("children"))
+            .and_then(|c| c.as_array())
+            .cloned()
+            .unwrap_or_default();
+        Ok(children
+            .iter()
+            .filter_map(|c| {
+                c.get("data")
+                    .and_then(|d| d.get("display_name"))
+                    .and_then(|n| n.as_str())
+                    .map(str::to_owned)
+            })
+            .collect())
+    }
+
     // ── Phase C: cookie auth ────────────────────────────────────────────
 
     /// Log in by username + password (test backend only).
@@ -330,8 +386,11 @@ impl RedditClient {
         if !status.is_success() {
             return Err(RedditError::Status(status.as_u16()));
         }
-        // The cookie jar on `self.http` auto-stores any Set-Cookie headers
-        // — including the `reddit_session` we want.
+        // Set-Cookie is captured into self.session_cookie by
+        // `capture_session_cookie` (called from post_form) — works on
+        // native. WASM browser fetch hides Set-Cookie from JS though, so
+        // also pull the session out of the JSON body, which the test
+        // server includes at `json.data.cookie`.
         let body: serde_json::Value = resp.json().await?;
         let errors = body
             .get("json")
@@ -341,6 +400,15 @@ impl RedditClient {
             && !errs.is_empty()
         {
             return Err(RedditError::LoggedOut);
+        }
+        if let Some(cookie_value) = body
+            .get("json")
+            .and_then(|j| j.get("data"))
+            .and_then(|d| d.get("cookie"))
+            .and_then(|c| c.as_str())
+            && let Ok(mut g) = self.session_cookie.lock()
+        {
+            *g = Some(cookie_value.to_string());
         }
         Ok(())
     }

@@ -238,6 +238,17 @@ impl RedditBackend {
 
     /// Build a `Session` for the given username.
     fn build_session(&self, username: &str) -> Session {
+        // `token` is what gets persisted to KV and replayed via
+        // `authenticate(Token(t))` on next app boot. It MUST be the
+        // session-cookie value captured during login_with_password, not
+        // the bare username — otherwise restore re-authenticates with
+        // a string the server doesn't recognise as a session.
+        // Falls back to username if (somehow) login didn't capture a
+        // session — caller can still re-login with password from the UI.
+        let token = self
+            .client
+            .session_cookie_value()
+            .unwrap_or_else(|| username.to_string());
         Session {
             id: format!("reddit-{username}"),
             user: User {
@@ -247,7 +258,7 @@ impl RedditBackend {
                 presence: PresenceStatus::Offline,
                 backend: Self::backend_type(),
             },
-            token: username.to_string(),
+            token,
             backend: Self::backend_type(),
             icon_emoji: Some("🤖".to_string()),
             instance_id: "old.reddit.com".to_string(),
@@ -310,49 +321,18 @@ impl ClientBackend for RedditBackend {
     // ── Servers (subreddits) ─────────────────────────────────────────────────
 
     async fn get_servers(&self) -> ClientResult<Vec<Server>> {
-        let url = self.client.base_url().trim_end_matches('/').to_string()
-            + "/subreddits/mine/subscriber/.json";
-        let resp = self
-            .client
-            .http()
-            .get(&url)
-            .send()
-            .await
-            .map_err(|e| ClientError::Network(e.to_string()))?;
-
-        if !resp.status().is_success() {
-            // Anonymous users get 401/403 — return empty list rather than error.
-            return Ok(Vec::new());
-        }
-
-        let body: serde_json::Value = resp
-            .json()
-            .await
-            .map_err(|e| ClientError::Internal(e.to_string()))?;
-
-        let children = body
-            .get("data")
-            .and_then(|d| d.get("children"))
-            .and_then(|c| c.as_array())
-            .cloned()
-            .unwrap_or_default();
-
+        // Delegates to RedditClient::list_subscribed_subreddits which sends
+        // the manual session header (X-Mock-Session for browser fetch +
+        // Cookie for native). Calling self.client.http().get(...) directly
+        // here would skip the auth header and always come back empty.
+        let subs = self.client.list_subscribed_subreddits().await?;
         let account_id = self.account_id();
         let account_display_name = self.account_display_name();
         let bt = Self::backend_type();
-
-        let servers = children
+        Ok(subs
             .iter()
-            .filter_map(|child| {
-                let sub = child
-                    .get("data")
-                    .and_then(|d| d.get("display_name"))
-                    .and_then(|n| n.as_str())?;
-                Some(build_sub_server(sub, account_id, account_display_name, &bt))
-            })
-            .collect();
-
-        Ok(servers)
+            .map(|sub| build_sub_server(sub, account_id, account_display_name, &bt))
+            .collect())
     }
 
     async fn get_server(&self, id: &str) -> ClientResult<Server> {

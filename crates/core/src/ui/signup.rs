@@ -521,7 +521,6 @@ fn AddAccountNav(selected_slug: Option<String>) -> Element {
                 {
                     let is_active = selected_slug.as_deref() == Some(slug.as_str());
                     let class = if is_active { "signup-nav-item active" } else { "signup-nav-item" };
-                    let slug_for_link = slug.clone();
                     rsx! {
                         div {
                             class,
@@ -532,13 +531,6 @@ fn AddAccountNav(selected_slug: Option<String>) -> Element {
                             div { class: "signup-nav-item-text",
                                 span { class: "signup-nav-item-name", "{name}" }
                                 span { class: "signup-nav-item-desc", "{desc}" }
-                                // Register affordance — shown below the description when
-                                // the backend declares an External or InApp signup method.
-                                // NotSupported backends render nothing (demo, HN, etc.).
-                                RegisterLink {
-                                    backend_slug: slug_for_link,
-                                    server_url: None,
-                                }
                             }
                         }
                     }
@@ -746,9 +738,20 @@ pub(crate) fn ClientSignupPage(client: String) -> Element {
                     navigate_back: navigate_back_to_settings,
                 };
                 let on_complete = build_on_complete(client_manager, chat_data);
+                let slug_for_register = client.clone();
                 rsx! {
                     div { class: "signup-content",
                         { render(on_complete, ctx) }
+                        // Register affordance lives in the right pane (next to
+                        // the form) so the picker entries on the left stay
+                        // compact. Only renders when the backend declares
+                        // External / InApp signup_method; NotSupported is hidden.
+                        div { class: "signup-content-register",
+                            RegisterLink {
+                                backend_slug: slug_for_register,
+                                server_url: None,
+                            }
+                        }
                     }
                 }
             }

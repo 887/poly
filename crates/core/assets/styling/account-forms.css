@@ -549,3 +549,14 @@
 .register-link:hover .register-link__arrow {
     transform: translateX(2px);
 }
+
+/* Register affordance docked under the form in the right pane (moved
+ * out of the left-sidebar entries 2026-05-02 — they were getting too
+ * tall + repetitive). */
+.signup-content-register {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-primary);
+    display: flex;
+    justify-content: flex-start;
+}
