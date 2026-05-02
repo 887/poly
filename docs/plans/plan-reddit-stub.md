@@ -1,4 +1,30 @@
-## Status: IN PROGRESS — Phase A shipped (commit a459cea2), Phase B next
+## Status: IN PROGRESS — Phase A shipped (commit a459cea2), F.2 fixtures captured, Phase B next
+
+## Real-world findings from F.2 fixture capture (2026-05-02)
+
+Three plan-affecting changes vs the original write-up. Reddit has tightened
+old.reddit.com surface meaningfully since the plan was drafted:
+
+1. **`.compact` URL suffix is gone** — `/r/<sub>/<sort>/` 301-redirects
+   to the non-`.compact` URL. Drop every `.compact` reference. The
+   non-`.compact` HTML is functionally identical for parsing (data-fullname
+   + thing.thing[data-fullname^="t3_"] etc all present).
+2. **`/login` is now the shreddit React app** — "Welcome to Reddit",
+   `class="theme-beta"`, 385KB of JS-app HTML with no scrapable form. Kept
+   the file as `login_redirect.html` to drive the **LoggedOut detector**
+   (parser returns `LoggedOut` if response contains either the legacy
+   `.login-form` selector OR the modern `class="theme-beta"` shreddit
+   marker).
+3. **`/api/login/<username>` returns 403** — the legacy form-POST login
+   endpoint is locked. **Password-based login is dead from the public
+   surface.** Phase C must drop the password path entirely; bring-your-own-
+   cookie is now the **only** viable auth flow for end users (paste the
+   `reddit_session` cookie value from DevTools → Application → Cookies in
+   a logged-in browser).
+
+Bonus useful endpoint discovered: `GET /api/me.json` returns JSON without
+auth (anonymous loid + experiment flags). Useful as an auth-state probe in
+Phase C.
 
 # Plan: Reddit Backend (HTML scraping, dev-plugins gated)
 
@@ -141,53 +167,58 @@ side effect.
       `comments_t3_xyz.html`, `inbox_empty.html`, `inbox_with_dms.html`,
       `user_overview.html`, `login_redirect.html`.
 
-### Phase C — Cookie auth + modhash
+### Phase C — Cookie auth + modhash (REVISED post-F.2: cookie-only)
 
-- [ ] **C.1** Implement `RedditClient::login(username, password) -> Result<()>`:
-      POST to `https://www.reddit.com/api/login/<username>` form-encoded
-      `user, passwd, api_type=json`. Parse JSON response, extract `modhash`
-      and the `reddit_session` cookie (auto-stored by `reqwest::cookie_store`).
-- [ ] **C.2** Implement `RedditClient::login_with_cookie(reddit_session_cookie: String) -> Result<()>`:
-      bypass username/password, set the cookie directly, then GET
-      `https://old.reddit.com/api/me.json` to retrieve modhash + verify the
-      cookie is live. (This is the "bring your own cookie" path for users
-      with 2FA enabled — they grab the cookie from a logged-in browser
-      session.)
-- [ ] **C.3** Modhash refresh: every response that contains
-      `<input name="uh" value="...">` updates the cached modhash. Required
-      for any state-mutating POST.
+Per F.2 findings: `/api/login/<username>` returns 403 → password-based login
+is dead from the public surface. Only viable auth path is bring-your-own-
+cookie. C.1 (password login) is **REMOVED**.
+
+- [ ] **C.1** ~~Password login~~ — **REMOVED**. `/api/login/<u>` is locked
+      (403 Forbidden as of 2026-05-02). Document this in
+      `docs/dev/test-backends.md` Reddit section.
+- [ ] **C.2** Implement `RedditClient::login_with_cookie(reddit_session: String) -> Result<()>`:
+      set the cookie directly into the `reqwest::cookie_store`, then GET
+      `https://old.reddit.com/api/me.json` to verify the cookie is live
+      (anon response has empty `data.name`; live cookie response has
+      populated user fields). Extract modhash from the response if present
+      (`data.modhash`).
+- [ ] **C.3** Modhash refresh: every authenticated HTML response contains
+      `<input name="uh" value="...">` somewhere — parser updates the cached
+      modhash on every fetch. Required for any state-mutating POST.
 - [ ] **C.4** Persist `reddit_session` cookie in `poly_kv` under
       `client.reddit.<account_id>.session_cookie`. Restore on
       `RedditClient::resume(account_id)`.
-- [ ] **C.5** Detect and surface 2FA: login response with
-      `"reason": "wrong_password"` AND username has 2FA enabled (no way to
-      detect from outside) → return `ClientError::TwoFactorRequired`.
-      UI surfaces this with "use cookie auth instead" instructions.
-- [ ] **C.6** Rate limit handling: respect `X-Ratelimit-Remaining`,
-      `X-Ratelimit-Reset` response headers. Sleep + retry once on `429`.
+- [ ] **C.5** Auth-state detection: parser layer (Phase B.6) returns
+      `LoggedOut` when response HTML contains EITHER the legacy `.login-form`
+      selector OR the modern shreddit marker `class="theme-beta"` AND
+      `<title>Welcome to Reddit</title>`. `RedditClient` surfaces this as
+      `ClientError::SessionExpired` so the UI prompts for a fresh cookie.
+- [ ] **C.6** Rate limit handling: respect `X-Ratelimit-Remaining` (seen
+      in F.2 capture as `99.0`), `X-Ratelimit-Reset` response headers.
+      Sleep + retry once on `429`.
 
 ### Phase D — Read flows (subreddit browsing, DMs)
 
 - [ ] **D.1** `get_servers()` → return user's subscribed subreddits scraped
-      from `https://old.reddit.com/subreddits/mine/.compact` (the compact
+      from `https://old.reddit.com/subreddits/mine/` (the standard
       HTML view is smaller). Each becomes a `Server { id: "r_<sub>", … }`.
 - [ ] **D.2** `get_channels(server_id)` → return single `Channel { id:
       "c_posts", name: "posts" }`. (Sort is UI-side, not channel-side.)
 - [ ] **D.3** `get_messages(server_id, channel_id, sort: ChannelSort)` →
-      GET `https://old.reddit.com/r/<sub>/<sort>/.compact` where `sort ∈
+      GET `https://old.reddit.com/r/<sub>/<sort>/` where `sort ∈
       {hot, new, top, rising, controversial}`, parse via
       `parser::subreddit::parse_listing`, convert to forum-style
       `Vec<Message>`.
 - [ ] **D.4** `get_message_thread(server_id, channel_id, post_id)` → GET
-      `https://old.reddit.com/r/<sub>/comments/<post_id>/.compact`, parse via
+      `https://old.reddit.com/r/<sub>/comments/<post_id>/`, parse via
       `parser::post::parse_post_page`, return OP as parent + comments as
       threaded replies.
 - [ ] **D.5** `get_dm_channels()` → GET
-      `https://old.reddit.com/message/inbox/.compact`, parse via
+      `https://old.reddit.com/message/inbox/`, parse via
       `parser::inbox::parse_inbox`, group messages by counterparty into
       `DmChannel`s.
 - [ ] **D.6** `get_dm_messages(dm_id)` → GET
-      `https://old.reddit.com/message/messages/<dm_id>/.compact`, parse the
+      `https://old.reddit.com/message/messages/<dm_id>/`, parse the
       thread.
 - [ ] **D.7** Avatar resolution: `User.avatar_url` → resolve from
       `https://old.reddit.com/user/<u>/about.json`-equivalent HTML scrape;
@@ -241,11 +272,11 @@ Signal" use case).
       file serving), `tracing`, `serde`, `poly-test-common`.
 - [ ] **F.2** Capture real fixtures from `old.reddit.com` (logged in as
       throwaway test account) for ten anchor pages:
-      - `/subreddits/mine/.compact`
-      - `/r/rust/hot/.compact`, `/r/rust/new/.compact`, `/r/rust/top/.compact`
-      - `/r/rust/comments/<id>/.compact` (one with deep nested comments)
-      - `/message/inbox/.compact` (with 3 DM threads)
-      - `/message/messages/<id>/.compact` (DM thread with 5 back-and-forth)
+      - `/subreddits/mine/`
+      - `/r/rust/hot/`, `/r/rust/new/`, `/r/rust/top/`
+      - `/r/rust/comments/<id>/` (one with deep nested comments)
+      - `/message/inbox/` (with 3 DM threads)
+      - `/message/messages/<id>/` (DM thread with 5 back-and-forth)
       - `/user/sheep/about.json`-equivalent HTML
       - `/login` (logged-out redirect target)
       - `/api/login/<u>` 200 response (cookie-set headers + JSON body)
@@ -260,7 +291,7 @@ Signal" use case).
       `/api/vote`, `/api/compose` all accept the POST and return canned
       success JSON. Maintain in-memory state so subsequent GETs reflect the
       mutation (e.g. POSTing to `/api/compose` adds a fixture row to
-      `/message/inbox/.compact` on the next GET).
+      `/message/inbox/` on the next GET).
 - [ ] **F.5** Avatar serving: `/avatars/<animal>` returns the corresponding
       `clients/demo/assets/<animal>.png` via the shared
       `servers/test-common::avatars::serve_animal` helper. Update
