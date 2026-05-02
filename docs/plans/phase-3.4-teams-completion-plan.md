@@ -51,7 +51,7 @@ Discord is NOT registered in `register_native_signup_entries()` either — both 
 - [x] **3.4.3.1** `servers/test-teams/src/routes.rs` — add `POST /test/auth/login { login, password } → { token, user_id }` that validates against the seeded Sheep/Walrus accounts and returns a Bearer token. Uses the same `state.auth.create_token` path `/test/auth/token` issues.
 - [x] **3.4.3.2** `clients/teams/src/lib.rs` — accept `AuthCredentials::EmailPassword { email, password }`. On that variant: POST `/test/auth/login`, receive token, continue as Bearer flow. Token flow stays as-is.
 - [x] **3.4.3.3** `clients/teams/src/signup.rs` — swap Sheep/Walrus `TestAccountEntry` to EmailPassword (mirror what Discord did for Koala/Kangaroo in phase 2.5)
-- [ ] ⏸ **3.4.3.4** ~~Signup panel tabs~~ → deferred with 3.4.2. Signup panel isn't reachable until Teams is registered in the signup picker (which in turn waits for 3.4.7 OAuth to give the manual form a reason to exist).
+- [x] **3.4.3.4** ~~Signup panel tabs~~ → N/A in the same pattern as 3.4.2.1–3.4.2.3. The original blocker (no signup picker entry, no OAuth tab to anchor a manual form) was lifted by 3.4.7.7 — Teams is now in `register_native_signup_entries()` and `TeamsSignupPage` has Microsoft-account (device-code) + Access-token tabs. Sheep/Walrus EmailPassword auth (3.4.3.2 + 3.4.3.3) lands via test-account auto-register behind `dev-plugins`, not via a manual EmailPassword tab — same approach Discord took. No additional tab work required.
 
 ## 3.4.4 Extend test-teams to match test-discord's surface
 
