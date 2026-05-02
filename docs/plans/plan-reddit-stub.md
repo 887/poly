@@ -2,29 +2,73 @@
 
 ## Real-world findings from F.2 fixture capture (2026-05-02)
 
-Three plan-affecting changes vs the original write-up. Reddit has tightened
-old.reddit.com surface meaningfully since the plan was drafted:
+Findings vs the original write-up. Reddit has tightened old.reddit.com
+surface meaningfully since the plan was drafted:
 
 1. **`.compact` URL suffix is gone** — `/r/<sub>/<sort>/` 301-redirects
    to the non-`.compact` URL. Drop every `.compact` reference. The
-   non-`.compact` HTML is functionally identical for parsing (data-fullname
-   + thing.thing[data-fullname^="t3_"] etc all present).
+   non-`.compact` HTML is functionally identical for parsing.
 2. **`/login` is now the shreddit React app** — "Welcome to Reddit",
    `class="theme-beta"`, 385KB of JS-app HTML with no scrapable form. Kept
    the file as `login_redirect.html` to drive the **LoggedOut detector**
    (parser returns `LoggedOut` if response contains either the legacy
    `.login-form` selector OR the modern `class="theme-beta"` shreddit
    marker).
-3. **`/api/login/<username>` returns 403** — the legacy form-POST login
-   endpoint is locked. **Password-based login is dead from the public
-   surface.** Phase C must drop the password path entirely; bring-your-own-
-   cookie is now the **only** viable auth flow for end users (paste the
-   `reddit_session` cookie value from DevTools → Application → Cookies in
-   a logged-in browser).
+3. **`/api/login/<username>` returns 403** — legacy form-POST login is
+   locked. **Password login is dead from the public surface.** Phase C
+   must drop the password path entirely; bring-your-own-cookie is the
+   **only** viable auth flow.
+4. **`/api/compose` and `/api/sendmessage` BOTH 404** — the legacy
+   write-side endpoints for direct messages are gone too. Phase E.3 (DM
+   compose, the *primary use case* for this backend) cannot use these
+   form-POST endpoints. Three options to investigate:
+   - **OAuth bearer token flow** via `/api/v1/access_token` (would shift
+     auth from cookie-paste to a real OAuth dance, much more complex)
+   - **Scrape the modern shreddit `/message/compose/` form action + JS**
+     (fragile; new-reddit form changes weekly)
+   - **Use the stealth path:** new reddit's GraphQL endpoint
+     `https://www.reddit.com/svc/shreddit/graphql` with the `token_v2`
+     cookie that's set alongside `reddit_session`
+5. **Brand-new accounts get HIDDEN from `/subreddits/mine/` HTML**
+   (anti-spam delay) — but `/subreddits/mine/subscriber/.json` shows the
+   subs immediately. Phase D.1 should fall back to the JSON endpoint when
+   the HTML returns 0 subscribed subs (or just always use JSON for that
+   endpoint — no parsing benefit from HTML).
+6. **`/api/subscribe`** with `X-Modhash` + `X-Requested-With: XMLHttpRequest`
+   headers + `uh=<modhash>` form data **DOES still work** — returns
+   `200 {}` and the subscription registers (verified via
+   `/r/<sub>/about.json` `user_is_subscriber: true`). So at least one
+   write-side legacy endpoint survives.
 
 Bonus useful endpoint discovered: `GET /api/me.json` returns JSON without
 auth (anonymous loid + experiment flags). Useful as an auth-state probe in
 Phase C.
+
+### Fixture inventory (`clients/reddit/tests/fixtures/`)
+
+Public (no auth needed):
+- `r_rust_hot.html`, `r_rust_new.html`, `r_rust_top.html` — 3 sort listings, 25/25/18 posts each
+- `comments_t3_14921t7.html` — 211 nested comments + 1 OP, ideal stress test for the threading parser
+- `user_overview.html` — 25 posts/comments by a real user
+- `login_redirect.html` — the new shreddit React app (negative fixture for LoggedOut detector)
+
+Auth-gated (captured via throwaway `sheep` account, sanitized):
+- `api_me_sheep.json` — populated `/api/me.json` response (logged-in user data)
+- `frontpage_logged_in.html` — `old.reddit.com/` for an authed user (sidebar + nav state)
+- `inbox_empty.html` — `/message/inbox/` with no DMs (empty-state fixture)
+- `subreddits_mine_empty.html` — `/subreddits/mine/` HTML for new account (anti-spam hide; shows what the page looks like when reddit declines to display subs)
+- `subreddits_mine_populated.json` — `/subreddits/mine/subscriber/.json` showing 2 actual subs (r/rust, r/programming) — JSON branch for the parser
+
+Deferred (need a populated state we couldn't easily produce):
+- `inbox_with_dms.html` — needs another account messaging us, OR working compose endpoint
+- `message_thread_t4_*.html` — needs a populated DM thread
+- `subreddits_mine_populated.html` — needs aged account past the anti-spam window
+- Real `/api/compose` success response — needs working write endpoint (see finding #4)
+
+**Sanitization applied to every auth-gated fixture:** username, user-id,
+loid, modhash, csrf_token, anonbox email, all replaced with `sheep` /
+`SANITIZED` placeholders. Verified zero leakage with a 4-needle probe
+(`PreviousCurve2228`, `2djlt5h8c4`, `bbbs7hvgrr`, `bafqw`).
 
 # Plan: Reddit Backend (HTML scraping, dev-plugins gated)
 
