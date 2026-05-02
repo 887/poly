@@ -47,5 +47,8 @@ reqwest = { workspace = true, optional = true, features = ["cookies"] }
 scraper = { version = "0.20", optional = true }
 regex = { version = "1", optional = true }
 
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
+
 [lints]
 workspace = true

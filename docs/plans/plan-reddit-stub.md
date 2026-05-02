@@ -1,4 +1,4 @@
-## Status: IN PROGRESS — Phase A (a459cea2) + F.2 fixtures (a2c95418) + Phase B (commit pending) shipped, Phase C next
+## Status: IN PROGRESS — Phase A (a459cea2) + F.2 (a2c95418) + B (a6e2f5c3) + D-anonymous (commit pending) shipped. Anonymous read flows are usable end-to-end. Phase C (cookie auth) optional next; Phase E (writes) blocked on figuring out a working compose endpoint.
 
 ## Real-world findings from F.2 fixture capture (2026-05-02)
 
@@ -268,7 +268,33 @@ cookie. C.1 (password login) is **REMOVED**.
       in F.2 capture as `99.0`), `X-Ratelimit-Reset` response headers.
       Sleep + retry once on `429`.
 
-### Phase D — Read flows (subreddit browsing, DMs)
+### Phase D-anonymous — Read flows (no-auth subset) — ✅ shipped (commit pending)
+
+The first three read methods need no auth at all — they were the first
+shippable subset of Phase D. Cookie-required reads (subscribed list, DMs,
+inbox) stay in the unticked Phase D list below for when Phase C lands.
+
+- [x] **D-anon.1** `RedditClient::list_subreddit(subreddit, sort: SortKind)`
+      — `GET /r/<sub>/<sort>/`, parses via `parser::subreddit::parse_listing`.
+      `SortKind` enum covers Hot / New / Top / Rising / Controversial.
+- [x] **D-anon.2** `RedditClient::get_post(post_id)` — `GET /comments/<id>/`,
+      reqwest follows the 301 reddit issues to add the canonical slug.
+      Parses via `parser::post::parse_post_page`.
+- [x] **D-anon.3** `RedditClient::get_user(username)` — `GET /user/<u>/`,
+      parses via `parser::user::parse_user_overview`.
+- [x] **D-anon.4** `RedditError` enum (Http / Parse / LoggedOut /
+      Status(u16)) with `From<reqwest::Error>` and `From<ParseError>`.
+- [x] **D-anon.5** `tests/integration_anonymous_read.rs` — 4 live wire
+      tests against `old.reddit.com`, all `#[ignore]`'d so CI doesn't
+      depend on the live internet. Manual run:
+      `cargo test -p poly-reddit --test integration_anonymous_read -- --ignored`.
+      Verified live: r/rust hot listing fetches + parses ✓
+- [x] **D-anon.6** Bumped default UA to a real Firefox UA string —
+      `Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0`.
+      The bare `poly-reddit/0.1` string was getting rate-limited.
+      Regression-guarded by a unit test.
+
+### Phase D — Read flows (auth-gated subset, requires Phase C)
 
 - [ ] **D.1** `get_servers()` → return user's subscribed subreddits scraped
       from `https://old.reddit.com/subreddits/mine/` (the standard
