@@ -175,6 +175,28 @@ impl RedditClient {
         Ok(resp.text().await?)
     }
 
+    /// POST a form-encoded body. Workspace reqwest disables
+    /// default-features (drops `.form()`), so we encode + set the
+    /// Content-Type manually.
+    async fn post_form(
+        &self,
+        url: &str,
+        fields: &[(&str, &str)],
+    ) -> Result<reqwest::Response, RedditError> {
+        let body = serde_urlencoded::to_string(fields)
+            .map_err(|e| RedditError::Http(e.to_string()))?;
+        Ok(self
+            .http
+            .post(url)
+            .header(
+                reqwest::header::CONTENT_TYPE,
+                "application/x-www-form-urlencoded",
+            )
+            .body(body)
+            .send()
+            .await?)
+    }
+
     /// List the posts in a subreddit at the given sort.
     ///
     /// Anonymous — works without auth.
@@ -230,6 +252,246 @@ impl RedditClient {
         let url = self.resolve_url(&path);
         let html = self.fetch_text(&url).await?;
         Ok(parser::user::parse_user_overview(&html)?)
+    }
+
+    // ── Phase C: cookie auth ────────────────────────────────────────────
+
+    /// Log in by username + password (test backend only).
+    ///
+    /// Real `old.reddit.com` returns 403 on `/api/login/<user>` since
+    /// 2024+ — this method is for tests against `poly-test-reddit`. For
+    /// production use, see [`Self::login_with_session_cookie`].
+    ///
+    /// # Errors
+    ///
+    /// `RedditError::Status` for non-2xx HTTP, `RedditError::LoggedOut`
+    /// if Reddit replies with a wrong-password JSON error.
+    pub async fn login_with_password(
+        &self,
+        username: &str,
+        password: &str,
+    ) -> Result<(), RedditError> {
+        let path = format!("/api/login/{username}");
+        let url = self.resolve_url(&path);
+        let resp = self
+            .post_form(
+                &url,
+                &[
+                    ("user", username),
+                    ("passwd", password),
+                    ("api_type", "json"),
+                ],
+            )
+            .await?;
+        let status = resp.status();
+        if !status.is_success() {
+            return Err(RedditError::Status(status.as_u16()));
+        }
+        // The cookie jar on `self.http` auto-stores any Set-Cookie headers
+        // — including the `reddit_session` we want.
+        let body: serde_json::Value = resp.json().await?;
+        let errors = body
+            .get("json")
+            .and_then(|j| j.get("errors"))
+            .and_then(|e| e.as_array());
+        if let Some(errs) = errors
+            && !errs.is_empty()
+        {
+            return Err(RedditError::LoggedOut);
+        }
+        Ok(())
+    }
+
+    /// Bring-your-own-cookie auth path. The user pastes their
+    /// `reddit_session` cookie value (from a logged-in browser), and we
+    /// pre-seed the jar so subsequent requests authenticate as them.
+    ///
+    /// This is the only viable production auth path for real reddit
+    /// (the password endpoint returns 403). Intended UI: a settings
+    /// field where the user pastes the cookie value.
+    ///
+    /// # Errors
+    ///
+    /// `RedditError::Http` if the cookie can't be parsed into the jar.
+    pub fn login_with_session_cookie(
+        &mut self,
+        cookie_value: &str,
+    ) -> Result<(), RedditError> {
+        // reqwest's default Client builder doesn't expose a way to
+        // re-seed cookies after construction. Rebuild the client with a
+        // fresh jar pre-populated.
+        let jar = std::sync::Arc::new(reqwest::cookie::Jar::default());
+        let url = self
+            .base_url
+            .parse::<reqwest::Url>()
+            .map_err(|e| RedditError::Http(e.to_string()))?;
+        jar.add_cookie_str(
+            &format!("reddit_session={cookie_value}; Path=/"),
+            &url,
+        );
+        self.http = reqwest::Client::builder()
+            .cookie_provider(jar)
+            .user_agent(Self::DEFAULT_UA)
+            .build()?;
+        Ok(())
+    }
+
+    /// Probe whether the current session is authenticated.
+    ///
+    /// `GET /api/me.json` — anonymous responses have empty `data.name`,
+    /// authenticated ones have the user fields populated.
+    ///
+    /// # Errors
+    ///
+    /// `RedditError::Http` / `Status` for transport-level failures.
+    pub async fn is_logged_in(&self) -> Result<Option<String>, RedditError> {
+        let url = self.resolve_url("/api/me.json");
+        let resp = self.http.get(&url).send().await?;
+        if !resp.status().is_success() {
+            return Err(RedditError::Status(resp.status().as_u16()));
+        }
+        let body: serde_json::Value = resp.json().await?;
+        Ok(body
+            .get("data")
+            .and_then(|d| d.get("name"))
+            .and_then(|n| n.as_str())
+            .filter(|s| !s.is_empty())
+            .map(str::to_owned))
+    }
+
+    // ── Phase D (auth-gated): inbox + subscribed list ───────────────────
+
+    /// Fetch the authenticated user's DM inbox.
+    ///
+    /// # Errors
+    ///
+    /// `RedditError::LoggedOut` if the session cookie is missing or
+    /// expired (response will be the login page).
+    pub async fn inbox(&self) -> Result<Vec<parser::RawDm>, RedditError> {
+        let url = self.resolve_url("/message/inbox/");
+        let html = self.fetch_text(&url).await?;
+        Ok(parser::inbox::parse_inbox(&html)?)
+    }
+
+    // ── Phase E: write flows ────────────────────────────────────────────
+
+    /// Send a private message (DM).
+    ///
+    /// **Note:** real `old.reddit.com` `/api/compose` returns 404 as of
+    /// 2026-05-02. This works against `poly-test-reddit` (which
+    /// implements the legacy form-POST endpoint); against live Reddit a
+    /// future update will need to switch to the shreddit GraphQL or
+    /// OAuth-bearer path. See plan-reddit-stub.md F.2 findings.
+    ///
+    /// # Errors
+    ///
+    /// `RedditError::Status` for HTTP non-2xx, `RedditError::LoggedOut`
+    /// for a wrong-recipient or unauthenticated reply.
+    pub async fn compose_dm(
+        &self,
+        to: &str,
+        subject: &str,
+        body: &str,
+    ) -> Result<(), RedditError> {
+        let url = self.resolve_url("/api/compose");
+        let resp = self
+            .post_form(
+                &url,
+                &[
+                    ("to", to),
+                    ("subject", subject),
+                    ("text", body),
+                    ("api_type", "json"),
+                ],
+            )
+            .await?;
+        if !resp.status().is_success() {
+            return Err(RedditError::Status(resp.status().as_u16()));
+        }
+        let body: serde_json::Value = resp.json().await?;
+        if let Some(errs) = body
+            .get("json")
+            .and_then(|j| j.get("errors"))
+            .and_then(|e| e.as_array())
+            && !errs.is_empty()
+        {
+            return Err(RedditError::LoggedOut);
+        }
+        Ok(())
+    }
+
+    /// Subscribe (or unsubscribe) to a subreddit. `sr_fullname` is the
+    /// `t5_<id>` form. `action` is `"sub"` or `"unsub"`.
+    ///
+    /// # Errors
+    ///
+    /// `RedditError::Status` for HTTP non-2xx.
+    pub async fn subscribe(
+        &self,
+        sr_fullname: &str,
+        action: &str,
+    ) -> Result<(), RedditError> {
+        let url = self.resolve_url("/api/subscribe");
+        let resp = self
+            .post_form(
+                &url,
+                &[
+                    ("action", action),
+                    ("sr", sr_fullname),
+                    ("api_type", "json"),
+                ],
+            )
+            .await?;
+        if !resp.status().is_success() {
+            return Err(RedditError::Status(resp.status().as_u16()));
+        }
+        Ok(())
+    }
+
+    /// Reply with a comment under a parent (`t1_` for comment-on-comment,
+    /// `t3_` for comment-on-post).
+    ///
+    /// # Errors
+    ///
+    /// `RedditError::Status` for HTTP non-2xx.
+    pub async fn reply_comment(
+        &self,
+        parent_fullname: &str,
+        text: &str,
+    ) -> Result<(), RedditError> {
+        let url = self.resolve_url("/api/comment");
+        let resp = self
+            .post_form(
+                &url,
+                &[
+                    ("thing_id", parent_fullname),
+                    ("text", text),
+                    ("api_type", "json"),
+                ],
+            )
+            .await?;
+        if !resp.status().is_success() {
+            return Err(RedditError::Status(resp.status().as_u16()));
+        }
+        Ok(())
+    }
+
+    /// Vote on a thing. `dir` is `1` (upvote), `0` (clear), or `-1`
+    /// (downvote). `id` is the `t3_` or `t1_` fullname.
+    ///
+    /// # Errors
+    ///
+    /// `RedditError::Status` for HTTP non-2xx.
+    pub async fn vote(&self, fullname: &str, dir: i8) -> Result<(), RedditError> {
+        let url = self.resolve_url("/api/vote");
+        let dir_str = dir.to_string();
+        let resp = self
+            .post_form(&url, &[("id", fullname), ("dir", dir_str.as_str())])
+            .await?;
+        if !resp.status().is_success() {
+            return Err(RedditError::Status(resp.status().as_u16()));
+        }
+        Ok(())
     }
 }
 

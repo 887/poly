@@ -32,6 +32,7 @@ members = [
     "servers/test-hackernews",
     "servers/test-forgejo",
     "servers/test-github",
+    "servers/test-reddit",
     "servers/test-runner",
     "mcp/devtools-protocol",
     "mcp/desktop-devtools-mcp",
@@ -233,6 +234,7 @@ poly-server = { path = "servers/server" }
 poly-test-common = { path = "servers/test-common" }
 poly-test-forgejo = { path = "servers/test-forgejo" }
 poly-test-github = { path = "servers/test-github" }
+poly-test-reddit = { path = "servers/test-reddit" }
 poly-server-client = { path = "clients/server-client", default-features = false }
 poly-desktop-devtools-mcp = { path = "mcp/desktop-devtools-mcp" }
 poly-web-devtools-mcp = { path = "mcp/web-devtools-mcp" }

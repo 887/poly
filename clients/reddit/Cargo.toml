@@ -24,6 +24,7 @@ native = [
     "dep:reqwest",
     "dep:scraper",
     "dep:regex",
+    "dep:serde_urlencoded",
     "dep:poly-host-bridge",
 ]
 
@@ -46,9 +47,18 @@ async-trait = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true, features = ["cookies"] }
 scraper = { version = "0.20", optional = true }
 regex = { version = "1", optional = true }
+# Form-encoded body building. reqwest's `.form()` is workspace-disabled
+# (default-features = false drops serde_urlencoded), so we encode manually.
+serde_urlencoded = { version = "0.7", optional = true }
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time", "net"] }
+poly-test-reddit = { path = "../../servers/test-reddit" }
+axum = { workspace = true }
+
+[[test]]
+name = "back_and_forth"
+path = "tests/back_and_forth.rs"
 
 [lints]
 workspace = true

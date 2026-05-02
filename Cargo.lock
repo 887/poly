@@ -6919,17 +6919,20 @@ name = "poly-reddit"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "axum",
  "chrono",
  "dioxus",
  "futures",
  "poly-client",
  "poly-host-bridge",
+ "poly-test-reddit",
  "poly-ui-macros",
  "regex",
  "reqwest 0.13.2",
  "scraper",
  "serde",
  "serde_json",
+ "serde_urlencoded",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -7201,6 +7204,23 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
+]
+
+[[package]]
+name = "poly-test-reddit"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "chrono",
+ "dashmap",
+ "poly-test-common",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

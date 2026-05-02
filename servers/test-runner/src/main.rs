@@ -26,6 +26,7 @@ const BACKENDS: &[(&str, u16)] = &[
     ("poly-test-hackernews", 9105),
     ("poly-test-forgejo", 9106),
     ("poly-test-github", 9107),
+    ("poly-test-reddit", 9108),
 ];
 
 /// Spawn one backend binary. Returns the child handle.
@@ -98,6 +99,7 @@ fn print_summary_banner(statuses: &[(String, u16, bool)]) {
     println!("  HN       → (read-only feed)   (localhost:9105)");
     println!("  Forgejo  → Otter, Flamingo    (localhost:9106)");
     println!("  GitHub   → Penguin, Chameleon (localhost:9107)");
+    println!("  Reddit   → Cat, Dog           (localhost:9108)");
     println!();
     println!("Press Ctrl+C to stop all servers.");
 }

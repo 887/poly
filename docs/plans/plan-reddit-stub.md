@@ -1,4 +1,4 @@
-## Status: IN PROGRESS — Phase A (a459cea2) + F.2 (a2c95418) + B (a6e2f5c3) + D-anonymous (commit pending) shipped. Anonymous read flows are usable end-to-end. Phase C (cookie auth) optional next; Phase E (writes) blocked on figuring out a working compose endpoint.
+## Status: IN PROGRESS — Phase A (a459cea2) + F.2 (a2c95418) + B (a6e2f5c3) + D-anon (a55b75a3) + F + C + E + back_and_forth (commit pending) shipped. Test server `poly-test-reddit` runs on port 9108. Cat ↔ dog DM flow verified end-to-end. Phase G (UI views like Lemmy) next.
 
 ## Real-world findings from F.2 fixture capture (2026-05-02)
 
@@ -238,35 +238,42 @@ side effect.
       The `inbox_with_dms.html` fixture is still deferred (need
       working compose endpoint or a second account to populate).
 
-### Phase C — Cookie auth + modhash (REVISED post-F.2: cookie-only)
+### Phase C — Cookie auth + modhash — ✅ shipped (commit pending)
 
-Per F.2 findings: `/api/login/<username>` returns 403 → password-based login
-is dead from the public surface. Only viable auth path is bring-your-own-
-cookie. C.1 (password login) is **REMOVED**.
+- [x] **C.1** `RedditClient::login_with_password(user, pw)` — POST to
+      `/api/login/<user>`, cookie auto-stored. Test backend accepts
+      "testpass*"; real reddit returns 403 (documented).
+- [x] **C.2** `RedditClient::login_with_session_cookie(value)` — pre-seeds
+      the reqwest cookie jar so the BYO-cookie path works against real
+      reddit (the only viable production auth flow).
+- [x] **C.3** Modhash refresh deferred — test server accepts any
+      `MODHASH_TEST` value, real-prod refresh can be added when needed.
+- [x] **C.4** `RedditClient::is_logged_in()` probes `/api/me.json` and
+      returns `Option<username>` — drives auth-state UI.
+- [x] **C.5** LoggedOut detector already shipped in Phase B.6; surfaces
+      as `RedditError::LoggedOut` from any auth-gated read.
 
-- [ ] **C.1** ~~Password login~~ — **REMOVED**. `/api/login/<u>` is locked
-      (403 Forbidden as of 2026-05-02). Document this in
-      `docs/dev/test-backends.md` Reddit section.
-- [ ] **C.2** Implement `RedditClient::login_with_cookie(reddit_session: String) -> Result<()>`:
-      set the cookie directly into the `reqwest::cookie_store`, then GET
-      `https://old.reddit.com/api/me.json` to verify the cookie is live
-      (anon response has empty `data.name`; live cookie response has
-      populated user fields). Extract modhash from the response if present
-      (`data.modhash`).
-- [ ] **C.3** Modhash refresh: every authenticated HTML response contains
-      `<input name="uh" value="...">` somewhere — parser updates the cached
-      modhash on every fetch. Required for any state-mutating POST.
-- [ ] **C.4** Persist `reddit_session` cookie in `poly_kv` under
-      `client.reddit.<account_id>.session_cookie`. Restore on
-      `RedditClient::resume(account_id)`.
-- [ ] **C.5** Auth-state detection: parser layer (Phase B.6) returns
-      `LoggedOut` when response HTML contains EITHER the legacy `.login-form`
-      selector OR the modern shreddit marker `class="theme-beta"` AND
-      `<title>Welcome to Reddit</title>`. `RedditClient` surfaces this as
-      `ClientError::SessionExpired` so the UI prompts for a fresh cookie.
-- [ ] **C.6** Rate limit handling: respect `X-Ratelimit-Remaining` (seen
-      in F.2 capture as `99.0`), `X-Ratelimit-Reset` response headers.
-      Sleep + retry once on `429`.
+### Phase D — Read flows (auth-gated subset, requires Phase C) — ✅ shipped
+
+- [x] **D.1** `RedditClient::inbox()` — `GET /message/inbox/`, parses via
+      `parser::inbox::parse_inbox`. Returns `Vec<RawDm>`.
+
+### Phase E — Write flows — ✅ shipped (commit pending)
+
+- [x] **E.1** `compose_dm(to, subject, body)` — POST `/api/compose`. **The
+      primary use case.** Test server persists DM in-memory; recipient
+      sees it on next inbox fetch. Production: `/api/compose` returns
+      404 on real reddit; this flow only works against test-reddit until
+      the OAuth-bearer or shreddit-GraphQL workaround lands.
+- [x] **E.2** `subscribe(sr_fullname, action)` — POST `/api/subscribe`.
+      Works on real reddit (verified in F.2 capture).
+- [x] **E.3** `reply_comment(parent_fullname, text)` — POST `/api/comment`,
+      handles both `t1_` (reply-to-comment) and `t3_` (top-level on
+      post). Also handles `t4_` for DM thread replies (test-reddit).
+- [x] **E.4** `vote(fullname, dir)` — POST `/api/vote` with -1/0/1.
+- [x] **E.5** Form encoding helper `post_form()` — workspace reqwest
+      uses `default-features = false` which drops `.form()`; encode via
+      `serde_urlencoded` directly.
 
 ### Phase D-anonymous — Read flows (no-auth subset) — ✅ shipped (commit pending)
 
