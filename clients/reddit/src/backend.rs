@@ -754,7 +754,114 @@ impl ClientBackend for RedditBackend {
         _channel_id: &str,
         row_id: &str,
     ) -> ClientResult<ViewDetail> {
-        Err(ClientError::NotFound(format!("row not found: {row_id}")))
+        // ViewRow ids are emitted as `t3_<post_id>` by raw_post_to_viewrow.
+        let post_id = row_id
+            .strip_prefix("t3_")
+            .ok_or_else(|| ClientError::NotFound(format!("get_view_detail: not a t3_ row: {row_id}")))?;
+
+        // Fetch the post (HTML page → RawPost + comments). Comments aren't
+        // surfaced here yet (TreeSpec returns its own data); body_block
+        // owns the post header + body + image gallery.
+        let (post, _comments) = self.client.get_post(post_id).await.map_err(ClientError::from)?;
+
+        // Gallery posts: fetch the JSON to get all image URLs. Single-image
+        // posts and self-posts skip this round-trip.
+        let gallery_urls: Vec<String> = if post.is_gallery {
+            self.client
+                .get_gallery_urls(post_id)
+                .await
+                .map_err(ClientError::from)?
+        } else if let Some(ref preview) = post.preview_url {
+            // Single-image post — render the cover preview as the only
+            // gallery item so the UI has a consistent rendering path.
+            vec![preview.clone()]
+        } else {
+            Vec::new()
+        };
+
+        fn html_escape(s: &str) -> String {
+            s.replace('&', "&amp;")
+                .replace('<', "&lt;")
+                .replace('>', "&gt;")
+                .replace('"', "&quot;")
+        }
+
+        let mut html = String::new();
+        // Title heading.
+        html.push_str(&format!("<h3>{}</h3>", html_escape(&post.title)));
+        // Author + score line.
+        html.push_str(&format!(
+            "<p class=\"reddit-post-meta\">by u/{} · {} points · {} comments</p>",
+            html_escape(&post.author),
+            post.score,
+            post.comment_count,
+        ));
+        // External URL link, if any.
+        if let Some(ref url) = post.url
+            && !post.is_gallery
+            && post.preview_url.is_none()
+        {
+            let escaped = html_escape(url);
+            html.push_str(&format!(
+                "<p class=\"reddit-post-link\"><a href=\"{escaped}\">{escaped}</a></p>"
+            ));
+        }
+        // Self-post body markdown (already HTML-rendered by parser).
+        if let Some(ref body) = post.body
+            && !body.is_empty()
+        {
+            html.push_str(&format!("<div class=\"reddit-post-body\">{body}</div>"));
+        }
+        // Gallery / single-image rendering: each image as its own <img>
+        // wrapped in a div so CSS can lay them out (host's stylesheet
+        // can scope `.reddit-gallery > img` for carousel / grid).
+        if !gallery_urls.is_empty() {
+            html.push_str("<div class=\"reddit-gallery\">");
+            for (i, url) in gallery_urls.iter().enumerate() {
+                let alt = if post.is_gallery {
+                    format!("Gallery image {}/{}", i + 1, gallery_urls.len())
+                } else {
+                    "Post image".to_string()
+                };
+                html.push_str(&format!(
+                    "<img class=\"reddit-gallery-item\" src=\"{}\" alt=\"{}\" loading=\"lazy\" />",
+                    html_escape(url),
+                    html_escape(&alt),
+                ));
+            }
+            html.push_str("</div>");
+        }
+
+        // Scoped stylesheet — gives the gallery a horizontally-scrollable
+        // strip on narrow viewports and a 2-up grid on wider ones.
+        let stylesheet = Some(
+            ".reddit-post-meta { color: var(--text-muted, #888); font-size: 0.85rem; }
+             .reddit-post-body { margin: 12px 0; }
+             .reddit-post-link a { color: var(--text-link, #60a5fa); }
+             .reddit-gallery {
+                 display: flex;
+                 flex-wrap: wrap;
+                 gap: 8px;
+                 margin-top: 12px;
+             }
+             .reddit-gallery-item {
+                 max-width: min(100%, 480px);
+                 max-height: 540px;
+                 object-fit: contain;
+                 border-radius: 6px;
+                 background: rgba(0, 0, 0, 0.3);
+             }"
+                .to_string(),
+        );
+
+        Ok(ViewDetail {
+            body_block: CustomBlock {
+                sanitized_html: html,
+                stylesheet,
+                max_height_px: None,
+            },
+            comments_section: None,
+        })
     }
 
     async fn get_composer_buttons(&self, _channel_id: &str) -> ClientResult<Vec<ComposerButton>> {
