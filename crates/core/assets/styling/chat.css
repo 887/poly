@@ -1522,9 +1522,9 @@
     scroll-snap-align: center;
 }
 
-/* Forum Posts|Comments toggle pill — sits above ClientView's body
- * toolbar (which carries the Hot dropdown + Filter input). Shown only
- * for backends with supports_comment_feed = true (Lemmy + demo-forum). */
+/* Forum Posts|Comments toggle pill — injected via the body toolbar's
+ * `leading` slot for backends with supports_comment_feed = true (Lemmy
+ * + demo-forum). Sits inline with Hot dropdown + Filter input. */
 
 .forum-view-wrapper {
     display: flex;
@@ -1533,12 +1533,13 @@
     min-height: 0;
 }
 
-.forum-view-toggle-bar {
-    display: flex;
+.forum-toolbar-pills {
+    display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 8px 16px 4px 16px;
-    border-bottom: 1px solid var(--border-primary);
+    margin-right: 12px;
+    padding-right: 12px;
+    border-right: 1px solid var(--border-primary);
 }
 
 .forum-toggle-pill {

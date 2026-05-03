@@ -115,6 +115,11 @@ pub fn ClientView(
     /// input so the parent can control filtering without touching the descriptor.
     #[props(default)]
     forum_filter: Option<String>,
+    /// Optional leading slot for the body's toolbar — ForumView passes the
+    /// Posts|Comments pill toggle here so it sits inline next to Hot /
+    /// Filter… instead of stacking above the toolbar.
+    #[props(default)]
+    toolbar_leading: Option<Element>,
 ) -> Element {
     let client_manager: BatchedSignal<ClientManager> = use_context();
 
@@ -158,11 +163,14 @@ pub fn ClientView(
         }
         Some(Ok(desc)) => {
             let desc: ViewDescriptor = desc.clone();
-            if let Some(filter) = forum_filter {
-                render_descriptor_with_filter(channel_id.clone(), account_id.clone(), desc, initial_tab, filter)
-            } else {
-                render_descriptor(channel_id.clone(), account_id.clone(), desc, initial_tab)
-            }
+            render_descriptor_inner(
+                channel_id.clone(),
+                account_id.clone(),
+                desc,
+                initial_tab,
+                forum_filter.filter(|f| !f.is_empty()),
+                toolbar_leading.clone(),
+            )
         }
     }
 }
@@ -295,7 +303,7 @@ fn render_descriptor_with_filter(
     initial_tab: Option<String>,
     extra_filter: String,
 ) -> Element {
-    render_descriptor_inner(channel_id, account_id, desc, initial_tab, Some(extra_filter))
+    render_descriptor_inner(channel_id, account_id, desc, initial_tab, Some(extra_filter), None)
 }
 
 fn render_descriptor(
@@ -304,7 +312,7 @@ fn render_descriptor(
     desc: ViewDescriptor,
     initial_tab: Option<String>,
 ) -> Element {
-    render_descriptor_inner(channel_id, account_id, desc, initial_tab, None)
+    render_descriptor_inner(channel_id, account_id, desc, initial_tab, None, None)
 }
 
 // lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
@@ -315,6 +323,7 @@ fn render_descriptor_inner(
     desc: ViewDescriptor,
     initial_tab: Option<String>,
     extra_filter: Option<String>,
+    toolbar_leading: Option<Element>,
 ) -> Element {
     let header = desc.header.clone();
     let toolbar = desc.toolbar.clone();
@@ -362,6 +371,7 @@ fn render_descriptor_inner(
                     selected_sort,
                     selected_filter,
                     selected_tab,
+                    leading: toolbar_leading.clone(),
                 }
             }
             div { class: "client-view-body",

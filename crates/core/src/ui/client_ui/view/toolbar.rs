@@ -68,6 +68,12 @@ pub fn ViewToolbar(
     /// P4 — parent-owned selected tab id.
     #[props(default)]
     selected_tab: Signal<Option<String>>,
+    /// Optional leading slot rendered at the start of the toolbar row,
+    /// before the tabs / sorts / filters. Used by `ForumView` to inject
+    /// the Posts|Comments pill toggle inline (so it sits on the same
+    /// row as Hot / Filter… instead of stacking above the toolbar).
+    #[props(default)]
+    leading: Option<Element>,
 ) -> Element {
     let default_sort = default_id(&toolbar.sort_options);
     let default_filter = default_id(&toolbar.filter_options);
@@ -112,6 +118,9 @@ pub fn ViewToolbar(
 
     rsx! {
         div { class: "client-view-toolbar forum-header", role: "toolbar",
+            if let Some(leading) = leading {
+                {leading}
+            }
             if !tabs.is_empty() {
                 div { class: "client-view-toolbar-tabs view-toolbar-tabs forum-nav-tabs", role: "tablist",
                     for tab in tabs {

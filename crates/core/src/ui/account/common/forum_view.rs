@@ -292,58 +292,66 @@ pub fn ForumView() -> Element {
     let forum_filter_val = filter_debounced.read().clone();
     let forum_filter_opt = if forum_filter_val.is_empty() { None } else { Some(forum_filter_val) };
 
-    rsx! {
-        div { class: "forum-view-wrapper",
-            // Phase D — Posts|Comments pill header for backends with a
-            // community-wide comment feed (Lemmy + demo-forum). The Filter
-            // input lives in the body engine's existing toolbar (rendered
-            // inside ClientView below) so we don't duplicate it here.
-            if supports_comment_feed {
-                div { class: "forum-view-toggle-bar",
-                    {
-                        let onclick = move |_evt: MouseEvent| {
-                            app_state.batch(|s| s.view_filter = PostsOrComments::Posts);
-                            raw_filter.set(String::new());
-                        };
-                        rsx! {
-                            button {
-                                class: if view_filter == PostsOrComments::Posts {
-                                    "forum-toggle-pill forum-toggle-pill--active"
-                                } else {
-                                    "forum-toggle-pill"
-                                },
-                                "aria-pressed": if view_filter == PostsOrComments::Posts { "true" } else { "false" },
-                                onclick,
-                                "Posts"
-                            }
+    // Phase D (deep refactor) — when supports_comment_feed, build the
+    // Posts|Comments pill toggle as an Element and inject it into the
+    // body engine's toolbar via the `toolbar_leading` slot. This keeps
+    // the pills inline next to Hot / Filter… instead of stacking above.
+    let toolbar_leading: Option<Element> = if supports_comment_feed {
+        let posts_onclick = move |_evt: MouseEvent| {
+            app_state.batch(|s| s.view_filter = PostsOrComments::Posts);
+            raw_filter.set(String::new());
+        };
+        let comments_onclick = move |_evt: MouseEvent| {
+            app_state.batch(|s| s.view_filter = PostsOrComments::Comments);
+            raw_filter.set(String::new());
+        };
+        Some(rsx! {
+            div { class: "forum-toolbar-pills", role: "group", "aria-label": "Feed type",
+                {
+                    let onclick = posts_onclick;
+                    rsx! {
+                        button {
+                            class: if view_filter == PostsOrComments::Posts {
+                                "forum-toggle-pill forum-toggle-pill--active"
+                            } else {
+                                "forum-toggle-pill"
+                            },
+                            "aria-pressed": if view_filter == PostsOrComments::Posts { "true" } else { "false" },
+                            onclick,
+                            "Posts"
                         }
                     }
-                    {
-                        let onclick = move |_evt: MouseEvent| {
-                            app_state.batch(|s| s.view_filter = PostsOrComments::Comments);
-                            raw_filter.set(String::new());
-                        };
-                        rsx! {
-                            button {
-                                class: if view_filter == PostsOrComments::Comments {
-                                    "forum-toggle-pill forum-toggle-pill--active"
-                                } else {
-                                    "forum-toggle-pill"
-                                },
-                                "aria-pressed": if view_filter == PostsOrComments::Comments { "true" } else { "false" },
-                                onclick,
-                                "Comments"
-                            }
+                }
+                {
+                    let onclick = comments_onclick;
+                    rsx! {
+                        button {
+                            class: if view_filter == PostsOrComments::Comments {
+                                "forum-toggle-pill forum-toggle-pill--active"
+                            } else {
+                                "forum-toggle-pill"
+                            },
+                            "aria-pressed": if view_filter == PostsOrComments::Comments { "true" } else { "false" },
+                            onclick,
+                            "Comments"
                         }
                     }
                 }
             }
+        })
+    } else {
+        None
+    };
+
+    rsx! {
+        div { class: "forum-view-wrapper",
             ClientView {
                 key: "{key}",
                 channel_id: effective_channel_id,
                 account_id,
                 initial_tab: Some(forum_scope),
                 forum_filter: forum_filter_opt,
+                toolbar_leading,
             }
         }
     }
