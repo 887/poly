@@ -21,6 +21,44 @@ use std::pin::Pin;
 use crate::{RedditClient, RedditError, SortKind};
 use crate::parser::{RawComment, RawDm, RawPost, UserProfile};
 
+/// Walk a comment tree depth-first and push each comment as a flat
+/// Message into the output Vec. Used by `get_messages` for the
+/// per-post comment-fetch route (`hn-post-<pid>`) so ForumPostView
+/// can render the thread as a flat list (Message-level reply_to
+/// threading is a separate, future pass).
+fn flatten_comments_into_messages(
+    comments: &[RawComment],
+    backend: &BackendType,
+    out: &mut Vec<Message>,
+) {
+    for c in comments {
+        out.push(Message {
+            id: format!("t1_{}", c.id),
+            author: User {
+                id: user_id_for_name(&c.author),
+                display_name: c.author.clone(),
+                avatar_url: None,
+                presence: PresenceStatus::Offline,
+                backend: backend.clone(),
+            },
+            // body_html is reddit's pre-rendered markdown; keep verbatim
+            // so the chat-view can render it via the existing markdown
+            // sanitization layer.
+            content: MessageContent::Text(c.body_html.clone()),
+            timestamp: c.timestamp,
+            attachments: Vec::new(),
+            reactions: Vec::new(),
+            reply_to: None,
+            edited: false,
+            thread: None,
+            preview_image_url: None,
+        });
+        if !c.replies.is_empty() {
+            flatten_comments_into_messages(&c.replies, backend, out);
+        }
+    }
+}
+
 /// Recursively emit reddit comments as depth-indented sanitized HTML.
 /// Used by `get_view_detail` to inline the comment thread under the
 /// post body (TreeSpec-via-ViewRow doesn't support hierarchy yet).
@@ -521,17 +559,41 @@ impl ClientBackend for RedditBackend {
         channel_id: &str,
         _query: MessageQuery,
     ) -> ClientResult<Vec<Message>> {
-        let sub = sub_from_channel_id(channel_id)
-            .ok_or_else(|| ClientError::NotFound(format!("channel not found: {channel_id}")))?;
-
-        let posts = self
-            .client
-            .list_subreddit(sub, SortKind::Hot)
-            .await
-            .map_err(ClientError::from)?;
-
         let bt = Self::backend_type();
-        Ok(posts.iter().map(|p| raw_post_to_message(p, &bt)).collect())
+
+        // Three channel-id shapes:
+        // 1. `c_posts_<sub>` — subreddit post-list (the standard channel)
+        // 2. `hn-post-<post_id>` — ForumPostView's per-post comment fetch
+        //    (the channel id is hard-coded to `hn-post-<pid>` in the
+        //    shared forum_view.rs because HackerNews was the first
+        //    forum-style backend; we accept the same shape here so
+        //    Reddit posts open with their comments populated)
+        // 3. anything else — return NotFound
+        if let Some(sub) = sub_from_channel_id(channel_id) {
+            let posts = self
+                .client
+                .list_subreddit(sub, SortKind::Hot)
+                .await
+                .map_err(ClientError::from)?;
+            return Ok(posts.iter().map(|p| raw_post_to_message(p, &bt)).collect());
+        }
+        if let Some(post_id) = channel_id.strip_prefix("hn-post-") {
+            // Fetch the post + its comment tree, flatten depth-first
+            // into a Vec<Message>. The OP itself is included as the
+            // first message so ForumPostView's lookup finds it.
+            let (post, comments) = self
+                .client
+                .get_post(post_id)
+                .await
+                .map_err(ClientError::from)?;
+
+            let mut messages = Vec::new();
+            messages.push(raw_post_to_message(&post, &bt));
+            flatten_comments_into_messages(&comments, &bt, &mut messages);
+            return Ok(messages);
+        }
+
+        Err(ClientError::NotFound(format!("channel not found: {channel_id}")))
     }
 
     // ── Users ─────────────────────────────────────────────────────────────────
