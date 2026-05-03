@@ -363,6 +363,45 @@ fn build_sub_channel(sub: &str) -> Channel {
     }
 }
 
+// ─── Sort state helpers ───────────────────────────────────────────────────────
+
+/// Stable string key used to persist a `SortKind` in `settings_storage`.
+fn sort_kind_to_str(sort: SortKind) -> &'static str {
+    match sort {
+        SortKind::Hot => "hot",
+        SortKind::New => "new",
+        SortKind::Rising => "rising",
+        SortKind::Controversial => "controversial",
+        SortKind::Top => "top",
+        SortKind::TopHour => "top-hour",
+        SortKind::TopDay => "top-day",
+        SortKind::TopWeek => "top-week",
+        SortKind::TopMonth => "top-month",
+        SortKind::TopYear => "top-year",
+        SortKind::TopAll => "top-all",
+    }
+}
+
+/// Parse a persisted sort key back into a `SortKind`.
+///
+/// Returns `SortKind::Hot` for unrecognised or absent values (safe default).
+fn sort_kind_from_str(s: &str) -> SortKind {
+    match s {
+        "hot" => SortKind::Hot,
+        "new" => SortKind::New,
+        "rising" => SortKind::Rising,
+        "controversial" => SortKind::Controversial,
+        "top" => SortKind::Top,
+        "top-hour" => SortKind::TopHour,
+        "top-day" => SortKind::TopDay,
+        "top-week" => SortKind::TopWeek,
+        "top-month" => SortKind::TopMonth,
+        "top-year" => SortKind::TopYear,
+        "top-all" => SortKind::TopAll,
+        _ => SortKind::Hot,
+    }
+}
+
 // ─── State storage for session ───────────────────────────────────────────────
 
 /// `ClientBackend` adapter wrapping a `RedditClient` + optional session.
@@ -386,6 +425,17 @@ impl RedditBackend {
         self.settings_storage
             .get(SettingsScope::AccountGlobal, "", "show-media-previews")
             .is_none_or(|v| v != "false")
+    }
+
+    /// Read the current sort mode.
+    ///
+    /// Defaults to `SortKind::Hot` when the user has never chosen a sort.
+    fn current_sort(&self) -> SortKind {
+        self.settings_storage
+            .get(SettingsScope::AccountGlobal, "", "current-sort")
+            .as_deref()
+            .map(sort_kind_from_str)
+            .unwrap_or(SortKind::Hot)
     }
 
     fn backend_type() -> BackendType {
@@ -758,42 +808,8 @@ impl ClientBackend for RedditBackend {
 
     fn backend_capabilities(&self) -> BackendCapabilities {
         BackendCapabilities {
-            community_search: CommunitySearchSupport::Single,
             ..BackendCapabilities::MESSAGING_NO_SOCIAL
         }
-    }
-
-    async fn search_communities(
-        &self,
-        query: &str,
-        _scope: CommunityScope,
-        cursor: Option<String>,
-    ) -> ClientResult<CommunityPage> {
-        // Reddit's subreddit search ignores scope — there is only one
-        // global scope. `cursor` is Reddit's `after` fullname string.
-        let (subs, next_after) = self
-            .client
-            .search_subreddits(query, cursor.as_deref())
-            .await
-            .map_err(|e| ClientError::Network(e.to_string()))?;
-
-        let bt = Self::backend_type();
-        let account_id = self.account_id().to_string();
-        let account_display_name = self.account_display_name().to_string();
-
-        let items = subs
-            .iter()
-            .map(|sub| {
-                let mut server =
-                    build_sub_server(&sub.name, &account_id, &account_display_name, &bt);
-                if let Some(url) = &sub.icon_url {
-                    server.icon_url = Some(url.clone());
-                }
-                server
-            })
-            .collect();
-
-        Ok(CommunityPage { items, next_cursor: next_after })
     }
 
     fn plugin_manifest(&self) -> PluginManifest {
@@ -897,17 +913,135 @@ impl ClientBackend for RedditBackend {
     }
 
     async fn get_sidebar_declaration(&self) -> ClientResult<SidebarDeclaration> {
+        let items = vec![
+            SidebarItem {
+                id: "sort-reddit-hot".to_string(),
+                parent_id: None,
+                label_key: "ui-sidebar-sort-hot".to_string(),
+                icon: None,
+                badge: None,
+                route_kind: SidebarRouteKind::Channel,
+            },
+            SidebarItem {
+                id: "sort-reddit-new".to_string(),
+                parent_id: None,
+                label_key: "ui-sidebar-sort-new".to_string(),
+                icon: None,
+                badge: None,
+                route_kind: SidebarRouteKind::Channel,
+            },
+            SidebarItem {
+                id: "sort-reddit-rising".to_string(),
+                parent_id: None,
+                label_key: "ui-sidebar-sort-rising".to_string(),
+                icon: None,
+                badge: None,
+                route_kind: SidebarRouteKind::Channel,
+            },
+            SidebarItem {
+                id: "sort-reddit-controversial".to_string(),
+                parent_id: None,
+                label_key: "ui-sidebar-sort-controversial".to_string(),
+                icon: None,
+                badge: None,
+                route_kind: SidebarRouteKind::Channel,
+            },
+            SidebarItem {
+                id: "sort-reddit-top".to_string(),
+                parent_id: None,
+                label_key: "ui-sidebar-sort-top".to_string(),
+                icon: None,
+                badge: None,
+                route_kind: SidebarRouteKind::Channel,
+            },
+            // "Top by time" sub-modes — nested under sort-reddit-top.
+            SidebarItem {
+                id: "sort-reddit-top-hour".to_string(),
+                parent_id: Some("sort-reddit-top".to_string()),
+                label_key: "ui-sidebar-sort-top-hour".to_string(),
+                icon: None,
+                badge: None,
+                route_kind: SidebarRouteKind::Channel,
+            },
+            SidebarItem {
+                id: "sort-reddit-top-day".to_string(),
+                parent_id: Some("sort-reddit-top".to_string()),
+                label_key: "ui-sidebar-sort-top-day".to_string(),
+                icon: None,
+                badge: None,
+                route_kind: SidebarRouteKind::Channel,
+            },
+            SidebarItem {
+                id: "sort-reddit-top-week".to_string(),
+                parent_id: Some("sort-reddit-top".to_string()),
+                label_key: "ui-sidebar-sort-top-week".to_string(),
+                icon: None,
+                badge: None,
+                route_kind: SidebarRouteKind::Channel,
+            },
+            SidebarItem {
+                id: "sort-reddit-top-month".to_string(),
+                parent_id: Some("sort-reddit-top".to_string()),
+                label_key: "ui-sidebar-sort-top-month".to_string(),
+                icon: None,
+                badge: None,
+                route_kind: SidebarRouteKind::Channel,
+            },
+            SidebarItem {
+                id: "sort-reddit-top-year".to_string(),
+                parent_id: Some("sort-reddit-top".to_string()),
+                label_key: "ui-sidebar-sort-top-year".to_string(),
+                icon: None,
+                badge: None,
+                route_kind: SidebarRouteKind::Channel,
+            },
+            SidebarItem {
+                id: "sort-reddit-top-all".to_string(),
+                parent_id: Some("sort-reddit-top".to_string()),
+                label_key: "ui-sidebar-sort-top-all".to_string(),
+                icon: None,
+                badge: None,
+                route_kind: SidebarRouteKind::Channel,
+            },
+        ];
         Ok(SidebarDeclaration {
-            layout: SidebarLayoutKind::Feed,
-            sections: Vec::new(),
+            layout: SidebarLayoutKind::SortModes,
+            sections: vec![SidebarSection {
+                header_key: None,
+                collapsible: false,
+                default_collapsed: false,
+                items,
+            }],
             header_block: None,
         })
     }
 
     async fn invoke_sidebar_action(&self, action_id: &str) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound(format!(
-            "unknown sidebar action: {action_id}"
-        )))
+        let sort = match action_id {
+            "sort-reddit-hot" => SortKind::Hot,
+            "sort-reddit-new" => SortKind::New,
+            "sort-reddit-rising" => SortKind::Rising,
+            "sort-reddit-controversial" => SortKind::Controversial,
+            "sort-reddit-top" => SortKind::Top,
+            "sort-reddit-top-hour" => SortKind::TopHour,
+            "sort-reddit-top-day" => SortKind::TopDay,
+            "sort-reddit-top-week" => SortKind::TopWeek,
+            "sort-reddit-top-month" => SortKind::TopMonth,
+            "sort-reddit-top-year" => SortKind::TopYear,
+            "sort-reddit-top-all" => SortKind::TopAll,
+            _ => {
+                return Err(ClientError::NotFound(format!(
+                    "unknown sidebar action: {action_id}"
+                )));
+            }
+        };
+        self.settings_storage.set(
+            SettingsScope::AccountGlobal,
+            "",
+            "current-sort",
+            sort_kind_to_str(sort),
+        )?;
+        Ok(ActionOutcome::RefreshTarget)
     }
 
     async fn get_channel_view(&self, _channel_id: &str) -> ClientResult<ViewDescriptor> {
@@ -940,7 +1074,7 @@ impl ClientBackend for RedditBackend {
 
         let posts = self
             .client
-            .list_subreddit(sub, SortKind::Hot)
+            .list_subreddit(sub, self.current_sort())
             .await
             .map_err(ClientError::from)?;
 

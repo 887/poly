@@ -93,6 +93,18 @@ pub enum SortKind {
     Rising,
     /// High-engagement, mixed-vote posts.
     Controversial,
+    /// Top posts from the past hour.
+    TopHour,
+    /// Top posts from the past day.
+    TopDay,
+    /// Top posts from the past week.
+    TopWeek,
+    /// Top posts from the past month.
+    TopMonth,
+    /// Top posts from the past year.
+    TopYear,
+    /// Top posts of all time.
+    TopAll,
 }
 
 #[cfg(feature = "native")]
@@ -103,9 +115,26 @@ impl SortKind {
         match self {
             Self::Hot => "hot",
             Self::New => "new",
-            Self::Top => "top",
+            Self::Top | Self::TopHour | Self::TopDay | Self::TopWeek
+            | Self::TopMonth | Self::TopYear | Self::TopAll => "top",
             Self::Rising => "rising",
             Self::Controversial => "controversial",
+        }
+    }
+
+    /// Optional `?t=` query parameter for time-windowed top sorts.
+    ///
+    /// Returns `None` for sorts that don't need a time filter.
+    #[must_use]
+    pub fn time_filter(self) -> Option<&'static str> {
+        match self {
+            Self::TopHour => Some("hour"),
+            Self::TopDay => Some("day"),
+            Self::TopWeek => Some("week"),
+            Self::TopMonth => Some("month"),
+            Self::TopYear => Some("year"),
+            Self::TopAll => Some("all"),
+            _ => None,
         }
     }
 }
@@ -285,7 +314,11 @@ impl RedditClient {
         sort: SortKind,
     ) -> Result<Vec<RawPost>, RedditError> {
         let path = format!("/r/{subreddit}/{}/", sort.as_path());
-        let url = self.resolve_url(&path);
+        let base = self.resolve_url(&path);
+        let url = match sort.time_filter() {
+            Some(t) => format!("{base}?t={t}"),
+            None => base,
+        };
         let html = self.fetch_text(&url).await?;
         Ok(parser::subreddit::parse_listing(&html)?)
     }
@@ -644,88 +677,6 @@ impl RedditClient {
         }
         Ok(())
     }
-
-    /// Search subreddits via `/subreddits/search.json?q={query}&limit=25[&after={cursor}]`.
-    ///
-    /// Returns `(results, next_after_cursor)` where the cursor is Reddit's
-    /// `after` string (e.g. `"t5_2qh0u"`) or `None` when no more pages exist.
-    ///
-    /// # Errors
-    ///
-    /// `RedditError::Status` for HTTP non-2xx.
-    pub async fn search_subreddits(
-        &self,
-        query: &str,
-        after: Option<&str>,
-    ) -> Result<(Vec<SubredditInfo>, Option<String>), RedditError> {
-        let mut url = format!(
-            "{}/subreddits/search.json?q={}&limit=25",
-            self.base_url.trim_end_matches('/'),
-            urlencoding_simple(query),
-        );
-        if let Some(a) = after {
-            url.push_str("&after=");
-            url.push_str(a);
-        }
-
-        let resp = self.with_session_cookie(self.http.get(&url)).send().await?;
-        if !resp.status().is_success() {
-            return Err(RedditError::Status(resp.status().as_u16()));
-        }
-
-        let body: serde_json::Value = resp.json().await?;
-        let data = body.get("data").cloned().unwrap_or_default();
-        let next_after = data
-            .get("after")
-            .and_then(|v| v.as_str())
-            .filter(|s| !s.is_empty())
-            .map(str::to_string);
-
-        let children = data
-            .get("children")
-            .and_then(|c| c.as_array())
-            .cloned()
-            .unwrap_or_default();
-
-        let subs = children
-            .iter()
-            .filter_map(|c| {
-                let d = c.get("data")?;
-                let name = d.get("display_name").and_then(|n| n.as_str())?;
-                let icon_url = ["community_icon", "icon_img"]
-                    .iter()
-                    .find_map(|field| {
-                        d.get(*field)
-                            .and_then(|v| v.as_str())
-                            .filter(|s| !s.is_empty())
-                            .map(|s| s.replace("&amp;", "&"))
-                    });
-                Some(SubredditInfo { name: name.to_string(), icon_url })
-            })
-            .collect();
-
-        Ok((subs, next_after))
-    }
-}
-
-/// Minimal percent-encoder for URL query values.
-///
-/// Replaces space with `+` and encodes `&`, `?`, `#`, `%` which could
-/// break the query string. Uses `+` (not `%20`) because `old.reddit.com`
-/// accepts both and `+` is shorter.
-fn urlencoding_simple(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for c in s.chars() {
-        match c {
-            ' ' => out.push('+'),
-            '&' => out.push_str("%26"),
-            '?' => out.push_str("%3F"),
-            '#' => out.push_str("%23"),
-            '%' => out.push_str("%25"),
-            other => out.push(other),
-        }
-    }
-    out
 }
 
 #[cfg(all(test, feature = "native"))]
@@ -741,6 +692,25 @@ mod tests {
         assert_eq!(SortKind::Top.as_path(), "top");
         assert_eq!(SortKind::Rising.as_path(), "rising");
         assert_eq!(SortKind::Controversial.as_path(), "controversial");
+        // Sub-period Top variants all map to "top" path.
+        assert_eq!(SortKind::TopHour.as_path(), "top");
+        assert_eq!(SortKind::TopDay.as_path(), "top");
+        assert_eq!(SortKind::TopWeek.as_path(), "top");
+        assert_eq!(SortKind::TopMonth.as_path(), "top");
+        assert_eq!(SortKind::TopYear.as_path(), "top");
+        assert_eq!(SortKind::TopAll.as_path(), "top");
+    }
+
+    #[test]
+    fn sort_kind_time_filter() {
+        assert_eq!(SortKind::Hot.time_filter(), None);
+        assert_eq!(SortKind::Top.time_filter(), None);
+        assert_eq!(SortKind::TopHour.time_filter(), Some("hour"));
+        assert_eq!(SortKind::TopDay.time_filter(), Some("day"));
+        assert_eq!(SortKind::TopWeek.time_filter(), Some("week"));
+        assert_eq!(SortKind::TopMonth.time_filter(), Some("month"));
+        assert_eq!(SortKind::TopYear.time_filter(), Some("year"));
+        assert_eq!(SortKind::TopAll.time_filter(), Some("all"));
     }
 
     #[test]

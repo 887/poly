@@ -114,13 +114,13 @@ Bar 1.
       the channel list shows the 16 sort modes with the active one
       highlighted; click a row, verify the post list re-orders.
 
-## Phase C — Reddit: drop FeedLayout abuse, ship SortModes
+## Phase C — Reddit: drop FeedLayout abuse, ship SortModes (shipped in commit `178f58bc`)
 
-- [ ] **C.1** Change `clients/reddit/src/backend.rs::get_sidebar_declaration`
+- [x] **C.1** Change `clients/reddit/src/backend.rs::get_sidebar_declaration`
       to return `SidebarLayoutKind::SortModes` with Reddit's 5 sorts
       (`hot / new / top / rising / controversial`) + a "Top by"
       sub-group (`hour / day / week / month / year / all`).
-- [ ] **C.2** Wire `invoke_sidebar_action("sort-reddit-hot")` etc.
+- [x] **C.2** Wire `invoke_sidebar_action("sort-reddit-hot")` etc.
       to set the Reddit backend's current sort and reload posts.
 - [ ] **C.3** Smoke: navigate to a subreddit, verify Hot/New/Top/…
       replace the old Top/New/Best/Ask/Show/Jobs (HN) labels.
