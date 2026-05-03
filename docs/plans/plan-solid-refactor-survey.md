@@ -1,0 +1,410 @@
+# Plan: SOLID refactor survey + ranked wins
+
+> Owner: alexander.stuermer@aareon.com
+> Created: 2026-05-03
+> Status: 🧭 SURVEY — investigation complete, ranked work proposed
+>
+> Source shards (raw findings, do not delete — referenced throughout):
+> - `docs/plans/.solid-survey-shards/A.md` — Single Responsibility (oversize)
+> - `docs/plans/.solid-survey-shards/B.md` — Open/Closed + Liskov
+> - `docs/plans/.solid-survey-shards/C.md` — Interface Segregation + DI
+> - `docs/plans/.solid-survey-shards/D.md` — State + reactive architecture
+> - `docs/plans/.solid-survey-shards/E.md` — Test infra + tooling
+
+## Executive summary
+
+The codebase is mostly SOLID where it matters most — DI at the **crate
+boundary** is clean (zero `use poly_<backend>::` imports inside
+`crates/core/`), `BatchedSignal` already encodes hang-class
+countermeasures, and the WIT contract makes some of the kitchen-sinky
+shapes load-bearing.
+
+The **cross-cutting** rot lives in three places:
+
+1. **Three god structs** (`AppState` 100 fields, `ChatData` 30 fields,
+   `ChatViewMarkupCtx` 70 fields) and **one god component** (`chat_view.rs`
+   6809 lines) own most of what makes adding features hard.
+2. **One god trait** (`ClientBackend` 88 methods, 52 of them implemented
+   by ≤4 of 11 backends) forces every backend to stub or default 60 % of
+   the surface and forces every UI consumer to ask "is this supported"
+   via runtime capability flags.
+3. **Three sources of truth for backend capabilities** (slug-keyed
+   match arms in `types.rs`, per-backend trait override, per-backend
+   parity test) drift independently and are kept in sync only by
+   bespoke regression tests.
+
+A small number of **cheap mechanical wins** (slug constants,
+`baked_locales` per-locale split, test-harness extraction) can ship
+immediately for measurable PR-friction improvements. The bigger
+god-struct + kitchen-sink-trait splits need phased rollout but
+unblock the oversize-component refactor (`plan-component-lints.md`).
+
+The plan below is ordered to **start with the cheapest, lowest-risk
+wins that pay back immediately**, then tackle the structural items in
+dependency order. Each phase notes whether it can be delegated to a
+sonnet worktree agent (mostly yes for the mechanical phases) or needs
+orchestrator-led design (mostly the trait-split phases).
+
+---
+
+## Goals
+
+1. Reduce the **edit-N-files burden** when adding a backend, route,
+   view kind, or capability — measure by counting parallel match-arm
+   edits and grep counts.
+2. Reduce the **re-render fan-out** of the three god signals so that
+   touching `voice_connection` doesn't re-render the chat list, and
+   touching `notifications` doesn't re-render the call banner. Measure
+   by `app_state` / `chat_data` subscribe-site count and per-write
+   re-render count under the existing hang-class lints.
+3. Cut the **trait stub burden** from ~52 NotSupported defaults to ~10
+   genuinely shared methods + capability sub-traits opt-in.
+4. Eliminate **duplicated lint surfaces** (bash + dylint + lint-gate
+   express same intent) by funneling through a single rules library.
+5. Shrink **the worst single-file blowups** (chat_view.rs,
+   tools.rs, types.rs) to navigable sub-modules.
+
+## Non-Goals
+
+- No "rewrite Dioxus into another reactive framework" or "pull WASM
+  out" structural moves.
+- No changes to the WIT contract surface — the trait splits we propose
+  must mirror existing WIT interface boundaries.
+- No demo-data restructuring (`clients/demo/src/data.rs` is fixture
+  data and stays as-is per shard A.3).
+
+---
+
+## Top 10 wins, ranked by ROI
+
+ROI = (impact across surfaces) / (effort + risk). Each row links to the
+detailed shard write-up.
+
+| # | Win | Effort | Impact | Risk | Shards |
+|---|-----|--------|--------|------|--------|
+| 1 | Per-backend `pub const SLUG: &str` (199 string literals → 11 consts) | S | M | Low | B.1.3 |
+| 2 | Split `baked_locales.rs` per locale (PR-conflict relief) | S | M | Low | E.1#2 |
+| 3 | Extract `BackendHarness` shim from `servers/test-*/` (~270 LOC dup) | S/M | M | Low | E.1#1, E.3 |
+| 4 | `clients/client/src/types.rs` file split (1891 lines → 10 modules, `pub use` re-exports) | S/M | M | Low | A.1#4 |
+| 5 | Demo backend triplication → `DemoFlavour` parametric (~1000 LOC removed) | M | M | Med | B.1.2, A.1#2 |
+| 6 | `ClientManager::with_backend(...)` helper (collapses 48 sites) + LSP fixes | M | H | Low | D.1.1, B.2.* |
+| 7 | Kill `capabilities_for_slug` table — single source of truth via trait | M | H | Med | B.1.1 |
+| 8 | Split `chat_view.rs` (6809 lines) per `chat_view/` sub-module | L | H | Med | A.1#1 |
+| 9 | Slice `BatchedSignal<ChatData>` — extract `VoiceState`, `DragState`, `ChatLists` first | L | H | Med | C.3.1, D.3 |
+| 10 | Capability sub-traits — split `ClientBackend` mirroring WIT interfaces | XL | H | High | C.2, B.1.5 |
+
+**Wins #1-4 are cheap mechanical mops; do them first as warm-up + immediate PR-friction relief.**
+**Wins #5-7 set up the larger structural moves; do them in parallel where files don't overlap.**
+**Wins #8-9 are the tent-pole structural refactors; sequence carefully.**
+**Win #10 is the long-horizon trait split; gated on #6+#7 landing.**
+
+---
+
+## Phased delivery
+
+### Phase A — Mechanical wins (warm-up; ~2 days total)
+
+Parallelisable across 4 sonnet worktree agents, all touching
+disjoint files.
+
+- [ ] **A.1** Per-backend `pub const SLUG: &str` exported from each
+      `clients/<name>/src/lib.rs`; flip the 199 in-crate
+      `BackendType::from("…")` literals to `BackendType::from(crate::SLUG)`.
+      Sites: see B.1.3 table. Effort S.
+- [ ] **A.2** Split `crates/core/src/i18n/baked_locales.rs` (4487
+      lines) per-locale. Patch site: `crates/core/build.rs:84-109`. Net
+      patch ≤15 lines. Effort S. Source: E.1#2.
+- [ ] **A.3** Extract `BackendHarness` trait + `run::<H>()` helper
+      into `servers/test-common`. Collapse 9 `main.rs` shells, 8
+      `seed/reset/reseed` triples, lifecycle HTTP handlers, layer
+      chain. Effort S/M. Source: E.1#1.
+- [ ] **A.4** File-split `clients/client/src/types.rs` (1891 lines)
+      into `types/{backend, auth, server, file, message, user,
+      notification, moderation, voice, command}.rs` with a `mod.rs`
+      re-export shim. Zero behaviour change. Effort S/M. Source: A.1#4.
+
+### Phase B — LSP fixes + capability single-source-of-truth (~3 days)
+
+- [ ] **B.1** Land the four LSP fixes from B.2:
+  - `send_reply_message` default → `Err(NotSupported)` (silent data-loss bug). HIGH.
+  - `get_pinned_messages` default → `Err(NotSupported)` (mirror `set_message_pinned`). MED.
+  - HN `get_presence` `Ok(Offline)` → `Err(NotSupported)` + add `PresenceStatus::Unknown` variant. MED.
+  - Teams `get_user` `NotFound` → `NotSupported`. LOW.
+  Effort S each. Source: B.2.1-B.2.4.
+- [ ] **B.2** Kill `capabilities_for_slug` table by routing through
+      the existing trait method + a startup-time slug→caps registry on
+      `ClientManager`. Delete the `pack_f_capability_gates` parity test
+      and the per-backend capabilities tests they spawned. Effort M.
+      Source: B.1.1.
+- [ ] **B.3** Add the inline-allowlist for the 6 lemmy/hackernews/teams
+      `if backend == "<slug>"` quirk gates so the
+      `forbid_backend_slug_match` lint stops complaining about each;
+      do NOT promote them to capabilities (over-abstraction risk).
+      Source: B.3.6.
+
+### Phase C — Demo triplication + chat_view virtualization split (~5 days)
+
+These can land in parallel; they touch disjoint trees.
+
+- [ ] **C.1** Extract `DemoFlavour` trait/struct so `DemoClient`,
+      `DemoClient2`, `DemoClient3` collapse into one parametric
+      `DemoClient<F>`. Net ~1000 LOC removed. Effort M. Source: B.1.2.
+- [ ] **C.2** Pull `crates/core/src/ui/account/common/chat_view.rs`'s
+      virtualization engine (lines 1982-2342, ~360 lines of pure
+      window math) into `chat_view/virtualization.rs`. Stand-alone, no
+      Signal access — should be the easiest sub-module to extract first
+      and prove the split shape works before tackling the rest. Effort
+      M. Source: A.1#1.
+
+### Phase D — `ClientManager::with_backend` + `use_view_resource` (~3 days)
+
+- [ ] **D.1** Implement `ClientManager::with_backend(account_id, async fn)`
+      and `with_backend_for_server(server_id, async fn)` that resolves
+      the backend, applies `read_with_timeout(BACKEND_TIMEOUT)`, and
+      returns `ClientResult<R>` so callers can `?`. Migrate the 48
+      duplicate sites listed in D.1.1. Net ~290 lines removed. Effort
+      M. Source: D.1.1.
+- [ ] **D.2** Implement `use_view_resource<Q: ViewQuery>(query)` hook
+      bundling `(account_id, server_id, channel_id, scope, sort,
+      filter)` keying + backend resolve + timeout + reactive-effect
+      re-fire. Migrate the 28 ad-hoc `use_resource` body engines. Net
+      ~140 lines removed. Effort M. Source: D.1.4.
+- [ ] **D.3** (Opportunistic) Add a derive macro generating
+      `get_setting_value`/`set_setting_value` from a backend's
+      `SettingsStorageCell` field — eliminates the 12-line duplicate
+      block in 8 `clients/*/src/lib.rs`. Net ~90 lines. Source: D.4.3
+      (note: shard called this "lower priority"; bundle here only if
+      bandwidth permits).
+
+### Phase E — Lint-gate consolidation (~3 days)
+
+- [ ] **E.1** Create `crates/lint-gate-rules` lib crate. Move every
+      `crates/lint-gate/build/<rule>.rs` into
+      `lint-gate-rules/src/<rule>.rs`; `build.rs` becomes a thin driver
+      calling `lint_gate_rules::all_rules()`. Tests live next to rules.
+      Drop the 1416-line mirror in `lint-gate/src/lib.rs`. Effort M.
+      Source: E.2 ("recommended consolidation").
+- [ ] **E.2** Port the 10 `tools/scripts/forbid-*.sh` scripts into
+      `lint-gate-rules` modules using a shared `allowlist::Loader`.
+      Drop the bash scripts after a parity-CI run. Effort M.
+- [ ] **E.3** Decide the dylint duplication: either retire
+      `tools/lints/poly-lints/` (the two scripts that are also
+      bash-and-lint-gate gated) or reframe as a `main`-only
+      deeper-HIR-analysis lane. Effort S. Source: E.2 findings.
+- [ ] **E.4** Either delete or document the empty
+      `crates/lint-gate/baseline.json` (currently a 2-byte
+      `{"violations": []}` file). If kept, write a one-liner README
+      noting it as the safety net. Source: E.2 surprise.
+- [ ] **E.5** Delete the 16-line stub `forbid-ui-only-persona-action.sh`
+      OR finish Phase Q.3 it represents. Source: E.2.
+
+### Phase F — `chat_view.rs` full split (~1 week, parallelisable)
+
+Phase F unlocks all the per-effect work (`use_history_state_effect` etc.)
+that hang-class plans already name as the canonical examples but couldn't
+isolate.
+
+- [ ] **F.1** Move sub-components (`ChatHeaderActions` 347 lines,
+      `ChatUtilityRail` 205 lines) to `chat_view/{header,utility_rail}.rs`.
+- [ ] **F.2** Move composer + search-filter helpers to
+      `chat_view/{composer_helpers,search_filter}.rs`.
+- [ ] **F.3** Move all 12 `use_*_effect` hooks to
+      `chat_view/effects/<name>.rs` (one file per effect — they ARE the
+      "reasons to change" that SRP cares about). Source: A.1#1.
+- [ ] **F.4** Pull `ChatViewSignals` (35 fields) and
+      `ChatViewMarkupCtx` (70 fields) into `chat_view/signals.rs` and
+      `chat_view/markup_ctx.rs` respectively. Convert the manual
+      lockstep between them into a builder.
+- [ ] **F.5** What remains in `chat_view/mod.rs` is the orchestrator
+      (≤300 lines, fits the component cap). Source: A.1#1 split shape.
+
+### Phase G — `AppState` + `ChatData` slice signals (~2 weeks, phased)
+
+The biggest structural move. Land per-slice, not big-bang. Each
+sub-step is independently shippable; later steps benefit from earlier
+ones (smaller signal subscriptions = less re-render churn).
+
+- [ ] **G.1** Land the in-flight `context_menu_stack` migration that
+      `state.rs:585-590` already calls out. Delete the 8 scalar
+      `*_context_menu` fields once every site uses the stack. Source:
+      D.4.5.
+- [ ] **G.2** Extract `BatchedSignal<VoiceState>` from `ChatData`
+      (80 sites, self-contained). Voice writes stop re-rendering chat
+      list. Source: D.3.
+- [ ] **G.3** Extract `BatchedSignal<DragState>` from `ChatData`
+      (61 sites, transient, very write-heavy during drag). Source: D.3.
+- [ ] **G.4** Add `ChatAction` enum + `ChatData::apply()`. Migrate the
+      23 manual-clear sites (`cd.channels.clear(); cd.messages.clear();
+      cd.members.clear()`) to typed actions. Source: D.1.3.
+- [ ] **G.5** Split remaining `AppState` into `NavState`, `UiLayout`,
+      `UiOverlays`, `UserPrefs`. Source: D.2 split table.
+- [ ] **G.6** Split remaining `ChatData` into `ChatLists`,
+      `ChatViewState`, `AccountSessions`. Add by-id `HashMap` shadows
+      so the 14 linear `iter().find` lookups become O(1). Source: D.3.
+
+### Phase H — `ClientBackend` capability sub-traits (~1 month, long-horizon)
+
+Gated on Phase B (capabilities single-source) + Phase D (with_backend)
+landing. Trait split must mirror WIT interface boundaries (C.1.3
+caveat).
+
+- [ ] **H.1** Carve out `ContentPolicy` (3 methods, 0 implementers).
+      Pure deletion — no migration burden. Effort S. Source: C.2.1.
+- [ ] **H.2** Carve out `CodeRepoBackend` + `ForumBackend` +
+      `ThreadsBackend` (7 methods total, 4 implementers). Update
+      `code_explorer.rs` + forum routes to take the narrower trait.
+      Effort M. Source: C.2.2.
+- [ ] **H.3** Carve out `Moderation` + `SocialGraph` + `DmsAndGroups`
+      (38 methods, ~43% of trait). Touches every backend; do
+      one-trait-at-a-time. Effort L per trait. Source: C.2.3.
+- [ ] **H.4** Decide on the dispatch shape — `Box<dyn ClientBackend>`
+      stays the storage type; capability traits are accessed via
+      blanket `dyn ClientBackend -> Option<&dyn Cap>` accessors keyed
+      on `BackendCapabilities` bitflags. Source: C.1.3 caveat 2.
+
+### Phase I — Routes.rs decomposition (~1 week, after Phase H starts)
+
+- [ ] **I.1** Macro-derive `route_account_id` + `route_variant_name`
+      from `#[connected(...)]` metadata already on each Route variant.
+      `sync_route_to_app_state` stays hand-written (intentionally
+      divergent bodies — see B.1.4 caveats). Effort L. Source: B.1.4.
+- [ ] **I.2** Split `routes.rs` (2515 lines) per-domain — DM routes,
+      server routes, forum routes, settings routes, agent routes,
+      moderation routes — each module taking only the capability traits
+      it needs (DIP win). Effort L. Source: C.3.3.
+
+### Phase J — `mcp/chat-mcp/src/{tools,memory}.rs` split (~3 days)
+
+- [ ] **J.1** Split `tools.rs` (4081 lines, 80+ handlers) into
+      `tools/` sub-modules per CLAUDE.md's persona-handler family.
+      Source: A.1#3.
+- [ ] **J.2** Split `memory.rs` (2695 lines, 8 SQLite schemas, 57
+      methods) into `memory/{facts, chat_notes, drafts, persona/, …}`.
+      Convert the 9-11 param functions (`update_persona`,
+      `query_persona_audit`) to builder structs. Source: A.1#5.
+
+---
+
+## Don't bother (explicit "leave alone" list)
+
+Surveyed and intentionally rejected so future work doesn't re-litigate:
+
+- **`clients/demo/src/data.rs` (5806 lines)** — fixture data; the
+  function-per-fixture granularity is correct. Source: A.3.
+- **`mcp/chat-mcp/src/tools.rs` lines 213-1399 — JSON tool schema** —
+  one document by design (single grep verifies parity). Move *file*
+  per J.1 but don't fragment further. Source: A.3.
+- **`crates/core/src/ui/routes.rs` per-`#[component]` route adapters** —
+  none over the 150-line cap; splitting per-route would multiply file
+  count without breaking responsibilities. Source: A.3.
+- **`View`, `ConnectionStatus`, `ContainerLabelForm`,
+  `SidebarLayoutKind`, `ActionOutcome` enums** — closed sets by design
+  with single-purpose dispatch. Replacing with traits would obscure
+  the closed-set intent and lose compile-time exhaustiveness checks.
+  Source: B.3.1-B.3.4.
+- **`container_label_key` slug fallback table** — i18n fallback chain
+  that should stay centralized until plugins ship FTL bundles.
+  Source: B.3.5.
+- **6 `if backend == "<slug>"` UI quirk gates** — single-line
+  single-backend special cases; promoting each to a capability bit is
+  worse than the literal. Source: B.3.6.
+- **`UiSurface` 16-method block** — D9 design says "every backend
+  required to implement, return empty for nothing-to-contribute." Keep
+  in core trait. Source: C.4.1.
+- **`MenuItem` / `SidebarItem` flat-with-`parent_id`** — WIT forbids
+  recursive records; flat shape is required by the wire format.
+  Source: C.4.2.
+- **`event_stream` single-stream design** — host has unified dispatch
+  loop; per-capability streams would multiply consumer threads for no
+  win. Source: C.4.3.
+- **`BatchedSignal` itself** — closed by hang-class lints; do NOT
+  wrap further. Source: D.4.4 + C.4.8.
+- **`RouteSynced<T>` per-field** — locks writes to the router via
+  compile-time gating; current shape is already tighter than freeform.
+  Source: D.4.2.
+- **`SettingsStorageCell`** — already shared in `clients/client`; the
+  per-backend-instance ownership is intentional for cross-backend
+  isolation. Only the get/set 12-line shim is duplicated; address via
+  a derive macro (D.3 above) if bandwidth. Source: D.4.3.
+- **Per-row settings `Signal<bool>`** — independent toggles, NOT a
+  state machine. Bundling would over-broaden subscribers. Source: D.4.1.
+- **`clients/reddit/tests/fixtures/` cross-included by
+  `servers/test-reddit/`** — intentional ground-truth sharing. Add a
+  README noting the dual-include but don't restructure. Source: E.4.
+- **Per-client `[lib] crate-type = ["cdylib", "rlib"]` + cfg-gated
+  WASM deps** — load-bearing dual-build infrastructure. Source: E.4.
+- **`TEST_HARNESS.md` per-crate `cargo test` listing** — workaround
+  for native/WASM dep conflict, not bloat. Source: E.4.
+- **`route_graph.rs` "never-grandfather" rule** — orphan routes are
+  dead code; baseline support would defeat the lint. Source: E.4.
+
+---
+
+## Cross-references to existing in-flight plans
+
+This survey *augments*, not replaces, these existing plans:
+
+- `plan-component-lints.md` — covers the rsx!-cap that drives Phase F.
+  This plan's Phase F is the missing existing-offender migration.
+- `plan-batched-signal.md` — Phase 4 ("other hot-path signals") aligns
+  with this plan's Phase G.
+- `plan-peek-vs-read.md` — `with_backend` helper (Phase D.1) migrates
+  `client_manager.read()` to `.peek()` automatically.
+- `plan-backend-read-timeout.md` — `with_backend` closes the remaining
+  raw-`client_manager.read().get_backend()` surface the existing lint
+  cannot reach.
+- `plan-use-spawn-once.md` — `use_view_resource` (Phase D.2) bundles
+  spawn-once + reactive-effect + timeout + backend-resolve into one hook.
+- `plan-context-menu-quality-control.md` (DONE) — Phase G.1 finishes
+  the in-flight `context_menu_stack` migration the existing plan
+  started.
+
+---
+
+## Risks + mitigations
+
+- **God-signal split (Phase G) is the highest-blast-radius work.**
+  Land per-slice, not big-bang. Each slice is independently shippable
+  via a per-backend / per-component migration. Hang-class lints
+  remain green throughout.
+- **Trait split (Phase H) is constrained by WIT.** The Rust split
+  must mirror the existing `messenger-plugin.wit` interface
+  boundaries. Touching this without a matching WIT change breaks the
+  WASM plugin contract. Keep `Box<dyn ClientBackend>` as the storage
+  type; capability traits are dispatch-time downcasts.
+- **`Signal<crate::path::T>` blind-spot regression** — see memory
+  `feedback_signal_migration_namespace_blind`. Any signal-type
+  migration must catch fully-qualified Signal types via grep before
+  declaring a phase done.
+- **Demo backend triplication (Phase C.1)** — the existing tests
+  instantiate concrete `DemoClient2` / `DemoClient3` types directly.
+  Migration must update test sites in lockstep.
+
+---
+
+## Suggested execution model
+
+- **Phases A + E** can be assigned to sonnet worktree agents in
+  parallel — disjoint files, mechanical work, low-risk.
+- **Phases B + C + D** orchestrator-led with sonnet helpers for the
+  sed-style migrations. Risk on `with_backend` is real (touches 48
+  sites that vary in subtle ways).
+- **Phases F + G + H** orchestrator-led with sonnet workers per
+  sub-step. Each phase has a clear "land one sub-step, prove the shape,
+  then parallelise" structure baked in.
+- **Phase I + J** can ride along after H starts — they unblock once
+  the trait splits exist.
+
+Estimated total effort if everything ships: **~2-3 months elapsed**
+with one engineer + sonnet agents, much less with multiple worktrees.
+The mechanical wins (Phase A) ship in a couple of days and yield
+immediate PR-friction relief.
+
+---
+
+## Status: 🧭 SURVEY — ready for prioritisation
+
+Pick which phases to greenlight. Recommend starting with Phase A as a
+pure cost-free win, then Phase B for the LSP fixes (silent data-loss
+bug fix in `send_reply_message` is genuinely user-visible), then
+Phase C as the warm-up to the larger structural moves.
