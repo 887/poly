@@ -281,6 +281,27 @@ pub fn ForumPostView(channel_id: String, post_id: String) -> Element {
                     )
                     .await
                     .unwrap_or_default();
+                // If the backend returned the OP as the first message
+                // (Reddit does this for the hn-post-<pid> channel pattern),
+                // pull it into chat_data.messages so the post-render below
+                // finds it on direct deep-link navigation. Without this,
+                // direct nav to a post URL renders 'Post not found' even
+                // when the comment fetch succeeded.
+                let pid_msg_id = pid.clone();
+                if result.iter().any(|m| m.id == pid_msg_id) {
+                    let to_inject: Vec<_> = result
+                        .iter()
+                        .filter(|m| m.id == pid_msg_id)
+                        .cloned()
+                        .collect();
+                    chat_data.batch(move |cd| {
+                        for m in to_inject {
+                            if !cd.messages.iter().any(|x| x.id == m.id) {
+                                cd.messages.push(m);
+                            }
+                        }
+                    });
+                }
                 thread_comments.set(result);
             }
             thread_loading.set(false);
