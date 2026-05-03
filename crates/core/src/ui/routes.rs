@@ -179,6 +179,15 @@ pub fn route_targets_unknown_account(route: &Route, client_manager: &ClientManag
         }
     }
 
+    // E1.5 — also defer when the account is in `expected_account_ids`:
+    // it's persisted in storage but `restore_native_accounts` hasn't
+    // landed it in `backends` / `sessions` yet. Without this, deep links
+    // to a non-demo account on cold boot bounce to /settings before
+    // async restoration completes.
+    if client_manager.expected_account_ids.contains(account_id) {
+        return false;
+    }
+
     !active.into_iter().any(|id| id == account_id)
 }
 

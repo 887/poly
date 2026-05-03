@@ -341,6 +341,18 @@ pub struct ClientManager {
     pub signup_entries: Vec<SignupEntry>,
     /// Test accounts registered by native plugins for the quick-add dev panel.
     pub test_account_entries: Vec<TestAccountEntry>,
+    /// Account IDs that exist in persisted storage (`account_tokens` KV)
+    /// but have not yet been restored into `backends` / `sessions`.
+    ///
+    /// Populated at startup BEFORE `restore_native_accounts` runs so that
+    /// route guards like `route_targets_unknown_account` can defer the
+    /// "unknown account → bounce to /settings" verdict during the
+    /// async-restore window. Without this, a deep-link directly to an
+    /// account's URL on a cold boot redirects to /settings before the
+    /// restore future has had a chance to register the backend.
+    ///
+    /// Accounts are removed from this set as they get restored.
+    pub expected_account_ids: std::collections::HashSet<String>,
 }
 
 impl Clone for ClientManager {
@@ -356,6 +368,7 @@ impl Clone for ClientManager {
             disabled_native_backends: self.disabled_native_backends.clone(),
             signup_entries: self.signup_entries.clone(),
             test_account_entries: self.test_account_entries.clone(),
+            expected_account_ids: self.expected_account_ids.clone(),
         }
     }
 }
@@ -391,6 +404,7 @@ impl ClientManager {
             disabled_native_backends: Vec::new(),
             signup_entries: Vec::new(),
             test_account_entries: Vec::new(),
+            expected_account_ids: std::collections::HashSet::new(),
         }
     }
 

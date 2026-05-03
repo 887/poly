@@ -124,6 +124,16 @@ pub async fn restore_native_accounts(
         return;
     };
 
+    // Pre-populate `expected_account_ids` so route guards (`route_targets_
+    // unknown_account`) can defer the "unknown account → bounce to /settings"
+    // verdict on cold boot when a deep link targets an account that's
+    // about to be restored. The set is consulted alongside `active_account_ids`.
+    client_manager.batch(|c| {
+        for t in &tokens {
+            c.expected_account_ids.insert(t.account_id.clone());
+        }
+    });
+
     // Snapshot the current disabled list and already-restored sessions so
     // we don't hold any Signal guard across awaits.
     let (disabled, already_restored): (Vec<String>, Vec<String>) = {
@@ -225,7 +235,11 @@ pub async fn restore_native_accounts(
                     let sess = session.clone();
                     let bh = backend_handle.clone();
                     client_manager.batch(move |cm| {
-                        cm.commit_backend_account(aid, sess, bh, server_map);
+                        cm.commit_backend_account(aid.clone(), sess, bh, server_map);
+                        // Account is now active; remove from the
+                        // expected-pending set so it stops deferring
+                        // route-guard checks.
+                        cm.expected_account_ids.remove(&aid);
                     });
                 }
                 {
