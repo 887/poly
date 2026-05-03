@@ -92,6 +92,14 @@ impl RedditState {
             "dog".to_string(),
             vec!["rust".to_string(), "programming".to_string()],
         );
+        // Pre-issue deterministic cookies so persisted KV tokens survive
+        // restart. The signup flow stores `mock_session_<name>_0` as the
+        // first issued cookie; mirror that here so restore_native_accounts
+        // can replay the same value successfully.
+        s.sessions
+            .insert("mock_session_cat_0".to_string(), "cat".to_string());
+        s.sessions
+            .insert("mock_session_dog_0".to_string(), "dog".to_string());
         s
     }
 

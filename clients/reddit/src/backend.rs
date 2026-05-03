@@ -624,9 +624,12 @@ impl ClientBackend for RedditBackend {
             // Fetch the post + its comment tree, flatten depth-first
             // into a Vec<Message>. The OP itself is included as the
             // first message so ForumPostView's lookup finds it.
+            // Forum URLs carry the `t3_`-prefixed message id; the
+            // RedditClient API expects a bare id, so strip if present.
+            let bare_id = post_id.strip_prefix("t3_").unwrap_or(post_id);
             let (post, comments) = self
                 .client
-                .get_post(post_id)
+                .get_post(bare_id)
                 .await
                 .map_err(ClientError::from)?;
 

@@ -137,11 +137,16 @@ pub async fn get_post(
     State(_state): State<Arc<RedditState>>,
     Path(post_id): Path<String>,
 ) -> Response {
+    // Real Reddit comment URLs use the bare id (no `t3_` prefix), but
+    // some clients accidentally pass the prefixed form — strip it so
+    // the fixture rewrite produces a single, valid `t3_<id>` not
+    // `t3_t3_<id>`.
+    let bare = post_id.strip_prefix("t3_").unwrap_or(&post_id);
     // Always return the deep-thread fixture for now. The fixture's t3_ id
     // is `14921t7` — rewrite in the body so the parser sees the requested id.
     let body = COMMENTS_FIXTURE
-        .replace("t3_14921t7", &format!("t3_{post_id}"))
-        .replace("/14921t7/", &format!("/{post_id}/"));
+        .replace("t3_14921t7", &format!("t3_{bare}"))
+        .replace("/14921t7/", &format!("/{bare}/"));
     html_resp(body)
 }
 
@@ -161,6 +166,10 @@ pub async fn get_post_json(
     State(_state): State<Arc<RedditState>>,
     Path(post_id): Path<String>,
 ) -> Response {
+    let post_id: String = match post_id.strip_prefix("t3_") {
+        Some(rest) => rest.to_string(),
+        None => post_id,
+    };
     if post_id == "1t22ox5" {
         match serde_json::from_str::<Value>(GALLERY_JSON_FIXTURE) {
             Ok(v) => return json_resp(v),

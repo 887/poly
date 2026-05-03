@@ -93,6 +93,23 @@ fn build_backend_for_slug(
             Some(Box::new(poly_forgejo::ForgejoClient::new(url)))
         }
 
+        #[cfg(feature = "reddit")]
+        "reddit" => {
+            let client = match instance_id {
+                Some(url) => poly_reddit::RedditClient::with_base_url(url.to_string()),
+                None => poly_reddit::RedditClient::new(),
+            };
+            match client {
+                Ok(c) => Some(Box::new(poly_reddit::backend::RedditBackend::new(c))),
+                Err(e) => {
+                    tracing::warn!(
+                        "account_restore: reddit client construction failed: {e}"
+                    );
+                    None
+                }
+            }
+        }
+
         // poly has its own restore path; demo slugs are ephemeral.
         "poly" | "demo" | "demo_chat" | "demo_forum" => None,
 
