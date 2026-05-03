@@ -1315,6 +1315,22 @@ async fn init_storage(
                             settings.favorited_server_ids.len()
                         );
                     }
+                    // Pre-populate `expected_account_ids` BEFORE the demo
+                    // activation. This window — between demo activation
+                    // making `active` non-empty and `restore_native_accounts`
+                    // landing the per-token backends — is when route_targets_
+                    // unknown_account fires for any deep-link nav targeting
+                    // a non-demo account. The expected set tells the route
+                    // guard to defer the verdict until restoration completes.
+                    if let Ok(tokens) = storage.get_account_tokens().await {
+                        let expected: Vec<String> =
+                            tokens.iter().map(|t| t.account_id.clone()).collect();
+                        client_manager.batch(move |cm| {
+                            for id in expected {
+                                cm.expected_account_ids.insert(id);
+                            }
+                        });
+                    }
                     // Restore the demo client if it was active when the app last closed.
                     // toggle_demo activates all demo data; the Router's Root component
                     // then redirects to /demo/demo/dms once it mounts.
