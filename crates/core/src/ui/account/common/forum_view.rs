@@ -247,10 +247,39 @@ pub fn ForumPostView(channel_id: String, post_id: String) -> Element {
                 .selected_server
                 .cloned()
                 .unwrap_or_default();
-            let account_id = app_state.peek().nav.active_account_id.cloned();
-            let backend = account_id
-                .as_deref()
-                .and_then(|aid| client_manager.read().get_backend(aid));
+            // Wait for the account to be restored — on direct deep-link
+            // navigation (e.g. `/reddit/.../posts/<pid>` from a cold
+            // boot), `active_account_id` may not be set yet, and even
+            // when it is, the backend may not have landed in
+            // `client_manager.backends` yet because
+            // `restore_native_accounts` is async. Poll up to ~5s.
+            let mut backend = None;
+            let mut account_id_resolved = None;
+            for attempt in 0..20_u32 {
+                let account_id = app_state.peek().nav.active_account_id.cloned();
+                if let Some(aid) = account_id.as_deref() {
+                    if let Some(bh) = client_manager.read().get_backend(aid) {
+                        backend = Some(bh);
+                        account_id_resolved = account_id;
+                        break;
+                    }
+                }
+                if attempt < 19 {
+                    // 250 ms × 20 = 5 s budget. WASM-only sleep —
+                    // tokio::time isn't available on wasm32 (Instant
+                    // unimplemented); native builds don't ship this
+                    // UI component so the no-op fallback is safe.
+                    #[cfg(target_arch = "wasm32")]
+                    {
+                        gloo_timers::future::TimeoutFuture::new(250).await;
+                    }
+                    #[cfg(not(target_arch = "wasm32"))]
+                    {
+                        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+                    }
+                }
+            }
+            let _ = account_id_resolved;
 
             let already_loaded = {
                 let snap = chat_data.peek();
