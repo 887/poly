@@ -19,6 +19,9 @@
 //! same model as Discord and Teams. The TOS gray area around scraping is
 //! the explicit reason for keeping it out of release builds.
 
+/// The backend slug used in all [`poly_client::BackendType`] constructions for this crate.
+pub const SLUG: &str = "reddit";
+
 #[cfg(feature = "native")]
 pub mod backend;
 

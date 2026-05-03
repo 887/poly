@@ -439,7 +439,7 @@ impl RedditBackend {
     }
 
     fn backend_type() -> BackendType {
-        BackendType::from("reddit")
+        BackendType::from(crate::SLUG)
     }
 
     fn account_id(&self) -> &str {
@@ -799,7 +799,7 @@ impl ClientBackend for RedditBackend {
     // ── Backend info ─────────────────────────────────────────────────────────
 
     fn backend_type(&self) -> BackendType {
-        BackendType::from("reddit")
+        BackendType::from(crate::SLUG)
     }
 
     fn backend_name(&self) -> &str {

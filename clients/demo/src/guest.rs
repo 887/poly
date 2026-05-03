@@ -578,7 +578,7 @@ impl MessengerClientGuest for DemoPlugin {
             user: session.user,
             last_message: None,
             unread_count: 0,
-            backend: pc::BackendType::from("demo"),
+            backend: pc::BackendType::from(crate::SLUG),
             account_id: crate::data::DEMO_ACCOUNT_ID.to_string(),
         }))
     }

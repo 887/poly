@@ -44,7 +44,7 @@ pub fn build_server(account_id: &str) -> Server {
                 channel_ids: vec![HnFeed::Jobs.channel_id().to_string()],
             },
         ],
-        backend: BackendType::from("hackernews"),
+        backend: BackendType::from(crate::SLUG),
         unread_count: 0,
         mention_count: 0,
         account_id: account_id.to_string(),
@@ -192,7 +192,7 @@ fn anonymous_user() -> User {
         display_name: "anonymous".to_string(),
         avatar_url: None,
         presence: PresenceStatus::Offline,
-        backend: BackendType::from("hackernews"),
+        backend: BackendType::from(crate::SLUG),
     }
 }
 
@@ -203,7 +203,7 @@ fn hn_author_to_user(by: Option<&str>) -> User {
             display_name: username.to_string(),
             avatar_url: None,
             presence: PresenceStatus::Offline,
-            backend: BackendType::from("hackernews"),
+            backend: BackendType::from(crate::SLUG),
         },
         None => anonymous_user(),
     }
@@ -342,7 +342,7 @@ pub fn hn_user_to_user(user: &HnUser) -> User {
         display_name: user.id.clone(),
         avatar_url: None,
         presence: PresenceStatus::Offline,
-        backend: BackendType::from("hackernews"),
+        backend: BackendType::from(crate::SLUG),
     }
 }
 

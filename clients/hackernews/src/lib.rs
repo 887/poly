@@ -8,6 +8,9 @@
 //! HN requires no authentication for reading. The backend always provides a
 //! guest session and returns stories as `Forum`-type channel messages.
 
+/// The backend slug used in all [`poly_client::BackendType`] constructions for this crate.
+pub const SLUG: &str = "hackernews";
+
 #[cfg(feature = "native")]
 mod api;
 #[cfg(feature = "native")]
@@ -93,10 +96,10 @@ impl HackerNewsClient {
                 display_name: username.to_string(),
                 avatar_url: Some("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='8' fill='%23ff6600'/%3E%3Ctext x='20' y='27' font-family='sans-serif' font-size='15' font-weight='bold' text-anchor='middle' fill='white'%3EHN%3C/text%3E%3C/svg%3E".to_string()),
                 presence: PresenceStatus::Offline,
-                backend: BackendType::from("hackernews"),
+                backend: BackendType::from(crate::SLUG),
             },
             token: username.to_string(),
-            backend: BackendType::from("hackernews"),
+            backend: BackendType::from(crate::SLUG),
             icon_emoji: Some("🔶".to_string()),
             instance_id: "news.ycombinator.com".to_string(),
             backend_url: Some("https://hacker-news.firebaseio.com".to_string()),
@@ -114,10 +117,10 @@ impl HackerNewsClient {
                 display_name: "Anonymous".to_string(),
                 avatar_url: Some("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='8' fill='%23ff6600'/%3E%3Ctext x='20' y='27' font-family='sans-serif' font-size='15' font-weight='bold' text-anchor='middle' fill='white'%3EHN%3C/text%3E%3C/svg%3E".to_string()),
                 presence: PresenceStatus::Offline,
-                backend: BackendType::from("hackernews"),
+                backend: BackendType::from(crate::SLUG),
             },
             token: String::new(),
-            backend: BackendType::from("hackernews"),
+            backend: BackendType::from(crate::SLUG),
             icon_emoji: Some("🔶".to_string()),
             instance_id: "news.ycombinator.com".to_string(),
             backend_url: Some("https://hacker-news.firebaseio.com".to_string()),
@@ -420,7 +423,7 @@ impl ClientBackend for HackerNewsClient {
     // --- Backend info ---
 
     fn backend_type(&self) -> BackendType {
-        BackendType::from("hackernews")
+        BackendType::from(crate::SLUG)
     }
 
     fn backend_name(&self) -> &str {

@@ -26,6 +26,9 @@
 //!
 //! The JWT is automatically included in all subsequent API requests.
 
+/// The backend slug used in all [`poly_client::BackendType`] constructions for this crate.
+pub const SLUG: &str = "poly";
+
 /// WIT bindings for the WASM plugin (WASI targets only).
 /// This module isolates the `wit-bindgen` macros for FFI.
 #[cfg(target_os = "wasi")]

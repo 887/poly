@@ -12,6 +12,9 @@
 //! - **Native** (`--features native`): Implements `ClientBackend` directly.
 //! - **WASM plugin** (target `wasm32-wasip2`): Exports WIT `messenger-client`.
 
+/// The backend slug used in all [`poly_client::BackendType`] constructions for this crate.
+pub const SLUG: &str = "discord";
+
 #[cfg(feature = "native")]
 mod api;
 #[cfg(feature = "native")]
@@ -232,7 +235,7 @@ impl DiscordClient {
             display_name: u.global_name.unwrap_or(u.username),
             avatar_url,
             presence: PresenceStatus::Online,
-            backend: BackendType::from("discord"),
+            backend: BackendType::from(crate::SLUG),
         }
     }
 
@@ -695,10 +698,10 @@ impl ClientBackend for DiscordClient {
                 display_name: user.username.clone(),
                 avatar_url: None,
                 presence: PresenceStatus::Online,
-                backend: BackendType::from("discord"),
+                backend: BackendType::from(crate::SLUG),
             },
             token,
-            backend: BackendType::from("discord"),
+            backend: BackendType::from(crate::SLUG),
             icon_emoji: Some("💬".to_string()),
             instance_id: self.http.base_url().to_string(),
             backend_url: Some(self.http.base_url().to_string()),
@@ -742,7 +745,7 @@ impl ClientBackend for DiscordClient {
                 icon_url,
                 banner_url,
                 categories: vec![],
-                backend: BackendType::from("discord"),
+                backend: BackendType::from(crate::SLUG),
                 unread_count: 0,
                 mention_count: 0,
                 account_id: account_id.clone(),
@@ -772,7 +775,7 @@ impl ClientBackend for DiscordClient {
             icon_url,
             banner_url,
             categories: vec![],
-            backend: BackendType::from("discord"),
+            backend: BackendType::from(crate::SLUG),
             unread_count: 0,
             mention_count: 0,
             account_id,
@@ -958,11 +961,11 @@ impl ClientBackend for DiscordClient {
                     display_name: c.name,
                     avatar_url: None,
                     presence: PresenceStatus::Offline,
-                    backend: BackendType::from("discord"),
+                    backend: BackendType::from(crate::SLUG),
                 },
                 last_message: None,
                 unread_count: 0,
-                backend: BackendType::from("discord"),
+                backend: BackendType::from(crate::SLUG),
                 account_id: account_id.clone(),
             })
             .collect())
@@ -1232,7 +1235,7 @@ impl ClientBackend for DiscordClient {
                         display_name: moderator_id.clone(),
                         avatar_url: None,
                         presence: PresenceStatus::Offline,
-                        backend: BackendType::from("discord"),
+                        backend: BackendType::from(crate::SLUG),
                     },
                     |u| self.discord_user_to_poly(u.clone()),
                 );
@@ -1328,7 +1331,7 @@ impl ClientBackend for DiscordClient {
     }
 
     fn backend_type(&self) -> BackendType {
-        BackendType::from("discord")
+        BackendType::from(crate::SLUG)
     }
 
     fn backend_name(&self) -> &str {

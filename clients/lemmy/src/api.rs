@@ -433,7 +433,7 @@ pub fn map_person(person: &LemmyPerson) -> User {
             .unwrap_or_else(|| person.name.clone()),
         avatar_url: person.avatar.clone(),
         presence: PresenceStatus::Offline,
-        backend: BackendType::from("lemmy"),
+        backend: BackendType::from(crate::SLUG),
     }
 }
 
@@ -451,7 +451,7 @@ pub fn map_community_to_server(view: &CommunityView, account_id: &str, account_d
             name: "Posts".to_string(),
             channel_ids: vec![channel_id],
         }],
-        backend: BackendType::from("lemmy"),
+        backend: BackendType::from(crate::SLUG),
         unread_count: 0,
         mention_count: 0,
         account_id: account_id.to_string(),
@@ -720,7 +720,7 @@ pub fn map_pm_to_dm_channel(
         user: map_person(other),
         last_message: Some(last_msg),
         unread_count: u32::from(!view.private_message.read),
-        backend: BackendType::from("lemmy"),
+        backend: BackendType::from(crate::SLUG),
         account_id: account_id.to_string(),
     }
 }

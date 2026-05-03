@@ -150,7 +150,7 @@ fn u(users: &[User], idx: usize) -> User {
         display_name: format!("Unknown#{idx}"),
         avatar_url: None,
         presence: PresenceStatus::Offline,
-        backend: BackendType::from("demo"),
+        backend: BackendType::from(crate::SLUG),
     })
 }
 
@@ -233,7 +233,7 @@ mod forum_helper_tests {
                 display_name: "U".into(),
                 avatar_url: None,
                 presence: PresenceStatus::Online,
-                backend: BackendType::from("demo"),
+                backend: BackendType::from(crate::SLUG),
             },
             content: MessageContent::Text(String::new()),
             timestamp: Utc::now(),
@@ -1287,7 +1287,7 @@ pub fn demo_cat_user() -> User {
         display_name: "🐱 Cat (demo)".to_string(),
         avatar_url: Some(DEMO_CAT_AVATAR.to_string()),
         presence: PresenceStatus::Online,
-        backend: BackendType::from("demo"),
+        backend: BackendType::from(crate::SLUG),
     }
 }
 
@@ -1300,7 +1300,7 @@ pub fn demo_dog_user() -> User {
         display_name: "🐶 Dog (demo)".to_string(),
         avatar_url: Some(DEMO_DOG_AVATAR.to_string()),
         presence: PresenceStatus::Online,
-        backend: BackendType::from("demo"),
+        backend: BackendType::from(crate::SLUG),
     }
 }
 
@@ -1317,10 +1317,10 @@ pub fn demo_session() -> Session {
             // avatar_url path — no demo-specific logic needed in UI code.
             avatar_url: Some(DEMO_CAT_AVATAR.to_string()),
             presence: PresenceStatus::Online,
-            backend: BackendType::from("demo"),
+            backend: BackendType::from(crate::SLUG),
         },
         token: "demo-token-not-real".to_string(),
-        backend: BackendType::from("demo"),
+        backend: BackendType::from(crate::SLUG),
         icon_emoji: Some("🐱".to_string()),
         instance_id: DEMO_INSTANCE_ID.to_string(),
         backend_url: None,
@@ -1337,10 +1337,10 @@ pub fn demo2_session() -> Session {
             display_name: "Dog (demo)".to_string(),
             avatar_url: Some(DEMO_DOG_AVATAR.to_string()),
             presence: PresenceStatus::Online,
-            backend: BackendType::from("demo"),
+            backend: BackendType::from(crate::SLUG),
         },
         token: "demo2-token-not-real".to_string(),
-        backend: BackendType::from("demo"),
+        backend: BackendType::from(crate::SLUG),
         icon_emoji: Some("🐶".to_string()),
         instance_id: DEMO_INSTANCE_ID.to_string(),
         backend_url: None,
@@ -1358,7 +1358,7 @@ fn demo_user(id: &str) -> User {
             display_name: id.to_string(),
             avatar_url: None,
             presence: PresenceStatus::Offline,
-            backend: BackendType::from("demo"),
+            backend: BackendType::from(crate::SLUG),
         })
 }
 
@@ -1436,7 +1436,7 @@ pub fn demo_users() -> Vec<User> {
             display_name: name.to_string(),
             avatar_url: Some(avatar_url.clone()),
             presence: *presence,
-            backend: BackendType::from("demo"),
+            backend: BackendType::from(crate::SLUG),
         })
         .collect()
 }
@@ -1501,7 +1501,7 @@ pub fn cat_dog_shared_server(account_id: &str, account_display_name: &str) -> Se
             name: "Hangout".to_string(),
             channel_ids: vec!["ch-arena-general".to_string()],
         }],
-        backend: BackendType::from("demo"),
+        backend: BackendType::from(crate::SLUG),
         unread_count: 0,
         mention_count: 0,
         account_id: account_id.to_string(),
@@ -1618,7 +1618,7 @@ pub fn demo_servers() -> Vec<Server> {
                     ],
                 },
             ],
-            backend: BackendType::from("demo"),
+            backend: BackendType::from(crate::SLUG),
             unread_count: 5,
             mention_count: 2,
             account_id: DEMO_ACCOUNT_ID.to_string(),
@@ -1644,7 +1644,7 @@ pub fn demo_servers() -> Vec<Server> {
                     "ch-voice-gaming".to_string(),
                 ],
             }],
-            backend: BackendType::from("demo"),
+            backend: BackendType::from(crate::SLUG),
             unread_count: 12,
             mention_count: 0,
             account_id: DEMO_ACCOUNT_ID.to_string(),
@@ -1669,7 +1669,7 @@ pub fn demo_servers() -> Vec<Server> {
                     "ch-production".to_string(),
                 ],
             }],
-            backend: BackendType::from("demo"),
+            backend: BackendType::from(crate::SLUG),
             unread_count: 0,
             mention_count: 0,
             account_id: DEMO_ACCOUNT_ID.to_string(),
@@ -1714,7 +1714,7 @@ pub fn demo2_servers() -> Vec<Server> {
                     channel_ids: vec!["ch2-help".to_string(), "ch2-voice-oss".to_string()],
                 },
             ],
-            backend: BackendType::from("demo"),
+            backend: BackendType::from(crate::SLUG),
             unread_count: 14,
             mention_count: 3,
             account_id: DEMO2_ACCOUNT_ID.to_string(),
@@ -1740,7 +1740,7 @@ pub fn demo2_servers() -> Vec<Server> {
                     "ch2-voice-book".to_string(),
                 ],
             }],
-            backend: BackendType::from("demo"),
+            backend: BackendType::from(crate::SLUG),
             unread_count: 7,
             mention_count: 0,
             account_id: DEMO2_ACCOUNT_ID.to_string(),
@@ -1766,7 +1766,7 @@ pub fn demo2_servers() -> Vec<Server> {
                     "ch2-show-your-dish".to_string(),
                 ],
             }],
-            backend: BackendType::from("demo"),
+            backend: BackendType::from(crate::SLUG),
             unread_count: 0,
             mention_count: 0,
             account_id: DEMO2_ACCOUNT_ID.to_string(),
@@ -1792,7 +1792,7 @@ pub fn demo2_servers() -> Vec<Server> {
                     "ch2-voice-workout".to_string(),
                 ],
             }],
-            backend: BackendType::from("demo"),
+            backend: BackendType::from(crate::SLUG),
             unread_count: 2,
             mention_count: 1,
             account_id: DEMO2_ACCOUNT_ID.to_string(),
@@ -2079,7 +2079,7 @@ pub fn demo2_notifications() -> Vec<Notification> {
             },
             read: false,
             timestamp: ago_hours(2),
-            backend: BackendType::from("demo"),
+            backend: BackendType::from(crate::SLUG),
             account_id: DEMO2_ACCOUNT_ID.to_string(),
             preview: "New discussion in #current-read".to_string(),
         },
@@ -2091,7 +2091,7 @@ pub fn demo2_notifications() -> Vec<Notification> {
             },
             read: false,
             timestamp: ago_hours(4),
-            backend: BackendType::from("demo"),
+            backend: BackendType::from(crate::SLUG),
             account_id: DEMO2_ACCOUNT_ID.to_string(),
             preview: "Bob posted a new workout challenge".to_string(),
         },
@@ -2723,7 +2723,7 @@ pub fn demo_groups() -> Vec<Group> {
                 thread: None,
                 preview_image_url: None,
             }),
-            backend: BackendType::from("demo"),
+            backend: BackendType::from(crate::SLUG),
             account_id: DEMO_ACCOUNT_ID.to_string(),
         },
         Group {
@@ -2742,7 +2742,7 @@ pub fn demo_groups() -> Vec<Group> {
                 thread: None,
                 preview_image_url: None,
             }),
-            backend: BackendType::from("demo"),
+            backend: BackendType::from(crate::SLUG),
             account_id: DEMO_ACCOUNT_ID.to_string(),
         },
     ]
@@ -2780,7 +2780,7 @@ pub fn demo_dm_channels() -> Vec<DmChannel> {
         preview_image_url: None,
                 }),
                 unread_count: if i < 2 { 1 } else { 0 },
-                backend: BackendType::from("demo"),
+                backend: BackendType::from(crate::SLUG),
                 account_id: DEMO_ACCOUNT_ID.to_string(),
             }
         })
@@ -2831,7 +2831,7 @@ pub fn demo_dm_channels() -> Vec<DmChannel> {
             preview_image_url: None,
         }),
         unread_count: 1,
-        backend: BackendType::from("demo"),
+        backend: BackendType::from(crate::SLUG),
         account_id: DEMO_ACCOUNT_ID.to_string(),
     });
 
@@ -2853,7 +2853,7 @@ pub fn demo_dm_channels() -> Vec<DmChannel> {
             preview_image_url: None,
         }),
         unread_count: 0,
-        backend: BackendType::from("demo"),
+        backend: BackendType::from(crate::SLUG),
         account_id: DEMO_ACCOUNT_ID.to_string(),
     });
 
@@ -2865,7 +2865,7 @@ pub fn demo_dm_channels() -> Vec<DmChannel> {
             display_name: "🐶 Dog (demo)".to_string(),
             avatar_url: Some(DEMO_DOG_AVATAR.to_string()),
             presence: PresenceStatus::Online,
-            backend: BackendType::from("demo"),
+            backend: BackendType::from(crate::SLUG),
         },
         last_message: Some(Message {
             id: "msg-dm-dog-latest".to_string(),
@@ -2874,7 +2874,7 @@ pub fn demo_dm_channels() -> Vec<DmChannel> {
                 display_name: "🐶 Dog (demo)".to_string(),
                 avatar_url: Some(DEMO_DOG_AVATAR.to_string()),
                 presence: PresenceStatus::Online,
-                backend: BackendType::from("demo"),
+                backend: BackendType::from(crate::SLUG),
             },
             content: MessageContent::Text(
                 "bark bark! 🐕 haha, your pull request is almost as good as my naps 😼".to_string(),
@@ -2888,7 +2888,7 @@ pub fn demo_dm_channels() -> Vec<DmChannel> {
             preview_image_url: None,
         }),
         unread_count: 1,
-        backend: BackendType::from("demo"),
+        backend: BackendType::from(crate::SLUG),
         account_id: DEMO_ACCOUNT_ID.to_string(),
     });
 
@@ -2912,7 +2912,7 @@ pub fn demo_empty_dm_channel_for_user(user_id: &str, account_id: &str) -> Client
         user,
         last_message: None,
         unread_count: 0,
-        backend: BackendType::from("demo"),
+        backend: BackendType::from(crate::SLUG),
         account_id: account_id.to_string(),
     })
 }
@@ -2928,7 +2928,7 @@ pub fn demo_notifications() -> Vec<Notification> {
                 channel_id: "ch-general".to_string(),
                 message_id: "msg-ch-general-2".to_string(),
             },
-            backend: BackendType::from("demo"),
+            backend: BackendType::from(crate::SLUG),
             account_id: DEMO_ACCOUNT_ID.to_string(),
             timestamp: ago_minutes(5),
             read: false,
@@ -2941,7 +2941,7 @@ pub fn demo_notifications() -> Vec<Notification> {
                 channel_id: "ch-rust".to_string(),
                 message_id: "msg-30".to_string(),
             },
-            backend: BackendType::from("demo"),
+            backend: BackendType::from(crate::SLUG),
             account_id: DEMO_ACCOUNT_ID.to_string(),
             timestamp: ago_minutes(20),
             read: false,
@@ -2953,7 +2953,7 @@ pub fn demo_notifications() -> Vec<Notification> {
             kind: NotificationKind::FriendRequest {
                 from_user_id: "user-iris".to_string(),
             },
-            backend: BackendType::from("demo"),
+            backend: BackendType::from(crate::SLUG),
             account_id: DEMO_ACCOUNT_ID.to_string(),
             timestamp: ago_minutes(45),
             read: false,
@@ -2965,7 +2965,7 @@ pub fn demo_notifications() -> Vec<Notification> {
             kind: NotificationKind::FriendRequest {
                 from_user_id: "user-jack".to_string(),
             },
-            backend: BackendType::from("demo"),
+            backend: BackendType::from(crate::SLUG),
             account_id: DEMO_ACCOUNT_ID.to_string(),
             timestamp: ago_hours(2),
             read: false,
@@ -2977,7 +2977,7 @@ pub fn demo_notifications() -> Vec<Notification> {
             kind: NotificationKind::ServerInvite {
                 server_id: "server-new".to_string(),
             },
-            backend: BackendType::from("demo"),
+            backend: BackendType::from(crate::SLUG),
             account_id: DEMO_ACCOUNT_ID.to_string(),
             timestamp: ago_hours(3),
             read: false,
@@ -2989,7 +2989,7 @@ pub fn demo_notifications() -> Vec<Notification> {
             kind: NotificationKind::ServerInvite {
                 server_id: "server-art".to_string(),
             },
-            backend: BackendType::from("demo"),
+            backend: BackendType::from(crate::SLUG),
             account_id: DEMO_ACCOUNT_ID.to_string(),
             timestamp: ago_hours(6),
             read: false,
@@ -3004,7 +3004,7 @@ pub fn demo_notifications() -> Vec<Notification> {
                 channel_name: "Dev Voice".to_string(),
                 inviter_user_id: "user-bob".to_string(),
             },
-            backend: BackendType::from("demo"),
+            backend: BackendType::from(crate::SLUG),
             account_id: DEMO_ACCOUNT_ID.to_string(),
             timestamp: ago_hours(1),
             read: false,
@@ -3019,7 +3019,7 @@ pub fn demo_notifications() -> Vec<Notification> {
                 channel_name: "Gaming Voice".to_string(),
                 inviter_user_id: "user-diana".to_string(),
             },
-            backend: BackendType::from("demo"),
+            backend: BackendType::from(crate::SLUG),
             account_id: DEMO_ACCOUNT_ID.to_string(),
             timestamp: ago_hours(4),
             read: true,
@@ -3032,7 +3032,7 @@ pub fn demo_notifications() -> Vec<Notification> {
                 channel_id: "ch-off-topic".to_string(),
                 message_id: "msg-ch-off-topic-0".to_string(),
             },
-            backend: BackendType::from("demo"),
+            backend: BackendType::from(crate::SLUG),
             account_id: DEMO_ACCOUNT_ID.to_string(),
             timestamp: ago_hours(8),
             read: true,
@@ -3584,7 +3584,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                     display_name: "🐶 Dog (demo)".to_string(),
                     avatar_url: Some(DEMO_DOG_AVATAR.to_string()),
                     presence: PresenceStatus::Online,
-                    backend: BackendType::from("demo"),
+                    backend: BackendType::from(crate::SLUG),
                 },
                 content: MessageContent::Text(
                     "bark bark!! 🐕 LOL pedestrian?? My PRs actually PASS CI cat!! unlike SOME libraries we know 😏"
@@ -3620,7 +3620,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                     display_name: "🐶 Dog (demo)".to_string(),
                     avatar_url: Some(DEMO_DOG_AVATAR.to_string()),
                     presence: PresenceStatus::Online,
-                    backend: BackendType::from("demo"),
+                    backend: BackendType::from(crate::SLUG),
                 },
                 content: MessageContent::Text(
                     "that was ONE TIME and it was CLEARLY a testing artifact!! unlike your hot-reload that breaks EVERY TUESDAY 🙄"
@@ -3656,7 +3656,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                     display_name: "🐶 Dog (demo)".to_string(),
                     avatar_url: Some(DEMO_DOG_AVATAR.to_string()),
                     presence: PresenceStatus::Online,
-                    backend: BackendType::from("demo"),
+                    backend: BackendType::from(crate::SLUG),
                 },
                 content: MessageContent::Text(
                     "not better than YOUR message queueing!! at least mine have RTFM docs 📚 you just have vibes and prayer 😼💀"
@@ -3692,7 +3692,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                     display_name: "🐶 Dog (demo)".to_string(),
                     avatar_url: Some(DEMO_DOG_AVATAR.to_string()),
                     presence: PresenceStatus::Online,
-                    backend: BackendType::from("demo"),
+                    backend: BackendType::from(crate::SLUG),
                 },
                 content: MessageContent::Text(
                     "bark bark! 🐕 haha, your pull request is almost as good as my naps 😼"
@@ -4018,7 +4018,7 @@ pub fn demo_groups_v2() -> Vec<Group> {
                 thread: None,
                 preview_image_url: None,
             }),
-            backend: BackendType::from("demo"),
+            backend: BackendType::from(crate::SLUG),
             account_id: DEMO_ACCOUNT_ID.to_string(),
         },
         Group {
@@ -4037,7 +4037,7 @@ pub fn demo_groups_v2() -> Vec<Group> {
                 thread: None,
                 preview_image_url: None,
             }),
-            backend: BackendType::from("demo"),
+            backend: BackendType::from(crate::SLUG),
             account_id: DEMO_ACCOUNT_ID.to_string(),
         },
         Group {
@@ -4056,7 +4056,7 @@ pub fn demo_groups_v2() -> Vec<Group> {
                 thread: None,
                 preview_image_url: None,
             }),
-            backend: BackendType::from("demo"),
+            backend: BackendType::from(crate::SLUG),
             account_id: DEMO_ACCOUNT_ID.to_string(),
         },
         Group {
@@ -4080,7 +4080,7 @@ pub fn demo_groups_v2() -> Vec<Group> {
                 thread: None,
                 preview_image_url: None,
             }),
-            backend: BackendType::from("demo"),
+            backend: BackendType::from(crate::SLUG),
             account_id: DEMO_ACCOUNT_ID.to_string(),
         },
     ]
@@ -4108,7 +4108,7 @@ pub fn demo2_groups() -> Vec<Group> {
                 thread: None,
                 preview_image_url: None,
             }),
-            backend: BackendType::from("demo"),
+            backend: BackendType::from(crate::SLUG),
             account_id: DEMO2_ACCOUNT_ID.to_string(),
         },
         Group {
@@ -4129,7 +4129,7 @@ pub fn demo2_groups() -> Vec<Group> {
                 thread: None,
                 preview_image_url: None,
             }),
-            backend: BackendType::from("demo"),
+            backend: BackendType::from(crate::SLUG),
             account_id: DEMO2_ACCOUNT_ID.to_string(),
         },
         Group {
@@ -4148,7 +4148,7 @@ pub fn demo2_groups() -> Vec<Group> {
                 thread: None,
                 preview_image_url: None,
             }),
-            backend: BackendType::from("demo"),
+            backend: BackendType::from(crate::SLUG),
             account_id: DEMO2_ACCOUNT_ID.to_string(),
         },
     ]
@@ -5531,11 +5531,11 @@ fn search_demo_messages(query: &MessageSearchQuery, demo2: bool) -> Vec<MessageS
                 display_name: "🐱 Cat (demo)".to_string(),
                 avatar_url: Some(DEMO_CAT_AVATAR.to_string()),
                 presence: PresenceStatus::Online,
-                backend: BackendType::from("demo"),
+                backend: BackendType::from(crate::SLUG),
             },
             last_message: None,
             unread_count: 0,
-            backend: BackendType::from("demo"),
+            backend: BackendType::from(crate::SLUG),
             account_id: DEMO2_ACCOUNT_ID.to_string(),
         });
         channels

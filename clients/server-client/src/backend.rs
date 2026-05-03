@@ -95,7 +95,7 @@ impl PolyServerBackend {
             display_name: profile.display_name.clone(),
             avatar_url: profile.avatar_url.clone(),
             presence: PresenceStatus::Offline,
-            backend: BackendType::from("poly"),
+            backend: BackendType::from(crate::SLUG),
         }
     }
 
@@ -123,7 +123,7 @@ impl PolyServerBackend {
             icon_url: srv.icon_url.clone(),
             banner_url: srv.banner_url.clone(),
             categories: cats,
-            backend: BackendType::from("poly"),
+            backend: BackendType::from(crate::SLUG),
             unread_count: 0,
             mention_count: 0,
             account_id: account_id.to_string(),
@@ -183,7 +183,7 @@ impl PolyServerBackend {
                 display_name: msg.author_id.clone(), // Will be resolved later
                 avatar_url: None,
                 presence: PresenceStatus::Offline,
-                backend: BackendType::from("poly"),
+                backend: BackendType::from(crate::SLUG),
             },
             content: MessageContent::Text(msg.content.clone()),
             timestamp: msg.created_at,
@@ -247,7 +247,7 @@ impl ClientBackend for PolyServerBackend {
                     id: auth.user_id.clone(),
                     user: Self::map_user(&profile),
                     token: auth.token,
-                    backend: BackendType::from("poly"),
+                    backend: BackendType::from(crate::SLUG),
                     icon_emoji: Some("\u{1f536}".to_string()), // 🔶
                     // Strip "http(s)://" so instance_id is a URL-path-safe segment
                     // (e.g. "127.0.0.1:7080" or "my.poly.server.com").
@@ -284,7 +284,7 @@ impl ClientBackend for PolyServerBackend {
                     id: auth.user_id.clone(),
                     user: Self::map_user(&profile),
                     token: auth.token,
-                    backend: BackendType::from("poly"),
+                    backend: BackendType::from(crate::SLUG),
                     icon_emoji: Some("\u{1f536}".to_string()),
                     // Strip "http(s)://" so instance_id is a URL-path-safe segment.
                     instance_id: self
@@ -545,7 +545,7 @@ impl ClientBackend for PolyServerBackend {
                     name: Some(ch.name.clone()),
                     members,
                     last_message: None,
-                    backend: BackendType::from("poly"),
+                    backend: BackendType::from(crate::SLUG),
                     account_id: account_id.clone(),
                 });
             }
@@ -596,7 +596,7 @@ impl ClientBackend for PolyServerBackend {
                         display_name: ch.name.clone(),
                         avatar_url: None,
                         presence: PresenceStatus::Offline,
-                        backend: BackendType::from("poly"),
+                        backend: BackendType::from(crate::SLUG),
                     },
                 }
             } else {
@@ -606,7 +606,7 @@ impl ClientBackend for PolyServerBackend {
                     display_name: ch.name.clone(),
                     avatar_url: None,
                     presence: PresenceStatus::Offline,
-                    backend: BackendType::from("poly"),
+                    backend: BackendType::from(crate::SLUG),
                 }
             };
 
@@ -615,7 +615,7 @@ impl ClientBackend for PolyServerBackend {
                 user,
                 last_message: None,
                 unread_count: 0,
-                backend: BackendType::from("poly"),
+                backend: BackendType::from(crate::SLUG),
                 account_id: account_id.clone(),
             });
         }
@@ -871,7 +871,7 @@ impl ClientBackend for PolyServerBackend {
                         display_name: e.actor_id,
                         avatar_url: None,
                         presence: PresenceStatus::Offline,
-                        backend: BackendType::from("poly"),
+                        backend: BackendType::from(crate::SLUG),
                     },
                     target_user_id: e.target_id.filter(|s| !s.is_empty()),
                     target_display_name: None,
@@ -1060,7 +1060,7 @@ impl ClientBackend for PolyServerBackend {
     // ── Backend info ─────────────────────────────────────────────────────────
 
     fn backend_type(&self) -> BackendType {
-        BackendType::from("poly")
+        BackendType::from(crate::SLUG)
     }
 
     fn backend_name(&self) -> &str {
@@ -1390,7 +1390,7 @@ fn map_server_event(event: srv::ServerEvent) -> Option<ClientEvent> {
                     display_name: payload.author_id,
                     avatar_url: None,
                     presence: PresenceStatus::Offline,
-                    backend: BackendType::from("poly"),
+                    backend: BackendType::from(crate::SLUG),
                 },
                 content: MessageContent::Text(payload.content),
                 timestamp: payload.created_at,
@@ -1411,7 +1411,7 @@ fn map_server_event(event: srv::ServerEvent) -> Option<ClientEvent> {
                     display_name: payload.author_id,
                     avatar_url: None,
                     presence: PresenceStatus::Offline,
-                    backend: BackendType::from("poly"),
+                    backend: BackendType::from(crate::SLUG),
                 },
                 content: MessageContent::Text(payload.content),
                 timestamp: payload.created_at,
@@ -1452,12 +1452,12 @@ fn map_server_event(event: srv::ServerEvent) -> Option<ClientEvent> {
                     display_name: from.display_name,
                     avatar_url: from.avatar_url,
                     presence: PresenceStatus::Offline,
-                    backend: BackendType::from("poly"),
+                    backend: BackendType::from(crate::SLUG),
                 },
             })
         }
         srv::ServerEvent::DeviceRevoked => Some(ClientEvent::ConnectionStateChanged {
-            backend: BackendType::from("poly"),
+            backend: BackendType::from(crate::SLUG),
             connected: false,
         }),
         srv::ServerEvent::VoiceStateUpdate {
@@ -1474,7 +1474,7 @@ fn map_server_event(event: srv::ServerEvent) -> Option<ClientEvent> {
                             display_name: String::new(),
                             avatar_url: None,
                             presence: PresenceStatus::Online,
-                            backend: BackendType::from("poly"),
+                            backend: BackendType::from(crate::SLUG),
                         },
                         is_muted: false,
                         is_deafened: false,

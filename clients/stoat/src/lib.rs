@@ -23,6 +23,9 @@
 
 // TODO(phase-3.1): Implement Stoat client
 
+/// The backend slug used in all [`poly_client::BackendType`] constructions for this crate.
+pub const SLUG: &str = "stoat";
+
 #[cfg(feature = "native")]
 mod api;
 
@@ -204,7 +207,7 @@ impl StoatClient {
             id: authenticated.session_id,
             user: authenticated.user,
             token: authenticated.token,
-            backend: BackendType::from("stoat"),
+            backend: BackendType::from(crate::SLUG),
             icon_emoji: Some("🦦".to_string()),
             instance_id: self.instance_id(),
             backend_url: Some(self.base_url().to_string()),
@@ -373,7 +376,7 @@ impl StoatClient {
             user,
             last_message,
             unread_count,
-            backend: BackendType::from("stoat"),
+            backend: BackendType::from(crate::SLUG),
             account_id: account_id.to_string(),
         })
     }
@@ -812,7 +815,7 @@ impl ClientBackend for StoatClient {
                                 .collect(),
                             name: channel.name,
                             last_message,
-                            backend: BackendType::from("stoat"),
+                            backend: BackendType::from(crate::SLUG),
                             account_id: account_id.clone(),
                         })
                     }
@@ -880,7 +883,7 @@ impl ClientBackend for StoatClient {
                             kind: NotificationKind::FriendRequest {
                                 from_user_id: user.id.clone(),
                             },
-                            backend: BackendType::from("stoat"),
+                            backend: BackendType::from(crate::SLUG),
                             account_id: account_id.clone(),
                             timestamp: chrono::Utc::now(),
                             read: false,
@@ -1196,7 +1199,7 @@ impl ClientBackend for StoatClient {
     }
 
     fn backend_type(&self) -> BackendType {
-        BackendType::from("stoat")
+        BackendType::from(crate::SLUG)
     }
 
     fn backend_name(&self) -> &str {
@@ -1790,7 +1793,7 @@ fn parse_bonfire_event(json: &serde_json::Value) -> Option<ClientEvent> {
                     display_name: String::new(),
                     avatar_url: None,
                     presence: poly_client::PresenceStatus::Online,
-                    backend: BackendType::from("stoat"),
+                    backend: BackendType::from(crate::SLUG),
                 },
                 content: poly_client::MessageContent::Text(content),
                 timestamp: chrono::Utc::now(),
@@ -2057,14 +2060,14 @@ mod tests {
                     display_name: "Stoaty".to_string(),
                     avatar_url: None,
                     presence: PresenceStatus::Online,
-                    backend: BackendType::from("stoat"),
+                    backend: BackendType::from(crate::SLUG),
                 },
                 session_name: Some("Poly".to_string()),
             })
         });
 
         let session = session.expect("authenticate should succeed");
-        assert_eq!(session.backend, BackendType::from("stoat"));
+        assert_eq!(session.backend, BackendType::from(crate::SLUG));
         assert_eq!(session.instance_id, "chat.example.test~api");
         assert_eq!(session.backend_url, Some("https://chat.example.test/api".to_string()));
     }
@@ -2286,7 +2289,7 @@ mod tests {
 
         assert_eq!(user.id, "user_2");
         assert_eq!(user.display_name, "Otter Pal");
-        assert_eq!(user.backend, BackendType::from("stoat"));
+        assert_eq!(user.backend, BackendType::from(crate::SLUG));
 
         Ok(())
     }

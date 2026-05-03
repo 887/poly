@@ -107,10 +107,10 @@ detailed shard write-up.
 Parallelisable across 4 sonnet worktree agents, all touching
 disjoint files.
 
-- [ ] **A.1** Per-backend `pub const SLUG: &str` exported from each
+- [x] **A.1** Per-backend `pub const SLUG: &str` exported from each
       `clients/<name>/src/lib.rs`; flip the 199 in-crate
       `BackendType::from("…")` literals to `BackendType::from(crate::SLUG)`.
-      Sites: see B.1.3 table. Effort S.
+      Sites: see B.1.3 table. Effort S. — shipped in commit `0acd71e2`
 - [ ] **A.2** Split `crates/core/src/i18n/baked_locales.rs` (4487
       lines) per-locale. Patch site: `crates/core/build.rs:84-109`. Net
       patch ≤15 lines. Effort S. Source: E.1#2.

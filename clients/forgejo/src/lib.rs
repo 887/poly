@@ -12,6 +12,9 @@
 //!
 //! The backend is read-only — send_message returns NotSupported.
 
+/// The backend slug used in all [`poly_client::BackendType`] constructions for this crate.
+pub const SLUG: &str = "forgejo";
+
 #[cfg(feature = "native")]
 mod api;
 #[cfg(feature = "native")]

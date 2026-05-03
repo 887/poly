@@ -9,6 +9,9 @@
 //! - **Native** (`--features native`): Implements `ClientBackend` directly.
 //! - **WASM plugin** (target `wasm32-wasip2`): Exports WIT `messenger-client`.
 
+/// The backend slug used in all [`poly_client::BackendType`] constructions for this crate.
+pub const SLUG: &str = "teams";
+
 #[cfg(feature = "native")]
 pub mod auth;
 #[cfg(feature = "native")]
@@ -125,7 +128,7 @@ impl TeamsClient {
                     display_name: u.display_name.unwrap_or_default(),
                     avatar_url: None,
                     presence: PresenceStatus::Online,
-                    backend: BackendType::from("teams"),
+                    backend: BackendType::from(crate::SLUG),
                 }
             } else {
                 self.unknown_user()
@@ -196,7 +199,7 @@ impl TeamsClient {
             display_name: "Unknown".to_string(),
             avatar_url: None,
             presence: PresenceStatus::Offline,
-            backend: BackendType::from("teams"),
+            backend: BackendType::from(crate::SLUG),
         }
     }
 }
@@ -264,7 +267,7 @@ fn poly_event_message_from_json(m: &serde_json::Value) -> Option<Message> {
             display_name: author_name,
             avatar_url: None,
             presence: PresenceStatus::Online,
-            backend: BackendType::from("teams"),
+            backend: BackendType::from(crate::SLUG),
         },
         content: MessageContent::Text(content),
         timestamp,
@@ -305,10 +308,10 @@ impl ClientBackend for TeamsClient {
                 display_name: user.display_name.clone(),
                 avatar_url: None,
                 presence: PresenceStatus::Online,
-                backend: BackendType::from("teams"),
+                backend: BackendType::from(crate::SLUG),
             },
             token,
-            backend: BackendType::from("teams"),
+            backend: BackendType::from(crate::SLUG),
             icon_emoji: Some("💼".to_string()),
             // Strip the URL scheme so `instance_id` is a bare "host:port"
             // (e.g. "localhost:9103") instead of "http://localhost:9103".
@@ -360,7 +363,7 @@ impl ClientBackend for TeamsClient {
             icon_url: None,
             banner_url: None,
             categories: vec![],
-            backend: BackendType::from("teams"),
+            backend: BackendType::from(crate::SLUG),
             unread_count: 0,
             mention_count: 0,
             account_id: account_id.clone(),
@@ -384,7 +387,7 @@ impl ClientBackend for TeamsClient {
             icon_url: None,
             banner_url: None,
             categories: vec![],
-            backend: BackendType::from("teams"),
+            backend: BackendType::from(crate::SLUG),
             unread_count: 0,
             mention_count: 0,
             account_id,
@@ -496,7 +499,7 @@ impl ClientBackend for TeamsClient {
                         display_name: name.clone(),
                         avatar_url: None,
                         presence: PresenceStatus::Offline,
-                        backend: BackendType::from("teams"),
+                        backend: BackendType::from(crate::SLUG),
                     })
                 })
                 .unwrap_or_else(|| self.unknown_user());
@@ -505,7 +508,7 @@ impl ClientBackend for TeamsClient {
                 user: contact,
                 last_message: None,
                 unread_count: 0,
-                backend: BackendType::from("teams"),
+                backend: BackendType::from(crate::SLUG),
                 account_id: account_id.clone(),
             }
         }).collect())
@@ -745,7 +748,7 @@ impl ClientBackend for TeamsClient {
     }
 
     fn backend_type(&self) -> BackendType {
-        BackendType::from("teams")
+        BackendType::from(crate::SLUG)
     }
 
     fn backend_name(&self) -> &str {

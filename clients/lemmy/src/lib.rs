@@ -11,6 +11,9 @@
 
 #![allow(clippy::if_same_then_else)]
 
+/// The backend slug used in all [`poly_client::BackendType`] constructions for this crate.
+pub const SLUG: &str = "lemmy";
+
 #[cfg(feature = "native")]
 mod api;
 
@@ -218,7 +221,7 @@ impl ClientBackend for LemmyClient {
                     id: format!("lemmy-session-{}", person.id),
                     user: map_person(&person),
                     token: session.jwt,
-                    backend: BackendType::from("lemmy"),
+                    backend: BackendType::from(crate::SLUG),
                     icon_emoji: None,
                     instance_id,
                     backend_url: Some(self.base_url().to_string()),
@@ -278,7 +281,7 @@ impl ClientBackend for LemmyClient {
             id: format!("lemmy-session-{}", person.id),
             user: map_person(&person),
             token: jwt,
-            backend: BackendType::from("lemmy"),
+            backend: BackendType::from(crate::SLUG),
             icon_emoji: None,
             instance_id,
             backend_url: Some(self.base_url().to_string()),
@@ -443,7 +446,7 @@ impl ClientBackend for LemmyClient {
                     display_name: session.user_display_name,
                     avatar_url: session.user_avatar_url,
                     presence: PresenceStatus::Online,
-                    backend: BackendType::from("lemmy"),
+                    backend: BackendType::from(crate::SLUG),
                 });
             }
         }
@@ -1262,7 +1265,7 @@ impl ClientBackend for LemmyClient {
                     display_name: "Unknown".to_string(),
                     avatar_url: None,
                     presence: PresenceStatus::Offline,
-                    backend: BackendType::from("lemmy"),
+                    backend: BackendType::from(crate::SLUG),
                 },
                 map_person,
             );
@@ -1291,7 +1294,7 @@ impl ClientBackend for LemmyClient {
                     display_name: "Unknown".to_string(),
                     avatar_url: None,
                     presence: PresenceStatus::Offline,
-                    backend: BackendType::from("lemmy"),
+                    backend: BackendType::from(crate::SLUG),
                 },
                 map_person,
             );
@@ -1318,7 +1321,7 @@ impl ClientBackend for LemmyClient {
                     display_name: "Unknown".to_string(),
                     avatar_url: None,
                     presence: PresenceStatus::Offline,
-                    backend: BackendType::from("lemmy"),
+                    backend: BackendType::from(crate::SLUG),
                 },
                 map_person,
             );
@@ -1349,7 +1352,7 @@ impl ClientBackend for LemmyClient {
     // ── Backend info ──────────────────────────────────────────────────────────
 
     fn backend_type(&self) -> BackendType {
-        BackendType::from("lemmy")
+        BackendType::from(crate::SLUG)
     }
 
     fn backend_name(&self) -> &str {

@@ -16,6 +16,9 @@
 //!
 //! DECISION(D21): WASM Plugin Backends.
 
+/// The backend slug used in all [`poly_client::BackendType`] constructions for this crate.
+pub const SLUG: &str = "demo";
+
 /// Public data module — demo data generators for testing.
 pub mod data;
 
@@ -268,7 +271,7 @@ impl ClientBackend for DemoClient {
             user: session.user,
             last_message: None,
             unread_count: 0,
-            backend: BackendType::from("demo"),
+            backend: BackendType::from(crate::SLUG),
             account_id: data::DEMO_ACCOUNT_ID.to_string(),
         })
     }
@@ -476,7 +479,7 @@ impl ClientBackend for DemoClient {
     }
 
     fn backend_type(&self) -> BackendType {
-        BackendType::from("demo")
+        BackendType::from(crate::SLUG)
     }
 
     fn backend_name(&self) -> &str {
@@ -885,7 +888,7 @@ impl ClientBackend for DemoClient2 {
                 display_name: "🐱 Cat (demo)".to_string(),
                 avatar_url: Some(data::DEMO_CAT_AVATAR.to_string()),
                 presence: PresenceStatus::Online,
-                backend: BackendType::from("demo"),
+                backend: BackendType::from(crate::SLUG),
             },
             last_message: Some(Message {
                 id: "msg-dm-cat-latest".to_string(),
@@ -894,7 +897,7 @@ impl ClientBackend for DemoClient2 {
                     display_name: "🐱 Cat (demo)".to_string(),
                     avatar_url: Some(data::DEMO_CAT_AVATAR.to_string()),
                     presence: PresenceStatus::Online,
-                    backend: BackendType::from("demo"),
+                    backend: BackendType::from(crate::SLUG),
                 },
                 content: MessageContent::Text(
                     "fair! 😹 but you have to admit the feature flag organization is *clean* even if it's stolen from my 2023 design"
@@ -909,7 +912,7 @@ impl ClientBackend for DemoClient2 {
                 preview_image_url: None,
             }),
             unread_count: 1,
-            backend: BackendType::from("demo"),
+            backend: BackendType::from(crate::SLUG),
             account_id: data::DEMO2_ACCOUNT_ID.to_string(),
         });
 
@@ -934,7 +937,7 @@ impl ClientBackend for DemoClient2 {
             user: session.user,
             last_message: None,
             unread_count: 0,
-            backend: BackendType::from("demo"),
+            backend: BackendType::from(crate::SLUG),
             account_id: data::DEMO2_ACCOUNT_ID.to_string(),
         })
     }
@@ -970,7 +973,7 @@ impl ClientBackend for DemoClient2 {
     }
 
     fn backend_type(&self) -> BackendType {
-        BackendType::from("demo")
+        BackendType::from(crate::SLUG)
     }
 
     fn backend_name(&self) -> &str {

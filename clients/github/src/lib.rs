@@ -25,6 +25,9 @@
 //! `gh` binary and pipes stdout/stderr/exit_code back to the WASM frontend,
 //! so the rest of the crate is target-agnostic.
 
+/// The backend slug used in all [`poly_client::BackendType`] constructions for this crate.
+pub const SLUG: &str = "github";
+
 mod api;
 mod mapping;
 pub mod signup;
