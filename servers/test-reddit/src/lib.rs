@@ -45,8 +45,11 @@ pub fn router(state: Arc<RedditState>) -> Router {
             "/subreddits/mine/subscriber/.json",
             get(routes::subreddits_mine_json),
         )
-        // Community search (Discover Communities)
+        // Community search + popular default (Discover Communities)
         .route("/subreddits/search.json", get(routes::subreddits_search))
+        .route("/subreddits/popular.json", get(routes::subreddits_popular))
+        // Per-subreddit deterministic letter SVG (community icons).
+        .route("/sub-icons/{sub_with_ext}", get(routes::sub_icon))
         // Writes.
         .route("/api/subscribe", post(routes::subscribe))
         .route("/api/compose", post(routes::compose))

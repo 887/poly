@@ -105,10 +105,10 @@ pub fn DiscoverCommunitiesView(
     let query_str = query.read().clone();
     let scope_val = *scope.read();
     use_reactive_effect((query_str, scope_val), move |(q, sc)| {
-        if q.trim().is_empty() {
-            load_state.set(LoadState::Idle);
-            return;
-        }
+        // Empty query → fetch the backend's "popular / suggested" list
+        // (Reddit /subreddits/popular.json, Lemmy /api/v3/community/list
+        // sort=Hot). Backend implementations of search_communities
+        // recognise "" and route to the popular endpoint.
         load_state.set(LoadState::Loading);
         let aid = account_id.clone();
         spawn(async move {

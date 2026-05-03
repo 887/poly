@@ -1493,23 +1493,34 @@ impl LemmyHttpClient {
         listing_type: &str,
         cursor: Option<&str>,
     ) -> ClientResult<SearchCommunitiesResponse> {
-        let jwt = self.jwt()?;
         let page = cursor.unwrap_or("1");
-        let url = self.url(&format!(
-            "/api/v3/search?type_=Communities&q={query}&listing_type={listing_type}&limit=50&page={page}"
-        ));
-        let resp = self
-            .http
-            .get(url)
-            .header("User-Agent", self.ua())
-            .bearer_auth(&jwt)
+        // Empty query → Lemmy's "popular / hot" community feed via the
+        // dedicated /community/list endpoint. The response shape is the
+        // same `{communities: [...]}` envelope so callers don't branch.
+        let url = if query.trim().is_empty() {
+            self.url(&format!(
+                "/api/v3/community/list?type_={listing_type}&sort=Hot&limit=50&page={page}"
+            ))
+        } else {
+            self.url(&format!(
+                "/api/v3/search?type_=Communities&q={query}&listing_type={listing_type}&limit=50&page={page}"
+            ))
+        };
+        let mut req = self.http.get(url).header("User-Agent", self.ua());
+        // JWT only when we actually have one — Local / All listings are
+        // public on real Lemmy, so an unauthenticated discover view still
+        // returns useful results.
+        if let Ok(jwt) = self.jwt() {
+            req = req.bearer_auth(&jwt);
+        }
+        let resp = req
             .send()
             .await
             .map_err(|e| ClientError::Network(e.to_string()))?;
 
         if !resp.status().is_success() {
             return Err(ClientError::Network(format!(
-                "GET /api/v3/search?type_=Communities returned HTTP {}",
+                "GET community search returned HTTP {}",
                 resp.status()
             )));
         }

@@ -694,12 +694,25 @@ impl RedditClient {
         query: &str,
         after: Option<&str>,
     ) -> Result<(Vec<SubredditInfo>, Option<String>), RedditError> {
-        let encoded_q = urlencoding_simple(query);
-        let mut path = format!("/subreddits/search.json?q={encoded_q}&limit=25");
-        if let Some(cursor) = after {
-            let encoded_after = urlencoding_simple(cursor);
-            path.push_str(&format!("&after={encoded_after}"));
-        }
+        // Empty query → reddit's "popular" listing (curated by reddit's
+        // algorithm). Real reddit serves this at /subreddits/popular.json;
+        // the test mock mirrors the path.
+        let path = if query.trim().is_empty() {
+            let mut p = "/subreddits/popular.json?limit=25".to_string();
+            if let Some(cursor) = after {
+                let encoded_after = urlencoding_simple(cursor);
+                p.push_str(&format!("&after={encoded_after}"));
+            }
+            p
+        } else {
+            let encoded_q = urlencoding_simple(query);
+            let mut p = format!("/subreddits/search.json?q={encoded_q}&limit=25");
+            if let Some(cursor) = after {
+                let encoded_after = urlencoding_simple(cursor);
+                p.push_str(&format!("&after={encoded_after}"));
+            }
+            p
+        };
         let url = self.resolve_url(&path);
         let resp = self.with_session_cookie(self.http.get(&url)).send().await?;
         if !resp.status().is_success() {

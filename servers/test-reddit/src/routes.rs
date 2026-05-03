@@ -255,16 +255,11 @@ pub async fn subreddits_mine_json(
         .iter()
         .enumerate()
         .map(|(i, sub)| {
-            // Map test subs to existing animal avatars so the icon path
-            // resolves to a real PNG via test-common::avatars::serve_animal.
-            // r/rust → cat, r/programming → dog, anything else → koala
-            // (deterministic visual so the UI smoke test can sanity-check
-            // icons render).
-            let animal = match sub.as_str() {
-                "rust" => "cat",
-                "programming" => "dog",
-                _ => "koala",
-            };
+            // Real reddit serves community_icon from styles.redditmedia.com;
+            // the mock returns a deterministic colored letter SVG generated
+            // by `/sub-icons/<sub>.svg` so the UI sees per-sub variety
+            // without hijacking the user-avatar set (cat/dog belong to
+            // /u/cat and /u/dog).
             json!({
                 "kind": "t5",
                 "data": {
@@ -274,8 +269,8 @@ pub async fn subreddits_mine_json(
                     "title": sub,
                     "subscribers": 1234,
                     "user_is_subscriber": true,
-                    "community_icon": format!("http://127.0.0.1:9108/avatars/{animal}"),
-                    "icon_img": format!("http://127.0.0.1:9108/avatars/{animal}"),
+                    "community_icon": format!("http://127.0.0.1:9108/sub-icons/{sub}.svg"),
+                    "icon_img": format!("http://127.0.0.1:9108/sub-icons/{sub}.svg"),
                 }
             })
         })
@@ -355,9 +350,10 @@ pub async fn subreddits_search(
             all_subs.insert(sub.clone());
         }
     }
-    // Always include the fixture subreddits so there's something to search.
-    for builtin in ["rust", "programming", "askreddit", "worldnews"] {
-        all_subs.insert(builtin.to_string());
+    // Always include the fixture subreddits + a curated "popular" set so
+    // empty-query "popular feed" lookups always return something useful.
+    for builtin in POPULAR_SUBS {
+        all_subs.insert((*builtin).to_string());
     }
 
     let all_subs_sorted: Vec<String> = {
@@ -371,27 +367,7 @@ pub async fn subreddits_search(
         .filter(|sub| keyword.is_empty() || sub.to_lowercase().contains(&keyword))
         .take(limit)
         .enumerate()
-        .map(|(i, sub)| {
-            let animal = match sub.as_str() {
-                "rust" => "cat",
-                "programming" => "dog",
-                _ => "koala",
-            };
-            json!({
-                "kind": "t5",
-                "data": {
-                    "name": format!("t5_srch{i}"),
-                    "display_name": sub,
-                    "display_name_prefixed": format!("r/{sub}"),
-                    "title": sub,
-                    "subscribers": 5000,
-                    "user_is_subscriber": false,
-                    "community_icon": format!("http://127.0.0.1:9108/avatars/{animal}"),
-                    "icon_img": format!("http://127.0.0.1:9108/avatars/{animal}"),
-                    "public_description": format!("The {sub} subreddit."),
-                }
-            })
-        })
+        .map(|(i, sub)| build_subreddit_listing_entry(i, sub, "srch", false))
         .collect();
 
     let dist = i64::try_from(children.len()).unwrap_or(0);
@@ -404,6 +380,93 @@ pub async fn subreddits_search(
             "children": children,
         }
     }))
+}
+
+/// Static seed list of popular subreddits used by `subreddits_search`
+/// (so an empty query is non-empty) and by `subreddits_popular`.
+pub const POPULAR_SUBS: &[&str] = &[
+    "rust",
+    "programming",
+    "askreddit",
+    "worldnews",
+    "science",
+    "technology",
+    "todayilearned",
+    "showerthoughts",
+    "explainlikeimfive",
+    "movies",
+    "gaming",
+    "books",
+    "music",
+    "personalfinance",
+    "lifeprotips",
+    "linux",
+    "rust_gamedev",
+    "selfhosted",
+    "futurology",
+    "dataisbeautiful",
+];
+
+fn build_subreddit_listing_entry(idx: usize, sub: &str, kind_prefix: &str, subscriber: bool) -> Value {
+    json!({
+        "kind": "t5",
+        "data": {
+            "name": format!("t5_{kind_prefix}{idx}"),
+            "display_name": sub,
+            "display_name_prefixed": format!("r/{sub}"),
+            "title": sub,
+            "subscribers": 5000,
+            "user_is_subscriber": subscriber,
+            "community_icon": format!("http://127.0.0.1:9108/sub-icons/{sub}.svg"),
+            "icon_img": format!("http://127.0.0.1:9108/sub-icons/{sub}.svg"),
+            "public_description": format!("The {sub} subreddit."),
+        }
+    })
+}
+
+/// `GET /subreddits/popular.json` — Reddit's "popular subreddits" endpoint.
+/// Returns a curated `POPULAR_SUBS` list. Real Reddit cursor-paginates via
+/// `after`; the mock returns the whole list in one response with `after: null`.
+pub async fn subreddits_popular(
+    State(_state): State<Arc<RedditState>>,
+) -> Response {
+    let children: Vec<Value> = POPULAR_SUBS
+        .iter()
+        .enumerate()
+        .map(|(i, sub)| build_subreddit_listing_entry(i, sub, "pop", false))
+        .collect();
+    let dist = i64::try_from(children.len()).unwrap_or(0);
+    json_resp(json!({
+        "kind": "Listing",
+        "data": {
+            "after": null,
+            "dist": dist,
+            "modhash": "MODHASH_TEST",
+            "children": children,
+        }
+    }))
+}
+
+/// `GET /sub-icons/<sub>.svg` — deterministic-pastel letter SVG for the
+/// requested subreddit name. Used in place of hijacking the user-avatar
+/// set; first letter of the sub name on a hue-rotated background.
+pub async fn sub_icon(Path(sub_with_ext): Path<String>) -> Response {
+    let sub = sub_with_ext.strip_suffix(".svg").unwrap_or(&sub_with_ext);
+    let letter = sub.chars().next().unwrap_or('r').to_ascii_uppercase();
+    // Stable hash → hue so r/rust always renders the same color.
+    let hue: u32 = sub.bytes().fold(0u32, |a, b| a.wrapping_add(u32::from(b))) % 360;
+    let bg = format!("hsl({hue}, 60%, 45%)");
+    let svg = format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <circle cx="32" cy="32" r="32" fill="{bg}"/>
+  <text x="32" y="40" text-anchor="middle" font-family="-apple-system,Segoe UI,Roboto,sans-serif"
+        font-size="32" font-weight="600" fill="white">{letter}</text>
+</svg>"#
+    );
+    Response::builder()
+        .header(header::CONTENT_TYPE, "image/svg+xml")
+        .body(svg.into())
+        .unwrap_or_else(|_| (StatusCode::INTERNAL_SERVER_ERROR, "svg build").into_response())
 }
 
 // ── POST handlers ───────────────────────────────────────────────────────────
