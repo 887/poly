@@ -187,6 +187,10 @@ pub(crate) fn from_wit_backend_capabilities(c: wit::BackendCapabilities) -> pc::
         has_timed_ban: false,
         has_channel_mgmt: false,
         has_moderation_log: false,
+        // WASM plugins don't yet declare community-search or comment-feed
+        // capability via WIT; default both off conservatively.
+        community_search: pc::CommunitySearchSupport::None,
+        supports_comment_feed: false,
     }
 }
 

@@ -1308,8 +1308,54 @@ impl ClientBackend for LemmyClient {
             has_timed_ban: true,
             has_channel_mgmt: false,
             has_moderation_log: true,
+            community_search: CommunitySearchSupport::SubscribedLocalAll,
+            // Phase D — Posts | Comments toggle.
+            supports_comment_feed: true,
             ..BackendCapabilities::MESSAGING_NO_SOCIAL
         }
+    }
+
+    async fn search_communities(
+        &self,
+        query: &str,
+        scope: CommunityScope,
+        cursor: Option<String>,
+    ) -> ClientResult<CommunityPage> {
+        let listing_type = match scope {
+            CommunityScope::Subscribed => "Subscribed",
+            CommunityScope::Local => "Local",
+            CommunityScope::All => "All",
+        };
+        let session = self.http.session().ok_or_else(|| {
+            ClientError::AuthFailed("Lemmy: not authenticated".to_string())
+        })?;
+        let account_id = session.user_id.to_string();
+        let account_display_name = session.user_display_name.clone();
+        let resp = self.http.search_communities(
+            query,
+            listing_type,
+            cursor.as_deref(),
+        ).await?;
+
+        // Lemmy returns exactly `limit` items (50) when a full page exists.
+        // Next page cursor is the 1-based page number incremented as a string.
+        let current_page: u32 = cursor
+            .as_deref()
+            .and_then(|c| c.parse().ok())
+            .unwrap_or(1u32);
+        let next_cursor = if resp.communities.len() == 50 {
+            Some((current_page + 1).to_string())
+        } else {
+            None
+        };
+
+        let items = resp
+            .communities
+            .iter()
+            .map(|view| map_community_to_server(view, &account_id, &account_display_name))
+            .collect();
+
+        Ok(CommunityPage { items, next_cursor })
     }
 
     fn get_signup_method(&self, server_url: Option<&str>) -> SignupMethod {
@@ -1337,5 +1383,35 @@ impl ClientBackend for LemmyClient {
         }
         self.http.set_user_agent(new_ua);
         Ok(())
+    }
+
+    // ── Phase D — Posts / Comments toggle ────────────────────────────────────
+
+    /// Return recent comments across a Lemmy community (Phase D).
+    ///
+    /// `channel_id` must be a `lemmy-feed-{community_id}` channel. Returns up
+    /// to `query.limit` (default 50) comments sorted by newest first, each
+    /// mapped to a `Message` via `map_comment_to_message`.
+    async fn get_recent_comments(
+        &self,
+        channel_id: &str,
+        query: MessageQuery,
+    ) -> ClientResult<Vec<Message>> {
+        let community_id = Self::parse_feed_channel(channel_id).ok_or_else(|| {
+            ClientError::NotFound(format!(
+                "get_recent_comments: expected lemmy-feed-<id>, got: {channel_id}"
+            ))
+        })?;
+
+        let limit = query.limit.unwrap_or(50).min(200);
+        let resp = self.http.fetch_community_comments(community_id, limit).await?;
+
+        let messages: Vec<Message> = resp
+            .comments
+            .iter()
+            .map(|view| map_comment_to_message(view))
+            .collect();
+
+        Ok(messages)
     }
 }

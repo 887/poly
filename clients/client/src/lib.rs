@@ -661,6 +661,28 @@ pub trait ClientBackend: Send + Sync {
         Err(ClientError::NotSupported("update_server_banner".to_string()))
     }
 
+    // --- Discover Communities (Phase E) ---
+
+    /// Search for communities / subreddits matching `query`.
+    ///
+    /// `scope` is only meaningful for backends with
+    /// [`CommunitySearchSupport::SubscribedLocalAll`] (Lemmy). Reddit ignores
+    /// the scope and always searches across all of Reddit. `cursor` is the
+    /// opaque pagination token returned by the previous call's
+    /// `CommunityPage::next_cursor`; pass `None` for the first page.
+    ///
+    /// Default impl returns [`ClientError::NotSupported`]; Lemmy and Reddit
+    /// override this.
+    async fn search_communities(
+        &self,
+        query: &str,
+        scope: CommunityScope,
+        cursor: Option<String>,
+    ) -> ClientResult<CommunityPage> {
+        let _ = (query, scope, cursor);
+        Err(ClientError::NotSupported("search_communities".to_string()))
+    }
+
     // --- Real-time events ---
 
     /// Get a stream of real-time events from the backend.
@@ -976,6 +998,31 @@ pub trait ClientBackend: Send + Sync {
         channel_id: &str,
         message_id: &str,
     ) -> ClientResult<ActionOutcome>;
+
+    // --- Phase D — Posts / Comments toggle --------------------------------
+
+    /// Fetch recent comments across a community (Phase D).
+    ///
+    /// `channel_id` is the feed channel for the community (e.g. for Lemmy,
+    /// `lemmy-feed-{community_id}`). Returns up to `query.limit` (default 50)
+    /// of the most recently-posted comments across all posts in the community,
+    /// mapped to `Message` values so the existing comment-rendering path in
+    /// `ForumPostView` can display them without changes.
+    ///
+    /// `query.limit` caps the number returned. Other `MessageQuery` fields
+    /// (`before`, `after`, `around`) are forwarded to the backend where the
+    /// backend's API supports them.
+    ///
+    /// Default returns `Err(ClientError::NotSupported(...))`. Backends that set
+    /// `BackendCapabilities::supports_comment_feed = true` MUST implement this.
+    async fn get_recent_comments(
+        &self,
+        channel_id: &str,
+        query: MessageQuery,
+    ) -> ClientResult<Vec<Message>> {
+        let _ = (channel_id, query);
+        Err(ClientError::NotSupported("get_recent_comments".to_string()))
+    }
 }
 
 // ── Signup plugin interface ──────────────────────────────────────────────────

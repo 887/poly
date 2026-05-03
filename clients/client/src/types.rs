@@ -92,6 +92,8 @@ pub fn capabilities_for_slug(slug: &str) -> BackendCapabilities {
             has_ban: true,
             has_timed_ban: true,
             has_moderation_log: true,
+            community_search: crate::ui_surface::CommunitySearchSupport::SubscribedLocalAll,
+            supports_comment_feed: true,
             ..BackendCapabilities::MESSAGING_NO_SOCIAL
         },
         "reddit" => BackendCapabilities {
@@ -99,6 +101,7 @@ pub fn capabilities_for_slug(slug: &str) -> BackendCapabilities {
             // surface (mod actions live behind the modtools UI which we
             // don't scrape). Leave moderation flags off; treat reddit as
             // a forum + DMs backend.
+            community_search: crate::ui_surface::CommunitySearchSupport::Single,
             ..BackendCapabilities::MESSAGING_NO_SOCIAL
         },
         "matrix" => BackendCapabilities {
@@ -763,6 +766,33 @@ pub struct BackendCapabilities {
     /// Gates the Mod Log tab in server settings.
     #[serde(default)]
     pub has_moderation_log: bool,
+
+    // ── Discover Communities (Phase E) ─────────────────────────────────────
+
+    /// Whether and how the backend supports community search.
+    ///
+    /// `None` (default) hides the "Discover" button in Bar 1.
+    /// `Single` shows a search-only view (Reddit: one scope).
+    /// `SubscribedLocalAll` shows tabbed Subscribed/Local/All + search (Lemmy).
+    ///
+    /// `#[serde(default)]` keeps older WASM plugin capability blobs valid —
+    /// they get `CommunitySearchSupport::None` on deserialisation.
+    #[serde(default)]
+    pub community_search: crate::ui_surface::CommunitySearchSupport,
+
+    // ── Phase D — Posts / Comments toggle ─────────────────────────────────
+
+    /// Whether the backend supports a community-level recent-comments feed
+    /// (Phase D — Posts | Comments toggle in the forum view).
+    ///
+    /// When `true`, `ForumView` renders the Posts | Comments pill; clicking
+    /// "Comments" calls `ClientBackend::get_recent_comments` instead of the
+    /// normal post feed. Currently only Lemmy sets this to `true`.
+    ///
+    /// `#[serde(default)]` keeps older WASM plugin capability blobs valid —
+    /// they get `false` on deserialisation.
+    #[serde(default)]
+    pub supports_comment_feed: bool,
 }
 
 impl BackendCapabilities {
@@ -781,6 +811,8 @@ impl BackendCapabilities {
         has_timed_ban: false,
         has_channel_mgmt: false,
         has_moderation_log: false,
+        community_search: crate::ui_surface::CommunitySearchSupport::None,
+        supports_comment_feed: false,
     };
 
     /// Forum-style messaging with an inbox but no friends / DMs / voice (Lemmy).
@@ -798,6 +830,8 @@ impl BackendCapabilities {
         has_timed_ban: false,
         has_channel_mgmt: false,
         has_moderation_log: false,
+        community_search: crate::ui_surface::CommunitySearchSupport::None,
+        supports_comment_feed: false,
     };
 
     /// `true` if this backend should render with the forum-style UI layout:
@@ -869,7 +903,15 @@ impl BackendCapabilities {
         has_timed_ban: false,
         has_channel_mgmt: false,
         has_moderation_log: false,
+        community_search: crate::ui_surface::CommunitySearchSupport::None,
+        supports_comment_feed: false,
     };
+
+    /// `true` if the Discover Communities button should be shown.
+    #[must_use]
+    pub const fn should_show_discover(&self) -> bool {
+        !matches!(self.community_search, crate::ui_surface::CommunitySearchSupport::None)
+    }
 
     // ── Moderation capability predicates ──────────────────────────────────
 

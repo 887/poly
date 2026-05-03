@@ -758,8 +758,42 @@ impl ClientBackend for RedditBackend {
 
     fn backend_capabilities(&self) -> BackendCapabilities {
         BackendCapabilities {
+            community_search: CommunitySearchSupport::Single,
             ..BackendCapabilities::MESSAGING_NO_SOCIAL
         }
+    }
+
+    async fn search_communities(
+        &self,
+        query: &str,
+        _scope: CommunityScope,
+        cursor: Option<String>,
+    ) -> ClientResult<CommunityPage> {
+        // Reddit's subreddit search ignores scope — there is only one
+        // global scope. `cursor` is Reddit's `after` fullname string.
+        let (subs, next_after) = self
+            .client
+            .search_subreddits(query, cursor.as_deref())
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+
+        let bt = Self::backend_type();
+        let account_id = self.account_id().to_string();
+        let account_display_name = self.account_display_name().to_string();
+
+        let items = subs
+            .iter()
+            .map(|sub| {
+                let mut server =
+                    build_sub_server(&sub.name, &account_id, &account_display_name, &bt);
+                if let Some(url) = &sub.icon_url {
+                    server.icon_url = Some(url.clone());
+                }
+                server
+            })
+            .collect();
+
+        Ok(CommunityPage { items, next_cursor: next_after })
     }
 
     fn plugin_manifest(&self) -> PluginManifest {

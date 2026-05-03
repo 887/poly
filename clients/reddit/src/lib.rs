@@ -644,6 +644,88 @@ impl RedditClient {
         }
         Ok(())
     }
+
+    /// Search subreddits via `/subreddits/search.json?q={query}&limit=25[&after={cursor}]`.
+    ///
+    /// Returns `(results, next_after_cursor)` where the cursor is Reddit's
+    /// `after` string (e.g. `"t5_2qh0u"`) or `None` when no more pages exist.
+    ///
+    /// # Errors
+    ///
+    /// `RedditError::Status` for HTTP non-2xx.
+    pub async fn search_subreddits(
+        &self,
+        query: &str,
+        after: Option<&str>,
+    ) -> Result<(Vec<SubredditInfo>, Option<String>), RedditError> {
+        let mut url = format!(
+            "{}/subreddits/search.json?q={}&limit=25",
+            self.base_url.trim_end_matches('/'),
+            urlencoding_simple(query),
+        );
+        if let Some(a) = after {
+            url.push_str("&after=");
+            url.push_str(a);
+        }
+
+        let resp = self.with_session_cookie(self.http.get(&url)).send().await?;
+        if !resp.status().is_success() {
+            return Err(RedditError::Status(resp.status().as_u16()));
+        }
+
+        let body: serde_json::Value = resp.json().await?;
+        let data = body.get("data").cloned().unwrap_or_default();
+        let next_after = data
+            .get("after")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .map(str::to_string);
+
+        let children = data
+            .get("children")
+            .and_then(|c| c.as_array())
+            .cloned()
+            .unwrap_or_default();
+
+        let subs = children
+            .iter()
+            .filter_map(|c| {
+                let d = c.get("data")?;
+                let name = d.get("display_name").and_then(|n| n.as_str())?;
+                let icon_url = ["community_icon", "icon_img"]
+                    .iter()
+                    .find_map(|field| {
+                        d.get(*field)
+                            .and_then(|v| v.as_str())
+                            .filter(|s| !s.is_empty())
+                            .map(|s| s.replace("&amp;", "&"))
+                    });
+                Some(SubredditInfo { name: name.to_string(), icon_url })
+            })
+            .collect();
+
+        Ok((subs, next_after))
+    }
+}
+
+/// Minimal percent-encoder for URL query values.
+///
+/// Replaces space with `+` and encodes `&`, `?`, `#`, `%` which could
+/// break the query string. Uses `+` (not `%20`) because `old.reddit.com`
+/// accepts both and `+` is shorter.
+fn urlencoding_simple(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            ' ' => out.push('+'),
+            '&' => out.push_str("%26"),
+            '?' => out.push_str("%3F"),
+            '#' => out.push_str("%23"),
+            '%' => out.push_str("%25"),
+            other => out.push(other),
+        }
+    }
+    out
 }
 
 #[cfg(all(test, feature = "native"))]

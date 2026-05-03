@@ -101,6 +101,21 @@ impl MemberListSortOrder {
     }
 }
 
+/// Which feed the forum view shows — posts or recent comments.
+///
+/// Stored in `AppState.view_filter`; toggled by the Posts | Comments pill
+/// in `ForumView`. Only meaningful for backends where
+/// `BackendCapabilities::supports_comment_feed` is `true` (currently Lemmy).
+/// All other backends ignore this field and always render posts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum PostsOrComments {
+    /// Show the post feed (default).
+    #[default]
+    Posts,
+    /// Show the recent-comments feed.
+    Comments,
+}
+
 /// Global shell layout mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum LayoutMode {
@@ -605,6 +620,12 @@ pub struct AppState {
     /// Updated by the toggle buttons in `OverviewSidebar`. Read by the
     /// account overview body to filter which categories of cards render.
     pub overview_scope: String,
+    /// Whether the forum view shows posts or recent comments (Phase D).
+    ///
+    /// Toggled by the Posts | Comments pill in `ForumView`. Only meaningful
+    /// when the active backend's `BackendCapabilities::supports_comment_feed`
+    /// is `true`; all other backends always show posts.
+    pub view_filter: PostsOrComments,
 }
 
 impl Default for AppState {
@@ -634,6 +655,7 @@ impl Default for AppState {
             active_moderation_dialog: None,
             forum_scope: "subscribed".to_string(),
             overview_scope: "servers".to_string(),
+            view_filter: PostsOrComments::Posts,
         }
     }
 }

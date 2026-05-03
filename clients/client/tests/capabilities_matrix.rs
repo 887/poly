@@ -15,6 +15,7 @@
 use poly_client::{
     BackendCapabilities, DmSupport, FriendModel, MessagingModel,
     NotificationSupport, VoiceSupport, capabilities_for_slug,
+    CommunitySearchSupport,
 };
 
 fn expected(slug: &str) -> BackendCapabilities {
@@ -29,6 +30,8 @@ fn expected(slug: &str) -> BackendCapabilities {
             has_ban: true,
             has_timed_ban: true,
             has_moderation_log: true,
+            community_search: CommunitySearchSupport::SubscribedLocalAll,
+            supports_comment_feed: true,
             ..BackendCapabilities::MESSAGING_NO_SOCIAL
         },
         "matrix" => BackendCapabilities {

@@ -587,6 +587,57 @@ pub struct ComposerButton {
     pub position: ComposerSlot,
 }
 
+// ─── Discover Communities (Phase E) ────────────────────────────────
+
+/// E.1 — Whether this backend supports community search and to what degree.
+///
+/// Drives the "Discover" button visibility in Bar 1 and the scope-tab
+/// rendering in `DiscoverCommunitiesView`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum CommunitySearchSupport {
+    /// Backend has no community search (default for all backends).
+    #[default]
+    None,
+    /// Backend supports keyword search returning a single scope of results
+    /// (e.g. Reddit: search across all of Reddit, no Subscribed/Local/All tabs).
+    Single,
+    /// Backend supports three-scope search: Subscribed, Local, and All
+    /// (e.g. Lemmy: tabs mirror the Lemmy API's `listing_type` parameter).
+    SubscribedLocalAll,
+}
+
+/// E.1 — Which scope to search communities within.
+///
+/// Maps 1-to-1 onto Lemmy's `listing_type` query parameter for
+/// `search_communities`. For Reddit, only `All` is meaningful; the
+/// backend ignores the scope field.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum CommunityScope {
+    /// Only the user's subscribed communities / subreddits.
+    Subscribed,
+    /// Communities on the local instance (Lemmy only).
+    Local,
+    /// All communities/subreddits, federated or otherwise.
+    #[default]
+    All,
+}
+
+/// E.2 — One page of community search results plus an optional cursor for
+/// the next page.
+///
+/// `items` contains at most `limit` (backend-defined) `Server` entries.
+/// When `next_cursor` is `Some`, the caller may pass it back to
+/// `search_communities` to fetch the next page.
+///
+/// The `Server` type from `crate::types` is intentionally not repeated
+/// in-line here — callers use `poly_client::CommunityPage` which is
+/// re-exported from the crate root.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CommunityPage {
+    pub items: Vec<crate::Server>,
+    pub next_cursor: Option<String>,
+}
+
 // ─── WP 1 unit tests ───────────────────────────────────────────────
 
 #[cfg(test)]

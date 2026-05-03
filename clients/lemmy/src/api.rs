@@ -145,6 +145,16 @@ pub struct CommunityListResponse {
     pub communities: Vec<CommunityView>,
 }
 
+/// Response from `GET /api/v3/search?type_=Communities` (Phase E).
+///
+/// The search endpoint wraps results under a `communities` key just like
+/// the community-list endpoint. We define a separate type so callers can
+/// distinguish the two response shapes if Lemmy ever diverges.
+#[derive(Debug, Clone, Deserialize)]
+pub struct SearchCommunitiesResponse {
+    pub communities: Vec<CommunityView>,
+}
+
 /// Post counts sub-object.
 #[derive(Debug, Clone, Deserialize)]
 pub struct PostCounts {
@@ -1101,6 +1111,38 @@ impl LemmyHttpClient {
             .map_err(|e| ClientError::Network(e.to_string()))
     }
 
+    /// `GET /api/v3/comment/list?community_id={id}&sort=New&limit={limit}` —
+    /// recent comments across ALL posts in a community (Phase D feed toggle).
+    pub async fn fetch_community_comments(
+        &self,
+        community_id: i64,
+        limit: u32,
+    ) -> ClientResult<CommentListResponse> {
+        let jwt = self.jwt()?;
+        let url = self.url(&format!(
+            "/api/v3/comment/list?community_id={community_id}&sort=New&limit={limit}&type_=All"
+        ));
+        let resp = self
+            .http
+            .get(url)
+            .header("User-Agent", self.ua())
+            .bearer_auth(&jwt)
+            .send()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+
+        if !resp.status().is_success() {
+            return Err(ClientError::Network(format!(
+                "GET /api/v3/comment/list (community) returned HTTP {}",
+                resp.status()
+            )));
+        }
+
+        resp.json::<CommentListResponse>()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))
+    }
+
     /// `GET /api/v3/comment/list?post_id={id}&sort=Hot&limit=50`
     pub async fn fetch_comments(&self, post_id: i64) -> ClientResult<CommentListResponse> {
         let jwt = self.jwt()?;
@@ -1436,6 +1478,44 @@ impl LemmyHttpClient {
         resp.json::<EditCommunityResponse>()
             .await
             .map(|r| r.community_view)
+            .map_err(|e| ClientError::Network(e.to_string()))
+    }
+
+    /// `GET /api/v3/search?type_=Communities&q={query}&listing_type={scope}&limit=50[&page={page}]`
+    ///
+    /// Maps Lemmy's search endpoint to a `Vec<CommunityView>`. `scope` is one of
+    /// `"Subscribed"`, `"Local"`, or `"All"` (Lemmy's `listing_type` values).
+    /// `cursor` is an opaque page-number string (`"2"`, `"3"`, …); pass `None`
+    /// for the first page.
+    pub async fn search_communities(
+        &self,
+        query: &str,
+        listing_type: &str,
+        cursor: Option<&str>,
+    ) -> ClientResult<SearchCommunitiesResponse> {
+        let jwt = self.jwt()?;
+        let page = cursor.unwrap_or("1");
+        let url = self.url(&format!(
+            "/api/v3/search?type_=Communities&q={query}&listing_type={listing_type}&limit=50&page={page}"
+        ));
+        let resp = self
+            .http
+            .get(url)
+            .header("User-Agent", self.ua())
+            .bearer_auth(&jwt)
+            .send()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+
+        if !resp.status().is_success() {
+            return Err(ClientError::Network(format!(
+                "GET /api/v3/search?type_=Communities returned HTTP {}",
+                resp.status()
+            )));
+        }
+
+        resp.json::<SearchCommunitiesResponse>()
+            .await
             .map_err(|e| ClientError::Network(e.to_string()))
     }
 }
