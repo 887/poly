@@ -323,6 +323,91 @@ pub async fn avatar(Path(animal): Path<String>) -> Response {
     poly_test_common::avatars::serve_animal(&animal)
 }
 
+// ── Subreddit search ────────────────────────────────────────────────────────
+
+#[derive(Debug, Deserialize, Default)]
+pub struct SubredditSearchQuery {
+    pub q: Option<String>,
+    pub limit: Option<usize>,
+    pub after: Option<String>,
+}
+
+/// `GET /subreddits/search.json` — search subreddits by keyword.
+///
+/// Returns a standard Reddit Listing JSON with matching subreddits.
+/// Matches against the seeded subreddit names. The `after` cursor mirrors
+/// Reddit's pagination token; the test server ignores it (tiny fixture set).
+pub async fn subreddits_search(
+    State(state): State<Arc<RedditState>>,
+    Query(q): Query<SubredditSearchQuery>,
+) -> Response {
+    let keyword = q
+        .q
+        .as_deref()
+        .unwrap_or_default()
+        .to_lowercase();
+    let limit = q.limit.unwrap_or(25);
+
+    // Collect all known subreddit names across subscriptions.
+    let mut all_subs: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for entry in state.subscriptions.iter() {
+        for sub in entry.value().iter() {
+            all_subs.insert(sub.clone());
+        }
+    }
+    // Always include the fixture subreddits so there's something to search.
+    for builtin in ["rust", "programming", "askreddit", "worldnews"] {
+        all_subs.insert(builtin.to_string());
+    }
+
+    let mut matching: Vec<&'static str> = Vec::new();
+    let all_subs_sorted: Vec<String> = {
+        let mut v: Vec<String> = all_subs.into_iter().collect();
+        v.sort();
+        v
+    };
+
+    let children: Vec<Value> = all_subs_sorted
+        .iter()
+        .filter(|sub| keyword.is_empty() || sub.to_lowercase().contains(&keyword))
+        .take(limit)
+        .enumerate()
+        .map(|(i, sub)| {
+            let animal = match sub.as_str() {
+                "rust" => "cat",
+                "programming" => "dog",
+                _ => "koala",
+            };
+            let _ = &matching;
+            json!({
+                "kind": "t5",
+                "data": {
+                    "name": format!("t5_srch{i}"),
+                    "display_name": sub,
+                    "display_name_prefixed": format!("r/{sub}"),
+                    "title": sub,
+                    "subscribers": 5000,
+                    "user_is_subscriber": false,
+                    "community_icon": format!("http://127.0.0.1:9108/avatars/{animal}"),
+                    "icon_img": format!("http://127.0.0.1:9108/avatars/{animal}"),
+                    "public_description": format!("The {sub} subreddit."),
+                }
+            })
+        })
+        .collect();
+
+    let dist = i64::try_from(children.len()).unwrap_or(0);
+    json_resp(json!({
+        "kind": "Listing",
+        "data": {
+            "after": null,
+            "dist": dist,
+            "modhash": "MODHASH_TEST",
+            "children": children,
+        }
+    }))
+}
+
 // ── POST handlers ───────────────────────────────────────────────────────────
 
 #[derive(Debug, Deserialize)]

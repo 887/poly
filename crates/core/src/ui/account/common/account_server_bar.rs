@@ -157,6 +157,7 @@ pub fn AccountServerBar() -> Element {
     let show_dms = caps.should_show_dms();
     let show_friends = caps.should_show_friends();
     let show_notifs = caps.should_show_notifications();
+    let show_discover = caps.should_show_discover();
 
     // Forum-layout backends (Lemmy) store subscribed communities as servers in
     // `chat_data.servers`, populated at login/restore time. If the list is empty
@@ -273,6 +274,16 @@ pub fn AccountServerBar() -> Element {
             // Notifications button — account-scoped
             if show_notifs {
                 AccountBarNotifsButton { current_view, notif_count }
+            }
+
+            // Discover Communities button — only for backends with community_search support
+            if show_discover {
+                AccountBarDiscoverButton {
+                    current_view,
+                    backend_slug: backend_slug.clone(),
+                    instance_id: instance_id.clone(),
+                    account_id: account_id.clone(),
+                }
             }
 
             // Separator
@@ -717,6 +728,50 @@ fn AccountBarNotifsButton(current_view: View, notif_count: usize) -> Element {
             }
             SidebarTooltip {
                 line1: t("nav-notifications"),
+                line2: None,
+                line3: None,
+            }
+        }
+    }
+}
+
+/// Discover Communities button — navigates to the Discover route.
+///
+/// Only rendered when `caps.should_show_discover()` is true (Lemmy, Reddit).
+#[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
+#[component]
+fn AccountBarDiscoverButton(
+    current_view: View,
+    backend_slug: String,
+    instance_id: String,
+    account_id: String,
+) -> Element {
+    let chat_data: BatchedSignal<ChatData> = use_context();
+    rsx! {
+        div {
+            class: if current_view == View::DiscoverCommunities { "server-icon active" } else { "server-icon" },
+            onclick: move |_| {
+                if current_view == View::DiscoverCommunities {
+                    return;
+                }
+                chat_data.batch(|cd| {
+                    cd.current_server = None;
+                    cd.current_channel = None;
+                    cd.channels.clear();
+                    cd.messages.clear();
+                    cd.members.clear();
+                });
+                crate::nav!(Route::DiscoverRoute {
+                    backend: backend_slug.clone(),
+                    instance_id: instance_id.clone(),
+                    account_id: account_id.clone(),
+                });
+            },
+            div { class: "icon-discover", "🔍" }
+            SidebarTooltip {
+                line1: t("nav-discover"),
                 line2: None,
                 line3: None,
             }

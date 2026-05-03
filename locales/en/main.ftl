@@ -30,6 +30,7 @@ nav-search = Search
 nav-servers = Servers
 nav-demo = Toggle Demo Client
 nav-demo-active = Demo Client Active
+nav-discover = Discover Communities
 
 # Setup Wizard
 setup-welcome-title = Welcome to Poly
@@ -721,7 +722,20 @@ feature-unsupported-dms = { $backend } doesn't support direct messages.
 feature-unsupported-notifications = { $backend } doesn't expose a notification inbox.
 feature-unsupported-create-server = { $backend } doesn't support creating servers from Poly.
 feature-unsupported-voice = { $backend } doesn't support voice channels.
+feature-unsupported-discover = { $backend } doesn't support community discovery.
 feature-unsupported-redirecting = Redirecting you back…
+
+# Phase E — Discover Communities view
+ui-discover-title = Discover Communities
+ui-discover-search-placeholder = Search communities…
+ui-discover-tab-subscribed = Subscribed
+ui-discover-tab-local = Local
+ui-discover-tab-all = All
+ui-discover-action-open = Open
+ui-discover-loading = Loading…
+ui-discover-no-results = No communities found. Try a different search term.
+ui-discover-error-no-backend = Backend not available — try signing in again.
+ui-discover-error-timeout = Request timed out. Check your connection.
 
 # WP-6 — per-plugin container terminology
 term-container-server = Server

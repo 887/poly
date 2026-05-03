@@ -74,7 +74,7 @@ use dioxus::prelude::*;
 pub fn use_reactive_effect<Deps, F>(deps: Deps, body: F)
 where
     Deps: PartialEq + Clone + 'static,
-    F: Fn(Deps) + 'static,
+    F: FnMut(Deps) + 'static,
 {
     // Mirror `deps` into a Signal each render. Dioxus signals dedupe by
     // PartialEq so same-value writes are no-ops; different-value writes
@@ -84,6 +84,7 @@ where
     if deps_sig.peek().as_ref() != Some(&deps) {
         deps_sig.set(Some(deps.clone()));
     }
+    let mut body = body;
     use_effect(move || {
         // Subscribe to deps_sig so the effect re-fires on deps change.
         // Clone before calling body — the read guard must be dropped

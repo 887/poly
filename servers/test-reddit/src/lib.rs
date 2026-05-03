@@ -45,6 +45,8 @@ pub fn router(state: Arc<RedditState>) -> Router {
             "/subreddits/mine/subscriber/.json",
             get(routes::subreddits_mine_json),
         )
+        // Community search (Discover Communities)
+        .route("/subreddits/search.json", get(routes::subreddits_search))
         // Writes.
         .route("/api/subscribe", post(routes::subscribe))
         .route("/api/compose", post(routes::compose))

@@ -808,6 +808,7 @@ impl ClientBackend for RedditBackend {
 
     fn backend_capabilities(&self) -> BackendCapabilities {
         BackendCapabilities {
+            community_search: poly_client::CommunitySearchSupport::Single,
             ..BackendCapabilities::MESSAGING_NO_SOCIAL
         }
     }
@@ -1295,5 +1296,40 @@ impl ClientBackend for RedditBackend {
         Err(ClientError::NotFound(format!(
             "unknown message action: {action_id}"
         )))
+    }
+
+    // ── Phase E: community search ─────────────────────────────────────────────
+
+    async fn search_communities(
+        &self,
+        query: &str,
+        _scope: poly_client::CommunityScope,
+        cursor: Option<String>,
+    ) -> poly_client::ClientResult<poly_client::CommunityPage> {
+        let (subs, next_after) = self
+            .client
+            .search_subreddits(query, cursor.as_deref())
+            .await
+            .map_err(ClientError::from)?;
+
+        let account_id = self.account_id().to_string();
+        let account_display_name = self.account_display_name().to_string();
+        let bt = Self::backend_type();
+
+        let items = subs
+            .into_iter()
+            .map(|sub| {
+                let mut server = build_sub_server(&sub.name, &account_id, &account_display_name, &bt);
+                if let Some(url) = sub.icon_url {
+                    server.icon_url = Some(url);
+                }
+                server
+            })
+            .collect();
+
+        Ok(poly_client::CommunityPage {
+            items,
+            next_cursor: next_after,
+        })
     }
 }

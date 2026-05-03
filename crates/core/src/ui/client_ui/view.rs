@@ -110,6 +110,11 @@ pub fn ClientView(
     account_id: String,
     #[props(default)]
     initial_tab: Option<String>,
+    /// Phase D — external filter injected by ForumView (Posts|Comments toggle +
+    /// debounced text filter). When `Some`, overrides the toolbar's own filter
+    /// input so the parent can control filtering without touching the descriptor.
+    #[props(default)]
+    forum_filter: Option<String>,
 ) -> Element {
     let client_manager: BatchedSignal<ClientManager> = use_context();
 
@@ -153,7 +158,11 @@ pub fn ClientView(
         }
         Some(Ok(desc)) => {
             let desc: ViewDescriptor = desc.clone();
-            render_descriptor(channel_id.clone(), account_id.clone(), desc, initial_tab)
+            if let Some(filter) = forum_filter {
+                render_descriptor_with_filter(channel_id.clone(), account_id.clone(), desc, initial_tab, filter)
+            } else {
+                render_descriptor(channel_id.clone(), account_id.clone(), desc, initial_tab)
+            }
         }
     }
 }
@@ -372,6 +381,14 @@ fn render_descriptor_inner(
                         selected_filter.read(),
                         selected_tab.read(),
                     );
+                    // Phase D: when an external filter is provided (ForumView
+                    // Posts|Comments debounce), prefer it over the toolbar's
+                    // filter signal for ListBody and TreeBody.
+                    let effective_filter = extra_filter
+                        .as_deref()
+                        .filter(|f| !f.is_empty())
+                        .map(|f| f.to_string())
+                        .unwrap_or_else(|| filter_str.clone());
                     match body {
                         ViewBody::ListBody(spec) => rsx! {
                             ListBody {
@@ -379,7 +396,7 @@ fn render_descriptor_inner(
                                 channel_id: channel_id.clone(),
                                 account_id: account_id.clone(),
                                 spec,
-                                filter: filter_str.clone(),
+                                filter: effective_filter.clone(),
                                 selected_sort,
                                 selected_filter,
                                 selected_tab,
@@ -400,7 +417,7 @@ fn render_descriptor_inner(
                                 channel_id: channel_id.clone(),
                                 account_id: account_id.clone(),
                                 spec,
-                                filter: filter_str.clone(),
+                                filter: effective_filter.clone(),
                                 selected_sort,
                                 selected_filter,
                                 selected_tab,

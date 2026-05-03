@@ -143,6 +143,8 @@ pub enum View {
     Friends,
     /// Notifications feed.
     Notifications,
+    /// Discover Communities page (Lemmy, Reddit).
+    DiscoverCommunities,
     /// A server's channel view.
     Server,
     /// Settings page.

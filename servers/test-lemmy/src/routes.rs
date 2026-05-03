@@ -264,6 +264,66 @@ pub async fn get_community(
 }
 
 // ---------------------------------------------------------------------------
+// Search (community discovery — GET /api/v3/search)
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize, Default)]
+pub struct SearchQuery {
+    pub q: Option<String>,
+    pub type_: Option<String>,
+    pub listing_type: Option<String>,
+    #[allow(dead_code)]
+    pub limit: Option<i64>,
+    #[allow(dead_code)]
+    pub page: Option<i64>,
+}
+
+/// GET /api/v3/search
+///
+/// Supports `type_=Communities`. Returns a filtered list of communities
+/// matching the `q` keyword (case-insensitive prefix/substring match on
+/// name + title). Respects `listing_type` (Subscribed / Local / All).
+pub async fn search_communities(
+    State(state): State<Arc<LemmyState>>,
+    headers: HeaderMap,
+    Query(q): Query<SearchQuery>,
+) -> impl IntoResponse {
+    if bearer_user_id(&state, &headers).is_none() {
+        return auth_error().into_response();
+    }
+
+    let keyword = q.q.unwrap_or_default().to_lowercase();
+    let listing_type = q.listing_type.as_deref().unwrap_or("All");
+
+    let communities: Vec<Value> = state
+        .communities
+        .iter()
+        .filter(|entry| {
+            let c = entry.value();
+            // Scope filter
+            if listing_type == "Subscribed" && !c.subscribed {
+                return false;
+            }
+            // Keyword filter — empty keyword matches everything
+            if keyword.is_empty() {
+                return true;
+            }
+            c.name.to_lowercase().contains(&keyword)
+                || c.title.to_lowercase().contains(&keyword)
+        })
+        .map(|entry| community_view(entry.value()))
+        .collect();
+
+    Json(json!({
+        "communities": communities,
+        "posts": [],
+        "comments": [],
+        "users": [],
+    }))
+    .into_response()
+}
+
+// ---------------------------------------------------------------------------
 // Posts
 // ---------------------------------------------------------------------------
 

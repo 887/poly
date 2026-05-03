@@ -36,6 +36,7 @@
 
 pub mod agent_panel;
 pub mod account_bar;
+pub mod discover_communities;
 pub mod account_server_bar;
 pub mod account_switcher;
 pub mod attachment_context_menu;

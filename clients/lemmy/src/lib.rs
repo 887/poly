@@ -145,6 +145,14 @@ impl LemmyClient {
             .and_then(|s| s.parse::<i64>().ok())
     }
 
+    /// Extract a community_id integer from a `lemmy-comments-{community_id}` channel ID.
+    /// Phase D — synthetic channel for the community-level recent-comments feed.
+    fn parse_comments_channel(channel_id: &str) -> Option<i64> {
+        channel_id
+            .strip_prefix("lemmy-comments-")
+            .and_then(|s| s.parse::<i64>().ok())
+    }
+
     /// Extract a post_id integer from a `lemmy-post-{id}` channel/message ID.
     fn parse_post_channel(channel_id: &str) -> Option<i64> {
         channel_id
@@ -753,7 +761,29 @@ impl ClientBackend for LemmyClient {
         })
     }
 
-    async fn get_channel_view(&self, _channel_id: &str) -> ClientResult<ViewDescriptor> {
+    async fn get_channel_view(&self, channel_id: &str) -> ClientResult<ViewDescriptor> {
+        // Phase D — comments feed: `lemmy-comments-{community_id}` routes to
+        // the community-level recent-comments endpoint instead of the post list.
+        if Self::parse_comments_channel(channel_id).is_some() {
+            return Ok(ViewDescriptor {
+                kind: ViewKind::FlatList,
+                header: Some(ViewHeader {
+                    title_key: Some("plugin-lemmy-view-comments-title".to_string()),
+                    subtitle_key: None,
+                    info_block: None,
+                }),
+                toolbar: None,
+                body: ViewBody::ListBody(ListSpec {
+                    row_template: RowTemplate {
+                        primary_field: "text".to_string(),
+                        secondary_field: Some("author".to_string()),
+                        meta_field: None,
+                        icon_field: None,
+                    },
+                    page_size: 50,
+                }),
+            });
+        }
         Ok(ViewDescriptor {
             kind: ViewKind::Tree,
             header: Some(ViewHeader {
@@ -795,6 +825,32 @@ impl ClientBackend for LemmyClient {
                 .iter()
                 .map(|view| map_community_to_viewrow(view, 0))
                 .collect();
+            return Ok(ViewRowsPage { rows, next_cursor: None });
+        }
+
+        // Phase D — comments feed: `lemmy-comments-{community_id}` routes to
+        // the community-level recent-comments endpoint instead of the post list.
+        if let Some(community_id) = Self::parse_comments_channel(channel_id) {
+            let limit: u32 = 50;
+            let resp = self.http.fetch_community_comments(community_id, limit).await?;
+            let rows: Vec<ViewRow> = resp.comments.iter().map(|view| {
+                let msg = map_comment_to_message(view);
+                let content_text = match &msg.content {
+                    MessageContent::Text(s) => s.clone(),
+                    MessageContent::WithAttachments { text, .. } => text.clone(),
+                };
+                ViewRow {
+                    id: msg.id.clone(),
+                    primary_text: content_text,
+                    secondary_text: Some(msg.author.display_name.clone()),
+                    meta_text: None,
+                    icon: msg.author.avatar_url.clone(),
+                    badge: None,
+                    context_menu_target_kind: MenuTargetKind::Message,
+                    preview_image_url: None,
+                    is_video: false,
+                }
+            }).collect();
             return Ok(ViewRowsPage { rows, next_cursor: None });
         }
 

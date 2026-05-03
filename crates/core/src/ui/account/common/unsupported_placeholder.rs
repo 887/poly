@@ -26,10 +26,11 @@ pub enum UnsupportedFeature {
     Notifications,
     CreateServer,
     Voice,
+    Discover,
 }
 
 impl UnsupportedFeature {
-    #[must_use] 
+    #[must_use]
     pub fn label_key(self) -> &'static str {
         match self {
             Self::Friends => "feature-unsupported-friends",
@@ -37,10 +38,11 @@ impl UnsupportedFeature {
             Self::Notifications => "feature-unsupported-notifications",
             Self::CreateServer => "feature-unsupported-create-server",
             Self::Voice => "feature-unsupported-voice",
+            Self::Discover => "feature-unsupported-discover",
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn test_id(self) -> &'static str {
         match self {
             Self::Friends => "feature-unsupported-friends",
@@ -48,6 +50,7 @@ impl UnsupportedFeature {
             Self::Notifications => "feature-unsupported-notifications",
             Self::CreateServer => "feature-unsupported-create-server",
             Self::Voice => "feature-unsupported-voice",
+            Self::Discover => "feature-unsupported-discover",
         }
     }
 }
@@ -90,6 +93,7 @@ mod tests {
             UnsupportedFeature::Notifications,
             UnsupportedFeature::CreateServer,
             UnsupportedFeature::Voice,
+            UnsupportedFeature::Discover,
         ];
         let keys: std::collections::HashSet<&str> =
             features.iter().map(|f| f.label_key()).collect();
@@ -104,6 +108,7 @@ mod tests {
             UnsupportedFeature::Notifications,
             UnsupportedFeature::CreateServer,
             UnsupportedFeature::Voice,
+            UnsupportedFeature::Discover,
         ] {
             assert_eq!(feature.test_id(), feature.label_key());
         }

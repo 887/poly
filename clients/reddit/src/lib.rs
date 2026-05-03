@@ -677,6 +677,87 @@ impl RedditClient {
         }
         Ok(())
     }
+
+    // ── Phase E: community search ───────────────────────────────────────
+
+    /// Search subreddits by keyword.
+    ///
+    /// Returns a page of matching [`SubredditInfo`] items and an optional
+    /// `after` cursor for the next page (Reddit's standard pagination token).
+    ///
+    /// # Errors
+    ///
+    /// `RedditError::Status` for HTTP non-2xx, `RedditError::Http` for
+    /// transport errors, `RedditError::Json` for unparseable responses.
+    pub async fn search_subreddits(
+        &self,
+        query: &str,
+        after: Option<&str>,
+    ) -> Result<(Vec<SubredditInfo>, Option<String>), RedditError> {
+        let encoded_q = urlencoding_simple(query);
+        let mut path = format!("/subreddits/search.json?q={encoded_q}&limit=25");
+        if let Some(cursor) = after {
+            let encoded_after = urlencoding_simple(cursor);
+            path.push_str(&format!("&after={encoded_after}"));
+        }
+        let url = self.resolve_url(&path);
+        let resp = self.with_session_cookie(self.http.get(&url)).send().await?;
+        if !resp.status().is_success() {
+            return Err(RedditError::Status(resp.status().as_u16()));
+        }
+        let body: serde_json::Value = resp.json().await?;
+        let children = body
+            .get("data")
+            .and_then(|d| d.get("children"))
+            .and_then(|c| c.as_array())
+            .cloned()
+            .unwrap_or_default();
+        let next_after = body
+            .get("data")
+            .and_then(|d| d.get("after"))
+            .and_then(|a| a.as_str())
+            .filter(|s| !s.is_empty())
+            .map(str::to_owned);
+        let subs = children
+            .iter()
+            .filter_map(|c| {
+                let data = c.get("data")?;
+                let name = data.get("display_name").and_then(|n| n.as_str())?;
+                let icon_url = ["community_icon", "icon_img"]
+                    .iter()
+                    .find_map(|field| {
+                        data.get(*field)
+                            .and_then(|v| v.as_str())
+                            .filter(|s| !s.is_empty())
+                            .map(|s| s.replace("&amp;", "&"))
+                    });
+                Some(SubredditInfo {
+                    name: name.to_string(),
+                    icon_url,
+                })
+            })
+            .collect();
+        Ok((subs, next_after))
+    }
+}
+
+/// Percent-encode characters that would break URL query parameter values.
+///
+/// Only encodes `&`, `?`, `#`, `%`, and space — enough for query strings
+/// without a full-blown percent-encoding library dependency on WASM.
+fn urlencoding_simple(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for ch in s.chars() {
+        match ch {
+            ' ' => out.push('+'),
+            '&' => out.push_str("%26"),
+            '?' => out.push_str("%3F"),
+            '#' => out.push_str("%23"),
+            '%' => out.push_str("%25"),
+            c => out.push(c),
+        }
+    }
+    out
 }
 
 #[cfg(all(test, feature = "native"))]

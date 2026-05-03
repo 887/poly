@@ -125,22 +125,23 @@ Bar 1.
 - [ ] **C.3** Smoke: navigate to a subreddit, verify Hot/New/Top/…
       replace the old Top/New/Best/Ask/Show/Jobs (HN) labels.
 
-## Phase D — Posts / Comments toggle (Lemmy only)
+## Phase D — Posts / Comments toggle (Lemmy only) — shipped
 
-- [ ] **D.1** Add `view_filter: PostsOrComments` enum to
+- [x] **D.1** Add `view_filter: PostsOrComments` enum to
       `crates/core/src/state.rs` (or wherever the lemmy forum scope
       lives) with default `Posts`.
-- [ ] **D.2** In `forum_view.rs`'s ClientView header, render two
+- [x] **D.2** In `forum_view.rs`'s ClientView header, render two
       pill-buttons "Posts | Comments" when the active backend's
       `BackendCapabilities::supports_comment_feed` is true (new flag,
       defaults false; Lemmy sets it true).
-- [ ] **D.3** When `Comments` is active, swap the data source from
+- [x] **D.3** When `Comments` is active, swap the data source from
       `get_messages(channel)` to `get_comments(channel)` (new backend
       method on Lemmy returning `Vec<Message>` of recent comments
-      across the community).
-- [ ] **D.4** Add the existing `Filter…` text input next to the
-      Hot/New/Top buttons, debounced 250 ms, filtering the rendered
-      list client-side on title + author substring.
+      across the community). Implemented via synthetic `lemmy-comments-{id}`
+      channel prefix; `get_channel_view` + `get_view_rows` detect it.
+- [x] **D.4** Add the existing `Filter…` text input next to the
+      Posts|Comments pill buttons, debounced 250 ms via `gloo_timers`,
+      threaded into `ClientView` via new `forum_filter: Option<String>` prop.
 
 ## Phase E — DiscoverCommunities route + page
 

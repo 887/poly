@@ -77,6 +77,7 @@ use super::account::{
     OutgoingDirectCallOverlay, SavedItemsView, ServerSettingsPage, ThreadFullView,
     ThreadPanel, VoiceChannelView,
 };
+use super::account::common::discover_communities::DiscoverCommunitiesView;
 use super::client_ui::ClientSidebar;
 use super::create_forum_post::{CreateForumPostPage, ForumSearchPage};
 use super::main_layout::MainLayout;
@@ -132,6 +133,7 @@ pub fn route_account_id(route: &Route) -> Option<&str> {
         | Route::ServerOverviewMissedRoute { account_id, .. }
         | Route::ServerOverviewStatsRoute { account_id, .. }
         | Route::ServerOverviewAgentsRoute { account_id, .. }
+        | Route::DiscoverRoute { account_id, .. }
         | Route::ThreadView { account_id, .. } => Some(account_id.as_str()),
         // Reauth intentionally returns None so route_targets_unknown_account
         // never treats a reauth URL as pointing at a missing account — the
@@ -428,6 +430,11 @@ pub enum Route {
             account_id: String,
             thread_id: String,
         },
+
+        // ── Account-scoped: Discover Communities ─────────────────────
+        #[connected(linked)]
+        #[route("/:backend/:instance_id/:account_id/discover")]
+        DiscoverRoute { backend: String, instance_id: String, account_id: String },
 
         // ── Account-scoped: Create server (full-page form) ───────────
         #[connected(linked)]
@@ -968,6 +975,21 @@ pub fn sync_route_to_app_state(route: &Route, app_state: BatchedSignal<AppState>
             s.nav.active_backend.set(Some(BackendType::from_slug(backend)));
             s.nav.active_instance_id.set(Some(instance_id.clone()));
             s.nav.active_account_id.set(Some(account_id.clone()));
+            s.nav
+                .account_last_routes
+                .insert(account_id.clone(), route_url);
+        }
+        Route::DiscoverRoute {
+            backend,
+            instance_id,
+            account_id,
+        } => {
+            s.nav.view.set(View::DiscoverCommunities);
+            s.nav.active_backend.set(Some(BackendType::from_slug(backend)));
+            s.nav.active_instance_id.set(Some(instance_id.clone()));
+            s.nav.active_account_id.set(Some(account_id.clone()));
+            s.nav.selected_server.set(None);
+            s.nav.selected_channel.set(None);
             s.nav
                 .account_last_routes
                 .insert(account_id.clone(), route_url);
@@ -1962,6 +1984,28 @@ fn NotificationsRoute(backend: String, instance_id: String, account_id: String) 
     }
 }
 
+/// Discover Communities — account-scoped route for searching communities.
+///
+/// Capability-gated: only shown when `backend_capabilities().community_search != None`.
+#[context_menu(None)]
+#[rustfmt::skip]
+#[ui_action(inherit)]
+#[component]
+fn DiscoverRoute(backend: String, instance_id: String, account_id: String) -> Element {
+    let caps = poly_client::capabilities_for_slug(&backend);
+    if matches!(caps.community_search, poly_client::CommunitySearchSupport::None) {
+        return rsx! {
+            FeatureUnsupportedPlaceholder {
+                backend_slug: backend.clone(),
+                feature: UnsupportedFeature::Discover,
+            }
+        };
+    }
+    rsx! {
+        DiscoverCommunitiesView { account_id, instance_id, backend_slug: backend }
+    }
+}
+
 /// Settings page — app-level, not account-scoped.
 #[context_menu(None)]
 #[rustfmt::skip]
@@ -2445,6 +2489,7 @@ fn route_variant_name(route: &Route) -> &'static str {
         Route::ServerHome { .. } => "ServerHome",
         Route::FriendsRoute { .. } => "FriendsRoute",
         Route::NotificationsRoute { .. } => "NotificationsRoute",
+        Route::DiscoverRoute { .. } => "DiscoverRoute",
         Route::SavedItemsRoute { .. } => "SavedItemsRoute",
         Route::ServerOverviewRoute { .. } => "ServerOverviewRoute",
         Route::ServerOverviewMissedRoute { .. } => "ServerOverviewMissedRoute",

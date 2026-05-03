@@ -5,7 +5,7 @@
 use crate::state::BatchedSignal;
 use crate::client_manager::ClientManager;
 use crate::state::chat_data::user_color;
-use crate::state::{AppState, ChatData, use_spawn_once};
+use crate::state::{AppState, ChatData, PostsOrComments, use_spawn_once};
 use crate::ui::account::common::forum_composer::{ComposerMode, ForumComposer, SubmitPayload};
 use crate::ui::client_ui::ClientView;
 use crate::ui::context_menu::menus::{forum_post_entry, ForumPostCtx};
@@ -14,6 +14,7 @@ use crate::ui::routes::Route;
 use chrono::DateTime;
 use dioxus::prelude::*;
 use poly_client::{Message, MessageContent, MessageQuery};
+use crate::ui::actions::{ActionCx, UiAction};
 use poly_ui_macros::{context_menu, ui_action};
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -126,9 +127,35 @@ fn score_class(score: i64) -> &'static str {
 // Top-level ForumView — thin wrapper over `ClientView`. The plugin declares
 // its own view-descriptor (list / card-grid / tree / split); the host engine
 // renders it. Legacy HN/Lemmy-specific rendering is gone (plan WP 5).
+//
+// Phase D additions: Posts|Comments pill toggle (Lemmy-only) + debounced
+// text filter header.
 // ─────────────────────────────────────────────────────────────────────────────
 
-#[ui_action(None)]
+/// Phase D — typed action enum required by the `#[ui_action]` lint gate
+/// because ForumView now has click handlers (the Posts|Comments pill).
+#[derive(Debug, Clone)]
+pub(crate) enum ForumViewAction {
+    /// User clicked the "Posts" pill.
+    ShowPosts,
+    /// User clicked the "Comments" pill.
+    ShowComments,
+    /// User typed in the filter input.
+    SetFilter(String),
+}
+
+impl UiAction for ForumViewAction {
+    fn apply(self, cx: ActionCx<'_>) {
+        match self {
+            Self::ShowPosts => cx.state.view_filter = PostsOrComments::Posts,
+            Self::ShowComments => cx.state.view_filter = PostsOrComments::Comments,
+            // Filter text is local signal; no AppState mutation needed.
+            Self::SetFilter(_) => {}
+        }
+    }
+}
+
+#[ui_action(ForumViewAction)]
 #[context_menu(None)]
 #[component]
 pub fn ForumView() -> Element {
@@ -196,6 +223,62 @@ pub fn ForumView() -> Element {
             }
         };
     }
+
+    // Phase D — Posts|Comments toggle: only shown for backends that expose a
+    // comment feed (currently Lemmy). Derive from nav active_backend slug so
+    // we don't need a live backend handle.
+    let backend_slug = {
+        let s = app_state.read();
+        s.nav
+            .active_backend
+            .cloned()
+            .map(|b| b.slug().to_string())
+            .unwrap_or_default()
+    };
+    let supports_comment_feed = poly_client::capabilities_for_slug(&backend_slug).supports_comment_feed;
+
+    // Phase D — current toggle value from AppState.
+    let view_filter = app_state.peek().view_filter;
+
+    // Phase D — local raw filter text signal + debounced signal.
+    // `raw_filter` is written by the input's oninput handler immediately.
+    // `filter_debounced` is updated after a 250ms quiet period.
+    let mut raw_filter: Signal<String> = use_signal(String::new);
+    let mut filter_debounced: Signal<String> = use_signal(String::new);
+
+    // Debounce: every time raw_filter changes, wait 250ms then flush.
+    // WASM: gloo_timers; native: tokio::time.
+    {
+        // poly-lint: allow stale-effect-capture — raw_filter is a Signal, subscription is intentional
+        use_effect(move || {
+            let text = raw_filter.read().clone();
+            #[cfg(target_arch = "wasm32")]
+            {
+                wasm_bindgen_futures::spawn_local(async move {
+                    gloo_timers::future::TimeoutFuture::new(250).await;
+                    filter_debounced.set(text);
+                });
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                // Native: no WASM scheduler contention; update immediately.
+                filter_debounced.set(text);
+            }
+        });
+    }
+
+    // Phase D — channel ID rewrite: when Comments mode active and the channel
+    // is a `lemmy-feed-{id}` channel, substitute `lemmy-comments-{id}`.
+    let effective_channel_id = if view_filter == PostsOrComments::Comments {
+        if let Some(community_id) = channel_id.strip_prefix("lemmy-feed-") {
+            format!("lemmy-comments-{community_id}")
+        } else {
+            channel_id.clone()
+        }
+    } else {
+        channel_id.clone()
+    };
+
     // forum_scope drives the Local / All / Subscribed sidebar scope buttons.
     // Including it in the key forces a full remount when the scope changes so
     // the body engine re-fetches `get_view_rows` with the updated tab_id.
@@ -203,14 +286,50 @@ pub fn ForumView() -> Element {
     // subscribes to AppState via the `.read()` calls above (active_account_id,
     // selected_channel) so any batch() on AppState re-renders this component.
     let forum_scope = app_state.peek().forum_scope.clone();
-    // Key forces a full remount on channel or scope change so use_resource
-    // inside ClientView (and its body engines) picks up the new values.
-    // Without this, switching servers keeps showing the previous server's
-    // posts because use_resource holds a captured String that Dioxus
-    // can't track reactively.
-    let key = format!("{}:{}:{}", channel_id, account_id, forum_scope);
+    // Key forces a full remount on channel, scope, or view_filter change.
+    let key = format!("{}:{}:{}:{:?}", effective_channel_id, account_id, forum_scope, view_filter);
+
+    let forum_filter_val = filter_debounced.read().clone();
+    let forum_filter_opt = if forum_filter_val.is_empty() { None } else { Some(forum_filter_val) };
+
     rsx! {
-        ClientView { key: "{key}", channel_id, account_id, initial_tab: Some(forum_scope) }
+        div { class: "forum-view-wrapper",
+            // Phase D — Posts|Comments pill header (Lemmy-only)
+            if supports_comment_feed {
+                div { class: "forum-view-toggle-bar",
+                    button {
+                        class: if view_filter == PostsOrComments::Posts { "forum-toggle-pill forum-toggle-pill--active" } else { "forum-toggle-pill" },
+                        onclick: move |_| {
+                            app_state.batch(|s| s.view_filter = PostsOrComments::Posts);
+                            raw_filter.set(String::new());
+                        },
+                        "Posts"
+                    }
+                    button {
+                        class: if view_filter == PostsOrComments::Comments { "forum-toggle-pill forum-toggle-pill--active" } else { "forum-toggle-pill" },
+                        onclick: move |_| {
+                            app_state.batch(|s| s.view_filter = PostsOrComments::Comments);
+                            raw_filter.set(String::new());
+                        },
+                        "Comments"
+                    }
+                    input {
+                        class: "forum-toggle-filter-input",
+                        r#type: "text",
+                        placeholder: "Filter…",
+                        value: "{raw_filter.read()}",
+                        oninput: move |e| raw_filter.set(e.value()),
+                    }
+                }
+            }
+            ClientView {
+                key: "{key}",
+                channel_id: effective_channel_id,
+                account_id,
+                initial_tab: Some(forum_scope),
+                forum_filter: forum_filter_opt,
+            }
+        }
     }
 }
 

@@ -30,6 +30,7 @@ fn current_title(app_state: &AppState, chat_data: &ChatData) -> String {
             .as_ref().map_or_else(|| t("nav-dms"), |ch| ch.name.clone()),
         View::Friends => t("nav-friends"),
         View::Notifications => t("notifications-title"),
+        View::DiscoverCommunities => t("ui-discover-title"),
         View::Settings => t("settings-title"),
         View::Agent => t("agent-page-title"),
         View::Search => t("search-page-title"),
