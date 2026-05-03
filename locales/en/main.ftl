@@ -1025,6 +1025,28 @@ ui-sidebar-feed-ask = Ask
 ui-sidebar-feed-show = Show
 ui-sidebar-feed-jobs = Jobs
 
+# Discover-communities — SortModesLayout (Lemmy / Reddit)
+ui-sidebar-sort-modes-header = Channels
+ui-sidebar-sort-more = More
+ui-sidebar-sort-hot = Hot
+ui-sidebar-sort-active = Active
+ui-sidebar-sort-scaled = Scaled
+ui-sidebar-sort-controversial = Controversial
+ui-sidebar-sort-new = New
+ui-sidebar-sort-old = Old
+ui-sidebar-sort-most-comments = Most Comments
+ui-sidebar-sort-new-comments = New Comments
+ui-sidebar-sort-rising = Rising
+ui-sidebar-sort-top = Top
+ui-sidebar-sort-top-hour = Top: Hour
+ui-sidebar-sort-top-six-hours = Top: Six Hours
+ui-sidebar-sort-top-twelve-hours = Top: Twelve Hours
+ui-sidebar-sort-top-day = Top: Day
+ui-sidebar-sort-top-week = Top: Week
+ui-sidebar-sort-top-month = Top: Month
+ui-sidebar-sort-top-year = Top: Year
+ui-sidebar-sort-top-all = Top: All Time
+
 # P27 — RepoTreeLayout (GitHub / Forgejo)
 ui-sidebar-repos-header = Repositories
 ui-sidebar-repos-loading = Loading repositories…
