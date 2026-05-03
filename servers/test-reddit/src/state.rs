@@ -11,8 +11,10 @@ use dashmap::DashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use poly_test_common::HeaderInspectBuffer;
+
 /// All mock Reddit state.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct RedditState {
     /// session-cookie → username
     pub sessions: Arc<DashMap<String, String>>,
@@ -32,6 +34,50 @@ pub struct RedditState {
     pub dm_seq: Arc<AtomicU64>,
     /// Auto-incremented base for synthesised comment ids.
     pub comment_seq: Arc<AtomicU64>,
+    /// Header-inspect ring buffer used by the shared `BackendHarness`
+    /// middleware to expose `/test/inspect/last-headers`.
+    pub inspect: Arc<HeaderInspectBuffer>,
+}
+
+impl Default for RedditState {
+    fn default() -> Self {
+        Self {
+            sessions: Arc::default(),
+            users: Arc::default(),
+            subscriptions: Arc::default(),
+            inboxes: Arc::default(),
+            sent: Arc::default(),
+            votes: Arc::default(),
+            comments: Arc::default(),
+            dm_seq: Arc::default(),
+            comment_seq: Arc::default(),
+            inspect: Arc::new(HeaderInspectBuffer::new()),
+        }
+    }
+}
+
+impl poly_test_common::BackendHarness for RedditState {
+    const BACKEND: &'static str = "reddit";
+
+    fn new(_auth: poly_test_common::AuthState) -> Self {
+        // Reddit's mock state has no persisted-token concept (sessions live
+        // inline as a DashMap), so the auth-state argument is intentionally
+        // discarded. Lifecycle (seed/reset/reseed) flows through the
+        // BackendHarness defaults.
+        Self::default()
+    }
+
+    fn seed(&self) { RedditState::seed(self); }
+    fn reset(&self) { RedditState::reset(self); }
+    // reseed() uses the default: reset() + seed()
+
+    fn routes(state: Arc<Self>) -> axum::Router<Arc<Self>> {
+        crate::routes_only(state)
+    }
+
+    fn inspect_buf(&self) -> Arc<HeaderInspectBuffer> {
+        Arc::clone(&self.inspect)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -63,11 +109,13 @@ pub struct MockComment {
 
 impl RedditState {
     /// Pre-populate with the canonical 🐱 cat + 🐶 dog test users.
-    /// Both share the throwaway test password `testpass123`.
-    #[must_use]
-    pub fn seeded() -> Self {
-        let s = Self::default();
-        s.users.insert(
+    /// Idempotent — safe to call repeatedly. Used both by the legacy
+    /// `seeded()` constructor and by `BackendHarness::seed()`.
+    pub fn seed(&self) {
+        if !self.users.is_empty() {
+            return;
+        }
+        self.users.insert(
             "cat".to_string(),
             MockUser {
                 name: "cat".to_string(),
@@ -75,7 +123,7 @@ impl RedditState {
                 avatar_animal: "cat".to_string(),
             },
         );
-        s.users.insert(
+        self.users.insert(
             "dog".to_string(),
             MockUser {
                 name: "dog".to_string(),
@@ -84,11 +132,11 @@ impl RedditState {
             },
         );
         // Pre-subscribe both to r/rust + r/programming.
-        s.subscriptions.insert(
+        self.subscriptions.insert(
             "cat".to_string(),
             vec!["rust".to_string(), "programming".to_string()],
         );
-        s.subscriptions.insert(
+        self.subscriptions.insert(
             "dog".to_string(),
             vec!["rust".to_string(), "programming".to_string()],
         );
@@ -96,10 +144,32 @@ impl RedditState {
         // restart. The signup flow stores `mock_session_<name>_0` as the
         // first issued cookie; mirror that here so restore_native_accounts
         // can replay the same value successfully.
-        s.sessions
+        self.sessions
             .insert("mock_session_cat_0".to_string(), "cat".to_string());
-        s.sessions
+        self.sessions
             .insert("mock_session_dog_0".to_string(), "dog".to_string());
+    }
+
+    /// Wipe all in-memory state to empty. Used by
+    /// `BackendHarness::reset()` (and indirectly via `reseed()`).
+    pub fn reset(&self) {
+        self.sessions.clear();
+        self.users.clear();
+        self.subscriptions.clear();
+        self.inboxes.clear();
+        self.sent.clear();
+        self.votes.clear();
+        self.comments.clear();
+        self.dm_seq.store(0, Ordering::SeqCst);
+        self.comment_seq.store(0, Ordering::SeqCst);
+    }
+
+    /// Construct + seed in one call. Kept for callers that don't go
+    /// through the harness (existing tests, `router_default()`).
+    #[must_use]
+    pub fn seeded() -> Self {
+        let s = Self::default();
+        s.seed();
         s
     }
 

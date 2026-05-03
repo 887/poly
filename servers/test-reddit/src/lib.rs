@@ -16,14 +16,13 @@ pub mod state;
 
 use axum::{Router, routing::{get, post}};
 use std::sync::Arc;
-use tower_http::cors::CorsLayer;
-use tower_http::trace::TraceLayer;
 
 pub use state::RedditState;
 
-/// Build the axum router. Caller supplies the (already-seeded) state.
+/// Backend-specific routes only (no lifecycle, no inspect middleware,
+/// no CORS). Called by `BackendHarness::routes()`.
 #[must_use]
-pub fn router(state: Arc<RedditState>) -> Router {
+pub fn routes_only(_state: Arc<RedditState>) -> Router<Arc<RedditState>> {
     Router::new()
         // Anonymous read.
         .route("/", get(routes::frontpage))
@@ -59,9 +58,14 @@ pub fn router(state: Arc<RedditState>) -> Router {
         .route("/avatars/{animal}", get(routes::avatar))
         // Test-only convenience.
         .route("/test/reset", post(routes::test_reset))
-        .layer(CorsLayer::permissive())
-        .layer(TraceLayer::new_for_http())
-        .with_state(state)
+}
+
+/// Full router (backend routes + lifecycle + inspect + CORS) — kept for
+/// integration tests that call `router(state)` directly without going
+/// through `poly_test_common::run::<RedditState>()`.
+#[must_use]
+pub fn router(state: Arc<RedditState>) -> Router {
+    poly_test_common::build_router::<RedditState>(state)
 }
 
 /// Default seeded router (cat + dog + r/rust + r/programming subscribed).

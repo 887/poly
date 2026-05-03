@@ -115,11 +115,14 @@ disjoint files.
       lines) per-locale. Patch site: `crates/core/build.rs:84-109`. Net
       patch ≤15 lines. Effort S. Source: E.1#2. — shipped in commit `274f92ef`.
 - [x] **A.3** Extract `BackendHarness` trait + `run::<H>()` helper
-      into `servers/test-common`. Collapse 8 `main.rs` shells to 5
-      lines each, 8 `seed/reset/reseed` triples → harness default,
+      into `servers/test-common`. Collapse all 9 `main.rs` shells to
+      4 lines each, 9 `seed/reset/reseed` triples → harness default,
       lifecycle HTTP handlers → harness, layer chain → harness.
-      Reddit excluded (no auth/inspect, fundamentally different shape).
-      Effort S/M. Source: E.1#1. — shipped in commit `17fd9d63`.
+      Reddit landed in a follow-up (added inspect buffer + idempotent
+      seed/reset on RedditState; the auth-state arg is intentionally
+      ignored since Reddit's sessions live inline in the state).
+      Effort S/M. Source: E.1#1. — shipped in commits `17fd9d63`
+      (8 backends) + Reddit follow-up.
 - [x] **A.4** File-split `clients/client/src/types.rs` (1891 lines)
       into `types/{backend, auth, server, file, message, user,
       notification, moderation, voice, command}.rs` with a `mod.rs`
