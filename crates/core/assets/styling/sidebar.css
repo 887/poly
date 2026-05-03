@@ -443,6 +443,19 @@
  * below add layout-specific tweaks: list spacing + nested-Top-by
  * indent + collapsible <details> chrome. */
 
+/* Override the default tiny-uppercase .sidebar-header style for the
+ * SortModes layout — its header is "Sort posts by" prose, not a
+ * category label, and reads better in the same scale as the
+ * overview-page heading.  */
+.client-sidebar.sort-modes-layout .sidebar-header {
+    font-size: 18px;
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--text-primary);
+    padding: 16px 16px 8px 16px;
+}
+
 .sort-modes-list {
     list-style: none;
     margin: 0;

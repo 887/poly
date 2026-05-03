@@ -742,7 +742,39 @@ impl ClientBackend for LemmyClient {
     }
 
     async fn invoke_sidebar_action(&self, action_id: &str) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound(format!("unknown sidebar action: {action_id}")))
+        // Phase B (in-flight): SortModes sidebar dispatches `sort-*` action ids.
+        // Persist the chosen sort under per-account-global storage; `get_view_rows`
+        // reads it back as the fallback when the toolbar sort is unset.
+        let sort_value = match action_id {
+            "sort-hot" => "Hot",
+            "sort-active" => "Active",
+            "sort-scaled" => "Scaled",
+            "sort-controversial" => "Controversial",
+            "sort-new" => "New",
+            "sort-old" => "Old",
+            "sort-most-comments" => "MostComments",
+            "sort-new-comments" => "NewComments",
+            "sort-top" | "sort-top-day" => "TopDay",
+            "sort-top-hour" => "TopHour",
+            "sort-top-six-hours" => "TopSixHour",
+            "sort-top-twelve-hours" => "TopTwelveHour",
+            "sort-top-week" => "TopWeek",
+            "sort-top-month" => "TopMonth",
+            "sort-top-year" => "TopYear",
+            "sort-top-all" => "TopAll",
+            _ => {
+                return Err(ClientError::NotFound(format!(
+                    "unknown sidebar action: {action_id}"
+                )));
+            }
+        };
+        self.settings_storage.set(
+            SettingsScope::AccountGlobal,
+            "",
+            "current-sort",
+            sort_value,
+        )?;
+        Ok(ActionOutcome::RefreshTarget)
     }
 
     /// Account overview: a CardGrid of the user's subscribed communities.
@@ -795,11 +827,9 @@ impl ClientBackend for LemmyClient {
                 info_block: None,
             }),
             toolbar: Some(ViewToolbar {
-                sort_options: vec![
-                    ToolbarOption { id: "hot".to_string(), label_key: "plugin-lemmy-sort-hot".to_string(), icon: None, default_selected: true },
-                    ToolbarOption { id: "new".to_string(), label_key: "plugin-lemmy-sort-new".to_string(), icon: None, default_selected: false },
-                    ToolbarOption { id: "top".to_string(), label_key: "plugin-lemmy-sort-top".to_string(), icon: None, default_selected: false },
-                ],
+                // Sort options live in the SortModes sidebar — declaring
+                // them here would render a duplicate dropdown above posts.
+                sort_options: vec![],
                 filter_options: vec![],
                 tabs: vec![],
                 action_items: vec![],
@@ -864,7 +894,16 @@ impl ClientBackend for LemmyClient {
         })?;
 
         let page = cursor_to_page(cursor.as_ref());
-        let sort = sort_id.unwrap_or("Hot");
+        // Sort priority: explicit toolbar override → SortModes sidebar
+        // selection (settings_storage) → "Hot" default.
+        let stored_sort = self.settings_storage.get(
+            SettingsScope::AccountGlobal,
+            "",
+            "current-sort",
+        );
+        let sort: &str = sort_id
+            .or(stored_sort.as_deref())
+            .unwrap_or("Hot");
         let page_size: u32 = 25;
 
         let resp = self

@@ -1595,23 +1595,13 @@ impl ClientBackend for DemoClient3 {
                 info_block: None,
             }),
             toolbar: Some(ViewToolbar {
-                // Full Lemmy sort ladder — matches pre-refactor `ForumSort`
-                // enum. When `>4` options are present the host toolbar
-                // renders a `<select>` dropdown instead of tab chips.
-                sort_options: vec![
-                    ToolbarOption { id: "hot".to_string(), label_key: "plugin-demo-sort-hot".to_string(), icon: None, default_selected: true },
-                    ToolbarOption { id: "active".to_string(), label_key: "plugin-demo-sort-active".to_string(), icon: None, default_selected: false },
-                    ToolbarOption { id: "new".to_string(), label_key: "plugin-demo-sort-new".to_string(), icon: None, default_selected: false },
-                    ToolbarOption { id: "old".to_string(), label_key: "plugin-demo-sort-old".to_string(), icon: None, default_selected: false },
-                    ToolbarOption { id: "most_comments".to_string(), label_key: "plugin-demo-sort-most-comments".to_string(), icon: None, default_selected: false },
-                    ToolbarOption { id: "new_comments".to_string(), label_key: "plugin-demo-sort-new-comments".to_string(), icon: None, default_selected: false },
-                    ToolbarOption { id: "top_hour".to_string(), label_key: "plugin-demo-sort-top-hour".to_string(), icon: None, default_selected: false },
-                    ToolbarOption { id: "top_day".to_string(), label_key: "plugin-demo-sort-top-day".to_string(), icon: None, default_selected: false },
-                    ToolbarOption { id: "top_week".to_string(), label_key: "plugin-demo-sort-top-week".to_string(), icon: None, default_selected: false },
-                    ToolbarOption { id: "top_month".to_string(), label_key: "plugin-demo-sort-top-month".to_string(), icon: None, default_selected: false },
-                    ToolbarOption { id: "top_year".to_string(), label_key: "plugin-demo-sort-top-year".to_string(), icon: None, default_selected: false },
-                    ToolbarOption { id: "top_all_time".to_string(), label_key: "plugin-demo-sort-top-all-time".to_string(), icon: None, default_selected: false },
-                ],
+                // Sort options now live in the SortModes sidebar (Hot /
+                // Active / New / Old / Most Comments / New Comments / Top
+                // hour…all_time). Declaring them again here would render a
+                // duplicate dropdown above the post list, with no way to
+                // pick which one wins. Empty sort_options collapses to
+                // just the Filter… input + refresh button.
+                sort_options: vec![],
                 filter_options: vec![],
                 // Subscribed / Local / All are rendered in the SIDEBAR
                 // (channel_list.rs) — the same place Lemmy puts them — and

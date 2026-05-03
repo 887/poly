@@ -1040,7 +1040,7 @@ ui-sidebar-feed-show = Show
 ui-sidebar-feed-jobs = Jobs
 
 # Discover-communities — SortModesLayout (Lemmy / Reddit)
-ui-sidebar-sort-modes-header = Channels
+ui-sidebar-sort-modes-header = Sort posts by
 ui-sidebar-sort-more = More
 ui-sidebar-sort-hot = Hot
 ui-sidebar-sort-active = Active

@@ -383,13 +383,23 @@ fn render_descriptor_inner(
                     // so Dioxus can't track reactivity on them; without a
                     // key-based remount the resource keeps the stale values
                     // and the user's Local/All click does nothing.
+                    // Subscribe to the global sidebar-invalidated tick so
+                    // sidebar-driven sort changes (SortModes click → backend
+                    // settings_storage write → ActionOutcome::RefreshTarget)
+                    // actually re-fire the body's use_resource. Without
+                    // including the tick in body_key, the resource captures
+                    // stale Strings and the click does nothing visible.
+                    let app_state_for_tick: BatchedSignal<crate::state::AppState>
+                        = use_context();
+                    let sidebar_tick = app_state_for_tick.read().sidebar_invalidated_tick;
                     let body_key = format!(
-                        "{}:{}:{:?}:{:?}:{:?}",
+                        "{}:{}:{:?}:{:?}:{:?}:{}",
                         channel_id,
                         account_id,
                         selected_sort.read(),
                         selected_filter.read(),
                         selected_tab.read(),
+                        sidebar_tick,
                     );
                     // Phase D: when an external filter is provided (ForumView
                     // Posts|Comments debounce), prefer it over the toolbar's

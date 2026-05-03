@@ -78,7 +78,7 @@ pub fn SortModesLayout(decl: SidebarDeclaration) -> Element {
                         let action_id = id_disp.clone();
                         let client_manager = client_manager;
                         spawn(async move {
-                            dispatch_sort_action(client_manager, account_id, action_id).await;
+                            dispatch_sort_action(client_manager, app_state, account_id, action_id).await;
                         });
                     };
                     let kids_clone = kids.clone();
@@ -110,7 +110,7 @@ pub fn SortModesLayout(decl: SidebarDeclaration) -> Element {
                                                 let action_id = id_disp.clone();
                                                 let client_manager = client_manager;
                                                 spawn(async move {
-                                                    dispatch_sort_action(client_manager, account_id, action_id).await;
+                                                    dispatch_sort_action(client_manager, app_state, account_id, action_id).await;
                                                 });
                                             };
                                             rsx! {
@@ -136,6 +136,7 @@ pub fn SortModesLayout(decl: SidebarDeclaration) -> Element {
 
 async fn dispatch_sort_action(
     client_manager: BatchedSignal<ClientManager>,
+    app_state: BatchedSignal<AppState>,
     account_id: String,
     action_id: String,
 ) {
@@ -153,6 +154,12 @@ async fn dispatch_sort_action(
         };
         guard.invoke_sidebar_action(&action_id).await
     };
+    // Bump the global sidebar-invalidated tick so the body engine's
+    // use_resource (keyed on this tick via render_descriptor_inner)
+    // re-fires and picks up the backend's new current-sort.
+    app_state.batch(|s| {
+        s.sidebar_invalidated_tick = s.sidebar_invalidated_tick.wrapping_add(1);
+    });
     let Some(toast_queue) = try_consume_context::<Signal<Vec<ToastMessage>>>() else {
         tracing::info!("SortModesLayout: action outcome (no-toast-ctx): {outcome:?}");
         return;
