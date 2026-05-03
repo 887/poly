@@ -311,6 +311,32 @@ impl RedditClient {
         Ok(parser::post::parse_post_page(&html)?)
     }
 
+    /// Fetch the gallery image URLs for a multi-image post.
+    ///
+    /// Reddit's gallery layout is delivered via `/comments/<id>/.json`,
+    /// not the HTML page — `gallery_data.items` ordered list keyed into
+    /// `media_metadata.<media_id>.s.u` (the source URL). HTML-entity
+    /// encoded URLs in the JSON are decoded.
+    ///
+    /// Returns `Ok(Vec::new())` for non-gallery posts; the caller can
+    /// check `RawPost.is_gallery` first to avoid the round-trip.
+    ///
+    /// # Errors
+    ///
+    /// `RedditError::Status` for HTTP non-2xx, `RedditError::Http` for
+    /// transport-level failures, `RedditError::Parse` if the JSON shape
+    /// is unrecognisable.
+    pub async fn get_gallery_urls(&self, post_id: &str) -> Result<Vec<String>, RedditError> {
+        let path = format!("/comments/{post_id}/.json");
+        let url = self.resolve_url(&path);
+        let resp = self.with_session_cookie(self.http.get(&url)).send().await?;
+        if !resp.status().is_success() {
+            return Err(RedditError::Status(resp.status().as_u16()));
+        }
+        let json: serde_json::Value = resp.json().await?;
+        Ok(parser::post::parse_gallery_metadata(&json)?)
+    }
+
     /// Fetch a user's overview page.
     ///
     /// Anonymous — works without auth.

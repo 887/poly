@@ -115,3 +115,104 @@ fn parse_comment_node(el: &ElementRef<'_>) -> Result<RawComment, ParseError> {
         replies,
     })
 }
+
+/// Parse a Reddit gallery JSON response (`/comments/<id>/.json`) and
+/// return the ordered list of high-resolution image URLs.
+///
+/// Reddit galleries store the gallery layout under `gallery_data.items`
+/// (an ordered list of `{caption, media_id, ...}`) and the actual image
+/// URLs under `media_metadata.<media_id>.s.u`. The URLs are HTML-entity
+/// encoded by reddit (`&amp;` for `&`); we decode them so reqwest /
+/// browser fetch resolves them correctly.
+///
+/// Returns an empty `Vec` for non-gallery posts (the JSON shape is
+/// missing both `gallery_data` and `media_metadata`).
+///
+/// # Errors
+///
+/// `ParseError::LoggedOut` if the JSON shape indicates the response was
+/// a login redirect rather than a real post. Otherwise infallible —
+/// missing fields silently yield an empty `Vec`.
+pub fn parse_gallery_metadata(json: &serde_json::Value) -> Result<Vec<String>, ParseError> {
+    // Reddit comments JSON is an array; the first element holds the post.
+    // For galleries the post sits at [0].data.children[0].data.
+    let post = json
+        .get(0)
+        .and_then(|v| v.get("data"))
+        .and_then(|d| d.get("children"))
+        .and_then(|c| c.get(0))
+        .and_then(|c| c.get("data"));
+    let Some(post) = post else {
+        return Ok(Vec::new());
+    };
+
+    // The ordered media_id list lives in gallery_data.items[].
+    let items = post
+        .get("gallery_data")
+        .and_then(|g| g.get("items"))
+        .and_then(|i| i.as_array());
+    let Some(items) = items else {
+        return Ok(Vec::new());
+    };
+
+    // Resolve each media_id → media_metadata[id].s.u (the source URL).
+    let metadata = post.get("media_metadata");
+    let mut urls = Vec::new();
+    for item in items {
+        let Some(media_id) = item.get("media_id").and_then(|m| m.as_str()) else {
+            continue;
+        };
+        let url = metadata
+            .and_then(|m| m.get(media_id))
+            .and_then(|md| md.get("s"))
+            .and_then(|s| s.get("u"))
+            .and_then(|u| u.as_str());
+        if let Some(url) = url {
+            urls.push(url.replace("&amp;", "&"));
+        }
+    }
+    Ok(urls)
+}
+
+#[cfg(test)]
+mod gallery_tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
+    use super::parse_gallery_metadata;
+
+    const GALLERY_JSON: &str =
+        include_str!("../../tests/fixtures/comments_gallery_t3_1t22ox5.json");
+
+    #[test]
+    fn extracts_two_image_urls_from_real_gallery() {
+        let json: serde_json::Value =
+            serde_json::from_str(GALLERY_JSON).expect("fixture is valid json");
+        let urls = parse_gallery_metadata(&json).expect("parses cleanly");
+        assert_eq!(urls.len(), 2, "expected 2 gallery items");
+        for url in &urls {
+            assert!(
+                url.starts_with("https://preview.redd.it/"),
+                "expected preview.redd.it URL, got {url}"
+            );
+            assert!(
+                !url.contains("&amp;"),
+                "HTML entities should be decoded, got {url}"
+            );
+        }
+    }
+
+    #[test]
+    fn empty_for_non_gallery_post() {
+        let json: serde_json::Value =
+            serde_json::from_str("[{\"data\":{\"children\":[{\"data\":{}}]}}]").unwrap();
+        let urls = parse_gallery_metadata(&json).unwrap();
+        assert!(urls.is_empty());
+    }
+
+    #[test]
+    fn empty_for_malformed_json() {
+        let json: serde_json::Value = serde_json::from_str("{}").unwrap();
+        let urls = parse_gallery_metadata(&json).unwrap();
+        assert!(urls.is_empty());
+    }
+}
