@@ -27,12 +27,14 @@ pub mod communities;
 pub mod custom;
 pub mod feed;
 pub mod repo_tree;
+pub mod sort_modes;
 
 pub use channel_list_layout::ChannelListLayout;
 pub use communities::CommunitiesLayout;
 pub use custom::CustomSidebar;
 pub use feed::FeedLayout;
 pub use repo_tree::RepoTreeLayout;
+pub use sort_modes::SortModesLayout;
 
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
@@ -152,6 +154,7 @@ pub fn ClientSidebar() -> Element {
                 | SidebarLayoutKind::Custom => rsx! { ChannelListLayout {} },
                 SidebarLayoutKind::Communities => rsx! { CommunitiesLayout {} },
                 SidebarLayoutKind::Feed => rsx! { FeedLayout {} },
+                SidebarLayoutKind::SortModes => rsx! { SortModesLayout { decl: decl.clone() } },
                 // RepoTree backends (GitHub, Forgejo) expose a tree of all
                 // repos at the account level. Once the user drills into a
                 // specific repo server, the sidebar must show only that

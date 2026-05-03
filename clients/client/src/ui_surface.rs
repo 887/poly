@@ -354,6 +354,11 @@ pub enum SidebarLayoutKind {
     Feed,
     /// GitHub/Forgejo: repo tree.
     RepoTree,
+    /// Lemmy/Reddit: per-server sort modes (Hot/New/Top/...) rendered as
+    /// channels under the active server. Items live in
+    /// `SidebarDeclaration.sections[0].items`; sub-modes (e.g. Reddit
+    /// "Top: hour/day/week") use `parent_id` to nest.
+    SortModes,
     /// Plugin supplies sections explicitly.
     Custom,
 }
