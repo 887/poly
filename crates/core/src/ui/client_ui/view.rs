@@ -42,19 +42,26 @@ pub fn is_bandwidth_constrained() -> bool {
     #[cfg(target_arch = "wasm32")]
     {
         // navigator.connection is non-standard but supported in
-        // Chromium-based browsers; access through js_sys to avoid
-        // pulling a heavyweight web-sys feature flag for one read.
+        // Chromium-based browsers. Access entirely through js_sys to
+        // avoid pulling the web-sys `Navigator` feature flag (would
+        // bloat the WASM bundle for one read).
         use wasm_bindgen::JsValue;
-        let win = match web_sys::window() {
-            Some(w) => w,
+        let win: JsValue = match web_sys::window() {
+            Some(w) => w.into(),
             None => return false,
         };
-        // Reflect.get(navigator, "connection") then .effectiveType.
-        let nav: JsValue = win.navigator().into();
+        // window.navigator (via Reflect since web-sys' Navigator feature
+        // isn't enabled workspace-wide).
+        let nav = match js_sys::Reflect::get(&win, &JsValue::from_str("navigator")) {
+            Ok(v) if !v.is_undefined() && !v.is_null() => v,
+            _ => return false,
+        };
+        // navigator.connection
         let conn = match js_sys::Reflect::get(&nav, &JsValue::from_str("connection")) {
             Ok(v) if !v.is_undefined() && !v.is_null() => v,
             _ => return false,
         };
+        // connection.effectiveType
         let effective = match js_sys::Reflect::get(&conn, &JsValue::from_str("effectiveType")) {
             Ok(v) => v.as_string().unwrap_or_default(),
             _ => return false,
