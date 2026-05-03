@@ -110,20 +110,21 @@ disjoint files.
 - [x] **A.1** Per-backend `pub const SLUG: &str` exported from each
       `clients/<name>/src/lib.rs`; flip the 199 in-crate
       `BackendType::from("…")` literals to `BackendType::from(crate::SLUG)`.
-      Sites: see B.1.3 table. Effort S. — shipped in commit `0acd71e2`
-- [ ] **A.2** Split `crates/core/src/i18n/baked_locales.rs` (4487
+      Sites: see B.1.3 table. Effort S. — shipped in commit `c844f314`.
+- [x] **A.2** Split `crates/core/src/i18n/baked_locales.rs` (4487
       lines) per-locale. Patch site: `crates/core/build.rs:84-109`. Net
-      patch ≤15 lines. Effort S. Source: E.1#2.
+      patch ≤15 lines. Effort S. Source: E.1#2. — shipped in commit `274f92ef`.
 - [x] **A.3** Extract `BackendHarness` trait + `run::<H>()` helper
       into `servers/test-common`. Collapse 8 `main.rs` shells to 5
       lines each, 8 `seed/reset/reseed` triples → harness default,
       lifecycle HTTP handlers → harness, layer chain → harness.
       Reddit excluded (no auth/inspect, fundamentally different shape).
-      Effort S/M. Source: E.1#1. — shipped in commit `<pending>`
-- [ ] **A.4** File-split `clients/client/src/types.rs` (1891 lines)
+      Effort S/M. Source: E.1#1. — shipped in commit `17fd9d63`.
+- [x] **A.4** File-split `clients/client/src/types.rs` (1891 lines)
       into `types/{backend, auth, server, file, message, user,
       notification, moderation, voice, command}.rs` with a `mod.rs`
       re-export shim. Zero behaviour change. Effort S/M. Source: A.1#4.
+      — shipped in commit `5647a26f`.
 
 ### Phase B — LSP fixes + capability single-source-of-truth (~3 days)
 
