@@ -60,7 +60,11 @@ pub fn SortModesLayout(decl: SidebarDeclaration) -> Element {
                     let label = t(&item.label_key);
                     let kids = children_of(&id);
                     let selected = current == id;
-                    let class = if selected { "sort-modes-row selected" } else { "sort-modes-row" };
+                    let class = if selected {
+                        "channel-item sort-modes-row active"
+                    } else {
+                        "channel-item sort-modes-row"
+                    };
                     let account_id_top = account_id.clone();
                     let account_id_kids = account_id.clone();
                     let id_for_click = id.clone();
@@ -92,7 +96,11 @@ pub fn SortModesLayout(decl: SidebarDeclaration) -> Element {
                                             let cid = child.id.clone();
                                             let clabel = t(&child.label_key);
                                             let cselected = current == cid;
-                                            let cclass = if cselected { "sort-modes-row child selected" } else { "sort-modes-row child" };
+                                            let cclass = if cselected {
+                                                "channel-item sort-modes-row child active"
+                                            } else {
+                                                "channel-item sort-modes-row child"
+                                            };
                                             let account_id = account_id_kids.clone();
                                             let cid_click = cid.clone();
                                             let onclick = move |_evt: MouseEvent| {

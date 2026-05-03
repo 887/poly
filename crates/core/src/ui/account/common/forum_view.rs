@@ -294,31 +294,47 @@ pub fn ForumView() -> Element {
 
     rsx! {
         div { class: "forum-view-wrapper",
-            // Phase D — Posts|Comments pill header (Lemmy-only)
+            // Phase D — Posts|Comments pill header for backends with a
+            // community-wide comment feed (Lemmy + demo-forum). The Filter
+            // input lives in the body engine's existing toolbar (rendered
+            // inside ClientView below) so we don't duplicate it here.
             if supports_comment_feed {
                 div { class: "forum-view-toggle-bar",
-                    button {
-                        class: if view_filter == PostsOrComments::Posts { "forum-toggle-pill forum-toggle-pill--active" } else { "forum-toggle-pill" },
-                        onclick: move |_| {
+                    {
+                        let onclick = move |_evt: MouseEvent| {
                             app_state.batch(|s| s.view_filter = PostsOrComments::Posts);
                             raw_filter.set(String::new());
-                        },
-                        "Posts"
+                        };
+                        rsx! {
+                            button {
+                                class: if view_filter == PostsOrComments::Posts {
+                                    "forum-toggle-pill forum-toggle-pill--active"
+                                } else {
+                                    "forum-toggle-pill"
+                                },
+                                "aria-pressed": if view_filter == PostsOrComments::Posts { "true" } else { "false" },
+                                onclick,
+                                "Posts"
+                            }
+                        }
                     }
-                    button {
-                        class: if view_filter == PostsOrComments::Comments { "forum-toggle-pill forum-toggle-pill--active" } else { "forum-toggle-pill" },
-                        onclick: move |_| {
+                    {
+                        let onclick = move |_evt: MouseEvent| {
                             app_state.batch(|s| s.view_filter = PostsOrComments::Comments);
                             raw_filter.set(String::new());
-                        },
-                        "Comments"
-                    }
-                    input {
-                        class: "forum-toggle-filter-input",
-                        r#type: "text",
-                        placeholder: "Filter…",
-                        value: "{raw_filter.read()}",
-                        oninput: move |e| raw_filter.set(e.value()),
+                        };
+                        rsx! {
+                            button {
+                                class: if view_filter == PostsOrComments::Comments {
+                                    "forum-toggle-pill forum-toggle-pill--active"
+                                } else {
+                                    "forum-toggle-pill"
+                                },
+                                "aria-pressed": if view_filter == PostsOrComments::Comments { "true" } else { "false" },
+                                onclick,
+                                "Comments"
+                            }
+                        }
                     }
                 }
             }

@@ -437,6 +437,69 @@
     margin: 0;
 }
 
+/* SortModesLayout — Lemmy / Reddit per-server sort-mode rows. The
+ * channel-item class on each row picks up hover/active styling from
+ * channel-list.css so they look like Discord channels. The rules
+ * below add layout-specific tweaks: list spacing + nested-Top-by
+ * indent + collapsible <details> chrome. */
+
+.sort-modes-list {
+    list-style: none;
+    margin: 0;
+    padding: 4px 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.sort-modes-row.channel-item {
+    /* Channel-item already supplies padding / radius / hover; override
+     * only what differs (no icon column → tighter horizontal padding,
+     * uppercase styling for visual distinction from real channels). */
+    padding: 6px 12px;
+}
+
+.sort-modes-row.channel-item.child {
+    margin-left: 12px;
+}
+
+.sort-modes-children {
+    margin: 2px 0 4px 0;
+}
+
+.sort-modes-children > summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 6px 12px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    border-radius: var(--radius-md);
+}
+
+.sort-modes-children > summary:hover {
+    background-color: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.sort-modes-children > summary::before {
+    content: "▸ ";
+    display: inline-block;
+    transition: transform var(--transition-fast);
+}
+
+.sort-modes-children[open] > summary::before {
+    content: "▾ ";
+}
+
+.sort-modes-sublist {
+    list-style: none;
+    margin: 0;
+    padding: 2px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
 /* P29 — sidebar error badge (shown above fallback ChannelList). */
 .client-sidebar-error-badge {
     background: var(--danger-bg, rgba(220, 53, 69, 0.15));

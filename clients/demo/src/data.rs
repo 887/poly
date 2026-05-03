@@ -393,8 +393,55 @@ pub fn demo3_servers() -> Vec<Server> {
     ]
 }
 
+/// Wider catalog of demo3 communities for the Discover page. Includes
+/// the 3 subscribed entries plus 15 unsubscribed seeds so the discover
+/// flow has something to browse even when the demo account is already
+/// joined to everything.
+#[must_use]
+pub fn demo3_discover_servers() -> Vec<Server> {
+    let mut all = demo3_servers();
+    let extras: &[(&str, &str, &str, &str, &str, &str)] = &[
+        ("comm-cooking", "cooking", "🍳", "#b45309", "#f59e0b", "Recipes, technique, kitchen tales."),
+        ("comm-gardening", "gardening", "🌱", "#166534", "#4ade80", "Plant nerds, soil tips, harvest pics."),
+        ("comm-photography", "photography", "📷", "#1f2937", "#9ca3af", "Composition, gear, post-processing."),
+        ("comm-gaming", "gaming", "🎮", "#6d28d9", "#a78bfa", "All things games + culture."),
+        ("comm-books", "books", "📚", "#7c2d12", "#fdba74", "Reading group, recommendations, reviews."),
+        ("comm-music", "music", "🎵", "#1e40af", "#60a5fa", "Albums, artists, listening clubs."),
+        ("comm-movies", "movies", "🎬", "#831843", "#f472b6", "Film discussion + new releases."),
+        ("comm-science", "science", "🔬", "#0e7490", "#22d3ee", "Latest research + popsci threads."),
+        ("comm-history", "history", "🏛️", "#a16207", "#facc15", "Historical discussions across eras."),
+        ("comm-philosophy", "philosophy", "🤔", "#374151", "#9ca3af", "Ideas, ethics, epistemology."),
+        ("comm-fitness", "fitness", "💪", "#9f1239", "#fb7185", "Training, nutrition, recovery."),
+        ("comm-travel", "travel", "✈️", "#0369a1", "#38bdf8", "Trip reports + travel hacking."),
+        ("comm-pets", "pets", "🐾", "#be185d", "#f472b6", "Cat tax, dog tax, exotics tax."),
+        ("comm-diy", "diy", "🔧", "#92400e", "#fbbf24", "Build logs, repair jobs, project pics."),
+        ("comm-tech_news", "tech_news", "📰", "#1e3a8a", "#3b82f6", "Industry news + analysis."),
+    ];
+    for (id, name, emoji, bg1, bg2, desc) in extras {
+        all.push(Server {
+            id: (*id).to_string(),
+            name: (*name).to_string(),
+            icon_url: Some(themed_server_icon(emoji, bg1, bg2)),
+            banner_url: None,
+            categories: Vec::new(),
+            backend: BackendType::from(DEMO_FORUM_BACKEND),
+            unread_count: 0,
+            mention_count: 0,
+            account_id: DEMO3_ACCOUNT_ID.to_string(),
+            account_display_name: DEMO3_ACCOUNT_NAME.to_string(),
+            default_channel_id: None,
+            description: Some((*desc).to_string()),
+            star_count: None,
+            language: None,
+            forks_count: None,
+            open_issues_count: None,
+        });
+    }
+    all
+}
+
 /// Generate forum channels for demo3 servers.
-#[must_use] 
+#[must_use]
 pub fn demo3_channels(server_id: &str) -> Vec<Channel> {
     match server_id {
         "comm-rust-lang" => vec![

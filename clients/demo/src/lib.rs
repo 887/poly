@@ -1511,9 +1511,37 @@ impl ClientBackend for DemoClient3 {
     }
 
     async fn get_sidebar_declaration(&self) -> Result<SidebarDeclaration, ClientError> {
+        // Match the SortModes shape Lemmy + Reddit use so all forum-style
+        // backends present the same channel-row sidebar to the user.
+        let mk = |id: &str, label_key: &str, parent: Option<&str>| SidebarItem {
+            id: id.to_string(),
+            parent_id: parent.map(str::to_string),
+            label_key: label_key.to_string(),
+            icon: None,
+            badge: None,
+            route_kind: SidebarRouteKind::Channel,
+        };
         Ok(SidebarDeclaration {
-            layout: SidebarLayoutKind::ChannelList,
-            sections: Vec::new(),
+            layout: SidebarLayoutKind::SortModes,
+            sections: vec![SidebarSection {
+                header_key: None,
+                collapsible: false,
+                default_collapsed: false,
+                items: vec![
+                    mk("sort-hot", "ui-sidebar-sort-hot", None),
+                    mk("sort-active", "ui-sidebar-sort-active", None),
+                    mk("sort-new", "ui-sidebar-sort-new", None),
+                    mk("sort-old", "ui-sidebar-sort-old", None),
+                    mk("sort-most-comments", "ui-sidebar-sort-most-comments", None),
+                    mk("sort-new-comments", "ui-sidebar-sort-new-comments", None),
+                    mk("sort-top", "ui-sidebar-sort-top", None),
+                    mk("sort-top-day", "ui-sidebar-sort-top-day", Some("sort-top")),
+                    mk("sort-top-week", "ui-sidebar-sort-top-week", Some("sort-top")),
+                    mk("sort-top-month", "ui-sidebar-sort-top-month", Some("sort-top")),
+                    mk("sort-top-year", "ui-sidebar-sort-top-year", Some("sort-top")),
+                    mk("sort-top-all", "ui-sidebar-sort-top-all", Some("sort-top")),
+                ],
+            }],
             header_block: None,
         })
     }
@@ -1521,6 +1549,18 @@ impl ClientBackend for DemoClient3 {
     async fn invoke_sidebar_action(
         &self, action_id: &str,
     ) -> Result<ActionOutcome, ClientError> {
+        // Persist the chosen sort under the same per-account-global slot
+        // Lemmy uses; the demo's body engine reads it back to re-order
+        // the post list. Unknown ids fall through to NotFound.
+        if action_id.starts_with("sort-") {
+            let _ = self.settings_storage.set(
+                SettingsScope::AccountGlobal,
+                "",
+                "current-sort",
+                action_id,
+            );
+            return Ok(ActionOutcome::RefreshTarget);
+        }
         Err(ClientError::NotFound(format!("unknown sidebar action: {action_id}")))
     }
 
@@ -1761,6 +1801,23 @@ impl ClientBackend for DemoClient3 {
             *lock = version_override;
         }
         Ok(())
+    }
+
+    async fn search_communities(
+        &self,
+        query: &str,
+        _scope: CommunityScope,
+        _cursor: Option<String>,
+    ) -> ClientResult<CommunityPage> {
+        // Demo backend: return the wider seeded catalog filtered by
+        // substring match on name. Empty query → return everything
+        // (acts as the "popular" default).
+        let needle = query.trim().to_lowercase();
+        let items: Vec<Server> = data::demo3_discover_servers()
+            .into_iter()
+            .filter(|s| needle.is_empty() || s.name.to_lowercase().contains(&needle))
+            .collect();
+        Ok(CommunityPage { items, next_cursor: None })
     }
 }
 
