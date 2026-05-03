@@ -201,8 +201,9 @@ impl From<RedditError> for ClientError {
 
 fn raw_post_to_message(post: &RawPost, backend: &BackendType) -> Message {
     let content = if let Some(body) = &post.body {
-        if !body.is_empty() {
-            MessageContent::Text(format!("{}\n\n{}", post.title, body))
+        let body_text = html_to_plain_text(body);
+        if !body_text.is_empty() {
+            MessageContent::Text(format!("{}\n\n{}", post.title, body_text))
         } else {
             MessageContent::Text(post.title.clone())
         }
@@ -633,8 +634,36 @@ impl ClientBackend for RedditBackend {
                 .await
                 .map_err(ClientError::from)?;
 
+            // Always attempt the gallery JSON fetch — for a non-gallery
+            // post it returns Ok(empty) cheaply; for a gallery post it
+            // gives us the full ordered list of source URLs that the
+            // HTML scrape doesn't expose. Append each as an Attachment
+            // on the OP message so ForumThreadView renders the carousel.
+            let gallery_urls: Vec<String> = if self.media_previews_enabled() {
+                self.client.get_gallery_urls(bare_id).await.unwrap_or_default()
+            } else {
+                Vec::new()
+            };
+
+            let mut op_msg = raw_post_to_message(&post, &bt);
+            if gallery_urls.len() >= 2 {
+                op_msg.attachments.clear();
+                for (i, url) in gallery_urls.iter().enumerate() {
+                    op_msg.attachments.push(Attachment::remote(
+                        format!("reddit-gallery-{bare_id}-{i}"),
+                        format!("gallery_{i}.jpg"),
+                        "image/jpeg".to_string(),
+                        url.clone(),
+                        0,
+                    ));
+                }
+                if op_msg.preview_image_url.is_none() {
+                    op_msg.preview_image_url = gallery_urls.first().cloned();
+                }
+            }
+
             let mut messages = Vec::new();
-            messages.push(raw_post_to_message(&post, &bt));
+            messages.push(op_msg);
             flatten_comments_into_messages(&comments, &bt, &mut messages);
             return Ok(messages);
         }

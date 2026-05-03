@@ -1495,6 +1495,33 @@
     word-break: break-word;
 }
 
+.forum-post-gallery {
+    margin: 12px 0 0 0;
+    display: flex;
+    justify-content: center;
+}
+
+.forum-post-gallery-carousel {
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    gap: 8px;
+    justify-content: flex-start;
+}
+
+.forum-post-gallery-item {
+    max-width: 100%;
+    max-height: 600px;
+    border-radius: 6px;
+    object-fit: contain;
+    background: var(--bg-surface-2, #0d0d18);
+}
+
+.forum-post-gallery-carousel .forum-post-gallery-item {
+    flex: 0 0 auto;
+    max-width: 90%;
+    scroll-snap-align: center;
+}
+
 .forum-comments-header {
     padding: 10px 16px;
     border-bottom: 1px solid var(--border-primary);

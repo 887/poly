@@ -422,6 +422,40 @@ fn ForumThreadView(post: Message, comments: Vec<Message>, loading: bool) -> Elem
                         span { class: "forum-post-time", "· {time_str}" }
                     }
                     p { class: "forum-thread-post-content", "{text}" }
+                    // Gallery / image attachments. Multi-image posts (>=2
+                    // image attachments) render as a horizontal scroll-snap
+                    // carousel; single-image posts render centered. Video
+                    // attachments fall back to a thumbnail link until the
+                    // chat-view grows native video playback.
+                    {
+                        let img_atts: Vec<_> = post
+                            .attachments
+                            .iter()
+                            .filter(|a| a.content_type.starts_with("image/"))
+                            .collect();
+                        let class = if img_atts.len() >= 2 {
+                            "forum-post-gallery forum-post-gallery-carousel"
+                        } else {
+                            "forum-post-gallery"
+                        };
+                        if !img_atts.is_empty() {
+                            rsx! {
+                                div { class: "{class}",
+                                    for (i, att) in img_atts.iter().enumerate() {
+                                        img {
+                                            class: "forum-post-gallery-item",
+                                            src: "{att.url}",
+                                            alt: "{att.filename}",
+                                            loading: "lazy",
+                                            key: "{att.id}-{i}",
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            rsx! {}
+                        }
+                    }
                 }
             }
             // Comment count header
