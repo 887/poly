@@ -31,6 +31,7 @@ pub fn router(state: Arc<RedditState>) -> Router {
         .route("/login/", get(routes::login_page))
         .route("/r/{sub}/{sort}/", get(routes::list_subreddit))
         .route("/comments/{id}/", get(routes::get_post))
+        .route("/comments/{id}/.json", get(routes::get_post_json))
         .route("/r/{sub}/comments/{id}/{slug}/", get(routes::get_post_with_slug))
         .route("/user/{name}/", get(routes::get_user))
         // Auth + JSON.

@@ -41,6 +41,8 @@ const INBOX_EMPTY_FIXTURE: &str =
     include_str!("../../../clients/reddit/tests/fixtures/inbox_empty.html");
 const SUBREDDITS_MINE_EMPTY_FIXTURE: &str =
     include_str!("../../../clients/reddit/tests/fixtures/subreddits_mine_empty.html");
+const GALLERY_JSON_FIXTURE: &str =
+    include_str!("../../../clients/reddit/tests/fixtures/comments_gallery_t3_1t22ox5.json");
 const API_ME_LOGGED_IN_JSON: &str =
     include_str!("../../../clients/reddit/tests/fixtures/api_me_sheep.json");
 
@@ -149,6 +151,25 @@ pub async fn get_post_with_slug(
     Path((_sub, post_id, _slug)): Path<(String, String, String)>,
 ) -> Response {
     get_post(State(state), Path(post_id)).await
+}
+
+/// `GET /comments/<id>/.json` — JSON variant. Returns a real-shape
+/// gallery response for `1t22ox5` (the fixture id) so RedditClient's
+/// gallery-URL extraction has something to chew on. For other ids,
+/// returns an empty (non-gallery) shell.
+pub async fn get_post_json(
+    State(_state): State<Arc<RedditState>>,
+    Path(post_id): Path<String>,
+) -> Response {
+    if post_id == "1t22ox5" {
+        match serde_json::from_str::<Value>(GALLERY_JSON_FIXTURE) {
+            Ok(v) => return json_resp(v),
+            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "fixture parse").into_response(),
+        }
+    }
+    json_resp(json!([
+        {"data": {"children": [{"data": {"id": post_id, "is_gallery": false}}]}}
+    ]))
 }
 
 /// `GET /user/<u>/`

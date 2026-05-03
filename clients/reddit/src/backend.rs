@@ -19,7 +19,41 @@ use poly_client::*;
 use std::pin::Pin;
 
 use crate::{RedditClient, RedditError, SortKind};
-use crate::parser::{RawDm, RawPost, UserProfile};
+use crate::parser::{RawComment, RawDm, RawPost, UserProfile};
+
+/// Recursively emit reddit comments as depth-indented sanitized HTML.
+/// Used by `get_view_detail` to inline the comment thread under the
+/// post body (TreeSpec-via-ViewRow doesn't support hierarchy yet).
+fn render_comments_to_html(out: &mut String, comments: &[RawComment], depth: u32, max_depth: u32) {
+    fn html_escape(s: &str) -> String {
+        s.replace('&', "&amp;")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;")
+            .replace('"', "&quot;")
+    }
+    let indent_px = depth.min(max_depth).saturating_mul(16);
+    for comment in comments {
+        out.push_str(&format!(
+            "<div class=\"reddit-comment\" style=\"margin-left:{indent_px}px\">"
+        ));
+        out.push_str(&format!(
+            "<div class=\"reddit-comment-meta\">u/{} · {} points</div>",
+            html_escape(&comment.author),
+            comment.score,
+        ));
+        // Body is already HTML-rendered by the parser (markdown → HTML by
+        // reddit), so include verbatim — host's CustomBlock sanitizer
+        // strips dangerous tags downstream.
+        out.push_str(&format!(
+            "<div class=\"reddit-comment-body\">{}</div>",
+            comment.body_html,
+        ));
+        out.push_str("</div>");
+        if depth < max_depth && !comment.replies.is_empty() {
+            render_comments_to_html(out, &comment.replies, depth.saturating_add(1), max_depth);
+        }
+    }
+}
 
 // ─── ID helpers ─────────────────────────────────────────────────────────────
 
@@ -759,25 +793,30 @@ impl ClientBackend for RedditBackend {
             .strip_prefix("t3_")
             .ok_or_else(|| ClientError::NotFound(format!("get_view_detail: not a t3_ row: {row_id}")))?;
 
-        // Fetch the post (HTML page → RawPost + comments). Comments aren't
-        // surfaced here yet (TreeSpec returns its own data); body_block
-        // owns the post header + body + image gallery.
-        let (post, _comments) = self.client.get_post(post_id).await.map_err(ClientError::from)?;
+        // Fetch the post + comment tree. Comments are rendered inline via
+        // depth-indented HTML inside body_block (TreeSpec needs hierarchy
+        // support on ViewRow that doesn't exist yet).
+        let (post, comments) = self.client.get_post(post_id).await.map_err(ClientError::from)?;
 
-        // Gallery posts: fetch the JSON to get all image URLs. Single-image
-        // posts and self-posts skip this round-trip.
-        let gallery_urls: Vec<String> = if post.is_gallery {
-            self.client
-                .get_gallery_urls(post_id)
-                .await
-                .map_err(ClientError::from)?
+        // Always try the gallery JSON — cheap (one extra request) and
+        // robust against parser misclassification of is_gallery.
+        // Empty Vec falls back to single-cover-image render below.
+        let gallery_from_json = self
+            .client
+            .get_gallery_urls(post_id)
+            .await
+            .unwrap_or_default();
+
+        // If the JSON gave us multiple URLs, that's a real gallery.
+        // Otherwise fall back to the cover preview (single image post).
+        let gallery_urls: Vec<String> = if gallery_from_json.len() >= 2 {
+            gallery_from_json
         } else if let Some(ref preview) = post.preview_url {
-            // Single-image post — render the cover preview as the only
-            // gallery item so the UI has a consistent rendering path.
             vec![preview.clone()]
         } else {
             Vec::new()
         };
+        let is_real_gallery = gallery_urls.len() >= 2;
 
         fn html_escape(s: &str) -> String {
             s.replace('&', "&amp;")
@@ -796,10 +835,9 @@ impl ClientBackend for RedditBackend {
             post.score,
             post.comment_count,
         ));
-        // External URL link, if any.
+        // External URL link, if any (for non-image link posts).
         if let Some(ref url) = post.url
-            && !post.is_gallery
-            && post.preview_url.is_none()
+            && gallery_urls.is_empty()
         {
             let escaped = html_escape(url);
             html.push_str(&format!(
@@ -812,13 +850,17 @@ impl ClientBackend for RedditBackend {
         {
             html.push_str(&format!("<div class=\"reddit-post-body\">{body}</div>"));
         }
-        // Gallery / single-image rendering: each image as its own <img>
-        // wrapped in a div so CSS can lay them out (host's stylesheet
-        // can scope `.reddit-gallery > img` for carousel / grid).
+        // Gallery / single-image rendering. Multi-image (>=2) posts use a
+        // scroll-snap carousel; single-image posts get a centered cover.
         if !gallery_urls.is_empty() {
-            html.push_str("<div class=\"reddit-gallery\">");
+            let wrapper_class = if is_real_gallery {
+                "reddit-gallery reddit-gallery-carousel"
+            } else {
+                "reddit-gallery"
+            };
+            html.push_str(&format!("<div class=\"{wrapper_class}\">"));
             for (i, url) in gallery_urls.iter().enumerate() {
-                let alt = if post.is_gallery {
+                let alt = if is_real_gallery {
                     format!("Gallery image {}/{}", i + 1, gallery_urls.len())
                 } else {
                     "Post image".to_string()
@@ -830,19 +872,48 @@ impl ClientBackend for RedditBackend {
                 ));
             }
             html.push_str("</div>");
+            if is_real_gallery {
+                html.push_str(&format!(
+                    "<p class=\"reddit-gallery-count\">{} images — swipe / scroll to view</p>",
+                    gallery_urls.len(),
+                ));
+            }
         }
 
-        // Scoped stylesheet — gives the gallery a horizontally-scrollable
-        // strip on narrow viewports and a 2-up grid on wider ones.
+        // Threaded comments rendered inline. Each RawComment becomes a
+        // .reddit-comment block with depth-indented left margin (capped
+        // at depth 8 to avoid runaway indentation).
+        if !comments.is_empty() {
+            html.push_str(&format!(
+                "<h4 class=\"reddit-comments-heading\">Comments ({})</h4>",
+                post.comment_count.min(9999),
+            ));
+            html.push_str("<div class=\"reddit-comments\">");
+            render_comments_to_html(&mut html, &comments, 0, 8);
+            html.push_str("</div>");
+        }
+
+        // Scoped stylesheet — flex strip for single images, scroll-snap
+        // carousel for multi-image galleries, depth-indented comments.
         let stylesheet = Some(
             ".reddit-post-meta { color: var(--text-muted, #888); font-size: 0.85rem; }
-             .reddit-post-body { margin: 12px 0; }
-             .reddit-post-link a { color: var(--text-link, #60a5fa); }
+             .reddit-post-body { margin: 12px 0; line-height: 1.5; }
+             .reddit-post-link a { color: var(--text-link, #60a5fa); word-break: break-all; }
              .reddit-gallery {
                  display: flex;
-                 flex-wrap: wrap;
                  gap: 8px;
                  margin-top: 12px;
+                 align-items: flex-start;
+             }
+             .reddit-gallery-carousel {
+                 overflow-x: auto;
+                 scroll-snap-type: x mandatory;
+                 scroll-behavior: smooth;
+                 padding-bottom: 8px;
+             }
+             .reddit-gallery-carousel .reddit-gallery-item {
+                 scroll-snap-align: center;
+                 flex: 0 0 auto;
              }
              .reddit-gallery-item {
                  max-width: min(100%, 480px);
@@ -850,7 +921,31 @@ impl ClientBackend for RedditBackend {
                  object-fit: contain;
                  border-radius: 6px;
                  background: rgba(0, 0, 0, 0.3);
-             }"
+             }
+             .reddit-gallery-count {
+                 color: var(--text-muted, #888);
+                 font-size: 0.8rem;
+                 margin: 4px 0 0;
+             }
+             .reddit-comments-heading {
+                 margin-top: 24px;
+                 padding-top: 12px;
+                 border-top: 1px solid var(--border-primary, #333);
+             }
+             .reddit-comments { display: flex; flex-direction: column; gap: 12px; }
+             .reddit-comment {
+                 padding: 8px 12px;
+                 border-left: 2px solid var(--border-primary, #333);
+                 background: rgba(255, 255, 255, 0.02);
+                 border-radius: 0 4px 4px 0;
+             }
+             .reddit-comment-meta {
+                 color: var(--text-muted, #888);
+                 font-size: 0.78rem;
+                 margin-bottom: 4px;
+             }
+             .reddit-comment-body { line-height: 1.45; }
+             .reddit-comment-body p { margin: 4px 0; }"
                 .to_string(),
         );
 
