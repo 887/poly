@@ -114,10 +114,12 @@ disjoint files.
 - [ ] **A.2** Split `crates/core/src/i18n/baked_locales.rs` (4487
       lines) per-locale. Patch site: `crates/core/build.rs:84-109`. Net
       patch ≤15 lines. Effort S. Source: E.1#2.
-- [ ] **A.3** Extract `BackendHarness` trait + `run::<H>()` helper
-      into `servers/test-common`. Collapse 9 `main.rs` shells, 8
-      `seed/reset/reseed` triples, lifecycle HTTP handlers, layer
-      chain. Effort S/M. Source: E.1#1.
+- [x] **A.3** Extract `BackendHarness` trait + `run::<H>()` helper
+      into `servers/test-common`. Collapse 8 `main.rs` shells to 5
+      lines each, 8 `seed/reset/reseed` triples → harness default,
+      lifecycle HTTP handlers → harness, layer chain → harness.
+      Reddit excluded (no auth/inspect, fundamentally different shape).
+      Effort S/M. Source: E.1#1. — shipped in commit `<pending>`
 - [ ] **A.4** File-split `clients/client/src/types.rs` (1891 lines)
       into `types/{backend, auth, server, file, message, user,
       notification, moderation, voice, command}.rs` with a `mod.rs`

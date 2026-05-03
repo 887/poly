@@ -9,33 +9,20 @@
 //!
 //! Exposes [`router`] so integration tests can spin up the server in-process.
 
-use axum::middleware;
 use axum::Router;
 use axum::routing::{get, post};
-use tower_http::cors::CorsLayer;
 
 mod routes;
 mod state;
 
 pub use state::LemmyState;
 
-use poly_test_common::{handle_inspect_last_headers, header_inspect_middleware};
 use std::sync::Arc;
 
-/// Build the Axum router for the mock Lemmy server.
+/// Backend-specific routes only (no lifecycle, no inspect middleware, no CORS).
 ///
-/// The router is shared between the standalone binary (`main.rs`) and
-/// integration tests, which call this function directly to start an
-/// in-process server.
-pub fn router() -> Router {
-    let state = Arc::new(LemmyState::new());
-    state.seed();
-    router_with_state(state)
-}
-
-/// Build the router with explicit state (used by `main.rs` for seeded startup).
-pub fn router_with_state(state: Arc<LemmyState>) -> Router {
-    let inspect = Arc::clone(&state.inspect);
+/// Called by `BackendHarness::routes()`.
+pub fn routes_only(_state: Arc<LemmyState>) -> Router<Arc<LemmyState>> {
     Router::new()
         .route("/health", get(routes::health))
         // Auth
@@ -68,15 +55,19 @@ pub fn router_with_state(state: Arc<LemmyState>) -> Router {
         .route("/pictrs/image/{filename}", get(routes::serve_pictrs_image))
         // Test-only bypass: get a token without a password
         .route("/test/auth/token", post(routes::test_auth_token))
-        // Inspection endpoints (Phase E)
-        .route(
-            "/test/inspect/last-headers",
-            get(handle_inspect_last_headers).with_state(Arc::clone(&inspect)),
-        )
-        .with_state(state)
-        .layer(middleware::from_fn_with_state(
-            Arc::clone(&inspect),
-            header_inspect_middleware,
-        ))
-        .layer(CorsLayer::very_permissive())
+        // NOTE: no .with_state() here — build_router() provides it via the outer chain
+}
+
+/// Full router (backend routes + lifecycle + inspect + CORS).
+///
+/// Available for integration tests; seeded state variant.
+pub fn router() -> Router {
+    let state = Arc::new(LemmyState::new());
+    state.seed();
+    router_with_state(state)
+}
+
+/// Full router with explicit state.
+pub fn router_with_state(state: Arc<LemmyState>) -> Router {
+    poly_test_common::build_router::<LemmyState>(state)
 }

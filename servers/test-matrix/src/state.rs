@@ -83,6 +83,28 @@ impl Default for MatrixState {
     }
 }
 
+impl poly_test_common::BackendHarness for MatrixState {
+    const BACKEND: &'static str = "matrix";
+
+    fn new(auth: poly_test_common::AuthState) -> Self {
+        let mut s = MatrixState::new();
+        s.auth = auth;
+        s
+    }
+
+    fn seed(&self) { MatrixState::seed(self); }
+    fn reset(&self) { MatrixState::reset(self); }
+    // reseed() uses the default: reset() + seed()
+
+    fn routes(state: std::sync::Arc<Self>) -> axum::Router<std::sync::Arc<Self>> {
+        crate::routes_only(state)
+    }
+
+    fn inspect_buf(&self) -> std::sync::Arc<poly_test_common::HeaderInspectBuffer> {
+        StdArc::clone(&self.inspect)
+    }
+}
+
 impl MatrixState {
     #[must_use]
     pub fn new() -> Self {
@@ -298,12 +320,6 @@ impl MatrixState {
         self.banned_members.clear();
         self.inspect.clear();
         tracing::info!("reset Matrix state to empty");
-    }
-
-    /// Wipe and re-seed.
-    pub fn reseed(&self) {
-        self.reset();
-        self.seed();
     }
 
     /// Helper: create a room with state events.

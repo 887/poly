@@ -110,6 +110,27 @@ pub struct ContentEntry {
     pub encoding: Option<String>,
 }
 
+impl poly_test_common::BackendHarness for GitHubState {
+    const BACKEND: &'static str = "github";
+
+    fn new(auth: poly_test_common::AuthState) -> Self {
+        let mut s = GitHubState::new();
+        s.auth = auth;
+        s
+    }
+
+    fn seed(&self) { GitHubState::seed(self); }
+    fn reset(&self) { GitHubState::reset(self); }
+
+    fn routes(state: std::sync::Arc<Self>) -> axum::Router<std::sync::Arc<Self>> {
+        crate::routes_only(state)
+    }
+
+    fn inspect_buf(&self) -> std::sync::Arc<poly_test_common::HeaderInspectBuffer> {
+        Arc::clone(&self.inspect)
+    }
+}
+
 impl GitHubState {
     #[must_use]
     pub fn new() -> Self {

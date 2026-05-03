@@ -150,6 +150,28 @@ pub struct UnreadState {
     pub mentions: Vec<String>,
 }
 
+impl poly_test_common::BackendHarness for StoatState {
+    const BACKEND: &'static str = "stoat";
+
+    fn new(auth: poly_test_common::AuthState) -> Self {
+        let mut s = StoatState::new();
+        s.auth = auth;
+        s
+    }
+
+    fn seed(&self) { StoatState::seed(self); }
+    fn reset(&self) { StoatState::reset(self); }
+    // reseed() uses the default: reset() + seed()
+
+    fn routes(state: std::sync::Arc<Self>) -> axum::Router<std::sync::Arc<Self>> {
+        crate::routes_only(state)
+    }
+
+    fn inspect_buf(&self) -> std::sync::Arc<poly_test_common::HeaderInspectBuffer> {
+        StdArc::clone(&self.inspect)
+    }
+}
+
 impl Default for StoatState {
     fn default() -> Self {
         Self::new()
@@ -419,12 +441,6 @@ impl StoatState {
         self.member_mod.clear();
         self.inspect.clear();
         tracing::info!("reset Stoat state to empty");
-    }
-
-    /// Wipe all data and re-seed. Most common operation between test runs.
-    pub fn reseed(&self) {
-        self.reset();
-        self.seed();
     }
 
     fn create_channel(&self, id: &str, name: &str, description: Option<&str>, server_id: Option<&str>, channel_type: &str) {

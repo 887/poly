@@ -121,6 +121,28 @@ pub struct Reaction {
     pub created_date_time: String,
 }
 
+impl poly_test_common::BackendHarness for TeamsState {
+    const BACKEND: &'static str = "teams";
+
+    fn new(auth: poly_test_common::AuthState) -> Self {
+        let mut s = TeamsState::new();
+        s.auth = auth;
+        s
+    }
+
+    fn seed(&self) { TeamsState::seed(self); }
+    fn reset(&self) { TeamsState::reset(self); }
+    // reseed() uses the default: reset() + seed()
+
+    fn routes(state: std::sync::Arc<Self>) -> axum::Router<std::sync::Arc<Self>> {
+        crate::routes_only(state)
+    }
+
+    fn inspect_buf(&self) -> std::sync::Arc<poly_test_common::HeaderInspectBuffer> {
+        Arc::clone(&self.inspect)
+    }
+}
+
 impl Default for TeamsState {
     fn default() -> Self {
         Self::new()
@@ -274,9 +296,4 @@ impl TeamsState {
         tracing::info!("reset Teams state to empty");
     }
 
-    /// Wipe all data and re-seed. Most common operation between test runs.
-    pub fn reseed(&self) {
-        self.reset();
-        self.seed();
-    }
 }

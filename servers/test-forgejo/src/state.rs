@@ -91,6 +91,27 @@ pub struct ContentEntry {
     pub encoding: Option<String>,
 }
 
+impl poly_test_common::BackendHarness for ForgejoState {
+    const BACKEND: &'static str = "forgejo";
+
+    fn new(auth: poly_test_common::AuthState) -> Self {
+        let mut s = ForgejoState::new();
+        s.auth = auth;
+        s
+    }
+
+    fn seed(&self) { ForgejoState::seed(self); }
+    fn reset(&self) { ForgejoState::reset(self); }
+
+    fn routes(state: std::sync::Arc<Self>) -> axum::Router<std::sync::Arc<Self>> {
+        crate::routes_only(state)
+    }
+
+    fn inspect_buf(&self) -> std::sync::Arc<poly_test_common::HeaderInspectBuffer> {
+        Arc::clone(&self.inspect)
+    }
+}
+
 impl ForgejoState {
     #[must_use]
     pub fn new() -> Self {

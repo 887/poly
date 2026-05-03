@@ -18,16 +18,11 @@
 //! - `GET /v0/jobstories.json`
 //! - `GET /v0/item/{id}.json`
 
-use axum::middleware;
 use axum::Router;
 use axum::routing::get;
-use poly_test_common::{
-    handle_inspect_last_headers, header_inspect_middleware, health_handler, HeaderInspectBuffer,
-    TestServerBase,
-};
+use poly_test_common::{health_handler, HeaderInspectBuffer, TestServerBase};
 use serde_json::{Value, json};
 use std::sync::Arc;
-use tower_http::cors::CorsLayer;
 
 // ---------------------------------------------------------------------------
 // Seed data
@@ -196,6 +191,24 @@ impl Default for HnState {
     }
 }
 
+impl poly_test_common::BackendHarness for HnState {
+    const BACKEND: &'static str = "hackernews";
+
+    fn new(_auth: poly_test_common::AuthState) -> Self {
+        HnState::new()
+    }
+
+    fn seed(&self) { HnState::seed(self); }
+
+    fn routes(state: std::sync::Arc<Self>) -> axum::Router<std::sync::Arc<Self>> {
+        routes_only(state)
+    }
+
+    fn inspect_buf(&self) -> std::sync::Arc<poly_test_common::HeaderInspectBuffer> {
+        Arc::clone(&self.inspect)
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Handlers
 // ---------------------------------------------------------------------------
@@ -252,56 +265,39 @@ async fn test_auth_token_handler() -> axum::response::Json<Value> {
 // Router
 // ---------------------------------------------------------------------------
 
-/// Build the axum router for the mock HN server.
-pub fn router(state: Arc<HnState>) -> Router {
-    let inspect = Arc::clone(&state.inspect);
+/// Backend-specific routes only (no lifecycle, no inspect middleware, no CORS).
+///
+/// Called by `BackendHarness::routes()`.
+pub fn routes_only(state: Arc<HnState>) -> Router<Arc<HnState>> {
     Router::new()
         .route(
             "/health",
             get(|| async { health_handler("hackernews").await }),
         )
-        // Feed lists
+        // Feed lists — closures hard-code the feed key, state is captured
         .route("/v0/topstories.json", get({
             let s = state.clone();
-            move || {
-                let s = s.clone();
-                async move { feed_handler(axum::extract::Path("top".to_string()), axum::extract::State(s)).await }
-            }
+            move || { let s = s.clone(); async move { feed_handler(axum::extract::Path("top".to_string()), axum::extract::State(s)).await } }
         }))
         .route("/v0/newstories.json", get({
             let s = state.clone();
-            move || {
-                let s = s.clone();
-                async move { feed_handler(axum::extract::Path("new".to_string()), axum::extract::State(s)).await }
-            }
+            move || { let s = s.clone(); async move { feed_handler(axum::extract::Path("new".to_string()), axum::extract::State(s)).await } }
         }))
         .route("/v0/beststories.json", get({
             let s = state.clone();
-            move || {
-                let s = s.clone();
-                async move { feed_handler(axum::extract::Path("best".to_string()), axum::extract::State(s)).await }
-            }
+            move || { let s = s.clone(); async move { feed_handler(axum::extract::Path("best".to_string()), axum::extract::State(s)).await } }
         }))
         .route("/v0/askstories.json", get({
             let s = state.clone();
-            move || {
-                let s = s.clone();
-                async move { feed_handler(axum::extract::Path("ask".to_string()), axum::extract::State(s)).await }
-            }
+            move || { let s = s.clone(); async move { feed_handler(axum::extract::Path("ask".to_string()), axum::extract::State(s)).await } }
         }))
         .route("/v0/showstories.json", get({
             let s = state.clone();
-            move || {
-                let s = s.clone();
-                async move { feed_handler(axum::extract::Path("show".to_string()), axum::extract::State(s)).await }
-            }
+            move || { let s = s.clone(); async move { feed_handler(axum::extract::Path("show".to_string()), axum::extract::State(s)).await } }
         }))
         .route("/v0/jobstories.json", get({
             let s = state.clone();
-            move || {
-                let s = s.clone();
-                async move { feed_handler(axum::extract::Path("jobs".to_string()), axum::extract::State(s)).await }
-            }
+            move || { let s = s.clone(); async move { feed_handler(axum::extract::Path("jobs".to_string()), axum::extract::State(s)).await } }
         }))
         // Individual items — route captures "1234.json", handler strips ".json"
         .route("/v0/item/{id_json}", get(item_handler))
@@ -309,17 +305,14 @@ pub fn router(state: Arc<HnState>) -> Router {
         .route("/v0/user/{user_json}", get(user_handler))
         // Test-only bypass: guest auth token
         .route("/test/auth/token", axum::routing::post(test_auth_token_handler))
-        // Inspection endpoints (Phase E)
-        .route(
-            "/test/inspect/last-headers",
-            get(handle_inspect_last_headers).with_state(Arc::clone(&inspect)),
-        )
-        .with_state(state)
-        .layer(middleware::from_fn_with_state(
-            Arc::clone(&inspect),
-            header_inspect_middleware,
-        ))
-        .layer(CorsLayer::very_permissive())
+        // NOTE: no .with_state() here — build_router() provides it via the outer chain
+}
+
+/// Full router (backend routes + lifecycle + inspect + CORS).
+///
+/// Kept for integration tests and in-process test servers.
+pub fn router(state: Arc<HnState>) -> Router {
+    poly_test_common::build_router::<HnState>(state)
 }
 
 // ---------------------------------------------------------------------------

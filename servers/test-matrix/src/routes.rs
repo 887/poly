@@ -1060,27 +1060,6 @@ pub async fn test_auth_token(
 }
 
 // ---------------------------------------------------------------------------
-// Lifecycle endpoints
-// ---------------------------------------------------------------------------
-
-/// POST /seed
-pub async fn seed(State(state): State<std::sync::Arc<MatrixState>>) -> impl IntoResponse {
-    state.seed();
-    Json(serde_json::json!({ "status": "seeded" }))
-}
-
-/// POST /reset
-pub async fn reset(State(state): State<std::sync::Arc<MatrixState>>) -> impl IntoResponse {
-    state.reset();
-    Json(serde_json::json!({ "status": "reset" }))
-}
-
-/// POST /reseed
-pub async fn reseed(State(state): State<std::sync::Arc<MatrixState>>) -> impl IntoResponse {
-    state.reseed();
-    Json(serde_json::json!({ "status": "reseeded" }))
-}
-
 /// GET /_matrix/media/v3/thumbnail/{server}/{mediaId}
 /// (and the matching /download/ alias)
 ///

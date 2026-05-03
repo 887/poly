@@ -111,6 +111,27 @@ pub struct ModlogEntry {
     pub when_: String,
 }
 
+impl poly_test_common::BackendHarness for LemmyState {
+    const BACKEND: &'static str = "lemmy";
+
+    fn new(auth: poly_test_common::AuthState) -> Self {
+        let mut s = LemmyState::new();
+        s.auth = auth;
+        s
+    }
+
+    fn seed(&self) { LemmyState::seed(self); }
+    fn reset(&self) { LemmyState::reset(self); }
+
+    fn routes(state: std::sync::Arc<Self>) -> axum::Router<std::sync::Arc<Self>> {
+        crate::routes_only(state)
+    }
+
+    fn inspect_buf(&self) -> std::sync::Arc<poly_test_common::HeaderInspectBuffer> {
+        Arc::clone(&self.inspect)
+    }
+}
+
 impl LemmyState {
     #[must_use]
     pub fn new() -> Self {

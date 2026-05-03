@@ -668,25 +668,6 @@ pub async fn send_chat_message(
 }
 
 // ---------------------------------------------------------------------------
-// Lifecycle
-// ---------------------------------------------------------------------------
-
-pub async fn seed(State(state): State<Arc<TeamsState>>) -> impl IntoResponse {
-    state.seed();
-    Json(serde_json::json!({ "ok": true }))
-}
-
-pub async fn reset(State(state): State<Arc<TeamsState>>) -> impl IntoResponse {
-    state.reset();
-    Json(serde_json::json!({ "ok": true }))
-}
-
-pub async fn reseed(State(state): State<Arc<TeamsState>>) -> impl IntoResponse {
-    state.reseed();
-    Json(serde_json::json!({ "ok": true }))
-}
-
-// ---------------------------------------------------------------------------
 // Avatar — Microsoft Graph profile-photo path
 // ---------------------------------------------------------------------------
 

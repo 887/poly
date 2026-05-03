@@ -197,6 +197,39 @@ pub struct Message {
     pub thread_id: Option<Id<ChannelMarker>>,
 }
 
+impl poly_test_common::BackendHarness for DiscordState {
+    const BACKEND: &'static str = "discord";
+
+    fn new(auth: poly_test_common::AuthState) -> Self {
+        let mut s = DiscordState::new();
+        s.auth = auth;
+        s
+    }
+
+    fn seed(&self) { DiscordState::seed(self); DiscordState::seed_moderation(self); }
+    fn reset(&self) { DiscordState::reset(self); }
+    fn reseed(&self) { DiscordState::reseed(self); } // includes seed_moderation()
+
+    fn routes(state: std::sync::Arc<Self>) -> axum::Router<std::sync::Arc<Self>> {
+        crate::routes_only(state)
+    }
+
+    fn inspect_buf(&self) -> std::sync::Arc<poly_test_common::HeaderInspectBuffer> {
+        Arc::clone(&self.inspect)
+    }
+
+    fn post_bind(
+        state: &std::sync::Arc<Self>,
+        addr: std::net::SocketAddr,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>> {
+        let state = Arc::clone(state);
+        Box::pin(async move {
+            *state.gateway_url.write().await =
+                format!("ws://{}/gateway/ws", addr);
+        })
+    }
+}
+
 impl Default for DiscordState {
     fn default() -> Self {
         Self::new()

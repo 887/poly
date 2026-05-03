@@ -9,29 +9,19 @@
 //!
 //! Exposes [`router`] so integration tests can spin up the server in-process.
 
-use axum::middleware;
 use axum::Router;
 use axum::routing::{delete, get, post};
-use tower_http::cors::CorsLayer;
+use std::sync::Arc;
 
 mod routes;
 mod state;
 
 pub use state::ForgejoState;
 
-use poly_test_common::{handle_inspect_last_headers, header_inspect_middleware};
-use std::sync::Arc;
-
-/// Build the Axum router for the mock Forgejo server (with freshly seeded state).
-pub fn router() -> Router {
-    let state = Arc::new(ForgejoState::new());
-    state.seed();
-    router_with_state(state)
-}
-
-/// Build the router with explicit state (used by `main.rs` for seeded startup).
-pub fn router_with_state(state: Arc<ForgejoState>) -> Router {
-    let inspect = Arc::clone(&state.inspect);
+/// Backend-specific routes only (no lifecycle, no inspect middleware, no CORS).
+///
+/// Called by `BackendHarness::routes()`.
+pub fn routes_only(_state: Arc<ForgejoState>) -> Router<Arc<ForgejoState>> {
     Router::new()
         .route("/health", get(routes::health))
         .route("/api/v1/user", get(routes::get_user))
@@ -52,10 +42,7 @@ pub fn router_with_state(state: Arc<ForgejoState>) -> Router {
             "/api/v1/repos/{owner}/{repo}/issues/{number}/comments",
             get(routes::list_comments),
         )
-        .route(
-            "/api/v1/repos/{owner}/{repo}",
-            get(routes::get_repo),
-        )
+        .route("/api/v1/repos/{owner}/{repo}", get(routes::get_repo))
         .route(
             "/api/v1/repos/{owner}/{repo}/issues/comments/{id}",
             delete(routes::delete_issue_comment),
@@ -70,15 +57,17 @@ pub fn router_with_state(state: Arc<ForgejoState>) -> Router {
         )
         .route("/avatars/{name}", get(routes::serve_avatar))
         .route("/test/auth/token", post(routes::test_auth_token))
-        // Inspection endpoints (Phase E)
-        .route(
-            "/test/inspect/last-headers",
-            get(handle_inspect_last_headers).with_state(Arc::clone(&inspect)),
-        )
-        .with_state(state)
-        .layer(middleware::from_fn_with_state(
-            Arc::clone(&inspect),
-            header_inspect_middleware,
-        ))
-        .layer(CorsLayer::very_permissive())
+        // NOTE: no .with_state() here — build_router() provides it via the outer chain
+}
+
+/// Full router with freshly seeded state. Available for integration tests.
+pub fn router() -> Router {
+    let state = Arc::new(ForgejoState::new());
+    state.seed();
+    router_with_state(state)
+}
+
+/// Full router with explicit state.
+pub fn router_with_state(state: Arc<ForgejoState>) -> Router {
+    poly_test_common::build_router::<ForgejoState>(state)
 }

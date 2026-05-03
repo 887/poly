@@ -559,26 +559,6 @@ pub async fn open_dm(
 }
 
 // ---------------------------------------------------------------------------
-// Lifecycle
-// ---------------------------------------------------------------------------
-
-pub async fn seed(State(state): State<Arc<DiscordState>>) -> impl IntoResponse {
-    state.seed();
-    state.seed_moderation();
-    Json(serde_json::json!({ "ok": true }))
-}
-
-pub async fn reset(State(state): State<Arc<DiscordState>>) -> impl IntoResponse {
-    state.reset();
-    Json(serde_json::json!({ "ok": true }))
-}
-
-pub async fn reseed(State(state): State<Arc<DiscordState>>) -> impl IntoResponse {
-    state.reseed();
-    Json(serde_json::json!({ "ok": true }))
-}
-
-// ---------------------------------------------------------------------------
 // Gateway WebSocket — GET /gateway/ws
 // ---------------------------------------------------------------------------
 

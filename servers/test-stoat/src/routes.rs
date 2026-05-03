@@ -946,24 +946,6 @@ pub async fn test_auth_token(
     .into_response()
 }
 
-/// POST /seed
-pub async fn seed(State(state): State<std::sync::Arc<StoatState>>) -> impl IntoResponse {
-    state.seed();
-    Json(serde_json::json!({ "status": "seeded" }))
-}
-
-/// POST /reset
-pub async fn reset(State(state): State<std::sync::Arc<StoatState>>) -> impl IntoResponse {
-    state.reset();
-    Json(serde_json::json!({ "status": "reset" }))
-}
-
-/// POST /reseed
-pub async fn reseed(State(state): State<std::sync::Arc<StoatState>>) -> impl IntoResponse {
-    state.reseed();
-    Json(serde_json::json!({ "status": "reseeded" }))
-}
-
 // ---------------------------------------------------------------------------
 // Real-time: typing indicator + Bonfire WebSocket
 // ---------------------------------------------------------------------------

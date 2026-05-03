@@ -31,6 +31,7 @@ pub mod avatars;
 mod auth;
 mod broadcast;
 mod cli;
+pub mod harness;
 pub mod inspect;
 mod server;
 
@@ -38,6 +39,7 @@ pub use auth::{AuthState, TokenAuth, wipe_persisted};
 pub use avatars::serve_animal;
 pub use broadcast::EventBus;
 pub use cli::CliArgs;
+pub use harness::{BackendHarness, build_router, run};
 pub use inspect::{
     HEADER_INSPECT_CAP, HeaderEntry, HeaderInspectBuffer, handle_inspect_last_headers,
     header_inspect_middleware,
