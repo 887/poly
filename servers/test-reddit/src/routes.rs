@@ -9,7 +9,7 @@
 
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::{HeaderMap, StatusCode, header},
     response::{Html, IntoResponse, Response},
 };
@@ -360,7 +360,6 @@ pub async fn subreddits_search(
         all_subs.insert(builtin.to_string());
     }
 
-    let mut matching: Vec<&'static str> = Vec::new();
     let all_subs_sorted: Vec<String> = {
         let mut v: Vec<String> = all_subs.into_iter().collect();
         v.sort();
@@ -378,7 +377,6 @@ pub async fn subreddits_search(
                 "programming" => "dog",
                 _ => "koala",
             };
-            let _ = &matching;
             json!({
                 "kind": "t5",
                 "data": {

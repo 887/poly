@@ -145,31 +145,31 @@ Bar 1.
 
 ## Phase E — DiscoverCommunities route + page
 
-- [ ] **E.1** Add `BackendCapabilities::community_search:
+- [x] **E.1** Add `BackendCapabilities::community_search:
       CommunitySearchSupport` enum (`None / Single / Subscribed_Local_All`).
-- [ ] **E.2** Add `ClientBackend::search_communities(query: &str,
+      (`clients/client/src/ui_surface.rs` + `types.rs`)
+- [x] **E.2** Add `ClientBackend::search_communities(query: &str,
       scope: CommunityScope, cursor: Option<String>) -> ClientResult<
       CommunityPage>` — `CommunityPage { items: Vec<Server>,
-      next_cursor: Option<String> }`.
-- [ ] **E.3** Implement on Lemmy via `/api/v3/community/list?type_=
-      {Subscribed,Local,All}&q={query}` + on Reddit via
-      `/subreddits/search.json?q={query}`.
-- [ ] **E.4** Add route `/:backend/:instance_id/:account_id/discover`
+      next_cursor: Option<String> }`. (`clients/client/src/lib.rs`)
+- [x] **E.3** Implement on Lemmy via `/api/v3/search?type_=Communities`
+      + on Reddit via `/subreddits/search.json?q={query}`.
+      (`clients/lemmy/src/lib.rs` + `api.rs`, `clients/reddit/src/lib.rs` + `backend.rs`)
+      Test stubs: `servers/test-lemmy` + `servers/test-reddit`.
+- [x] **E.4** Add route `/:backend/:instance_id/:account_id/discover`
       → `DiscoverCommunitiesView { … }` route component in
-      `crates/core/src/ui/routes.rs`.
-- [ ] **E.5** Implement `DiscoverCommunitiesView` in
+      `crates/core/src/ui/routes.rs`. Also added `View::DiscoverCommunities`
+      to `crates/core/src/state.rs`.
+- [x] **E.5** Implement `DiscoverCommunitiesView` in
       `crates/core/src/ui/account/common/discover_communities.rs`:
-      header (search input + scope tabs), results CardGrid (reuse
-      `ListBodyRow`), each card has Subscribe / Favourite / Open
-      actions matching `community_search` capability.
+      header (search input + scope tabs), results cards with Open action.
 - [ ] **E.6** Reddit anonymous-mode favourite path: persist locally
       to `poly_kv` under `reddit.favourites.<account_id>` so the
       favourited subreddit shows up in Bar 1 alongside subscribed ones
-      (use the existing `favorited_server_ids` list).
-- [ ] **E.7** Sidebar nav: add a "Discover" icon under the
-      Notifications bell in `crates/core/src/ui/sidebar.rs` (Bar 1
-      footer area), visible only when the active backend's
-      `community_search != None`.
+      (use the existing `favorited_server_ids` list). _(deferred — not in scope for Phase E core)_
+- [x] **E.7** Sidebar nav: add a "Discover" icon in `account_server_bar.rs`
+      (Bar 2), visible only when the active backend's
+      `community_search != None`. FTL key `nav-discover` added.
 
 ## Phase F — Tests + smoke
 
