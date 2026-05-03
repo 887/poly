@@ -21,6 +21,49 @@ use std::pin::Pin;
 use crate::{RedditClient, RedditError, SortKind};
 use crate::parser::{RawComment, RawDm, RawPost, UserProfile};
 
+/// Strip HTML tags + decode common entities from a reddit comment body.
+///
+/// Reddit's parser emits `body_html` already converted from markdown, but
+/// `MessageContent::Text` is rendered as plain text by the chat view (no
+/// HTML interpretation). This conversion gives readable text — paragraphs
+/// joined with newlines, lists flattened, links shown as link text only
+/// (URLs lost). Lossy but the right floor for the existing chat-view.
+///
+/// Future improvement: round-trip HTML → markdown so the chat-view's
+/// markdown renderer can lay out lists / links / code blocks properly.
+fn html_to_plain_text(html: &str) -> String {
+    // Replace block-level closing tags with double-newline so paragraphs
+    // and list items separate visually.
+    let mut s = html.to_string();
+    for close in ["</p>", "</li>", "</div>", "</blockquote>", "<br>", "<br/>", "<br />"] {
+        s = s.replace(close, "\n\n");
+    }
+    // Strip remaining tags via a tiny state-machine.
+    let mut out = String::with_capacity(s.len());
+    let mut in_tag = false;
+    for ch in s.chars() {
+        match ch {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            c if !in_tag => out.push(c),
+            _ => {}
+        }
+    }
+    // Decode the common HTML entities reddit emits.
+    out = out
+        .replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&nbsp;", " ");
+    // Collapse runs of 3+ newlines down to 2.
+    while out.contains("\n\n\n") {
+        out = out.replace("\n\n\n", "\n\n");
+    }
+    out.trim().to_string()
+}
+
 /// Walk a comment tree depth-first and push each comment as a flat
 /// Message into the output Vec. Used by `get_messages` for the
 /// per-post comment-fetch route (`hn-post-<pid>`) so ForumPostView
@@ -41,10 +84,10 @@ fn flatten_comments_into_messages(
                 presence: PresenceStatus::Offline,
                 backend: backend.clone(),
             },
-            // body_html is reddit's pre-rendered markdown; keep verbatim
-            // so the chat-view can render it via the existing markdown
-            // sanitization layer.
-            content: MessageContent::Text(c.body_html.clone()),
+            // body_html is reddit's pre-rendered HTML; the chat-view
+            // renders MessageContent::Text as plain text (no HTML
+            // interpretation), so strip tags + decode entities first.
+            content: MessageContent::Text(html_to_plain_text(&c.body_html)),
             timestamp: c.timestamp,
             attachments: Vec::new(),
             reactions: Vec::new(),
