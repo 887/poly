@@ -173,11 +173,21 @@ These can land in parallel; they touch disjoint trees.
       cleanly migrate (multi-call write-lock bodies) had their `read()`
       flipped to `peek()` to close hang-class #7. Source: D.1.1. —
       shipped in commit `c23d41a3`.
-- [ ] **D.2** Implement `use_view_resource<Q: ViewQuery>(query)` hook
-      bundling `(account_id, server_id, channel_id, scope, sort,
-      filter)` keying + backend resolve + timeout + reactive-effect
-      re-fire. Migrate the 28 ad-hoc `use_resource` body engines. Net
-      ~140 lines removed. Effort M. Source: D.1.4.
+- [x] **D.2** `ViewQuery` trait + `use_view_resource<Q>(query)` hook
+      shipped in `crates/core/src/ui/client_ui/use_view_resource.rs`,
+      bundling backend-resolve + 5s timeout via D.1's `with_backend`.
+      **11 of 27 sites migrated** to typed query structs (channel
+      view, account overview, list-body first page + row detail,
+      split-body rows, server roles/bans/modlog, context menu items,
+      composer buttons, message actions). 16 remained on raw
+      `use_resource` because they have structural reasons not to
+      migrate: Signal reads inside the closure (reactive dep tracking),
+      `try_consume_context` patterns, `Option<String>` account_id with
+      `Ok(vec![])` fallback (treating "no account" as success not
+      error), multi-call closure bodies with side-effects on ChatData,
+      `get_backend_for_server` resolution path, intentional
+      `client_manager.read()` subscriptions. Source: D.1.4. — shipped
+      in commit `c1b6e031`.
 - [x] **D.3** Trait-default approach (cleaner than a derive macro):
       `ClientBackend` gained `fn settings_storage(&self)` with a
       static-empty default, and `get_setting_value`/`set_setting_value`
