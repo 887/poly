@@ -165,23 +165,26 @@ These can land in parallel; they touch disjoint trees.
 
 ### Phase D — `ClientManager::with_backend` + `use_view_resource` (~3 days)
 
-- [ ] **D.1** Implement `ClientManager::with_backend(account_id, async fn)`
-      and `with_backend_for_server(server_id, async fn)` that resolves
-      the backend, applies `read_with_timeout(BACKEND_TIMEOUT)`, and
-      returns `ClientResult<R>` so callers can `?`. Migrate the 48
-      duplicate sites listed in D.1.1. Net ~290 lines removed. Effort
-      M. Source: D.1.1.
+- [x] **D.1** Implemented `ClientManager::with_backend(account_id, async fn)`,
+      `with_backend_timeout`, and `with_backend_for_server(server_id, async fn)`
+      that resolve the backend, apply `read_with_timeout(BACKEND_TIMEOUT)`,
+      and return `ClientResult<R>` so callers can `?`. 43 duplicate
+      sites migrated across `crates/core/src/ui/`. Sites that couldn't
+      cleanly migrate (multi-call write-lock bodies) had their `read()`
+      flipped to `peek()` to close hang-class #7. Source: D.1.1. —
+      shipped in commit `c23d41a3`.
 - [ ] **D.2** Implement `use_view_resource<Q: ViewQuery>(query)` hook
       bundling `(account_id, server_id, channel_id, scope, sort,
       filter)` keying + backend resolve + timeout + reactive-effect
       re-fire. Migrate the 28 ad-hoc `use_resource` body engines. Net
       ~140 lines removed. Effort M. Source: D.1.4.
-- [ ] **D.3** (Opportunistic) Add a derive macro generating
-      `get_setting_value`/`set_setting_value` from a backend's
-      `SettingsStorageCell` field — eliminates the 12-line duplicate
-      block in 8 `clients/*/src/lib.rs`. Net ~90 lines. Source: D.4.3
-      (note: shard called this "lower priority"; bundle here only if
-      bandwidth permits).
+- [x] **D.3** Trait-default approach (cleaner than a derive macro):
+      `ClientBackend` gained `fn settings_storage(&self)` with a
+      static-empty default, and `get_setting_value`/`set_setting_value`
+      now have working defaults that delegate to it. Each of the 11
+      plugin crates' identical 12-line {get,set} pair collapsed to a
+      single 3-line override returning `&self.settings_storage`. Net
+      -270 LOC. Source: D.4.3. — shipped in commit `cd1809bc`.
 
 ### Phase E — Lint-gate consolidation (~3 days)
 
