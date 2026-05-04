@@ -11,6 +11,9 @@
 //! - Multi-line composer with toolbar controls
 //! - Message reactions, editing, and context menu
 
+mod virtualization;
+use virtualization::*;
+
 use crate::state::BatchedSignal;
 use super::super::super::routes::Route;
 use super::chat_history::{
@@ -49,18 +52,11 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
-const MESSAGE_VIRTUALIZATION_THRESHOLD: usize = 10_000;
-const MESSAGE_VIRTUALIZATION_OVERSCAN_PX: f64 = 1200.0;
-const MESSAGE_VIRTUALIZATION_MIN_RENDERED: usize = 96;
 /// Treat history paging as an exact-edge action: only trigger when the scroll
 /// position has actually reached the top/bottom sentinel boundary (with a tiny
 /// epsilon for browser rounding noise).
 const MESSAGE_HISTORY_EDGE_THRESHOLD_PX: f64 = 1.0;
 const MESSAGE_HISTORY_EDGE_REARM_PX: f64 = 48.0;
-/// History sentinels only exist so the browser can observe edge entry.
-/// Keep them tiny so the native scrollbar mostly reflects the real 200-row
-/// working set instead of a synthetic fake scroll range.
-const MESSAGE_HISTORY_SENTINEL_PX: f64 = 8.0;
 /// When the user re-enters the bottom sentinel, fetch multiple newer pages in a
 /// single async burst and swap the final 200-message working set only once.
 /// This avoids visibly "attaching" rows page-by-page and clears the bottom
@@ -69,14 +65,6 @@ const MAX_CHAINED_NEWER_HISTORY_PAGES: usize = 20;
 /// Distance from the scroll bottom (in pixels) beyond which the "Jump to Present"
 /// button appears. Matches roughly one viewport height of buffer.
 const JUMP_TO_PRESENT_THRESHOLD_PX: f64 = 200.0;
-const ESTIMATED_FULL_MESSAGE_HEIGHT: f64 = 92.0;
-const ESTIMATED_GROUPED_MESSAGE_HEIGHT: f64 = 34.0;
-const ESTIMATED_DATE_SEPARATOR_HEIGHT: f64 = 28.0;
-const ESTIMATED_UNREAD_DIVIDER_HEIGHT: f64 = 20.0;
-const ESTIMATED_REPLY_PREVIEW_HEIGHT: f64 = 22.0;
-const ESTIMATED_REACTION_BAR_HEIGHT: f64 = 28.0;
-const ESTIMATED_IMAGE_ATTACHMENT_HEIGHT: f64 = 180.0;
-const ESTIMATED_FILE_ATTACHMENT_HEIGHT: f64 = 52.0;
 
 #[derive(Debug, Clone)]
 struct MsgContextMenu {
@@ -90,22 +78,6 @@ struct MsgContextMenu {
     /// Discord-parity image actions (Copy / Save / Copy Link / Open Link)
     /// for this attachment when present.
     image_attachment: Option<(String, String)>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq)]
-struct MessageVirtualWindowState {
-    enabled: bool,
-    start_idx: usize,
-    end_idx: usize,
-    top_spacer_px: f64,
-    bottom_spacer_px: f64,
-}
-
-#[derive(Debug, Clone, Copy)]
-struct MessageListViewportMetrics {
-    scroll_top: f64,
-    client_height: f64,
-    scroll_height: f64,
 }
 
 const GROUP_THRESHOLD_MINUTES: i64 = 7;
@@ -1979,225 +1951,6 @@ struct ChatViewMarkupCtx {
     mobile_layout_resize_tick: Signal<u64>,
 }
 
-fn should_virtualize_messages(message_count: usize, search_query_value: &str) -> bool {
-    message_count > MESSAGE_VIRTUALIZATION_THRESHOLD && search_query_value.is_empty()
-}
-
-fn estimate_message_row_height(
-    messages: &[Message],
-    idx: usize,
-    unread_marker_id: Option<&str>,
-    unread_count: u32,
-) -> f64 {
-    let Some(msg) = messages.get(idx) else {
-        return ESTIMATED_FULL_MESSAGE_HEIGHT;
-    };
-    let show_date_sep = if idx == 0 {
-        true
-    } else {
-        messages
-            .get(idx.saturating_sub(1))
-            .is_none_or(|prev| msg.timestamp.date_naive() != prev.timestamp.date_naive())
-    };
-    let is_grouped = if idx == 0 {
-        false
-    } else {
-        messages.get(idx.saturating_sub(1)).is_some_and(|prev| {
-            prev.author.id == msg.author.id
-                && !show_date_sep
-                && msg
-                    .timestamp
-                    .signed_duration_since(prev.timestamp)
-                    .num_minutes()
-                    < GROUP_THRESHOLD_MINUTES
-        })
-    };
-
-    let mut height = if is_grouped {
-        ESTIMATED_GROUPED_MESSAGE_HEIGHT
-    } else {
-        ESTIMATED_FULL_MESSAGE_HEIGHT
-    };
-
-    if show_date_sep {
-        height += ESTIMATED_DATE_SEPARATOR_HEIGHT;
-    }
-    if unread_count > 0 && unread_marker_id == Some(msg.id.as_str()) {
-        height += ESTIMATED_UNREAD_DIVIDER_HEIGHT;
-    }
-    if msg.reply_to.is_some() {
-        height += ESTIMATED_REPLY_PREVIEW_HEIGHT;
-    }
-    if !msg.reactions.is_empty() {
-        height += ESTIMATED_REACTION_BAR_HEIGHT;
-    }
-
-    for attachment in &msg.attachments {
-        let attachment_height = if attachment.content_type.starts_with("image/") {
-            ESTIMATED_IMAGE_ATTACHMENT_HEIGHT
-        } else {
-            ESTIMATED_FILE_ATTACHMENT_HEIGHT
-        };
-        height += attachment_height;
-    }
-
-    height
-}
-
-fn estimate_message_block_height(
-    messages: &[Message],
-    start_idx: usize,
-    end_idx: usize,
-    unread_marker_id: Option<&str>,
-    unread_count: u32,
-) -> f64 {
-    if start_idx >= end_idx || start_idx >= messages.len() {
-        return 0.0;
-    }
-
-    let capped_end = end_idx.min(messages.len());
-    let mut total = 0.0_f64;
-    for idx in start_idx..capped_end {
-        total += estimate_message_row_height(messages, idx, unread_marker_id, unread_count);
-    }
-    total
-}
-
-fn recompute_history_spacers(history: &mut ChatHistoryUiState, _messages: &[Message]) {
-    history.before_spacer_px = if history.has_more_before {
-        MESSAGE_HISTORY_SENTINEL_PX
-    } else {
-        0.0_f64
-    };
-    history.after_spacer_px = if history.has_more_after {
-        MESSAGE_HISTORY_SENTINEL_PX
-    } else {
-        0.0_f64
-    };
-}
-
-fn compute_message_virtual_window(
-    messages: &[Message],
-    unread_marker_id: Option<&str>,
-    unread_count: u32,
-    metrics: MessageListViewportMetrics,
-) -> MessageVirtualWindowState {
-    if messages.is_empty() {
-        return MessageVirtualWindowState::default();
-    }
-
-    let mut prefix_heights = Vec::with_capacity(messages.len().saturating_add(1));
-    prefix_heights.push(0.0_f64);
-    for idx in 0..messages.len() {
-        let prev = prefix_heights.last().copied().unwrap_or(0.0_f64);
-        let next = prev + estimate_message_row_height(messages, idx, unread_marker_id, unread_count);
-        prefix_heights.push(next);
-    }
-
-    let viewport_start = (metrics.scroll_top - MESSAGE_VIRTUALIZATION_OVERSCAN_PX).max(0.0_f64);
-    let viewport_end =
-        metrics.scroll_top + metrics.client_height + MESSAGE_VIRTUALIZATION_OVERSCAN_PX;
-
-    let mut start_idx = 0_usize;
-    while start_idx < messages.len()
-        && prefix_heights
-            .get(start_idx.saturating_add(1))
-            .copied()
-            .is_some_and(|height| height < viewport_start)
-    {
-        start_idx = start_idx.saturating_add(1);
-    }
-
-    let mut end_idx = start_idx;
-    while end_idx < messages.len()
-        && prefix_heights
-            .get(end_idx)
-            .copied()
-            .is_some_and(|height| height <= viewport_end)
-    {
-        end_idx = end_idx.saturating_add(1);
-    }
-
-    if end_idx.saturating_sub(start_idx) < MESSAGE_VIRTUALIZATION_MIN_RENDERED {
-        let extra = MESSAGE_VIRTUALIZATION_MIN_RENDERED.saturating_sub(end_idx.saturating_sub(start_idx));
-        // lint-allow-unused: floor division — splits leftover slack evenly above/below viewport
-        #[allow(clippy::integer_division)]
-        let extra_before = extra / 2;
-        start_idx = start_idx.saturating_sub(extra_before);
-        end_idx = start_idx.saturating_add(MESSAGE_VIRTUALIZATION_MIN_RENDERED).min(messages.len());
-        start_idx = end_idx.saturating_sub(MESSAGE_VIRTUALIZATION_MIN_RENDERED);
-    }
-
-    let total_height = prefix_heights.last().copied().unwrap_or(0.0_f64);
-    let top_spacer_px = prefix_heights.get(start_idx).copied().unwrap_or(0.0_f64);
-    let bottom_spacer_px =
-        total_height - prefix_heights.get(end_idx).copied().unwrap_or(total_height);
-
-    MessageVirtualWindowState {
-        enabled: true,
-        start_idx,
-        end_idx,
-        top_spacer_px,
-        bottom_spacer_px,
-    }
-}
-
-async fn read_message_list_viewport_metrics() -> Option<MessageListViewportMetrics> {
-    let mut eval = document::eval(
-        r#"
-            const el = document.getElementById('message-list-scroll');
-            if (!el) {
-                dioxus.send('');
-            } else {
-                dioxus.send(`${el.scrollTop}|${el.clientHeight}|${el.scrollHeight}`);
-            }
-        "#,
-    );
-
-    let Ok(raw) = eval.recv::<String>().await else {
-        return None;
-    };
-    let mut parts = raw.split('|');
-    let scroll_top = parts.next()?.parse::<f64>().ok()?;
-    let client_height = parts.next()?.parse::<f64>().ok()?;
-    let scroll_height = parts.next()?.parse::<f64>().ok()?;
-    Some(MessageListViewportMetrics {
-        scroll_top,
-        client_height,
-        scroll_height,
-    })
-}
-
-fn trim_message_window_from_bottom(messages: &mut Vec<Message>) -> bool {
-    if messages.len() <= MAX_LOADED_MESSAGES {
-        return false;
-    }
-    messages.truncate(MAX_LOADED_MESSAGES);
-    true
-}
-
-fn trim_message_window_from_top(messages: &mut Vec<Message>) -> bool {
-    if messages.len() <= MAX_LOADED_MESSAGES {
-        return false;
-    }
-    let overflow = messages.len().saturating_sub(MAX_LOADED_MESSAGES);
-    messages.drain(0..overflow);
-    true
-}
-
-fn set_message_virtual_window(
-    mut virtual_window: Signal<MessageVirtualWindowState>,
-    messages: &[Message],
-    unread_marker_id: Option<&str>,
-    unread_count: u32,
-    metrics: MessageListViewportMetrics,
-) {
-    let next = compute_message_virtual_window(messages, unread_marker_id, unread_count, metrics);
-    if *virtual_window.read() != next {
-        virtual_window.set(next);
-    }
-}
-
 #[derive(Clone)]
 struct MessageListScrollWorkCtx {
     loading: bool,
@@ -2217,18 +1970,6 @@ struct MessageListScrollWorkCtx {
     /// Signal updated by the scroll loop — true when the user is scrolled far
     /// enough from the live tail that "Jump to Present" should be shown.
     scrolled_from_bottom: Signal<bool>,
-}
-
-async fn wait_for_next_animation_frame() -> bool {
-    let mut eval = document::eval(
-        r#"
-            requestAnimationFrame(() => {
-                dioxus.send(true);
-            });
-        "#,
-    );
-
-    eval.recv::<bool>().await.unwrap_or(false)
 }
 
 fn spawn_message_list_scroll_work(mut ctx: MessageListScrollWorkCtx) {
