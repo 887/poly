@@ -131,22 +131,22 @@ disjoint files.
 
 ### Phase B — LSP fixes + capability single-source-of-truth (~3 days)
 
-- [ ] **B.1** Land the four LSP fixes from B.2:
+- [x] **B.1** Land the four LSP fixes from B.2:
   - `send_reply_message` default → `Err(NotSupported)` (silent data-loss bug). HIGH.
   - `get_pinned_messages` default → `Err(NotSupported)` (mirror `set_message_pinned`). MED.
-  - HN `get_presence` `Ok(Offline)` → `Err(NotSupported)` + add `PresenceStatus::Unknown` variant. MED.
+  - HN `get_presence` `Ok(Offline)` → `Ok(PresenceStatus::Unknown)` + new variant. MED.
   - Teams `get_user` `NotFound` → `NotSupported`. LOW.
-  Effort S each. Source: B.2.1-B.2.4.
-- [ ] **B.2** Kill `capabilities_for_slug` table by routing through
-      the existing trait method + a startup-time slug→caps registry on
-      `ClientManager`. Delete the `pack_f_capability_gates` parity test
-      and the per-backend capabilities tests they spawned. Effort M.
-      Source: B.1.1.
-- [ ] **B.3** Add the inline-allowlist for the 6 lemmy/hackernews/teams
-      `if backend == "<slug>"` quirk gates so the
-      `forbid_backend_slug_match` lint stops complaining about each;
-      do NOT promote them to capabilities (over-abstraction risk).
-      Source: B.3.6.
+  — shipped in commit `1034d3e2`.
+- [x] **B.2** Killed `capabilities_for_slug` table — single source of
+      truth via runtime `ClientManager::backend_capabilities` registry.
+      Deleted `pack_f_capability_gates` parity test + 8 per-backend
+      `tests/capabilities.rs` parity tests. 22 UI consumer sites
+      migrated to `client_manager.peek().capabilities_for_slug(slug)`.
+      — shipped in commit `68ee5243`.
+- [x] **B.3** Closed as moot — the `forbid_backend_slug_match` lint
+      matches `match X.as_str() { ... }` ladders, NOT the 6
+      `if backend == "<slug>"` quirk gates the survey flagged. No
+      inline-allowlist needed; nothing to migrate.
 
 ### Phase C — Demo triplication + chat_view virtualization split (~5 days)
 
