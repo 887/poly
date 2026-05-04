@@ -671,37 +671,8 @@ impl ClientBackend for LemmyClient {
         }])
     }
 
-    async fn get_setting_value(
-        &self,
-        scope: SettingsScope,
-        scope_id: &str,
-        key: &str,
-    ) -> ClientResult<String> {
-        // Pack C P18: in-memory storage stub. TODO: migrate to
-        // host-api.kv_get once exposed to plugins for true persistence.
-        if let Some(value) = self.settings_storage.get(scope, scope_id, key) {
-            return Ok(value);
-        }
-        for section in self.get_settings_sections().await? {
-            for field in section.fields {
-                if field.key == key {
-                    return Ok(field.default_value);
-                }
-            }
-        }
-        Err(ClientError::NotFound(format!("setting: {key}")))
-    }
-
-    async fn set_setting_value(
-        &self,
-        scope: SettingsScope,
-        scope_id: &str,
-        key: &str,
-        value: &str,
-    ) -> ClientResult<()> {
-        // Pack C P18: in-memory storage stub. TODO: migrate to
-        // host-api.kv_set once exposed to plugins for true persistence.
-        self.settings_storage.set(scope, scope_id, key, value)
+    fn settings_storage(&self) -> &SettingsStorageCell {
+        &self.settings_storage
     }
 
     /// Return the mechanism inventory for this backend.

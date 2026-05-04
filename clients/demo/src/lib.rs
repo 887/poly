@@ -378,30 +378,8 @@ impl<F: DemoFlavour> ClientBackend for DemoClientGeneric<F> {
         }])
     }
 
-    async fn get_setting_value(
-        &self, scope: SettingsScope, scope_id: &str, key: &str,
-    ) -> Result<String, ClientError> {
-        // Pack C P18: check in-memory storage first (written via
-        // set_setting_value); fall through to declared default if unset.
-        if let Some(value) = self.settings_storage.get(scope, scope_id, key) {
-            return Ok(value);
-        }
-        for section in self.get_settings_sections().await? {
-            for field in section.fields {
-                if field.key == key {
-                    return Ok(field.default_value);
-                }
-            }
-        }
-        Err(ClientError::NotFound(format!("setting: {key}")))
-    }
-
-    async fn set_setting_value(
-        &self, scope: SettingsScope, scope_id: &str, key: &str, value: &str,
-    ) -> Result<(), ClientError> {
-        // Pack C P18: persist into the per-instance in-memory cell. Demo
-        // backends intentionally don't persist across restarts.
-        self.settings_storage.set(scope, scope_id, key, value)
+    fn settings_storage(&self) -> &SettingsStorageCell {
+        &self.settings_storage
     }
 
     async fn get_sidebar_declaration(&self) -> Result<SidebarDeclaration, ClientError> {

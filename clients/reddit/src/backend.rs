@@ -857,26 +857,8 @@ impl ClientBackend for RedditBackend {
         Ok(Vec::new())
     }
 
-    async fn get_setting_value(
-        &self,
-        scope: SettingsScope,
-        scope_id: &str,
-        key: &str,
-    ) -> ClientResult<String> {
-        if let Some(value) = self.settings_storage.get(scope, scope_id, key) {
-            return Ok(value);
-        }
-        Err(ClientError::NotFound(format!("setting: {key}")))
-    }
-
-    async fn set_setting_value(
-        &self,
-        scope: SettingsScope,
-        scope_id: &str,
-        key: &str,
-        value: &str,
-    ) -> ClientResult<()> {
-        self.settings_storage.set(scope, scope_id, key, value)
+    fn settings_storage(&self) -> &SettingsStorageCell {
+        &self.settings_storage
     }
 
     /// Declares the `show-media-previews` mechanism, which controls whether

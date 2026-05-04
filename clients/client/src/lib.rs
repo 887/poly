@@ -911,22 +911,56 @@ pub trait ClientBackend: Send + Sync {
     /// every scope. Host filters by scope at render time.
     async fn get_settings_sections(&self) -> ClientResult<Vec<SettingsSection>>;
 
+    /// Phase D.3 of plan-solid-refactor-survey — backends with a
+    /// `SettingsStorageCell` field override this to return a reference
+    /// to it. The default returns a static empty cell so backends that
+    /// genuinely have no settings (read-only feeds) accept the default.
+    /// `get_setting_value` + `set_setting_value` then have working
+    /// default impls that delegate to this accessor — eliminating ~12
+    /// lines of identical boilerplate from each plugin.
+    fn settings_storage(&self) -> &SettingsStorageCell {
+        static EMPTY: std::sync::OnceLock<SettingsStorageCell> = std::sync::OnceLock::new();
+        EMPTY.get_or_init(SettingsStorageCell::new)
+    }
+
     /// D15 — read a JSON-encoded setting value from the plugin.
+    ///
+    /// Default impl: reads from `self.settings_storage()` and falls
+    /// back to the declared `default_value` from `get_settings_sections`.
+    /// Backends that need custom lookup logic (e.g. cross-scope coalescing)
+    /// can override.
     async fn get_setting_value(
         &self,
         scope: SettingsScope,
         scope_id: &str,
         key: &str,
-    ) -> ClientResult<String>;
+    ) -> ClientResult<String> {
+        if let Some(v) = self.settings_storage().get(scope, scope_id, key) {
+            return Ok(v);
+        }
+        for section in self.get_settings_sections().await? {
+            for field in section.fields {
+                if field.key == key {
+                    return Ok(field.default_value);
+                }
+            }
+        }
+        Err(ClientError::NotFound(format!("setting: {key}")))
+    }
 
     /// D15 — write a JSON-encoded setting value via the plugin.
+    ///
+    /// Default impl: writes to `self.settings_storage()`. Override only
+    /// for backends that need to push the change to a remote service.
     async fn set_setting_value(
         &self,
         scope: SettingsScope,
         scope_id: &str,
         key: &str,
         value: &str,
-    ) -> ClientResult<()>;
+    ) -> ClientResult<()> {
+        self.settings_storage().set(scope, scope_id, key, value)
+    }
 
     /// D5 / D19 — plugin's current sidebar declaration. Host re-calls on
     /// receipt of [`ClientEvent::SidebarInvalidated`].
