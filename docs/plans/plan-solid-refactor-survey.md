@@ -237,9 +237,9 @@ isolate.
       `ChatUtilityRail` 205 lines) to `chat_view/{header,utility_rail}.rs`. — shipped in commit `<pending>`
 - [x] **F.2** Move composer + search-filter helpers to
       `chat_view/{composer_helpers,search_filter}.rs`. — shipped in commit `f8ca9e1f`
-- [ ] **F.3** Move all 12 `use_*_effect` hooks to
+- [x] **F.3** Move all 12 `use_*_effect` hooks to
       `chat_view/effects/<name>.rs` (one file per effect — they ARE the
-      "reasons to change" that SRP cares about). Source: A.1#1.
+      "reasons to change" that SRP cares about). Source: A.1#1. — shipped in commit `<pending>`
 - [ ] **F.4** Pull `ChatViewSignals` (35 fields) and
       `ChatViewMarkupCtx` (70 fields) into `chat_view/signals.rs` and
       `chat_view/markup_ctx.rs` respectively. Convert the manual

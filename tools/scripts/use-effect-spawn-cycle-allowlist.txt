@@ -20,18 +20,18 @@
 # spawn writes `header_actions_overflow` / `header_actions_menu_open`.
 # Different signals → no cycle. Resize-driven; use_spawn_once key
 # would be the tick itself which changes every resize, defeating the
-# guard. Acceptable as-is.
-crates/core/src/ui/account/common/chat_view.rs:1275
+# guard. Acceptable as-is. (Moved to header.rs in Phase F.1.)
+crates/core/src/ui/account/common/chat_view/header.rs:26
 
 # Unread-marker visibility poll. Effect reads `history_state`
 # (`unread_marker_message_id`, `unread_count`); spawn writes
 # `unread_marker_on_screen` (different signal). No cycle.
-crates/core/src/ui/account/common/chat_view.rs:1709
+# (Moved to effects/unread_marker_visibility.rs in Phase F.3.)
+crates/core/src/ui/account/common/chat_view/effects/unread_marker_visibility.rs:8
 
-# Custom-emoji preload per channel. Reads local `channel_id` prop;
-# spawn writes `custom_emojis` (different signal). LOW-severity per
-# audit — no cross-signal cycle.
-crates/core/src/ui/account/common/chat_view.rs:4571
+# Custom-emoji preload per channel migrated to `use_reactive_effect` in
+# Phase D (commit c23d41a3) — no longer uses use_effect+spawn, entry stale.
+# (Original: crates/core/src/ui/account/common/chat_view.rs:4571)
 
 # Media-viewer keyboard/gesture event loop. No signal subscription in
 # the effect body (one-shot on mount); spawn runs a JS event pump that
