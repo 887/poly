@@ -114,19 +114,9 @@ pub fn ComposerHooks(
             let account_id = account_id.clone();
             let channel_id = channel_id.clone();
             async move {
-                let Some(backend) = client_manager.read().get_backend(&account_id) else {
-                    return Err(ClientError::NotFound(format!(
-                        "no backend for account {account_id}"
-                    )));
-                };
-                let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
-                    Ok(g) => g,
-                    Err(_) => {
-                        tracing::warn!("composer: backend read timed out loading composer buttons");
-                        return Err(ClientError::Internal("backend read timed out".into()));
-                    }
-                };
-                guard.get_composer_buttons(&channel_id).await
+                client_manager.peek().with_backend(&account_id, async |b| {
+                    b.get_composer_buttons(&channel_id).await
+                }).await
             }
         })
     };
@@ -225,21 +215,9 @@ pub fn MessageActions(
             let channel_id = channel_id.clone();
             let message_id = message_id.clone();
             async move {
-                let Some(backend) = client_manager.read().get_backend(&account_id) else {
-                    return Err(ClientError::NotFound(format!(
-                        "no backend for account {account_id}"
-                    )));
-                };
-                let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
-                    Ok(g) => g,
-                    Err(_) => {
-                        tracing::warn!("composer: backend read timed out loading message actions");
-                        return Err(ClientError::Internal("backend read timed out".into()));
-                    }
-                };
-                guard
-                    .get_message_actions(&channel_id, &message_id)
-                    .await
+                client_manager.peek().with_backend(&account_id, async |b| {
+                    b.get_message_actions(&channel_id, &message_id).await
+                }).await
             }
         })
     };
@@ -324,21 +302,9 @@ async fn invoke_composer(account_id: &str, action_id: &str, channel_id: &str) {
         }
     };
 
-    let Some(backend) = client_manager.read().get_backend(account_id) else {
-        tracing::warn!("ComposerHooks: no backend for account {account_id}");
-        return;
-    };
-
-    let outcome = {
-        let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
-            Ok(g) => g,
-            Err(_) => {
-                tracing::warn!("composer: backend read timed out invoking composer action");
-                return;
-            }
-        };
-        guard.invoke_composer_action(action_id, channel_id).await
-    };
+    let outcome = client_manager.peek().with_backend(account_id, async |b| {
+        b.invoke_composer_action(action_id, channel_id).await
+    }).await;
 
     dispatch_outcome(account_id, outcome, client_manager);
 }
@@ -357,23 +323,9 @@ async fn invoke_message(
         }
     };
 
-    let Some(backend) = client_manager.read().get_backend(account_id) else {
-        tracing::warn!("MessageActions: no backend for account {account_id}");
-        return;
-    };
-
-    let outcome = {
-        let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
-            Ok(g) => g,
-            Err(_) => {
-                tracing::warn!("composer: backend read timed out invoking message action");
-                return;
-            }
-        };
-        guard
-            .invoke_message_action(action_id, channel_id, message_id)
-            .await
-    };
+    let outcome = client_manager.peek().with_backend(account_id, async |b| {
+        b.invoke_message_action(action_id, channel_id, message_id).await
+    }).await;
 
     dispatch_outcome(account_id, outcome, client_manager);
 }

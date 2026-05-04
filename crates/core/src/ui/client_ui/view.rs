@@ -130,19 +130,9 @@ pub fn ClientView(
             let account_id = account_id.clone();
             let channel_id = channel_id.clone();
             async move {
-                let Some(backend) = client_manager.read().get_backend(&account_id) else {
-                    return Err(ClientError::NotFound(format!(
-                        "no backend for account {account_id}"
-                    )));
-                };
-                let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
-                    Ok(g) => g,
-                    Err(_) => {
-                        tracing::warn!("view: backend read timed out loading channel view");
-                        return Err(ClientError::Internal("backend read timed out".into()));
-                    }
-                };
-                guard.get_channel_view(&channel_id).await
+                client_manager.peek().with_backend(&account_id, async |b| {
+                    b.get_channel_view(&channel_id).await
+                }).await
             }
         })
     };
@@ -192,19 +182,9 @@ pub fn AccountOverviewView(account_id: String) -> Element {
         use_resource(move || {
             let account_id = account_id.clone();
             async move {
-                let Some(backend) = client_manager.read().get_backend(&account_id) else {
-                    return Err(ClientError::NotFound(format!(
-                        "no backend for account {account_id}"
-                    )));
-                };
-                let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
-                    Ok(g) => g,
-                    Err(_) => {
-                        tracing::warn!("AccountOverviewView: backend read timed out");
-                        return Err(ClientError::Internal("backend read timed out".into()));
-                    }
-                };
-                guard.get_account_overview_view().await
+                client_manager.peek().with_backend(&account_id, async |b| {
+                    b.get_account_overview_view().await
+                }).await
             }
         })
     };

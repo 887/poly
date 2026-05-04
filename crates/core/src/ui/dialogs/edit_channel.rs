@@ -134,17 +134,14 @@ pub fn EditChannelDialog(
                                     position: None,
                                 };
 
-                                let backend_opt = client_manager.read().get_backend(&account_id);
-                                let Some(backend_arc) = backend_opt else {
-                                    error_msg.set(format!("No backend for account {account_id}"));
-                                    return;
-                                };
                                 submitting.set(true);
                                 error_msg.set(String::new());
                                 let cid = channel_id.clone();
+                                let aid = account_id.clone();
                                 spawn(async move {
-                                    let guard = backend_arc.read().await;
-                                    match guard.update_channel(&cid, params).await {
+                                    match client_manager.peek().with_backend(&aid, async |b| {
+                                        b.update_channel(&cid, params).await
+                                    }).await {
                                         Ok(_) => {
                                             submitting.set(false);
                                             success.set(true);

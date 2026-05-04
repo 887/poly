@@ -166,17 +166,10 @@ async fn remove_member(
     client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
 ) {
-    let Some(backend) = client_manager.read().get_backend(&account_id) else {
-        return;
-    };
-    let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
-        Ok(g) => g,
-        Err(_) => {
-            tracing::warn!("dm_user_sidebar: backend read timed out in remove_group_member");
-            return;
-        }
-    };
-    if guard.remove_group_member(&group_id, &user_id).await.is_ok() {
+    let result = client_manager.peek().with_backend(&account_id, async |b| {
+        b.remove_group_member(&group_id, &user_id).await
+    }).await;
+    if result.is_ok() {
         // Remove the member from local state immediately for instant feedback.
         chat_data.batch(|cd| {
             cd.active_group_members.retain(|m| m.id != user_id);

@@ -17,7 +17,6 @@ use crate::ui::client_ui::toast::{ToastMessage, push_toast};
 use dioxus::prelude::*;
 use poly_client::ToastTone;
 use poly_ui_macros::{context_menu, ui_action};
-use std::time::Duration;
 
 #[ui_action(inherit)]
 #[context_menu(inherit)]
@@ -118,17 +117,13 @@ pub fn GroupDmContextMenu() -> Element {
                             let was_muted = muted();
                             muted.toggle();
                             spawn(async move {
-                                if let Some(handle) = client_manager.read().get_backend(&aid)
-                                    && let Ok(backend) = handle
-                                        .read_with_timeout(Duration::from_secs(5))
-                                        .await
-                                {
-                                    drop(if was_muted {
-                                        backend.unmute_conversation(&cid).await
+                                drop(client_manager.peek().with_backend(&aid, async |b| {
+                                    if was_muted {
+                                        b.unmute_conversation(&cid).await
                                     } else {
-                                        backend.mute_conversation(&cid, None).await
-                                    });
-                                }
+                                        b.mute_conversation(&cid, None).await
+                                    }
+                                }).await);
                             });
                         },
                     }
@@ -147,13 +142,9 @@ pub fn GroupDmContextMenu() -> Element {
                             let cid = cid.clone();
                             let aid = aid.clone();
                             spawn(async move {
-                                if let Some(handle) = client_manager.read().get_backend(&aid)
-                                    && let Ok(backend) = handle
-                                        .read_with_timeout(Duration::from_secs(5))
-                                        .await
-                                {
-                                    drop(backend.leave_group_dm(&cid).await);
-                                }
+                                drop(client_manager.peek().with_backend(&aid, async |b| {
+                                    b.leave_group_dm(&cid).await
+                                }).await);
                             });
                             close();
                         },

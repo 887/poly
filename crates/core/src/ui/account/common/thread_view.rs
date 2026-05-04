@@ -173,16 +173,11 @@ pub fn ActiveThreadsBar() -> Element {
             let sid = server_id?;
             let cid = channel_id?;
             let aid = account_id?;
-            let backend_arc = client_manager.read().get_backend(&aid)?;
-            let guard = backend_arc.read().await;
-            match guard.get_active_threads(&sid).await {
-                Ok(all) => Some(
-                    all.into_iter()
-                        .filter(|t| t.parent_channel_id == cid)
-                        .collect::<Vec<_>>(),
-                ),
-                Err(_) => None,
-            }
+            client_manager.peek().with_backend(&aid, async |b| {
+                b.get_active_threads(&sid).await
+            }).await.ok().and_then(|all| {
+                Some(all.into_iter().filter(|t| t.parent_channel_id == cid).collect::<Vec<_>>())
+            })
         }
     });
 
@@ -276,9 +271,9 @@ pub fn ThreadPanel() -> Element {
         let account_id = account_id.clone();
         async move {
             let aid = account_id?;
-            let backend_arc = client_manager.read().get_backend(&aid)?;
-            let guard = backend_arc.read().await;
-            guard.get_channel(&thread_id).await.ok()
+            client_manager.peek().with_backend(&aid, async |b| {
+                b.get_channel(&thread_id).await
+            }).await.ok()
         }
     });
 
@@ -299,10 +294,9 @@ pub fn ThreadPanel() -> Element {
         move |(tid, aid)| async move {
             let Some(tid) = tid else { return };
             let Some(aid) = aid else { return };
-            let backend_arc = client_manager.read().get_backend(&aid);
-            let Some(backend_arc) = backend_arc else { return };
-            let guard = backend_arc.read().await;
-            if let Ok(msgs) = guard.get_messages(&tid, MessageQuery::default()).await {
+            if let Ok(msgs) = client_manager.peek().with_backend(&aid, async |b| {
+                b.get_messages(&tid, MessageQuery::default()).await
+            }).await {
                 messages_w.set(msgs);
             }
         },
@@ -444,9 +438,9 @@ pub fn ThreadFullView(thread_id: String) -> Element {
             let aid = aid.clone();
             async move {
                 let aid = aid?;
-                let backend_arc = client_manager.read().get_backend(&aid)?;
-                let guard = backend_arc.read().await;
-                guard.get_channel(&tid).await.ok()
+                client_manager.peek().with_backend(&aid, async |b| {
+                    b.get_channel(&tid).await
+                }).await.ok()
             }
         })
     };
@@ -458,13 +452,9 @@ pub fn ThreadFullView(thread_id: String) -> Element {
         let aid = app_state.read().nav.active_account_id.cloned();
         let Some(aid) = aid else { return };
         spawn(async move {
-            let backend_arc = client_manager.read().get_backend(&aid);
-            let Some(backend_arc) = backend_arc else { return };
-            let guard = backend_arc.read().await;
-            if let Ok(msgs) = guard
-                .get_messages(&tid, MessageQuery::default())
-                .await
-            {
+            if let Ok(msgs) = client_manager.peek().with_backend(&aid, async |b| {
+                b.get_messages(&tid, MessageQuery::default()).await
+            }).await {
                 messages_w.set(msgs);
             }
         });

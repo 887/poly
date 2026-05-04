@@ -176,7 +176,7 @@ async fn join_voice_channel(
     let server_id = app_state.read().nav.selected_server.cloned();
     let Some(server_id) = server_id else { return };
 
-    let backend_info = client_manager.read().get_backend_for_server(&server_id);
+    let backend_info = client_manager.peek().get_backend_for_server(&server_id);
     let Some((voice_account_id, backend)) = backend_info else {
         return;
     };

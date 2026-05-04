@@ -117,19 +117,9 @@ pub fn ClientMenu(
             let account_id = account_id.clone();
             let target_id = target_id.clone();
             async move {
-                let Some(backend) = client_manager.read().get_backend(&account_id) else {
-                    return Err(ClientError::NotFound(format!(
-                        "no backend for account {account_id}"
-                    )));
-                };
-                let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
-                    Ok(g) => g,
-                    Err(_) => {
-                        tracing::warn!("menu: backend read timed out loading context menu items");
-                        return Err(ClientError::Internal("backend read timed out".into()));
-                    }
-                };
-                guard.get_context_menu_items(target, &target_id).await
+                client_manager.peek().with_backend(&account_id, async |b| {
+                    b.get_context_menu_items(target, &target_id).await
+                }).await
             }
         })
     };
@@ -614,23 +604,9 @@ async fn dispatch_action(
         }
     };
 
-    let Some(backend) = client_manager.read().get_backend(&account_id) else {
-        tracing::warn!("ClientMenu: no backend for account {account_id}");
-        return;
-    };
-
-    let outcome = {
-        let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
-            Ok(g) => g,
-            Err(_) => {
-                tracing::warn!("menu: backend read timed out invoking context action");
-                return;
-            }
-        };
-        guard
-            .invoke_context_action(&action_id, target, &target_id)
-            .await
-    };
+    let outcome = client_manager.peek().with_backend(&account_id, async |b| {
+        b.invoke_context_action(&action_id, target, &target_id).await
+    }).await;
 
     let Some(toast_queue) = try_consume_context::<Signal<Vec<ToastMessage>>>() else {
         tracing::debug!("ClientMenu: no toast queue in context — logging only");

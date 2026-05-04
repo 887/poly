@@ -144,62 +144,53 @@ pub fn SavedItemsView() -> Element {
         let dm_channels = dm_channels.clone();
         let groups = groups.clone();
         async move {
-            let Some(backend) = client_manager.read().get_backend(&account_id) else {
-                return Vec::<SavedPinnedItem>::new();
-            };
+            client_manager.peek().with_backend(&account_id, async |b| {
+                let mut items = Vec::new();
 
-            let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
-                Ok(g) => g,
-                Err(_) => {
-                    tracing::warn!("saved_items: backend read timed out");
-                    return Vec::new();
-                }
-            };
-            let mut items = Vec::new();
-
-            for dm in dm_channels {
-                if let Ok(messages) = guard.get_pinned_messages(&dm.id).await {
-                    for message in messages {
-                        items.push(SavedPinnedItem {
-                            channel_name: dm.user.display_name.clone(),
-                            hit: MessageSearchHit {
-                                channel_id: dm.id.clone(),
-                                channel_name: Some(dm.user.display_name.clone()),
-                                server_id: None,
-                                message,
-                            },
-                        });
+                for dm in dm_channels {
+                    if let Ok(messages) = b.get_pinned_messages(&dm.id).await {
+                        for message in messages {
+                            items.push(SavedPinnedItem {
+                                channel_name: dm.user.display_name.clone(),
+                                hit: MessageSearchHit {
+                                    channel_id: dm.id.clone(),
+                                    channel_name: Some(dm.user.display_name.clone()),
+                                    server_id: None,
+                                    message,
+                                },
+                            });
+                        }
                     }
                 }
-            }
 
-            for group in groups {
-                if let Ok(messages) = guard.get_pinned_messages(&group.id).await {
-                    let group_name = group.name.clone().unwrap_or_else(|| {
-                        group
-                            .members
-                            .iter()
-                            .map(|member| member.display_name.clone())
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    });
-
-                    for message in messages {
-                        items.push(SavedPinnedItem {
-                            channel_name: group_name.clone(),
-                            hit: MessageSearchHit {
-                                channel_id: group.id.clone(),
-                                channel_name: Some(group_name.clone()),
-                                server_id: None,
-                                message,
-                            },
+                for group in groups {
+                    if let Ok(messages) = b.get_pinned_messages(&group.id).await {
+                        let group_name = group.name.clone().unwrap_or_else(|| {
+                            group
+                                .members
+                                .iter()
+                                .map(|member| member.display_name.clone())
+                                .collect::<Vec<_>>()
+                                .join(", ")
                         });
+
+                        for message in messages {
+                            items.push(SavedPinnedItem {
+                                channel_name: group_name.clone(),
+                                hit: MessageSearchHit {
+                                    channel_id: group.id.clone(),
+                                    channel_name: Some(group_name.clone()),
+                                    server_id: None,
+                                    message,
+                                },
+                            });
+                        }
                     }
                 }
-            }
 
-            items.sort_by(|a, b| b.hit.message.timestamp.cmp(&a.hit.message.timestamp));
-            items
+                items.sort_by(|a, b| b.hit.message.timestamp.cmp(&a.hit.message.timestamp));
+                Ok(items)
+            }).await.unwrap_or_default()
         }
     });
 

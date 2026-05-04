@@ -249,32 +249,15 @@ pub fn ListBody(
                                                 return;
                                             }
                                         };
-                                        let backend = match client_manager.read().get_backend(&account_id) {
-                                            Some(b) => b,
-                                            None => {
-                                                loading_more.set(false);
-                                                return;
-                                            }
-                                        };
-                                        let guard = match backend
-                                            .read_with_timeout(std::time::Duration::from_secs(5))
-                                            .await
-                                        {
-                                            Ok(g) => g,
-                                            Err(_) => {
-                                                tracing::warn!("ListBody load-more: backend read timed out");
-                                                loading_more.set(false);
-                                                return;
-                                            }
-                                        };
-                                        let result = guard.get_view_rows(
-                                            &channel_id,
-                                            cursor,
-                                            sort_id.as_deref(),
-                                            filter_id.as_deref(),
-                                            tab_id.as_deref(),
-                                        ).await;
-                                        drop(guard);
+                                        let result = client_manager.peek().with_backend(&account_id, async |b| {
+                                            b.get_view_rows(
+                                                &channel_id,
+                                                cursor,
+                                                sort_id.as_deref(),
+                                                filter_id.as_deref(),
+                                                tab_id.as_deref(),
+                                            ).await
+                                        }).await;
                                         match result {
                                             Ok(page) => {
                                                 loaded_rows.write().extend(page.rows);
@@ -463,24 +446,9 @@ pub fn ViewRowDetail(channel_id: String, account_id: String, row_id: String) -> 
             let channel_id = channel_id.clone();
             let row_id = row_id.clone();
             async move {
-                let Some(backend) = client_manager.read().get_backend(&account_id) else {
-                    return Err(ClientError::NotFound(format!(
-                        "no backend for account {account_id}"
-                    )));
-                };
-                let guard = match backend
-                    .read_with_timeout(std::time::Duration::from_secs(5))
-                    .await
-                {
-                    Ok(g) => g,
-                    Err(_) => {
-                        tracing::warn!("ViewRowDetail: backend read timed out");
-                        return Err(ClientError::Internal(
-                            "backend read timed out".to_string(),
-                        ));
-                    }
-                };
-                guard.get_view_detail(&channel_id, &row_id).await
+                client_manager.peek().with_backend(&account_id, async |b| {
+                    b.get_view_detail(&channel_id, &row_id).await
+                }).await
             }
         })
     };
@@ -830,32 +798,15 @@ pub(super) fn fetch_first_page(
         let filter_id = filter_id.clone();
         let tab_id = tab_id.clone();
         async move {
-            let Some(backend) = client_manager.read().get_backend(&account_id) else {
-                return Err(ClientError::NotFound(format!(
-                    "no backend for account {account_id}"
-                )));
-            };
-            let guard = match backend
-                .read_with_timeout(std::time::Duration::from_secs(5))
-                .await
-            {
-                Ok(g) => g,
-                Err(_) => {
-                    tracing::warn!("fetch_first_page: backend read timed out");
-                    return Err(ClientError::Internal(
-                        "backend read timed out".to_string(),
-                    ));
-                }
-            };
-            guard
-                .get_view_rows(
+            client_manager.peek().with_backend(&account_id, async |b| {
+                b.get_view_rows(
                     &channel_id,
                     None,
                     sort_id.as_deref(),
                     filter_id.as_deref(),
                     tab_id.as_deref(),
-                )
-                .await
+                ).await
+            }).await
         }
     })
 }

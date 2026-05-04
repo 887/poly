@@ -29,7 +29,6 @@ use crate::ui::client_ui::toast::{ToastMessage, push_toast};
 use dioxus::prelude::*;
 use poly_client::{PresenceStatus, ToastTone, User};
 use poly_ui_macros::{context_menu, ui_action};
-use std::time::Duration;
 
 #[ui_action(inherit)]
 #[context_menu(inherit)]
@@ -184,13 +183,9 @@ pub fn DmContextMenu() -> Element {
                             let cid = cid.clone();
                             let aid = aid.clone();
                             spawn(async move {
-                                if let Some(handle) = client_manager.read().get_backend(&aid)
-                                    && let Ok(backend) = handle
-                                        .read_with_timeout(Duration::from_secs(5))
-                                        .await
-                                {
-                                    drop(backend.close_dm_channel(&cid).await);
-                                }
+                                drop(client_manager.peek().with_backend(&aid, async |b| {
+                                    b.close_dm_channel(&cid).await
+                                }).await);
                             });
                             close();
                         },
@@ -226,13 +221,9 @@ pub fn DmContextMenu() -> Element {
                             let uid = uid.clone();
                             let aid = aid.clone();
                             spawn(async move {
-                                if let Some(handle) = client_manager.read().get_backend(&aid)
-                                    && let Ok(backend) = handle
-                                        .read_with_timeout(Duration::from_secs(5))
-                                        .await
-                                {
-                                    drop(backend.remove_friend(&uid).await);
-                                }
+                                drop(client_manager.peek().with_backend(&aid, async |b| {
+                                    b.remove_friend(&uid).await
+                                }).await);
                             });
                             close();
                         },
@@ -251,13 +242,9 @@ pub fn DmContextMenu() -> Element {
                             let uid = uid.clone();
                             let aid = aid.clone();
                             spawn(async move {
-                                if let Some(handle) = client_manager.read().get_backend(&aid)
-                                    && let Ok(backend) = handle
-                                        .read_with_timeout(Duration::from_secs(5))
-                                        .await
-                                {
-                                    drop(backend.ignore_user(&uid).await);
-                                }
+                                drop(client_manager.peek().with_backend(&aid, async |b| {
+                                    b.ignore_user(&uid).await
+                                }).await);
                             });
                             close();
                         },
@@ -277,13 +264,9 @@ pub fn DmContextMenu() -> Element {
                             let uid = uid.clone();
                             let aid = aid.clone();
                             spawn(async move {
-                                if let Some(handle) = client_manager.read().get_backend(&aid)
-                                    && let Ok(backend) = handle
-                                        .read_with_timeout(Duration::from_secs(5))
-                                        .await
-                                {
-                                    drop(backend.block_user(&uid).await);
-                                }
+                                drop(client_manager.peek().with_backend(&aid, async |b| {
+                                    b.block_user(&uid).await
+                                }).await);
                             });
                             close();
                         },
@@ -311,17 +294,13 @@ pub fn DmContextMenu() -> Element {
                             let was_muted = muted();
                             muted.toggle();
                             spawn(async move {
-                                if let Some(handle) = client_manager.read().get_backend(&aid)
-                                    && let Ok(backend) = handle
-                                        .read_with_timeout(Duration::from_secs(5))
-                                        .await
-                                {
-                                    drop(if was_muted {
-                                        backend.unmute_conversation(&cid).await
+                                drop(client_manager.peek().with_backend(&aid, async |b| {
+                                    if was_muted {
+                                        b.unmute_conversation(&cid).await
                                     } else {
-                                        backend.mute_conversation(&cid, None).await
-                                    });
-                                }
+                                        b.mute_conversation(&cid, None).await
+                                    }
+                                }).await);
                             });
                         },
                     }

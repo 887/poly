@@ -96,18 +96,15 @@ pub fn BanMemberDialog(
                                 let reason_opt = if reason_str.is_empty() { None } else { Some(reason_str) };
                                 // 7 days = 604800 seconds of message history to delete
                                 let delete_secs = if *delete_history.read() { Some(604_800_u64) } else { None };
-                                let backend_opt = client_manager.read().get_backend(&account_id);
-                                let Some(backend_arc) = backend_opt else {
-                                    error_msg.set(format!("No backend for account {account_id}"));
-                                    return;
-                                };
                                 submitting.set(true);
                                 error_msg.set(String::new());
                                 let sid = server_id.clone();
                                 let mid = member_id.clone();
+                                let aid = account_id.clone();
                                 spawn(async move {
-                                    let guard = backend_arc.read().await;
-                                    match guard.ban_member(&sid, &mid, reason_opt.as_deref(), delete_secs).await {
+                                    match client_manager.peek().with_backend(&aid, async |b| {
+                                        b.ban_member(&sid, &mid, reason_opt.as_deref(), delete_secs).await
+                                    }).await {
                                         Ok(()) => {
                                             submitting.set(false);
                                             success.set(true);

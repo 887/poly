@@ -155,20 +155,13 @@ pub fn DiscordForumView() -> Element {
             let aid = aid.clone();
             let cur_sort = *sort.read();
             async move {
-                let backend = client_manager.read().get_backend(&aid)?;
-                let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
-                    Ok(g) => g,
-                    Err(_) => {
-                        tracing::warn!("discord_forum_view: backend read timed out");
-                        return None;
-                    }
-                };
-                match guard.get_forum_posts(&cid, cur_sort, Some(50)).await {
+                match client_manager.peek().with_backend(&aid, async |b| {
+                    b.get_forum_posts(&cid, cur_sort, Some(50)).await
+                }).await {
                     Ok(posts) => Some(posts),
+                    Err(poly_client::ClientError::NotFound(_) | poly_client::ClientError::Internal(_)) => None,
                     Err(err) => {
-                        tracing::debug!(
-                            "DiscordForumView: get_forum_posts failed: {err:?}"
-                        );
+                        tracing::debug!("DiscordForumView: get_forum_posts failed: {err:?}");
                         Some(vec![])
                     }
                 }
@@ -706,36 +699,16 @@ fn NewPostModal(
                             let post_body = body.read().clone();
                             let post_tags = selected_tag_ids.read().clone();
                             spawn(async move {
-                                let backend = client_manager.read().get_backend(&aid);
-                                match backend {
-                                    None => {
-                                        tracing::warn!(
-                                            "NewPostModal: no backend for account {aid}"
-                                        );
+                                match client_manager.peek().with_backend(&aid, async |b| {
+                                    b.create_forum_post(&cid, &post_title, &post_body, post_tags).await
+                                }).await {
+                                    Ok(_new_post) => {
+                                        tracing::info!("create_forum_post succeeded for {cid}");
                                     }
-                                    Some(handle) => {
-                                        let guard = handle.read().await;
-                                        match guard
-                                            .create_forum_post(
-                                                &cid,
-                                                &post_title,
-                                                &post_body,
-                                                post_tags,
-                                            )
-                                            .await
-                                        {
-                                            Ok(_new_post) => {
-                                                tracing::info!(
-                                                    "create_forum_post succeeded for {cid}"
-                                                );
-                                            }
-                                            Err(err) => {
-                                                tracing::info!(
-                                                    "create_forum_post: {err:?} (expected \
-                                                     NotSupported until Phase 5)"
-                                                );
-                                            }
-                                        }
+                                    Err(err) => {
+                                        tracing::info!(
+                                            "create_forum_post: {err:?} (expected NotSupported until Phase 5)"
+                                        );
                                     }
                                 }
                                 submitting.set(false);

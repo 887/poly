@@ -26,11 +26,9 @@ pub fn BansTab(server_id: String, account_id: String) -> Element {
             let account_id = account_id.clone();
             let client_manager = client_manager;
             async move {
-                let Some(backend_arc) = client_manager.read().get_backend(&account_id) else {
-                    return Err("No backend".to_string());
-                };
-                let guard = backend_arc.read().await;
-                guard.get_bans(&server_id).await.map_err(|e| e.to_string())
+                client_manager.peek().with_backend(&account_id, async |b| {
+                    b.get_bans(&server_id).await
+                }).await.map_err(|e| e.to_string())
             }
         })
     };
@@ -93,15 +91,13 @@ fn render_ban_row(
                         let account_id = account_id.clone();
                         let uid = user_id.clone();
                         move |_| {
-                            let Some(backend_arc) = client_manager.read().get_backend(&account_id) else {
-                                unban_error.set("No backend".to_string());
-                                return;
-                            };
                             let sid = server_id.clone();
                             let mid = uid.clone();
+                            let aid = account_id.clone();
                             spawn(async move {
-                                let guard = backend_arc.read().await;
-                                match guard.unban_member(&sid, &mid).await {
+                                match client_manager.peek().with_backend(&aid, async |b| {
+                                    b.unban_member(&sid, &mid).await
+                                }).await {
                                     Ok(()) => {
                                         unban_error.set(String::new());
                                         bans_resource.restart();

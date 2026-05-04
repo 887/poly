@@ -96,17 +96,17 @@ async fn load_channel_data(
         return;
     };
 
-    let backend_info = client_manager.read().get_backend_for_server(&server_id);
-    let Some((_account_id, backend)) = backend_info else {
-        chat_data.batch(|cd| cd.loading = false);
-        return;
-    };
-
     let channel_type = chat_data
         .read()
         .current_channel
         .as_ref()
         .map(|ch| ch.channel_type);
+
+    let backend_info = client_manager.peek().get_backend_for_server(&server_id);
+    let Some((_account_id, backend)) = backend_info else {
+        chat_data.batch(|cd| cd.loading = false);
+        return;
+    };
 
     let guard = match backend
         .read_with_timeout(std::time::Duration::from_secs(5))
@@ -196,27 +196,19 @@ async fn load_dm_messages(
         .filter(|channel| channel.id == channel_id)
         .map_or(0, |channel| channel.unread_count);
 
-    let Some(backend) = client_manager.read().get_backend(&account_id) else {
-        tracing::warn!(account_id = %account_id, "load_dm_messages: no backend found");
-        chat_data.batch(|cd| cd.loading = false);
-        return;
-    };
-
-    tracing::info!(channel_id = %channel_id, "load_dm_messages: backend acquired, fetching messages");
-    let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
-        Ok(g) => g,
+    tracing::info!(channel_id = %channel_id, "load_dm_messages: fetching messages");
+    let (messages, members) = match client_manager.peek().with_backend(&account_id, async |b| {
+        let messages = b.get_messages(&channel_id, initial_message_query(unread_count)).await.ok();
+        let members = b.get_channel_members(&channel_id).await.ok();
+        Ok((messages, members))
+    }).await {
+        Ok(pair) => pair,
         Err(_) => {
-            tracing::warn!("channel_list: backend read timed out in load_dm_messages");
+            tracing::warn!(account_id = %account_id, "load_dm_messages: no backend or timed out");
             chat_data.batch(|cd| cd.loading = false);
             return;
         }
     };
-    let messages = guard
-        .get_messages(&channel_id, initial_message_query(unread_count))
-        .await
-        .ok();
-    let members = guard.get_channel_members(&channel_id).await.ok();
-    drop(guard);
 
     tracing::info!(
         channel_id = %channel_id,
@@ -351,14 +343,6 @@ pub(crate) fn open_direct_message_from_active_account(
         "open_direct_message_from_active_account: no existing DM, requesting backend"
     );
 
-    let Some(backend) = client_manager.read().get_backend(&account_id) else {
-        tracing::warn!(
-            "open_direct_message_from_active_account: no backend found for account {}",
-            account_id
-        );
-        return;
-    };
-
     spawn(async move {
         tracing::info!(
             user_id = %user_id,
@@ -366,14 +350,9 @@ pub(crate) fn open_direct_message_from_active_account(
             "open_direct_message_from_active_account: spawned, awaiting open_direct_message_channel"
         );
         let opened_dm = {
-            let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
-                Ok(g) => g,
-                Err(_) => {
-                    tracing::warn!("channel_list: backend read timed out opening DM channel");
-                    return;
-                }
-            };
-            match guard.open_direct_message_channel(&user_id).await {
+            match client_manager.peek().with_backend(&account_id, async |b| {
+                b.open_direct_message_channel(&user_id).await
+            }).await {
                 Ok(dm) => dm,
                 Err(err) => {
                     tracing::warn!(

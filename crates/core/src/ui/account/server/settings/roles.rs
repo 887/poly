@@ -26,14 +26,9 @@ pub fn RolesTab(server_id: String, account_id: String) -> Element {
             let account_id = account_id.clone();
             let client_manager = client_manager;
             async move {
-                let Some(backend_arc) = client_manager.read().get_backend(&account_id) else {
-                    return Err("No backend".to_string());
-                };
-                let guard = backend_arc.read().await;
-                guard
-                    .get_server_roles(&server_id)
-                    .await
-                    .map_err(|e| e.to_string())
+                client_manager.peek().with_backend(&account_id, async |b| {
+                    b.get_server_roles(&server_id).await
+                }).await.map_err(|e| e.to_string())
             }
         })
     };

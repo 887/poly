@@ -299,9 +299,9 @@ async fn run_reset_flow(
     chat_data: BatchedSignal<crate::state::ChatData>,
     app_state: BatchedSignal<AppState>,
 ) -> Result<(), String> {
-    let account_ids = client_manager.read().active_account_ids();
+    let account_ids = client_manager.peek().active_account_ids();
     for account_id in account_ids {
-        let backend = client_manager.read().get_backend(&account_id);
+        let backend = client_manager.peek().get_backend(&account_id);
         if let Some(backend_handle) = backend {
             let mut guard = backend_handle.write().await;
             if let Err(err) = guard.logout().await {

@@ -1177,7 +1177,7 @@ async fn load_server_data_internal(
     chat_data.batch(|cd| cd.loading = true);
 
     // Find which backend owns this server
-    let backend_info = client_manager.read().get_backend_for_server(&server_id);
+    let backend_info = client_manager.peek().get_backend_for_server(&server_id);
     let Some((_account_id, backend)) = backend_info else {
         chat_data.batch(|cd| cd.loading = false);
         return;
@@ -1406,7 +1406,7 @@ pub async fn restore_server_channel(
     // onclick batching fix in commit a761fe01).
     chat_data.batch(|cd| cd.loading = true);
 
-    let backend_info = client_manager.read().get_backend_for_server(&server_id);
+    let backend_info = client_manager.peek().get_backend_for_server(&server_id);
     let Some((_account_id, backend)) = backend_info else {
         chat_data.batch(|cd| cd.loading = false);
         return None;

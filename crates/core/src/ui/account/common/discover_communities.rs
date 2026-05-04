@@ -112,20 +112,18 @@ pub fn DiscoverCommunitiesView(
         load_state.set(LoadState::Loading);
         let aid = account_id.clone();
         spawn(async move {
-            let backend_arc = client_manager.read().get_backend(&aid);
-            let Some(backend_arc) = backend_arc else {
-                load_state.set(LoadState::Error(t("ui-discover-error-no-backend")));
-                return;
-            };
-            let guard = match backend_arc.read_with_timeout(std::time::Duration::from_secs(10)).await {
-                Ok(g) => g,
-                Err(_) => {
-                    load_state.set(LoadState::Error(t("ui-discover-error-timeout")));
-                    return;
-                }
-            };
-            match guard.search_communities(&q, sc, None).await {
+            match client_manager.peek().with_backend_timeout(
+                &aid,
+                std::time::Duration::from_secs(10),
+                async |b| b.search_communities(&q, sc, None).await,
+            ).await {
                 Ok(page) => load_state.set(LoadState::Results(page.items)),
+                Err(poly_client::ClientError::NotFound(_)) => {
+                    load_state.set(LoadState::Error(t("ui-discover-error-no-backend")));
+                }
+                Err(poly_client::ClientError::Internal(_)) => {
+                    load_state.set(LoadState::Error(t("ui-discover-error-timeout")));
+                }
                 Err(e) => load_state.set(LoadState::Error(e.to_string())),
             }
         });

@@ -47,21 +47,9 @@ pub fn SplitBody(channel_id: String, account_id: String, spec: SplitSpec) -> Ele
             let account_id = account_id.clone();
             let channel_id = channel_id.clone();
             async move {
-                let Some(backend) = client_manager.read().get_backend(&account_id) else {
-                    return Err(ClientError::NotFound(format!(
-                        "no backend for account {account_id}"
-                    )));
-                };
-                let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
-                    Ok(g) => g,
-                    Err(_) => {
-                        tracing::warn!("split_body: backend read timed out loading view rows");
-                        return Err(ClientError::Internal("backend read timed out".into()));
-                    }
-                };
-                guard
-                    .get_view_rows(&channel_id, None, None, None, None)
-                    .await
+                client_manager.peek().with_backend(&account_id, async |b| {
+                    b.get_view_rows(&channel_id, None, None, None, None).await
+                }).await
             }
         })
     };
@@ -79,19 +67,9 @@ pub fn SplitBody(channel_id: String, account_id: String, spec: SplitSpec) -> Ele
                 let Some(row_id) = sel else {
                     return Err(ClientError::NotFound("no row selected".into()));
                 };
-                let Some(backend) = client_manager.read().get_backend(&account_id) else {
-                    return Err(ClientError::NotFound(format!(
-                        "no backend for account {account_id}"
-                    )));
-                };
-                let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
-                    Ok(g) => g,
-                    Err(_) => {
-                        tracing::warn!("split_body: backend read timed out loading view detail");
-                        return Err(ClientError::Internal("backend read timed out".into()));
-                    }
-                };
-                guard.get_view_detail(&channel_id, &row_id).await
+                client_manager.peek().with_backend(&account_id, async |b| {
+                    b.get_view_detail(&channel_id, &row_id).await
+                }).await
             }
         })
     };

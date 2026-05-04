@@ -1106,7 +1106,7 @@ fn restore_dm_chat(
             .filter(|channel| channel.id == dm_id)
             .map_or(0, |channel| channel.unread_count);
 
-        let backend_arc = client_manager.read().get_backend(&account_id);
+        let backend_arc = client_manager.peek().get_backend(&account_id);
         let Some(backend_arc) = backend_arc else {
             chat_data.batch(|cd| cd.loading = false);
             return;

@@ -103,20 +103,9 @@ async fn dispatch_feed_action(
     account_id: String,
     action_id: String,
 ) {
-    let Some(backend) = client_manager.read().get_backend(&account_id) else {
-        tracing::warn!("FeedLayout: no backend for account {account_id}");
-        return;
-    };
-    let outcome = {
-        let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
-            Ok(g) => g,
-            Err(_) => {
-                tracing::warn!("feed: backend read timed out invoking sidebar action");
-                return;
-            }
-        };
-        guard.invoke_sidebar_action(&action_id).await
-    };
+    let outcome = client_manager.peek().with_backend(&account_id, async |b| {
+        b.invoke_sidebar_action(&action_id).await
+    }).await;
     let Some(toast_queue) = try_consume_context::<Signal<Vec<ToastMessage>>>() else {
         tracing::debug!("FeedLayout: no toast queue in context — logging only");
         tracing::info!("FeedLayout: action outcome (no-toast-ctx): {outcome:?}");

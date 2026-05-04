@@ -584,9 +584,9 @@ pub(crate) fn mark_channel_as_read_with_backend(
     let cid = channel_id.to_string();
     spawn(async move {
         let handle = if let Some(sid) = server_id {
-            client_manager.read().get_backend_for_server(&sid).map(|(_, b)| b)
+            client_manager.peek().get_backend_for_server(&sid).map(|(_, b)| b)
         } else if let Some(aid) = account_id {
-            client_manager.read().get_backend(&aid)
+            client_manager.peek().get_backend(&aid)
         } else {
             None
         };
@@ -1461,11 +1461,11 @@ fn use_member_list_effect(signals: &ChatViewSignals) {
 
         let backend = if let Some(server_id) = selected_server {
             client_manager
-                .read()
+                .peek()
                 .get_backend_for_server(&server_id)
                 .map(|(_, handle)| handle)
         } else if let Some(account_id) = active_account_id {
-            client_manager.read().get_backend(&account_id)
+            client_manager.peek().get_backend(&account_id)
         } else {
             None
         };
@@ -1559,19 +1559,9 @@ fn use_search_messages_effect(signals: &ChatViewSignals, ctx: &ChatViewMarkupCtx
                     is_dm_channel,
                     is_group_channel,
                 );
-                let Some(backend) = client_manager.read().get_backend(&account_id) else {
-                    search_hits.set(Vec::new());
-                    return;
-                };
-                let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
-                    Ok(g) => g,
-                    Err(_) => {
-                        tracing::warn!("chat_view: backend read timed out in search_messages");
-                        search_hits.set(Vec::new());
-                        return;
-                    }
-                };
-                match guard.search_messages(parsed_query).await {
+                match client_manager.peek().with_backend(&account_id, async |b| {
+                    b.search_messages(parsed_query).await
+                }).await {
                     Ok(hits) => search_hits.set(hits),
                     Err(err) => {
                         tracing::warn!("search_messages failed: {err}");
@@ -1614,11 +1604,11 @@ fn use_pinned_messages_effect(signals: &ChatViewSignals) {
             let active_account_id = app_state.peek().nav.active_account_id.cloned();
             let backend = if let Some(server_id) = selected_server {
                 client_manager
-                    .read()
+                    .peek()
                     .get_backend_for_server(&server_id)
                     .map(|(_, handle)| handle)
             } else if let Some(account_id) = active_account_id {
-                client_manager.read().get_backend(&account_id)
+                client_manager.peek().get_backend(&account_id)
             } else {
                 None
             };
@@ -1766,11 +1756,11 @@ fn use_command_preload_effect(signals: &ChatViewSignals, channel_id: &Option<Str
         let active_account_id = app_state.peek().nav.active_account_id.cloned();
         let backend = if let Some(server_id) = selected_server {
             client_manager
-                .read()
+                .peek()
                 .get_backend_for_server(&server_id)
                 .map(|(_, handle)| handle)
         } else if let Some(account_id) = active_account_id {
-            client_manager.read().get_backend(&account_id)
+            client_manager.peek().get_backend(&account_id)
         } else {
             None
         };
@@ -3308,13 +3298,13 @@ async fn load_older_messages(
         });
         return;
     };
-    let backend = if let Some(server_id) = app_state.read().nav.selected_server.cloned() {
+    let backend = if let Some(server_id) = app_state.peek().nav.selected_server.cloned() {
         client_manager
-            .read()
+            .peek()
             .get_backend_for_server(&server_id)
             .map(|(_, handle)| handle)
-    } else if let Some(account_id) = app_state.read().nav.active_account_id.cloned() {
-        client_manager.read().get_backend(&account_id)
+    } else if let Some(account_id) = app_state.peek().nav.active_account_id.cloned() {
+        client_manager.peek().get_backend(&account_id)
     } else {
         None
     };
@@ -3406,13 +3396,13 @@ async fn load_newer_messages(
         });
         return;
     };
-    let backend = if let Some(server_id) = app_state.read().nav.selected_server.cloned() {
+    let backend = if let Some(server_id) = app_state.peek().nav.selected_server.cloned() {
         client_manager
-            .read()
+            .peek()
             .get_backend_for_server(&server_id)
             .map(|(_, handle)| handle)
-    } else if let Some(account_id) = app_state.read().nav.active_account_id.cloned() {
-        client_manager.read().get_backend(&account_id)
+    } else if let Some(account_id) = app_state.peek().nav.active_account_id.cloned() {
+        client_manager.peek().get_backend(&account_id)
     } else {
         None
     };
@@ -4269,9 +4259,9 @@ fn maybe_send_real_typing(
     let server_id = app_state.read().nav.selected_server.cloned();
     spawn(async move {
         let handle = if let Some(ref sid) = server_id {
-            client_manager.read().get_backend_for_server(sid).map(|(_, b)| b)
+            client_manager.peek().get_backend_for_server(sid).map(|(_, b)| b)
         } else if let Some(ref aid) = account_id {
-            client_manager.read().get_backend(aid)
+            client_manager.peek().get_backend(aid)
         } else {
             None
         };
@@ -4357,9 +4347,9 @@ fn TypingModeButton(mut typing_mode: Signal<TypingMode>) -> Element {
                     for _ in 0_i32..12_i32 {
                         if *mode_signal.peek() != TypingMode::Simulator { break; }
                         let handle = if let Some(ref sid) = server_id {
-                            client_manager.read().get_backend_for_server(sid).map(|(_, b)| b)
+                            client_manager.peek().get_backend_for_server(sid).map(|(_, b)| b)
                         } else if let Some(ref aid) = account_id {
-                            client_manager.read().get_backend(aid)
+                            client_manager.peek().get_backend(aid)
                         } else {
                             None
                         };
@@ -4646,21 +4636,10 @@ fn render_input_emoji_picker(ctx: ChatViewMarkupCtx) -> Element {
         let app_state = app_state_for_emoji;
         spawn(async move {
             let Some(ref cid) = channel_id else { return };
-            let active_account_id = app_state.read().nav.active_account_id.cloned();
-            let backend = if let Some(account_id) = active_account_id {
-                client_manager.read().get_backend(&account_id)
-            } else {
-                None
-            };
-            let Some(backend) = backend else { return };
-            let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
-                Ok(g) => g,
-                Err(_) => {
-                    tracing::warn!("chat_view: backend read timed out in get_available_emojis");
-                    return;
-                }
-            };
-            if let Ok(emojis) = guard.get_available_emojis(cid).await {
+            let Some(account_id) = app_state.peek().nav.active_account_id.cloned() else { return };
+            if let Ok(emojis) = client_manager.peek().with_backend(&account_id, async |b| {
+                b.get_available_emojis(cid).await
+            }).await {
                 custom_emojis.set(emojis);
             }
         });
@@ -5891,14 +5870,14 @@ async fn send_message(ctx: SendMessageCtx) {
     // Resolve the backend: server channels use server_id lookup; DM channels fall back to
     // active_account_id so messages still send when no server is selected.
     let backend = {
-        let state = app_state.read();
+        let state = app_state.peek();
         if let Some(ref server_id) = *state.nav.selected_server {
             client_manager
-                .read()
+                .peek()
                 .get_backend_for_server(server_id)
                 .map(|(_id, b)| b)
         } else if let Some(ref account_id) = *state.nav.active_account_id {
-            client_manager.read().get_backend(account_id)
+            client_manager.peek().get_backend(account_id)
         } else {
             None
         }
@@ -6221,17 +6200,16 @@ fn render_context_menu_danger_item(
                 msg_context_menu.set(None);
                 // Fire backend delete_message (best-effort; local removal already applied).
                 if !channel_id.is_empty() && !account_id.is_empty() {
-                    let backend_opt = client_manager.read().get_backend(&account_id);
-                    if let Some(backend_arc) = backend_opt {
-                        let cid = channel_id.clone();
-                        let mid = mid_delete.clone();
-                        spawn(async move {
-                            let guard = backend_arc.read().await;
-                            if let Err(e) = guard.delete_message(&cid, &mid).await {
-                                tracing::warn!("delete_message failed: {e}");
-                            }
-                        });
-                    }
+                    let cid = channel_id.clone();
+                    let mid = mid_delete.clone();
+                    let aid = account_id.clone();
+                    spawn(async move {
+                        if let Err(e) = client_manager.peek().with_backend(&aid, async |b| {
+                            b.delete_message(&cid, &mid).await
+                        }).await {
+                            tracing::warn!("delete_message failed: {e}");
+                        }
+                    });
                 }
             },
         }

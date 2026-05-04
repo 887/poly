@@ -94,19 +94,9 @@ pub fn ClientSidebar() -> Element {
                         header_block: None,
                     });
                 };
-                let Some(backend) = client_manager.read().get_backend(&account_id) else {
-                    return Err(ClientError::NotFound(format!(
-                        "no backend for account {account_id}"
-                    )));
-                };
-                let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
-                    Ok(g) => g,
-                    Err(_) => {
-                        tracing::warn!("sidebar: backend read timed out loading sidebar declaration");
-                        return Err(ClientError::Internal("backend read timed out".into()));
-                    }
-                };
-                guard.get_sidebar_declaration().await
+                client_manager.peek().with_backend(&account_id, async |b| {
+                    b.get_sidebar_declaration().await
+                }).await
             }
         })
     };

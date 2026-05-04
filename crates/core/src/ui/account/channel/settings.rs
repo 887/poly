@@ -63,19 +63,9 @@ fn ChannelSettingsContent(
                     Some(cm) => cm,
                     None => return Vec::<PluginSettingsSectionData>::new(),
                 };
-                let Some(backend) = client_manager.read().get_backend(&account_id) else {
-                    return Vec::new();
-                };
-                let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
-                    Ok(g) => g,
-                    Err(_) => {
-                        tracing::warn!("channel_settings: backend read timed out loading plugin sections");
-                        return Vec::new();
-                    }
-                };
-                guard
-                    .get_settings_sections()
-                    .await
+                client_manager.peek().with_backend(&account_id, async |b| {
+                    b.get_settings_sections().await
+                }).await
                     .unwrap_or_default()
                     .into_iter()
                     .filter(|s| matches!(s.scope, SettingsScope::PerChannel))

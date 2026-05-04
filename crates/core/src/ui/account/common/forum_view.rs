@@ -402,7 +402,7 @@ pub fn ForumPostView(channel_id: String, post_id: String) -> Element {
             for attempt in 0..20_u32 {
                 let account_id = app_state.peek().nav.active_account_id.cloned();
                 if let Some(aid) = account_id.as_deref() {
-                    if let Some(bh) = client_manager.read().get_backend(aid) {
+                    if let Some(bh) = client_manager.peek().get_backend(aid) {
                         backend = Some(bh);
                         account_id_resolved = account_id;
                         break;

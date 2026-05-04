@@ -233,7 +233,6 @@ fn BannerPanel(
                             let sid2 = sid.clone();
                             let url2 = url.clone();
                             let aid2 = aid.clone();
-                            let backend_arc = client_manager.read().get_backend(&aid2);
                             let toast_queue = try_consume_context::<Signal<Vec<ToastMessage>>>();
                             spawn(async move {
                                 // 1. Persist local override
@@ -248,21 +247,25 @@ fn BannerPanel(
                                     drop(storage.set_app_settings(&settings).await);
                                 }
                                 // 2. Call backend API
-                                if let Some(arc) = backend_arc {
-                                    let banner_arg = if url2.is_empty() { None } else { Some(url2.as_str()) };
-                                    let result = arc.read().await.update_server_banner(&sid2, banner_arg).await;
-                                    match result {
-                                        Ok(()) => {
-                                            tracing::debug!("update_server_banner ok for {sid2}");
-                                        }
-                                        Err(poly_client::ClientError::NotSupported(_)) => {
-                                            // Backend doesn't support remote banner updates — local-only is fine
-                                        }
-                                        Err(e) => {
-                                            tracing::warn!("update_server_banner failed: {e:?}");
-                                            if let Some(q) = toast_queue {
-                                                push_toast(q, ToastMessage::new("server-overview-banner-save-failed", ToastTone::Error));
-                                            }
+                                let banner_arg_is_empty = url2.is_empty();
+                                let result = client_manager.peek().with_backend(&aid2, async |b| {
+                                    let banner_arg = if banner_arg_is_empty { None } else { Some(url2.as_str()) };
+                                    b.update_server_banner(&sid2, banner_arg).await
+                                }).await;
+                                match result {
+                                    Ok(()) => {
+                                        tracing::debug!("update_server_banner ok for {sid2}");
+                                    }
+                                    Err(poly_client::ClientError::NotFound(_)) => {
+                                        // No backend — local-only is fine
+                                    }
+                                    Err(poly_client::ClientError::NotSupported(_)) => {
+                                        // Backend doesn't support remote banner updates — local-only is fine
+                                    }
+                                    Err(e) => {
+                                        tracing::warn!("update_server_banner failed: {e:?}");
+                                        if let Some(q) = toast_queue {
+                                            push_toast(q, ToastMessage::new("server-overview-banner-save-failed", ToastTone::Error));
                                         }
                                     }
                                 }

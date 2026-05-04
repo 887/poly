@@ -81,17 +81,9 @@ async fn resolve_direct_message_for_active_account(
         return Some((existing_dm, instance_id));
     }
 
-    let backend = client_manager.read().get_backend(&account_id)?;
-    let opened_dm = {
-        let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
-            Ok(g) => g,
-            Err(_) => {
-                tracing::warn!("direct_call: backend read timed out opening DM channel");
-                return None;
-            }
-        };
-        guard.open_direct_message_channel(&user_id).await.ok()?
-    };
+    let opened_dm = client_manager.peek().with_backend(&account_id, async |b| {
+        b.open_direct_message_channel(&user_id).await
+    }).await.ok()?;
 
     {
         let dm_c = opened_dm.clone();

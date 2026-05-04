@@ -222,32 +222,15 @@ pub fn TreeBody(
                                                 return;
                                             }
                                         };
-                                        let backend = match client_manager.read().get_backend(&account_id) {
-                                            Some(b) => b,
-                                            None => {
-                                                loading_more.set(false);
-                                                return;
-                                            }
-                                        };
-                                        let guard = match backend
-                                            .read_with_timeout(std::time::Duration::from_secs(5))
-                                            .await
-                                        {
-                                            Ok(g) => g,
-                                            Err(_) => {
-                                                tracing::warn!("TreeBody load-more: backend read timed out");
-                                                loading_more.set(false);
-                                                return;
-                                            }
-                                        };
-                                        let result = guard.get_view_rows(
-                                            &channel_id,
-                                            cursor,
-                                            sort_id.as_deref(),
-                                            filter_id.as_deref(),
-                                            tab_id.as_deref(),
-                                        ).await;
-                                        drop(guard);
+                                        let result = client_manager.peek().with_backend(&account_id, async |b| {
+                                            b.get_view_rows(
+                                                &channel_id,
+                                                cursor,
+                                                sort_id.as_deref(),
+                                                filter_id.as_deref(),
+                                                tab_id.as_deref(),
+                                            ).await
+                                        }).await;
                                         match result {
                                             Ok(page) => {
                                                 loaded_rows.write().extend(page.rows);

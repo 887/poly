@@ -158,16 +158,12 @@ fn do_create_server(
         mut creating,
         mut error_msg,
     } = signals;
-    let backend_opt = client_manager.read().get_backend(&account_id);
-    let Some(backend_arc) = backend_opt else {
-        error_msg.set("No backend found for this account".to_string());
-        return;
-    };
     creating.set(true);
     error_msg.set(String::new());
     spawn(async move {
-        let guard = backend_arc.read().await;
-        match guard.create_server(&name).await {
+        match client_manager.peek().with_backend(&account_id, async |b| {
+            b.create_server(&name).await
+        }).await {
             Ok(server) => {
                 let server_id = server.id.clone();
                 // Register so load_server_data can match backend.

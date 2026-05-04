@@ -80,19 +80,9 @@ pub fn CommunitiesLayout() -> Element {
                 let Some(account_id) = account_id else {
                     return Ok::<Vec<Server>, ClientError>(Vec::new());
                 };
-                let Some(backend) = client_manager.read().get_backend(&account_id) else {
-                    return Err(ClientError::NotFound(format!(
-                        "no backend for account {account_id}"
-                    )));
-                };
-                let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
-                    Ok(g) => g,
-                    Err(_) => {
-                        tracing::warn!("communities: backend read timed out loading servers");
-                        return Err(ClientError::Internal("backend read timed out".into()));
-                    }
-                };
-                guard.get_servers().await
+                client_manager.peek().with_backend(&account_id, async |b| {
+                    b.get_servers().await
+                }).await
             }
         })
     };

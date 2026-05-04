@@ -116,18 +116,15 @@ pub fn TimeoutMemberDialog(
                                 let until = chrono::Utc::now() + chrono::Duration::minutes(minutes);
                                 let reason_str = reason.read().trim().to_string();
                                 let reason_opt = if reason_str.is_empty() { None } else { Some(reason_str) };
-                                let backend_opt = client_manager.read().get_backend(&account_id);
-                                let Some(backend_arc) = backend_opt else {
-                                    error_msg.set(format!("No backend for account {account_id}"));
-                                    return;
-                                };
                                 submitting.set(true);
                                 error_msg.set(String::new());
                                 let sid = server_id.clone();
                                 let mid = member_id.clone();
+                                let aid = account_id.clone();
                                 spawn(async move {
-                                    let guard = backend_arc.read().await;
-                                    match guard.timeout_member(&sid, &mid, until, reason_opt.as_deref()).await {
+                                    match client_manager.peek().with_backend(&aid, async |b| {
+                                        b.timeout_member(&sid, &mid, until, reason_opt.as_deref()).await
+                                    }).await {
                                         Ok(()) => {
                                             submitting.set(false);
                                             success.set(true);

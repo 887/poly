@@ -659,47 +659,34 @@ async fn handle_friend_request_action(
     notif_id: String,
     accept: bool,
 ) {
-    let Some(backend) = client_manager.read().get_backend(&account_id) else {
-        tracing::warn!(
-            "No backend found for friend-request notification account {}",
-            account_id
-        );
-        return;
-    };
-
-    let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
-        Ok(g) => g,
-        Err(_) => {
-            tracing::warn!("notifications: backend read timed out in respond_to_friend_request");
+    let refreshed_friends = match client_manager.peek().with_backend(&account_id, async |b| {
+        b.respond_to_friend_request(&user_id, accept).await?;
+        let friends = if accept {
+            match b.get_friends().await {
+                Ok(friends) => Some(friends),
+                Err(err) => {
+                    tracing::warn!(
+                        "get_friends failed after accepting friend request for account {}: {}",
+                        account_id,
+                        err
+                    );
+                    None
+                }
+            }
+        } else {
+            None
+        };
+        Ok(friends)
+    }).await {
+        Ok(friends) => friends,
+        Err(err) => {
+            tracing::warn!(
+                "respond_to_friend_request failed for account {} user {}: {}",
+                account_id, user_id, err
+            );
             return;
         }
     };
-    if let Err(err) = guard.respond_to_friend_request(&user_id, accept).await {
-        tracing::warn!(
-            "respond_to_friend_request failed for account {} user {}: {}",
-            account_id,
-            user_id,
-            err
-        );
-        return;
-    }
-
-    let refreshed_friends = if accept {
-        match guard.get_friends().await {
-            Ok(friends) => Some(friends),
-            Err(err) => {
-                tracing::warn!(
-                    "get_friends failed after accepting friend request for account {}: {}",
-                    account_id,
-                    err
-                );
-                None
-            }
-        }
-    } else {
-        None
-    };
-    drop(guard);
 
     chat_data.batch(move |cd| {
         cd.notifications

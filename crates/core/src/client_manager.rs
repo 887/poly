@@ -973,4 +973,95 @@ impl ClientManager {
         tracing::info!("Poly server account removed: {account_id}");
         Ok(())
     }
+
+    // ── Backend-access helpers (Phase D.1 of plan-solid-refactor-survey) ────────
+    //
+    // These helpers consolidate the three-step pattern repeated at 48+ call sites:
+    //   1. `client_manager.peek().get_backend(&account_id)` — Option unwrap + hang #7
+    //   2. `backend.read_with_timeout(...)` — hang #4
+    //   3. `guard.<method>(...)` — the actual API call
+    //
+    // Usage:
+    //   let result = client_manager.peek().with_backend(&account_id, async |b| {
+    //       b.get_messages(&channel_id, query).await
+    //   }).await?;
+    //
+    // The helper takes `&self` (i.e. `&ClientManager`). Callers provide
+    // `client_manager.peek()` (no reactive subscription) or any `&ClientManager`
+    // borrow they already have.
+
+    /// Default timeout for `with_backend` — 5 seconds, matching the most common
+    /// per-site value in the codebase (see CLAUDE.md hang class #4).
+    pub const BACKEND_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+    /// Resolve `account_id` to a backend, lock it with the standard 5s timeout,
+    /// and run `f` with an immutable reference to the backend trait object.
+    ///
+    /// Returns `ClientError::NotFound` when no backend is registered for the
+    /// account, and `ClientError::Internal` on read-lock timeout.  Callers can
+    /// propagate with `?` instead of manually matching the `Option` or the
+    /// `BackendReadTimeout` result.
+    ///
+    /// # Hang-class safety
+    ///
+    /// - **Hang #7 (render-time subscription):** Call via `client_manager.peek()`
+    ///   (not `.read()`) so this does NOT subscribe the component to re-renders.
+    /// - **Hang #4 (backend RwLock starvation):** The inner lock uses
+    ///   `read_with_timeout(BACKEND_TIMEOUT)` rather than raw `backend.read().await`.
+    pub async fn with_backend<F, R>(&self, account_id: &str, f: F) -> poly_client::ClientResult<R>
+    where
+        F: AsyncFnOnce(&dyn poly_client::ClientBackend) -> poly_client::ClientResult<R>,
+    {
+        self.with_backend_timeout(account_id, Self::BACKEND_TIMEOUT, f).await
+    }
+
+    /// Same as [`with_backend`] but with a caller-specified timeout.
+    ///
+    /// Use for operations that are expected to be slower (e.g. initial server
+    /// list loads).  10s and 30s variants exist in the wild.
+    pub async fn with_backend_timeout<F, R>(
+        &self,
+        account_id: &str,
+        timeout: std::time::Duration,
+        f: F,
+    ) -> poly_client::ClientResult<R>
+    where
+        F: AsyncFnOnce(&dyn poly_client::ClientBackend) -> poly_client::ClientResult<R>,
+    {
+        let handle = self
+            .get_backend(account_id)
+            .ok_or_else(|| poly_client::ClientError::NotFound(format!("no backend for account {account_id}")))?;
+
+        let guard = handle
+            .read_with_timeout(timeout)
+            .await
+            .map_err(|e| poly_client::ClientError::Internal(e.to_string()))?;
+
+        f(guard.as_ref()).await
+    }
+
+    /// Resolve `server_id` → `account_id` → backend, then run `f`.
+    ///
+    /// Passes both the resolved `account_id` and a reference to the backend
+    /// to the closure so callers that need to forward the account ID (e.g. for
+    /// secondary lookups) don't have to replicate the server-map resolve logic.
+    pub async fn with_backend_for_server<F, R>(
+        &self,
+        server_id: &str,
+        f: F,
+    ) -> poly_client::ClientResult<R>
+    where
+        F: AsyncFnOnce(&str, &dyn poly_client::ClientBackend) -> poly_client::ClientResult<R>,
+    {
+        let (account_id, handle) = self
+            .get_backend_for_server(server_id)
+            .ok_or_else(|| poly_client::ClientError::NotFound(format!("no backend for server {server_id}")))?;
+
+        let guard = handle
+            .read_with_timeout(Self::BACKEND_TIMEOUT)
+            .await
+            .map_err(|e| poly_client::ClientError::Internal(e.to_string()))?;
+
+        f(&account_id, guard.as_ref()).await
+    }
 }

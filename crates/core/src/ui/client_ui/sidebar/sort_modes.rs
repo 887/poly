@@ -140,20 +140,9 @@ async fn dispatch_sort_action(
     account_id: String,
     action_id: String,
 ) {
-    let Some(backend) = client_manager.read().get_backend(&account_id) else {
-        tracing::warn!("SortModesLayout: no backend for account {account_id}");
-        return;
-    };
-    let outcome = {
-        let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
-            Ok(g) => g,
-            Err(_) => {
-                tracing::warn!("sort-modes: backend read timed out invoking sidebar action");
-                return;
-            }
-        };
-        guard.invoke_sidebar_action(&action_id).await
-    };
+    let outcome = client_manager.peek().with_backend(&account_id, async |b| {
+        b.invoke_sidebar_action(&action_id).await
+    }).await;
     // Bump the global sidebar-invalidated tick so the body engine's
     // use_resource (keyed on this tick via render_descriptor_inner)
     // re-fires and picks up the backend's new current-sort.

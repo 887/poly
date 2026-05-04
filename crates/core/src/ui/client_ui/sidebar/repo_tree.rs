@@ -52,19 +52,9 @@ pub fn RepoTreeLayout() -> Element {
                 let Some(account_id) = account_id else {
                     return Ok::<Vec<Server>, ClientError>(Vec::new());
                 };
-                let Some(backend) = client_manager.read().get_backend(&account_id) else {
-                    return Err(ClientError::NotFound(format!(
-                        "no backend for account {account_id}"
-                    )));
-                };
-                let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
-                    Ok(g) => g,
-                    Err(_) => {
-                        tracing::warn!("repo_tree: backend read timed out loading servers");
-                        return Err(ClientError::Internal("backend read timed out".into()));
-                    }
-                };
-                guard.get_servers().await
+                client_manager.peek().with_backend(&account_id, async |b| {
+                    b.get_servers().await
+                }).await
             }
         })
     };
@@ -168,20 +158,9 @@ async fn dispatch_repo_action(
     account_id: String,
     action_id: String,
 ) {
-    let Some(backend) = client_manager.read().get_backend(&account_id) else {
-        tracing::warn!("RepoTreeLayout: no backend for account {account_id}");
-        return;
-    };
-    let outcome = {
-        let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
-            Ok(g) => g,
-            Err(_) => {
-                tracing::warn!("repo_tree: backend read timed out invoking sidebar action");
-                return;
-            }
-        };
-        guard.invoke_sidebar_action(&action_id).await
-    };
+    let outcome = client_manager.peek().with_backend(&account_id, async |b| {
+        b.invoke_sidebar_action(&action_id).await
+    }).await;
     let Some(toast_queue) = try_consume_context::<Signal<Vec<ToastMessage>>>() else {
         tracing::debug!("RepoTreeLayout: no toast queue in context — logging only");
         tracing::info!("RepoTreeLayout: action outcome (no-toast-ctx): {outcome:?}");

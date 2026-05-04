@@ -185,23 +185,13 @@ pub fn AccountServerBar() -> Element {
                         Some(cm) => cm,
                         None => return,
                     };
-                let Some(backend) = client_manager.read().get_backend(&account_id) else {
-                    return;
-                };
-                let guard = match backend
-                    .read_with_timeout(std::time::Duration::from_secs(10))
-                    .await
-                {
-                    Ok(g) => g,
-                    Err(_) => {
-                        tracing::warn!(
-                            "account_server_bar: get_servers timeout for {account_id}"
-                        );
-                        return;
-                    }
-                };
-                let Ok(servers) = guard.get_servers().await else {
-                    return;
+                let servers = match client_manager.peek().with_backend_timeout(
+                    &account_id,
+                    std::time::Duration::from_secs(10),
+                    async |b| b.get_servers().await,
+                ).await {
+                    Ok(s) => s,
+                    Err(_) => return,
                 };
                 if servers.is_empty() {
                     return;
