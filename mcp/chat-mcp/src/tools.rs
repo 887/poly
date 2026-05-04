@@ -211,7 +211,7 @@ pub fn should_expose_tool(tool_name: &str, caps: &BackendCapabilities) -> bool {
 /// RPCs keep advertising every callable tool.
 #[must_use]
 pub fn tool_list_for_backend(slug: &str) -> Vec<Value> {
-    let caps = poly_client::capabilities_for_slug(slug);
+    let caps = poly_client::capabilities_for_slug_static(slug);
     tool_list()
         .into_iter()
         .filter(|t| {
@@ -1651,7 +1651,7 @@ async fn handle_list_friends(args: &Value, pool: &BackendPool) -> Value {
     // return an explicit NotSupported error instead of `Ok([])`, which would
     // silently mislead the caller into thinking the user has zero friends.
     if let Some(slug) = str_arg(args, "backend") {
-        let caps = poly_client::capabilities_for_slug(slug);
+        let caps = poly_client::capabilities_for_slug_static(slug);
         if matches!(caps.friends, FriendModel::None) {
             return err_result(format!(
                 "list_friends not supported: backend '{slug}' has no friends concept"
@@ -1688,7 +1688,7 @@ async fn handle_send_message(args: &Value, pool: &BackendPool) -> Value {
     // NotSupported up-front. Prevents the MCP from plumbing writes into a
     // backend whose API physically cannot accept them.
     if let Some(slug) = str_arg(args, "backend") {
-        let caps = poly_client::capabilities_for_slug(slug);
+        let caps = poly_client::capabilities_for_slug_static(slug);
         if !matches!(caps.messaging, MessagingModel::Full) {
             return err_result(format!(
                 "send_message not supported: backend '{slug}' is read-only"
@@ -1720,7 +1720,7 @@ async fn handle_send_message(args: &Value, pool: &BackendPool) -> Value {
 async fn handle_send_typing(args: &Value, pool: &BackendPool) -> Value {
     // Capability guard: only expose to backends that advertise typing indicators.
     if let Some(slug) = str_arg(args, "backend") {
-        let caps = poly_client::capabilities_for_slug(slug);
+        let caps = poly_client::capabilities_for_slug_static(slug);
         if !caps.supports_typing_indicators {
             return err_result(format!(
                 "send_typing not supported: backend '{slug}' does not advertise typing indicators"
@@ -1751,7 +1751,7 @@ fn handle_list_plugin_tools(args: &Value) -> Value {
     let Some(slug) = str_arg(args, "backend") else {
         return err_result("missing 'backend'");
     };
-    let caps = poly_client::capabilities_for_slug(slug);
+    let caps = poly_client::capabilities_for_slug_static(slug);
     let mut tools: Vec<&'static str> = vec![
         "list_plugins",
         "list_accounts",
@@ -2467,7 +2467,7 @@ async fn handle_draft_create(args: &Value, pool: &BackendPool, mem: &MemoryDb) -
     let auto_send_at: Option<String> = if let Some(secs) = auto_send_in_secs {
         let is_writable = pool.find_by_account(account_id)
             .is_some_and(|e| {
-                let caps = poly_client::capabilities_for_slug(
+                let caps = poly_client::capabilities_for_slug_static(
                     &format!("{:?}", e.session.backend)
                 );
                 caps.composer_writable()
@@ -3592,7 +3592,7 @@ mod tests {
     #[test]
     fn always_exposed_tools_pass_on_every_backend() {
         for slug in KNOWN_SLUGS {
-            let caps = poly_client::capabilities_for_slug(slug);
+            let caps = poly_client::capabilities_for_slug_static(slug);
             for tool in ALWAYS_EXPOSED {
                 assert!(
                     should_expose_tool(tool, &caps),
@@ -3605,7 +3605,7 @@ mod tests {
     #[test]
     fn list_friends_gated_on_friend_model() {
         for slug in KNOWN_SLUGS {
-            let caps = poly_client::capabilities_for_slug(slug);
+            let caps = poly_client::capabilities_for_slug_static(slug);
             let exposed = should_expose_tool("list_friends", &caps);
             let expected = !matches!(caps.friends, FriendModel::None);
             assert_eq!(exposed, expected, "list_friends on '{slug}'");
@@ -3615,7 +3615,7 @@ mod tests {
     #[test]
     fn list_dms_gated_on_dm_support() {
         for slug in KNOWN_SLUGS {
-            let caps = poly_client::capabilities_for_slug(slug);
+            let caps = poly_client::capabilities_for_slug_static(slug);
             let exposed = should_expose_tool("list_dms", &caps);
             let expected = !matches!(caps.dms, DmSupport::None);
             assert_eq!(exposed, expected, "list_dms on '{slug}'");
@@ -3625,7 +3625,7 @@ mod tests {
     #[test]
     fn send_message_gated_on_messaging_model() {
         for slug in KNOWN_SLUGS {
-            let caps = poly_client::capabilities_for_slug(slug);
+            let caps = poly_client::capabilities_for_slug_static(slug);
             let exposed = should_expose_tool("send_message", &caps);
             let expected = matches!(caps.messaging, MessagingModel::Full);
             assert_eq!(exposed, expected, "send_message on '{slug}'");
@@ -3635,7 +3635,7 @@ mod tests {
     #[test]
     fn hackernews_is_read_only_feed_shape() {
         // Concrete expectations — HN is the canonical read-only slug.
-        let caps = poly_client::capabilities_for_slug("hackernews");
+        let caps = poly_client::capabilities_for_slug_static("hackernews");
         assert!(!should_expose_tool("send_message", &caps));
         assert!(!should_expose_tool("list_friends", &caps));
         assert!(!should_expose_tool("list_dms", &caps));
@@ -3645,7 +3645,7 @@ mod tests {
 
     #[test]
     fn discord_is_full_social_chat_shape() {
-        let caps = poly_client::capabilities_for_slug("discord");
+        let caps = poly_client::capabilities_for_slug_static("discord");
         assert!(should_expose_tool("send_message", &caps));
         assert!(should_expose_tool("list_friends", &caps));
         assert!(should_expose_tool("list_dms", &caps));
@@ -3653,7 +3653,7 @@ mod tests {
 
     #[test]
     fn unknown_tool_name_not_exposed() {
-        let caps = poly_client::capabilities_for_slug("discord");
+        let caps = poly_client::capabilities_for_slug_static("discord");
         assert!(!should_expose_tool("not_a_real_tool", &caps));
         assert!(!should_expose_tool("", &caps));
     }
@@ -3662,7 +3662,7 @@ mod tests {
     fn send_typing_gated_on_supports_typing_indicators() {
         // Backends with typing support should expose the tool.
         for slug in ["discord", "matrix", "stoat", "poly", "demo"] {
-            let caps = poly_client::capabilities_for_slug(slug);
+            let caps = poly_client::capabilities_for_slug_static(slug);
             assert!(
                 should_expose_tool("send_typing", &caps),
                 "send_typing should be exposed on backend '{slug}'"
@@ -3670,7 +3670,7 @@ mod tests {
         }
         // Backends without typing support must not expose the tool.
         for slug in ["hackernews", "lemmy", "teams", "github"] {
-            let caps = poly_client::capabilities_for_slug(slug);
+            let caps = poly_client::capabilities_for_slug_static(slug);
             assert!(
                 !should_expose_tool("send_typing", &caps),
                 "send_typing must NOT be exposed on backend '{slug}'"
@@ -3733,7 +3733,7 @@ mod tests {
         }
         // Draft tools must be exposed on every backend.
         for slug in KNOWN_SLUGS {
-            let caps = poly_client::capabilities_for_slug(slug);
+            let caps = poly_client::capabilities_for_slug_static(slug);
             for t in draft_tools {
                 assert!(
                     should_expose_tool(t, &caps),
@@ -3755,7 +3755,7 @@ mod tests {
     #[test]
     fn style_tools_exposed_on_every_backend() {
         for slug in KNOWN_SLUGS {
-            let caps = poly_client::capabilities_for_slug(slug);
+            let caps = poly_client::capabilities_for_slug_static(slug);
             for t in ["set_chat_style", "get_chat_style", "list_chat_styles", "forget_chat_style"] {
                 assert!(
                     should_expose_tool(t, &caps),
@@ -3796,7 +3796,7 @@ mod tests {
     #[test]
     fn meta_persona_tools_always_exposed_on_every_backend() {
         for slug in KNOWN_SLUGS {
-            let caps = poly_client::capabilities_for_slug(slug);
+            let caps = poly_client::capabilities_for_slug_static(slug);
             for t in META_PERSONA_TOOLS {
                 assert!(
                     should_expose_tool(t, &caps),

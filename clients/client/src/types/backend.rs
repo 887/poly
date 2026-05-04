@@ -70,10 +70,13 @@ impl BackendId {
 /// which consults the runtime registry first (populated from each backend's
 /// own `backend_capabilities()` trait impl at connect/restore time).
 ///
-/// This function is private to prevent external callers from accidentally
-/// bypassing the runtime registry.
+/// This function stays `pub` for processes that genuinely cannot reach the
+/// runtime registry (notably the `chat-mcp` MCP server, which runs out of
+/// process and only sees backend slugs from RPC payloads). UI consumers
+/// inside `crates/core/` MUST go through `client_manager.peek().capabilities_for_slug(slug)`
+/// instead so the per-account live values win.
 #[must_use]
-pub(crate) fn static_capabilities_for_slug(slug: &str) -> BackendCapabilities {
+pub fn capabilities_for_slug_static(slug: &str) -> BackendCapabilities {
     // lint-allow-unused: explicit "hackernews" arm documents intent vs the wildcard fallback
     #[allow(clippy::match_same_arms)]
     match slug {
