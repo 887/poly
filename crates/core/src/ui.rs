@@ -1892,7 +1892,7 @@ pub fn App() -> Element {
                 storage_ready: storage_ready_now,
                 setup_complete,
             },
-            &app_state_snapshot,
+            &ui_layout_snapshot,
             &client_manager_snapshot,
             &chat_data_snapshot,
         );

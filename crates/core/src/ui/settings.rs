@@ -63,7 +63,7 @@ mod translation;
 mod voice_video;
 
 use crate::i18n::t;
-use crate::state::{AppState, BatchedSignal, SettingsSection};
+use crate::state::{AppState, BatchedSignal, SettingsSection, UserPrefs};
 use crate::ui::main_layout::close_mobile_drawer;
 use crate::ui::routes::Route;
 use crate::ui::split_shell::SplitMenuShell;
@@ -250,13 +250,13 @@ fn SettingsSearchBar(search_text: Signal<String>) -> Element {
     }
 }
 fn install_settings_scroll_spy(
-    _app_state: BatchedSignal<AppState>,
+    _user_prefs: BatchedSignal<UserPrefs>,
     _plugin_section_ids: Vec<String>,
     _active_plugin_slug: Signal<Option<String>>,
 ) {
     #[cfg(target_arch = "wasm32")]
     {
-        let app_state = _app_state;
+        let user_prefs = _user_prefs;
         let mut active_plugin_slug = _active_plugin_slug;
         let config = SettingsScrollSpyConfig {
             runtime_flag: "__polySettingsScrollSpyInstalled",
@@ -604,7 +604,7 @@ pub fn SettingsPage() -> Element {
     // Install scroll spy when plugins change; memoized plugin_section_ids prevents
     // spurious re-runs on unrelated state updates (e.g., search, section changes).
     use_effect(move || {
-        install_settings_scroll_spy(app_state, (*plugin_section_ids.read()).clone(), active_plugin_slug);
+        install_settings_scroll_spy(user_prefs, (*plugin_section_ids.read()).clone(), active_plugin_slug);
     });
 
     // When the search query changes to non-empty, scroll the content area to the
