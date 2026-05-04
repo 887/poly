@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 use crate::client_manager::BackendHandleExt;
 use crate::state::use_spawn_once;
-use super::super::ChatViewSignals;
+use super::super::signals::ChatViewSignals;
 
 pub(in super::super) fn use_command_preload_effect(signals: &ChatViewSignals, channel_id: &Option<String>) {
     let app_state = signals.app_state;

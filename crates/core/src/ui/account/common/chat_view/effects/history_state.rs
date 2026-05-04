@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use super::super::ChatViewSignals;
+use super::super::signals::ChatViewSignals;
 use super::super::super::chat_history::{ChatHistoryUiState, unread_marker_message_id};
 use super::super::virtualization::recompute_history_spacers;
 use super::super::current_channel_unread_count;

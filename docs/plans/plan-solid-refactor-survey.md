@@ -2,7 +2,7 @@
 
 > Owner: alexander.stuermer@aareon.com
 > Created: 2026-05-03
-> Status: 🧭 SURVEY — investigation complete, ranked work proposed
+> Status: 🟡 IN PROGRESS — phases A-F shipped; phases G-J pending
 >
 > Source shards (raw findings, do not delete — referenced throughout):
 > - `docs/plans/.solid-survey-shards/A.md` — Single Responsibility (oversize)
@@ -227,25 +227,35 @@ These can land in parallel; they touch disjoint trees.
       persona-quality-gates plan; will land as a real Rust scanner once
       the UI surface ships. — shipped in commit `ec586e02`.
 
-### Phase F — `chat_view.rs` full split (~1 week, parallelisable)
+### Phase F — `chat_view.rs` full split (~1 week, parallelisable) — shipped in commits `059eaf55`, `f8ca9e1f`, `d11abf25`, this commit
 
 Phase F unlocks all the per-effect work (`use_history_state_effect` etc.)
 that hang-class plans already name as the canonical examples but couldn't
 isolate.
 
 - [x] **F.1** Move sub-components (`ChatHeaderActions` 347 lines,
-      `ChatUtilityRail` 205 lines) to `chat_view/{header,utility_rail}.rs`. — shipped in commit `<pending>`
+      `ChatUtilityRail` 205 lines) to `chat_view/{header,utility_rail}.rs`. — shipped in commit `059eaf55`
 - [x] **F.2** Move composer + search-filter helpers to
       `chat_view/{composer_helpers,search_filter}.rs`. — shipped in commit `f8ca9e1f`
 - [x] **F.3** Move all 12 `use_*_effect` hooks to
       `chat_view/effects/<name>.rs` (one file per effect — they ARE the
-      "reasons to change" that SRP cares about). Source: A.1#1. — shipped in commit `<pending>`
-- [ ] **F.4** Pull `ChatViewSignals` (35 fields) and
+      "reasons to change" that SRP cares about). Source: A.1#1. — shipped in commit `d11abf25`
+- [x] **F.4** Pull `ChatViewSignals` (35 fields) and
       `ChatViewMarkupCtx` (70 fields) into `chat_view/signals.rs` and
-      `chat_view/markup_ctx.rs` respectively. Convert the manual
-      lockstep between them into a builder.
-- [ ] **F.5** What remains in `chat_view/mod.rs` is the orchestrator
-      (≤300 lines, fits the component cap). Source: A.1#1 split shape.
+      `chat_view/markup_ctx.rs` respectively. Constructor
+      `build_chat_view_markup_ctx` moved to markup_ctx.rs as the
+      "from_signals" builder. — shipped in this commit
+- [x] **F.5** Orchestrator finalized: `mod.rs` re-exports removed;
+      effects now import from `super::super::signals::ChatViewSignals`
+      and `super::super::markup_ctx::ChatViewMarkupCtx`. Baseline
+      regenerated twice. Both WASM + native builds pass. mod.rs final
+      size: 3996 LOC (vs 4396 before F.4+F.5). Note: mod.rs exceeds
+      the ≤500 LOC orchestrator goal — the remaining ~3500 LOC are
+      render helpers (`render_message_list`, `render_message_row`,
+      `render_message_input_area`, `MsgContextMenuOverlay`, etc.).
+      Proposed follow-up: extract render helpers to
+      `chat_view/message_list.rs`, `chat_view/composer.rs`,
+      `chat_view/context_menu_overlay.rs` (separate task). — shipped in this commit
 
 ### Phase G — `AppState` + `ChatData` slice signals (~2 weeks, phased)
 

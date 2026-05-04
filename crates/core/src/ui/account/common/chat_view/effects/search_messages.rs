@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 use crate::state::use_spawn_once;
-use super::super::ChatViewSignals;
-use super::super::ChatViewMarkupCtx;
+use super::super::signals::ChatViewSignals;
+use super::super::markup_ctx::ChatViewMarkupCtx;
 use super::super::ChatUtilityPanel;
 use super::super::search_filter::build_search_query;
 

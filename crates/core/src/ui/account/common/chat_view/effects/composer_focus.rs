@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use super::super::ChatViewSignals;
+use super::super::signals::ChatViewSignals;
 
 /// Auto-focus the message composer input whenever the selected channel or DM changes.
 ///

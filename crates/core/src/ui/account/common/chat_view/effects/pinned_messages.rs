@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 use crate::client_manager::BackendHandleExt;
 use crate::state::use_spawn_once;
-use super::super::ChatViewSignals;
+use super::super::signals::ChatViewSignals;
 use super::super::ChatUtilityPanel;
 
 pub(in super::super) fn use_pinned_messages_effect(signals: &ChatViewSignals) {

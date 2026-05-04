@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
-use super::super::ChatViewSignals;
-use super::super::ChatViewMarkupCtx;
+use super::super::signals::ChatViewSignals;
+use super::super::markup_ctx::ChatViewMarkupCtx;
 use super::super::sync_mobile_side_column_open;
 
 pub(in super::super) fn use_mobile_side_column_effect(signals: &ChatViewSignals, ctx: &ChatViewMarkupCtx) {

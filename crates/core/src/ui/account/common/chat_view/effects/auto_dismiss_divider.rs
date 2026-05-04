@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use super::super::ChatViewSignals;
+use super::super::signals::ChatViewSignals;
 use super::super::mark_channel_as_read;
 
 /// Auto-dismiss the unread divider (and mark the channel as read) the moment the

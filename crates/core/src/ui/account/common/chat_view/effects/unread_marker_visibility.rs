@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use super::super::ChatViewSignals;
+use super::super::signals::ChatViewSignals;
 
 pub(in super::super) fn use_unread_marker_visibility_effect(signals: &ChatViewSignals) {
     let mut unread_marker_on_screen = signals.unread_marker_on_screen;
