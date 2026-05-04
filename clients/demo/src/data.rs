@@ -5804,3 +5804,55 @@ pub fn demo_available_stickers(channel_id: &str) -> Vec<StickerItem> {
         },
     ]
 }
+
+/// Synthesised "federated" demo posts that appear only in the All scope of
+/// the forum flavour's `view_rows`.
+///
+/// Author display names use the `name@instance.tld` convention to look like
+/// posts from other Lemmy-style instances. Post IDs are namespaced with
+/// `fpost-fed-` so they never collide with handcrafted local IDs in
+/// `demo3_messages`.
+pub fn demo_federated_posts(channel_id: &str) -> Vec<Message> {
+    fn mk(id: &str, name: &str, body: &str, age_h: i64, score: u32) -> Message {
+        Message {
+            id: id.to_string(),
+            author: User {
+                id: format!("demo3-fed-{}", name.replace(['@', '.'], "-")),
+                display_name: name.to_string(),
+                avatar_url: None,
+                presence: PresenceStatus::Offline,
+                backend: BackendType::from(DEMO_FORUM_BACKEND),
+            },
+            content: MessageContent::Text(body.to_string()),
+            timestamp: ago_hours(age_h),
+            attachments: vec![],
+            reactions: vec![Reaction { emoji: "\u{1f44d}".to_string(), count: score, me: false }],
+            reply_to: None,
+            edited: false,
+            thread: None,
+            preview_image_url: None,
+        }
+    }
+    match channel_id {
+        "forum-rust-posts" => vec![
+            mk("fpost-fed-rust-1", "rustacean@lemmy.world",
+               "[All] crates.io reached 200k crates this week. Top growth area: async-runtime adapters. Anyone else surprised by the wasm-runtime spike?",
+               2, 312),
+            mk("fpost-fed-rust-2", "embedded_dev@beehaw.org",
+               "[All] Showed Rust to a C team for the first time today. They were sold on the borrow checker the moment I demoed it catching a use-after-free.",
+               5, 188),
+            mk("fpost-fed-rust-3", "crab_friend@programming.dev",
+               "[All] PSA: `cargo nextest` if you havent tried it. ~3x faster than `cargo test` on our 800-test repo because of better test scheduling.",
+               9, 96),
+        ],
+        "forum-rust-questions" => vec![
+            mk("fpost-fed-rustq-1", "askrust@lemmy.world",
+               "[All] How do you all structure a workspace with 30+ internal crates? Were hitting compile-time pain and considering merging some.",
+               4, 71),
+            mk("fpost-fed-rustq-2", "newbie@beehaw.org",
+               "[All] Coming from Go \u{2014} whats the idiomatic Rust equivalent of a small struct with a constructor? `impl Foo { pub fn new(...) -> Self }` or builder?",
+               8, 52),
+        ],
+        _ => vec![],
+    }
+}

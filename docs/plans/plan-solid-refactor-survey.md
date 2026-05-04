@@ -152,9 +152,11 @@ disjoint files.
 
 These can land in parallel; they touch disjoint trees.
 
-- [ ] **C.1** Extract `DemoFlavour` trait/struct so `DemoClient`,
+- [x] **C.1** Extract `DemoFlavour` trait/struct so `DemoClient`,
       `DemoClient2`, `DemoClient3` collapse into one parametric
-      `DemoClient<F>`. Net ~1000 LOC removed. Effort M. Source: B.1.2.
+      `DemoClientGeneric<F>` with type aliases. `lib.rs` 1867→514 LOC (73%),
+      single `ClientBackend` impl body, all 7 tests pass. Effort M.
+      Source: B.1.2. — shipped in commit (see below).
 - [ ] **C.2** Pull `crates/core/src/ui/account/common/chat_view.rs`'s
       virtualization engine (lines 1982-2342, ~360 lines of pure
       window math) into `chat_view/virtualization.rs`. Stand-alone, no

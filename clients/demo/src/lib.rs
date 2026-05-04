@@ -22,6 +22,13 @@ pub const SLUG: &str = "demo";
 /// Public data module — demo data generators for testing.
 pub mod data;
 
+/// Per-flavour trait + three marker structs (Demo, DemoChat, DemoForum).
+///
+/// Only compiled under the `native` feature — the WASM plugin path goes
+/// through `guest.rs` / `wit_bindings.rs` instead.
+#[cfg(feature = "native")]
+pub mod flavour;
+
 /// WASM plugin guest implementation.
 ///
 /// When compiled to `wasm32-wasip2`, this module exports the WIT
@@ -47,7 +54,7 @@ mod guest;
 /// Mirrors the WIT `plugin-metadata.get-translations(locale) → string` export.
 /// Returns an empty string for unsupported locales so the host falls back to
 /// English (the same contract as the WIT interface).
-#[must_use] 
+#[must_use]
 pub fn plugin_translations(locale: &str) -> String {
     match locale {
         "de" => include_str!("../locales/de/plugin.ftl").to_string(),
@@ -58,9 +65,10 @@ pub fn plugin_translations(locale: &str) -> String {
     }
 }
 
-// ─── Native ClientBackend implementations ──────────────────────────
-// These are available when the `native` feature is enabled (default).
-// They implement the async `ClientBackend` trait from poly-client.
+// ─── Native ClientBackend implementation ────────────────────────────
+// One generic DemoClient<F: DemoFlavour> replaces the former
+// DemoClient / DemoClient2 / DemoClient3 triplication (~1 600 LOC → ~400 LOC).
+// Type aliases preserve the external names that consumers depend on.
 
 #[cfg(feature = "native")]
 use async_trait::async_trait;
@@ -71,38 +79,51 @@ use poly_client::*;
 #[cfg(feature = "native")]
 use std::pin::Pin;
 
-/// Demo messenger client for UI testing.
-///
-/// Generates randomized but realistic-looking data for all
-/// messenger operations. No network calls are made.
-// DECISION(D12): Demo client created in Phase 2 alongside UI.
 #[cfg(feature = "native")]
-pub struct DemoClient {
+use flavour::DemoFlavour;
+
+/// Generic demo backend parameterised over a [`DemoFlavour`].
+///
+/// All three demo accounts (Cat / Dog / Platypus-Forum) share this single
+/// struct + `ClientBackend` impl. Per-flavour variation lives entirely in the
+/// `F: DemoFlavour` associated functions so there is no branching inside
+/// the methods.
+///
+/// Consumers should use the concrete type aliases: [`DemoClient`] (Cat),
+/// [`DemoClient2`] (Dog), [`DemoClient3`] (Forum).
+// DECISION(D12): Demo client created in Phase 2 alongside UI.
+// Refactored in Phase C.1 of plan-solid-refactor-survey.md.
+#[cfg(feature = "native")]
+pub struct DemoClientGeneric<F: DemoFlavour> {
     authenticated: bool,
     session: Option<Session>,
     /// Pack C P18 — in-memory settings storage. Demo backends never persist
     /// across process restarts; this cell gives round-trip semantics within
     /// one session.
-    settings_storage: SettingsStorageCell,    /// Stored version override (None = return "poly-demo/0.0.0").
+    settings_storage: SettingsStorageCell,
+    /// Stored version override (None = return "poly-demo/0.0.0").
     version_override: std::sync::Mutex<Option<String>>,
+    /// Zero-sized marker for the flavour type.
+    _flavour: std::marker::PhantomData<F>,
 }
 
 #[cfg(feature = "native")]
-impl DemoClient {
-    /// Create a new demo client.
-    #[must_use] 
+impl<F: DemoFlavour> DemoClientGeneric<F> {
+    /// Create a new demo client for flavour `F`.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             authenticated: false,
             session: None,
             settings_storage: SettingsStorageCell::new(),
             version_override: std::sync::Mutex::new(None),
+            _flavour: std::marker::PhantomData,
         }
     }
 }
 
 #[cfg(feature = "native")]
-impl Default for DemoClient {
+impl<F: DemoFlavour> Default for DemoClientGeneric<F> {
     fn default() -> Self {
         Self::new()
     }
@@ -111,9 +132,9 @@ impl Default for DemoClient {
 #[cfg(feature = "native")]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-impl ClientBackend for DemoClient {
+impl<F: DemoFlavour> ClientBackend for DemoClientGeneric<F> {
     async fn authenticate(&mut self, _credentials: AuthCredentials) -> ClientResult<Session> {
-        let session = data::demo_session();
+        let session = F::session();
         self.session = Some(session.clone());
         self.authenticated = true;
         Ok(session)
@@ -130,18 +151,18 @@ impl ClientBackend for DemoClient {
     }
 
     async fn get_servers(&self) -> ClientResult<Vec<Server>> {
-        Ok(data::demo_servers())
+        Ok(F::servers())
     }
 
     async fn get_server(&self, id: &str) -> ClientResult<Server> {
-        data::demo_servers()
+        F::servers()
             .into_iter()
             .find(|s| s.id == id)
             .ok_or_else(|| ClientError::NotFound(format!("Server {id}")))
     }
 
     async fn get_channels(&self, server_id: &str) -> ClientResult<Vec<Channel>> {
-        Ok(data::apply_local_read_state(data::demo_channels(server_id)))
+        Ok(data::apply_local_read_state(F::channels(server_id)))
     }
 
     async fn mark_channel_read(&self, channel_id: &str) -> ClientResult<()> {
@@ -150,9 +171,8 @@ impl ClientBackend for DemoClient {
     }
 
     async fn get_channel(&self, id: &str) -> ClientResult<Channel> {
-        // Search all servers for the channel
-        for server in data::demo_servers() {
-            for channel in data::demo_channels(&server.id) {
+        for server in F::servers() {
+            for channel in F::channels(&server.id) {
                 if channel.id == id {
                     return Ok(channel);
                 }
@@ -166,7 +186,7 @@ impl ClientBackend for DemoClient {
         channel_id: &str,
         content: MessageContent,
     ) -> ClientResult<Message> {
-        Ok(data::demo_sent_message(channel_id, content))
+        Ok(F::send_message_for(channel_id, content))
     }
 
     async fn send_reply_message(
@@ -175,11 +195,7 @@ impl ClientBackend for DemoClient {
         reply_to_message_id: &str,
         content: MessageContent,
     ) -> ClientResult<Message> {
-        Ok(data::demo_sent_reply_message(
-            channel_id,
-            reply_to_message_id,
-            content,
-        ))
+        Ok(data::demo_sent_reply_message(channel_id, reply_to_message_id, content))
     }
 
     async fn send_typing(&self, _channel_id: &str) -> ClientResult<()> {
@@ -191,18 +207,18 @@ impl ClientBackend for DemoClient {
         channel_id: &str,
         query: MessageQuery,
     ) -> ClientResult<Vec<Message>> {
-        Ok(data::demo_messages_query(channel_id, &query))
+        Ok(F::messages(channel_id, &query))
     }
 
     async fn search_messages(
         &self,
         query: MessageSearchQuery,
     ) -> ClientResult<Vec<MessageSearchHit>> {
-        Ok(data::demo_search_messages(&query))
+        Ok(F::search_messages(&query))
     }
 
     async fn get_pinned_messages(&self, channel_id: &str) -> ClientResult<Vec<Message>> {
-        Ok(data::demo_pinned_messages(channel_id))
+        Ok(F::pinned_messages(channel_id))
     }
 
     async fn get_channel_commands(&self, channel_id: &str) -> ClientResult<Vec<ChatCommand>> {
@@ -218,27 +234,22 @@ impl ClientBackend for DemoClient {
     }
 
     async fn get_user(&self, id: &str) -> ClientResult<User> {
-        data::demo_users()
+        F::users()
             .into_iter()
             .find(|u| u.id == id)
             .ok_or_else(|| ClientError::NotFound(format!("User {id}")))
     }
 
     async fn get_friends(&self) -> ClientResult<Vec<User>> {
-        // Cat is friends with the eight stock demo people PLUS Dog so
-        // the two demo accounts can be exercised end-to-end (DM, shared
-        // arena, friends-list interop).
-        let mut friends = data::demo_users().into_iter().take(8).collect::<Vec<_>>();
-        friends.push(data::demo_dog_user());
-        Ok(friends)
+        Ok(F::friends())
     }
 
-    async fn get_channel_members(&self, _channel_id: &str) -> ClientResult<Vec<User>> {
-        Ok(data::demo_users())
+    async fn get_channel_members(&self, channel_id: &str) -> ClientResult<Vec<User>> {
+        Ok(F::channel_members(channel_id))
     }
 
     async fn get_groups(&self) -> ClientResult<Vec<Group>> {
-        Ok(data::demo_groups_v2())
+        Ok(F::groups())
     }
 
     async fn remove_group_member(&self, _group_id: &str, _user_id: &str) -> ClientResult<()> {
@@ -251,33 +262,27 @@ impl ClientBackend for DemoClient {
     }
 
     async fn get_dm_channels(&self) -> ClientResult<Vec<DmChannel>> {
-        Ok(data::apply_local_read_state_dms(data::demo_dm_channels()))
+        Ok(F::dm_channels())
     }
 
     async fn open_direct_message_channel(&self, user_id: &str) -> ClientResult<DmChannel> {
-        data::demo_dm_channels()
-            .into_iter()
-            .find(|dm| dm.user.id == user_id)
-            .map_or_else(
-                || data::demo_empty_dm_channel_for_user(user_id, data::DEMO_ACCOUNT_ID),
-                Ok,
-            )
+        F::open_dm_channel(user_id)
     }
 
     async fn open_saved_messages_channel(&self) -> ClientResult<DmChannel> {
-        let session = self.session.clone().unwrap_or_else(data::demo_session);
+        let session = self.session.clone().unwrap_or_else(F::session);
         Ok(DmChannel {
-            id: "dm-demo-saved-self".to_string(),
+            id: F::saved_messages_dm_id().to_string(),
             user: session.user,
             last_message: None,
             unread_count: 0,
-            backend: BackendType::from(crate::SLUG),
-            account_id: data::DEMO_ACCOUNT_ID.to_string(),
+            backend: BackendType::from(F::backend_slug()),
+            account_id: F::account_id().to_string(),
         })
     }
 
     async fn get_notifications(&self) -> ClientResult<Vec<Notification>> {
-        Ok(data::demo_notifications())
+        Ok(F::notifications())
     }
 
     async fn respond_to_friend_request(&self, _user_id: &str, _accept: bool) -> ClientResult<()> {
@@ -298,196 +303,23 @@ impl ClientBackend for DemoClient {
         &self,
         channel_id: &str,
     ) -> ClientResult<Vec<VoiceParticipant>> {
-        Ok(data::demo_voice_participants(channel_id))
+        Ok(F::voice_participants(channel_id))
     }
 
     fn event_stream(&self) -> Pin<Box<dyn Stream<Item = ClientEvent> + Send>> {
-        #[cfg(target_arch = "wasm32")]
-        {
-            // The demo dataset is already preloaded in web/Electron builds.
-            // Returning an empty live stream keeps demo mode functional there
-            // without relying on unsupported/native timer behavior.
-            Box::pin(futures::stream::empty())
-        }
-
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            let users = data::demo_users();
-            // Server text channels that receive simulated messages.
-            let server_channels = vec![
-                "ch-general",
-                "ch-off-topic",
-                "ch-rust",
-                "ch-dioxus",
-                "ch-minecraft",
-                "ch-valorant",
-                "ch-recommendations",
-            ];
-            // DM channels that receive simulated messages (dm-{user_id}).
-            let dm_channels = vec!["dm-user-alice", "dm-user-bob", "dm-user-charlie"];
-            let server_messages = vec![
-                "That's a great point!",
-                "I'll look into it. \u{1f527}",
-                "Has anyone else seen this?",
-                "Working on a fix now...",
-                "brb",
-                "lol nice one",
-                "Can confirm, same issue here.",
-                "\u{1f44d}",
-                "Just pushed the fix!",
-                "Who's up for a game tonight?",
-                "This is so cool!",
-                "Let's sync tomorrow morning.",
-            ];
-            let dm_messages = vec![
-                "Hey, are you around?",
-                "Did you see the latest update?",
-                "Let's catch up soon!",
-                "Thanks for the help earlier \u{1f64f}",
-                "Check this out!",
-                "I'll send you the file in a bit.",
-                "Haha yeah exactly \u{1f61d}",
-                "Makes sense, let's do it!",
-            ];
-
-            // Emit a simulated event every 4-8 seconds (staggered cycle).
-            let stream = futures::stream::unfold(0u64, move |counter| {
-                let users = users.clone();
-                let server_channels = server_channels.clone();
-                let dm_channels = dm_channels.clone();
-                let server_messages = server_messages.clone();
-                let dm_messages = dm_messages.clone();
-                async move {
-                    if users.is_empty() || server_channels.is_empty() {
-                        return None;
-                    }
-
-                    // counter is bounded by stream lifetime; usize on 32-bit hosts is ample
-                    // for the demo's lifetime (incremented once per ~5s).
-                    let cu = usize::try_from(counter).unwrap_or(usize::MAX);
-
-                    // Stagger timing: 4s, 6s, 8s, 5s, 7s, 3s cycle
-                    let delays = [4u64, 6, 8, 5, 7, 3];
-                    let delay_secs = delays
-                        .get(cu.checked_rem(delays.len()).unwrap_or(0))
-                        .copied()
-                        .unwrap_or(5);
-                    tokio::time::sleep(std::time::Duration::from_secs(delay_secs)).await;
-
-                    let user_idx = cu.checked_rem(users.len()).unwrap_or(0);
-                    let user = users.get(user_idx)?;
-
-                    // Rotate: server msg, typing, DM msg, server msg, presence
-                    let event = match counter.checked_rem(5).unwrap_or(0) {
-                        // Server channel message
-                        0 | 3 => {
-                            let ch_idx = cu.checked_rem(server_channels.len()).unwrap_or(0);
-                            let channel_id = (*server_channels.get(ch_idx)?).to_string();
-                            let msg_idx = cu
-                                .checked_div(5)
-                                .and_then(|v| v.checked_rem(server_messages.len()))
-                                .unwrap_or(0);
-                            let text = server_messages.get(msg_idx).copied().unwrap_or("...");
-                            ClientEvent::MessageReceived {
-                                channel_id,
-                                message: Message {
-                                    id: format!("msg-stream-{counter}"),
-                                    author: user.clone(),
-                                    content: MessageContent::Text(text.to_string()),
-                                    timestamp: chrono::Utc::now(),
-                                    attachments: vec![],
-                                    reactions: vec![],
-                                    reply_to: None,
-                                    edited: false,
-                                    thread: None,
-                                    preview_image_url: None,
-                                },
-                            }
-                        }
-                        // Typing indicator in a server channel
-                        1 => {
-                            let ch_idx = cu.checked_rem(server_channels.len()).unwrap_or(0);
-                            let channel_id = (*server_channels.get(ch_idx)?).to_string();
-                            ClientEvent::TypingStarted {
-                                channel_id,
-                                user_id: user.id.clone(),
-                                timestamp: chrono::Utc::now(),
-                            }
-                        }
-                        // DM channel message (simulates another user messaging you)
-                        2 => {
-                            let dm_idx = cu
-                                .checked_div(2)
-                                .and_then(|v| v.checked_rem(dm_channels.len()))
-                                .unwrap_or(0);
-                            let channel_id = (*dm_channels.get(dm_idx)?).to_string();
-                            let dm_user_idx = cu
-                                .checked_add(1)
-                                .and_then(|v| v.checked_rem(users.len()))
-                                .unwrap_or(0);
-                            let dm_user = users.get(dm_user_idx)?;
-                            let msg_idx = cu
-                                .checked_div(3)
-                                .and_then(|v| v.checked_rem(dm_messages.len()))
-                                .unwrap_or(0);
-                            let text = dm_messages.get(msg_idx).copied().unwrap_or("hey!");
-                            ClientEvent::MessageReceived {
-                                channel_id,
-                                message: Message {
-                                    id: format!("msg-stream-dm-{counter}"),
-                                    author: dm_user.clone(),
-                                    content: MessageContent::Text(text.to_string()),
-                                    timestamp: chrono::Utc::now(),
-                                    attachments: vec![],
-                                    reactions: vec![],
-                                    reply_to: None,
-                                    edited: false,
-                                    thread: None,
-                                    preview_image_url: None,
-                                },
-                            }
-                        }
-                        // Presence change
-                        _ => {
-                            let statuses = [
-                                PresenceStatus::Online,
-                                PresenceStatus::Idle,
-                                PresenceStatus::DoNotDisturb,
-                                PresenceStatus::Online,
-                            ];
-                            let s_idx = cu
-                                .checked_div(3)
-                                .and_then(|v| v.checked_rem(statuses.len()))
-                                .unwrap_or(0);
-                            let status = statuses
-                                .get(s_idx)
-                                .cloned()
-                                .unwrap_or(PresenceStatus::Online);
-                            ClientEvent::PresenceChanged {
-                                user_id: user.id.clone(),
-                                status,
-                            }
-                        }
-                    };
-
-                    Some((event, counter.saturating_add(1)))
-                }
-            });
-
-            Box::pin(stream)
-        }
+        F::event_stream()
     }
 
     fn backend_type(&self) -> BackendType {
-        BackendType::from(crate::SLUG)
+        BackendType::from(F::backend_slug())
     }
 
     fn backend_name(&self) -> &str {
-        "Demo"
+        F::backend_name()
     }
 
     fn backend_capabilities(&self) -> BackendCapabilities {
-        BackendCapabilities::FULL_SOCIAL_CHAT
+        F::capabilities()
     }
 
     async fn get_context_menu_items(
@@ -573,1183 +405,35 @@ impl ClientBackend for DemoClient {
     }
 
     async fn get_sidebar_declaration(&self) -> Result<SidebarDeclaration, ClientError> {
-        Ok(SidebarDeclaration {
-            layout: SidebarLayoutKind::ChannelList,
-            sections: Vec::new(),
-            header_block: None,
-        })
+        F::sidebar_declaration()
     }
 
     async fn invoke_sidebar_action(
         &self, action_id: &str,
     ) -> Result<ActionOutcome, ClientError> {
-        Err(ClientError::NotFound(format!("unknown sidebar action: {action_id}")))
+        F::invoke_sidebar_action(action_id, &self.settings_storage)
+            .unwrap_or_else(|| Err(ClientError::NotFound(format!("unknown sidebar action: {action_id}"))))
     }
 
     async fn get_account_overview_view(&self) -> ClientResult<ViewDescriptor> {
-        Ok(ViewDescriptor {
-            kind: ViewKind::CardGrid,
-            header: Some(ViewHeader {
-                title_key: Some("plugin-demo-overview-title".to_string()),
-                subtitle_key: Some("plugin-demo-overview-subtitle".to_string()),
-                info_block: None,
-            }),
-            toolbar: None,
-            body: ViewBody::CardBody(CardSpec {
-                primary_field: "name".to_string(),
-            }),
-        })
+        F::account_overview_view()
     }
 
-    async fn get_channel_view(&self, _channel_id: &str) -> Result<ViewDescriptor, ClientError> {
-        // Chat-only backend; no structured view.
-        Err(ClientError::NotSupported("chat-only backend; no structured view".into()))
-    }
-
-    async fn get_view_rows(
-        &self, channel_id: &str, _cursor: Option<Cursor>,
-        _sort_id: Option<&str>, _filter_id: Option<&str>, _tab_id: Option<&str>,
-    ) -> Result<ViewRowsPage, ClientError> {
-        if channel_id.is_empty() || channel_id == "overview" {
-            let rows = data::demo_servers()
-                .into_iter()
-                .map(|s| {
-                    let members = data::demo_server_member_count(&s.id);
-                    let unread = s.unread_count;
-                    let mentions = s.mention_count;
-                    let meta = if mentions > 0 {
-                        format!("{members} members · {unread} unread · @{mentions} mentions")
-                    } else {
-                        format!("{members} members · {unread} unread")
-                    };
-                    ViewRow {
-                        id: s.id.clone(),
-                        primary_text: s.name.clone(),
-                        secondary_text: Some(data::demo_server_description(&s.id).to_string()),
-                        meta_text: Some(meta),
-                        icon: None,
-                        badge: None,
-                        context_menu_target_kind: MenuTargetKind::Server,
-                        preview_image_url: None,
-                        is_video: false,
-                    }
-                })
-                .collect();
-            return Ok(ViewRowsPage { rows, next_cursor: None });
-        }
-        Err(ClientError::NotSupported("chat-only backend; no view rows".into()))
-    }
-
-    async fn get_view_detail(
-        &self, _channel_id: &str, _row_id: &str,
-    ) -> Result<ViewDetail, ClientError> {
-        Err(ClientError::NotSupported("chat-only backend; no view detail".into()))
-    }
-
-    async fn get_composer_buttons(
-        &self, _channel_id: &str,
-    ) -> Result<Vec<ComposerButton>, ClientError> {
-        // Demo client — no real composer extensions; exists solely for UI smoke testing.
-        Ok(Vec::new())
-    }
-
-    async fn get_message_actions(
-        &self, _channel_id: &str, _message_id: &str,
-    ) -> Result<Vec<MenuItem>, ClientError> {
-        // Demo client — no real message actions; exists solely for UI smoke testing.
-        Ok(Vec::new())
-    }
-
-    async fn invoke_composer_action(
-        &self, action_id: &str, _channel_id: &str,
-    ) -> Result<ActionOutcome, ClientError> {
-        Err(ClientError::NotFound(format!("unknown composer action: {action_id}")))
-    }
-
-    async fn invoke_message_action(
-        &self, action_id: &str, _channel_id: &str, _message_id: &str,
-    ) -> Result<ActionOutcome, ClientError> {
-        Err(ClientError::NotFound(format!("unknown message action: {action_id}")))
-    }
-
-    fn client_version(&self) -> String {
-        self.version_override
-            .lock()
-            .ok()
-            .and_then(|g| g.clone())
-            .unwrap_or_else(|| "poly-demo/0.0.0".to_string())
-    }
-
-    async fn set_client_version_override(
-        &self,
-        version_override: Option<String>,
-    ) -> ClientResult<()> {
-        if let Ok(mut lock) = self.version_override.lock() {
-            *lock = version_override;
-        }
-        Ok(())
-    }
-}
-
-/// Second demo messenger client — the "dog" account (demo2 / 🐶).
-///
-/// Provides a second set of demo data (4 different servers, separate
-/// notifications, different communities) so the multi-account UI can be
-/// tested realistically with two simultaneous demo accounts.
-#[cfg(feature = "native")]
-pub struct DemoClient2 {
-    authenticated: bool,
-    session: Option<Session>,
-    /// Pack C P18 — in-memory settings storage. See [`DemoClient`].
-    settings_storage: SettingsStorageCell,    /// Stored version override (None = return "poly-demo/0.0.0").
-    version_override: std::sync::Mutex<Option<String>>,
-}
-
-#[cfg(feature = "native")]
-impl DemoClient2 {
-    /// Create a new demo2 client.
-    #[must_use] 
-    pub fn new() -> Self {
-        Self {
-            authenticated: false,
-            session: None,
-            settings_storage: SettingsStorageCell::new(),
-            version_override: std::sync::Mutex::new(None),
-        }
-    }
-}
-
-#[cfg(feature = "native")]
-impl Default for DemoClient2 {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[cfg(feature = "native")]
-#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
-#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-impl ClientBackend for DemoClient2 {
-    async fn authenticate(&mut self, _credentials: AuthCredentials) -> ClientResult<Session> {
-        let session = data::demo2_session();
-        self.session = Some(session.clone());
-        self.authenticated = true;
-        Ok(session)
-    }
-
-    async fn logout(&mut self) -> ClientResult<()> {
-        self.session = None;
-        self.authenticated = false;
-        Ok(())
-    }
-
-    fn is_authenticated(&self) -> bool {
-        self.authenticated
-    }
-
-    async fn get_servers(&self) -> ClientResult<Vec<Server>> {
-        Ok(data::demo2_servers())
-    }
-
-    async fn get_server(&self, id: &str) -> ClientResult<Server> {
-        data::demo2_servers()
-            .into_iter()
-            .find(|s| s.id == id)
-            .ok_or_else(|| ClientError::NotFound(format!("Server {id}")))
-    }
-
-    async fn get_channels(&self, server_id: &str) -> ClientResult<Vec<Channel>> {
-        Ok(data::apply_local_read_state(data::demo2_channels(server_id)))
-    }
-
-    async fn get_channel(&self, id: &str) -> ClientResult<Channel> {
-        for server in data::demo2_servers() {
-            for channel in data::demo2_channels(&server.id) {
-                if channel.id == id {
-                    return Ok(channel);
-                }
-            }
-        }
-        Err(ClientError::NotFound(format!("Channel {id}")))
-    }
-
-    async fn send_message(
-        &self,
-        channel_id: &str,
-        content: MessageContent,
-    ) -> ClientResult<Message> {
-        Ok(data::demo_sent_message_for(
-            channel_id,
-            content,
-            data::demo2_session().user,
-        ))
-    }
-
-    async fn send_reply_message(
-        &self,
-        channel_id: &str,
-        reply_to_message_id: &str,
-        content: MessageContent,
-    ) -> ClientResult<Message> {
-        Ok(data::demo_sent_reply_message(
-            channel_id,
-            reply_to_message_id,
-            content,
-        ))
-    }
-
-    async fn send_typing(&self, _channel_id: &str) -> ClientResult<()> {
-        Ok(()) // Demo silently accepts typing indicators.
-    }
-
-    async fn get_messages(
-        &self,
-        channel_id: &str,
-        query: MessageQuery,
-    ) -> ClientResult<Vec<Message>> {
-        Ok(data::demo2_messages_query(channel_id, &query))
-    }
-
-    async fn search_messages(
-        &self,
-        query: MessageSearchQuery,
-    ) -> ClientResult<Vec<MessageSearchHit>> {
-        Ok(data::demo2_search_messages(&query))
-    }
-
-    async fn get_pinned_messages(&self, channel_id: &str) -> ClientResult<Vec<Message>> {
-        Ok(data::demo2_pinned_messages(channel_id))
-    }
-
-    async fn get_channel_commands(&self, channel_id: &str) -> ClientResult<Vec<ChatCommand>> {
-        Ok(data::demo_channel_commands(channel_id))
-    }
-
-    async fn get_available_emojis(&self, channel_id: &str) -> ClientResult<Vec<CustomEmoji>> {
-        Ok(data::demo_available_emojis(channel_id))
-    }
-
-    async fn get_available_stickers(&self, channel_id: &str) -> ClientResult<Vec<StickerItem>> {
-        Ok(data::demo_available_stickers(channel_id))
-    }
-
-    async fn get_user(&self, id: &str) -> ClientResult<User> {
-        data::demo_users()
-            .into_iter()
-            .find(|u| u.id == id)
-            .ok_or_else(|| ClientError::NotFound(format!("User {id}")))
-    }
-
-    async fn get_friends(&self) -> ClientResult<Vec<User>> {
-        // Dog account has a different friend circle plus Cat — see Cat's
-        // get_friends for the matching reciprocal entry.
-        let mut friends = data::demo_users().into_iter().skip(2).take(6).collect::<Vec<_>>();
-        friends.push(data::demo_cat_user());
-        Ok(friends)
-    }
-
-    async fn get_channel_members(&self, _channel_id: &str) -> ClientResult<Vec<User>> {
-        Ok(data::demo_users().into_iter().take(6).collect())
-    }
-
-    async fn get_groups(&self) -> ClientResult<Vec<Group>> {
-        Ok(data::demo2_groups())
-    }
-
-    async fn remove_group_member(&self, _group_id: &str, _user_id: &str) -> ClientResult<()> {
-        Ok(())
-    }
-
-    async fn add_group_member(&self, _group_id: &str, _user_id: &str) -> ClientResult<()> {
-        Ok(())
-    }
-
-    async fn mark_channel_read(&self, channel_id: &str) -> ClientResult<()> {
-        data::mark_channel_read_local(channel_id);
-        Ok(())
-    }
-
-    async fn get_dm_channels(&self) -> ClientResult<Vec<DmChannel>> {
-        // A subset of DMs from a different perspective
-        let mut dms: Vec<DmChannel> = data::demo_dm_channels()
-            .into_iter()
-            .take(3)
-            .map(|mut dm| {
-                dm.account_id = data::DEMO2_ACCOUNT_ID.to_string();
-                dm
-            })
-            .collect();
-
-        // Add cross-account DM: dog sees cat
-        dms.push(DmChannel {
-            id: "dm-demo-cat".to_string(),
-            user: User {
-                id: "demo-cat-user".to_string(),
-                display_name: "🐱 Cat (demo)".to_string(),
-                avatar_url: Some(data::DEMO_CAT_AVATAR.to_string()),
-                presence: PresenceStatus::Online,
-                backend: BackendType::from(crate::SLUG),
-            },
-            last_message: Some(Message {
-                id: "msg-dm-cat-latest".to_string(),
-                author: User {
-                    id: "demo-cat-user".to_string(),
-                    display_name: "🐱 Cat (demo)".to_string(),
-                    avatar_url: Some(data::DEMO_CAT_AVATAR.to_string()),
-                    presence: PresenceStatus::Online,
-                    backend: BackendType::from(crate::SLUG),
-                },
-                content: MessageContent::Text(
-                    "fair! 😹 but you have to admit the feature flag organization is *clean* even if it's stolen from my 2023 design"
-                        .to_string(),
-                ),
-                timestamp: data::ago_hours(3),
-                attachments: vec![],
-                reactions: vec![],
-                reply_to: None,
-                edited: false,
-                thread: None,
-                preview_image_url: None,
-            }),
-            unread_count: 1,
-            backend: BackendType::from(crate::SLUG),
-            account_id: data::DEMO2_ACCOUNT_ID.to_string(),
-        });
-
-        Ok(data::apply_local_read_state_dms(dms))
-    }
-
-    async fn open_direct_message_channel(&self, user_id: &str) -> ClientResult<DmChannel> {
-        self.get_dm_channels()
-            .await?
-            .into_iter()
-            .find(|dm| dm.user.id == user_id)
-            .map_or_else(
-                || data::demo_empty_dm_channel_for_user(user_id, data::DEMO2_ACCOUNT_ID),
-                Ok,
-            )
-    }
-
-    async fn open_saved_messages_channel(&self) -> ClientResult<DmChannel> {
-        let session = self.session.clone().unwrap_or_else(data::demo2_session);
-        Ok(DmChannel {
-            id: "dm-demo2-saved-self".to_string(),
-            user: session.user,
-            last_message: None,
-            unread_count: 0,
-            backend: BackendType::from(crate::SLUG),
-            account_id: data::DEMO2_ACCOUNT_ID.to_string(),
-        })
-    }
-
-    async fn get_notifications(&self) -> ClientResult<Vec<Notification>> {
-        Ok(data::demo2_notifications())
-    }
-
-    async fn respond_to_friend_request(&self, _user_id: &str, _accept: bool) -> ClientResult<()> {
-        // Demo client: accept/deny is handled by host-side state updates after a successful
-        // backend response. Return success so the notifications UI can exercise that flow.
-        Ok(())
-    }
-
-    async fn get_presence(&self, _user_id: &str) -> ClientResult<PresenceStatus> {
-        Ok(PresenceStatus::Online)
-    }
-
-    async fn set_presence(&self, _status: PresenceStatus) -> ClientResult<()> {
-        Ok(())
-    }
-
-    async fn get_voice_participants(
-        &self,
-        _channel_id: &str,
-    ) -> ClientResult<Vec<VoiceParticipant>> {
-        Ok(vec![])
-    }
-
-    fn event_stream(&self) -> Pin<Box<dyn Stream<Item = ClientEvent> + Send>> {
-        // Demo2 emits no live events for simplicity
-        Box::pin(futures::stream::empty())
-    }
-
-    fn backend_type(&self) -> BackendType {
-        BackendType::from(crate::SLUG)
-    }
-
-    fn backend_name(&self) -> &str {
-        "Demo (Dog)"
-    }
-
-    fn backend_capabilities(&self) -> BackendCapabilities {
-        BackendCapabilities::FULL_SOCIAL_CHAT
-    }
-
-    async fn get_context_menu_items(
-        &self, target: MenuTargetKind, _target_id: &str,
-    ) -> Result<Vec<MenuItem>, ClientError> {
-        if target != MenuTargetKind::Server {
-            return Ok(Vec::new());
-        }
-        Ok(vec![MenuItem {
-            id: "regenerate-demo-data".to_string(),
-            parent_id: None,
-            slot: MenuSlot::AfterFavorites,
-            label_key: "plugin-demo-menu-regenerate-demo-data-label".to_string(),
-            icon: None,
-            item_variant: MenuItemVariant::Normal,
-            shortcut: None,
-            block: None,
-        }])
-    }
-
-    async fn invoke_context_action(
-        &self, action_id: &str, _target: MenuTargetKind, _target_id: &str,
-    ) -> Result<ActionOutcome, ClientError> {
-        match action_id {
-            "regenerate-demo-data" => Ok(ActionOutcome::Noop),
-            _ => Err(ClientError::NotFound(format!("unknown action: {action_id}"))),
-        }
-    }
-
-    async fn poll_action(
-        &self, _handle: PendingHandle,
-    ) -> Result<ActionOutcome, ClientError> {
-        Err(ClientError::NotFound("no pending actions".into()))
-    }
-
-    async fn get_settings_sections(&self) -> Result<Vec<SettingsSection>, ClientError> {
-        Ok(vec![SettingsSection {
-            scope: SettingsScope::AccountGlobal,
-            section_key: "preferences".to_string(),
-            icon: None,
-            fields: vec![
-                SettingDescriptor {
-                    key: "regenerate-on-start".to_string(),
-                    kind: SettingKind::Toggle,
-                    default_value: "false".to_string(),
-                    extra: String::new(),
-                },
-                SettingDescriptor {
-                    key: "message-count".to_string(),
-                    kind: SettingKind::Slider,
-                    default_value: "50".to_string(),
-                    extra: "{\"min\":10,\"max\":500,\"step\":10}".to_string(),
-                },
-            ],
-            info_block: None,
-        }])
-    }
-
-    async fn get_setting_value(
-        &self, scope: SettingsScope, scope_id: &str, key: &str,
-    ) -> Result<String, ClientError> {
-        // Pack C P18: check in-memory storage first (written via
-        // set_setting_value); fall through to declared default if unset.
-        if let Some(value) = self.settings_storage.get(scope, scope_id, key) {
-            return Ok(value);
-        }
-        for section in self.get_settings_sections().await? {
-            for field in section.fields {
-                if field.key == key {
-                    return Ok(field.default_value);
-                }
-            }
-        }
-        Err(ClientError::NotFound(format!("setting: {key}")))
-    }
-
-    async fn set_setting_value(
-        &self, scope: SettingsScope, scope_id: &str, key: &str, value: &str,
-    ) -> Result<(), ClientError> {
-        // Pack C P18: persist into the per-instance in-memory cell. Demo
-        // backends intentionally don't persist across restarts.
-        self.settings_storage.set(scope, scope_id, key, value)
-    }
-
-    async fn get_sidebar_declaration(&self) -> Result<SidebarDeclaration, ClientError> {
-        Ok(SidebarDeclaration {
-            layout: SidebarLayoutKind::ChannelList,
-            sections: Vec::new(),
-            header_block: None,
-        })
-    }
-
-    async fn invoke_sidebar_action(
-        &self, action_id: &str,
-    ) -> Result<ActionOutcome, ClientError> {
-        Err(ClientError::NotFound(format!("unknown sidebar action: {action_id}")))
-    }
-
-    async fn get_account_overview_view(&self) -> ClientResult<ViewDescriptor> {
-        Ok(ViewDescriptor {
-            kind: ViewKind::CardGrid,
-            header: Some(ViewHeader {
-                title_key: Some("plugin-demo-overview-title".to_string()),
-                subtitle_key: Some("plugin-demo-overview-subtitle".to_string()),
-                info_block: None,
-            }),
-            toolbar: None,
-            body: ViewBody::CardBody(CardSpec {
-                primary_field: "name".to_string(),
-            }),
-        })
-    }
-
-    async fn get_channel_view(&self, _channel_id: &str) -> Result<ViewDescriptor, ClientError> {
-        // Chat-only backend; no structured view.
-        Err(ClientError::NotSupported("chat-only backend; no structured view".into()))
-    }
-
-    async fn get_view_rows(
-        &self, channel_id: &str, _cursor: Option<Cursor>,
-        _sort_id: Option<&str>, _filter_id: Option<&str>, _tab_id: Option<&str>,
-    ) -> Result<ViewRowsPage, ClientError> {
-        if channel_id.is_empty() || channel_id == "overview" {
-            let rows = data::demo2_servers()
-                .into_iter()
-                .map(|s| {
-                    let members = data::demo_server_member_count(&s.id);
-                    let unread = s.unread_count;
-                    let mentions = s.mention_count;
-                    let meta = if mentions > 0 {
-                        format!("{members} members · {unread} unread · @{mentions} mentions")
-                    } else {
-                        format!("{members} members · {unread} unread")
-                    };
-                    ViewRow {
-                        id: s.id.clone(),
-                        primary_text: s.name.clone(),
-                        secondary_text: Some(data::demo_server_description(&s.id).to_string()),
-                        meta_text: Some(meta),
-                        icon: None,
-                        badge: None,
-                        context_menu_target_kind: MenuTargetKind::Server,
-                        preview_image_url: None,
-                        is_video: false,
-                    }
-                })
-                .collect();
-            return Ok(ViewRowsPage { rows, next_cursor: None });
-        }
-        Err(ClientError::NotSupported("chat-only backend; no view rows".into()))
-    }
-
-    async fn get_view_detail(
-        &self, _channel_id: &str, _row_id: &str,
-    ) -> Result<ViewDetail, ClientError> {
-        Err(ClientError::NotSupported("chat-only backend; no view detail".into()))
-    }
-
-    async fn get_composer_buttons(
-        &self, _channel_id: &str,
-    ) -> Result<Vec<ComposerButton>, ClientError> {
-        // Demo client — no real composer extensions; exists solely for UI smoke testing.
-        Ok(Vec::new())
-    }
-
-    async fn get_message_actions(
-        &self, _channel_id: &str, _message_id: &str,
-    ) -> Result<Vec<MenuItem>, ClientError> {
-        // Demo client — no real message actions; exists solely for UI smoke testing.
-        Ok(Vec::new())
-    }
-
-    async fn invoke_composer_action(
-        &self, action_id: &str, _channel_id: &str,
-    ) -> Result<ActionOutcome, ClientError> {
-        Err(ClientError::NotFound(format!("unknown composer action: {action_id}")))
-    }
-
-    async fn invoke_message_action(
-        &self, action_id: &str, _channel_id: &str, _message_id: &str,
-    ) -> Result<ActionOutcome, ClientError> {
-        Err(ClientError::NotFound(format!("unknown message action: {action_id}")))
-    }
-
-    fn client_version(&self) -> String {
-        self.version_override
-            .lock()
-            .ok()
-            .and_then(|g| g.clone())
-            .unwrap_or_else(|| "poly-demo/0.0.0".to_string())
-    }
-
-    async fn set_client_version_override(
-        &self,
-        version_override: Option<String>,
-    ) -> ClientResult<()> {
-        if let Ok(mut lock) = self.version_override.lock() {
-            *lock = version_override;
-        }
-        Ok(())
-    }
-}
-
-/// Third demo messenger client — the "lemming" account (demo_forum / 🐭).
-///
-/// Models a Lemmy-style forum with communities as servers and forum channels
-/// as post boards. Uses the `demo_forum` backend type so it appears as a
-/// distinct plugin from the regular `demo` backend.
-#[cfg(feature = "native")]
-pub struct DemoClient3 {
-    authenticated: bool,
-    session: Option<Session>,
-    /// Pack C P18 — in-memory settings storage. See [`DemoClient`].
-    settings_storage: SettingsStorageCell,    /// Stored version override (None = return "poly-demo/0.0.0").
-    version_override: std::sync::Mutex<Option<String>>,
-}
-
-#[cfg(feature = "native")]
-impl DemoClient3 {
-    /// Create a new demo_forum client.
-    #[must_use] 
-    pub fn new() -> Self {
-        Self {
-            authenticated: false,
-            session: None,
-            settings_storage: SettingsStorageCell::new(),
-            version_override: std::sync::Mutex::new(None),
-        }
-    }
-}
-
-#[cfg(feature = "native")]
-impl Default for DemoClient3 {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[cfg(feature = "native")]
-#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
-#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-impl ClientBackend for DemoClient3 {
-    async fn authenticate(&mut self, _credentials: AuthCredentials) -> ClientResult<Session> {
-        let session = data::demo3_session();
-        self.session = Some(session.clone());
-        self.authenticated = true;
-        Ok(session)
-    }
-
-    async fn logout(&mut self) -> ClientResult<()> {
-        self.session = None;
-        self.authenticated = false;
-        Ok(())
-    }
-
-    fn is_authenticated(&self) -> bool {
-        self.authenticated
-    }
-
-    async fn get_servers(&self) -> ClientResult<Vec<Server>> {
-        Ok(data::demo3_servers())
-    }
-
-    async fn get_server(&self, id: &str) -> ClientResult<Server> {
-        data::demo3_servers()
-            .into_iter()
-            .find(|s| s.id == id)
-            .ok_or_else(|| ClientError::NotFound(format!("Server {id}")))
-    }
-
-    async fn get_channels(&self, server_id: &str) -> ClientResult<Vec<Channel>> {
-        Ok(data::apply_local_read_state(data::demo3_channels(server_id)))
-    }
-
-    async fn mark_channel_read(&self, channel_id: &str) -> ClientResult<()> {
-        data::mark_channel_read_local(channel_id);
-        Ok(())
-    }
-
-    async fn get_channel(&self, id: &str) -> ClientResult<Channel> {
-        for server in data::demo3_servers() {
-            for channel in data::demo3_channels(&server.id) {
-                if channel.id == id {
-                    return Ok(channel);
-                }
-            }
-        }
-        Err(ClientError::NotFound(format!("Channel {id}")))
-    }
-
-    async fn send_message(
-        &self,
-        channel_id: &str,
-        content: MessageContent,
-    ) -> ClientResult<Message> {
-        Ok(data::demo_sent_message(channel_id, content))
-    }
-
-    async fn send_reply_message(
-        &self,
-        channel_id: &str,
-        reply_to_message_id: &str,
-        content: MessageContent,
-    ) -> ClientResult<Message> {
-        Ok(data::demo_sent_reply_message(
-            channel_id,
-            reply_to_message_id,
-            content,
-        ))
-    }
-
-    async fn send_typing(&self, _channel_id: &str) -> ClientResult<()> {
-        Ok(()) // Demo silently accepts typing indicators.
-    }
-
-    async fn get_messages(
-        &self,
-        channel_id: &str,
-        _query: MessageQuery,
-    ) -> ClientResult<Vec<Message>> {
-        // DM channels
-        let dm_msgs = data::demo3_dm_messages(channel_id);
-        if !dm_msgs.is_empty() {
-            return Ok(dm_msgs);
-        }
-        // Thread comments — channel_id is a post ID or the "hn-post-<id>"
-        // pseudo-channel that ForumPostView uses to fetch comments.
-        let stripped = channel_id
-            .strip_prefix("hn-post-")
-            .unwrap_or(channel_id);
-        if stripped.starts_with("fpost-") {
-            let comments = data::demo3_post_comments(stripped);
-            if !comments.is_empty() {
-                return Ok(comments);
-            }
-        }
-        // Forum post list
-        Ok(data::demo3_messages(channel_id))
-    }
-
-    async fn search_messages(
-        &self,
-        _query: MessageSearchQuery,
-    ) -> ClientResult<Vec<MessageSearchHit>> {
-        Ok(vec![])
-    }
-
-    async fn get_pinned_messages(&self, _channel_id: &str) -> ClientResult<Vec<Message>> {
-        Ok(vec![])
-    }
-
-    async fn get_channel_commands(&self, _channel_id: &str) -> ClientResult<Vec<ChatCommand>> {
-        Ok(vec![])
-    }
-
-    async fn get_available_emojis(&self, _channel_id: &str) -> ClientResult<Vec<CustomEmoji>> {
-        Ok(vec![])
-    }
-
-    async fn get_available_stickers(&self, _channel_id: &str) -> ClientResult<Vec<StickerItem>> {
-        Ok(vec![])
-    }
-
-    async fn get_user(&self, id: &str) -> ClientResult<User> {
-        Err(ClientError::NotFound(format!("User {id}")))
-    }
-
-    async fn get_friends(&self) -> ClientResult<Vec<User>> {
-        Ok(vec![])
-    }
-
-    async fn get_channel_members(&self, _channel_id: &str) -> ClientResult<Vec<User>> {
-        Ok(vec![])
-    }
-
-    async fn get_groups(&self) -> ClientResult<Vec<Group>> {
-        Ok(vec![])
-    }
-
-    async fn remove_group_member(&self, _group_id: &str, _user_id: &str) -> ClientResult<()> {
-        Ok(())
-    }
-
-    async fn add_group_member(&self, _group_id: &str, _user_id: &str) -> ClientResult<()> {
-        Ok(())
-    }
-
-    async fn get_dm_channels(&self) -> ClientResult<Vec<DmChannel>> {
-        Ok(data::apply_local_read_state_dms(data::demo3_dm_channels()))
-    }
-
-    async fn open_direct_message_channel(&self, user_id: &str) -> ClientResult<DmChannel> {
-        data::demo3_dm_channels()
-            .into_iter()
-            .find(|dm| dm.user.id == user_id)
-            .ok_or_else(|| ClientError::NotFound(format!("DM user {user_id}")))
-    }
-
-    async fn open_saved_messages_channel(&self) -> ClientResult<DmChannel> {
-        let session = self.session.clone().unwrap_or_else(data::demo3_session);
-        Ok(DmChannel {
-            id: "dm-demo3-saved-self".to_string(),
-            user: session.user,
-            last_message: None,
-            unread_count: 0,
-            backend: BackendType::from(data::DEMO_FORUM_BACKEND),
-            account_id: data::DEMO3_ACCOUNT_ID.to_string(),
-        })
-    }
-
-    async fn get_notifications(&self) -> ClientResult<Vec<Notification>> {
-        Ok(data::demo3_notifications())
-    }
-
-    async fn respond_to_friend_request(&self, _user_id: &str, _accept: bool) -> ClientResult<()> {
-        Ok(())
-    }
-
-    async fn get_presence(&self, _user_id: &str) -> ClientResult<PresenceStatus> {
-        Ok(PresenceStatus::Online)
-    }
-
-    async fn set_presence(&self, _status: PresenceStatus) -> ClientResult<()> {
-        Ok(())
-    }
-
-    async fn get_voice_participants(
-        &self,
-        _channel_id: &str,
-    ) -> ClientResult<Vec<VoiceParticipant>> {
-        Ok(vec![])
-    }
-
-    fn event_stream(&self) -> Pin<Box<dyn Stream<Item = ClientEvent> + Send>> {
-        Box::pin(futures::stream::empty())
-    }
-
-    fn backend_type(&self) -> BackendType {
-        BackendType::from(data::DEMO_FORUM_BACKEND)
-    }
-
-    fn backend_name(&self) -> &str {
-        "Demo Forum (Platypus)"
-    }
-
-    fn backend_capabilities(&self) -> BackendCapabilities {
-        BackendCapabilities::MESSAGING_NO_SOCIAL
-    }
-
-    async fn get_context_menu_items(
-        &self, target: MenuTargetKind, _target_id: &str,
-    ) -> Result<Vec<MenuItem>, ClientError> {
-        if target != MenuTargetKind::Server {
-            return Ok(Vec::new());
-        }
-        Ok(vec![MenuItem {
-            id: "regenerate-demo-data".to_string(),
-            parent_id: None,
-            slot: MenuSlot::AfterFavorites,
-            label_key: "plugin-demo-menu-regenerate-demo-data-label".to_string(),
-            icon: None,
-            item_variant: MenuItemVariant::Normal,
-            shortcut: None,
-            block: None,
-        }])
-    }
-
-    async fn invoke_context_action(
-        &self, action_id: &str, _target: MenuTargetKind, _target_id: &str,
-    ) -> Result<ActionOutcome, ClientError> {
-        match action_id {
-            "regenerate-demo-data" => Ok(ActionOutcome::Noop),
-            _ => Err(ClientError::NotFound(format!("unknown action: {action_id}"))),
-        }
-    }
-
-    async fn poll_action(
-        &self, _handle: PendingHandle,
-    ) -> Result<ActionOutcome, ClientError> {
-        Err(ClientError::NotFound("no pending actions".into()))
-    }
-
-    async fn get_settings_sections(&self) -> Result<Vec<SettingsSection>, ClientError> {
-        Ok(vec![SettingsSection {
-            scope: SettingsScope::AccountGlobal,
-            section_key: "preferences".to_string(),
-            icon: None,
-            fields: vec![
-                SettingDescriptor {
-                    key: "regenerate-on-start".to_string(),
-                    kind: SettingKind::Toggle,
-                    default_value: "false".to_string(),
-                    extra: String::new(),
-                },
-                SettingDescriptor {
-                    key: "message-count".to_string(),
-                    kind: SettingKind::Slider,
-                    default_value: "50".to_string(),
-                    extra: "{\"min\":10,\"max\":500,\"step\":10}".to_string(),
-                },
-            ],
-            info_block: None,
-        }])
-    }
-
-    async fn get_setting_value(
-        &self, scope: SettingsScope, scope_id: &str, key: &str,
-    ) -> Result<String, ClientError> {
-        // Pack C P18: check in-memory storage first (written via
-        // set_setting_value); fall through to declared default if unset.
-        if let Some(value) = self.settings_storage.get(scope, scope_id, key) {
-            return Ok(value);
-        }
-        for section in self.get_settings_sections().await? {
-            for field in section.fields {
-                if field.key == key {
-                    return Ok(field.default_value);
-                }
-            }
-        }
-        Err(ClientError::NotFound(format!("setting: {key}")))
-    }
-
-    async fn set_setting_value(
-        &self, scope: SettingsScope, scope_id: &str, key: &str, value: &str,
-    ) -> Result<(), ClientError> {
-        // Pack C P18: persist into the per-instance in-memory cell. Demo
-        // backends intentionally don't persist across restarts.
-        self.settings_storage.set(scope, scope_id, key, value)
-    }
-
-    async fn get_sidebar_declaration(&self) -> Result<SidebarDeclaration, ClientError> {
-        // Match the SortModes shape Lemmy + Reddit use so all forum-style
-        // backends present the same channel-row sidebar to the user.
-        let mk = |id: &str, label_key: &str, parent: Option<&str>| SidebarItem {
-            id: id.to_string(),
-            parent_id: parent.map(str::to_string),
-            label_key: label_key.to_string(),
-            icon: None,
-            badge: None,
-            route_kind: SidebarRouteKind::Channel,
-        };
-        Ok(SidebarDeclaration {
-            layout: SidebarLayoutKind::SortModes,
-            sections: vec![SidebarSection {
-                header_key: None,
-                collapsible: false,
-                default_collapsed: false,
-                items: vec![
-                    mk("sort-hot", "ui-sidebar-sort-hot", None),
-                    mk("sort-active", "ui-sidebar-sort-active", None),
-                    mk("sort-new", "ui-sidebar-sort-new", None),
-                    mk("sort-old", "ui-sidebar-sort-old", None),
-                    mk("sort-most-comments", "ui-sidebar-sort-most-comments", None),
-                    mk("sort-new-comments", "ui-sidebar-sort-new-comments", None),
-                    mk("sort-top", "ui-sidebar-sort-top", None),
-                    mk("sort-top-day", "ui-sidebar-sort-top-day", Some("sort-top")),
-                    mk("sort-top-week", "ui-sidebar-sort-top-week", Some("sort-top")),
-                    mk("sort-top-month", "ui-sidebar-sort-top-month", Some("sort-top")),
-                    mk("sort-top-year", "ui-sidebar-sort-top-year", Some("sort-top")),
-                    mk("sort-top-all", "ui-sidebar-sort-top-all", Some("sort-top")),
-                ],
-            }],
-            header_block: None,
-        })
-    }
-
-    async fn invoke_sidebar_action(
-        &self, action_id: &str,
-    ) -> Result<ActionOutcome, ClientError> {
-        // Persist the chosen sort under the same per-account-global slot
-        // Lemmy uses; the demo's body engine reads it back to re-order
-        // the post list. Unknown ids fall through to NotFound.
-        if action_id.starts_with("sort-") {
-            let _ = self.settings_storage.set(
-                SettingsScope::AccountGlobal,
-                "",
-                "current-sort",
-                action_id,
-            );
-            return Ok(ActionOutcome::RefreshTarget);
-        }
-        Err(ClientError::NotFound(format!("unknown sidebar action: {action_id}")))
-    }
-
-    async fn get_account_overview_view(&self) -> ClientResult<ViewDescriptor> {
-        Ok(ViewDescriptor {
-            kind: ViewKind::CardGrid,
-            header: Some(ViewHeader {
-                title_key: Some("plugin-demo-forum-overview-title".to_string()),
-                subtitle_key: Some("plugin-demo-forum-overview-subtitle".to_string()),
-                info_block: None,
-            }),
-            toolbar: None,
-            body: ViewBody::CardBody(CardSpec {
-                primary_field: "name".to_string(),
-            }),
-        })
-    }
-
-    async fn get_channel_view(&self, _channel_id: &str) -> Result<ViewDescriptor, ClientError> {
-        // Demo declares a Tree view for any non-chat channel. Chat channels
-        // are routed through `chat_view.rs` before this is called; forum-style
-        // channels (e.g. `demo_forum` posts) need a structured view.
-        // `get_view_rows` still returns empty until real forum data lands.
-        Ok(ViewDescriptor {
-            kind: ViewKind::Tree,
-            header: Some(ViewHeader {
-                title_key: Some("plugin-demo-view-posts-title".to_string()),
-                subtitle_key: None,
-                info_block: None,
-            }),
-            toolbar: Some(ViewToolbar {
-                // Sort options now live in the SortModes sidebar (Hot /
-                // Active / New / Old / Most Comments / New Comments / Top
-                // hour…all_time). Declaring them again here would render a
-                // duplicate dropdown above the post list, with no way to
-                // pick which one wins. Empty sort_options collapses to
-                // just the Filter… input + refresh button.
-                sort_options: vec![],
-                filter_options: vec![],
-                // Subscribed / Local / All are rendered in the SIDEBAR
-                // (channel_list.rs) — the same place Lemmy puts them — and
-                // delivered to `get_view_rows` via `tab_id` through
-                // ForumView's `initial_tab` prop. Declaring them as toolbar
-                // tabs here would render a duplicate row of chips above the
-                // post list, which is not how Lemmy looks.
-                tabs: vec![],
-                action_items: vec![],
-            }),
-            body: ViewBody::TreeBody(TreeSpec {
-                root_page_size: 25,
-                max_depth: 8,
-            }),
-        })
+    async fn get_channel_view(&self, channel_id: &str) -> Result<ViewDescriptor, ClientError> {
+        F::channel_view(channel_id)
     }
 
     async fn get_view_rows(
         &self, channel_id: &str, _cursor: Option<Cursor>,
         _sort_id: Option<&str>, _filter_id: Option<&str>, tab_id: Option<&str>,
     ) -> Result<ViewRowsPage, ClientError> {
-        if channel_id.is_empty() || channel_id == "overview" {
-            // Account overview: one card per subscribed community.
-            let rows = data::demo3_servers()
-                .into_iter()
-                .map(|s| {
-                    let members = data::demo_server_member_count(&s.id);
-                    let posts_count = data::demo3_messages(
-                        s.categories
-                            .first()
-                            .and_then(|c| c.channel_ids.first())
-                            .map_or("", String::as_str),
-                    )
-                    .len();
-                    let meta = format!("{members} subscribers · {posts_count} posts");
-                    ViewRow {
-                        id: s.id.clone(),
-                        primary_text: s.name.clone(),
-                        secondary_text: Some(
-                            data::demo_server_description(&s.id).to_string(),
-                        ),
-                        meta_text: Some(meta),
-                        icon: None,
-                        badge: None,
-                        context_menu_target_kind: MenuTargetKind::Server,
-                        preview_image_url: None,
-                        is_video: false,
-                    }
-                })
-                .collect();
-            return Ok(ViewRowsPage { rows, next_cursor: None });
-        }
-        let subscribed_posts = data::demo3_messages(channel_id);
-        // Listing-type scope: mirrors Lemmy's Subscribed / Local / All.
-        // Each scope returns a visibly-different post set so the demo
-        // actually shows the wiring working.
-        // - "subscribed" (default): the user's own curated feed — the
-        //   handcrafted posts in `data::demo3_messages`.
-        // - "local": instance-only — only posts authored by users on
-        //   the demo's home instance (display_name suffixed with
-        //   `(demo_forum)`). Visibly fewer than subscribed.
-        // - "all": federated firehose — subscribed + a handful of
-        //   posts synthesised as if they came from other federated
-        //   instances (display_name suffixed with `@instance.name`).
-        //   Visibly more than subscribed.
-        let posts: Vec<Message> = match tab_id.unwrap_or("subscribed") {
-            "local" => subscribed_posts
-                .into_iter()
-                .filter(|m| m.author.display_name.contains("(demo_forum)"))
-                .collect(),
-            "all" => {
-                let mut combined = subscribed_posts;
-                combined.extend(demo_federated_posts(channel_id));
-                combined
-            }
-            _ => subscribed_posts,
-        };
-        // Forum rows encode score / comment count / age in a greppable
-        // `SCORE:N ·` prefix on `meta_text`. The host `ListBody` / `TreeBody`
-        // engines pattern-match this prefix and render a Lemmy-style vote
-        // column; rows without the prefix fall back to the generic card.
-        let rows = posts
-            .into_iter()
-            .map(|msg| {
-                let body = match &msg.content {
-                    MessageContent::Text(t) => t.clone(),
-                    MessageContent::WithAttachments { text, .. } => text.clone(),
-                };
-                let score = data::forum_post_score(&msg);
-                let comment_count = data::demo3_post_comments(&msg.id).len();
-                let age = data::forum_humanize_age(msg.timestamp);
-                ViewRow {
-                    id: msg.id.clone(),
-                    primary_text: body,
-                    secondary_text: Some(format!("by {}", msg.author.display_name)),
-                    meta_text: Some(format!(
-                        "SCORE:{score} · {comment_count} comments · {age}"
-                    )),
-                    icon: None,
-                    badge: None,
-                    context_menu_target_kind: MenuTargetKind::Message,
-                    preview_image_url: None,
-                    is_video: false,
-                }
-            })
-            .collect();
-        Ok(ViewRowsPage {
-            rows,
-            next_cursor: None,
-        })
+        F::view_rows(channel_id, tab_id)
     }
 
     async fn get_view_detail(
         &self, channel_id: &str, row_id: &str,
     ) -> Result<ViewDetail, ClientError> {
-        // Find the post body from the forum messages. User text is HTML-escaped
-        // before wrapping so that &, <, > in the source don't break the output,
-        // and so UTF-8 multi-byte characters (em-dash etc.) pass through the
-        // sanitizer as-is instead of getting mojibake'd by HTML parsing.
-        fn html_escape(s: &str) -> String {
-            s.replace('&', "&amp;")
-                .replace('<', "&lt;")
-                .replace('>', "&gt;")
-                .replace('"', "&quot;")
-        }
-        let body_html = data::demo3_messages(channel_id)
-            .into_iter()
-            .find(|msg| msg.id == row_id)
-            .map_or_else(
-                || format!("<p>(post {} not found)</p>", html_escape(row_id)),
-                |msg| match msg.content {
-                    MessageContent::Text(t)
-                    | MessageContent::WithAttachments { text: t, .. } => {
-                        format!("<p>{}</p>", html_escape(&t))
-                    }
-                },
-            );
-        Ok(ViewDetail {
-            body_block: CustomBlock {
-                sanitized_html: body_html,
-                stylesheet: None,
-                max_height_px: None,
-            },
-            comments_section: Some(TreeSpec {
-                root_page_size: 25,
-                max_depth: 8,
-            }),
-        })
+        F::view_detail(channel_id, row_id)
     }
 
     async fn get_composer_buttons(
@@ -1799,69 +483,32 @@ impl ClientBackend for DemoClient3 {
     async fn search_communities(
         &self,
         query: &str,
-        _scope: CommunityScope,
-        _cursor: Option<String>,
+        scope: CommunityScope,
+        cursor: Option<String>,
     ) -> ClientResult<CommunityPage> {
-        // Demo backend: return the wider seeded catalog filtered by
-        // substring match on name. Empty query → return everything
-        // (acts as the "popular" default).
-        let needle = query.trim().to_lowercase();
-        let items: Vec<Server> = data::demo3_discover_servers()
-            .into_iter()
-            .filter(|s| needle.is_empty() || s.name.to_lowercase().contains(&needle))
-            .collect();
-        Ok(CommunityPage { items, next_cursor: None })
+        F::search_communities(query, scope, cursor)
+            .unwrap_or_else(|| Err(ClientError::NotSupported("community search not supported".into())))
     }
 }
 
-/// Synthesised "federated" demo posts that appear only in the All scope.
+// ─── Public type aliases — preserve the API that consumers depend on ────────
+
+// ─── Public type aliases ──────────────────────────────────────────────────────
+
+/// Demo client for the Cat / chat account (the original "demo" account).
 ///
-/// Author display names use the `name@instance.tld` convention to look like
-/// posts coming from other Lemmy-style instances the demo's home instance
-/// has federated with. The post IDs are namespaced with `fpost-fed-` so they
-/// never collide with the handcrafted local IDs in `data::demo3_messages`.
-fn demo_federated_posts(channel_id: &str) -> Vec<Message> {
-    use crate::data::DEMO_FORUM_BACKEND;
-    fn mk(id: &str, name: &str, body: &str, age_h: i64, score: u32) -> Message {
-        Message {
-            id: id.to_string(),
-            author: User {
-                id: format!("demo3-fed-{}", name.replace(['@', '.'], "-")),
-                display_name: name.to_string(),
-                avatar_url: None,
-                presence: PresenceStatus::Offline,
-                backend: BackendType::from(DEMO_FORUM_BACKEND),
-            },
-            content: MessageContent::Text(body.to_string()),
-            timestamp: data::ago_hours(age_h),
-            attachments: vec![],
-            reactions: vec![Reaction { emoji: "👍".to_string(), count: score, me: false }],
-            reply_to: None,
-            edited: false,
-            thread: None,
-            preview_image_url: None,
-        }
-    }
-    match channel_id {
-        "forum-rust-posts" => vec![
-            mk("fpost-fed-rust-1", "rustacean@lemmy.world",
-               "[All] crates.io reached 200k crates this week. Top growth area: async-runtime adapters. Anyone else surprised by the wasm-runtime spike?",
-               2, 312),
-            mk("fpost-fed-rust-2", "embedded_dev@beehaw.org",
-               "[All] Showed Rust to a C team for the first time today. They were sold on the borrow checker the moment I demoed it catching a use-after-free.",
-               5, 188),
-            mk("fpost-fed-rust-3", "crab_friend@programming.dev",
-               "[All] PSA: `cargo nextest` if you havent tried it. ~3x faster than `cargo test` on our 800-test repo because of better test scheduling.",
-               9, 96),
-        ],
-        "forum-rust-questions" => vec![
-            mk("fpost-fed-rustq-1", "askrust@lemmy.world",
-               "[All] How do you all structure a workspace with 30+ internal crates? Were hitting compile-time pain and considering merging some.",
-               4, 71),
-            mk("fpost-fed-rustq-2", "newbie@beehaw.org",
-               "[All] Coming from Go — whats the idiomatic Rust equivalent of a small struct with a constructor? `impl Foo { pub fn new(...) -> Self }` or builder?",
-               8, 52),
-        ],
-        _ => vec![],
-    }
-}
+/// Externally: `poly_demo::DemoClient::new()`.
+#[cfg(feature = "native")]
+pub type DemoClient = DemoClientGeneric<flavour::Demo>;
+
+/// Demo client for the Dog / chat account (the "demo2" account).
+///
+/// Externally: `poly_demo::DemoClient2::new()`.
+#[cfg(feature = "native")]
+pub type DemoClient2 = DemoClientGeneric<flavour::DemoChat>;
+
+/// Demo client for the Platypus / forum account (the "demo_forum" account).
+///
+/// Externally: `poly_demo::DemoClient3::new()`.
+#[cfg(feature = "native")]
+pub type DemoClient3 = DemoClientGeneric<flavour::DemoForum>;
