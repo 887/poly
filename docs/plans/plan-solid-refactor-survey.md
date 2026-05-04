@@ -272,7 +272,7 @@ ones (smaller signal subscriptions = less re-render churn).
       list. Source: D.3. — shipped (commit ID: 1057ee20)
 - [x] **G.3** Extract `BatchedSignal<DragState>` from `ChatData`
       (61 sites, transient, very write-heavy during drag). Source: D.3.
-      — shipped in commit (see jj log below)
+      — shipped in commit `a89999f4`
 - [ ] **G.4** Add `ChatAction` enum + `ChatData::apply()`. Migrate the
       23 manual-clear sites (`cd.channels.clear(); cd.messages.clear();
       cd.members.clear()`) to typed actions. Source: D.1.3.
