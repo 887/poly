@@ -282,9 +282,16 @@ ones (smaller signal subscriptions = less re-render churn).
 - [x] **G.6** Split remaining `ChatData` into `ChatLists`,
       `ChatViewState`, `AccountSessions`. Add by-id `HashMap` shadows
       so the 9 linear `iter().find` lookups become O(1). Source: D.3.
-      — shipped in this commit. Sub-structs defined + registered as contexts;
-      `ChatData` retains fields during migration (262 call sites; migration
-      of individual consumers is follow-on work as each file is touched).
+      — G.6a shipped in commit `efee96e5`. Sub-structs defined + registered as
+      contexts; single-bucket consumers migrated (content_social, account_bar,
+      discord_forum_view, dm_user_sidebar, user_sidebar, voice_view,
+      code_explorer, electron_titlebar, context_menu, profile, notifications,
+      overview_subpages, create_server, direct_call, direct_call_overlay,
+      dm_context_menu, user_profile_modal, routes).
+      — G.6b fixup shipped in commit `2928682e`: fixed multi-bucket consumers
+      (direct_call.rs needed AccountSessions + ChatLists; callers updated).
+      `ChatData` retains fields for remaining multi-bucket files (mod.rs,
+      channel_list.rs, routes.rs heavy paths, favorites_sidebar.rs).
       `ChatViewState::apply()` is the new dispatch target; `ChatData::apply()`
       kept as backward-compat shim.
 
