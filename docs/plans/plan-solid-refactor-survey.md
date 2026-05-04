@@ -257,7 +257,7 @@ isolate.
       `chat_view/message_list.rs`, `chat_view/composer.rs`,
       `chat_view/context_menu_overlay.rs` (separate task). — shipped in this commit
 
-### Phase G — `AppState` + `ChatData` slice signals (~2 weeks, phased) — in progress: G.1 + G.2 + G.3 shipped
+### Phase G — `AppState` + `ChatData` slice signals (~2 weeks, phased) — in progress: G.1 + G.2 + G.3 + G.4 shipped
 
 The biggest structural move. Land per-slice, not big-bang. Each
 sub-step is independently shippable; later steps benefit from earlier
@@ -273,9 +273,10 @@ ones (smaller signal subscriptions = less re-render churn).
 - [x] **G.3** Extract `BatchedSignal<DragState>` from `ChatData`
       (61 sites, transient, very write-heavy during drag). Source: D.3.
       — shipped in commit `a89999f4`
-- [ ] **G.4** Add `ChatAction` enum + `ChatData::apply()`. Migrate the
+- [x] **G.4** Add `ChatAction` enum + `ChatData::apply()`. Migrate the
       23 manual-clear sites (`cd.channels.clear(); cd.messages.clear();
       cd.members.clear()`) to typed actions. Source: D.1.3.
+      — shipped in commit (see below)
 - [ ] **G.5** Split remaining `AppState` into `NavState`, `UiLayout`,
       `UiOverlays`, `UserPrefs`. Source: D.2 split table.
 - [ ] **G.6** Split remaining `ChatData` into `ChatLists`,

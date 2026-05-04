@@ -27,7 +27,7 @@ use super::super::super::routes::Route;
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::state::chat_data::user_color;
-use crate::state::{AppState, ChatData, ContextMenuState, DragSource, DragState, View};
+use crate::state::{AppState, ChatAction, ChatData, ContextMenuState, DragSource, DragState, View};
 use crate::ui::context_menu::menus::server_icon_entry_at;
 use crate::ui::account::common::chat_history::remember_message_list_scroll_position;
 use crate::ui::favorites_sidebar::SidebarTooltip;
@@ -434,13 +434,7 @@ fn AccountServerIcon(
         // type can flip `ServerHome` into rendering `VoiceChannelView` even before
         // `load_server_data` fires, which requests audio permission and hard-crashes
         // Chromium on Linux.
-        chat_data.batch(|cd| {
-            cd.current_server = None;
-            cd.current_channel = None;
-            cd.channels = Vec::new();
-            cd.members = Vec::new();
-            cd.messages = Vec::new();
-        });
+        chat_data.batch(|cd| cd.apply(ChatAction::ClearChannelContext));
         // NOTE: do NOT spawn `load_server_data` here even when not in mobile
         // drawer context. `ServerHome::use_effect` (via `use_spawn_once`)
         // already kicks off the load when the route mounts. Spawning a second
@@ -557,13 +551,7 @@ fn AccountBarOverviewButton(
                 if current_view == View::Overview {
                     return;
                 }
-                chat_data.batch(|cd| {
-                    cd.current_server = None;
-                    cd.current_channel = None;
-                    cd.channels.clear();
-                    cd.messages.clear();
-                    cd.members.clear();
-                });
+                chat_data.batch(|cd| cd.apply(ChatAction::ClearChannelContext));
                 navigator()
                     .push(Route::ServerOverviewRoute {
                         backend: backend_slug.clone(),
@@ -600,13 +588,7 @@ fn AccountBarDmsButton(
                 if current_view == View::DmsFriends {
                     return;
                 }
-                chat_data.batch(|cd| {
-                    cd.current_server = None;
-                    cd.current_channel = None;
-                    cd.channels.clear();
-                    cd.messages.clear();
-                    cd.members.clear();
-                });
+                chat_data.batch(|cd| cd.apply(ChatAction::ClearChannelContext));
                 navigator()
                     .push(Route::DmsHome {
                         backend: backend_slug.clone(),
@@ -645,13 +627,7 @@ fn AccountBarFriendsButton(
                 if current_view == View::Friends {
                     return;
                 }
-                chat_data.batch(|cd| {
-                    cd.current_server = None;
-                    cd.current_channel = None;
-                    cd.channels.clear();
-                    cd.messages.clear();
-                    cd.members.clear();
-                });
+                chat_data.batch(|cd| cd.apply(ChatAction::ClearChannelContext));
                 crate::nav!(Route::FriendsRoute {
                     backend: backend_slug.clone(),
                     instance_id: instance_id.clone(),
@@ -702,13 +678,7 @@ fn AccountBarNotifsButton(current_view: View, notif_count: usize) -> Element {
                 if current_view == View::Notifications {
                     return;
                 }
-                chat_data.batch(|cd| {
-                    cd.current_server = None;
-                    cd.current_channel = None;
-                    cd.channels.clear();
-                    cd.messages.clear();
-                    cd.members.clear();
-                });
+                chat_data.batch(|cd| cd.apply(ChatAction::ClearChannelContext));
                 crate::nav!(Route::NotificationsRoute {
                     backend: backend_slug.clone(),
                     instance_id: instance_id.clone(),
@@ -749,13 +719,7 @@ fn AccountBarDiscoverButton(
                 if current_view == View::DiscoverCommunities {
                     return;
                 }
-                chat_data.batch(|cd| {
-                    cd.current_server = None;
-                    cd.current_channel = None;
-                    cd.channels.clear();
-                    cd.messages.clear();
-                    cd.members.clear();
-                });
+                chat_data.batch(|cd| cd.apply(ChatAction::ClearChannelContext));
                 crate::nav!(Route::DiscoverRoute {
                     backend: backend_slug.clone(),
                     instance_id: instance_id.clone(),

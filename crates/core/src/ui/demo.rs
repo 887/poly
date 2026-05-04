@@ -14,7 +14,7 @@
 
 use crate::state::BatchedSignal;
 use crate::client_manager::{BackendHandle, BackendHandleExt, ClientManager, PluginSettingsEntry};
-use crate::state::{AppState, ChatData, DragState, VoiceState};
+use crate::state::{AppState, ChatAction, ChatData, DragState, VoiceState};
 use crate::ui::account::common::chat_history::{
     read_message_list_scroll_metrics, request_scroll_to_bottom,
 };
@@ -122,11 +122,7 @@ pub(crate) async fn toggle_demo(
                         cd.friends.remove(aid.as_str());
                         cd.blocked_users.remove(aid.as_str());
                     }
-                    cd.channels.clear();
-                    cd.messages.clear();
-                    cd.members.clear();
-                    cd.current_server = None;
-                    cd.current_channel = None;
+                    cd.apply(ChatAction::ClearChannelContext);
                     for aid in &demo_ids_c {
                         cd.account_sessions.remove(aid.as_str());
                     }

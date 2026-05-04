@@ -24,7 +24,7 @@ use super::routes::Route;
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::state::chat_data::user_color;
-use crate::state::{AccountContextMenuState, AppState, ChatData, ContextMenuState, DragSource, DragState, View, VoiceState};
+use crate::state::{AccountContextMenuState, AppState, ChatAction, ChatData, ContextMenuState, DragSource, DragState, View, VoiceState};
 use crate::ui::context_menu::menus::{account_entry_at, server_icon_entry_at};
 use crate::ui::account::common::chat_history::{
     initial_message_query, remember_message_list_scroll_position,
@@ -676,13 +676,7 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                 // Clear server/channel state — the target route will reload what's needed.
                 // Batch into one write guard so only a single Dioxus re-render cascade
                 // is scheduled (5 separate writes → 5 cascades → WASM scheduler freeze).
-                chat_data.batch(|cd| {
-                    cd.current_server = None;
-                    cd.current_channel = None;
-                    cd.channels.clear();
-                    cd.messages.clear();
-                    cd.members.clear();
-                });
+                chat_data.batch(|cd| cd.apply(ChatAction::ClearChannelContext));
 
                 // If we have a stored last route for this account, restore it.
                 // This makes account-switching feel like a true tab switch.
@@ -1306,11 +1300,7 @@ async fn load_server_data_internal(
                  synchronous so ChatView doesn't briefly render a stale channel",
             );
         });
-        pending.set(|cd| {
-            cd.current_channel = None;
-            cd.messages.clear();
-            cd.members.clear();
-        });
+        pending.set(|cd| cd.apply(ChatAction::ClearActiveChannel));
     }
     pending.set(|cd| cd.loading = false);
     // ONE terminal cascade for the whole fetch.

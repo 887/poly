@@ -10,6 +10,7 @@
 
 pub mod batched_signal;
 pub mod bisect_log;
+pub mod chat_actions;
 pub mod chat_data;
 pub mod drag_state;
 pub mod route_synced;
@@ -19,6 +20,7 @@ pub mod voice_state;
 
 pub use bisect_log::bisect_log;
 pub use batched_signal::{BatchedSignal, PendingUpdate, use_batched_context};
+pub use chat_actions::ChatAction;
 pub use chat_data::ChatData;
 pub use drag_state::{DragSource, DragState};
 pub use route_synced::RouteSynced;
