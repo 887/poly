@@ -235,8 +235,8 @@ isolate.
 
 - [x] **F.1** Move sub-components (`ChatHeaderActions` 347 lines,
       `ChatUtilityRail` 205 lines) to `chat_view/{header,utility_rail}.rs`. — shipped in commit `<pending>`
-- [ ] **F.2** Move composer + search-filter helpers to
-      `chat_view/{composer_helpers,search_filter}.rs`.
+- [x] **F.2** Move composer + search-filter helpers to
+      `chat_view/{composer_helpers,search_filter}.rs`. — shipped in commit `<pending>`
 - [ ] **F.3** Move all 12 `use_*_effect` hooks to
       `chat_view/effects/<name>.rs` (one file per effect — they ARE the
       "reasons to change" that SRP cares about). Source: A.1#1.
