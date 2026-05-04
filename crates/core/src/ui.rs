@@ -98,7 +98,7 @@ pub(crate) use runtime_js::load_js_asset;
 pub use setup_wizard::SetupWizard;
 
 use crate::client_manager::{ClientManager, SignupEntry};
-use crate::state::{AppState, BatchedSignal, ChatData, DragState, LayoutMode, NavState, SettingsSection, UiLayout, UiOverlays, UserPrefs, View, VoiceState};
+use crate::state::{AccountSessions, AppState, BatchedSignal, ChatData, ChatLists, ChatViewState, DragState, LayoutMode, NavState, SettingsSection, UiLayout, UiOverlays, UserPrefs, View, VoiceState};
 use dioxus::prelude::*;
 use poly_ui_macros::{context_menu, ui_action};
 use routes::{route_targets_unknown_account, sync_route_to_app_state};
@@ -1715,6 +1715,20 @@ pub fn App() -> Element {
     let chat_data: BatchedSignal<ChatData> =
         BatchedSignal::from_signal(use_signal(ChatData::default));
     provide_context(chat_data);
+
+    // DECISION(G.6): Three sub-signal contexts split off from ChatData to narrow
+    // subscriber sets. Writing to ChatViewState (new message) does NOT re-render
+    // components that only subscribe to ChatLists (server sidebar) or
+    // AccountSessions (account bar), and vice-versa.
+    let chat_lists: BatchedSignal<ChatLists> =
+        BatchedSignal::from_signal(use_signal(ChatLists::default));
+    provide_context(chat_lists);
+    let chat_view_state: BatchedSignal<ChatViewState> =
+        BatchedSignal::from_signal(use_signal(ChatViewState::default));
+    provide_context(chat_view_state);
+    let account_sessions: BatchedSignal<AccountSessions> =
+        BatchedSignal::from_signal(use_signal(AccountSessions::default));
+    provide_context(account_sessions);
 
     // VoiceState is provided alongside ChatData so that voice writes
     // (participant list ticks, mute toggles) only re-render voice-watching

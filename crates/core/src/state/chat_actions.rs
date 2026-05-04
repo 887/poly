@@ -1,4 +1,4 @@
-//! Typed action dispatch for [`super::chat_data::ChatData`] mutations.
+//! Typed action dispatch for [`super::chat_view_state::ChatViewState`] mutations.
 //!
 //! Each variant encodes a *named* mutation pattern that appears in multiple
 //! call sites. Only patterns that recur across ≥2 files are given a variant —
@@ -8,23 +8,32 @@
 //!
 //! ```ignore
 //! // Instead of:
-//! chat_data.batch(|cd| {
-//!     cd.current_server = None;
-//!     cd.current_channel = None;
-//!     cd.channels.clear();
-//!     cd.messages.clear();
-//!     cd.members.clear();
+//! chat_view.batch(|cv| {
+//!     cv.current_server = None;
+//!     cv.current_channel = None;
+//!     cv.messages.clear();
+//!     cv.members.clear();
 //! });
+//! // … and separately:
+//! chat_lists.batch(|cl| cl.set_channels(vec![]));
 //!
 //! // Write:
-//! chat_data.batch(|cd| cd.apply(ChatAction::ClearChannelContext));
+//! chat_view.batch(|cv| cv.apply(ChatAction::ClearChannelContext));
+//! chat_lists.batch(|cl| cl.set_channels(vec![]));
 //!
 //! // Or, when mixing with extra mutations in the same batch:
-//! chat_data.batch(|cd| {
-//!     cd.apply(ChatAction::ClearChannelContext);
-//!     cd.current_server = Some(server.clone());
+//! chat_view.batch(|cv| {
+//!     cv.apply(ChatAction::ClearChannelContext);
+//!     cv.current_server = Some(server.clone());
 //! });
 //! ```
+//!
+//! ## Note on ClearChannelContext
+//!
+//! `ClearChannelContext` clears *view-state* fields only (current_server,
+//! current_channel, messages, members). Callers must ALSO clear
+//! `chat_lists.set_channels(vec![])` in a separate batch on `ChatLists`.
+//! This two-call pattern replaces the old single `chat_data.batch(|cd| cd.apply(...))`.
 //!
 //! ## Adding variants
 //!
@@ -32,23 +41,23 @@
 //! Wrapping a single-site mutation in an action adds indirection without
 //! reducing duplication.
 
-use super::chat_data::ChatData;
-
-/// A named mutation on [`ChatData`].
+/// A named mutation on [`super::chat_view_state::ChatViewState`].
 ///
-/// Apply via [`ChatData::apply`] inside a `.batch()` closure.
+/// Apply via [`super::chat_view_state::ChatViewState::apply`] inside a `.batch()` closure.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ChatAction {
-    /// Clear the full server + channel context.
+    /// Clear the full server + channel context (view-state fields only).
     ///
     /// Sets `current_server` and `current_channel` to `None` and clears
-    /// `channels`, `messages`, and `members`. Use when navigating away
-    /// from a server to a top-level route (Overview, DMs, Notifications,
-    /// Friends, Discover), or when switching servers.
+    /// `messages` and `members`. Use when navigating away from a server
+    /// to a top-level route (Overview, DMs, Notifications, Friends, Discover),
+    /// or when switching servers.
     ///
-    /// Canonical 5-field pattern repeated across `account_server_bar.rs`
-    /// (5 buttons), `favorites_sidebar.rs` (account-switch click),
-    /// and `demo.rs` (demo account teardown).
+    /// **Important:** this only clears view-state fields. Callers must also
+    /// call `chat_lists.batch(|cl| cl.set_channels(vec![]))` separately.
+    ///
+    /// Canonical pattern repeated across `account_server_bar.rs`,
+    /// `favorites_sidebar.rs`, and `demo.rs`.
     ClearChannelContext,
 
     /// Clear only the active channel's loaded data.
@@ -60,29 +69,4 @@ pub enum ChatAction {
     /// Pattern found in `favorites_sidebar.rs::load_server_data_internal`
     /// (the `!auto_select_first_text_channel` branch).
     ClearActiveChannel,
-}
-
-impl ChatData {
-    /// Apply a typed [`ChatAction`] to this `ChatData`.
-    ///
-    /// Call inside a `.batch()` closure:
-    /// ```ignore
-    /// chat_data.batch(|cd| cd.apply(ChatAction::ClearChannelContext));
-    /// ```
-    pub fn apply(&mut self, action: ChatAction) {
-        match action {
-            ChatAction::ClearChannelContext => {
-                self.current_server = None;
-                self.current_channel = None;
-                self.channels.clear();
-                self.messages.clear();
-                self.members.clear();
-            }
-            ChatAction::ClearActiveChannel => {
-                self.current_channel = None;
-                self.messages.clear();
-                self.members.clear();
-            }
-        }
-    }
 }

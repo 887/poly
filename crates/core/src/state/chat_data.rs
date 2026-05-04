@@ -5,6 +5,18 @@
 //! All data is populated from backends via the [`ClientManager`].
 //!
 //! Provided as `Signal<ChatData>` at the `App` level.
+//!
+//! ## Phase G.6 migration status
+//!
+//! Three sub-signal types have been extracted (plan-solid-refactor-survey.md):
+//! - `ChatLists` — servers, channels, dm_channels, groups, friends, notifications + by-id shadows
+//! - `ChatViewState` — messages, members, current_server/channel, typing_users, loading, etc.
+//! - `AccountSessions` — account_sessions, favorited_server_ids, account_order, content_policy, blocked_users
+//!
+//! These are now provided as separate `BatchedSignal` contexts alongside `ChatData`
+//! (see `ui.rs`). Full migration of the 262 call sites is in progress — `ChatData`
+//! remains the authoritative data store until all consumers are migrated.
+//!
 // TODO(phase-2.5.2): Reactive Data Stores
 // DECISION(V-4): VoiceMediaSettings is defined here and re-exported via VoiceState
 // (phase-G.2 of plan-solid-refactor-survey.md). Persistence TBD.
@@ -47,6 +59,12 @@ impl Default for VoiceMediaSettings {
 ///
 /// Holds loaded data from all active backends. Updated by async tasks
 /// that call into the `ClientManager`.
+///
+/// ## Phase G.6 note
+///
+/// The logical sub-structs `ChatLists`, `ChatViewState`, and `AccountSessions`
+/// (in `crate::state`) are now provided as separate `BatchedSignal` contexts.
+/// `ChatData` retains all fields until all call sites are migrated.
 #[derive(Debug, Clone, Default)]
 pub struct ChatData {
     /// All favorited servers from all backends.
@@ -128,8 +146,37 @@ pub struct ChatData {
     pub messages_loaded_via_anchor: bool,
 }
 
+impl ChatData {
+    /// Apply a typed [`super::chat_actions::ChatAction`] to this `ChatData`.
+    ///
+    /// This method is kept for backward compatibility during the G.6 migration.
+    /// New code should use `ChatViewState::apply()` instead.
+    ///
+    /// Call inside a `.batch()` closure:
+    /// ```ignore
+    /// chat_data.batch(|cd| cd.apply(ChatAction::ClearChannelContext));
+    /// ```
+    pub fn apply(&mut self, action: super::chat_actions::ChatAction) {
+        use super::chat_actions::ChatAction;
+        match action {
+            ChatAction::ClearChannelContext => {
+                self.current_server = None;
+                self.current_channel = None;
+                self.channels.clear();
+                self.messages.clear();
+                self.members.clear();
+            }
+            ChatAction::ClearActiveChannel => {
+                self.current_channel = None;
+                self.messages.clear();
+                self.members.clear();
+            }
+        }
+    }
+}
+
 /// Format a file size in human-readable form.
-#[must_use] 
+#[must_use]
 pub fn format_file_size(bytes: u64) -> String {
     if bytes < 1024 {
         return format!("{bytes} B");
@@ -158,7 +205,7 @@ pub fn format_file_size(bytes: u64) -> String {
 ///
 /// DECISION(D27): do not re-introduce slug→emoji mapping in this file —
 /// it belongs in the plugin's declaration.
-#[must_use] 
+#[must_use]
 pub fn backend_badge(_backend: &BackendType) -> &'static str {
     "⬜"
 }
@@ -166,7 +213,7 @@ pub fn backend_badge(_backend: &BackendType) -> &'static str {
 /// Get a deterministic color for a user ID (for avatar and username coloring).
 ///
 /// Returns a CSS color string.
-#[must_use] 
+#[must_use]
 pub fn user_color(user_id: &str) -> &'static str {
     let hash: u32 = user_id.bytes().fold(0u32, |acc, b| {
         acc.wrapping_mul(31).wrapping_add(u32::from(b))

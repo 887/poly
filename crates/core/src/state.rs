@@ -8,20 +8,26 @@
 //! - i18n locale
 //! - Setup wizard state
 
+pub mod account_sessions;
 pub mod batched_signal;
 pub mod bisect_log;
 pub mod chat_actions;
 pub mod chat_data;
+pub mod chat_lists;
+pub mod chat_view_state;
 pub mod drag_state;
 pub mod route_synced;
 pub mod use_reactive_effect;
 pub mod use_spawn_once;
 pub mod voice_state;
 
+pub use account_sessions::AccountSessions;
 pub use bisect_log::bisect_log;
 pub use batched_signal::{BatchedSignal, PendingUpdate, use_batched_context};
 pub use chat_actions::ChatAction;
 pub use chat_data::ChatData;
+pub use chat_lists::ChatLists;
+pub use chat_view_state::ChatViewState;
 pub use drag_state::{DragSource, DragState};
 pub use route_synced::RouteSynced;
 pub use voice_state::VoiceState;
@@ -30,6 +36,7 @@ pub use self::use_spawn_once::use_spawn_once;
 // Phase G.5 sub-signal types — re-exported so consumers can `use crate::state::NavState` etc.
 // NavState, NavigationState (alias), UiLayout, UiOverlays, UserPrefs are defined in this file
 // and automatically pub due to their pub visibility — no additional re-export needed.
+// Phase G.6 sub-signal types — re-exported so consumers can `use crate::state::ChatLists` etc.
 
 use poly_client::{BackendType, MemberPermissions};
 use poly_client::User;
