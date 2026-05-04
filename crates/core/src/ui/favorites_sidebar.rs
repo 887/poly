@@ -24,7 +24,7 @@ use super::routes::Route;
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::state::chat_data::user_color;
-use crate::state::{AccountContextMenuState, AppState, ChatData, ContextMenuState, DragSource, View, VoiceState};
+use crate::state::{AccountContextMenuState, AppState, ChatData, ContextMenuState, DragSource, DragState, View, VoiceState};
 use crate::ui::context_menu::menus::{account_entry_at, server_icon_entry_at};
 use crate::ui::account::common::chat_history::{
     initial_message_query, remember_message_list_scroll_position,
@@ -119,6 +119,7 @@ pub fn FavoritesBar() -> Element {
     let current_view = *app_state.read().nav.view;
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
+    let drag_state: BatchedSignal<DragState> = use_context();
 
     let servers = chat_data.read().servers.clone();
     let demo_active = client_manager.read().demo_active;
@@ -238,11 +239,18 @@ pub fn FavoritesBar() -> Element {
                 ondrop: move |evt| {
                     evt.prevent_default();
                     drag_over.set(false);
+                    // Snapshot drag state before clearing it.
+                    let (drag_id, drag_src) = drag_state.batch(|d| {
+                        let id = d.dragging_server_id.clone();
+                        let src = d.drag_source.clone();
+                        d.dragging_server_id = None;
+                        d.drag_source = DragSource::None;
+                        d.drag_over_id = None;
+                        (id, src)
+                    });
+                    // Per-item ondrop handles positional drops via stop_propagation.
+                    // This handler catches drops on the nav background (append to end).
                     let new_favorites = chat_data.batch(|cd| {
-                        let drag_id = cd.dragging_server_id.clone();
-                        let drag_src = cd.drag_source.clone();
-                        // Per-item ondrop handles positional drops via stop_propagation.
-                        // This handler catches drops on the nav background (append to end).
                         if let Some(sid) = drag_id {
                             match drag_src {
                                 DragSource::AccountServer | DragSource::FavoriteServer => {
@@ -253,9 +261,6 @@ pub fn FavoritesBar() -> Element {
                                 DragSource::None | DragSource::AccountIcon => {}
                             }
                         }
-                        cd.dragging_server_id = None;
-                        cd.drag_source = DragSource::None;
-                        cd.drag_over_id = None;
                         cd.favorited_server_ids.clone()
                     });
                     spawn(async move {
@@ -388,6 +393,7 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
     let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let app_state: BatchedSignal<AppState> = use_context();
+    let drag_state: BatchedSignal<DragState> = use_context();
 
     // Read connection and presence statuses for this account.
     let conn_class: &'static str = client_manager
@@ -473,33 +479,33 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
     };
     let needs_reauth_badge = conn_class == "unauthenticated";
 
-    let is_drag_over_account = chat_data.read().drag_over_id.as_deref()
+    let is_drag_over_account = drag_state.read().drag_over_id.as_deref()
         == Some(account_id.as_str())
-        && chat_data.read().drag_source == DragSource::AccountIcon;
+        && drag_state.read().drag_source == DragSource::AccountIcon;
 
     let drag_start_id = account_id.clone();
     let on_account_drag_start = move |_: Event<DragData>| {
-        chat_data.batch(|cd| {
-            cd.dragging_server_id = Some(drag_start_id.clone());
-            cd.drag_source = DragSource::AccountIcon;
+        drag_state.batch(|d| {
+            d.dragging_server_id = Some(drag_start_id.clone());
+            d.drag_source = DragSource::AccountIcon;
         });
     };
 
     let drag_over_id = account_id.clone();
     let on_account_drag_over = move |evt: Event<DragData>| {
-        if chat_data.read().drag_source != DragSource::AccountIcon {
+        if drag_state.read().drag_source != DragSource::AccountIcon {
             return;
         }
         evt.prevent_default();
         evt.stop_propagation();
-        chat_data.batch(|cd| cd.drag_over_id = Some(drag_over_id.clone()));
+        drag_state.batch(|d| d.drag_over_id = Some(drag_over_id.clone()));
     };
 
     let drag_leave_id = account_id.clone();
     let on_account_drag_leave = move |_: Event<DragData>| {
-        chat_data.batch(|cd| {
-            if cd.drag_over_id.as_deref() == Some(drag_leave_id.as_str()) {
-                cd.drag_over_id = None;
+        drag_state.batch(|d| {
+            if d.drag_over_id.as_deref() == Some(drag_leave_id.as_str()) {
+                d.drag_over_id = None;
             }
         });
     };
@@ -507,24 +513,29 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
     let drop_target_id = account_id.clone();
     let client_manager_for_drop = client_manager;
     let on_account_drop = move |evt: Event<DragData>| {
-        if chat_data.read().drag_source != DragSource::AccountIcon {
+        if drag_state.read().drag_source != DragSource::AccountIcon {
             return;
         }
         evt.prevent_default();
         evt.stop_propagation();
-        let snapshot = chat_data.batch(|cd| {
-            let dragging = cd.dragging_server_id.clone();
-            cd.drag_over_id = None;
-            let Some(drag_id) = dragging else {
-                cd.dragging_server_id = None;
-                cd.drag_source = DragSource::None;
-                return None;
-            };
-            if drag_id == drop_target_id {
-                cd.dragging_server_id = None;
-                cd.drag_source = DragSource::None;
-                return None;
+        // Snapshot and clear drag state first.
+        let (dragging, drag_id_valid) = drag_state.batch(|d| {
+            let dragging = d.dragging_server_id.clone();
+            d.drag_over_id = None;
+            let valid = dragging.as_deref() != Some(drop_target_id.as_str()) && dragging.is_some();
+            if !valid {
+                d.dragging_server_id = None;
+                d.drag_source = DragSource::None;
             }
+            (dragging, valid)
+        });
+        let Some(drag_id) = dragging else {
+            return;
+        };
+        if !drag_id_valid {
+            return;
+        }
+        let snapshot = chat_data.batch(|cd| {
             // Seed account_order from the live accounts if empty so we have
             // something to reorder against. Live list is sorted so the
             // baseline is deterministic.
@@ -552,9 +563,12 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                     cd.account_order.push(drag_id);
                 }
             }
-            cd.dragging_server_id = None;
-            cd.drag_source = DragSource::None;
             Some(cd.account_order.clone())
+        });
+        // Clear drag source after the reorder batch.
+        drag_state.batch(|d| {
+            d.dragging_server_id = None;
+            d.drag_source = DragSource::None;
         });
         if let Some(order) = snapshot {
             spawn(async move {
@@ -564,10 +578,8 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
     };
 
     let on_account_drag_end = move |_: Event<DragData>| {
-        chat_data.batch(|cd| {
-            cd.dragging_server_id = None;
-            cd.drag_source = DragSource::None;
-            cd.drag_over_id = None;
+        drag_state.batch(|d| {
+            *d = DragState::default();
         });
     };
 
@@ -877,6 +889,7 @@ fn FavoriteServerIcon(
     let app_state: BatchedSignal<AppState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
+    let drag_state: BatchedSignal<DragState> = use_context();
 
     // Get account's connection and presence status
     let _account_conn_class: &'static str = client_manager
@@ -903,7 +916,7 @@ fn FavoriteServerIcon(
     let server_needs_reauth = _account_conn_class == "unauthenticated";
 
     let is_selected = app_state.read().nav.selected_server.as_deref() == Some(&server_id);
-    let is_drag_over = chat_data.read().drag_over_id.as_deref() == Some(server_id.as_str());
+    let is_drag_over = drag_state.read().drag_over_id.as_deref() == Some(server_id.as_str());
     let first_letter: String = server_name
         .chars()
         .next()
@@ -992,9 +1005,9 @@ fn FavoriteServerIcon(
             ondragstart: {
                 let sid = server_id.clone();
                 move |_| {
-                    chat_data.batch(|cd| {
-                        cd.dragging_server_id = Some(sid.clone());
-                        cd.drag_source = DragSource::FavoriteServer;
+                    drag_state.batch(|d| {
+                        d.dragging_server_id = Some(sid.clone());
+                        d.drag_source = DragSource::FavoriteServer;
                     });
                 }
             },
@@ -1004,7 +1017,7 @@ fn FavoriteServerIcon(
                 move |evt: Event<DragData>| {
                     evt.prevent_default();
                     evt.stop_propagation();
-                    chat_data.batch(|cd| cd.drag_over_id = Some(sid.clone()));
+                    drag_state.batch(|d| d.drag_over_id = Some(sid.clone()));
                 }
             },
             // Drag leave — clear highlight if we are still the target
@@ -1012,10 +1025,10 @@ fn FavoriteServerIcon(
                 let sid = server_id.clone();
                 move |_| {
                     let currently_us =
-                        chat_data.read().drag_over_id.as_deref()
+                        drag_state.read().drag_over_id.as_deref()
                         == Some(sid.as_str());
                     if currently_us {
-                        chat_data.batch(|cd| cd.drag_over_id = None);
+                        drag_state.batch(|d| d.drag_over_id = None);
                     }
                 }
             },
@@ -1026,21 +1039,21 @@ fn FavoriteServerIcon(
                     evt.prevent_default();
                     // Stop bubbling so the nav's ondrop doesn't double-handle
                     evt.stop_propagation();
+                    // Snapshot and clear drag state first.
+                    let (dragging, src) = drag_state.batch(|d| {
+                        let dragging = d.dragging_server_id.clone();
+                        let src = d.drag_source.clone();
+                        *d = DragState::default();
+                        (dragging, src)
+                    });
+                    let Some(drag_id) = dragging else {
+                        return;
+                    };
+                    let target_id = tid.clone();
+                    if drag_id == target_id {
+                        return;
+                    }
                     let new_favorites = chat_data.batch(|cd| {
-                        let dragging = cd.dragging_server_id.clone();
-                        let src = cd.drag_source.clone();
-                        cd.drag_over_id = None;
-                        let Some(drag_id) = dragging else {
-                            cd.dragging_server_id = None;
-                            cd.drag_source = DragSource::None;
-                            return None;
-                        };
-                        let target_id = tid.clone();
-                        if drag_id == target_id {
-                            cd.dragging_server_id = None;
-                            cd.drag_source = DragSource::None;
-                            return None;
-                        }
                         match src {
                             DragSource::FavoriteServer => {
                                 // Reorder within Bar 1: move drag_id before target_id
@@ -1077,8 +1090,6 @@ fn FavoriteServerIcon(
                             }
                             DragSource::None | DragSource::AccountIcon => {}
                         }
-                        cd.dragging_server_id = None;
-                        cd.drag_source = DragSource::None;
                         Some(cd.favorited_server_ids.clone())
                     });
                     if let Some(favs) = new_favorites {
@@ -1090,11 +1101,7 @@ fn FavoriteServerIcon(
             },
             // Drag end — always clean up regardless of drop target
             ondragend: move |_| {
-                chat_data.batch(|cd| {
-                    cd.dragging_server_id = None;
-                    cd.drag_source = DragSource::None;
-                    cd.drag_over_id = None;
-                });
+                drag_state.batch(|d| { *d = DragState::default(); });
             },
             if let Some(ref url) = icon_url {
                 img {

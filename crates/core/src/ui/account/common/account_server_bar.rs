@@ -27,7 +27,7 @@ use super::super::super::routes::Route;
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::state::chat_data::user_color;
-use crate::state::{AppState, ChatData, ContextMenuState, DragSource, View};
+use crate::state::{AppState, ChatData, ContextMenuState, DragSource, DragState, View};
 use crate::ui::context_menu::menus::server_icon_entry_at;
 use crate::ui::account::common::chat_history::remember_message_list_scroll_position;
 use crate::ui::favorites_sidebar::SidebarTooltip;
@@ -338,8 +338,9 @@ fn AccountServerIcon(
     let app_state: BatchedSignal<AppState> = use_context();
     let _client_manager: BatchedSignal<ClientManager> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
+    let drag_state: BatchedSignal<DragState> = use_context();
 
-    let is_drag_over = chat_data.read().drag_over_id.as_deref() == Some(server_id.as_str());
+    let is_drag_over = drag_state.read().drag_over_id.as_deref() == Some(server_id.as_str());
     let item_class = match (is_selected, is_drag_over) {
         (true, true) => "server-icon active drag-over-target",
         (true, false) => "server-icon active",
@@ -376,9 +377,9 @@ fn AccountServerIcon(
 
     let sid_ds = server_id.clone();
     let on_drag_start = move |_: Event<DragData>| {
-        chat_data.batch(|cd| {
-            cd.dragging_server_id = Some(sid_ds.clone());
-            cd.drag_source = DragSource::AccountServer;
+        drag_state.batch(|d| {
+            d.dragging_server_id = Some(sid_ds.clone());
+            d.drag_source = DragSource::AccountServer;
         });
     };
 
@@ -386,13 +387,13 @@ fn AccountServerIcon(
     let on_drag_over = move |evt: Event<DragData>| {
         evt.prevent_default();
         evt.stop_propagation();
-        chat_data.batch(|cd| cd.drag_over_id = Some(sid_do.clone()));
+        drag_state.batch(|d| d.drag_over_id = Some(sid_do.clone()));
     };
 
     let sid_dl = server_id.clone();
     let on_drag_leave = move |_: Event<DragData>| {
-        if chat_data.read().drag_over_id.as_deref() == Some(sid_dl.as_str()) {
-            chat_data.batch(|cd| cd.drag_over_id = None);
+        if drag_state.read().drag_over_id.as_deref() == Some(sid_dl.as_str()) {
+            drag_state.batch(|d| d.drag_over_id = None);
         }
     };
 
@@ -401,29 +402,23 @@ fn AccountServerIcon(
     let on_drop = move |evt: Event<DragData>| {
         evt.prevent_default();
         evt.stop_propagation();
-        chat_data.batch(|cd| {
-            let dragging = cd.dragging_server_id.clone();
-            let src = cd.drag_source.clone();
-            cd.drag_over_id = None;
-            let Some(drag_id) = dragging else {
-                cd.dragging_server_id = None;
-                cd.drag_source = DragSource::None;
-                return;
-            };
-            if matches!(src, DragSource::AccountServer) && drag_id != tid {
-                apply_bar2_drop(cd, &drag_id, &tid, &aid_drop);
-            }
-            cd.dragging_server_id = None;
-            cd.drag_source = DragSource::None;
+        // Snapshot and clear drag state before mutating chat_data.
+        let (drag_id, src) = drag_state.batch(|d| {
+            let drag_id = d.dragging_server_id.clone();
+            let src = d.drag_source.clone();
+            *d = DragState::default();
+            (drag_id, src)
         });
+        let Some(drag_id) = drag_id else {
+            return;
+        };
+        if matches!(src, DragSource::AccountServer) && drag_id != tid {
+            chat_data.batch(|cd| apply_bar2_drop(cd, &drag_id, &tid, &aid_drop));
+        }
     };
 
     let on_drag_end = move |_: Event<DragData>| {
-        chat_data.batch(|cd| {
-            cd.dragging_server_id = None;
-            cd.drag_source = DragSource::None;
-            cd.drag_over_id = None;
-        });
+        drag_state.batch(|d| { *d = DragState::default(); });
     };
 
     let sid_click = server_id.clone();

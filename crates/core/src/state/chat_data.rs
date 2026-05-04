@@ -43,24 +43,6 @@ impl Default for VoiceMediaSettings {
     }
 }
 
-/// Source of the current HTML5 drag operation.
-///
-/// Distinguishes what kind of element started the drag so drop handlers
-/// can apply the correct reorder or add-to-favorites logic.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub enum DragSource {
-    /// No drag in progress.
-    #[default]
-    None,
-    /// Dragging a favorite server icon in Bar 1 (reorder within favorites).
-    FavoriteServer,
-    /// Dragging an account icon in Bar 1 (reorder within accounts).
-    AccountIcon,
-    /// Dragging a server icon in Bar 2 AccountServerBar
-    /// (reorder within Bar 2, or drop onto Bar 1 to favorite).
-    AccountServer,
-}
-
 /// Reactive data store for the chat UI.
 ///
 /// Holds loaded data from all active backends. Updated by async tasks
@@ -99,13 +81,6 @@ pub struct ChatData {
     /// Drag a server from Bar 2 to Bar 1 to add it here. Empty means
     /// no servers are pinned (Bar 1 shows nothing in the server area).
     pub favorited_server_ids: Vec<String>,
-    /// Server ID currently being dragged (set on dragstart, cleared on drop/dragend).
-    ///
-    /// Used to pass drag state from Bar 2 (Account Server Bar) to Bar 1 (Favorites Bar)
-    /// without needing browser DataTransfer API access.
-    pub dragging_server_id: Option<String>,
-    /// Source of the current drag operation.
-    pub drag_source: DragSource,
     /// F-DC-1 — Permission-denied error for the currently selected channel.
     ///
     /// Set when a channel load fails with `ClientError::PermissionDenied`.
@@ -113,11 +88,6 @@ pub struct ChatData {
     /// empty state in `render_message_list_content` instead of the generic
     /// "no messages" wave.
     pub channel_load_error: Option<String>,
-    /// ID of the element currently being hovered over as a drop target.
-    ///
-    /// Set on `ondragover` of individual items so the parent can determine
-    /// where to insert the dragged item on `ondrop`.
-    pub drag_over_id: Option<String>,
     /// Custom server ordering per account (account_id → Vec<server_id>).
     ///
     /// Populated on first drag within the Account Server Bar. Servers not

@@ -98,7 +98,7 @@ pub(crate) use runtime_js::load_js_asset;
 pub use setup_wizard::SetupWizard;
 
 use crate::client_manager::{ClientManager, SignupEntry};
-use crate::state::{AppState, BatchedSignal, ChatData, LayoutMode, SettingsSection, View, VoiceState};
+use crate::state::{AppState, BatchedSignal, ChatData, DragState, LayoutMode, SettingsSection, View, VoiceState};
 use dioxus::prelude::*;
 use poly_ui_macros::{context_menu, ui_action};
 use routes::{route_targets_unknown_account, sync_route_to_app_state};
@@ -1246,6 +1246,7 @@ async fn init_storage(
     client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
     voice_state: BatchedSignal<VoiceState>,
+    drag_state: BatchedSignal<DragState>,
 ) {
     match crate::storage::Storage::init().await {
         Ok(storage) => {
@@ -1336,7 +1337,7 @@ async fn init_storage(
                     // toggle_demo activates all demo data; the Router's Root component
                     // then redirects to /demo/demo/dms once it mounts.
                     if settings.demo_active {
-                        demo::toggle_demo(client_manager, chat_data, voice_state, app_state).await;
+                        demo::toggle_demo(client_manager, chat_data, voice_state, drag_state, app_state).await;
                     }
                     // Collapse the 4-write nav.* cascade into ONE batch. When
                     // mobile layout is active, both sidebar visibility bits are
@@ -1493,6 +1494,7 @@ fn AppBody(storage_ready: bool, setup_complete: bool, app_state: BatchedSignal<A
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let voice_state: BatchedSignal<VoiceState> = use_context();
+    let drag_state: BatchedSignal<DragState> = use_context();
     rsx! {
         if !storage_ready {
             div { class: "storage-loading" }
@@ -1510,7 +1512,7 @@ fn AppBody(storage_ready: bool, setup_complete: bool, app_state: BatchedSignal<A
                         // right away without needing an app restart.
                         // demo_active is true in persist_setup_completion so it
                         // will also be restored correctly on subsequent launches.
-                        demo::toggle_demo(client_manager, chat_data, voice_state, app_state).await;
+                        demo::toggle_demo(client_manager, chat_data, voice_state, drag_state, app_state).await;
                         // Only now flip is_setup_complete — this mounts the Router
                         // with demo already active, so on_update's initial redirect
                         // lands on DmsHome.
@@ -1710,6 +1712,14 @@ pub fn App() -> Element {
         BatchedSignal::from_signal(use_signal(VoiceState::default));
     provide_context(voice_state);
 
+    // DragState is provided alongside ChatData so that drag-event spam
+    // (ondragover fires many times per second) only re-renders
+    // drag-watching components rather than the entire chat list.
+    // DECISION(G.3): Extracted from ChatData per plan-solid-refactor-survey.md Phase G.3.
+    let drag_state: BatchedSignal<DragState> =
+        BatchedSignal::from_signal(use_signal(DragState::default));
+    provide_context(drag_state);
+
     // Register all native backend signup entries.  This mirrors the WIT
     // plugin-metadata pattern: the host has no compile-time knowledge of
     // which backends exist — each plugin registers itself once at startup.
@@ -1762,6 +1772,7 @@ pub fn App() -> Element {
             client_manager,
             chat_data,
             voice_state,
+            drag_state,
         )
         .await;
     });

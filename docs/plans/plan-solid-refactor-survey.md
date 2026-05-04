@@ -257,7 +257,7 @@ isolate.
       `chat_view/message_list.rs`, `chat_view/composer.rs`,
       `chat_view/context_menu_overlay.rs` (separate task). — shipped in this commit
 
-### Phase G — `AppState` + `ChatData` slice signals (~2 weeks, phased)
+### Phase G — `AppState` + `ChatData` slice signals (~2 weeks, phased) — in progress: G.1 + G.2 + G.3 shipped
 
 The biggest structural move. Land per-slice, not big-bang. Each
 sub-step is independently shippable; later steps benefit from earlier
@@ -269,9 +269,10 @@ ones (smaller signal subscriptions = less re-render churn).
       D.4.5. — shipped (commit ID pending jj describe)
 - [x] **G.2** Extract `BatchedSignal<VoiceState>` from `ChatData`
       (80 sites, self-contained). Voice writes stop re-rendering chat
-      list. Source: D.3. — shipped (commit ID: TBD via jj describe)
-- [ ] **G.3** Extract `BatchedSignal<DragState>` from `ChatData`
+      list. Source: D.3. — shipped (commit ID: 1057ee20)
+- [x] **G.3** Extract `BatchedSignal<DragState>` from `ChatData`
       (61 sites, transient, very write-heavy during drag). Source: D.3.
+      — shipped in commit (see jj log below)
 - [ ] **G.4** Add `ChatAction` enum + `ChatData::apply()`. Migrate the
       23 manual-clear sites (`cd.channels.clear(); cd.messages.clear();
       cd.members.clear()`) to typed actions. Source: D.1.3.

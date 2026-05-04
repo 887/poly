@@ -377,6 +377,7 @@ pub fn PluginsSettings() -> Element {
     let client_manager: BatchedSignal<crate::client_manager::ClientManager> = use_context();
     let chat_data: BatchedSignal<crate::state::ChatData> = use_context();
     let voice_state: BatchedSignal<crate::state::VoiceState> = use_context();
+    let drag_state: BatchedSignal<crate::state::DragState> = use_context();
     let app_state: crate::state::BatchedSignal<crate::state::AppState> = use_context();
 
     // Local reactive copies of the persisted list — updated on every toggle/add/remove.
@@ -444,7 +445,7 @@ pub fn PluginsSettings() -> Element {
                                         // visibility in sync across the whole app.
                                         spawn(async move {
                                             crate::ui::demo::toggle_demo(
-                                                client_manager, chat_data, voice_state, app_state,
+                                                client_manager, chat_data, voice_state, drag_state, app_state,
                                             ).await;
                                         });
                                     } else {

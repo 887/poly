@@ -14,7 +14,7 @@
 
 use crate::state::BatchedSignal;
 use crate::client_manager::{BackendHandle, BackendHandleExt, ClientManager, PluginSettingsEntry};
-use crate::state::{AppState, ChatData, VoiceState};
+use crate::state::{AppState, ChatData, DragState, VoiceState};
 use crate::ui::account::common::chat_history::{
     read_message_list_scroll_metrics, request_scroll_to_bottom,
 };
@@ -54,6 +54,7 @@ pub(crate) async fn toggle_demo(
     client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
     voice_state: BatchedSignal<VoiceState>,
+    drag_state: BatchedSignal<DragState>,
     app_state: BatchedSignal<AppState>,
 ) {
     #[cfg(feature = "demo")]
@@ -130,8 +131,8 @@ pub(crate) async fn toggle_demo(
                         cd.account_sessions.remove(aid.as_str());
                     }
                     cd.favorited_server_ids = new_fav_ids_c;
-                    cd.dragging_server_id = None;
                 });
+                drag_state.batch(|d| { d.dragging_server_id = None; });
                 voice_state.batch(|v| {
                     v.voice_channel_participants.clear();
                     v.voice_connection = None;
