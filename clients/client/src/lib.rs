@@ -114,16 +114,22 @@ pub trait ClientBackend: Send + Sync {
 
     /// Send a reply to an existing message.
     ///
-    /// Default implementation falls back to [`ClientBackend::send_message`]
-    /// for backends that do not yet expose reply semantics natively.
+    /// Default implementation returns `Err(NotSupported)` so callers can
+    /// detect the missing capability and either hide the reply UI or fall
+    /// back to a normal send. The previous default silently downgraded
+    /// replies to top-level posts (discarding `reply_to_message_id`),
+    /// which corrupted user intent without any signal — see
+    /// `docs/plans/plan-solid-refactor-survey.md` Phase B.2.4 (LSP).
     async fn send_reply_message(
         &self,
         channel_id: &str,
         reply_to_message_id: &str,
         content: MessageContent,
     ) -> ClientResult<Message> {
-        let _ = reply_to_message_id;
-        self.send_message(channel_id, content).await
+        let _ = (channel_id, reply_to_message_id, content);
+        Err(ClientError::NotSupported(
+            "send_reply_message".to_string(),
+        ))
     }
 
     /// Get messages from a channel with query options.
@@ -147,11 +153,17 @@ pub trait ClientBackend: Send + Sync {
 
     /// Get pinned messages for a channel.
     ///
-    /// Backends that do not support pins should return an empty list or the
-    /// default implementation below.
+    /// Backends that do not support pinning should override to return
+    /// `Err(NotSupported)` (this is the default). Returning `Ok(vec![])`
+    /// would be ambiguous — readers cannot distinguish "no pins" from
+    /// "unsupported", so the pin-button UI hides on any empty list and
+    /// supported-but-empty channels lose the affordance. See
+    /// `plan-solid-refactor-survey.md` Phase B.2.3.
     async fn get_pinned_messages(&self, channel_id: &str) -> ClientResult<Vec<Message>> {
         let _ = channel_id;
-        Ok(Vec::new())
+        Err(ClientError::NotSupported(
+            "get_pinned_messages".to_string(),
+        ))
     }
 
     /// Get slash commands available in a channel.

@@ -403,7 +403,11 @@ impl ClientBackend for HackerNewsClient {
     // --- Presence ---
 
     async fn get_presence(&self, _user_id: &str) -> ClientResult<PresenceStatus> {
-        Ok(PresenceStatus::Offline)
+        // HN has no presence concept. Returning Ok(Offline) used to lie to
+        // the UI (presence dot would show grey "offline" forever); use
+        // Unknown so the dot is suppressed entirely. set_presence already
+        // returns NotSupported below — read/write are now consistent.
+        Ok(PresenceStatus::Unknown)
     }
 
     async fn set_presence(&self, _status: PresenceStatus) -> ClientResult<()> {

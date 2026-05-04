@@ -30,6 +30,9 @@ fn presence_dot_class(status: &PresenceStatus) -> &'static str {
         PresenceStatus::Idle => "presence-dot idle",
         PresenceStatus::DoNotDisturb => "presence-dot dnd",
         PresenceStatus::Offline | PresenceStatus::Invisible => "presence-dot offline",
+        // Unknown = no presence info (HN, anon backends). Suppress the dot
+        // entirely rather than rendering grey "offline".
+        PresenceStatus::Unknown => "",
     }
 }
 

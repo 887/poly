@@ -32,6 +32,13 @@ pub enum PresenceStatus {
     Invisible,
     /// User is offline.
     Offline,
+    /// Presence is unknown — the backend either has no presence concept
+    /// (e.g. Hacker News), or the lookup failed transiently and the
+    /// caller should treat the user as "no information yet" rather than
+    /// "deliberately offline". Distinct from `Offline` so the UI can
+    /// suppress the presence dot entirely instead of showing a grey
+    /// "offline" indicator that misrepresents the data.
+    Unknown,
 }
 
 /// A group chat (multi-user DM).

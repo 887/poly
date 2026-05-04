@@ -176,6 +176,8 @@ pub fn UserProfileModal() -> Element {
         PresenceStatus::Idle => "status-dot presence-dot away",
         PresenceStatus::DoNotDisturb => "status-dot presence-dot dnd",
         PresenceStatus::Invisible | PresenceStatus::Offline => "status-dot presence-dot offline",
+        // Unknown — backend has no presence info; suppress the dot.
+        PresenceStatus::Unknown => "status-dot presence-dot offline",
     };
     let presence_label = match user.presence {
         PresenceStatus::Online => t("user-online"),
@@ -183,6 +185,7 @@ pub fn UserProfileModal() -> Element {
         PresenceStatus::DoNotDisturb => t("user-dnd"),
         PresenceStatus::Invisible => t("user-invisible"),
         PresenceStatus::Offline => t("user-offline"),
+        PresenceStatus::Unknown => String::new(),
     };
     let backend_icon = backend_badge(&user.backend);
     let backend_name = user.backend.display_name().to_string();

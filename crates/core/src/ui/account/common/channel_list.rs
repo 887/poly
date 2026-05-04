@@ -1158,7 +1158,10 @@ fn DMChannelItem(
         PresenceStatus::Online => "presence-dot online",
         PresenceStatus::Idle => "presence-dot idle",
         PresenceStatus::DoNotDisturb => "presence-dot dnd",
-        PresenceStatus::Offline | PresenceStatus::Invisible => "",
+        // Offline / Invisible / Unknown all suppress the dot — Unknown
+        // means "backend has no presence info", which is visually closer
+        // to "no indicator" than to a deliberate offline state.
+        PresenceStatus::Offline | PresenceStatus::Invisible | PresenceStatus::Unknown => "",
     };
 
     let menu_channel_id = channel_id.clone();

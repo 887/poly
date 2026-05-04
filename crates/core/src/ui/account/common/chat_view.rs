@@ -2434,7 +2434,7 @@ fn render_chat_header_info(ctx: ChatViewMarkupCtx) -> Element {
         PresenceStatus::Online => "presence-dot online",
         PresenceStatus::Idle => "presence-dot idle",
         PresenceStatus::DoNotDisturb => "presence-dot dnd",
-        PresenceStatus::Offline | PresenceStatus::Invisible => "",
+        PresenceStatus::Offline | PresenceStatus::Invisible | PresenceStatus::Unknown => "",
     };
 
     rsx! {
@@ -6772,7 +6772,7 @@ fn DmContactRow(user: User, app_state: BatchedSignal<AppState>) -> Element {
         PresenceStatus::Online => "presence-dot online",
         PresenceStatus::Idle => "presence-dot idle",
         PresenceStatus::DoNotDisturb => "presence-dot dnd",
-        PresenceStatus::Offline | PresenceStatus::Invisible => "",
+        PresenceStatus::Offline | PresenceStatus::Invisible | PresenceStatus::Unknown => "",
     };
     let entry_class = if matches!(user.presence, PresenceStatus::Offline | PresenceStatus::Invisible) {
         "user-entry offline"

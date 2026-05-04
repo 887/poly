@@ -52,6 +52,11 @@ pub(crate) fn to_wit_presence(ps: pc::PresenceStatus) -> wit::PresenceStatus {
         pc::PresenceStatus::DoNotDisturb => wit::PresenceStatus::DoNotDisturb,
         pc::PresenceStatus::Invisible => wit::PresenceStatus::Invisible,
         pc::PresenceStatus::Offline => wit::PresenceStatus::Offline,
+        // The WIT wire type does not yet declare an Unknown variant.
+        // Map "no information" to Offline on egress so older WASM plugins
+        // still receive a value they can match on; native callers continue
+        // to see Unknown via the in-process Rust trait.
+        pc::PresenceStatus::Unknown => wit::PresenceStatus::Offline,
     }
 }
 

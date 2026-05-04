@@ -34,6 +34,8 @@ fn presence_rank(p: PresenceStatus) -> u8 {
         PresenceStatus::Idle => 1,
         PresenceStatus::DoNotDisturb => 2,
         PresenceStatus::Offline | PresenceStatus::Invisible => 3,
+        // Unknown sorts last — no signal beats deliberate offline.
+        PresenceStatus::Unknown => 4,
     }
 }
 
@@ -273,7 +275,7 @@ fn UserGroup(
                         PresenceStatus::Online => "presence-dot online",
                         PresenceStatus::Idle => "presence-dot idle",
                         PresenceStatus::DoNotDisturb => "presence-dot dnd",
-                        PresenceStatus::Offline | PresenceStatus::Invisible => "",
+                        PresenceStatus::Offline | PresenceStatus::Invisible | PresenceStatus::Unknown => "",
                     };
                     rsx! {
                         div { class: "{entry_class}", onclick: move |_| on_click.call(u.clone()),

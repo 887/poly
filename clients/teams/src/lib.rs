@@ -470,7 +470,13 @@ impl ClientBackend for TeamsClient {
     }
 
     async fn get_user(&self, _id: &str) -> ClientResult<User> {
-        Err(ClientError::NotFound("Teams user lookup not supported".into()))
+        // The trait contract is "Ok(User) | Err(NotFound | Network | Auth)".
+        // Returning NotFound for "this backend has no user-lookup endpoint"
+        // would lie to callers — they'd give up looking elsewhere when in
+        // fact the user might exist, just not on Teams. Use NotSupported.
+        Err(ClientError::NotSupported(
+            "Teams user lookup not supported".into(),
+        ))
     }
 
     async fn get_friends(&self) -> ClientResult<Vec<User>> {
@@ -531,7 +537,9 @@ impl ClientBackend for TeamsClient {
             PresenceStatus::Online => "Available",
             PresenceStatus::Idle => "Away",
             PresenceStatus::DoNotDisturb => "DoNotDisturb",
-            PresenceStatus::Offline | PresenceStatus::Invisible => "Offline",
+            PresenceStatus::Offline
+            | PresenceStatus::Invisible
+            | PresenceStatus::Unknown => "Offline",
         };
         self.http.set_presence(availability).await
     }
