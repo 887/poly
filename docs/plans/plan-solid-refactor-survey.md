@@ -196,27 +196,36 @@ These can land in parallel; they touch disjoint trees.
       single 3-line override returning `&self.settings_storage`. Net
       -270 LOC. Source: D.4.3. — shipped in commit `cd1809bc`.
 
-### Phase E — Lint-gate consolidation (~3 days)
+### Phase E — Lint-gate consolidation (~3 days) — shipped in commits `ec586e02` (E.3-E.5) + `6eb5e73b` (E.1+E.2)
 
-- [ ] **E.1** Create `crates/lint-gate-rules` lib crate. Move every
+- [x] **E.1** Created `crates/lint-gate-rules` lib crate. Moved every
       `crates/lint-gate/build/<rule>.rs` into
-      `lint-gate-rules/src/<rule>.rs`; `build.rs` becomes a thin driver
-      calling `lint_gate_rules::all_rules()`. Tests live next to rules.
-      Drop the 1416-line mirror in `lint-gate/src/lib.rs`. Effort M.
-      Source: E.2 ("recommended consolidation").
-- [ ] **E.2** Port the 10 `tools/scripts/forbid-*.sh` scripts into
+      `lint-gate-rules/src/<rule>.rs`; `build.rs` is now a ~120-line
+      thin driver calling `poly_lint_gate_rules`. Tests live next to
+      rules (29 unit tests passing). Dropped the 1416-line mirror in
+      `lint-gate/src/lib.rs` (now 7 lines). Source: E.2 ("recommended
+      consolidation"). — shipped in commit `6eb5e73b`.
+- [x] **E.2** Ported 9 of 10 `tools/scripts/forbid-*.sh` scripts into
       `lint-gate-rules` modules using a shared `allowlist::Loader`.
-      Drop the bash scripts after a parity-CI run. Effort M.
-- [ ] **E.3** Decide the dylint duplication: either retire
-      `tools/lints/poly-lints/` (the two scripts that are also
-      bash-and-lint-gate gated) or reframe as a `main`-only
-      deeper-HIR-analysis lane. Effort S. Source: E.2 findings.
-- [ ] **E.4** Either delete or document the empty
-      `crates/lint-gate/baseline.json` (currently a 2-byte
-      `{"violations": []}` file). If kept, write a one-liner README
-      noting it as the safety net. Source: E.2 surprise.
-- [ ] **E.5** Delete the 16-line stub `forbid-ui-only-persona-action.sh`
-      OR finish Phase Q.3 it represents. Source: E.2.
+      Bash scripts deleted after parity. CI workflow now runs a single
+      `cargo check -p poly-lint-gate` step in place of 9 bash invocations.
+      791 pre-existing violations grandfathered in `baseline.json`.
+      `forbid-ui-only-persona-action.sh` (Q.3 stub) handled in E.5.
+      — shipped in commit `6eb5e73b`.
+- [x] **E.3** Retired the dylint duplication. Deleted
+      `tools/lints/poly-lints/` entirely + workspace exclude entry +
+      CI dylint job + `dylint.toml`. The lint-gate-rules Rust scanners
+      cover the same rules with allowlist semantics. — shipped in
+      commit `ec586e02`.
+- [x] **E.4** Documented `crates/lint-gate/baseline.json` via
+      `crates/lint-gate/baseline.md` (when it would be the right tool
+      and how to populate it). File itself untouched. — shipped in
+      commit `ec586e02`.
+- [x] **E.5** Deleted the 16-line stub `forbid-ui-only-persona-action.sh`
+      and removed the corresponding Q.3 step from
+      `.github/workflows/lint-test.yml`. Phase Q.3 stays open in the
+      persona-quality-gates plan; will land as a real Rust scanner once
+      the UI surface ships. — shipped in commit `ec586e02`.
 
 ### Phase F — `chat_view.rs` full split (~1 week, parallelisable)
 

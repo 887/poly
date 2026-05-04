@@ -12,6 +12,7 @@ path = "src/lib.rs"
 ignore = "0.4"
 serde = { workspace = true }
 serde_json = { workspace = true }
+poly-lint-gate-rules = { path = "../lint-gate-rules" }
 
 [features]
 # When this feature is enabled, the build script regenerates crates/lint-gate/baseline.json

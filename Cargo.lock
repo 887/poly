@@ -6842,6 +6842,17 @@ name = "poly-lint-gate"
 version = "0.1.0"
 dependencies = [
  "ignore",
+ "poly-lint-gate-rules",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "poly-lint-gate-rules"
+version = "0.1.0"
+dependencies = [
+ "ignore",
+ "regex",
  "serde",
  "serde_json",
 ]

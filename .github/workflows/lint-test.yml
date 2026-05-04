@@ -45,118 +45,28 @@ jobs:
       - name: Format check
         run: cargo fmt --all -- --check
 
-      - name: Check for use_effect+spawn+signal-write cycles
-        # Phase 5 Track A of docs/plans/plan-use-spawn-once.md — fails CI if
-        # anyone reintroduces the CLAUDE.md hang-class-#3 triple. Replacement:
-        # crates/core/src/state/use_spawn_once.rs. Allowlist:
-        # tools/scripts/use-effect-spawn-cycle-allowlist.txt.
-        run: bash tools/scripts/forbid-use-effect-spawn-cycle.sh
-
-      # Phase 5 Track A of docs/plans/plan-batched-signal.md — bans raw
-      # Signal::write() in the UI crate to prevent CLAUDE.md hang class #1
-      # (multi-.write() cascade) from being reintroduced. Exceptions live in
-      # tools/scripts/signal-write-allowlist.txt with rationale comments.
-      - name: Check for raw Signal::write in UI crate
-        run: ./tools/scripts/forbid-signal-write.sh
-
-      # Phase 5 Track A of docs/plans/plan-backend-read-timeout.md — bans raw
-      # backend.read().await in the UI crate to prevent CLAUDE.md hang class #4
-      # (RwLock starvation on WASM) from being reintroduced. Replacement:
-      # BackendHandleExt::read_with_timeout (crates/core/src/client_manager_timeout.rs).
-      # Inline-allowlist via: // poly-lint: allow raw backend.read().await — <reason>
-      # File-level allowlist: tools/scripts/raw-backend-read-allowlist.txt.
-      - name: Check for raw backend.read().await in UI crate
-        run: ./tools/scripts/forbid-raw-backend-read.sh
-
-      # Phase 5 Track A of docs/plans/plan-read-guard-scoping.md — bans long-scoped
-      # Signal::read() guards in the UI crate to prevent CLAUDE.md hang class #2
-      # (read guard live across a write) from being reintroduced.
-      # Inline-allowlist via: // poly-lint: allow long-read-guard — <reason>
-      # File-level allowlist: tools/scripts/long-read-guard-allowlist.txt.
-      - name: Check for long-scoped Signal::read() guards in UI crate
-        run: ./tools/scripts/forbid-long-read-guard.sh
-
-      # Phase 5 Track A of docs/plans/plan-use-reactive-effect.md — flags raw
-      # use_effect(move ||) closures in the UI crate to prevent CLAUDE.md hang
-      # class #6 (stale non-Signal closure capture) from being introduced.
-      # Replacement: use_reactive_effect (sync keyed effect) or use_spawn_once
-      # (async keyed spawn). Inline-allowlist via:
-      #   // poly-lint: allow stale-effect-capture — <reason>
-      # File-level allowlist: tools/scripts/stale-effect-capture-allowlist.txt.
-      # Phase 2 migration complete (2026-04-24). All 54 original allowlist entries
-      # resolved — HIGH sites migrated to use_reactive_effect, LOW/one-shot sites
-      # keep raw use_effect with inline poly-lint: allow comments. Hard-fail enabled.
-      - name: Check for stale closure captures in use_effect
-        run: ./tools/scripts/forbid-stale-effect-capture.sh
-
-      # Phases 1+2 of docs/plans/plan-peek-vs-read.md — flags render-time
-      # .read() calls that silently subscribe the parent component to a signal
-      # it doesn't need to track. This is CLAUDE.md hang class #7: a .read()
-      # at the top of a render body or hook-setup function that feeds a
-      # use_spawn_once / use_reactive_effect KEY or a .batch() call causes a
-      # perpetual re-render loop (real incident: Teams server-switch hang,
-      # 1408x re-render for 1 load_server_data call, fixed in commit 55f94246).
-      # Fix: use .peek() for key computation / snapshots; use .read() only when
-      # the reactive subscription is the explicit intent (rsx! output, etc.).
-      # Inline-allowlist via: // poly-lint: allow render-time-read — <reason>
-      # File-level allowlist: tools/scripts/render-time-read-allowlist.txt.
-      # continue-on-error: true until allowlist stabilises after Phase 2
-      # migration (flip to false in Phase 5 once no HIGH sites remain).
-      - name: Check for render-time .read() subscriptions (hang class 7)
-        run: ./tools/scripts/forbid-render-time-read.sh
-        continue-on-error: true
-
-      # Phase 1 of CLAUDE.md hang class #8 — flags `use_effect(move ||)`
-      # bodies that READ a signal X (subscribing) AND WRITE that same signal
-      # X via raw `.set(` / `.batch(` (not the `_if_changed` variants).
-      # `BatchedSignal::batch` always notifies subscribers, so an effect
-      # that subscribes-to and writes-to the same signal re-fires after its
-      # own write — a tight WASM-scheduler loop when the body's
-      # early-return guard has a hole for the steady state. Real incident:
-      # Teams T001/CH002 empty-channel wedge (3162 ChatView re-renders for
-      # one load_server_data call, fixed in commit 49e5f7d7).
-      # Fix: use `BatchedSignal::set_if_changed(next)` or
-      # `batch_if_changed(|cur| -> next)`.
-      # Inline-allowlist via: // poly-lint: allow effect-self-write — <reason>
-      # File-level allowlist: tools/scripts/effect-self-write-allowlist.txt.
-      # continue-on-error: true while the lint beds in (heuristic over-counts
-      # spawn-only writes that don't actually subscribe).
-      - name: Check for effect-self-write loops (hang class 8)
-        run: ./tools/scripts/forbid-effect-self-write.sh
-        continue-on-error: true
-
-      # ── Persona quality gates (Phase Q of plan-persona-quality-gates.md) ───
+      # ── Lint gate (all scanners now in crates/lint-gate-rules) ─────────────
       #
-      # These four lints gate the persona subsystem (mcp/chat-mcp). All ship
-      # continue-on-error: false from day one — the persona code is brand-new
-      # with no legacy debt to grandfather.
-
-      # Q.1 — cross-persona memory leak: SELECT/DELETE/UPDATE on persona-scoped
-      # tables without a nearby persona_slug binding leaks rows across personas.
-      # Allowlist: tools/scripts/cross-persona-memory-allowlist.txt
-      # Inline-allowlist: // poly-lint: allow cross-persona-memory — <reason>
-      # See: CLAUDE.md "Persona-subsystem footguns" class P1.
-      - name: Check for cross-persona memory access (persona class P1)
-        run: bash tools/scripts/forbid-cross-persona-memory.sh
-
-      # Q.2 — unaudited persona handler: every state-changing handle_meta_persona_*
-      # function in tools.rs must call audit() or record_persona_audit(). Omitting
-      # the audit row silently drops entries from the forensic audit trail.
-      # Allowlist: tools/scripts/unaudited-persona-tool-allowlist.txt
-      # Inline-allowlist: // poly-lint: allow unaudited-persona-tool — <reason>
-      # See: CLAUDE.md "Persona-subsystem footguns" class P2.
-      - name: Check for unaudited persona tool handlers (persona class P2)
-        run: bash tools/scripts/forbid-unaudited-persona-tool.sh
-
-      # Q.4 — raw backend read in persona builder: extends the existing
-      # forbid-raw-backend-read.sh to also scan mcp/chat-mcp/src/persona/.
-      # BackendPoolProvider in context.rs already wraps all backend calls in
-      # tokio::time::timeout; this lint prevents future regressions.
-      # Allowlist: tools/scripts/raw-backend-read-allowlist.txt (shared)
-      # Inline-allowlist: // poly-lint: allow raw backend.read().await — <reason>
-      # See: CLAUDE.md "Persona-subsystem footguns" class P4.
-      - name: Check for raw backend.read().await in persona builder (persona class P4)
-        run: bash tools/scripts/forbid-raw-backend-read.sh
+      # All hang-class and persona quality-gate lints (previously 9 bash scripts)
+      # run as part of `cargo check -p poly-lint-gate`. The Rust scanners live in
+      # crates/lint-gate-rules and are invoked by crates/lint-gate/build.rs.
+      # Existing violations are grandfathered in crates/lint-gate/baseline.json;
+      # NEW violations fail the build. To regenerate the baseline:
+      #   cargo check --features regen-baseline -p poly-lint-gate
+      #
+      # Scanners included:
+      #   - forbid_use_effect_spawn_cycle  (hang class #3, was forbid-use-effect-spawn-cycle.sh)
+      #   - forbid_signal_write            (hang class #1, was forbid-signal-write.sh)
+      #   - forbid_raw_backend_read        (hang class #4 + persona P4, was forbid-raw-backend-read.sh)
+      #   - forbid_long_read_guard         (hang class #2, was forbid-long-read-guard.sh)
+      #   - forbid_stale_effect_capture    (hang class #6, was forbid-stale-effect-capture.sh)
+      #   - forbid_render_time_read        (hang class #7, was forbid-render-time-read.sh)
+      #   - forbid_effect_self_write       (hang class #8, was forbid-effect-self-write.sh)
+      #   - forbid_cross_persona_memory    (persona class P1, was forbid-cross-persona-memory.sh)
+      #   - forbid_unaudited_persona_tool  (persona class P2, was forbid-unaudited-persona-tool.sh)
+      #   + all original build-time scanners (action_enum_coverage, route_graph, etc.)
+      - name: Lint gate (hang-class + persona quality gates via cargo check)
+        run: cargo check -p poly-lint-gate
 
   test:
     name: Tests

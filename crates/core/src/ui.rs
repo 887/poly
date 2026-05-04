@@ -1763,6 +1763,8 @@ pub fn App() -> Element {
     let chat_data_snapshot = chat_data.read().clone();
 
     use_effect(move || {
+        // poly-lint: allow effect-self-write — boot overlay state machine has
+        // guarded short-circuits (each .set is gated by an `if`), converges in ≤2 ticks.
         if !startup_overlay_enabled {
             startup_overlay_visible.set(false);
             startup_overlay_finished.set(false);

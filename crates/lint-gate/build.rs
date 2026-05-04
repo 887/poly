@@ -1,66 +1,11 @@
-//! Workspace-wide build-time lint gate.
+//! Workspace-wide build-time lint gate — thin driver.
 //!
-//! Runs on every `cargo check` / `cargo clippy` / `cargo build`. Scans the
-//! workspace for violations of three rules and emits `cargo::error=` for each.
-//! Existing violations are grandfathered via `baseline.json`.
-//!
-//! Rules:
-//!  1. Banned `#[allow(...)]` attributes (plan-component-lints.md §3.2).
-//!  2. Context-menu decorator coverage (plan-context-menu-quality-control.md §3.1.2).
-//!  3. Connected-routes graph reachability (plan-connected-routes-static-check.md §3).
-//!  4. UI action coverage (plan-ui-completeness.md §B).
-//!  5. UI action-enum coverage (typed-ui-action-enums plan Phase C).
-//!  6. FTL label-key coverage (plan-client-ui-surface.md D21).
-//!  7. Action ID naming convention — kebab-case (plan-client-ui-surface.md D25).
-//!  8. Backend-slug `match` ladders in UI (plan-client-ui-surface.md §7 WP 7).
-//!  9. Custom-block usage threshold (plan-client-ui-polish.md Pack G P40).
-//!
-//! Existing violations are grandfathered via `baseline.json`.
+//! All scanner logic lives in `crates/lint-gate-rules`. This build script is
+//! a ~30-line driver that locates the workspace root, builds a WorkspaceWalker,
+//! loads/saves the grandfathering baseline, calls `lint_gate_rules::all_rules()`
+//! to get violations, and emits `cargo::error=` for new violations.
 
-// Build-script scanners parse ASCII Rust source: string slicing on ASCII bytes,
-// `as`-cast line/column numbers, and integer arithmetic for offsets/counters are
-// intentional throughout. Each scanner runs once per `cargo check`; overflow and
-// truncation are unreachable in practice. Per-item allow on each `mod` declaration
-// (not a file-level inner attribute).
-
-#[allow(clippy::arithmetic_side_effects, clippy::string_slice, clippy::as_conversions, clippy::cast_possible_truncation, clippy::default_numeric_fallback, clippy::integer_division)]
-#[path = "build/action_enum_coverage.rs"]
-mod action_enum_coverage;
-#[allow(clippy::arithmetic_side_effects, clippy::string_slice, clippy::as_conversions, clippy::cast_possible_truncation, clippy::default_numeric_fallback, clippy::integer_division)]
-#[path = "build/action_id_naming.rs"]
-mod action_id_naming;
-#[allow(clippy::arithmetic_side_effects, clippy::string_slice, clippy::as_conversions, clippy::cast_possible_truncation, clippy::default_numeric_fallback, clippy::integer_division)]
-#[path = "build/allow_ban.rs"]
-mod allow_ban;
-#[allow(clippy::arithmetic_side_effects, clippy::string_slice, clippy::as_conversions, clippy::cast_possible_truncation, clippy::default_numeric_fallback, clippy::integer_division)]
-#[path = "build/baseline.rs"]
-mod baseline;
-#[allow(clippy::arithmetic_side_effects, clippy::string_slice, clippy::as_conversions, clippy::cast_possible_truncation, clippy::default_numeric_fallback, clippy::integer_division)]
-#[path = "build/context_menu_coverage.rs"]
-mod context_menu_coverage;
-#[allow(clippy::arithmetic_side_effects, clippy::string_slice, clippy::as_conversions, clippy::cast_possible_truncation, clippy::default_numeric_fallback, clippy::integer_division)]
-#[path = "build/custom_block_usage.rs"]
-mod custom_block_usage;
-#[allow(clippy::arithmetic_side_effects, clippy::string_slice, clippy::as_conversions, clippy::cast_possible_truncation, clippy::default_numeric_fallback, clippy::integer_division)]
-#[path = "build/forbid_backend_slug_match.rs"]
-mod forbid_backend_slug_match;
-#[allow(clippy::arithmetic_side_effects, clippy::string_slice, clippy::as_conversions, clippy::cast_possible_truncation, clippy::default_numeric_fallback, clippy::integer_division)]
-#[path = "build/ftl_label_key_coverage.rs"]
-mod ftl_label_key_coverage;
-#[allow(clippy::arithmetic_side_effects, clippy::string_slice, clippy::as_conversions, clippy::cast_possible_truncation, clippy::default_numeric_fallback, clippy::integer_division)]
-#[path = "build/nav_push_ban.rs"]
-mod nav_push_ban;
-#[allow(clippy::arithmetic_side_effects, clippy::string_slice, clippy::as_conversions, clippy::cast_possible_truncation, clippy::default_numeric_fallback, clippy::integer_division)]
-#[path = "build/route_graph.rs"]
-mod route_graph;
-#[allow(clippy::arithmetic_side_effects, clippy::string_slice, clippy::as_conversions, clippy::cast_possible_truncation, clippy::default_numeric_fallback, clippy::integer_division)]
-#[path = "build/ui_action_coverage.rs"]
-mod ui_action_coverage;
-#[allow(clippy::arithmetic_side_effects, clippy::string_slice, clippy::as_conversions, clippy::cast_possible_truncation, clippy::default_numeric_fallback, clippy::integer_division)]
-#[path = "build/walk.rs"]
-mod walk;
-
-use baseline::Baseline;
+use poly_lint_gate_rules as rules;
 
 fn main() {
     let ws_root = workspace_root();
@@ -89,26 +34,11 @@ fn main() {
         Baseline::load(&baseline_path)
     };
 
-    let walker = walk::WorkspaceWalker::new(&ws_root);
-
-    let mut violations: Vec<baseline::Violation> = Vec::new();
-    allow_ban::scan(&walker, &mut violations);
-    action_enum_coverage::scan(&walker, &mut violations);
-    action_id_naming::scan(&walker, &mut violations);
-    context_menu_coverage::scan(&walker, &mut violations);
-    custom_block_usage::scan(&walker, &mut violations);
-    forbid_backend_slug_match::scan(&walker, &mut violations);
-    ftl_label_key_coverage::scan(&walker, &mut violations);
-    nav_push_ban::scan(&walker, &mut violations);
-    route_graph::scan(&ws_root, &mut violations);
-    ui_action_coverage::scan(&walker, &mut violations);
+    let walker = rules::WorkspaceWalker::new(&ws_root);
+    let violations = rules::all_rules(&walker, &ws_root);
 
     if regen {
         for v in &violations {
-            // §5.3.2: route-graph violations are never grandfathered — the whole
-            // point of the graph scan is to catch new orphans immediately. Regen
-            // only silences allow_ban / context_menu_coverage / nav_push_ban /
-            // ui_action_coverage.
             if v.rule == "route_graph" {
                 println!("cargo::error={}", v.to_error_line());
             } else {
@@ -139,18 +69,79 @@ fn main() {
             "cargo::warning=lint-gate: {grandfathered} grandfathered violations (run `cargo check --features regen-baseline` to refresh baseline)"
         );
     }
-    if new_count > 0 {
-        // cargo::error directives already failed the build; nothing more to do here.
-    }
+    let _ = new_count;
 }
 
 fn workspace_root() -> std::path::PathBuf {
     // `CARGO_MANIFEST_DIR` is `.../crates/lint-gate`; parent-of-parent is the workspace root.
-    // Cargo always sets this env var for build scripts, and the parent/grandparent
-    // directories always exist for a properly nested workspace crate.
     let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".into());
     let p = std::path::Path::new(&manifest).to_path_buf();
     p.parent()
         .and_then(|p| p.parent())
         .map_or_else(|| p.clone(), std::path::Path::to_path_buf)
+}
+
+// Baseline — inlined here because build scripts use build-dependencies, not lib targets.
+// Uses serde_json from the build-deps to parse/write the JSON format.
+
+use std::collections::HashSet;
+
+struct Baseline {
+    keys: HashSet<(String, String, u32, String)>,
+    violations: Vec<rules::Violation>,
+}
+
+impl Baseline {
+    fn empty() -> Self {
+        Self { keys: HashSet::new(), violations: Vec::new() }
+    }
+
+    fn load(path: &std::path::Path) -> Self {
+        let Ok(s) = std::fs::read_to_string(path) else { return Self::empty(); };
+        let Ok(raw): Result<serde_json::Value, _> = serde_json::from_str(&s) else {
+            println!("cargo::warning=lint-gate: baseline.json parse failed");
+            return Self::empty();
+        };
+        let arr = match raw.get("violations").and_then(|v| v.as_array()) {
+            Some(a) => a.clone(),
+            None => return Self::empty(),
+        };
+        let mut b = Self::empty();
+        for item in arr {
+            let rule = item.get("rule").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let path_s = item.get("path").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let line = item.get("line").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+            let detail = item.get("detail").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            b.insert(rules::Violation { rule, path: path_s, line, detail });
+        }
+        b
+    }
+
+    fn insert(&mut self, v: rules::Violation) {
+        let key = (v.rule.clone(), v.path.clone(), v.line, v.detail.clone());
+        if self.keys.insert(key) {
+            self.violations.push(v);
+        }
+    }
+
+    fn contains(&self, v: &rules::Violation) -> bool {
+        let key = (v.rule.clone(), v.path.clone(), v.line, v.detail.clone());
+        self.keys.contains(&key)
+    }
+
+    fn save(&self, path: &std::path::Path) {
+        let mut sorted = self.violations.clone();
+        sorted.sort_by(|a, b| {
+            (&a.rule, &a.path, a.line, &a.detail).cmp(&(&b.rule, &b.path, b.line, &b.detail))
+        });
+        let obj = serde_json::json!({ "violations": sorted });
+        let Ok(json) = serde_json::to_string_pretty(&obj) else {
+            println!("cargo::warning=lint-gate: failed to serialize baseline");
+            return;
+        };
+        if let Some(dir) = path.parent() { drop(std::fs::create_dir_all(dir)); }
+        if let Err(e) = std::fs::write(path, json) {
+            println!("cargo::warning=lint-gate: failed to write baseline: {e}");
+        }
+    }
 }

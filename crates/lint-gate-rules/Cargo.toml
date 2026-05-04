@@ -1,0 +1,20 @@
+[package]
+name = "poly-lint-gate-rules"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+ignore = "0.4"
+serde = { workspace = true }
+serde_json = { workspace = true }
+regex = "1"
+
+[dev-dependencies]
+
+[lints]
+workspace = true
