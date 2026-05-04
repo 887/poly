@@ -20,7 +20,7 @@ use super::direct_call::disconnect_active_call;
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::state::chat_data::{backend_badge, user_color};
-use crate::state::{AppState, ChatData, VoiceState};
+use crate::state::{AppState, ChatData, NavState, UiOverlays, VoiceState};
 use crate::ui::account::common::chat_history::remember_message_list_scroll_position;
 use crate::ui::account::common::user_profile_modal::open_user_profile;
 use crate::ui::actions::{ActionCx, UiAction};
@@ -162,7 +162,7 @@ async fn join_voice_channel(
     client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
     voice_state: BatchedSignal<VoiceState>,
-    app_state: BatchedSignal<AppState>,
+    nav_state: BatchedSignal<NavState>,
 ) {
     // Step 1: Request microphone permission so browser shows the prompt now.
     let mut perm_eval = document::eval(JS_REQUEST_AUDIO_PERMISSION);
@@ -174,7 +174,7 @@ async fn join_voice_channel(
         voice_state.batch(|v| v.voice_connection = None);
     }
 
-    let server_id = app_state.read().nav.selected_server.cloned();
+    let server_id = nav_state.read().selected_server.cloned();
     let Some(server_id) = server_id else { return };
 
     let backend_info = client_manager.peek().get_backend_for_server(&server_id);
@@ -262,11 +262,11 @@ async fn join_voice_channel(
     };
     voice_state.batch(move |v| v.voice_connection = Some(voice_conn));
 
-    if let Some(previous_channel_id) = app_state.read().nav.selected_channel.cloned() {
+    if let Some(previous_channel_id) = nav_state.read().selected_channel.cloned() {
         remember_message_list_scroll_position(&previous_channel_id);
     }
-    app_state.batch(|st| {
-        st.nav.selected_channel.unsafe_presync_override(
+    nav_state.batch(|n| {
+        n.selected_channel.unsafe_presync_override(
             Some(channel_id),
             "voice_view: pre-set selected_channel inside join_voice_channel so ChatView \
              renders against the new voice channel synchronously rather than the outgoing \
@@ -290,10 +290,11 @@ pub fn VoiceChannelView() -> Element {
     let voice_state: BatchedSignal<VoiceState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let app_state: BatchedSignal<AppState> = use_context();
+    let nav_state: BatchedSignal<NavState> = use_context();
 
     let current_channel = chat_data.read().current_channel.clone();
     let current_server = chat_data.read().current_server.clone();
-    let channel_id = app_state.read().nav.selected_channel.cloned();
+    let channel_id = nav_state.read().selected_channel.cloned();
 
     let participants = channel_id
         .as_deref()
@@ -353,7 +354,7 @@ pub fn VoiceChannelView() -> Element {
                     chat_data,
                     voice_state,
                     client_manager,
-                    app_state,
+                    nav_state,
                 }
             }
             // Floating control bar — only when connected
@@ -497,7 +498,8 @@ fn VoiceParticipantGrid(
 #[component]
 fn VoiceTile(participant: VoiceParticipant) -> Element {
     let user = &participant.user;
-    let app_state: BatchedSignal<AppState> = use_context();
+    let ui_overlays: BatchedSignal<UiOverlays> = use_context();
+    let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
     let color = user_color(&user.id);
     let first_char: String = user
         .display_name
@@ -523,7 +525,7 @@ fn VoiceTile(participant: VoiceParticipant) -> Element {
     rsx! {
         div {
             class: "{tile_class}",
-            onclick: move |_| open_user_profile(app_state, profile_user.clone()),
+            onclick: move |_| open_user_profile(ui_overlays, profile_user.clone()),
             style: "cursor: pointer;",
             div { class: "{speaking_class}",
                 if let Some(url) = &avatar_url {
@@ -591,7 +593,7 @@ fn VoiceJoinButton(
     chat_data: BatchedSignal<ChatData>,
     voice_state: BatchedSignal<VoiceState>,
     client_manager: BatchedSignal<ClientManager>,
-    app_state: BatchedSignal<AppState>,
+    nav_state: BatchedSignal<NavState>,
 ) -> Element {
     rsx! {
         div { class: "voice-controls",
@@ -603,7 +605,7 @@ fn VoiceJoinButton(
                     let ch = chat_data.read().current_channel.clone();
                     let srv = chat_data.read().current_server.clone();
                     spawn(async move {
-                        join_voice_channel(cid, ch, srv, client_manager, chat_data, voice_state, app_state)
+                        join_voice_channel(cid, ch, srv, client_manager, chat_data, voice_state, nav_state)
                             .await;
                     });
                 },

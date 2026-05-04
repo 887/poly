@@ -6,6 +6,7 @@ use super::super::ChatUtilityPanel;
 
 pub(in super::super) fn use_pinned_messages_effect(signals: &ChatViewSignals) {
     let app_state = signals.app_state;
+    let nav = signals.nav;
     let client_manager = signals.client_manager;
     let mut pinned_messages = signals.pinned_messages;
     let utility_panel = signals.utility_panel;
@@ -20,7 +21,7 @@ pub(in super::super) fn use_pinned_messages_effect(signals: &ChatViewSignals) {
     // re-renders, this setup re-runs, the subscriptions re-fire — perpetual
     // loop (hang class #7, same as use_member_list_effect, commit 55f94246).
     let panel_is_pinned = *utility_panel.peek() == Some(ChatUtilityPanel::Pinned);
-    let target_channel_id = app_state.peek().nav.selected_channel.cloned();
+    let target_channel_id = nav.peek().selected_channel.cloned();
     use_spawn_once(
         (panel_is_pinned, target_channel_id),
         move |(panel_is_pinned, target_channel_id)| async move {
@@ -31,8 +32,8 @@ pub(in super::super) fn use_pinned_messages_effect(signals: &ChatViewSignals) {
                 pinned_messages.set(Vec::new());
                 return;
             };
-            let selected_server = app_state.peek().nav.selected_server.cloned();
-            let active_account_id = app_state.peek().nav.active_account_id.cloned();
+            let selected_server = nav.peek().selected_server.cloned();
+            let active_account_id = nav.peek().active_account_id.cloned();
             let backend = if let Some(server_id) = selected_server {
                 client_manager
                     .peek()

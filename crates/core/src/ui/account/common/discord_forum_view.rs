@@ -86,19 +86,19 @@ fn is_media_channel(ch: &Channel) -> bool {
 #[component]
 pub fn DiscordForumView() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
+    let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
 
     // Resolve channel + account from nav/chat_data (same pattern as ForumView).
-    let account_id = app_state
+    let account_id = nav
         .read()
-        .nav
-        .active_account_id
+                .active_account_id
         .cloned()
         .unwrap_or_default();
     let channel_id = {
-        let s = app_state.read();
-        s.nav
+        let s = nav.read();
+        s
             .selected_channel
             .cloned()
             .filter(|id| !id.is_empty())
@@ -197,15 +197,13 @@ pub fn DiscordForumView() -> Element {
     };
 
     // Navigation helpers.
-    let backend = app_state
+    let backend = nav
         .read()
-        .nav
-        .active_backend
+                .active_backend
         .cloned().map_or_else(|| "demo".to_string(), |b| b.slug().to_string());
-    let instance_id = app_state
+    let instance_id = nav
         .read()
-        .nav
-        .active_instance_id
+                .active_instance_id
         .cloned()
         .unwrap_or_default();
     let server_id = chat_data

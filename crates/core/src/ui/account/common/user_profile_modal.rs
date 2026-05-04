@@ -24,8 +24,8 @@ use super::channel_list::open_direct_message_from_active_account;
 use super::direct_call::{DirectCallRequest, navigate_to_pending_direct_call_from_active_account};
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
-use crate::state::AppState;
 use crate::state::ChatData;
+use crate::state::{NavState, UiOverlays};
 use crate::state::VoiceState;
 use crate::state::chat_data::{backend_badge, user_color};
 use crate::ui::actions::{ActionCx, UiAction};
@@ -47,12 +47,9 @@ pub enum UserProfileModalAction {
 }
 
 impl UiAction for UserProfileModalAction {
-    fn apply(self, cx: ActionCx<'_>) {
+    fn apply(self, _cx: ActionCx<'_>) {
         match self {
-            Self::Close => {
-                cx.state.nav.profile_modal_user = None;
-            }
-            Self::OpenDm | Self::Call | Self::VideoCall => {
+            Self::Close | Self::OpenDm | Self::Call | Self::VideoCall => {
                 todo!("phase-E: UserProfileModalAction requires Signal handles");
             }
         }
@@ -66,8 +63,8 @@ impl UiAction for UserProfileModalAction {
 /// Stores the user in `AppState.nav.profile_modal_user` and, on WASM,
 /// pushes `#poly-profile` to the browser history so the native back
 /// gesture closes the modal.
-pub fn open_user_profile(app_state: BatchedSignal<AppState>, user: User) {
-    app_state.batch(|st| st.nav.profile_modal_user = Some(user));
+pub fn open_user_profile(ui_overlays: BatchedSignal<UiOverlays>, user: User) {
+    ui_overlays.batch(|o| o.profile_modal_user = Some(user));
     #[cfg(target_arch = "wasm32")]
     {
         let _ = document::eval(
@@ -85,8 +82,8 @@ pub fn open_user_profile(app_state: BatchedSignal<AppState>, user: User) {
 ///
 /// Uses `history.back()` so the hashchange event fires and the async back-gesture
 /// listener (if running) resolves cleanly without a second write.
-fn close_modal(app_state: BatchedSignal<AppState>) {
-    app_state.batch(|st| st.nav.profile_modal_user = None);
+fn close_modal(ui_overlays: BatchedSignal<UiOverlays>) {
+    ui_overlays.batch(|o| o.profile_modal_user = None);
     #[cfg(target_arch = "wasm32")]
     {
         let _ = document::eval(
@@ -107,11 +104,12 @@ fn close_modal(app_state: BatchedSignal<AppState>) {
 #[context_menu(none)]
 #[component]
 pub fn UserProfileModal() -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
+    let nav_state: BatchedSignal<NavState> = use_context();
+    let ui_overlays: BatchedSignal<UiOverlays> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let voice_state: BatchedSignal<VoiceState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
-    let user = app_state.read().nav.profile_modal_user.clone();
+    let user = ui_overlays.read().profile_modal_user.clone();
     let Some(user) = user else {
         return rsx! {};
     };
@@ -156,7 +154,7 @@ pub fn UserProfileModal() -> Element {
                     // Route through close_modal so browser hash and signal state
                     // always converge regardless of whether dismissal came from
                     // Escape, backdrop/cross button, or browser back.
-                    close_modal(app_state);
+                    close_modal(ui_overlays);
                 }
             });
         });
@@ -219,7 +217,7 @@ pub fn UserProfileModal() -> Element {
         // Full-screen backdrop — click to close
         div {
             class: "poly-profile-overlay",
-            onclick: move |_| close_modal(app_state),
+            onclick: move |_| close_modal(ui_overlays),
 
             // Modal card — stops click propagation
             div {
@@ -231,7 +229,7 @@ pub fn UserProfileModal() -> Element {
                     button {
                         class: "poly-profile-header-btn poly-profile-close-btn",
                         title: "{t(\"action-close\")}",
-                        onclick: move |_| close_modal(app_state),
+                        onclick: move |_| close_modal(ui_overlays),
                         "✕"
                     }
                     button {
@@ -277,10 +275,10 @@ pub fn UserProfileModal() -> Element {
                     div { class: "poly-profile-actions",
                         button { class: "poly-profile-action-btn",
                             onclick: move |_| {
-                                close_modal(app_state);
+                                close_modal(ui_overlays);
                                 open_direct_message_from_active_account(
                                     action_user.id.clone(),
-                                    app_state,
+                                    nav_state,
                                     chat_data,
                                     client_manager,
                                     navigator(),
@@ -293,14 +291,15 @@ pub fn UserProfileModal() -> Element {
                         }
                         button { class: "poly-profile-action-btn",
                             onclick: move |_| {
-                                close_modal(app_state);
+                                close_modal(ui_overlays);
                                 navigate_to_pending_direct_call_from_active_account(
                                     DirectCallRequest {
                                         target_user: call_user.clone(),
                                         start_video: false,
                                         allow_add_to_active_temporary: true,
                                     },
-                                    app_state,
+                                    nav_state,
+                                    ui_overlays,
                                     chat_data,
                                     client_manager,
                                     navigator(),
@@ -313,14 +312,15 @@ pub fn UserProfileModal() -> Element {
                         }
                         button { class: "poly-profile-action-btn",
                             onclick: move |_| {
-                                close_modal(app_state);
+                                close_modal(ui_overlays);
                                 navigate_to_pending_direct_call_from_active_account(
                                     DirectCallRequest {
                                         target_user: video_user.clone(),
                                         start_video: true,
                                         allow_add_to_active_temporary: true,
                                     },
-                                    app_state,
+                                    nav_state,
+                                    ui_overlays,
                                     chat_data,
                                     client_manager,
                                     navigator(),

@@ -14,7 +14,7 @@
 
 use crate::state::BatchedSignal;
 use crate::client_manager::{BackendHandle, BackendHandleExt, ClientManager, PluginSettingsEntry};
-use crate::state::{AppState, ChatAction, ChatData, DragState, VoiceState};
+use crate::state::{AppState, ChatAction, ChatData, DragState, NavState, UiLayout, UiOverlays, UserPrefs, VoiceState};
 use crate::ui::account::common::chat_history::{
     read_message_list_scroll_metrics, request_scroll_to_bottom,
 };
@@ -56,6 +56,10 @@ pub(crate) async fn toggle_demo(
     voice_state: BatchedSignal<VoiceState>,
     drag_state: BatchedSignal<DragState>,
     app_state: BatchedSignal<AppState>,
+    nav: BatchedSignal<NavState>,
+    _ui_layout: BatchedSignal<UiLayout>,
+    _ui_overlays: BatchedSignal<UiOverlays>,
+    _user_prefs: BatchedSignal<UserPrefs>,
 ) {
     #[cfg(feature = "demo")]
     {
@@ -434,7 +438,7 @@ pub(crate) async fn toggle_demo(
             // Start real-time event stream listeners for each demo account.
             // Re-use the already-cloned handles — no extra Signal read needed.
             for (aid, backend) in backend_handles {
-                spawn_event_stream_listener(aid, backend, app_state, chat_data, client_manager);
+                spawn_event_stream_listener(aid, backend, app_state, nav, chat_data, client_manager);
             }
         }
     }
@@ -532,6 +536,7 @@ pub(crate) fn spawn_event_stream_listener(
     account_id: String,
     backend: BackendHandle,
     app_state: BatchedSignal<AppState>,
+    nav: BatchedSignal<NavState>,
     chat_data: BatchedSignal<ChatData>,
     client_manager: BatchedSignal<ClientManager>,
 ) {
@@ -573,7 +578,7 @@ pub(crate) fn spawn_event_stream_listener(
                     ref channel_id,
                     ref message,
                 } => {
-                    let selected = app_state.read().nav.selected_channel.clone();
+                    let selected = nav.read().selected_channel.clone();
                     if selected.as_deref() == Some(channel_id.as_str()) {
                         // Currently viewing this channel — append message live.
                         let msg_c = message.clone();

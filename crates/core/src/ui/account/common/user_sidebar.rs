@@ -21,7 +21,7 @@ use crate::state::BatchedSignal;
 use crate::i18n::t;
 use crate::state::ChatData;
 use crate::state::chat_data::user_color;
-use crate::state::{AppState, MemberListGrouping, MemberListSortOrder};
+use crate::state::{AppState, MemberListGrouping, MemberListSortOrder, UiOverlays};
 use crate::ui::account::common::user_profile_modal::open_user_profile;
 use dioxus::prelude::*;
 use poly_client::{PresenceStatus, User};
@@ -110,14 +110,16 @@ fn HighlightedName(name: String, query: String) -> Element {
 pub fn UserSidebar() -> Element {
     let chat_data: BatchedSignal<ChatData> = use_context();
     let app_state: BatchedSignal<AppState> = use_context();
+    let ui_overlays: BatchedSignal<UiOverlays> = use_context();
+    let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
     let members = chat_data.read().members.clone();
     let mut filter_open = use_signal(|| false);
     let mut filter_text = use_signal(String::new);
 
     // Read display preferences from global AppState.
-    let grouping   = app_state.read().member_list_grouping;
-    let sort_order = app_state.read().member_list_sort_order;
-    let show_offline = app_state.read().member_list_show_offline;
+    let grouping   = user_prefs.read().member_list_grouping;
+    let sort_order = user_prefs.read().member_list_sort_order;
+    let show_offline = user_prefs.read().member_list_show_offline;
 
     let query   = filter_text.read().clone();
     let lower_q = query.to_lowercase();
@@ -196,7 +198,7 @@ pub fn UserSidebar() -> Element {
                                 users: sorted,
                                 presence_class: "",
                                 query: query.clone(),
-                                on_click: move |u: User| open_user_profile(app_state, u),
+                                on_click: move |u: User| open_user_profile(ui_overlays, u),
                             }
                         }
                     }
@@ -214,16 +216,16 @@ pub fn UserSidebar() -> Element {
                         }
                         rsx! {
                             if !online.is_empty() {
-                                UserGroup { label: format!("{} — {}", t("user-online"), online.len()), users: online, presence_class: "online", query: query.clone(), on_click: move |u: User| open_user_profile(app_state, u) }
+                                UserGroup { label: format!("{} — {}", t("user-online"), online.len()), users: online, presence_class: "online", query: query.clone(), on_click: move |u: User| open_user_profile(ui_overlays, u) }
                             }
                             if !idle.is_empty() {
-                                UserGroup { label: format!("{} — {}", t("user-idle"), idle.len()), users: idle, presence_class: "idle", query: query.clone(), on_click: move |u: User| open_user_profile(app_state, u) }
+                                UserGroup { label: format!("{} — {}", t("user-idle"), idle.len()), users: idle, presence_class: "idle", query: query.clone(), on_click: move |u: User| open_user_profile(ui_overlays, u) }
                             }
                             if !dnd.is_empty() {
-                                UserGroup { label: format!("{} — {}", t("user-dnd"), dnd.len()), users: dnd, presence_class: "dnd", query: query.clone(), on_click: move |u: User| open_user_profile(app_state, u) }
+                                UserGroup { label: format!("{} — {}", t("user-dnd"), dnd.len()), users: dnd, presence_class: "dnd", query: query.clone(), on_click: move |u: User| open_user_profile(ui_overlays, u) }
                             }
                             if !offline.is_empty() {
-                                UserGroup { label: format!("{} — {}", t("user-offline"), offline.len()), users: offline, presence_class: "offline", query: query.clone(), on_click: move |u: User| open_user_profile(app_state, u) }
+                                UserGroup { label: format!("{} — {}", t("user-offline"), offline.len()), users: offline, presence_class: "offline", query: query.clone(), on_click: move |u: User| open_user_profile(ui_overlays, u) }
                             }
                         }
                     }

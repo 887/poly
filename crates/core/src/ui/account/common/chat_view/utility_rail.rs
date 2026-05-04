@@ -38,6 +38,7 @@ pub(super) fn ChatUtilityRail(
     mut threads_filter_open: Signal<bool>,
     mut threads_filter_query: Signal<String>,
 ) -> Element {
+    let rail_nav: BatchedSignal<crate::state::NavState> = use_context();
     let title = if panel == ChatUtilityPanel::Search {
         if search_query.is_empty() {
             t("search-messages")
@@ -181,7 +182,7 @@ pub(super) fn ChatUtilityRail(
                 // B.5 — Pending drafts across all chats for the active account.
                 {
                     let rail_app_state: BatchedSignal<AppState> = use_context();
-                    let active_account_id = rail_app_state.read().nav.active_account_id
+                    let active_account_id = rail_nav.read().active_account_id
                         .as_deref()
                         .unwrap_or("")
                         .to_string();
@@ -200,11 +201,11 @@ pub(super) fn ChatUtilityRail(
                 // utility-rail tab so Search/Members/etc remain accessible.
                 {
                     let rail_app_state: BatchedSignal<AppState> = use_context();
-                    let active_account_id = rail_app_state.read().nav.active_account_id
+                    let active_account_id = rail_nav.read().active_account_id
                         .as_deref()
                         .unwrap_or("")
                         .to_string();
-                    let active_chat_id = rail_app_state.read().nav.selected_channel
+                    let active_chat_id = rail_nav.read().selected_channel
                         .as_deref()
                         .unwrap_or("")
                         .to_string();
@@ -372,10 +373,11 @@ fn SearchPreviewText(text: String, search_terms: Vec<String>) -> Element {
 fn ChatSettingsPanel(mut notifications_muted: Signal<bool>) -> Element {
     use crate::ui::settings::common::{PolySelect, SelectOption};
     let app_state: BatchedSignal<AppState> = use_context();
+    let user_prefs: BatchedSignal<crate::state::UserPrefs> = use_context();
     let muted    = *notifications_muted.read();
-    let grouping = app_state.read().member_list_grouping;
-    let sort     = app_state.read().member_list_sort_order;
-    let show_off = app_state.read().member_list_show_offline;
+    let grouping = user_prefs.read().member_list_grouping;
+    let sort     = user_prefs.read().member_list_sort_order;
+    let show_off = user_prefs.read().member_list_show_offline;
 
     let grouping_options = vec![
         SelectOption { value: "by-status", label: t("chat-settings-grouping-by-status") },
@@ -423,8 +425,8 @@ fn ChatSettingsPanel(mut notifications_muted: Signal<bool>) -> Element {
                         value: grouping.as_str().to_string(),
                         onchange: move |v: String| {
                             let g = crate::state::MemberListGrouping::from_slug(&v);
-                            let (s, o) = app_state.map(|st| (st.member_list_sort_order, st.member_list_show_offline));
-                            app_state.batch(|st| st.member_list_grouping = g);
+                            let (s, o) = user_prefs.map(|p| (p.member_list_sort_order, p.member_list_show_offline));
+                            user_prefs.batch(|p| p.member_list_grouping = g);
                             spawn(async move { persist_member_list_display_settings(g, s, o).await; });
                         },
                     }
@@ -438,8 +440,8 @@ fn ChatSettingsPanel(mut notifications_muted: Signal<bool>) -> Element {
                         value: sort.as_str().to_string(),
                         onchange: move |v: String| {
                             let s = crate::state::MemberListSortOrder::from_slug(&v);
-                            let (g, o) = app_state.map(|st| (st.member_list_grouping, st.member_list_show_offline));
-                            app_state.batch(|st| st.member_list_sort_order = s);
+                            let (g, o) = user_prefs.map(|p| (p.member_list_grouping, p.member_list_show_offline));
+                            user_prefs.batch(|p| p.member_list_sort_order = s);
                             spawn(async move { persist_member_list_display_settings(g, s, o).await; });
                         },
                     }
@@ -451,9 +453,9 @@ fn ChatSettingsPanel(mut notifications_muted: Signal<bool>) -> Element {
                     button {
                         class: if show_off { "chat-settings-toggle-btn chat-settings-toggle-btn-on" } else { "chat-settings-toggle-btn" },
                         onclick: move |_| {
-                            let (prev, g, s) = app_state.map(|st| (st.member_list_show_offline, st.member_list_grouping, st.member_list_sort_order));
+                            let (prev, g, s) = user_prefs.map(|p| (p.member_list_show_offline, p.member_list_grouping, p.member_list_sort_order));
                             let new_val = !prev;
-                            app_state.batch(|st| st.member_list_show_offline = new_val);
+                            user_prefs.batch(|p| p.member_list_show_offline = new_val);
                             spawn(async move { persist_member_list_display_settings(g, s, new_val).await; });
                         },
                         span { class: "chat-settings-toggle-track",

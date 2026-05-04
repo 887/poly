@@ -21,7 +21,7 @@
 //! non-forum backend (HN, GitHub, …) is unaffected.
 
 use crate::client_manager::{BackendHandleExt, ClientManager};
-use crate::state::{AppState, BatchedSignal};
+use crate::state::{AppState, BatchedSignal, UiOverlays};
 use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::client_ui::CustomBlock;
 use crate::ui::client_ui::use_view_resource::{use_view_resource, ViewQuery};
@@ -165,12 +165,12 @@ pub fn ListBody(
         Some(Err(err)) => {
             tracing::debug!("ListBody: get_view_rows failed: {err:?}");
             if is_session_expired(err) {
-                let app_state: BatchedSignal<AppState> = use_context();
+                let nav_sig: BatchedSignal<crate::state::NavState> = use_context();
                 let (nav_backend, nav_instance_id, nav_account_id) = {
-                    let s = app_state.read();
-                    let b = s.nav.active_backend.cloned().map(|b| b.slug().to_string()).unwrap_or_default();
-                    let i = s.nav.active_instance_id.cloned().unwrap_or_default();
-                    let a = s.nav.active_account_id.cloned().unwrap_or_else(|| account_id.clone());
+                    let s = nav_sig.read();
+                    let b = s.active_backend.cloned().map(|b| b.slug().to_string()).unwrap_or_default();
+                    let i = s.active_instance_id.cloned().unwrap_or_default();
+                    let a = s.active_account_id.cloned().unwrap_or_else(|| account_id.clone());
                     (b, i, a)
                 };
                 rsx! {
@@ -229,18 +229,16 @@ pub fn ListBody(
                 let _unused_selected = selected_row_id.read().clone();
                 // Pull the route params once — forum post click routes to
                 // a full-page ForumPostView like the old LemmyForumView did.
-                let app_state: BatchedSignal<crate::state::AppState> = use_context();
-                let snap = app_state.read();
+                let nav_sig: BatchedSignal<crate::state::NavState> = use_context();
+                let snap = nav_sig.read();
                 let backend_slug_for_click = snap
-                    .nav
                     .active_backend
                     .cloned()
                     .map(|b| b.slug().to_string())
                     .unwrap_or_default();
-                let instance_id_for_click = snap.nav.active_instance_id.cloned().unwrap_or_default();
-                let server_id_for_click = snap.nav.selected_server.cloned().unwrap_or_default();
+                let instance_id_for_click = snap.active_instance_id.cloned().unwrap_or_default();
+                let server_id_for_click = snap.selected_server.cloned().unwrap_or_default();
                 let channel_id_for_click = snap
-                    .nav
                     .selected_channel
                     .cloned()
                     .unwrap_or_else(|| channel_id.clone());
@@ -342,6 +340,7 @@ pub fn ListBody(
 #[component]
 pub fn ListBodyRow(row: ViewRow, on_click: EventHandler<String>) -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
+    let ui_overlays: BatchedSignal<UiOverlays> = use_context();
     let id = row.id.clone();
     let id_for_click = id.clone();
     let primary = row.primary_text.clone();
@@ -381,7 +380,7 @@ pub fn ListBodyRow(row: ViewRow, on_click: EventHandler<String>) -> Element {
                             text: text.clone(),
                         };
                         let entry = forum_post_entry(ctx, &evt);
-                        app_state.batch(|st| st.context_menu_stack.push(entry));
+                        ui_overlays.batch(|o| o.context_menu_stack.push(entry));
                     }
                 },
                 div { class: "forum-post-votes",

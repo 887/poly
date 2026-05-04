@@ -17,7 +17,7 @@ use crate::state::BatchedSignal;
 use super::routes::Route;
 use crate::i18n::t;
 use crate::state::chat_data::user_color;
-use crate::state::{AppState, VoiceState};
+use crate::state::{AppState, NavState, VoiceState};
 use crate::ui::account::common::chat_history::remember_message_list_scroll_position;
 use crate::ui::account::common::direct_call::{disconnect_active_call, swap_to_first_held_call};
 use crate::ui::actions::{ActionCx, UiAction};
@@ -124,6 +124,7 @@ fn VoiceBannerChannelLink(
     dm_id: Option<String>,
     app_state: BatchedSignal<AppState>,
 ) -> Element {
+    let nav_state: BatchedSignal<NavState> = use_context();
     rsx! {
         button {
             class: "voice-banner-center",
@@ -143,7 +144,7 @@ fn VoiceBannerChannelLink(
                         });
                     }
                 } else {
-                    if let Some(previous_channel_id) = app_state.read().nav.selected_channel.cloned()
+                    if let Some(previous_channel_id) = nav_state.read().selected_channel.cloned()
                     {
                         remember_message_list_scroll_position(&previous_channel_id);
                     }
@@ -249,6 +250,7 @@ fn VoiceBannerControls(
 #[component]
 pub fn VoiceBanner() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
+    let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
     let voice_state: BatchedSignal<VoiceState> = use_context();
 
     let voice_conn = voice_state.read().voice_connection.clone();

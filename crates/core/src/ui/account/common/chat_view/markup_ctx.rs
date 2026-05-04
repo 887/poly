@@ -7,7 +7,7 @@
 
 use dioxus::prelude::*;
 use crate::state::BatchedSignal;
-use crate::state::{AppState, ChatData, VoiceState};
+use crate::state::{AppState, ChatData, NavState, UiLayout, UiOverlays, VoiceState};
 use crate::client_manager::ClientManager;
 use super::super::chat_history::ChatHistoryUiState;
 use super::composer_helpers::PendingAttachmentPreview;
@@ -29,6 +29,9 @@ use poly_client::{
 #[derive(Clone)]
 pub(super) struct ChatViewMarkupCtx {
     pub(super) app_state: BatchedSignal<AppState>,
+    pub(super) nav: BatchedSignal<NavState>,
+    pub(super) ui_layout: BatchedSignal<UiLayout>,
+    pub(super) ui_overlays: BatchedSignal<UiOverlays>,
     pub(super) client_manager: BatchedSignal<ClientManager>,
     pub(super) chat_data: BatchedSignal<ChatData>,
     pub(super) voice_state: BatchedSignal<VoiceState>,
@@ -110,11 +113,14 @@ pub(super) struct ChatViewMarkupCtx {
 
 pub(super) fn build_chat_view_markup_ctx(signals: &ChatViewSignals) -> ChatViewMarkupCtx {
     let app_state = signals.app_state;
+    let nav_signal = signals.nav;
+    let ui_layout = signals.ui_layout;
+    let ui_overlays = signals.ui_overlays;
     let client_manager = signals.client_manager;
     let chat_data = signals.chat_data;
     let voice_state = signals.voice_state;
     let nav = navigator();
-    let channel_id = app_state.read().nav.selected_channel.cloned();
+    let channel_id = nav_signal.read().selected_channel.cloned();
     let messages = chat_data.read().messages.clone();
     let current_channel = chat_data.read().current_channel.clone();
     let current_server = chat_data.read().current_server.clone();
@@ -136,9 +142,9 @@ pub(super) fn build_chat_view_markup_ctx(signals: &ChatViewSignals) -> ChatViewM
         .unwrap_or_default()
         .starts_with("group-");
     let member_list_visible = if is_dm_channel || is_group_channel {
-        app_state.read().nav.dm_right_sidebar_visible
+        ui_layout.read().dm_right_sidebar_visible
     } else {
-        app_state.read().nav.right_sidebar_visible
+        ui_layout.read().right_sidebar_visible
     };
     let (
         unread_marker_id,
@@ -150,6 +156,9 @@ pub(super) fn build_chat_view_markup_ctx(signals: &ChatViewSignals) -> ChatViewM
 
     ChatViewMarkupCtx {
         app_state,
+        nav: nav_signal,
+        ui_layout,
+        ui_overlays,
         client_manager,
         chat_data,
         voice_state,
@@ -185,7 +194,7 @@ pub(super) fn build_chat_view_markup_ctx(signals: &ChatViewSignals) -> ChatViewM
         unread_banner_time,
         unread_banner_date,
         unread_banner_channel_id: channel_id.clone(),
-        self_user_id: current_self_user_id(app_state, client_manager),
+        self_user_id: current_self_user_id(nav_signal, client_manager),
         dm_user: current_dm_user(chat_data, &channel_id, is_dm_channel),
         dm_user_avatar: current_dm_user_avatar(chat_data, &channel_id, is_dm_channel),
         dm_user_presence: current_dm_user_presence(chat_data, &channel_id, is_dm_channel),
@@ -272,13 +281,12 @@ fn display_unread_count(unread_count: u32) -> String {
 }
 
 fn current_self_user_id(
-    app_state: BatchedSignal<AppState>,
+    nav: BatchedSignal<NavState>,
     client_manager: BatchedSignal<ClientManager>,
 ) -> String {
-    let state = app_state.read();
+    let state = nav.read();
     let cm = client_manager.read();
     state
-        .nav
         .active_account_id
         .as_deref()
         .and_then(|aid| cm.sessions.get(aid))

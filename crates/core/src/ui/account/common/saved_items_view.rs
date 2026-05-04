@@ -9,7 +9,7 @@ use super::VoiceAccountFooter;
 use super::chat_view::{highlight_message, open_message_hit};
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
-use crate::state::{AppState, ChatData};
+use crate::state::{AppState, ChatData, NavState};
 use crate::ui::split_shell::SplitMenuShell;
 use dioxus::prelude::*;
 use poly_client::{MessageContent, MessageSearchHit};
@@ -105,6 +105,7 @@ fn build_saved_sources(items: &[SavedPinnedItem]) -> Vec<SavedSourceSummary> {
 #[component]
 pub fn SavedItemsView() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
+    let nav_state: BatchedSignal<NavState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let nav = navigator();
@@ -115,7 +116,7 @@ pub fn SavedItemsView() -> Element {
     let mut source_search = use_signal(String::new);
     let mut selected_source = use_signal(|| None::<String>);
 
-    let account_id = app_state.read().nav.active_account_id.cloned().unwrap_or_default();
+    let account_id = nav_state.read().active_account_id.cloned().unwrap_or_default();
     let active_user_id = chat_data
         .read()
         .account_sessions
@@ -301,8 +302,8 @@ pub fn SavedItemsView() -> Element {
                                         item: item.clone(),
                                         highlight_terms: highlight_terms.clone(),
                                         on_open: move |hit: MessageSearchHit| {
-                                            let current_channel_id = app_state.read().nav.selected_channel.cloned();
-                                            let current_server_id = app_state.read().nav.selected_server.cloned();
+                                            let current_channel_id = nav_state.read().selected_channel.cloned();
+                                            let current_server_id = nav_state.read().selected_server.cloned();
                                             spawn(async move {
                                                 if let Some((route, message_id)) = open_message_hit(
                                                     hit,
@@ -311,6 +312,7 @@ pub fn SavedItemsView() -> Element {
                                                     client_manager,
                                                     chat_data,
                                                     app_state,
+                                                    nav_state,
                                                 ).await {
                                                     nav.push(route);
                                                     highlight_message(&message_id);

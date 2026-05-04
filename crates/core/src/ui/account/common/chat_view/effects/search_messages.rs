@@ -7,6 +7,7 @@ use super::super::search_filter::build_search_query;
 
 pub(in super::super) fn use_search_messages_effect(signals: &ChatViewSignals, ctx: &ChatViewMarkupCtx) {
     let app_state = signals.app_state;
+    let nav = signals.nav;
     let client_manager = signals.client_manager;
     let mut search_hits = signals.search_hits;
     let utility_panel = signals.utility_panel;
@@ -46,7 +47,7 @@ pub(in super::super) fn use_search_messages_effect(signals: &ChatViewSignals, ct
                     search_hits.set(Vec::new());
                     return;
                 }
-                let account_id = app_state.peek().nav.active_account_id.cloned();
+                let account_id = nav.peek().active_account_id.cloned();
                 let Some(account_id) = account_id else {
                     search_hits.set(Vec::new());
                     return;

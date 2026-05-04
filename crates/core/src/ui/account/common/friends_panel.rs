@@ -208,6 +208,7 @@ fn FriendsFilterBar(
 #[component]
 fn FriendsGrid(friends: Vec<poly_client::User>, backend_slug: String) -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
+    let nav_state: BatchedSignal<crate::state::NavState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let nav = navigator();
@@ -273,14 +274,14 @@ fn FriendsGrid(friends: Vec<poly_client::User>, backend_slug: String) -> Element
                                     // write guards on app_state and chat_data; any
                                     // live read guard on the same signal would panic.
                                     {
-                                        let prev = app_state.read().nav.selected_channel.cloned();
+                                        let prev = nav_state.read().selected_channel.cloned();
                                         if let Some(ref id) = prev {
                                             remember_message_list_scroll_position(id);
                                         }
                                     }
                                     open_direct_message_from_active_account(
                                         friend_id.clone(),
-                                        app_state,
+                                        nav_state,
                                         chat_data,
                                         client_manager,
                                         nav,

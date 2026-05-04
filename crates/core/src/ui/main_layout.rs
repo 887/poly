@@ -209,6 +209,10 @@ fn NavBar() -> Element {
 #[component]
 pub fn MainLayout() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
+    let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
+    let ui_layout: crate::state::BatchedSignal<crate::state::UiLayout> = use_context();
+    let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
+    let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
 
     // DECISION(DX-ROUTER-3): Dioxus 0.7 web router does not fire on_update for the
@@ -226,7 +230,7 @@ pub fn MainLayout() -> Element {
     // NOTE: writing to a Signal during render is safe here because MainLayout does not
     // read app_state via .read() in its own render body — only in event handlers.
     let route = use_route::<Route>();
-    sync_route_to_app_state(&route, app_state);
+    sync_route_to_app_state(&route, app_state, nav, Some(user_prefs));
 
     use_effect(move || {
         init_mobile_drawer_runtime();
@@ -238,16 +242,16 @@ pub fn MainLayout() -> Element {
         crate::ui::preserve_layout_override_query_in_url();
         close_mobile_right_wing();
         if runtime_mobile_ui_active() {
-            app_state.batch(|st| {
-                st.nav.right_sidebar_visible = false;
-                st.nav.dm_right_sidebar_visible = false;
+            ui_layout.batch(|l| {
+                l.right_sidebar_visible = false;
+                l.dm_right_sidebar_visible = false;
             });
         }
     });
 
     use_effect(move || {
         if route_targets_unknown_account(&route, &client_manager.read()) {
-            app_state.batch(|st| st.settings_section = SettingsSection::Accounts);
+            user_prefs.batch(|p| p.settings_section = SettingsSection::Accounts);
             navigator().replace(Route::SettingsRoute);
         }
     });
@@ -257,11 +261,11 @@ pub fn MainLayout() -> Element {
     // updates account_last_routes inside AppState, which re-renders MainLayout).
     // The spawn ensures the async storage write doesn't block the render.
     use_effect(move || {
-        let routes_snapshot = app_state.read().nav.account_last_routes.clone();
+        let routes_snapshot = nav.read().account_last_routes.clone();
         if routes_snapshot.is_empty() {
             return;
         }
-        let dm_routes_snapshot = app_state.read().nav.account_last_dm_routes.clone();
+        let dm_routes_snapshot = nav.read().account_last_dm_routes.clone();
         spawn(async move {
             if let Some(storage) = crate::STORAGE.get()
                 && let Err(e) = storage.set_account_last_routes(&routes_snapshot).await
@@ -303,9 +307,9 @@ pub fn MainLayout() -> Element {
             // This handler is the belt-and-suspenders fallback — it clears the
             // entire stack on a global click (same as the old scalar-field clears).
             onclick: move |_| {
-                let has_stack = !app_state.read().context_menu_stack.is_empty();
+                let has_stack = !ui_overlays.read().context_menu_stack.is_empty();
                 if has_stack {
-                    app_state.batch(|st| st.context_menu_stack.clear());
+                    ui_overlays.batch(|o| o.context_menu_stack.clear());
                 }
             },
             // Belt-and-suspenders: suppress native browser context menu app-wide.
@@ -353,10 +357,14 @@ pub fn MainLayout() -> Element {
 #[component]
 fn ModerationDialogOverlay() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
-    let dialog = app_state.read().active_moderation_dialog.clone();
+    let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
+    let ui_layout: crate::state::BatchedSignal<crate::state::UiLayout> = use_context();
+    let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
+    let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
+    let dialog = ui_overlays.read().active_moderation_dialog.clone();
 
     let on_close = move |_| {
-        app_state.batch(|st| st.active_moderation_dialog = None);
+        ui_overlays.batch(|o| o.active_moderation_dialog = None);
     };
 
     match dialog {

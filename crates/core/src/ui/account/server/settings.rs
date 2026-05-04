@@ -521,6 +521,7 @@ pub fn ServerSettingsPage(
     let search_text = use_signal(String::new);
     let chat_data: BatchedSignal<crate::state::ChatData> = use_context();
     let app_state: BatchedSignal<AppState> = use_context();
+    let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
     let mut published_section = use_signal(String::new);
 
     #[cfg(target_arch = "wasm32")]
@@ -598,7 +599,7 @@ pub fn ServerSettingsPage(
     let server_id_for_effect = server_id.clone();
     use_effect(move || {
         let sid = server_id_for_effect.clone();
-        if app_state.read().nav.selected_server.as_deref() != Some(&sid) {
+        if nav.read().selected_server.as_deref() != Some(&sid) {
             // Don't forcibly override — the route handler already sets this.
         }
     });

@@ -39,13 +39,14 @@ const FEEDS: &[(&str, &str)] = &[
 #[component]
 pub fn FeedLayout() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
+    let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
     // Track which feed the user selected most recently. Used only for
     // visual feedback; the routing side-effect is driven by the
     // `invoke_sidebar_action` → `ActionOutcome::Navigate` path.
     let mut active_feed = use_signal(String::new);
 
-    let account_id = app_state.read().nav.active_account_id.cloned();
+    let account_id = nav.read().active_account_id.cloned();
     let current = active_feed.read().clone();
 
     rsx! {

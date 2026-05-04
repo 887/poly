@@ -19,7 +19,7 @@ use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::state::{
     AppState, ChannelContextMenuState, ChatData, DmContextMenuState, GroupDmContextMenuState,
-    View, VoiceState,
+    NavState, View, VoiceState,
 };
 use crate::ui::context_menu::menus::{channel_entry_at, dm_entry_at, group_dm_entry_at};
 use crate::ui::actions::{ActionCx, UiAction};
@@ -77,6 +77,7 @@ async fn load_channel_data(
     client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
     app_state: BatchedSignal<AppState>,
+    nav: BatchedSignal<crate::state::NavState>,
     voice_state: BatchedSignal<VoiceState>,
 ) {
     // Fire an initial spinner cascade so the UI paints "loading" before we
@@ -92,7 +93,7 @@ async fn load_channel_data(
         .map_or(0, |channel| channel.unread_count);
 
     // Get selected server to find the right backend
-    let server_id = app_state.read().nav.selected_server.cloned();
+    let server_id = nav.read().selected_server.cloned();
     let Some(server_id) = server_id else {
         chat_data.batch(|cd| cd.loading = false);
         return;
@@ -237,7 +238,7 @@ async fn load_dm_messages(
 fn activate_dm_channel(
     dm: DmChannel,
     instance_id: String,
-    mut app_state: BatchedSignal<AppState>,
+    nav_state: BatchedSignal<NavState>,
     chat_data: BatchedSignal<ChatData>,
     client_manager: BatchedSignal<ClientManager>,
     nav: crate::ui::dioxus_router::Navigator,
@@ -249,7 +250,7 @@ fn activate_dm_channel(
     );
 
     // Snapshot the previous channel before taking any write lock.
-    let previous_channel_id = app_state.read().nav.selected_channel.cloned();
+    let previous_channel_id = nav_state.read().selected_channel.cloned();
     if let Some(ref prev_id) = previous_channel_id {
         remember_message_list_scroll_position(prev_id);
     }
@@ -262,7 +263,7 @@ fn activate_dm_channel(
     // the same URL works because it skips the pre-mutation, and DmChat's own
     // use_effect (restore_dm_chat) loads the channel + messages from the route
     // params. Friend-click now walks the same path.
-    let _ = (dm.unread_count, &dm.last_message, &mut app_state, &chat_data);
+    let _ = (dm.unread_count, &dm.last_message, &chat_data);
 
     nav.push(Route::DmChat {
         backend: dm.backend.slug().to_string(),
@@ -275,16 +276,16 @@ fn activate_dm_channel(
 }
 
 fn active_account_context(
-    app_state: BatchedSignal<AppState>,
+    nav_state: BatchedSignal<crate::state::NavState>,
     chat_data: BatchedSignal<ChatData>,
 ) -> Option<(String, String)> {
-    let account_id = app_state.read().nav.active_account_id.cloned()?;
+    let account_id = nav_state.read().active_account_id.cloned()?;
     let instance_id = chat_data
         .read()
         .account_sessions
         .get(&account_id)
         .map(|session| session.instance_id.clone())
-        .or_else(|| app_state.read().nav.active_instance_id.cloned())
+        .or_else(|| nav_state.read().active_instance_id.cloned())
         .unwrap_or_default();
     Some((account_id, instance_id))
 }
@@ -293,14 +294,14 @@ fn active_account_context(
 /// navigate using the real DM channel ID returned by the backend.
 pub(crate) fn open_direct_message_from_active_account(
     user_id: String,
-    app_state: BatchedSignal<AppState>,
+    nav_state: BatchedSignal<crate::state::NavState>,
     chat_data: BatchedSignal<ChatData>,
     client_manager: BatchedSignal<ClientManager>,
     nav: crate::ui::dioxus_router::Navigator,
 ) {
     tracing::info!(user_id = %user_id, "open_direct_message_from_active_account: start");
 
-    let Some((account_id, instance_id)) = active_account_context(app_state, chat_data) else {
+    let Some((account_id, instance_id)) = active_account_context(nav_state, chat_data) else {
         tracing::warn!("open_direct_message_from_active_account: no active account");
         return;
     };
@@ -331,7 +332,7 @@ pub(crate) fn open_direct_message_from_active_account(
         activate_dm_channel(
             existing_dm,
             instance_id,
-            app_state,
+            nav_state,
             chat_data,
             client_manager,
             nav,
@@ -392,7 +393,7 @@ pub(crate) fn open_direct_message_from_active_account(
         activate_dm_channel(
             opened_dm,
             instance_id,
-            app_state,
+            nav_state,
             chat_data,
             client_manager,
             nav,
@@ -407,8 +408,12 @@ pub(crate) fn open_direct_message_from_active_account(
 #[component]
 pub fn ChannelList() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
+    let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
+    let ui_layout: crate::state::BatchedSignal<crate::state::UiLayout> = use_context();
+    let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
+    let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
-    let current_view = *app_state.read().nav.view;
+    let current_view = *nav.read().view;
     let current_server = chat_data.read().current_server.clone();
     let visible_category_ids = use_signal(Vec::<String>::new);
 
@@ -460,28 +465,29 @@ fn ServerBanner(
     visible_category_ids: Signal<Vec<String>>,
 ) -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
+    let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
+    let ui_layout: crate::state::BatchedSignal<crate::state::UiLayout> = use_context();
+    let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
+    let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
     let mut dropdown_open = use_signal(|| false);
     let mut channels_roles_open = use_signal(|| false);
 
     // Derive route-construction fields from AppState before entering RSX so
     // that we don't hold a borrow of `app_state` inside closures that also
     // mutate `dropdown_open`.
-    let instance_id = app_state
+    let instance_id = nav
         .read()
-        .nav
-        .active_instance_id
+                .active_instance_id
         .cloned()
         .unwrap_or_default();
-    let account_id = app_state
+    let account_id = nav
         .read()
-        .nav
-        .active_account_id
+                .active_account_id
         .cloned()
         .unwrap_or_default();
-    let server_id = app_state
+    let server_id = nav
         .read()
-        .nav
-        .selected_server
+                .selected_server
         .cloned()
         .unwrap_or_default();
 
@@ -646,10 +652,14 @@ fn ServerBanner(
 #[component]
 fn DMFriendsView() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
+    let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
+    let ui_layout: crate::state::BatchedSignal<crate::state::UiLayout> = use_context();
+    let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
+    let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
 
     // Only show DMs and groups belonging to the currently active account.
-    let active_account_id = app_state.read().nav.active_account_id.cloned();
+    let active_account_id = nav.read().active_account_id.cloned();
     let active_user_id = active_account_id.as_ref().and_then(|account_id| {
         chat_data
             .read()
@@ -676,7 +686,7 @@ fn DMFriendsView() -> Element {
         .filter(|g| active_account_id.as_deref() == Some(&g.account_id))
         .cloned()
         .collect();
-    let selected_channel = app_state.read().nav.selected_channel.clone();
+    let selected_channel = nav.read().selected_channel.clone();
 
     // Sort DMs by the latest incoming message from the other participant.
     let mut sorted_dms = dm_channels.clone();
@@ -726,11 +736,11 @@ fn DMFriendsView() -> Element {
             class: "dm-friends-row-btn",
             onclick: move |_| {
                 let (backend_slug, instance_id, account_id) = {
-                    let nav = &app_state.read().nav;
+                    let nav_snap = nav.read();
                     match (
-                        nav.active_backend.cloned(),
-                        nav.active_instance_id.cloned(),
-                        nav.active_account_id.cloned(),
+                        nav_snap.active_backend.cloned(),
+                        nav_snap.active_instance_id.cloned(),
+                        nav_snap.active_account_id.cloned(),
                     ) {
                         (Some(b), Some(iid), Some(id)) => (b.slug().to_string(), iid, id),
                         _ => ("demo".to_string(), "demo".to_string(), "demo-cat".to_string()),
@@ -752,11 +762,11 @@ fn DMFriendsView() -> Element {
             class: "dm-friends-row-btn",
             onclick: move |_| {
                 let (backend_slug, instance_id, account_id) = {
-                    let nav = &app_state.read().nav;
+                    let nav_snap = nav.read();
                     match (
-                        nav.active_backend.cloned(),
-                        nav.active_instance_id.cloned(),
-                        nav.active_account_id.cloned(),
+                        nav_snap.active_backend.cloned(),
+                        nav_snap.active_instance_id.cloned(),
+                        nav_snap.active_account_id.cloned(),
                     ) {
                         (Some(b), Some(iid), Some(id)) => (b.slug().to_string(), iid, id),
                         _ => ("demo".to_string(), "demo".to_string(), "demo-cat".to_string()),
@@ -812,6 +822,10 @@ fn DMFriendsView() -> Element {
 #[component]
 fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
+    let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
+    let ui_layout: crate::state::BatchedSignal<crate::state::UiLayout> = use_context();
+    let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
+    let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
     let _client_manager: BatchedSignal<ClientManager> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
 
@@ -819,8 +833,8 @@ fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
     let current_server = chat_data.read().current_server.clone();
 
     // Derive route construction fields for InlineCreateChannel.
-    let instance_id = app_state.read().nav.active_instance_id.cloned().unwrap_or_default();
-    let account_id  = app_state.read().nav.active_account_id.cloned().unwrap_or_default();
+    let instance_id = nav.read().active_instance_id.cloned().unwrap_or_default();
+    let account_id  = nav.read().active_account_id.cloned().unwrap_or_default();
 
     if let Some(ref server) = current_server {
         // Collect all channel IDs that are already assigned to a category.
@@ -900,7 +914,7 @@ fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
                             // Use nav.selected_channel (updated synchronously by
                             // sync_route_to_app_state) instead of chat_data.current_channel
                             // which lags behind the route on same-server channel switches.
-                            let nav_selected = app_state.read().nav.selected_channel.cloned().unwrap_or_default();
+                            let nav_selected = nav.read().selected_channel.cloned().unwrap_or_default();
                             let is_active = ch_id == nav_selected;
                             let icon = match ch.channel_type {
                                 ChannelType::Forum => match ch.name.as_str() {
@@ -979,7 +993,7 @@ fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
                     // re-renders when the user clicks one of the buttons —
                     // peek() left the previous active button highlighted.
                     {
-                        let scope = app_state.read().forum_scope.clone();
+                        let scope = user_prefs.read().forum_scope.clone();
                         let cls_sub = if scope == "subscribed" { "forum-filter-btn active forum-filter-full" } else { "forum-filter-btn forum-filter-full" };
                         let cls_loc = if scope == "local"      { "forum-filter-btn active forum-filter-full" } else { "forum-filter-btn forum-filter-full" };
                         let cls_all = if scope == "all"        { "forum-filter-btn active forum-filter-full" } else { "forum-filter-btn forum-filter-full" };
@@ -987,19 +1001,19 @@ fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
                             button {
                                 class: "{cls_sub}",
                                 r#type: "button",
-                                onclick: move |_| { app_state.batch(|s| s.forum_scope = "subscribed".to_string()); },
+                                onclick: move |_| { user_prefs.batch(|p| p.forum_scope = "subscribed".to_string()); },
                                 "Subscribed"
                             }
                             button {
                                 class: "{cls_loc}",
                                 r#type: "button",
-                                onclick: move |_| { app_state.batch(|s| s.forum_scope = "local".to_string()); },
+                                onclick: move |_| { user_prefs.batch(|p| p.forum_scope = "local".to_string()); },
                                 "Local"
                             }
                             button {
                                 class: "{cls_all}",
                                 r#type: "button",
-                                onclick: move |_| { app_state.batch(|s| s.forum_scope = "all".to_string()); },
+                                onclick: move |_| { user_prefs.batch(|p| p.forum_scope = "all".to_string()); },
                                 "All"
                             }
                         }
@@ -1126,6 +1140,10 @@ fn DMChannelItem(
     use crate::state::chat_data::user_color;
     use poly_client::PresenceStatus;
     let app_state: BatchedSignal<AppState> = use_context();
+    let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
+    let ui_layout: crate::state::BatchedSignal<crate::state::UiLayout> = use_context();
+    let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
+    let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
 
@@ -1159,8 +1177,8 @@ fn DMChannelItem(
     let lp_backend_slug = menu_backend_slug.clone();
     let dm_long_press = crate::ui::context_menu::long_press::LongPress::default_500ms(
         move |x, y| {
-            app_state.batch(|st| {
-                st.context_menu_stack.push(dm_entry_at(
+            ui_overlays.batch(|o| {
+                o.context_menu_stack.push(dm_entry_at(
                     DmContextMenuState {
                         x,
                         y,
@@ -1187,8 +1205,8 @@ fn DMChannelItem(
                 evt.prevent_default();
                 evt.stop_propagation();
                 let coords = evt.client_coordinates();
-                app_state.batch(|st| {
-                    st.context_menu_stack.push(dm_entry_at(
+                ui_overlays.batch(|o| {
+                    o.context_menu_stack.push(dm_entry_at(
                         DmContextMenuState {
                             x: coords.x,
                             y: coords.y,
@@ -1210,7 +1228,7 @@ fn DMChannelItem(
             ontouchmove: dm_long_press.on_touch_move(),
             ontouchcancel: dm_long_press.on_touch_cancel(),
             onclick: move |_| {
-                if let Some(previous_channel_id) = app_state.read().nav.selected_channel.cloned()
+                if let Some(previous_channel_id) = nav.read().selected_channel.cloned()
                 {
                     remember_message_list_scroll_position(&previous_channel_id); // Clear group member list — this is an individual DM.
                 }
@@ -1240,7 +1258,7 @@ fn DMChannelItem(
                     None,
                     &channel_id,
                 );
-                app_state.batch(|st| st.nav.dm_right_sidebar_visible = false);
+                ui_layout.batch(|l| l.dm_right_sidebar_visible = false);
                 let cid = channel_id.clone();
                 let aid = account_id.clone();
                 spawn(async move {
@@ -1296,6 +1314,10 @@ fn GroupChannelItem(
     instance_id: String,
 ) -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
+    let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
+    let ui_layout: crate::state::BatchedSignal<crate::state::UiLayout> = use_context();
+    let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
+    let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
 
@@ -1320,8 +1342,8 @@ fn GroupChannelItem(
     let lp_backend_slug = menu_backend_slug.clone();
     let group_long_press = crate::ui::context_menu::long_press::LongPress::default_500ms(
         move |x, y| {
-            app_state.batch(|st| {
-                st.context_menu_stack.push(group_dm_entry_at(
+            ui_overlays.batch(|o| {
+                o.context_menu_stack.push(group_dm_entry_at(
                     GroupDmContextMenuState {
                         x,
                         y,
@@ -1346,8 +1368,8 @@ fn GroupChannelItem(
                 evt.prevent_default();
                 evt.stop_propagation();
                 let coords = evt.client_coordinates();
-                app_state.batch(|st| {
-                    st.context_menu_stack.push(group_dm_entry_at(
+                ui_overlays.batch(|o| {
+                    o.context_menu_stack.push(group_dm_entry_at(
                         GroupDmContextMenuState {
                             x: coords.x,
                             y: coords.y,
@@ -1368,7 +1390,7 @@ fn GroupChannelItem(
             ontouchmove: group_long_press.on_touch_move(),
             ontouchcancel: group_long_press.on_touch_cancel(),
             onclick: move |_| {
-                if let Some(previous_channel_id) = app_state.read().nav.selected_channel.cloned()
+                if let Some(previous_channel_id) = nav.read().selected_channel.cloned()
                 {
                     remember_message_list_scroll_position(&previous_channel_id); // Populate group members for the DM member sidebar.
                 } // Synthesize a Channel so ChatView can display the group header
@@ -1427,6 +1449,10 @@ fn FriendItem(display_name: String, user_id: String) -> Element {
     use crate::state::chat_data::user_color;
 
     let app_state: BatchedSignal<AppState> = use_context();
+    let nav_state: crate::state::BatchedSignal<crate::state::NavState> = use_context();
+    let ui_layout: crate::state::BatchedSignal<crate::state::UiLayout> = use_context();
+    let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
+    let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let nav = navigator();
@@ -1446,7 +1472,7 @@ fn FriendItem(display_name: String, user_id: String) -> Element {
                 move |_| {
                     open_direct_message_from_active_account(
                         target_user_id.clone(),
-                        app_state,
+                        nav_state,
                         chat_data,
                         client_manager,
                         nav,
@@ -1508,11 +1534,15 @@ fn CategorySection(
 #[component]
 fn ChannelItemRow(channel: Channel) -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
+    let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
+    let ui_layout: crate::state::BatchedSignal<crate::state::UiLayout> = use_context();
+    let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
+    let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let voice_state: BatchedSignal<VoiceState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
 
-    let selected_channel = app_state.read().nav.selected_channel.clone();
+    let selected_channel = nav.read().selected_channel.clone();
     let ch_id = channel.id.clone();
     let ch_name = channel.name.clone();
     let ch_type = channel.channel_type;
@@ -1523,13 +1553,12 @@ fn ChannelItemRow(channel: Channel) -> Element {
     let ch_id_for_menu = ch_id.clone();
     let ch_name_for_menu = ch_name.clone();
     let is_active = selected_channel.as_deref() == Some(&ch_id);
-    let account_id_for_menu = app_state.read().nav.active_account_id.cloned().unwrap_or_default();
-    let backend_slug_for_menu = app_state
+    let account_id_for_menu = nav.read().active_account_id.cloned().unwrap_or_default();
+    let backend_slug_for_menu = nav
         .read()
-        .nav
-        .active_backend
+                .active_backend
         .cloned().map_or_else(|| "demo".to_string(), |b| b.slug().to_string());
-    let instance_id_for_menu = app_state.read().nav.active_instance_id.cloned().unwrap_or_default();
+    let instance_id_for_menu = nav.read().active_instance_id.cloned().unwrap_or_default();
 
     let type_icon = match ch_type {
         ChannelType::Text | ChannelType::Thread | ChannelType::Announcement => "#",
@@ -1569,8 +1598,8 @@ fn ChannelItemRow(channel: Channel) -> Element {
         let instance_id = instance_id_for_menu.clone();
         let backend_slug = backend_slug_for_menu.clone();
         crate::ui::context_menu::long_press::LongPress::default_500ms(move |x, y| {
-            app_state.batch(|st| {
-                st.context_menu_stack.push(channel_entry_at(
+            ui_overlays.batch(|o| {
+                o.context_menu_stack.push(channel_entry_at(
                     ChannelContextMenuState {
                         x,
                         y,
@@ -1596,8 +1625,8 @@ fn ChannelItemRow(channel: Channel) -> Element {
                 evt.prevent_default();
                 evt.stop_propagation();
                 let coords = evt.client_coordinates();
-                app_state.batch(|st| {
-                    st.context_menu_stack.push(channel_entry_at(
+                ui_overlays.batch(|o| {
+                    o.context_menu_stack.push(channel_entry_at(
                         ChannelContextMenuState {
                             x: coords.x,
                             y: coords.y,
@@ -1618,7 +1647,7 @@ fn ChannelItemRow(channel: Channel) -> Element {
             ontouchmove: long_press.on_touch_move(),
             ontouchcancel: long_press.on_touch_cancel(),
             onclick: move |_| {
-                if let Some(previous_channel_id) = app_state.read().nav.selected_channel.cloned()
+                if let Some(previous_channel_id) = nav.read().selected_channel.cloned()
                 {
                     remember_message_list_scroll_position(&previous_channel_id);
                 }
@@ -1628,7 +1657,7 @@ fn ChannelItemRow(channel: Channel) -> Element {
                 }
                 // Clear unread on click. Tells the backend too so the next
                 // get_channels refetch doesn't restore the unread count.
-                let server_id_for_mark = app_state.read().nav.selected_server.cloned();
+                let server_id_for_mark = nav.read().selected_server.cloned();
                 crate::ui::account::common::chat_view::mark_channel_as_read_with_backend(
                     chat_data,
                     client_manager,
@@ -1650,15 +1679,15 @@ fn ChannelItemRow(channel: Channel) -> Element {
                 });
                 let cid = ch_id.clone();
                 spawn(async move {
-                    load_channel_data(cid, client_manager, chat_data, app_state, voice_state).await;
+                    load_channel_data(cid, client_manager, chat_data, app_state, nav, voice_state).await;
                 });
-                let server_id = app_state.read().nav.selected_server.cloned().unwrap_or_default();
+                let server_id = nav.read().selected_server.cloned().unwrap_or_default();
                 let (backend_slug, instance_id, account_id) = {
-                    let nav = &app_state.read().nav;
+                    let nav_snap = nav.read();
                     match (
-                        nav.active_backend.cloned(),
-                        nav.active_instance_id.cloned(),
-                        nav.active_account_id.cloned(),
+                        nav_snap.active_backend.cloned(),
+                        nav_snap.active_instance_id.cloned(),
+                        nav_snap.active_account_id.cloned(),
                     ) {
                         (Some(b), Some(iid), Some(id)) => (b.slug().to_string(), iid, id),
                         _ => ("demo".to_string(), "demo".to_string(), "demo-cat".to_string()),

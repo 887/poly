@@ -26,10 +26,11 @@ use poly_ui_macros::{context_menu, ui_action};
 #[component]
 pub fn SortModesLayout(decl: SidebarDeclaration) -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
+    let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let mut active_id = use_signal(String::new);
 
-    let account_id = app_state.read().nav.active_account_id.cloned();
+    let account_id = nav.read().active_account_id.cloned();
 
     // Items from the first section. Group by parent_id so we can render
     // top-level rows + collapsible children.

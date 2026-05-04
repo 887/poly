@@ -83,6 +83,10 @@ pub fn ViewThreadButton(
     thread: ThreadInfo,
 ) -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
+    let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
+    let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
+    let nav_state: BatchedSignal<crate::state::NavState> = use_context();
+    let ui_overlays: BatchedSignal<crate::state::UiOverlays> = use_context();
     let nav = navigator();
     let thread_id = thread.thread_id.clone();
     let count = thread.message_count;
@@ -100,20 +104,17 @@ pub fn ViewThreadButton(
             onclick: move |_| {
                 if is_mobile() {
                     // Full-page navigation on mobile.
-                    let s = app_state.read();
+                    let s = nav_state.read();
                     let backend = s
-                        .nav
                         .active_backend
                         .cloned()
                         .map(|b| b.slug().to_string())
                         .unwrap_or_default();
                     let instance_id = s
-                        .nav
                         .active_instance_id
                         .cloned()
                         .unwrap_or_default();
                     let account_id = s
-                        .nav
                         .active_account_id
                         .cloned()
                         .unwrap_or_default();
@@ -126,10 +127,10 @@ pub fn ViewThreadButton(
                     });
                 } else {
                     // Side-panel on desktop.
-                    app_state.batch(|s| {
+                    ui_overlays.batch(|o| {
                         let currently_open =
-                            s.nav.thread_panel_open.as_deref() == Some(&thread_id);
-                        s.nav.thread_panel_open = if currently_open {
+                            o.thread_panel_open.as_deref() == Some(&thread_id);
+                        o.thread_panel_open = if currently_open {
                             None
                         } else {
                             Some(thread_id.clone())
@@ -154,6 +155,8 @@ pub fn ViewThreadButton(
 #[component]
 pub fn ActiveThreadsBar() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
+    let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
+    let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
 
@@ -162,8 +165,8 @@ pub fn ActiveThreadsBar() -> Element {
         .current_server
         .as_ref()
         .map(|s| s.id.clone());
-    let channel_id = app_state.read().nav.selected_channel.cloned();
-    let account_id = app_state.read().nav.active_account_id.cloned();
+    let channel_id = nav.read().selected_channel.cloned();
+    let account_id = nav.read().active_account_id.cloned();
 
     let threads = use_resource(move || {
         let server_id = server_id.clone();
@@ -203,6 +206,10 @@ pub fn ActiveThreadsBar() -> Element {
 #[component]
 fn ActiveThreadChip(thread: ThreadInfo) -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
+    let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
+    let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
+    let nav_state: BatchedSignal<crate::state::NavState> = use_context();
+    let ui_overlays: BatchedSignal<crate::state::UiOverlays> = use_context();
     let nav = navigator();
     let thread_id = thread.thread_id.clone();
     let count = thread.message_count;
@@ -213,15 +220,14 @@ fn ActiveThreadChip(thread: ThreadInfo) -> Element {
             title: format!("{} {}", count, t("thread-messages")),
             onclick: move |_| {
                 if is_mobile() {
-                    let s = app_state.read();
+                    let s = nav_state.read();
                     let backend = s
-                        .nav
                         .active_backend
                         .cloned()
                         .map(|b| b.slug().to_string())
                         .unwrap_or_default();
-                    let instance_id = s.nav.active_instance_id.cloned().unwrap_or_default();
-                    let account_id = s.nav.active_account_id.cloned().unwrap_or_default();
+                    let instance_id = s.active_instance_id.cloned().unwrap_or_default();
+                    let account_id = s.active_account_id.cloned().unwrap_or_default();
                     drop(s);
                     nav.push(Route::ThreadView {
                         backend,
@@ -230,10 +236,10 @@ fn ActiveThreadChip(thread: ThreadInfo) -> Element {
                         thread_id: thread_id.clone(),
                     });
                 } else {
-                    app_state.batch(|s| {
+                    ui_overlays.batch(|o| {
                         let currently_open =
-                            s.nav.thread_panel_open.as_deref() == Some(&thread_id);
-                        s.nav.thread_panel_open = if currently_open {
+                            o.thread_panel_open.as_deref() == Some(&thread_id);
+                        o.thread_panel_open = if currently_open {
                             None
                         } else {
                             Some(thread_id.clone())
@@ -257,13 +263,15 @@ fn ActiveThreadChip(thread: ThreadInfo) -> Element {
 #[component]
 pub fn ThreadPanel() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
+    let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
+    let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
 
-    let thread_id = app_state.read().nav.thread_panel_open.clone();
+    let thread_id = ui_overlays.read().thread_panel_open.clone();
     let Some(thread_id) = thread_id else {
         return rsx! {};
     };
-    let account_id = app_state.read().nav.active_account_id.cloned();
+    let account_id = nav.read().active_account_id.cloned();
 
     // Resolve the thread Channel object (name + metadata).
     let thread_channel = use_resource(move || {
@@ -285,8 +293,8 @@ pub fn ThreadPanel() -> Element {
     // load_server_data writes app_state.nav, ThreadView re-renders, this
     // setup re-runs, the read fires the subscription again — perpetual loop
     // (hang class #7, same shape as use_member_list_effect, commit 55f94246).
-    let thread_id_for_msgs = app_state.peek().nav.thread_panel_open.clone();
-    let account_id_for_msgs = app_state.peek().nav.active_account_id.cloned();
+    let thread_id_for_msgs = ui_overlays.peek().thread_panel_open.clone();
+    let account_id_for_msgs = nav.peek().active_account_id.cloned();
     let messages: Signal<Vec<Message>> = use_signal(Vec::new);
     let mut messages_w = messages;
     use_spawn_once(
@@ -303,7 +311,7 @@ pub fn ThreadPanel() -> Element {
     );
 
     let channel = thread_channel.read().as_ref().and_then(std::clone::Clone::clone);
-    let panel_thread_id = app_state.read().nav.thread_panel_open.clone();
+    let panel_thread_id = ui_overlays.read().thread_panel_open.clone();
 
     rsx! {
         div { class: "thread-panel",
@@ -338,6 +346,8 @@ pub fn ThreadPanelHeader(
     thread_id: String,
 ) -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
+    let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
+    let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
 
     let name = channel
         .as_ref().map_or_else(|| thread_id.clone(), |c| c.name.clone());
@@ -367,7 +377,7 @@ pub fn ThreadPanelHeader(
                 class: "thread-panel-close",
                 title: t("action-close"),
                 onclick: move |_| {
-                    app_state.batch(|st| st.nav.thread_panel_open = None);
+                    ui_overlays.batch(|o| o.thread_panel_open = None);
                 },
                 "✕"
             }
@@ -426,13 +436,15 @@ fn ThreadMessageRow(message: Message) -> Element {
 #[component]
 pub fn ThreadFullView(thread_id: String) -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
+    let nav_state: crate::state::BatchedSignal<crate::state::NavState> = use_context();
+    let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let nav = navigator();
 
     // Resolve channel metadata.
     let thread_channel = {
         let tid = thread_id.clone();
-        let aid = app_state.read().nav.active_account_id.cloned();
+        let aid = nav_state.read().active_account_id.cloned();
         use_resource(move || {
             let tid = tid.clone();
             let aid = aid.clone();
@@ -449,7 +461,7 @@ pub fn ThreadFullView(thread_id: String) -> Element {
     let messages: Signal<Vec<Message>> = use_signal(Vec::new);
     let mut messages_w = messages;
     use_reactive_effect(thread_id.clone(), move |tid| {
-        let aid = app_state.read().nav.active_account_id.cloned();
+        let aid = nav_state.read().active_account_id.cloned();
         let Some(aid) = aid else { return };
         spawn(async move {
             if let Ok(msgs) = client_manager.peek().with_backend(&aid, async |b| {

@@ -553,10 +553,11 @@ pub fn SearchPage(
     locked_account_id: Option<String>,
 ) -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
+    let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: BatchedSignal<crate::client_manager::ClientManager> = use_context();
     let query = use_signal(String::new);
-    let initial_type_seed = app_state.read().search_type_seed.clone();
+    let initial_type_seed = user_prefs.read().search_type_seed.clone();
     let mut enabled_accounts: Signal<std::collections::HashSet<String>> = use_signal(|| {
         // If we have a locked account, start with only that account enabled.
         if let Some(ref aid) = locked_account_id {
@@ -583,10 +584,10 @@ pub fn SearchPage(
     let mut grp_visible: Signal<usize> = use_signal(|| 20_usize);
 
     use_effect(move || {
-        let seed = app_state.read().search_type_seed.clone();
+        let seed = user_prefs.read().search_type_seed.clone();
         if let Some(seed) = seed {
             enabled_types.set(seed.into_iter().collect());
-            app_state.batch(|st| st.search_type_seed = None);
+            user_prefs.batch(|p| p.search_type_seed = None);
         }
     });
 

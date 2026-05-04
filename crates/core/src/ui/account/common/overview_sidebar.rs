@@ -12,7 +12,7 @@
 //! the column width and look stay consistent.
 
 use crate::i18n::t;
-use crate::state::{AppState, BatchedSignal};
+use crate::state::{AppState, BatchedSignal, NavState};
 use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::routes::Route;
 use dioxus::prelude::*;
@@ -59,16 +59,17 @@ fn current_page(route: &Route) -> OverviewPage {
 #[component]
 pub fn OverviewSidebar() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
+    let nav_state: BatchedSignal<NavState> = use_context();
     let _nav = navigator();
     let route: Route = use_route();
     let active = current_page(&route);
 
     let (backend, instance_id, account_id) = {
-        let nav_state = app_state.read();
-        let backend = nav_state.nav.active_backend.cloned().map_or_else(|| "demo".to_string(), |b| b.slug().to_string());
-        let instance = nav_state.nav.active_instance_id.cloned()
+        let nav = nav_state.read();
+        let backend = nav.active_backend.cloned().map_or_else(|| "demo".to_string(), |b: poly_client::BackendType| b.slug().to_string());
+        let instance = nav.active_instance_id.cloned()
             .unwrap_or_else(|| "demo".to_string());
-        let account = nav_state.nav.active_account_id.cloned()
+        let account = nav.active_account_id.cloned()
             .unwrap_or_default();
         (backend, instance, account)
     };

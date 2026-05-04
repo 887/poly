@@ -53,6 +53,10 @@ pub fn DemoPluginSettings() -> Element {
     let chat_data: BatchedSignal<crate::state::ChatData> = use_context();
     let voice_state: BatchedSignal<crate::state::VoiceState> = use_context();
     let drag_state: BatchedSignal<crate::state::DragState> = use_context();
+    let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
+    let ui_layout: crate::state::BatchedSignal<crate::state::UiLayout> = use_context();
+    let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
+    let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
     let demo_active = client_manager.read().demo_active;
 
     rsx! {
@@ -90,7 +94,7 @@ pub fn DemoPluginSettings() -> Element {
                             let was_active = client_manager.read().demo_active;
                             dioxus::core::spawn_forever(async move {
                                 crate::ui::demo::toggle_demo(
-                                    client_manager, chat_data, voice_state, drag_state, app_state,
+                                    client_manager, chat_data, voice_state, drag_state, app_state, nav, ui_layout, ui_overlays, user_prefs,
                                 ).await;
                                 if !was_active {
                                     app_state.batch(|st| st.is_setup_complete = true);

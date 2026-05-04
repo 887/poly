@@ -54,6 +54,7 @@ use poly_ui_macros::{context_menu, ui_action};
 #[component]
 pub fn ClientSidebar() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
+    let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
 
     // Resolve the current account. `active_account_id` is populated by the
@@ -61,12 +62,12 @@ pub fn ClientSidebar() -> Element {
     // it may be None — in that case we render the ChannelListLayout which
     // itself delegates to the existing `ChannelList` that handles the
     // DMs-home empty state.
-    let account_id = app_state.read().nav.active_account_id.cloned();
+    let account_id = nav.read().active_account_id.cloned();
     // When a repo backend (RepoTree) has a specific server selected, the inner
     // sidebar must show only that repo's channels — not the full repo list.
     // Read reactively so the layout switches when the user navigates into or
     // out of a repo.
-    let has_selected_server = app_state.read().nav.selected_server.is_some();
+    let has_selected_server = nav.read().selected_server.is_some();
 
     let decl_res = {
         let account_id = account_id.clone();

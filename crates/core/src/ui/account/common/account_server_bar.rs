@@ -27,7 +27,7 @@ use super::super::super::routes::Route;
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::state::chat_data::user_color;
-use crate::state::{AppState, ChatAction, ChatData, ContextMenuState, DragSource, DragState, View};
+use crate::state::{AppState, ChatAction, ChatData, ContextMenuState, DragSource, DragState, NavState, UiOverlays, View};
 use crate::ui::context_menu::menus::server_icon_entry_at;
 use crate::ui::account::common::chat_history::remember_message_list_scroll_position;
 use crate::ui::favorites_sidebar::SidebarTooltip;
@@ -110,15 +110,20 @@ fn apply_bar2_drop(cd: &mut ChatData, drag_id: &str, target_id: &str, account_id
 #[component]
 pub fn AccountServerBar() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
+    let nav_state: BatchedSignal<NavState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: BatchedSignal<crate::client_manager::ClientManager> = use_context();
 
-    let nav = app_state.read().nav.clone();
-    let active_account_id = nav.active_account_id.cloned();
-    let active_backend = nav.active_backend.cloned();
-    let active_instance_id = nav.active_instance_id.cloned();
-    let current_view = *nav.view;
-    let selected_server = nav.selected_server.cloned();
+    let (active_account_id, active_backend, active_instance_id, current_view, selected_server) = {
+        let nav = nav_state.read();
+        (
+            nav.active_account_id.cloned(),
+            nav.active_backend.cloned(),
+            nav.active_instance_id.cloned(),
+            *nav.view,
+            nav.selected_server.cloned(),
+        )
+    };
 
     // If no account is active, don't render
     let Some(account_id) = active_account_id else {
@@ -336,6 +341,8 @@ fn AccountServerIcon(
     icon_url: Option<String>,
 ) -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
+    let ui_overlays: BatchedSignal<UiOverlays> = use_context();
+    let nav_state: BatchedSignal<NavState> = use_context();
     let _client_manager: BatchedSignal<ClientManager> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let drag_state: BatchedSignal<DragState> = use_context();
@@ -358,8 +365,8 @@ fn AccountServerIcon(
         evt.prevent_default();
         evt.stop_propagation();
         let coords = evt.client_coordinates();
-        app_state.batch(|st| {
-            st.context_menu_stack.push(server_icon_entry_at(
+        ui_overlays.batch(|o| {
+            o.context_menu_stack.push(server_icon_entry_at(
                 ContextMenuState {
                     x: coords.x,
                     y: coords.y,
@@ -425,7 +432,7 @@ fn AccountServerIcon(
     let bslug_click = backend_slug.clone();
     let aid_click = account_id.clone();
     let on_click = move |_: Event<MouseData>| {
-        if let Some(previous_channel_id) = app_state.read().nav.selected_channel.cloned() {
+        if let Some(previous_channel_id) = nav_state.read().selected_channel.cloned() {
             remember_message_list_scroll_position(&previous_channel_id);
         }
         // Clear per-server transient data synchronously before the route change so
@@ -651,23 +658,21 @@ fn AccountBarFriendsButton(
 #[component]
 fn AccountBarNotifsButton(current_view: View, notif_count: usize) -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
+    let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
-    let backend_slug = app_state
+    let backend_slug = nav
         .read()
-        .nav
-        .active_backend
+                .active_backend
         .cloned()
         .map_or_else(|| "demo".to_string(), |backend| backend.slug().to_string());
-    let instance_id = app_state
+    let instance_id = nav
         .read()
-        .nav
-        .active_instance_id
+                .active_instance_id
         .cloned()
         .unwrap_or_else(|| "demo".to_string());
-    let account_id = app_state
+    let account_id = nav
         .read()
-        .nav
-        .active_account_id
+                .active_account_id
         .cloned()
         .unwrap_or_default();
 
@@ -747,15 +752,14 @@ fn AccountBarDiscoverButton(
 #[component]
 fn CreateServerButton(account_id: String) -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
-    let backend_slug = app_state
+    let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
+    let backend_slug = nav
         .read()
-        .nav
-        .active_backend
+                .active_backend
         .cloned().map_or_else(|| "poly".to_string(), |b| b.slug().to_string());
-    let instance_id = app_state
+    let instance_id = nav
         .read()
-        .nav
-        .active_instance_id
+                .active_instance_id
         .cloned()
         .unwrap_or_default();
 

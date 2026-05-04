@@ -24,7 +24,7 @@ use super::routes::Route;
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::state::chat_data::user_color;
-use crate::state::{AccountContextMenuState, AppState, ChatAction, ChatData, ContextMenuState, DragSource, DragState, View, VoiceState};
+use crate::state::{AccountContextMenuState, AppState, ChatAction, ChatData, ContextMenuState, DragSource, DragState, NavState, UiOverlays, View, VoiceState};
 use crate::ui::context_menu::menus::{account_entry_at, server_icon_entry_at};
 use crate::ui::account::common::chat_history::{
     initial_message_query, remember_message_list_scroll_position,
@@ -115,22 +115,21 @@ pub(crate) fn SidebarTooltip(
 #[component]
 #[allow(non_snake_case)]
 pub fn FavoritesBar() -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
-    let current_view = *app_state.read().nav.view;
+    let nav_state: BatchedSignal<NavState> = use_context();
+    let current_view = *nav_state.read().view;
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let drag_state: BatchedSignal<DragState> = use_context();
 
     let servers = chat_data.read().servers.clone();
     let demo_active = client_manager.read().demo_active;
-    let active_account = app_state.read().nav.active_account_id.cloned();
-    let _active_backend_slug = app_state
+    let active_account = nav_state.read().active_account_id.cloned();
+    let _active_backend_slug = nav_state
         .read()
-        .nav
         .active_backend
         .cloned()
         .map(|b| b.slug().to_string());
-    let _active_instance_id = app_state.read().nav.active_instance_id.cloned();
+    let _active_instance_id = nav_state.read().active_instance_id.cloned();
 
     // Collect distinct active account IDs for account icons, applying the
     // user-saved order from `ChatData.account_order` (hydrated at startup
@@ -392,7 +391,8 @@ pub fn FavoritesBar() -> Element {
 fn AccountIcon(account_id: String, is_active: bool) -> Element {
     let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
-    let app_state: BatchedSignal<AppState> = use_context();
+    let nav_state: BatchedSignal<NavState> = use_context();
+    let ui_overlays: BatchedSignal<UiOverlays> = use_context();
     let drag_state: BatchedSignal<DragState> = use_context();
 
     // Read connection and presence statuses for this account.
@@ -592,7 +592,7 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
 
     let menu_aid = account_id.clone();
     let menu_display = display_name.clone();
-    let menu_app_state = app_state;
+    let menu_ui_overlays = ui_overlays;
     let menu_chat_data = chat_data;
     let on_account_contextmenu = move |evt: Event<MouseData>| {
         evt.prevent_default();
@@ -607,8 +607,8 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                     |s| (s.backend.slug().to_string(), s.instance_id.clone()),
                 )
         };
-        menu_app_state.batch(|st| {
-            st.context_menu_stack.push(account_entry_at(
+        menu_ui_overlays.batch(|o| {
+            o.context_menu_stack.push(account_entry_at(
                 AccountContextMenuState {
                     x: coords.x,
                     y: coords.y,
@@ -690,9 +690,8 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                 // landing there — e.g. demo_forum opening on an empty Direct
                 // Messages page even though demo_forum has has_dms == false.
                 if !preserve_drawer_context {
-                    let last_route_url = app_state
+                    let last_route_url = nav_state
                         .read()
-                        .nav
                         .account_last_routes
                         .get(&aid)
                         .cloned();
@@ -880,7 +879,8 @@ fn FavoriteServerIcon(
     /// `None`, falls back to a colored first-letter placeholder.
     icon_url: Option<String>,
 ) -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
+    let nav_state: BatchedSignal<NavState> = use_context();
+    let ui_overlays: BatchedSignal<UiOverlays> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let drag_state: BatchedSignal<DragState> = use_context();
@@ -909,7 +909,7 @@ fn FavoriteServerIcon(
     };
     let server_needs_reauth = _account_conn_class == "unauthenticated";
 
-    let is_selected = app_state.read().nav.selected_server.as_deref() == Some(&server_id);
+    let is_selected = nav_state.read().selected_server.as_deref() == Some(&server_id);
     let is_drag_over = drag_state.read().drag_over_id.as_deref() == Some(server_id.as_str());
     let first_letter: String = server_name
         .chars()
@@ -944,9 +944,8 @@ fn FavoriteServerIcon(
                 let aid = account_id.clone();
                 move |_| {
                     let preserve_drawer_context = mobile_left_drawer_open();
-                    if let Some(previous_channel_id) = app_state
+                    if let Some(previous_channel_id) = nav_state
                         .read()
-                        .nav
                         .selected_channel
                         .cloned()
                     {
@@ -955,7 +954,7 @@ fn FavoriteServerIcon(
                     if !preserve_drawer_context {
                         let sid2 = sid.clone();
                         spawn(async move {
-                            load_server_data(sid2, app_state, client_manager, chat_data).await;
+                            load_server_data(sid2, nav_state, client_manager, chat_data).await;
                         });
                     }
                     navigator()
@@ -978,8 +977,8 @@ fn FavoriteServerIcon(
                     evt.prevent_default();
                     evt.stop_propagation();
                     let coords = evt.client_coordinates();
-                    app_state.batch(|st| {
-                        st.context_menu_stack.push(server_icon_entry_at(
+                    ui_overlays.batch(|o| {
+                        o.context_menu_stack.push(server_icon_entry_at(
                             ContextMenuState {
                                 x: coords.x,
                                 y: coords.y,
@@ -1158,25 +1157,25 @@ fn FavoriteServerIcon(
 /// Load channels and select the first text channel for a server.
 pub async fn load_server_data(
     server_id: String,
-    app_state: BatchedSignal<AppState>,
+    nav_state: BatchedSignal<NavState>,
     client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
 ) {
-    load_server_data_internal(server_id, app_state, client_manager, chat_data, true).await;
+    load_server_data_internal(server_id, nav_state, client_manager, chat_data, true).await;
 }
 
 pub async fn load_server_shell_data(
     server_id: String,
-    app_state: BatchedSignal<AppState>,
+    nav_state: BatchedSignal<NavState>,
     client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
 ) {
-    load_server_data_internal(server_id, app_state, client_manager, chat_data, false).await;
+    load_server_data_internal(server_id, nav_state, client_manager, chat_data, false).await;
 }
 
 async fn load_server_data_internal(
     server_id: String,
-    app_state: BatchedSignal<AppState>,
+    nav_state: BatchedSignal<NavState>,
     client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
     auto_select_first_text_channel: bool,
@@ -1258,8 +1257,8 @@ async fn load_server_data_internal(
     // so only an explicit channel tap opens content and closes the drawer.
     if auto_select_first_text_channel && let Some(ch) = first_text_channel {
         let ch_id_for_presync = ch.id.clone();
-        app_state.batch(|st| {
-            st.nav.selected_channel.unsafe_presync_override(
+        nav_state.batch(|n| {
+            n.selected_channel.unsafe_presync_override(
                 Some(ch_id_for_presync),
                 "favorites_sidebar::load_server_data_internal: auto-select first \
                  text channel when landing on /channels/{server}; the URL stays at \
@@ -1292,8 +1291,8 @@ async fn load_server_data_internal(
         }
     }
     if !auto_select_first_text_channel {
-        app_state.batch(|st| {
-            st.nav.selected_channel.unsafe_presync_override(
+        nav_state.batch(|n| {
+            n.selected_channel.unsafe_presync_override(
                 None,
                 "favorites_sidebar::load_server_data_internal: clear selected_channel \
                  when loading server shell only (mobile drawer context) — must be \

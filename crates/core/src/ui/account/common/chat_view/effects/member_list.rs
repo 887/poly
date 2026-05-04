@@ -5,6 +5,7 @@ use super::super::signals::ChatViewSignals;
 
 pub(in super::super) fn use_member_list_effect(signals: &ChatViewSignals) {
     let app_state = signals.app_state;
+    let nav = signals.nav;
     let client_manager = signals.client_manager;
     let chat_data = signals.chat_data;
 
@@ -23,7 +24,7 @@ pub(in super::super) fn use_member_list_effect(signals: &ChatViewSignals) {
     // ran 1408×. peek() breaks the subscription; the use_spawn_once below
     // re-evaluates this key on every legitimate ChatView re-render anyway,
     // so channel switches still propagate.
-    let active_channel_id = app_state.peek().nav.selected_channel.cloned();
+    let active_channel_id = nav.peek().selected_channel.cloned();
     use_spawn_once(active_channel_id, move |active_channel_id| async move {
         let chat_data = chat_data;
         let Some(active_channel_id) = active_channel_id else {
@@ -34,8 +35,8 @@ pub(in super::super) fn use_member_list_effect(signals: &ChatViewSignals) {
             return;
         };
 
-        let selected_server = app_state.peek().nav.selected_server.cloned();
-        let active_account_id = app_state.peek().nav.active_account_id.cloned();
+        let selected_server = nav.peek().selected_server.cloned();
+        let active_account_id = nav.peek().active_account_id.cloned();
         let is_group = active_channel_id.starts_with("group-");
 
         let backend = if let Some(server_id) = selected_server {

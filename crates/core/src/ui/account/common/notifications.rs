@@ -66,13 +66,11 @@ impl UiAction for NotificationsViewAction {
                 // Navigator is optional in ActionCx — only available at runtime.
                 if let Some(ref nav) = cx.navigator {
                     let instance_id = cx
-                        .state
                         .nav
                         .active_instance_id
                         .cloned()
                         .unwrap_or_default();
                     let backend = cx
-                        .state
                         .nav
                         .active_backend
                         .cloned()

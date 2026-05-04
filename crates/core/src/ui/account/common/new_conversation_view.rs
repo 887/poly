@@ -18,6 +18,7 @@ use poly_ui_macros::{context_menu, ui_action};
 #[component]
 pub fn NewConversationView() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
+    let nav_state: BatchedSignal<crate::state::NavState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let nav = navigator();
@@ -25,7 +26,7 @@ pub fn NewConversationView() -> Element {
     let mut search_filter = use_signal(String::new);
     let mut selected_user_ids = use_signal(Vec::<String>::new);
     let search_lower = search_filter.read().to_lowercase();
-    let active_backend = app_state.read().nav.active_backend.cloned();
+    let active_backend = nav_state.read().active_backend.cloned();
 
     let friends: Vec<_> = chat_data
         .read()
@@ -125,7 +126,7 @@ pub fn NewConversationView() -> Element {
                             };
                             open_direct_message_from_active_account(
                                 friend_id,
-                                app_state,
+                                nav_state,
                                 chat_data,
                                 client_manager,
                                 nav,

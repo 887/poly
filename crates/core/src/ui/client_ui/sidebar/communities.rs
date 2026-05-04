@@ -67,9 +67,10 @@ impl CommunitiesTab {
 #[component]
 pub fn CommunitiesLayout() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
+    let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
 
-    let account_id = app_state.read().nav.active_account_id.cloned();
+    let account_id = nav.read().active_account_id.cloned();
     let mut active_tab = use_signal(|| CommunitiesTab::Subscribed);
 
     let communities_res = {

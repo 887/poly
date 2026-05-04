@@ -134,6 +134,8 @@ fn render_user_row(ctx_json: &serde_json::Value, close: EventHandler<()>) -> Ele
         return rsx! {};
     };
     let app_state: BatchedSignal<AppState> = use_context();
+    let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
+    let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let user_for_profile = ctx.user.clone();
     let copy_id = ctx.user.id.clone();
@@ -141,7 +143,7 @@ fn render_user_row(ctx_json: &serde_json::Value, close: EventHandler<()>) -> Ele
 
     // Capability and permission gate for moderation actions.
     let caps = client_manager.peek().capabilities_for_slug(&ctx.backend_slug);
-    let last_known_perms = app_state.read().last_known_perms.clone();
+    let last_known_perms = user_prefs.read().last_known_perms.clone();
     let has_server = !ctx.server_id.is_empty();
 
     let show_kick = has_server
@@ -174,7 +176,7 @@ fn render_user_row(ctx_json: &serde_json::Value, close: EventHandler<()>) -> Ele
             button {
                 class: "context-menu-item",
                 onclick: move |_| {
-                    open_user_profile(app_state, user_for_profile.clone());
+                    open_user_profile(ui_overlays, user_for_profile.clone());
                     close.call(());
                 },
                 "{t(\"menu-view-profile\")}"
@@ -200,8 +202,8 @@ fn render_user_row(ctx_json: &serde_json::Value, close: EventHandler<()>) -> Ele
                         let member_name = member_name_kick.clone();
                         let account_id = account_id_kick.clone();
                         move |_| {
-                            app_state.batch(|st| {
-                                st.active_moderation_dialog = Some(ModerationDialog::Kick {
+                            ui_overlays.batch(|o| {
+                                o.active_moderation_dialog = Some(ModerationDialog::Kick {
                                     server_id: server_id.clone(),
                                     member_id: member_id.clone(),
                                     member_name: member_name.clone(),
@@ -223,8 +225,8 @@ fn render_user_row(ctx_json: &serde_json::Value, close: EventHandler<()>) -> Ele
                         let member_name = member_name_ban.clone();
                         let account_id = account_id_ban.clone();
                         move |_| {
-                            app_state.batch(|st| {
-                                st.active_moderation_dialog = Some(ModerationDialog::Ban {
+                            ui_overlays.batch(|o| {
+                                o.active_moderation_dialog = Some(ModerationDialog::Ban {
                                     server_id: server_id.clone(),
                                     member_id: member_id.clone(),
                                     member_name: member_name.clone(),
@@ -246,8 +248,8 @@ fn render_user_row(ctx_json: &serde_json::Value, close: EventHandler<()>) -> Ele
                         let member_name = member_name_timeout.clone();
                         let account_id = account_id_timeout.clone();
                         move |_| {
-                            app_state.batch(|st| {
-                                st.active_moderation_dialog = Some(ModerationDialog::Timeout {
+                            ui_overlays.batch(|o| {
+                                o.active_moderation_dialog = Some(ModerationDialog::Timeout {
                                     server_id: server_id.clone(),
                                     member_id: member_id.clone(),
                                     member_name: member_name.clone(),

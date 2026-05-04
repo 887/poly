@@ -7,7 +7,7 @@
 use crate::state::BatchedSignal;
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
-use crate::state::{AppState, ChatData, PendingDirectCallRequest, VoiceState};
+use crate::state::{AppState, ChatData, NavState, PendingDirectCallRequest, UiOverlays, VoiceState};
 use crate::ui::routes::Route;
 use dioxus::prelude::*;
 use poly_client::{DmChannel, User, VoiceConnection, VoiceConnectionKind, VoiceParticipant};
@@ -46,27 +46,27 @@ const JS_START_CAMERA: &str = r#"
 "#;
 
 fn active_account_context(
-    app_state: BatchedSignal<AppState>,
+    nav: BatchedSignal<NavState>,
     chat_data: BatchedSignal<ChatData>,
 ) -> Option<(String, String)> {
-    let account_id = app_state.read().nav.active_account_id.cloned()?;
+    let account_id = nav.read().active_account_id.cloned()?;
     let instance_id = chat_data
         .read()
         .account_sessions
         .get(&account_id)
         .map(|session| session.instance_id.clone())
-        .or_else(|| app_state.read().nav.active_instance_id.cloned())
+        .or_else(|| nav.read().active_instance_id.cloned())
         .unwrap_or_default();
     Some((account_id, instance_id))
 }
 
 async fn resolve_direct_message_for_active_account(
     user_id: String,
-    app_state: BatchedSignal<AppState>,
+    nav: BatchedSignal<NavState>,
     chat_data: BatchedSignal<ChatData>,
     client_manager: BatchedSignal<ClientManager>,
 ) -> Option<(DmChannel, String)> {
-    let (account_id, instance_id) = active_account_context(app_state, chat_data)?;
+    let (account_id, instance_id) = active_account_context(nav, chat_data)?;
 
     let existing_dm = {
         let chat_data_read = chat_data.read();
@@ -101,7 +101,8 @@ async fn resolve_direct_message_for_active_account(
 /// Resolve/open the DM for a target user and navigate to the pending direct-call route.
 pub(crate) fn navigate_to_pending_direct_call_from_active_account(
     request: DirectCallRequest,
-    app_state: BatchedSignal<AppState>,
+    nav_state: BatchedSignal<NavState>,
+    ui_overlays: BatchedSignal<UiOverlays>,
     chat_data: BatchedSignal<ChatData>,
     client_manager: BatchedSignal<ClientManager>,
     nav: crate::ui::dioxus_router::Navigator,
@@ -109,7 +110,7 @@ pub(crate) fn navigate_to_pending_direct_call_from_active_account(
     spawn(async move {
         let Some((dm, instance_id)) = resolve_direct_message_for_active_account(
             request.target_user.id.clone(),
-            app_state,
+            nav_state,
             chat_data,
             client_manager,
         )
@@ -145,8 +146,8 @@ pub(crate) fn navigate_to_pending_direct_call_from_active_account(
             },
         };
 
-        app_state.batch(|st| {
-            st.nav.pending_direct_call = Some(PendingDirectCallRequest {
+        ui_overlays.batch(|o| {
+            o.pending_direct_call = Some(PendingDirectCallRequest {
                 account_id: dm.account_id.clone(),
                 dm_id: dm.id.clone(),
                 target_user: request.target_user,
@@ -321,7 +322,7 @@ async fn maybe_start_video_camera(start_video: bool, voice_state: BatchedSignal<
 /// instead of parking the current call and creating a new one.
 pub(crate) fn start_direct_call_from_active_account(
     request: DirectCallRequest,
-    app_state: BatchedSignal<AppState>,
+    nav_state: BatchedSignal<NavState>,
     chat_data: BatchedSignal<ChatData>,
     voice_state: BatchedSignal<VoiceState>,
     client_manager: BatchedSignal<ClientManager>,
@@ -335,13 +336,13 @@ pub(crate) fn start_direct_call_from_active_account(
 
         let resolved_dm = resolve_direct_message_for_active_account(
             request.target_user.id.clone(),
-            app_state,
+            nav_state,
             chat_data,
             client_manager,
         )
         .await;
 
-        let Some((account_id, instance_id)) = active_account_context(app_state, chat_data) else {
+        let Some((account_id, instance_id)) = active_account_context(nav_state, chat_data) else {
             return;
         };
 

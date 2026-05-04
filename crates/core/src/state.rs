@@ -27,6 +27,9 @@ pub use route_synced::RouteSynced;
 pub use voice_state::VoiceState;
 pub use self::use_reactive_effect::use_reactive_effect;
 pub use self::use_spawn_once::use_spawn_once;
+// Phase G.5 sub-signal types — re-exported so consumers can `use crate::state::NavState` etc.
+// NavState, NavigationState (alias), UiLayout, UiOverlays, UserPrefs are defined in this file
+// and automatically pub due to their pub visibility — no additional re-export needed.
 
 use poly_client::{BackendType, MemberPermissions};
 use poly_client::User;
@@ -163,7 +166,7 @@ pub enum View {
     Signup,
 }
 
-/// Current navigation state.
+/// Navigation state — route-synced fields only.
 ///
 /// **Route-synced fields** — `view`, `active_backend`, `active_instance_id`,
 /// `active_account_id`, `selected_server`, `selected_channel` — are wrapped in
@@ -171,8 +174,13 @@ pub enum View {
 /// `nav.selected_channel.as_deref()`, …). Writes are compile-locked to
 /// `crate::ui::routes::sync_route_to_app_state`. To change one of these from a
 /// click handler, call `nav.push(Route::…)` and let `on_update` write it.
+///
+/// Provided as a separate `BatchedSignal<NavState>` context (Phase G.5 of
+/// plan-solid-refactor-survey.md). UI components that only need route state
+/// subscribe ONLY to this signal and are not re-rendered when overlays or
+/// preferences change.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct NavigationState {
+pub struct NavState {
     /// Currently active view.
     pub view: RouteSynced<View>,
     /// The backend type of the account currently navigated to (e.g. Demo, Stoat).
@@ -194,6 +202,37 @@ pub struct NavigationState {
     pub selected_server: RouteSynced<Option<String>>,
     /// Currently selected channel ID.
     pub selected_channel: RouteSynced<Option<String>>,
+    /// Last-visited URL per account ID.
+    ///
+    /// Populated by `sync_route_to_app_state` on every account-scoped navigation.
+    /// Used by `FavoritesBar` to restore the account's previous page when switching.
+    /// Persisted to storage so it survives page reloads.
+    pub account_last_routes: std::collections::HashMap<String, String>,
+    /// Last selected DM/group route per account.
+    ///
+    /// Unlike `account_last_routes`, this only tracks DM conversation routes so
+    /// `/dms` can reopen the most recent conversation instead of the empty DM home.
+    /// Persisted to storage so it survives restarts.
+    pub account_last_dm_routes: std::collections::HashMap<String, String>,
+}
+
+/// Backward-compatibility type alias — code that still refers to `NavigationState`
+/// compiles unchanged. Remove once all references are updated.
+pub type NavigationState = NavState;
+
+/// Shell layout and sidebar visibility state.
+///
+/// Provided as a separate `BatchedSignal<UiLayout>` context (Phase G.5 of
+/// plan-solid-refactor-survey.md). Components that only toggle sidebar visibility
+/// subscribe here and are not re-rendered when nav or overlays change.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UiLayout {
+    /// Global shell layout mode.
+    pub layout_mode: LayoutMode,
+    /// Whether the menu / wing order is mirrored.
+    pub mirror_menu_layout: bool,
+    /// Whether chat message rows are mirrored.
+    pub mirror_chat_messages: bool,
     /// Whether right sidebar (user list) is visible.
     pub right_sidebar_visible: bool,
     /// Whether the DM/group right member sidebar is visible.
@@ -207,39 +246,137 @@ pub struct NavigationState {
     /// the contact opens the full contact-info detail panel. Closing that detail panel
     /// should return to the list rather than collapsing the entire wing.
     pub mobile_dm_contact_detail_visible: bool,
-    /// Last-visited URL per account ID.
+}
+
+impl Default for UiLayout {
+    fn default() -> Self {
+        Self {
+            layout_mode: LayoutMode::AutoWidth,
+            mirror_menu_layout: false,
+            mirror_chat_messages: false,
+            right_sidebar_visible: true,
+            dm_right_sidebar_visible: true,
+            mobile_dm_contact_detail_visible: false,
+        }
+    }
+}
+
+/// Overlay / modal / context-menu state.
+///
+/// Provided as a separate `BatchedSignal<UiOverlays>` context (Phase G.5 of
+/// plan-solid-refactor-survey.md). The 8 retired scalar `*_context_menu` fields
+/// are NOT here — they were removed in G.1. Only the stack-based menu state +
+/// per-modal fields remain.
+#[derive(Debug, Clone, PartialEq)]
+pub struct UiOverlays {
+    /// Stack of context menus (plan-context-menu-quality-control.md Phase A).
     ///
-    /// Populated by `sync_route_to_app_state` on every account-scoped navigation.
-    /// Used by `FavoritesBar` to restore the account's previous page when switching.
-    /// Persisted to storage so it survives page reloads.
-    pub account_last_routes: std::collections::HashMap<String, String>,
-    /// Last selected DM/group route per account.
-    ///
-    /// Unlike `account_last_routes`, this only tracks DM conversation routes so
-    /// `/dms` can reopen the most recent conversation instead of the empty DM home.
-    /// Persisted to storage so it survives restarts.
-    pub account_last_dm_routes: std::collections::HashMap<String, String>,
+    /// Empty = no overlay. Pushing opens a submenu; popping closes it.
+    /// Consumed by `ui::context_menu::host::ContextMenuStack`. All legacy
+    /// scalar `*_context_menu` fields were migrated to this stack
+    /// (Phase G.1 of plan-solid-refactor-survey.md).
+    pub context_menu_stack: Vec<ActiveContextMenu>,
     /// Currently open user profile modal target.
     ///
     /// When `Some(user)`, `UserProfileModal` renders a full-screen overlay showing
     /// the given user's profile. Set by `open_user_profile()`; cleared on close.
     /// Not serialised — cleared on every cold start.
-    #[serde(skip)]
     pub profile_modal_user: Option<User>,
-    /// Pending direct call intent awaiting route-backed confirmation/connection.
-    ///
-    /// Used by the temporary outgoing-call route: the route holds the lightweight
-    /// "calling…" UI, and once it dismisses back to the DM route, the DM route
-    /// consumes this request and starts the actual temporary call connection.
-    #[serde(skip)]
-    pub pending_direct_call: Option<PendingDirectCallRequest>,
     /// Thread panel — the thread ID currently open in the side panel on desktop.
     ///
     /// When `Some(thread_id)`, `ThreadPanel` renders alongside the parent channel
     /// chat. `None` means the panel is closed. Not serialised — always starts
     /// closed on a cold start so stale thread context never leaks across sessions.
-    #[serde(skip)]
     pub thread_panel_open: Option<String>,
+    /// Currently open moderation dialog (kick / ban / timeout / edit-channel).
+    ///
+    /// `None` = no dialog open. Set by context menu items; cleared by the
+    /// dialog's own `on_close` handler (which also resets to `None`).
+    pub active_moderation_dialog: Option<ModerationDialog>,
+    /// Pending direct call intent awaiting route-backed confirmation/connection.
+    ///
+    /// Used by the temporary outgoing-call route: the route holds the lightweight
+    /// "calling…" UI, and once it dismisses back to the DM route, the DM route
+    /// consumes this request and starts the actual temporary call connection.
+    pub pending_direct_call: Option<PendingDirectCallRequest>,
+}
+
+impl Default for UiOverlays {
+    fn default() -> Self {
+        Self {
+            context_menu_stack: Vec::new(),
+            profile_modal_user: None,
+            thread_panel_open: None,
+            active_moderation_dialog: None,
+            pending_direct_call: None,
+        }
+    }
+}
+
+/// User preference state — persisted to storage on change.
+///
+/// Provided as a separate `BatchedSignal<UserPrefs>` context (Phase G.5 of
+/// plan-solid-refactor-survey.md). Components that only read member-list
+/// preferences subscribe here and are not re-rendered on nav or overlay changes.
+#[derive(Debug, Clone, PartialEq)]
+pub struct UserPrefs {
+    /// Active settings section.
+    pub settings_section: SettingsSection,
+    /// How members are grouped in the member list sidebar.
+    pub member_list_grouping: MemberListGrouping,
+    /// How members are sorted within groups (or globally if ungrouped).
+    pub member_list_sort_order: MemberListSortOrder,
+    /// Whether offline/invisible members are shown in the sidebar.
+    pub member_list_show_offline: bool,
+    /// Active feed-scope for the forum (Lemmy-style) view.
+    ///
+    /// One of `"subscribed"`, `"local"`, or `"all"`. Updated by the
+    /// Subscribed / Local / All scope buttons in the forum sidebar
+    /// (`channel_list.rs`). Read by `ForumView` to key the `ClientView`
+    /// mount and pre-select the matching toolbar tab on re-mount.
+    pub forum_scope: String,
+    /// Active scope for the per-account overview sidebar toggles.
+    ///
+    /// One of `"servers"` (default), `"dms"`, `"friends"`, `"notifications"`.
+    /// Updated by the toggle buttons in `OverviewSidebar`. Read by the
+    /// account overview body to filter which categories of cards render.
+    pub overview_scope: String,
+    /// Whether the forum view shows posts or recent comments (Phase D).
+    ///
+    /// Toggled by the Posts | Comments pill in `ForumView`. Only meaningful
+    /// when the active backend's `BackendCapabilities::supports_comment_feed`
+    /// is `true`; all other backends always show posts.
+    pub view_filter: PostsOrComments,
+    /// One-shot seed for the next visit to the global search page.
+    ///
+    /// Used by account-scoped views to open the shared search route with a
+    /// narrowed initial type filter (for example DMs + Groups only).
+    pub search_type_seed: Option<Vec<String>>,
+    /// Last-known permissions for the currently active account in the
+    /// currently active server.
+    ///
+    /// Populated by Wave 2/3 backend agents as users navigate into server
+    /// channels. Used by `MessageContextMenu` and `UserRowContextMenu` to
+    /// gate moderation affordances without a blocking async lookup on every
+    /// right-click. `None` until the first successful `get_my_permissions`
+    /// call for the active server.
+    pub last_known_perms: Option<MemberPermissions>,
+}
+
+impl Default for UserPrefs {
+    fn default() -> Self {
+        Self {
+            settings_section: SettingsSection::Accounts,
+            member_list_grouping: MemberListGrouping::ByStatus,
+            member_list_sort_order: MemberListSortOrder::Alphabetical,
+            member_list_show_offline: true,
+            forum_scope: "subscribed".to_string(),
+            overview_scope: "servers".to_string(),
+            view_filter: PostsOrComments::Posts,
+            search_type_seed: None,
+            last_known_perms: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -251,7 +388,7 @@ pub struct PendingDirectCallRequest {
     pub allow_add_to_active_temporary: bool,
 }
 
-impl Default for NavigationState {
+impl Default for NavState {
     fn default() -> Self {
         Self {
             view: RouteSynced::new(View::DmsFriends),
@@ -260,14 +397,8 @@ impl Default for NavigationState {
             active_account_id: RouteSynced::new(None),
             selected_server: RouteSynced::new(None),
             selected_channel: RouteSynced::new(None),
-            right_sidebar_visible: true,
-            dm_right_sidebar_visible: true,
-            mobile_dm_contact_detail_visible: false,
             account_last_routes: std::collections::HashMap::new(),
             account_last_dm_routes: std::collections::HashMap::new(),
-            profile_modal_user: None,
-            pending_direct_call: None,
-            thread_panel_open: None,
         }
     }
 }
@@ -544,99 +675,38 @@ pub struct ChannelContextMenuState {
 }
 
 /// Global app state provided at the root level.
+///
+/// ## Phase G.5 Migration Notes
+///
+/// Four sub-signals are now provided as separate `BatchedSignal` contexts
+/// alongside `AppState` (plan-solid-refactor-survey.md Phase G.5):
+///
+/// | Context type | What it replaces |
+/// |---|---|
+/// | `BatchedSignal<NavState>` | Previously `app_state.read().nav` (route-synced fields + last-routes) |
+/// | `BatchedSignal<UiLayout>` | `layout_mode`, `mirror_*`, sidebar visibility (previously under `nav`) |
+/// | `BatchedSignal<UiOverlays>` | `context_menu_stack`, modals (previously `nav.profile_modal_user` etc.) |
+/// | `BatchedSignal<UserPrefs>` | `settings_section`, `member_list_*`, `forum_scope`, etc. |
+///
+/// `AppState` itself retains only the two singleton fields below.
+/// All field accesses should be migrated to the appropriate sub-signal.
 #[derive(Debug, Clone)]
 pub struct AppState {
     /// Whether the app has been set up (keys generated).
     pub is_setup_complete: bool,
-    /// Navigation state.
-    pub nav: NavigationState,
-    /// Active settings section.
-    pub settings_section: SettingsSection,
-    /// Global shell layout mode.
-    pub layout_mode: LayoutMode,
-    /// Whether the menu / wing order is mirrored.
-    pub mirror_menu_layout: bool,
-    /// Whether chat message rows are mirrored.
-    pub mirror_chat_messages: bool,
-    /// How members are grouped in the member list sidebar.
-    pub member_list_grouping: MemberListGrouping,
-    /// How members are sorted within groups (or globally if ungrouped).
-    pub member_list_sort_order: MemberListSortOrder,
-    /// Whether offline/invisible members are shown in the sidebar.
-    pub member_list_show_offline: bool,
-    /// One-shot seed for the next visit to the global search page.
-    ///
-    /// Used by account-scoped views to open the shared search route with a
-    /// narrowed initial type filter (for example DMs + Groups only).
-    pub search_type_seed: Option<Vec<String>>,
-    /// Stack of context menus (plan-context-menu-quality-control.md Phase A).
-    ///
-    /// Empty = no overlay. Pushing opens a submenu; popping closes it.
-    /// Consumed by `ui::context_menu::host::ContextMenuStack`. All legacy
-    /// scalar `*_context_menu` fields have been migrated to this stack
-    /// (Phase G.1 of plan-solid-refactor-survey.md).
-    pub context_menu_stack: Vec<ActiveContextMenu>,
     /// Pack B P28 — monotonic counter incremented on receipt of a
     /// [`poly_client::ClientEvent::SidebarInvalidated`] event from any
     /// active backend. `ClientSidebar` reads this into its `use_resource`
     /// dependency list so an increment forces a re-fetch of
     /// `get_sidebar_declaration`.
     pub sidebar_invalidated_tick: u32,
-    /// Last-known permissions for the currently active account in the
-    /// currently active server.
-    ///
-    /// Populated by Wave 2/3 backend agents as users navigate into server
-    /// channels. Used by `MessageContextMenu` and `UserRowContextMenu` to
-    /// gate moderation affordances without a blocking async lookup on every
-    /// right-click. `None` until the first successful `get_my_permissions`
-    /// call for the active server.
-    pub last_known_perms: Option<MemberPermissions>,
-    /// Currently open moderation dialog (kick / ban / timeout / edit-channel).
-    ///
-    /// `None` = no dialog open. Set by context menu items; cleared by the
-    /// dialog's own `on_close` handler (which also resets to `None`).
-    pub active_moderation_dialog: Option<ModerationDialog>,
-    /// Active feed-scope for the forum (Lemmy-style) view.
-    ///
-    /// One of `"subscribed"`, `"local"`, or `"all"`. Updated by the
-    /// Subscribed / Local / All scope buttons in the forum sidebar
-    /// (`channel_list.rs`). Read by `ForumView` to key the `ClientView`
-    /// mount and pre-select the matching toolbar tab on re-mount.
-    pub forum_scope: String,
-    /// Active scope for the per-account overview sidebar toggles.
-    ///
-    /// One of `"servers"` (default), `"dms"`, `"friends"`, `"notifications"`.
-    /// Updated by the toggle buttons in `OverviewSidebar`. Read by the
-    /// account overview body to filter which categories of cards render.
-    pub overview_scope: String,
-    /// Whether the forum view shows posts or recent comments (Phase D).
-    ///
-    /// Toggled by the Posts | Comments pill in `ForumView`. Only meaningful
-    /// when the active backend's `BackendCapabilities::supports_comment_feed`
-    /// is `true`; all other backends always show posts.
-    pub view_filter: PostsOrComments,
 }
 
 impl Default for AppState {
     fn default() -> Self {
         Self {
             is_setup_complete: false,
-            nav: NavigationState::default(),
-            settings_section: SettingsSection::Accounts,
-            layout_mode: LayoutMode::AutoWidth,
-            mirror_menu_layout: false,
-            mirror_chat_messages: false,
-            member_list_grouping: MemberListGrouping::ByStatus,
-            member_list_sort_order: MemberListSortOrder::Alphabetical,
-            member_list_show_offline: true,
-            search_type_seed: None,
-            context_menu_stack: Vec::new(),
             sidebar_invalidated_tick: 0,
-            last_known_perms: None,
-            active_moderation_dialog: None,
-            forum_scope: "subscribed".to_string(),
-            overview_scope: "servers".to_string(),
-            view_filter: PostsOrComments::Posts,
         }
     }
 }

@@ -30,6 +30,7 @@ use poly_ui_macros::{context_menu, ui_action};
 #[component]
 pub fn ChannelContextMenuInner(menu: ChannelContextMenuState, close: EventHandler<()>) -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
+    let nav_state: BatchedSignal<crate::state::NavState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
 
     let channel_id = menu.channel_id.clone();
@@ -75,14 +76,12 @@ pub fn ChannelContextMenuInner(menu: ChannelContextMenuState, close: EventHandle
                 let server_id = menu.server_id.clone();
                 let account_id = menu.account_id.clone();
                 let channel_id_for_settings = channel_id.clone();
-                let backend_slug = app_state
+                let backend_slug = nav_state
                     .read() // poly-lint: allow render-time-read — nav snapshot for channel settings route; subscription intentional
-                    .nav
                     .active_backend
                     .cloned().map_or_else(|| "demo".to_string(), |b| b.slug().to_string());
-                let instance_id = app_state
+                let instance_id = nav_state
                     .read() // poly-lint: allow render-time-read — nav snapshot for instance_id route param
-                    .nav
                     .active_instance_id
                     .cloned()
                     .unwrap_or_default();

@@ -17,7 +17,7 @@ use crate::state::BatchedSignal;
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::state::chat_data::user_color;
-use crate::state::{AppState, ChatData};
+use crate::state::{AppState, ChatData, UiOverlays};
 use crate::ui::account::common::user_profile_modal::open_user_profile;
 use dioxus::prelude::*;
 use poly_client::{PresenceStatus, User};
@@ -46,6 +46,9 @@ fn presence_dot_class(status: &PresenceStatus) -> &'static str {
 #[component]
 pub fn DmUserSidebar() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
+    let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
+    let ui_overlays: BatchedSignal<UiOverlays> = use_context();
+    let ui_layout: crate::state::BatchedSignal<crate::state::UiLayout> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
 
@@ -54,8 +57,8 @@ pub fn DmUserSidebar() -> Element {
     } else {
         chat_data.read().members.clone()
     };
-    let group_id = app_state.read().nav.selected_channel.cloned();
-    let active_account_id = app_state.read().nav.active_account_id.cloned();
+    let group_id = nav.read().selected_channel.cloned();
+    let active_account_id = nav.read().active_account_id.cloned();
     let member_count = members.len();
 
     rsx! {
@@ -66,7 +69,7 @@ pub fn DmUserSidebar() -> Element {
                     class: "dm-sidebar-close",
                     title: "Close member list",
                     onclick: move |_| {
-                        app_state.batch(|st| st.nav.dm_right_sidebar_visible = false);
+                        ui_layout.batch(|l| l.dm_right_sidebar_visible = false);
                     },
                     "×"
                 }
@@ -83,7 +86,7 @@ pub fn DmUserSidebar() -> Element {
                             account_id: active_account_id.clone().unwrap_or_default(),
                             chat_data,
                             client_manager,
-                            app_state,
+                            ui_overlays,
                         }
                     }
                 }
@@ -103,7 +106,7 @@ fn DmMemberRow(
     account_id: String,
     chat_data: BatchedSignal<ChatData>,
     client_manager: BatchedSignal<ClientManager>,
-    app_state: BatchedSignal<AppState>,
+    ui_overlays: BatchedSignal<UiOverlays>,
 ) -> Element {
     let color = user_color(&member.id);
     let first_char: String = member
@@ -121,7 +124,7 @@ fn DmMemberRow(
     rsx! {
         div {
             class: "dm-member-row",
-            onclick: move |_| open_user_profile(app_state, member.clone()),
+            onclick: move |_| open_user_profile(ui_overlays, member.clone()),
             // Avatar with presence dot
             div { class: "dm-member-avatar-wrap",
                 div {

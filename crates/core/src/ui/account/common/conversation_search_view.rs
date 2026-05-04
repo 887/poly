@@ -169,6 +169,7 @@ fn ConversationTypeFilters(enabled_types: Signal<std::collections::HashSet<Strin
 #[component]
 pub fn ConversationSearchView() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
+    let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let query = use_signal(String::new);
     let enabled_types: Signal<std::collections::HashSet<String>> = use_signal(|| {
@@ -180,7 +181,7 @@ pub fn ConversationSearchView() -> Element {
     let mut dm_visible: Signal<usize> = use_signal(|| 20_usize);
     let mut grp_visible: Signal<usize> = use_signal(|| 20_usize);
 
-    let active_account_id = app_state.read().nav.active_account_id.cloned().unwrap_or_default();
+    let active_account_id = nav.read().active_account_id.cloned().unwrap_or_default();
     let active_user_id = chat_data
         .read()
         .account_sessions

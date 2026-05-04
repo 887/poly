@@ -257,7 +257,7 @@ isolate.
       `chat_view/message_list.rs`, `chat_view/composer.rs`,
       `chat_view/context_menu_overlay.rs` (separate task). — shipped in this commit
 
-### Phase G — `AppState` + `ChatData` slice signals (~2 weeks, phased) — in progress: G.1 + G.2 + G.3 + G.4 shipped
+### Phase G — `AppState` + `ChatData` slice signals (~2 weeks, phased) — G.1–G.5 shipped
 
 The biggest structural move. Land per-slice, not big-bang. Each
 sub-step is independently shippable; later steps benefit from earlier
@@ -277,8 +277,8 @@ ones (smaller signal subscriptions = less re-render churn).
       23 manual-clear sites (`cd.channels.clear(); cd.messages.clear();
       cd.members.clear()`) to typed actions. Source: D.1.3.
       — shipped in commit (see below)
-- [ ] **G.5** Split remaining `AppState` into `NavState`, `UiLayout`,
-      `UiOverlays`, `UserPrefs`. Source: D.2 split table.
+- [x] **G.5** Split remaining `AppState` into `NavState`, `UiLayout`,
+      `UiOverlays`, `UserPrefs`. Source: D.2 split table. — shipped in commit (see jj describe below)
 - [ ] **G.6** Split remaining `ChatData` into `ChatLists`,
       `ChatViewState`, `AccountSessions`. Add by-id `HashMap` shadows
       so the 14 linear `iter().find` lookups become O(1). Source: D.3.

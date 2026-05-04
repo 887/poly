@@ -61,7 +61,7 @@ use crate::ui::client_ui::{ComposerHooks, MessageActions};
 use poly_client::ComposerSlot;
 use crate::i18n::{t, t_args};
 use crate::state::chat_data::{backend_badge, format_file_size, user_color};
-use crate::state::{AppState, ChatData, VoiceState, use_reactive_effect, use_spawn_once};
+use crate::state::{AppState, ChatData, UiOverlays, VoiceState, use_reactive_effect, use_spawn_once};
 use crate::ui::split_shell::RightWingShell;
 use dioxus::html::HasFileData;
 use dioxus::prelude::*;
@@ -270,6 +270,7 @@ pub(crate) async fn open_message_hit(
     client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
     mut app_state: BatchedSignal<AppState>,
+    nav: BatchedSignal<crate::state::NavState>,
 ) -> Option<(Route, String)> {
     let target_message_id = hit.message.id.clone();
     let target_channel_id = hit.channel_id.clone();
@@ -291,8 +292,8 @@ pub(crate) async fn open_message_hit(
     }
 
     let target_server_id = hit.server_id.clone().or(current_server_id);
-    let active_account_id = app_state.read().nav.active_account_id.cloned();
-    let active_instance_id = app_state.read().nav.active_instance_id.cloned();
+    let active_account_id = nav.read().active_account_id.cloned();
+    let active_instance_id = nav.read().active_instance_id.cloned();
 
     let backend_info = if let Some(ref server_id) = target_server_id {
         client_manager
@@ -307,7 +308,7 @@ pub(crate) async fn open_message_hit(
                 (
                     account_id.clone(),
                     backend,
-                    app_state.read().nav.active_backend.cloned(),
+                    nav.read().active_backend.cloned(),
                 )
             })
     } else {
@@ -511,7 +512,7 @@ fn use_chat_view_effects(signals: &ChatViewSignals, ctx: &ChatViewMarkupCtx) {
     effects::use_search_messages_effect(signals, ctx);
     effects::use_pinned_messages_effect(signals);
     effects::use_history_state_effect(signals);
-    effects::use_member_list_preferences_effect(signals.app_state);
+    effects::use_member_list_preferences_effect(signals.ui_layout);
     effects::use_mobile_layout_resize_rerender_effect(signals.mobile_layout_resize_tick);
     effects::use_mobile_side_column_effect(signals, ctx);
     effects::use_command_preload_effect(signals, &ctx.channel_id);
@@ -606,6 +607,7 @@ struct MessageListScrollWorkCtx {
     search_query_value: String,
     virtual_window: Signal<MessageVirtualWindowState>,
     app_state: BatchedSignal<AppState>,
+    nav: BatchedSignal<crate::state::NavState>,
     client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
     top_edge_armed: Arc<AtomicBool>,
@@ -693,6 +695,7 @@ fn spawn_message_list_scroll_work(mut ctx: MessageListScrollWorkCtx) {
                 ctx.history_state.batch(|h| h.loading_before = true);
                 load_older_messages(
                     ctx.app_state,
+                    ctx.nav,
                     ctx.client_manager,
                     ctx.chat_data,
                     ctx.history_state,
@@ -708,6 +711,7 @@ fn spawn_message_list_scroll_work(mut ctx: MessageListScrollWorkCtx) {
                 ctx.history_state.batch(|h| h.loading_after = true);
                 load_newer_messages(
                     ctx.app_state,
+                    ctx.nav,
                     ctx.client_manager,
                     ctx.chat_data,
                     ctx.history_state,
@@ -909,7 +913,7 @@ fn mobile_server_right_wing_active(ctx: &ChatViewMarkupCtx) -> bool {
 }
 
 fn close_chat_side_column_state(
-    app_state: BatchedSignal<AppState>,
+    ui_layout: BatchedSignal<crate::state::UiLayout>,
     mut utility_panel: Signal<Option<ChatUtilityPanel>>,
     mut show_search_filters: Signal<bool>,
     is_group_channel: bool,
@@ -927,12 +931,12 @@ fn close_chat_side_column_state(
     }
 
     // Collapse 2-3 writes into ONE batch — see CLAUDE.md § Common WASM-hang causes #1.
-    app_state.batch(|st| {
+    ui_layout.batch(|l| {
         if is_group_channel || is_dm_channel {
-            st.nav.dm_right_sidebar_visible = false;
-            st.nav.mobile_dm_contact_detail_visible = false;
+            l.dm_right_sidebar_visible = false;
+            l.mobile_dm_contact_detail_visible = false;
         } else {
-            st.nav.right_sidebar_visible = false;
+            l.right_sidebar_visible = false;
         }
     });
 }
@@ -941,6 +945,9 @@ fn close_chat_side_column_state(
 #[allow(clippy::needless_pass_by_value)]
 fn render_mobile_chat_header_right_toggle(ctx: ChatViewMarkupCtx) -> Element {
     let app_state = ctx.app_state;
+    let nav_state = ctx.nav;
+    let ui_overlays = ctx.ui_overlays;
+    let ui_layout = ctx.ui_layout;
     let mut utility_panel = ctx.utility_panel;
     let mut show_search_filters = ctx.show_search_filters;
     let right_wing_open = ctx.member_list_visible || ctx.utility_panel.read().is_some();
@@ -1000,7 +1007,8 @@ fn render_mobile_chat_header_right_toggle(ctx: ChatViewMarkupCtx) -> Element {
                                     start_video: false,
                                     allow_add_to_active_temporary: false,
                                 },
-                                app_state,
+                                nav_state,
+                                ui_overlays,
                                 chat_data,
                                 client_manager,
                                 navigator(),
@@ -1020,7 +1028,8 @@ fn render_mobile_chat_header_right_toggle(ctx: ChatViewMarkupCtx) -> Element {
                                     start_video: true,
                                     allow_add_to_active_temporary: false,
                                 },
-                                app_state,
+                                nav_state,
+                                ui_overlays,
                                 chat_data,
                                 client_manager,
                                 navigator(),
@@ -1036,9 +1045,9 @@ fn render_mobile_chat_header_right_toggle(ctx: ChatViewMarkupCtx) -> Element {
                 aria_label: "{toggle_label}",
                 onclick: move |_| {
                     let currently_open = if is_dm_channel || is_group_channel {
-                        app_state.read().nav.dm_right_sidebar_visible
+                        ui_layout.read().dm_right_sidebar_visible
                     } else {
-                        app_state.read().nav.right_sidebar_visible
+                        ui_layout.read().right_sidebar_visible
                     };
                     let is_opening = !currently_open;
 
@@ -1047,17 +1056,17 @@ fn render_mobile_chat_header_right_toggle(ctx: ChatViewMarkupCtx) -> Element {
 
                     if is_opening {
                         show_search_filters.set(false);
-                        app_state.batch(|st| {
+                        ui_layout.batch(|l| {
                             if is_dm_channel || is_group_channel {
-                                st.nav.dm_right_sidebar_visible = true;
-                                st.nav.mobile_dm_contact_detail_visible = false;
+                                l.dm_right_sidebar_visible = true;
+                                l.mobile_dm_contact_detail_visible = false;
                             } else {
-                                st.nav.right_sidebar_visible = true;
+                                l.right_sidebar_visible = true;
                             }
                         });
                     } else {
                         close_chat_side_column_state(
-                            app_state,
+                            ui_layout,
                             utility_panel,
                             show_search_filters,
                             is_group_channel,
@@ -1095,7 +1104,7 @@ fn render_chat_body_shell(ctx: ChatViewMarkupCtx) -> Element {
     let mobile_layout = runtime_mobile_ui_active();
     // 5.2 — Thread panel is visible when a thread_id is stored in nav state
     // and we are not in mobile layout (mobile uses the full-page ThreadView route).
-    let thread_panel_open = ctx.app_state.read().nav.thread_panel_open.is_some();
+    let thread_panel_open = ctx.ui_overlays.read().thread_panel_open.is_some();
 
     rsx! {
         div { class: "chat-body-shell",
@@ -1129,6 +1138,7 @@ fn render_chat_content_column(ctx: ChatViewMarkupCtx) -> Element {
 fn render_message_list(ctx: ChatViewMarkupCtx) -> Element {
     let loading = ctx.loading;
     let app_state = ctx.app_state;
+    let nav = ctx.nav;
     let client_manager = ctx.client_manager;
     let chat_data = ctx.chat_data;
     let history_state = ctx.history_state;
@@ -1213,6 +1223,7 @@ fn render_message_list(ctx: ChatViewMarkupCtx) -> Element {
                         search_query_value: scroll_search_query_value,
                         virtual_window,
                         app_state,
+                        nav,
                         client_manager,
                         chat_data,
                         top_edge_armed: scroll_top_edge_armed,
@@ -1253,11 +1264,12 @@ fn render_message_list_loading_overlays(ctx: ChatViewMarkupCtx) -> Element {
 
 async fn load_older_messages(
     app_state: BatchedSignal<AppState>,
+    nav: BatchedSignal<crate::state::NavState>,
     client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
     history_state: BatchedSignal<ChatHistoryUiState>,
 ) {
-    let Some(active_channel_id) = app_state.read().nav.selected_channel.cloned() else {
+    let Some(active_channel_id) = nav.read().selected_channel.cloned() else {
         history_state.batch(|h| h.loading_before = false);
         return;
     };
@@ -1273,12 +1285,12 @@ async fn load_older_messages(
         });
         return;
     };
-    let backend = if let Some(server_id) = app_state.peek().nav.selected_server.cloned() {
+    let backend = if let Some(server_id) = nav.peek().selected_server.cloned() {
         client_manager
             .peek()
             .get_backend_for_server(&server_id)
             .map(|(_, handle)| handle)
-    } else if let Some(account_id) = app_state.peek().nav.active_account_id.cloned() {
+    } else if let Some(account_id) = nav.peek().active_account_id.cloned() {
         client_manager.peek().get_backend(&account_id)
     } else {
         None
@@ -1351,11 +1363,12 @@ async fn load_older_messages(
 
 async fn load_newer_messages(
     app_state: BatchedSignal<AppState>,
+    nav: BatchedSignal<crate::state::NavState>,
     client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
     history_state: BatchedSignal<ChatHistoryUiState>,
 ) {
-    let Some(active_channel_id) = app_state.read().nav.selected_channel.cloned() else {
+    let Some(active_channel_id) = nav.read().selected_channel.cloned() else {
         history_state.batch(|h| h.loading_after = false);
         return;
     };
@@ -1371,12 +1384,12 @@ async fn load_newer_messages(
         });
         return;
     };
-    let backend = if let Some(server_id) = app_state.peek().nav.selected_server.cloned() {
+    let backend = if let Some(server_id) = nav.peek().selected_server.cloned() {
         client_manager
             .peek()
             .get_backend_for_server(&server_id)
             .map(|(_, handle)| handle)
-    } else if let Some(account_id) = app_state.peek().nav.active_account_id.cloned() {
+    } else if let Some(account_id) = nav.peek().active_account_id.cloned() {
         client_manager.peek().get_backend(&account_id)
     } else {
         None
@@ -1595,6 +1608,7 @@ fn render_jump_to_present(ctx: ChatViewMarkupCtx) -> Element {
     let new_count = *ctx.new_messages_while_scrolled_up.read();
     let mut new_messages_while_scrolled_up = ctx.new_messages_while_scrolled_up;
     let app_state = ctx.app_state;
+    let nav = ctx.nav;
     let client_manager = ctx.client_manager;
     let chat_data = ctx.chat_data;
     let history_state = ctx.history_state;
@@ -1608,7 +1622,7 @@ fn render_jump_to_present(ctx: ChatViewMarkupCtx) -> Element {
                     if history_state.read().has_more_after && !history_state.read().loading_after {
                         history_state.batch(|h| h.loading_after = true);
                         spawn(async move {
-                            load_newer_messages(app_state, client_manager, chat_data, history_state).await;
+                            load_newer_messages(app_state, nav, client_manager, chat_data, history_state).await;
                             // RAF-deferred so it runs after Dioxus applies the new messages to the DOM.
                             request_scroll_to_bottom_deferred();
                         });
@@ -1829,13 +1843,7 @@ fn render_message_actions(
             // per-message actions render *after* host universal items so
             // host controls stay in stable positions.
             {
-                let account_id = ctx
-                    .app_state
-                    .read()
-                    .nav
-                    .active_account_id
-                    .cloned()
-                    .unwrap_or_default();
+                let account_id = ctx.nav.read().active_account_id.cloned().unwrap_or_default();
                 let channel_id = ctx.channel_id.clone().unwrap_or_default();
                 if !account_id.is_empty() && !channel_id.is_empty() {
                     rsx! {
@@ -1947,12 +1955,8 @@ fn render_message_input_area(ctx: ChatViewMarkupCtx) -> Element {
     // Pack F (P59) — composer gating on read-only backends. HN / GitHub
     // declare `MessagingModel::ReadOnly`; replace the textarea+send with a
     // static notice so users don't type into a control that silently no-ops.
-    let backend_slug = ctx
-        .app_state
-        .read()
-        .nav
-        .active_backend
-        .cloned().map_or_else(|| "demo".to_string(), |b| b.slug().to_string());
+    let backend_slug = ctx.nav.read().active_backend.cloned()
+        .map_or_else(|| "demo".to_string(), |b| b.slug().to_string());
     let composer_writable =
         ctx.client_manager.peek().capabilities_for_slug(&backend_slug).composer_writable();
 
@@ -1975,7 +1979,7 @@ fn render_message_input_area(ctx: ChatViewMarkupCtx) -> Element {
 fn render_message_input_enabled(ctx: ChatViewMarkupCtx) -> Element {
     // B.4 — DraftBanner: read the active account + channel from app_state/nav.
     let (active_account_id, active_chat_id) = {
-        let account_id = ctx.app_state.read().nav.active_account_id
+        let account_id = ctx.nav.read().active_account_id
             .as_deref()
             .unwrap_or("")
             .to_string();
@@ -2091,6 +2095,7 @@ fn render_message_input_row(ctx: ChatViewMarkupCtx) -> Element {
     let client_manager = ctx.client_manager;
     let chat_data = ctx.chat_data;
     let app_state = ctx.app_state;
+    let nav = ctx.nav;
     // Typing-mode persists per chat-view mount (i.e. across channel switches
     // within the same session). Owned here so the textarea oninput and the
     // toolbar button can both read it.
@@ -2107,7 +2112,7 @@ fn render_message_input_row(ctx: ChatViewMarkupCtx) -> Element {
         reply_target,
         client_manager,
         chat_data,
-        app_state,
+        nav,
         new_messages_while_scrolled_up: ctx.new_messages_while_scrolled_up,
     };
 
@@ -2115,13 +2120,7 @@ fn render_message_input_row(ctx: ChatViewMarkupCtx) -> Element {
     // composer buttons are mounted per-slot around the input. The chat view
     // itself stays untouched (D8 preservation) — only these three
     // `ComposerHooks` instances hook into the plugin surface.
-    let active_account_id = ctx
-        .app_state
-        .read()
-        .nav
-        .active_account_id
-        .cloned()
-        .unwrap_or_default();
+    let active_account_id = ctx.nav.read().active_account_id.cloned().unwrap_or_default();
     let channel_for_hooks = channel_id.clone().unwrap_or_default();
     let has_channel =
         !active_account_id.is_empty() && !channel_for_hooks.is_empty();
@@ -2171,6 +2170,7 @@ fn render_message_input_row(ctx: ChatViewMarkupCtx) -> Element {
                                         real_typing_channel.clone(),
                                         typing_send_in_flight,
                                         app_state,
+                                        nav,
                                         client_manager,
                                     );
                                 }
@@ -2225,13 +2225,14 @@ fn maybe_send_real_typing(
     channel_id: Option<String>,
     mut in_flight: Signal<bool>,
     app_state: BatchedSignal<AppState>,
+    nav: BatchedSignal<crate::state::NavState>,
     client_manager: BatchedSignal<ClientManager>,
 ) {
     if *in_flight.peek() { return; }
     let Some(channel_id) = channel_id else { return };
     in_flight.set(true);
-    let account_id = app_state.read().nav.active_account_id.cloned();
-    let server_id = app_state.read().nav.selected_server.cloned();
+    let account_id = nav.read().active_account_id.cloned();
+    let server_id = nav.read().selected_server.cloned();
     spawn(async move {
         let handle = if let Some(ref sid) = server_id {
             client_manager.peek().get_backend_for_server(sid).map(|(_, b)| b)
@@ -2291,6 +2292,7 @@ impl TypingMode {
 #[component]
 fn TypingModeButton(mut typing_mode: Signal<TypingMode>) -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
+    let nav: BatchedSignal<crate::state::NavState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let mode = *typing_mode.read();
 
@@ -2313,9 +2315,9 @@ fn TypingModeButton(mut typing_mode: Signal<TypingMode>) -> Element {
 
                 // Simulator mode: fire-and-forget 60s heartbeat. Loop bails
                 // out as soon as the user clicks again to leave Simulator.
-                let channel_id = app_state.read().nav.selected_channel.cloned();
-                let account_id = app_state.read().nav.active_account_id.cloned();
-                let server_id = app_state.read().nav.selected_server.cloned();
+                let channel_id = nav.read().selected_channel.cloned();
+                let account_id = nav.read().active_account_id.cloned();
+                let server_id = nav.read().selected_server.cloned();
                 let Some(channel_id) = channel_id else { return };
                 let mode_signal = typing_mode;
                 spawn(async move {
@@ -2388,7 +2390,7 @@ struct ComposerRuntimeCtx {
     reply_target: Signal<Option<MessageReplyPreview>>,
     client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
-    app_state: BatchedSignal<AppState>,
+    nav: BatchedSignal<crate::state::NavState>,
     new_messages_while_scrolled_up: Signal<u32>,
 }
 
@@ -2446,7 +2448,7 @@ fn handle_composer_keydown(
                 reply_to_message_id,
                 client_manager: ctx.client_manager,
                 chat_data: ctx.chat_data,
-                app_state: ctx.app_state,
+                nav: ctx.nav,
                 new_messages_while_scrolled_up: ctx.new_messages_while_scrolled_up,
             })
             .await;
@@ -2522,7 +2524,7 @@ fn render_send_button(ctx: ChatViewMarkupCtx) -> Element {
     let mut reply_target = ctx.reply_target;
     let client_manager = ctx.client_manager;
     let chat_data = ctx.chat_data;
-    let app_state = ctx.app_state;
+    let nav = ctx.nav;
     let new_messages_while_scrolled_up = ctx.new_messages_while_scrolled_up;
 
     let has_content = !message_input.read().is_empty() || !pending_attachments.read().is_empty();
@@ -2558,7 +2560,7 @@ fn render_send_button(ctx: ChatViewMarkupCtx) -> Element {
                                 reply_to_message_id,
                                 client_manager,
                                 chat_data,
-                                app_state,
+                                nav,
                                 new_messages_while_scrolled_up,
                             })
                             .await;
@@ -2599,6 +2601,7 @@ fn render_input_emoji_picker(ctx: ChatViewMarkupCtx) -> Element {
     let mut show_input_emoji = ctx.show_input_emoji;
     let markdown_enabled = ctx.markdown_enabled;
     let channel_id = ctx.channel_id.clone();
+    let nav = ctx.nav;
     let client_manager = ctx.client_manager;
 
     // Hooks must be called before any early return for stable hook ordering.
@@ -2611,7 +2614,7 @@ fn render_input_emoji_picker(ctx: ChatViewMarkupCtx) -> Element {
         let app_state = app_state_for_emoji;
         spawn(async move {
             let Some(ref cid) = channel_id else { return };
-            let Some(account_id) = app_state.peek().nav.active_account_id.cloned() else { return };
+            let Some(account_id) = nav.peek().active_account_id.cloned() else { return };
             if let Ok(emojis) = client_manager.peek().with_backend(&account_id, async |b| {
                 b.get_available_emojis(cid).await
             }).await {
@@ -2672,6 +2675,7 @@ fn render_chat_side_column(ctx: ChatViewMarkupCtx) -> Element {
 #[allow(clippy::needless_pass_by_value)]
 fn render_chat_tools_panel(ctx: ChatViewMarkupCtx) -> Element {
     let app_state = ctx.app_state;
+    let ui_layout = ctx.ui_layout;
     let mut utility_panel = ctx.utility_panel;
     let notifications_muted = ctx.notifications_muted;
     let mut show_search_filters = ctx.show_search_filters;
@@ -2689,7 +2693,7 @@ fn render_chat_tools_panel(ctx: ChatViewMarkupCtx) -> Element {
                     title: t("action-close"),
                     onclick: move |_| {
                         close_chat_side_column_state(
-                            app_state,
+                            ui_layout,
                             utility_panel,
                             show_search_filters,
                             is_group_channel,
@@ -2714,7 +2718,7 @@ fn render_chat_tools_panel(ctx: ChatViewMarkupCtx) -> Element {
                                 Some(ChatUtilityPanel::Settings)
                             };
                             utility_panel.set(next);
-                            app_state.batch(|st| st.nav.right_sidebar_visible = false);
+                            ui_layout.batch(|l| l.right_sidebar_visible = false);
                         },
                         span { class: "chat-settings-btn-icon",
                             span { class: "chat-settings-btn-icon-cog", "⚙️" }
@@ -2734,7 +2738,7 @@ fn render_chat_tools_panel(ctx: ChatViewMarkupCtx) -> Element {
                                 Some(ChatUtilityPanel::Threads)
                             };
                             utility_panel.set(next);
-                            app_state.batch(|st| st.nav.right_sidebar_visible = false);
+                            ui_layout.batch(|l| l.right_sidebar_visible = false);
                         },
                         "🧵"
                     }
@@ -2749,7 +2753,7 @@ fn render_chat_tools_panel(ctx: ChatViewMarkupCtx) -> Element {
                                 Some(ChatUtilityPanel::Pinned)
                             };
                             utility_panel.set(next);
-                            app_state.batch(|st| st.nav.right_sidebar_visible = false);
+                            ui_layout.batch(|l| l.right_sidebar_visible = false);
                         },
                         "📌"
                     }
@@ -2763,6 +2767,7 @@ fn render_chat_tools_panel(ctx: ChatViewMarkupCtx) -> Element {
                             is_group_channel,
                             is_dm_channel,
                             app_state,
+                            ui_layout,
                         )
                     }
                     {render_agent_toggle_button(app_state, utility_panel, show_search_filters, is_dm_channel, is_group_channel)}
@@ -2773,13 +2778,13 @@ fn render_chat_tools_panel(ctx: ChatViewMarkupCtx) -> Element {
                             utility_panel.set(None);
                             show_search_filters.set(false);
                             // Opening members: close agent panel — collapse 2 writes to 1 batch.
-                            app_state.batch(|st| {
+                            ui_layout.batch(|l| {
                                 if is_dm_channel || is_group_channel {
-                                    st.nav.dm_right_sidebar_visible = true;
-                                    st.nav.mobile_dm_contact_detail_visible = false;
+                                    l.dm_right_sidebar_visible = true;
+                                    l.mobile_dm_contact_detail_visible = false;
                                 } else {
-                                    let current = st.nav.right_sidebar_visible;
-                                    st.nav.right_sidebar_visible = !current;
+                                    let current = l.right_sidebar_visible;
+                                    l.right_sidebar_visible = !current;
                                 }
                             });
                         },
@@ -2810,6 +2815,8 @@ fn render_chat_utility_rail(
     let pinned_hit_channel = ctx.pinned_hit_channel.clone();
     let nav_for_search = ctx.nav_for_search;
     let nav_for_pinned = ctx.nav_for_pinned;
+    let nav_state_for_search = ctx.nav;
+    let nav_state_for_pinned = ctx.nav;
     let client_manager = ctx.client_manager;
     let chat_data = ctx.chat_data;
     let app_state = ctx.app_state;
@@ -2840,6 +2847,7 @@ fn render_chat_utility_rail(
                     .as_ref()
                     .map(|server| server.id.clone());
                 let nav = nav_for_search;
+                let nav_state = nav_state_for_search;
                 spawn(async move {
                     if let Some((route, message_id)) = open_message_hit(
                             hit,
@@ -2848,6 +2856,7 @@ fn render_chat_utility_rail(
                             client_manager,
                             chat_data,
                             app_state,
+                            nav_state,
                         )
                         .await
                     {
@@ -2873,6 +2882,7 @@ fn render_chat_utility_rail(
                     .as_ref()
                     .map(|server| server.id.clone());
                 let nav = nav_for_pinned;
+                let nav_state = nav_state_for_pinned;
                 spawn(async move {
                     if let Some((route, message_id)) = open_message_hit(
                             hit,
@@ -2881,6 +2891,7 @@ fn render_chat_utility_rail(
                             client_manager,
                             chat_data,
                             app_state,
+                            nav_state,
                         )
                         .await
                     {
@@ -3092,8 +3103,8 @@ fn AttachmentsView(
     message_text: String,
     is_own: bool,
 ) -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
-    let nav = navigator();
+    let nav_state: BatchedSignal<crate::state::NavState> = use_context();
+    let router_nav = navigator();
 
     rsx! {
         div { class: "message-attachments",
@@ -3133,22 +3144,22 @@ fn AttachmentsView(
                                     }));
                                 },
                                 onclick: move |_| {
-                                    let nav_state = app_state.read().nav.clone();
-                                    let Some(backend) = nav_state.active_backend.cloned() else {
+                                    let nav_snap = nav_state.read();
+                                    let Some(backend) = nav_snap.active_backend.cloned() else {
                                         return;
                                     };
-                                    let Some(instance_id) = nav_state.active_instance_id.cloned() else {
+                                    let Some(instance_id) = nav_snap.active_instance_id.cloned() else {
                                         return;
                                     };
-                                    let Some(account_id) = nav_state.active_account_id.cloned() else {
+                                    let Some(account_id) = nav_snap.active_account_id.cloned() else {
                                         return;
                                     };
-                                    let Some(channel_id) = nav_state.selected_channel.cloned() else {
+                                    let Some(channel_id) = nav_snap.selected_channel.cloned() else {
                                         return;
                                     };
 
-                                    if let Some(server_id) = nav_state.selected_server.cloned() {
-                                        nav.push(Route::ServerMediaViewerRoute {
+                                    if let Some(server_id) = nav_snap.selected_server.cloned() {
+                                        router_nav.push(Route::ServerMediaViewerRoute {
                                             backend: backend.slug().to_string(),
                                             instance_id,
                                             account_id,
@@ -3158,7 +3169,7 @@ fn AttachmentsView(
                                             attachment_index: idx,
                                         });
                                     } else {
-                                        nav.push(Route::DmMediaViewerRoute {
+                                        router_nav.push(Route::DmMediaViewerRoute {
                                             backend: backend.slug().to_string(),
                                             instance_id,
                                             account_id,
@@ -3320,7 +3331,7 @@ struct SendMessageCtx {
     reply_to_message_id: Option<String>,
     client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
-    app_state: BatchedSignal<AppState>,
+    nav: BatchedSignal<crate::state::NavState>,
     /// Reset to 0 after sending so the Jump to Present badge clears.
     new_messages_while_scrolled_up: Signal<u32>,
 }
@@ -3334,19 +3345,19 @@ async fn send_message(ctx: SendMessageCtx) {
         reply_to_message_id,
         client_manager,
         chat_data,
-        app_state,
+        nav,
         mut new_messages_while_scrolled_up,
     } = ctx;
     // Resolve the backend: server channels use server_id lookup; DM channels fall back to
     // active_account_id so messages still send when no server is selected.
     let backend = {
-        let state = app_state.peek();
-        if let Some(ref server_id) = *state.nav.selected_server {
+        let state = nav.peek();
+        if let Some(ref server_id) = *state.selected_server {
             client_manager
                 .peek()
                 .get_backend_for_server(server_id)
                 .map(|(_id, b)| b)
-        } else if let Some(ref account_id) = *state.nav.active_account_id {
+        } else if let Some(ref account_id) = *state.active_account_id {
             client_manager.peek().get_backend(account_id)
         } else {
             None
@@ -3484,13 +3495,13 @@ fn MsgContextMenuOverlay(
         return rsx! {};
     };
 
-    let app_state_sig: BatchedSignal<crate::state::AppState> = use_context();
-    let app_state = app_state_sig.read().clone();
-    let last_known_perms = app_state.last_known_perms.clone();
+    let nav_state: BatchedSignal<crate::state::NavState> = use_context();
+    let user_prefs: BatchedSignal<crate::state::UserPrefs> = use_context();
+    let last_known_perms = user_prefs.read().last_known_perms.clone();
     let client_manager: BatchedSignal<crate::client_manager::ClientManager> = use_context();
 
     // Resolve account_id and channel_id for the delete_message backend call.
-    let account_id_for_delete = app_state.nav.active_account_id
+    let account_id_for_delete = nav_state.read().active_account_id
         .as_deref()
         .unwrap_or("")
         .to_string();
@@ -3903,9 +3914,9 @@ fn SlashCommandPopup(
 #[component]
 fn DmContactListPanel(channel_id: String) -> Element {
     let chat_data: BatchedSignal<ChatData> = use_context();
-    let app_state: BatchedSignal<AppState> = use_context();
+    let nav_state: BatchedSignal<crate::state::NavState> = use_context();
 
-    let active_account_id = app_state.read().nav.active_account_id.cloned().unwrap_or_default();
+    let active_account_id = nav_state.read().active_account_id.cloned().unwrap_or_default();
 
     // The other person in this 1:1 DM
     let dm: Option<DmChannel> = chat_data
@@ -3929,12 +3940,12 @@ fn DmContactListPanel(channel_id: String) -> Element {
             }
             div { class: "chat-utility-body user-sidebar-body",
                 if let Some(ref dm) = dm {
-                    DmContactRow { user: dm.user.clone(), app_state }
+                    DmContactRow { user: dm.user.clone() }
                 } else {
                     div { class: "user-sidebar-empty", {t("user-no-members")} }
                 }
                 if let Some(self_u) = self_user {
-                    DmContactRow { user: self_u, app_state }
+                    DmContactRow { user: self_u }
                 }
             }
         }
@@ -3949,7 +3960,8 @@ fn DmContactListPanel(channel_id: String) -> Element {
 #[ui_action(inherit)]
 #[context_menu(UserRowContextMenu)]
 #[component]
-fn DmContactRow(user: User, app_state: BatchedSignal<AppState>) -> Element {
+fn DmContactRow(user: User) -> Element {
+    let ui_overlays: BatchedSignal<UiOverlays> = use_context();
     let color = user_color(&user.id);
     let first_char: String = user
         .display_name
@@ -3975,7 +3987,7 @@ fn DmContactRow(user: User, app_state: BatchedSignal<AppState>) -> Element {
     rsx! {
         div {
             class: "{entry_class}",
-            onclick: move |_| open_user_profile(app_state, user_clone.clone()),
+            onclick: move |_| open_user_profile(ui_overlays, user_clone.clone()),
             div { class: "user-avatar-wrap",
                 div { class: "user-avatar",
                     if let Some(ref url) = avatar_url {

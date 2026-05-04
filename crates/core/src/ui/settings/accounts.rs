@@ -55,7 +55,7 @@ mod tests {
     fn add_account_no_navigator_is_noop() {
         let mut state = AppState::default();
         // navigator is None in test context — action must not panic
-        AccountsSettingsAction::AddAccount.apply(crate::ui::actions::ActionCx::test(&mut state));
+        AccountsSettingsAction::AddAccount.apply(crate::ui::actions::ActionCx::test_no_nav(&mut state));
     }
 
     /// Structural test: all variants construct and the type implements UiAction.

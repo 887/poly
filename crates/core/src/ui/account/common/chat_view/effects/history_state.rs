@@ -7,6 +7,7 @@ use super::super::mark_channel_as_read_with_backend;
 
 pub(in super::super) fn use_history_state_effect(signals: &ChatViewSignals) {
     let app_state = signals.app_state;
+    let nav = signals.nav;
     let chat_data = signals.chat_data;
     let client_manager = signals.client_manager;
     let history_state = signals.history_state;
@@ -14,7 +15,7 @@ pub(in super::super) fn use_history_state_effect(signals: &ChatViewSignals) {
     let mut new_messages_while_scrolled_up = signals.new_messages_while_scrolled_up;
 
     use_effect(move || { // poly-lint: allow stale-effect-capture — Signal-only; subscribes to app_state, chat_data, history_state Signals
-        let Some(active_channel_id) = app_state.read().nav.selected_channel.cloned() else {
+        let Some(active_channel_id) = nav.read().selected_channel.cloned() else {
             // hang #8 countermeasure: skip the write when already default,
             // otherwise the unconditional write re-fires the effect.
             history_state.set_if_changed(ChatHistoryUiState::default());
@@ -86,8 +87,8 @@ pub(in super::super) fn use_history_state_effect(signals: &ChatViewSignals) {
         let entered_with_messages =
             messages_loaded && unread_count > 0 && (is_channel_switch || !prev_messages_loaded);
         if entered_with_messages {
-            let server_id = app_state.read().nav.selected_server.cloned();
-            let account_id = app_state.read().nav.active_account_id.cloned();
+            let server_id = nav.read().selected_server.cloned();
+            let account_id = nav.read().active_account_id.cloned();
             mark_channel_as_read_with_backend(
                 chat_data,
                 client_manager,

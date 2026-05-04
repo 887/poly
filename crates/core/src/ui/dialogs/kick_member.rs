@@ -29,6 +29,7 @@ pub fn KickMemberDialog(
 
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let app_state: BatchedSignal<AppState> = use_context();
+    let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
 
     let title = t("dialog-kick-title")
         .replace("{ $user }", &member_name)
@@ -96,7 +97,7 @@ pub fn KickMemberDialog(
                                             submitting.set(false);
                                             success.set(true);
                                             // Clear dialog from app state after short delay.
-                                            app_state.batch(|st| st.active_moderation_dialog = None);
+                                            ui_overlays.batch(|o| o.active_moderation_dialog = None);
                                         }
                                         Err(e) => {
                                             submitting.set(false);

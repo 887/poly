@@ -40,6 +40,7 @@ pub fn EditChannelDialog(
 
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let app_state: BatchedSignal<AppState> = use_context();
+    let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
 
     rsx! {
         div { class: "modal-backdrop",
@@ -145,7 +146,7 @@ pub fn EditChannelDialog(
                                         Ok(_) => {
                                             submitting.set(false);
                                             success.set(true);
-                                            app_state.batch(|st| st.active_moderation_dialog = None);
+                                            ui_overlays.batch(|o| o.active_moderation_dialog = None);
                                         }
                                         Err(e) => {
                                             submitting.set(false);

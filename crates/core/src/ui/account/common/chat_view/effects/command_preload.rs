@@ -5,6 +5,7 @@ use super::super::signals::ChatViewSignals;
 
 pub(in super::super) fn use_command_preload_effect(signals: &ChatViewSignals, channel_id: &Option<String>) {
     let app_state = signals.app_state;
+    let nav = signals.nav;
     let client_manager = signals.client_manager;
     let mut command_suggestions = signals.command_suggestions;
     let mut show_command_popup = signals.show_command_popup;
@@ -16,8 +17,8 @@ pub(in super::super) fn use_command_preload_effect(signals: &ChatViewSignals, ch
             show_command_popup.set(false);
             return;
         };
-        let selected_server = app_state.peek().nav.selected_server.cloned();
-        let active_account_id = app_state.peek().nav.active_account_id.cloned();
+        let selected_server = nav.peek().selected_server.cloned();
+        let active_account_id = nav.peek().active_account_id.cloned();
         let backend = if let Some(server_id) = selected_server {
             client_manager
                 .peek()

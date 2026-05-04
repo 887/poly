@@ -98,7 +98,7 @@ pub(crate) use runtime_js::load_js_asset;
 pub use setup_wizard::SetupWizard;
 
 use crate::client_manager::{ClientManager, SignupEntry};
-use crate::state::{AppState, BatchedSignal, ChatData, DragState, LayoutMode, SettingsSection, View, VoiceState};
+use crate::state::{AppState, BatchedSignal, ChatData, DragState, LayoutMode, NavState, SettingsSection, UiLayout, UiOverlays, UserPrefs, View, VoiceState};
 use dioxus::prelude::*;
 use poly_ui_macros::{context_menu, ui_action};
 use routes::{route_targets_unknown_account, sync_route_to_app_state};
@@ -240,7 +240,7 @@ fn startup_display_name(label: &str, fallback_id: &str) -> String {
 fn startup_log_lines(
     storage_ready: bool,
     setup_complete: bool,
-    app_state: &AppState,
+    ui_layout: &UiLayout,
     client_manager: &ClientManager,
     chat_data: &ChatData,
 ) -> Vec<String> {
@@ -257,7 +257,7 @@ fn startup_log_lines(
     });
     lines.push(format!(
         "[..] layout mode {:?}; mirrored menus: {}",
-        app_state.layout_mode, app_state.mirror_menu_layout
+        ui_layout.layout_mode, ui_layout.mirror_menu_layout
     ));
 
     if client_manager.sessions.is_empty() {
@@ -299,7 +299,7 @@ fn startup_log_lines(
 #[allow(clippy::needless_pass_by_value)]
 fn startup_overlay_state(
     params: StartupOverlayParams,
-    app_state: &AppState,
+    ui_layout: &UiLayout,
     client_manager: &ClientManager,
     chat_data: &ChatData,
 ) -> StartupOverlayState {
@@ -332,7 +332,7 @@ fn startup_overlay_state(
     let logs = startup_log_lines(
         storage_ready,
         setup_complete,
-        app_state,
+        ui_layout,
         client_manager,
         chat_data,
     );
@@ -582,13 +582,13 @@ const fn layout_mode_class(mode: LayoutMode) -> &'static str {
     }
 }
 
-fn app_root_class(app_state: &AppState) -> String {
-    let effective_mode = effective_layout_mode(app_state.layout_mode, false);
+fn app_root_class(ui_layout: &UiLayout) -> String {
+    let effective_mode = effective_layout_mode(ui_layout.layout_mode, false);
     let mut classes = vec!["poly-app", layout_mode_class(effective_mode)];
-    if app_state.mirror_menu_layout {
+    if ui_layout.mirror_menu_layout {
         classes.push("poly-menu-mirrored");
     }
-    if app_state.mirror_chat_messages {
+    if ui_layout.mirror_chat_messages {
         classes.push("poly-chat-mirrored");
     }
     classes.join(" ")
@@ -1242,6 +1242,10 @@ async fn init_storage(
     theme_config: BatchedSignal<crate::theme::ThemeConfig>,
     mut storage_ready: Signal<bool>,
     app_state: BatchedSignal<AppState>,
+    nav: BatchedSignal<NavState>,
+    ui_layout: BatchedSignal<UiLayout>,
+    ui_overlays: BatchedSignal<UiOverlays>,
+    user_prefs: BatchedSignal<UserPrefs>,
     mut locale_sig: Signal<String>,
     client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
@@ -1288,21 +1292,25 @@ async fn init_storage(
                     }
                     let restored_layout_mode =
                         effective_layout_mode(settings.layout_mode, settings.force_mobile_layout);
-                    // Collapse the 7-write cascade into ONE batch — see
-                    // CLAUDE.md § Common WASM-hang causes #1.
+                    // Collapse the layout+prefs writes into separate batches per sub-signal.
+                    // Each batch triggers one reactive cascade, not N cascades.
                     let mirror_menu_layout = settings.mirror_menu_layout;
                     let mirror_chat_messages = settings.mirror_chat_messages;
+                    ui_layout.batch(|l| {
+                        l.layout_mode = restored_layout_mode;
+                        l.mirror_menu_layout = mirror_menu_layout;
+                        l.mirror_chat_messages = mirror_chat_messages;
+                    });
                     let member_list_grouping = settings.member_list_grouping;
                     let member_list_sort_order = settings.member_list_sort_order;
                     let member_list_show_offline = settings.member_list_show_offline;
+                    user_prefs.batch(|p| {
+                        p.member_list_grouping = member_list_grouping;
+                        p.member_list_sort_order = member_list_sort_order;
+                        p.member_list_show_offline = member_list_show_offline;
+                    });
                     app_state.batch(|st| {
                         st.is_setup_complete = true;
-                        st.layout_mode = restored_layout_mode;
-                        st.mirror_menu_layout = mirror_menu_layout;
-                        st.mirror_chat_messages = mirror_chat_messages;
-                        st.member_list_grouping = member_list_grouping;
-                        st.member_list_sort_order = member_list_sort_order;
-                        st.member_list_show_offline = member_list_show_offline;
                     });
                     // nav.view is written by sync_route_to_app_state on the next nav.push
                     // Restore favorited servers so Bar 1 repopulates immediately
@@ -1337,23 +1345,22 @@ async fn init_storage(
                     // toggle_demo activates all demo data; the Router's Root component
                     // then redirects to /demo/demo/dms once it mounts.
                     if settings.demo_active {
-                        demo::toggle_demo(client_manager, chat_data, voice_state, drag_state, app_state).await;
+                        demo::toggle_demo(client_manager, chat_data, voice_state, drag_state, app_state, nav, ui_layout, ui_overlays, user_prefs).await;
                     }
-                    // Collapse the 4-write nav.* cascade into ONE batch. When
-                    // mobile layout is active, both sidebar visibility bits are
-                    // forced false regardless of persisted values.
+                    // Collapse the sidebar visibility cascade into one batch on UiLayout.
+                    // Mobile layout forces both visibility bits to false.
                     let is_mobile = layout_mode_is_mobile(restored_layout_mode);
                     let server_list_open = settings.server_member_list_open && !is_mobile;
                     let dm_list_open = settings.dm_member_list_open && !is_mobile;
-                    app_state.batch(|st| {
-                        st.nav.right_sidebar_visible = server_list_open;
-                        st.nav.dm_right_sidebar_visible = dm_list_open;
+                    ui_layout.batch(|l| {
+                        l.right_sidebar_visible = server_list_open;
+                        l.dm_right_sidebar_visible = dm_list_open;
                     });
                     // Restore per-account last-visited routes so account-switching
                     // returns to the correct page even after a page reload.
                     match storage.get_account_last_routes().await {
                         Ok(stored_routes) if !stored_routes.is_empty() => {
-                            app_state.batch(|st| st.nav.account_last_routes = stored_routes);
+                            nav.batch(|n| n.account_last_routes = stored_routes);
                             tracing::info!("Restored per-account last routes from storage");
                         }
                         Ok(_) => {}
@@ -1361,7 +1368,7 @@ async fn init_storage(
                     }
                     match storage.get_account_last_dm_routes().await {
                         Ok(stored_routes) if !stored_routes.is_empty() => {
-                            app_state.batch(|st| st.nav.account_last_dm_routes = stored_routes);
+                            nav.batch(|n| n.account_last_dm_routes = stored_routes);
                             tracing::info!("Restored per-account last DM routes from storage");
                         }
                         Ok(_) => {}
@@ -1444,25 +1451,26 @@ async fn persist_setup_completion(account_id: String) {
 
 fn router_config(
     app_state: BatchedSignal<AppState>,
+    nav: BatchedSignal<NavState>,
+    user_prefs: BatchedSignal<UserPrefs>,
     client_manager: BatchedSignal<ClientManager>,
 ) -> dioxus_router::RouterConfig<Route> {
     dioxus_router::RouterConfig::default().on_update(
         move |state: dioxus_router::GenericRouterContext<Route>| {
             let route = state.current();
-            sync_route_to_app_state(&route, app_state);
+            sync_route_to_app_state(&route, app_state, nav, Some(user_prefs));
             preserve_layout_override_query_in_url();
 
             if route_targets_unknown_account(&route, &client_manager.read()) {
-                app_state.batch(|st| st.settings_section = SettingsSection::Accounts);
+                user_prefs.batch(|p| p.settings_section = SettingsSection::Accounts);
                 return Some(NavigationTarget::Internal(Route::SettingsRoute));
             }
 
             if matches!(route, Route::PageNotFound { .. } | Route::Root) {
                 let cm = client_manager.read();
                 if cm.demo_active {
-                    let last_route = app_state
+                    let last_route = nav
                         .read()
-                        .nav
                         .account_last_routes
                         .values()
                         .find_map(|url| url.parse::<Route>().ok());
@@ -1476,7 +1484,7 @@ fn router_config(
                     }));
                 }
                 drop(cm); // poly-lint: allow long-read-guard — explicit drop(cm) before batch, audit M1
-                app_state.batch(|st| st.settings_section = SettingsSection::Accounts);
+                user_prefs.batch(|p| p.settings_section = SettingsSection::Accounts);
                 return Some(NavigationTarget::Internal(Route::SettingsRoute));
             }
 
@@ -1495,6 +1503,10 @@ fn AppBody(storage_ready: bool, setup_complete: bool, app_state: BatchedSignal<A
     let chat_data: BatchedSignal<ChatData> = use_context();
     let voice_state: BatchedSignal<VoiceState> = use_context();
     let drag_state: BatchedSignal<DragState> = use_context();
+    let nav: BatchedSignal<NavState> = use_context();
+    let ui_layout: BatchedSignal<UiLayout> = use_context();
+    let ui_overlays: BatchedSignal<UiOverlays> = use_context();
+    let user_prefs: BatchedSignal<UserPrefs> = use_context();
     rsx! {
         if !storage_ready {
             div { class: "storage-loading" }
@@ -1512,7 +1524,7 @@ fn AppBody(storage_ready: bool, setup_complete: bool, app_state: BatchedSignal<A
                         // right away without needing an app restart.
                         // demo_active is true in persist_setup_completion so it
                         // will also be restored correctly on subsequent launches.
-                        demo::toggle_demo(client_manager, chat_data, voice_state, drag_state, app_state).await;
+                        demo::toggle_demo(client_manager, chat_data, voice_state, drag_state, app_state, nav, ui_layout, ui_overlays, user_prefs).await;
                         // Only now flip is_setup_complete — this mounts the Router
                         // with demo already active, so on_update's initial redirect
                         // lands on DmsHome.
@@ -1521,7 +1533,7 @@ fn AppBody(storage_ready: bool, setup_complete: bool, app_state: BatchedSignal<A
                 },
             }
         } else {
-            Router::<Route> { config: move || router_config(app_state, use_context()) }
+            Router::<Route> { config: move || router_config(app_state, nav, user_prefs, client_manager) }
         }
     }
 }
@@ -1753,6 +1765,22 @@ pub fn App() -> Element {
     // prop-comparison skip optimization that can suppress signal-triggered re-renders).
     provide_context(app_state);
 
+    // DECISION(G.5): Four sub-signal contexts split off from AppState to narrow
+    // subscriber sets. Writing to UiOverlays (open context menu) does NOT re-render
+    // components that only subscribe to NavState (selected channel), etc.
+    let nav: BatchedSignal<NavState> =
+        BatchedSignal::from_signal(use_signal(NavState::default));
+    provide_context(nav);
+    let ui_layout: BatchedSignal<UiLayout> =
+        BatchedSignal::from_signal(use_signal(UiLayout::default));
+    provide_context(ui_layout);
+    let ui_overlays: BatchedSignal<UiOverlays> =
+        BatchedSignal::from_signal(use_signal(UiOverlays::default));
+    provide_context(ui_overlays);
+    let user_prefs: BatchedSignal<UserPrefs> =
+        BatchedSignal::from_signal(use_signal(UserPrefs::default));
+    provide_context(user_prefs);
+
     // Pack B wiring — global toast queue + sidebar refresh counter so
     // `ActionOutcome::Toast`, `Pending`, and `RefreshSidebar` cross the last
     // mile into user-visible UX. See `ui::client_ui::action_outcome` +
@@ -1768,6 +1796,10 @@ pub fn App() -> Element {
             theme_config,
             storage_ready,
             app_state,
+            nav,
+            ui_layout,
+            ui_overlays,
+            user_prefs,
             locale_sig,
             client_manager,
             chat_data,
@@ -1779,8 +1811,9 @@ pub fn App() -> Element {
     let theme_css = crate::theme::generate_css(&theme_config.read());
     let storage_ready_now = *storage_ready.read();
     let app_state_snapshot = app_state.read().clone();
+    let ui_layout_snapshot = ui_layout.read().clone();
     let setup_complete = app_state_snapshot.is_setup_complete;
-    let root_class = app_root_class(&app_state_snapshot);
+    let root_class = app_root_class(&ui_layout_snapshot);
     let client_manager_snapshot = client_manager.read().clone();
     let chat_data_snapshot = chat_data.read().clone();
 
@@ -1880,7 +1913,7 @@ pub fn App() -> Element {
             storage_ready: storage_ready_now,
             setup_complete,
         },
-        &app_state_snapshot,
+        &ui_layout_snapshot,
         &client_manager_snapshot,
         &chat_data_snapshot,
     );

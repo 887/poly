@@ -145,11 +145,14 @@ pub(crate) enum ForumViewAction {
 }
 
 impl UiAction for ForumViewAction {
-    fn apply(self, cx: ActionCx<'_>) {
+    fn apply(self, _cx: ActionCx<'_>) {
         match self {
-            Self::ShowPosts => cx.state.view_filter = PostsOrComments::Posts,
-            Self::ShowComments => cx.state.view_filter = PostsOrComments::Comments,
-            // Filter text is local signal; no AppState mutation needed.
+            // view_filter moved to UserPrefs — direct signal mutation via user_prefs.batch()
+            // in the button onclick handlers; the UiAction path is unused for these.
+            Self::ShowPosts | Self::ShowComments => {
+                todo!("phase-G.5: ForumViewAction::ShowPosts/ShowComments require UserPrefs signal");
+            }
+            // Filter text is local signal; no mutation needed.
             Self::SetFilter(_) => {}
         }
     }
@@ -160,6 +163,9 @@ impl UiAction for ForumViewAction {
 #[component]
 pub fn ForumView() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
+    let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
+    let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
+    let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
 
@@ -173,15 +179,14 @@ pub fn ForumView() -> Element {
     //      selected_channel = None, and also handles the 'navigate back from
     //      ForumPostRoute' flow where nav.selected_channel may be stale until
     //      load_server_data resolves.
-    let account_id = app_state
+    let account_id = nav
         .read()
-        .nav
         .active_account_id
         .cloned()
         .unwrap_or_default();
     let channel_id = {
-        let s = app_state.read();
-        if let Some(id) = s.nav.selected_channel.cloned() {
+        let s = nav.read();
+        if let Some(id) = s.selected_channel.cloned() {
             if !id.is_empty() {
                 id
             } else {
@@ -229,8 +234,8 @@ pub fn ForumView() -> Element {
     // comment feed (currently Lemmy). Derive from nav active_backend slug so
     // we don't need a live backend handle.
     let backend_slug = {
-        let s = app_state.read();
-        s.nav
+        let s = nav.read();
+        s
             .active_backend
             .cloned()
             .map(|b| b.slug().to_string())
@@ -239,7 +244,7 @@ pub fn ForumView() -> Element {
     let supports_comment_feed = client_manager.peek().capabilities_for_slug(&backend_slug).supports_comment_feed;
 
     // Phase D — current toggle value from AppState.
-    let view_filter = app_state.peek().view_filter;
+    let view_filter = user_prefs.peek().view_filter;
 
     // Phase D — local raw filter text signal + debounced signal.
     // `raw_filter` is written by the input's oninput handler immediately.
@@ -286,7 +291,7 @@ pub fn ForumView() -> Element {
     // peek() avoids subscribing to forum_scope directly — ForumView already
     // subscribes to AppState via the `.read()` calls above (active_account_id,
     // selected_channel) so any batch() on AppState re-renders this component.
-    let forum_scope = app_state.peek().forum_scope.clone();
+    let forum_scope = user_prefs.peek().forum_scope.clone();
     // Key forces a full remount on channel, scope, or view_filter change.
     let key = format!("{}:{}:{}:{:?}", effective_channel_id, account_id, forum_scope, view_filter);
 
@@ -299,11 +304,11 @@ pub fn ForumView() -> Element {
     // the pills inline next to Hot / Filter… instead of stacking above.
     let toolbar_leading: Option<Element> = if supports_comment_feed {
         let posts_onclick = move |_evt: MouseEvent| {
-            app_state.batch(|s| s.view_filter = PostsOrComments::Posts);
+            user_prefs.batch(|s| s.view_filter = PostsOrComments::Posts);
             raw_filter.set(String::new());
         };
         let comments_onclick = move |_evt: MouseEvent| {
-            app_state.batch(|s| s.view_filter = PostsOrComments::Comments);
+            user_prefs.batch(|s| s.view_filter = PostsOrComments::Comments);
             raw_filter.set(String::new());
         };
         Some(rsx! {
@@ -369,6 +374,10 @@ pub fn ForumView() -> Element {
 pub fn ForumPostView(channel_id: String, post_id: String) -> Element {
     let chat_data: BatchedSignal<ChatData> = use_context();
     let app_state: BatchedSignal<AppState> = use_context();
+    let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
+    let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
+    let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
+    let nav: BatchedSignal<crate::state::NavState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let voice_state: BatchedSignal<VoiceState> = use_context();
 
@@ -386,9 +395,8 @@ pub fn ForumPostView(channel_id: String, post_id: String) -> Element {
         (channel_id_clone, post_id_clone),
         move |(cid, pid)| async move {
             // Peek nav + chat_data so we don't subscribe and re-trigger.
-            let server_id = app_state
+            let server_id = nav
                 .peek()
-                .nav
                 .selected_server
                 .cloned()
                 .unwrap_or_default();
@@ -401,7 +409,7 @@ pub fn ForumPostView(channel_id: String, post_id: String) -> Element {
             let mut backend = None;
             let mut account_id_resolved = None;
             for attempt in 0..20_u32 {
-                let account_id = app_state.peek().nav.active_account_id.cloned();
+                let account_id = nav.peek().active_account_id.cloned();
                 if let Some(aid) = account_id.as_deref() {
                     if let Some(bh) = client_manager.peek().get_backend(aid) {
                         backend = Some(bh);
@@ -628,6 +636,9 @@ fn ForumThreadView(post: Message, comments: Vec<Message>, loading: bool) -> Elem
 #[component]
 fn ForumComment(node: ForumCommentNode) -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
+    let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
+    let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
+    let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
     let msg = &node.msg;
     let depth = node.depth;
     let children = node.children.clone();
@@ -697,7 +708,7 @@ fn ForumComment(node: ForumCommentNode) -> Element {
                     text: ctx_text.clone(),
                 };
                 let entry = forum_post_entry(ctx, &evt);
-                app_state.batch(|st| st.context_menu_stack.push(entry));
+                ui_overlays.batch(|o| o.context_menu_stack.push(entry));
             },
             div { class: "forum-comment-header",
                 button {

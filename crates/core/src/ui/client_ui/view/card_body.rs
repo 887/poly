@@ -42,19 +42,18 @@ pub fn CardBody(
     let _ = spec;
     let rows_res = fetch_first_page(channel_id.clone(), account_id.clone(), None, None, None);
     let app_state: BatchedSignal<AppState> = use_context();
+    let nav_sig: BatchedSignal<crate::state::NavState> = use_context();
     // CardBody's overview-context detection: the host's
     // `AccountOverviewView` calls `render_descriptor` with an empty
     // channel_id, so when channel_id is empty we treat each card click
     // as "open server with id = row.id".
     let is_overview = channel_id.is_empty();
     let (backend_slug, instance_id) = {
-        let s = app_state.read();
+        let s = nav_sig.read();
         let backend = s
-            .nav
             .active_backend
             .cloned().map_or_else(|| "demo".to_string(), |b| b.slug().to_string());
         let instance = s
-            .nav
             .active_instance_id
             .cloned()
             .unwrap_or_else(|| "demo".to_string());

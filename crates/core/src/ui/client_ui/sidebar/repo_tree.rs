@@ -40,9 +40,10 @@ fn repo_action_id(repo_id: &str, tab_suffix: &str) -> String {
 #[component]
 pub fn RepoTreeLayout() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
+    let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
 
-    let account_id = app_state.read().nav.active_account_id.cloned();
+    let account_id = nav.read().active_account_id.cloned();
 
     let repos_res = {
         let account_id = account_id.clone();

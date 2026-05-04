@@ -16,7 +16,7 @@
 
 use super::list_body::{fetch_first_page, parse_score_meta, score_class, ViewRowDetail};
 use crate::client_manager::{BackendHandleExt, ClientManager};
-use crate::state::{AppState, BatchedSignal};
+use crate::state::{AppState, BatchedSignal, NavState};
 use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::errors::{is_session_expired, SessionExpiredCard};
 use dioxus::prelude::*;
@@ -94,12 +94,12 @@ pub fn TreeBody(
         Some(Err(err)) => {
             tracing::debug!("TreeBody: get_view_rows failed: {err:?}");
             if is_session_expired(err) {
-                let app_state: BatchedSignal<AppState> = use_context();
+                let nav_state: BatchedSignal<NavState> = use_context();
                 let (nav_backend, nav_instance_id, nav_account_id) = {
-                    let s = app_state.read();
-                    let b = s.nav.active_backend.cloned().map(|b| b.slug().to_string()).unwrap_or_default();
-                    let i = s.nav.active_instance_id.cloned().unwrap_or_default();
-                    let a = s.nav.active_account_id.cloned().unwrap_or_else(|| account_id.clone());
+                    let s = nav_state.read();
+                    let b = s.active_backend.cloned().map(|b: poly_client::BackendType| b.slug().to_string()).unwrap_or_default();
+                    let i = s.active_instance_id.cloned().unwrap_or_default();
+                    let a = s.active_account_id.cloned().unwrap_or_else(|| account_id.clone());
                     (b, i, a)
                 };
                 rsx! {
@@ -157,18 +157,16 @@ pub fn TreeBody(
                 let _unused_selected = selected_row_id.read().clone();
                 // Pull route params — forum post click routes to full-page
                 // ForumPostView (matches the old LemmyForumView behavior).
-                let app_state: BatchedSignal<crate::state::AppState> = use_context();
-                let snap = app_state.read();
+                let nav_sig: BatchedSignal<crate::state::NavState> = use_context();
+                let snap = nav_sig.read();
                 let backend_slug_for_click = snap
-                    .nav
                     .active_backend
                     .cloned()
                     .map(|b| b.slug().to_string())
                     .unwrap_or_default();
-                let instance_id_for_click = snap.nav.active_instance_id.cloned().unwrap_or_default();
-                let server_id_for_click = snap.nav.selected_server.cloned().unwrap_or_default();
+                let instance_id_for_click = snap.active_instance_id.cloned().unwrap_or_default();
+                let server_id_for_click = snap.selected_server.cloned().unwrap_or_default();
                 let channel_id_for_click = snap
-                    .nav
                     .selected_channel
                     .cloned()
                     .unwrap_or_else(|| channel_id.clone());

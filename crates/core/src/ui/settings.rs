@@ -290,14 +290,14 @@ fn install_settings_scroll_spy(
                 if active_plugin_slug.read().as_deref() != Some(plugin_slug) {
                     active_plugin_slug.set(Some(plugin_slug.to_string()));
                 }
-                if app_state.read().settings_section != SettingsSection::Plugins {
-                    app_state.batch(|st| st.settings_section = SettingsSection::Plugins);
+                if user_prefs.read().settings_section != SettingsSection::Plugins {
+                    user_prefs.batch(|p| p.settings_section = SettingsSection::Plugins);
                 }
             } else {
                 active_plugin_slug.set(None);
                 let next = SettingsSection::from_slug(&slug);
-                if app_state.read().settings_section != next {
-                    app_state.batch(|st| st.settings_section = next);
+                if user_prefs.read().settings_section != next {
+                    user_prefs.batch(|p| p.settings_section = next);
                 }
             }
         });
@@ -335,6 +335,7 @@ fn SettingsNavigation(
     let filter = search_text.read().to_lowercase();
     let active_plugin = active_plugin_slug.read().clone();
     let app_state: BatchedSignal<AppState> = use_context();
+    let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
     let client_manager: BatchedSignal<crate::client_manager::ClientManager> = use_context();
     // Snapshot the registered plugin settings pages so we don't hold the read
     // guard across the RSX macro expansion.
@@ -364,7 +365,7 @@ fn SettingsNavigation(
                             class,
                             onclick: move |_| {
                                 active_plugin_slug.set(None);
-                                app_state.batch(|st| st.settings_section = section);
+                                user_prefs.batch(|p| p.settings_section = section);
                                 on_select.call(section);
                                 close_mobile_drawer();
                             },
@@ -565,6 +566,7 @@ fn SettingsAllSections(search_query: String) -> Element {
 #[component]
 pub fn SettingsPage() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
+    let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
     let locale_key = crate::i18n::use_locale().read().clone();
     let mut search_text = use_signal(String::new);
     let active_plugin_slug = use_signal(|| None::<String>);
@@ -583,7 +585,7 @@ pub fn SettingsPage() -> Element {
     });
 
     // Memo: isolate settings_section so effects only re-run when IT changes.
-    let section_memo = use_memo(move || app_state.read().settings_section);
+    let section_memo = use_memo(move || user_prefs.read().settings_section);
 
     // Scroll to the active section whenever it changes (inc. initial route load).
     // Defer with setTimeout to ensure DOM has rendered before scrolling.
@@ -633,7 +635,7 @@ pub fn SettingsPage() -> Element {
                     active_plugin_slug,
                     on_select: move |next: SettingsSection| {
                         *search_text.write() = String::new();
-                        app_state.batch(|st| st.settings_section = next);
+                        user_prefs.batch(|p| p.settings_section = next);
                         nav.push(Route::SettingsSectionRoute { section: next.to_slug().to_string() });
                     },
                 }

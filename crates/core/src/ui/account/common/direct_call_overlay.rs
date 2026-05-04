@@ -9,7 +9,7 @@ use crate::state::BatchedSignal;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
-use crate::state::{AppState, ChatData, VoiceState};
+use crate::state::{AppState, ChatData, NavState, VoiceState};
 use crate::ui::routes::Route;
 use dioxus::prelude::*;
 use poly_client::VoiceConnectionKind;
@@ -28,6 +28,8 @@ pub fn OutgoingDirectCallOverlay(
     allow_add_to_active_temporary: bool,
 ) -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
+    let nav_state: BatchedSignal<NavState> = use_context();
+    let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let voice_state: BatchedSignal<VoiceState> = use_context();
     #[cfg(not(target_arch = "wasm32"))]
@@ -129,7 +131,7 @@ pub fn OutgoingDirectCallOverlay(
                         start_video,
                         allow_add_to_active_temporary,
                     },
-                    app_state,
+                    nav_state,
                     chat_data,
                     voice_state,
                     client_manager,
@@ -142,7 +144,7 @@ pub fn OutgoingDirectCallOverlay(
         div {
             class: "direct-call-overlay",
             onclick: move |_| {
-                app_state.batch(|st| st.nav.pending_direct_call = None);
+                ui_overlays.batch(|o| o.pending_direct_call = None);
                 #[cfg(target_arch = "wasm32")]
                 {
                     let _ = document::eval("window.__polyPendingDirectCallReady = false;");
@@ -156,7 +158,7 @@ pub fn OutgoingDirectCallOverlay(
                     class: "direct-call-close-btn",
                     title: t("action-close"),
                     onclick: move |_| {
-                        app_state.batch(|st| st.nav.pending_direct_call = None);
+                        ui_overlays.batch(|o| o.pending_direct_call = None);
                         #[cfg(target_arch = "wasm32")]
                         {
                             let _ = document::eval("window.__polyPendingDirectCallReady = false;");
@@ -188,7 +190,7 @@ pub fn OutgoingDirectCallOverlay(
                     button {
                         class: "direct-call-cancel-btn",
                         onclick: move |_| {
-                            app_state.batch(|st| st.nav.pending_direct_call = None);
+                            ui_overlays.batch(|o| o.pending_direct_call = None);
                             #[cfg(target_arch = "wasm32")]
                             {
                                 let _ = document::eval("window.__polyPendingDirectCallReady = false;");

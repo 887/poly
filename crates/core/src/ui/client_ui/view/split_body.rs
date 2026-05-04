@@ -51,10 +51,11 @@ pub fn SplitBody(channel_id: String, account_id: String, spec: SplitSpec) -> Ele
     let _ = spec;
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let app_state: BatchedSignal<AppState> = use_context();
+    let nav_sig: BatchedSignal<crate::state::NavState> = use_context();
     let (nav_backend, nav_instance_id) = {
-        let s = app_state.read();
-        let b = s.nav.active_backend.cloned().map(|b| b.slug().to_string()).unwrap_or_default();
-        let i = s.nav.active_instance_id.cloned().unwrap_or_default();
+        let s = nav_sig.read();
+        let b = s.active_backend.cloned().map(|b| b.slug().to_string()).unwrap_or_default();
+        let i = s.active_instance_id.cloned().unwrap_or_default();
         (b, i)
     };
 

@@ -19,7 +19,7 @@
 //! `UserRowContextMenu` annotations on sidebar rows are left untouched.
 
 use crate::i18n::t;
-use crate::state::{AppState, AvatarContextMenuState, BatchedSignal};
+use crate::state::{AppState, AvatarContextMenuState, BatchedSignal, UiOverlays};
 use crate::ui::account::common::user_profile_modal::open_user_profile;
 use dioxus::prelude::*;
 use poly_client::{PresenceStatus, User};
@@ -34,6 +34,7 @@ use poly_ui_macros::{context_menu, ui_action};
 #[component]
 pub fn AvatarContextMenuInner(menu: AvatarContextMenuState, close: EventHandler<()>) -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
+    let ui_overlays: BatchedSignal<UiOverlays> = use_context();
 
     let x = menu.x;
     let y = menu.y;
@@ -67,7 +68,7 @@ pub fn AvatarContextMenuInner(menu: AvatarContextMenuState, close: EventHandler<
                                 presence: PresenceStatus::Offline,
                                 backend: poly_client::BackendType::from("demo"),
                             };
-                            open_user_profile(app_state, user);
+                            open_user_profile(ui_overlays, user);
                             close.call(());
                         },
                     }

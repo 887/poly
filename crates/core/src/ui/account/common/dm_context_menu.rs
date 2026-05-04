@@ -18,7 +18,7 @@
 
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
-use crate::state::{AppState, BatchedSignal, ChatData, DmContextMenuState, VoiceState};
+use crate::state::{AppState, BatchedSignal, ChatData, DmContextMenuState, NavState, UiOverlays, VoiceState};
 use crate::ui::account::common::chat_view::mark_channel_as_read;
 use crate::ui::account::common::direct_call::{
     DirectCallRequest, start_direct_call_from_active_account,
@@ -34,6 +34,8 @@ use poly_ui_macros::{context_menu, ui_action};
 #[component]
 pub fn DmContextMenuInner(menu: DmContextMenuState, close: EventHandler<()>) -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
+    let nav_state: BatchedSignal<NavState> = use_context();
+    let ui_overlays: BatchedSignal<UiOverlays> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let voice_state: BatchedSignal<VoiceState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
@@ -87,7 +89,7 @@ pub fn DmContextMenuInner(menu: DmContextMenuState, close: EventHandler<()>) -> 
                                 presence: PresenceStatus::Offline,
                                 backend: poly_client::BackendType::from("demo"),
                             };
-                            open_user_profile(app_state, user);
+                            open_user_profile(ui_overlays, user);
                             close.call(());
                         },
                     }
@@ -115,7 +117,7 @@ pub fn DmContextMenuInner(menu: DmContextMenuState, close: EventHandler<()>) -> 
                                     start_video: false,
                                     allow_add_to_active_temporary: true,
                                 },
-                                app_state,
+                                nav_state,
                                 chat_data,
                                 voice_state,
                                 client_manager,

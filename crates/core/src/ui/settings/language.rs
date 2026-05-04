@@ -214,7 +214,7 @@ mod tests {
         let mut state = AppState::default();
         // Must not panic — this is the primary guarantee.
         LanguageSettingsAction::SetLanguage("en".to_string())
-            .apply(crate::ui::actions::ActionCx::test(&mut state));
+            .apply(crate::ui::actions::ActionCx::test_no_nav(&mut state));
         let locale = crate::i18n::current_locale();
         assert!(
             crate::i18n::SUPPORTED_LOCALES.contains(&&*locale),
@@ -228,7 +228,7 @@ mod tests {
         // An unsupported locale leaves the current locale unchanged without panicking.
         let before = crate::i18n::current_locale();
         LanguageSettingsAction::SetLanguage("xx".to_string())
-            .apply(crate::ui::actions::ActionCx::test(&mut state));
+            .apply(crate::ui::actions::ActionCx::test_no_nav(&mut state));
         // Locale must still be a valid supported locale.
         let after = crate::i18n::current_locale();
         assert!(
@@ -243,7 +243,7 @@ mod tests {
         let mut state = AppState::default();
         // Empty string = "system" auto-detect, resolves to "en" outside WASM.
         LanguageSettingsAction::SetLanguage(String::new())
-            .apply(crate::ui::actions::ActionCx::test(&mut state));
+            .apply(crate::ui::actions::ActionCx::test_no_nav(&mut state));
         let locale = crate::i18n::current_locale();
         assert!(
             crate::i18n::SUPPORTED_LOCALES.contains(&&*locale),

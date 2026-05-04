@@ -107,6 +107,9 @@ pub(super) fn ChatHeaderActions(
 ) -> Element {
     use_header_actions_overflow_effect(header_actions_overflow, header_actions_menu_open, mobile_layout_resize_tick);
 
+    let ui_layout: crate::state::BatchedSignal<crate::state::UiLayout> = use_context();
+    let nav_state: crate::state::BatchedSignal<crate::state::NavState> = use_context();
+    let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
     let app_state = app_state;
     let mut utility_panel = utility_panel;
     let notifications_muted = notifications_muted;
@@ -140,7 +143,8 @@ pub(super) fn ChatHeaderActions(
                                         start_video: false,
                                         allow_add_to_active_temporary: false,
                                     },
-                                    app_state,
+                                    nav_state,
+                                    ui_overlays,
                                     chat_data,
                                     client_manager,
                                     navigator(),
@@ -160,7 +164,8 @@ pub(super) fn ChatHeaderActions(
                                         start_video: true,
                                         allow_add_to_active_temporary: false,
                                     },
-                                    app_state,
+                                    nav_state,
+                                    ui_overlays,
                                     chat_data,
                                     client_manager,
                                     navigator(),
@@ -173,7 +178,7 @@ pub(super) fn ChatHeaderActions(
                 {render_agent_toggle_button(app_state, utility_panel, show_search_filters, is_dm_channel, is_group_channel)}
                 {
                     render_member_toggle_button(
-                        app_state,
+                        ui_layout,
                         utility_panel,
                         show_search_filters,
                         is_group_channel,
@@ -218,6 +223,7 @@ pub(super) fn ChatHeaderActions(
                         is_group_channel,
                         is_dm_channel,
                         app_state,
+                        ui_layout,
                     )
                 }
                 button {
@@ -232,11 +238,11 @@ pub(super) fn ChatHeaderActions(
                         };
                         utility_panel.set(next);
                         if next.is_some() {
-                            app_state.batch(|st| {
+                            ui_layout.batch(|l| {
                                 if is_dm_channel || is_group_channel {
-                                    st.nav.dm_right_sidebar_visible = false;
+                                    l.dm_right_sidebar_visible = false;
                                 } else {
-                                    st.nav.right_sidebar_visible = false;
+                                    l.right_sidebar_visible = false;
                                 }
                             });
                         }
@@ -276,7 +282,8 @@ pub(super) fn ChatHeaderActions(
                                                     start_video: false,
                                                     allow_add_to_active_temporary: false,
                                                 },
-                                                app_state,
+                                                nav_state,
+                                                ui_overlays,
                                                 chat_data,
                                                 client_manager,
                                                 navigator(),
@@ -297,7 +304,8 @@ pub(super) fn ChatHeaderActions(
                                                     start_video: true,
                                                     allow_add_to_active_temporary: false,
                                                 },
-                                                app_state,
+                                                nav_state,
+                                                ui_overlays,
                                                 chat_data,
                                                 client_manager,
                                                 navigator(),
@@ -315,9 +323,9 @@ pub(super) fn ChatHeaderActions(
                                     let current = false;
                                     if !current {
                                         // opening agent panel: close members
-                                        app_state.batch(|st| {
-                                            st.nav.dm_right_sidebar_visible = false;
-                                            st.nav.right_sidebar_visible = false;
+                                        ui_layout.batch(|l| {
+                                            l.dm_right_sidebar_visible = false;
+                                            l.right_sidebar_visible = false;
                                         });
                                     }
                                     utility_panel.set(None);
@@ -331,16 +339,16 @@ pub(super) fn ChatHeaderActions(
                                 onclick: move |_| {
                                     header_actions_menu_open.set(false);
                                     let current = if is_dm_channel || is_group_channel {
-                                        app_state.read().nav.dm_right_sidebar_visible
+                                        ui_layout.read().dm_right_sidebar_visible
                                     } else {
-                                        app_state.read().nav.right_sidebar_visible
+                                        ui_layout.read().right_sidebar_visible
                                     };
-                                    app_state.batch(|st| {
+                                    ui_layout.batch(|l| {
                                         if is_dm_channel || is_group_channel {
-                                            st.nav.dm_right_sidebar_visible = !current;
-                                            st.nav.mobile_dm_contact_detail_visible = false;
+                                            l.dm_right_sidebar_visible = !current;
+                                            l.mobile_dm_contact_detail_visible = false;
                                         } else {
-                                            st.nav.right_sidebar_visible = !current;
+                                            l.right_sidebar_visible = !current;
                                         }
                                     });
                                     // Opening members: close agent panel
@@ -392,11 +400,11 @@ pub(super) fn ChatHeaderActions(
                                     };
                                     utility_panel.set(next);
                                     if next.is_some() {
-                                        app_state.batch(|st| {
+                                        ui_layout.batch(|l| {
                                             if is_dm_channel || is_group_channel {
-                                                st.nav.dm_right_sidebar_visible = false;
+                                                l.dm_right_sidebar_visible = false;
                                             } else {
-                                                st.nav.right_sidebar_visible = false;
+                                                l.right_sidebar_visible = false;
                                             }
                                         });
                                     }
@@ -416,11 +424,11 @@ pub(super) fn ChatHeaderActions(
                                     };
                                     utility_panel.set(next);
                                     if next.is_some() {
-                                        app_state.batch(|st| {
+                                        ui_layout.batch(|l| {
                                             if is_dm_channel || is_group_channel {
-                                                st.nav.dm_right_sidebar_visible = false;
+                                                l.dm_right_sidebar_visible = false;
                                             } else {
-                                                st.nav.right_sidebar_visible = false;
+                                                l.right_sidebar_visible = false;
                                             }
                                         });
                                     }
@@ -446,6 +454,7 @@ pub(super) fn render_search_tab_button(
     is_group_channel: bool,
     is_dm_channel: bool,
     app_state: BatchedSignal<AppState>,
+    ui_layout: crate::state::BatchedSignal<crate::state::UiLayout>,
 ) -> Element {
     let active = *utility_panel.read() == Some(ChatUtilityPanel::Search);
 
@@ -462,11 +471,11 @@ pub(super) fn render_search_tab_button(
                 };
                 utility_panel.set(next);
                 if mobile_tools || next.is_some() {
-                    app_state.batch(|st| {
+                    ui_layout.batch(|l| {
                         if is_dm_channel || is_group_channel {
-                            st.nav.dm_right_sidebar_visible = false;
+                            l.dm_right_sidebar_visible = false;
                         } else {
-                            st.nav.right_sidebar_visible = false;
+                            l.right_sidebar_visible = false;
                         }
                     });
                 }
@@ -511,7 +520,7 @@ pub(super) fn render_agent_toggle_button(
 }
 
 pub(super) fn render_member_toggle_button(
-    app_state: BatchedSignal<AppState>,
+    ui_layout: crate::state::BatchedSignal<crate::state::UiLayout>,
     mut utility_panel: Signal<Option<ChatUtilityPanel>>,
     mut show_search_filters: Signal<bool>,
     is_group_channel: bool,
@@ -520,11 +529,11 @@ pub(super) fn render_member_toggle_button(
     if is_group_channel {
         return rsx! {
             button {
-                class: if app_state.read().nav.dm_right_sidebar_visible { "header-btn soft-active chat-members-toggle-btn chat-header-btn-members" } else { "header-btn chat-members-toggle-btn chat-header-btn-members" },
+                class: if ui_layout.read().dm_right_sidebar_visible { "header-btn soft-active chat-members-toggle-btn chat-header-btn-members" } else { "header-btn chat-members-toggle-btn chat-header-btn-members" },
                 title: t("chat-toggle-members"),
                 onclick: move |_| {
-                    let current = app_state.read().nav.dm_right_sidebar_visible;
-                    app_state.batch(|st| st.nav.dm_right_sidebar_visible = !current);
+                    let current = ui_layout.read().dm_right_sidebar_visible;
+                    ui_layout.batch(|l| l.dm_right_sidebar_visible = !current);
                     // Opening members: close agent panel
                     utility_panel.set(None);
                     show_search_filters.set(false);
@@ -537,11 +546,11 @@ pub(super) fn render_member_toggle_button(
     if is_dm_channel {
         return rsx! {
             button {
-                class: if app_state.read().nav.dm_right_sidebar_visible { "header-btn soft-active chat-members-toggle-btn chat-header-btn-members" } else { "header-btn chat-members-toggle-btn chat-header-btn-members" },
+                class: if ui_layout.read().dm_right_sidebar_visible { "header-btn soft-active chat-members-toggle-btn chat-header-btn-members" } else { "header-btn chat-members-toggle-btn chat-header-btn-members" },
                 title: t("chat-toggle-contact"),
                 onclick: move |_| {
-                    let current = app_state.read().nav.dm_right_sidebar_visible;
-                    app_state.batch(|st| st.nav.dm_right_sidebar_visible = !current);
+                    let current = ui_layout.read().dm_right_sidebar_visible;
+                    ui_layout.batch(|l| l.dm_right_sidebar_visible = !current);
                     // Opening contact panel: close agent panel
                     utility_panel.set(None);
                     show_search_filters.set(false);
@@ -553,11 +562,11 @@ pub(super) fn render_member_toggle_button(
 
     rsx! {
         button {
-            class: if app_state.read().nav.right_sidebar_visible { "header-btn soft-active chat-members-toggle-btn chat-header-btn-members" } else { "header-btn chat-members-toggle-btn chat-header-btn-members" },
+            class: if ui_layout.read().right_sidebar_visible { "header-btn soft-active chat-members-toggle-btn chat-header-btn-members" } else { "header-btn chat-members-toggle-btn chat-header-btn-members" },
             title: t("chat-toggle-members"),
             onclick: move |_| {
-                let current = app_state.read().nav.right_sidebar_visible;
-                app_state.batch(|st| st.nav.right_sidebar_visible = !current);
+                let current = ui_layout.read().right_sidebar_visible;
+                ui_layout.batch(|l| l.right_sidebar_visible = !current);
                 // Opening members: close agent panel
                 utility_panel.set(None);
                 show_search_filters.set(false);

@@ -25,7 +25,7 @@ use super::super::super::routes::Route;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::chat_data::user_color;
-use crate::state::{AppState, ChatData, VoiceState};
+use crate::state::{AppState, ChatData, NavState, VoiceState};
 use dioxus::prelude::*;
 use poly_client::{AccountPresence, ConnectionStatus};
 use poly_ui_macros::{context_menu, ui_action};
@@ -47,8 +47,8 @@ struct AccountBarUserState {
     account_id: Option<String>,
 }
 
-fn current_account_bar_user(app_state: &AppState, chat_data: &ChatData) -> AccountBarUserState {
-    let aid = app_state.nav.active_account_id.as_deref();
+fn current_account_bar_user(nav: &NavState, chat_data: &ChatData) -> AccountBarUserState {
+    let aid = nav.active_account_id.as_deref();
     let client_manager = use_context::<BatchedSignal<ClientManager>>();
     let cm = client_manager.read();
 
@@ -289,7 +289,8 @@ fn AccountBarControls(
     voice_state: BatchedSignal<VoiceState>,
 ) -> Element {
     let client_manager: BatchedSignal<ClientManager> = use_context();
-    let nav = app_state.read().nav.clone();
+    let nav_state: BatchedSignal<NavState> = use_context();
+    let nav = nav_state.read();
     let backend_slug = nav
         .active_backend
         .cloned().map_or_else(|| "demo".to_string(), |backend| backend.slug().to_string());
@@ -365,12 +366,13 @@ fn AccountBarControls(
 #[component]
 pub fn AccountBar() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
+    let nav_state: BatchedSignal<NavState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let voice_state: BatchedSignal<VoiceState> = use_context();
     let voice_conn = voice_state.read().voice_connection.clone();
-    let st_snap = app_state.read().clone();
+    let nav_snap = nav_state.read().clone();
     let cd_snap = chat_data.read().clone();
-    let user = current_account_bar_user(&st_snap, &cd_snap);
+    let user = current_account_bar_user(&nav_snap, &cd_snap);
 
     let is_muted = voice_conn.as_ref().is_some_and(|vc| vc.is_muted);
     let is_deafened = voice_conn.as_ref().is_some_and(|vc| vc.is_deafened);

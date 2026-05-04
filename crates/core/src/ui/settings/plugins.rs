@@ -379,6 +379,10 @@ pub fn PluginsSettings() -> Element {
     let voice_state: BatchedSignal<crate::state::VoiceState> = use_context();
     let drag_state: BatchedSignal<crate::state::DragState> = use_context();
     let app_state: crate::state::BatchedSignal<crate::state::AppState> = use_context();
+    let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
+    let ui_layout: crate::state::BatchedSignal<crate::state::UiLayout> = use_context();
+    let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
+    let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
 
     // Local reactive copies of the persisted list — updated on every toggle/add/remove.
     let mut disabled: Signal<Vec<String>> = use_signal(Vec::new);
@@ -445,7 +449,7 @@ pub fn PluginsSettings() -> Element {
                                         // visibility in sync across the whole app.
                                         spawn(async move {
                                             crate::ui::demo::toggle_demo(
-                                                client_manager, chat_data, voice_state, drag_state, app_state,
+                                                client_manager, chat_data, voice_state, drag_state, app_state, nav, ui_layout, ui_overlays, user_prefs,
                                             ).await;
                                         });
                                     } else {
