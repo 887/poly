@@ -21,7 +21,8 @@ use crate::state::{ActiveContextMenu, AppState, BatchedSignal, MenuAnchor, Moder
 use crate::ui::account::common::user_profile_modal::open_user_profile;
 use dioxus::events::MouseEvent;
 use dioxus::prelude::*;
-use poly_client::{capabilities_for_slug, User};
+use poly_client::User;
+use crate::client_manager::ClientManager;
 use serde::{Deserialize, Serialize};
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -128,12 +129,13 @@ fn render_user_row(ctx_json: &serde_json::Value, close: EventHandler<()>) -> Ele
         return rsx! {};
     };
     let app_state: BatchedSignal<AppState> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
     let user_for_profile = ctx.user.clone();
     let copy_id = ctx.user.id.clone();
     let display_name = ctx.user.display_name.clone();
 
     // Capability and permission gate for moderation actions.
-    let caps = capabilities_for_slug(&ctx.backend_slug);
+    let caps = client_manager.peek().capabilities_for_slug(&ctx.backend_slug);
     let last_known_perms = app_state.read().last_known_perms.clone();
     let has_server = !ctx.server_id.is_empty();
 

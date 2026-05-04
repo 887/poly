@@ -272,7 +272,7 @@ fn build_on_complete_inner(
                     }
                 });
             }
-            let caps = poly_client::capabilities_for_slug(&backend_slug);
+            let caps = client_manager.peek().capabilities_for_slug(&backend_slug);
             let landing = match caps.landing {
                 poly_client::LandingPage::Overview => Route::ServerOverviewRoute {
                     backend: backend_slug,
@@ -382,7 +382,7 @@ fn build_on_complete_reauth(
                 chat_data.batch(move |cd| { cd.account_sessions.insert(aid, session); });
             }
 
-            let caps = poly_client::capabilities_for_slug(&backend_slug);
+            let caps = client_manager.peek().capabilities_for_slug(&backend_slug);
             let landing = match caps.landing {
                 poly_client::LandingPage::Overview => Route::ServerOverviewRoute {
                     backend: backend_slug,

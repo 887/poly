@@ -142,12 +142,13 @@ impl NotificationMenuFilter {
     }
 }
 
-/// Build the sidebar filter list honored for a given backend slug.
+/// Build the sidebar filter list for a given backend using its capability set.
 ///
 /// Kept as a pub(crate) free function so the inline regression test below
 /// can pin the matrix without instantiating the component.
-pub(crate) fn filters_for_backend(slug: &str) -> Vec<NotificationMenuFilter> {
-    let caps = poly_client::capabilities_for_slug(slug);
+/// Callers must supply the `BackendCapabilities` from
+/// `client_manager.peek().capabilities_for_slug(slug)`.
+pub(crate) fn filters_for_backend(slug: &str, caps: poly_client::BackendCapabilities) -> Vec<NotificationMenuFilter> {
     [
         NotificationMenuFilter::All,
         NotificationMenuFilter::Mentions,
@@ -190,11 +191,11 @@ pub fn NotificationsView(account_id: String, backend_slug: String) -> Element {
         .collect();
 
     let total_count = notifications.len();
-    let sidebar_filters = filters_for_backend(&backend_slug);
-
     // Detect whether the active account's stored token is rejected (401).
     // Only surface the reauth CTA in that case — hidden otherwise.
     let client_manager_sig: BatchedSignal<ClientManager> = use_context();
+    let caps = client_manager_sig.peek().capabilities_for_slug(&backend_slug);
+    let sidebar_filters = filters_for_backend(&backend_slug, caps);
     let needs_reauth = client_manager_sig
         .read()
         .connection_statuses
@@ -723,9 +724,16 @@ mod tests {
         filters.contains(&f)
     }
 
+    /// Helper: build filters using the runtime registry seeded by `ClientManager::new()`.
+    fn filters_for_slug(slug: &str) -> Vec<NotificationMenuFilter> {
+        let cm = crate::client_manager::ClientManager::new();
+        let caps = cm.capabilities_for_slug(slug);
+        filters_for_backend(slug, caps)
+    }
+
     #[test]
     fn discord_shows_all_filters() {
-        let filters = filters_for_backend("discord");
+        let filters = filters_for_slug("discord");
         assert!(contains(&filters, NotificationMenuFilter::All));
         assert!(contains(&filters, NotificationMenuFilter::Mentions));
         assert!(contains(&filters, NotificationMenuFilter::FriendRequests));
@@ -738,7 +746,7 @@ mod tests {
     fn stoat_omits_voice_and_server_invites() {
         // Stoat is full social chat but has no voice and does not support server
         // creation in Poly's model, so both voice and server invites must be hidden.
-        let filters = filters_for_backend("stoat");
+        let filters = filters_for_slug("stoat");
         assert!(contains(&filters, NotificationMenuFilter::FriendRequests));
         assert!(
             !contains(&filters, NotificationMenuFilter::ServerInvites),
@@ -753,7 +761,7 @@ mod tests {
     #[test]
     fn matrix_omits_voice_invites() {
         // Our current Matrix declaration has VoiceSupport::None.
-        let filters = filters_for_backend("matrix");
+        let filters = filters_for_slug("matrix");
         assert!(
             !contains(&filters, NotificationMenuFilter::VoiceInvites),
             "matrix has no voice — voice invites must be hidden"
@@ -764,7 +772,7 @@ mod tests {
     fn github_shows_only_read_activity_filters() {
         // GitHub is read-only with Activity-style notifications: no friends,
         // no create_server, no voice — the sidebar should collapse down.
-        let filters = filters_for_backend("github");
+        let filters = filters_for_slug("github");
         assert!(contains(&filters, NotificationMenuFilter::All));
         assert!(contains(&filters, NotificationMenuFilter::Mentions));
         assert!(contains(&filters, NotificationMenuFilter::Other));
@@ -778,7 +786,7 @@ mod tests {
         // HN has NotificationSupport::None, so the entire sidebar should be empty.
         // (In practice the NotificationsRoute also redirects HN away, but this is
         // the defensive last line of defence.)
-        let filters = filters_for_backend("hackernews");
+        let filters = filters_for_slug("hackernews");
         assert!(
             filters.is_empty(),
             "HN has NotificationSupport::None — filters: {filters:?}"
@@ -789,7 +797,7 @@ mod tests {
     fn lemmy_shows_mentions_no_social_invites() {
         // Lemmy has notifications (private messages / mentions) but no friends
         // and no create_server in Poly's declaration.
-        let filters = filters_for_backend("lemmy");
+        let filters = filters_for_slug("lemmy");
         assert!(contains(&filters, NotificationMenuFilter::Mentions));
         assert!(!contains(&filters, NotificationMenuFilter::FriendRequests));
         assert!(!contains(&filters, NotificationMenuFilter::VoiceInvites));
@@ -798,7 +806,7 @@ mod tests {
     #[test]
     fn unknown_slug_has_no_filters() {
         // Default capability preset is READ_ONLY_FEED → NotificationSupport::None.
-        let filters = filters_for_backend("definitely-not-a-real-plugin");
+        let filters = filters_for_slug("definitely-not-a-real-plugin");
         assert!(filters.is_empty());
     }
 

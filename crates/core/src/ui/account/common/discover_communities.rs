@@ -91,7 +91,7 @@ pub fn DiscoverCommunitiesView(
 ) -> Element {
     let client_manager: BatchedSignal<ClientManager> = use_context();
 
-    let caps = poly_client::capabilities_for_slug(&backend_slug);
+    let caps = client_manager.peek().capabilities_for_slug(&backend_slug);
     let show_scope_tabs = matches!(
         caps.community_search,
         CommunitySearchSupport::SubscribedLocalAll

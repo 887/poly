@@ -220,10 +220,11 @@ fn ServerSettingsNavigation(
     backend_slug: String,
     on_select: EventHandler<ServerSettingsSection>,
 ) -> Element {
+    let client_manager: BatchedSignal<ClientManager> = use_context();
     let filter = search_text.read().to_lowercase();
 
     let searching = !filter.is_empty();
-    let caps = poly_client::capabilities_for_slug(&backend_slug);
+    let caps = client_manager.peek().capabilities_for_slug(&backend_slug);
     let mod_sections = moderation_sections_for_caps(caps);
 
     rsx! {
@@ -279,6 +280,7 @@ fn ServerSettingsContent(
     server_id: String,
     server_name: String,
 ) -> Element {
+    let client_manager: BatchedSignal<ClientManager> = use_context();
     let _ = (&backend, &instance_id);
     let filter = search_text.read().to_lowercase();
 
@@ -395,7 +397,7 @@ fn ServerSettingsContent(
                 }
                 // Capability-gated moderation sections
                 {
-                    let caps = poly_client::capabilities_for_slug(&backend);
+                    let caps = client_manager.peek().capabilities_for_slug(&backend);
                     let mod_sections = moderation_sections_for_caps(caps);
                     rsx! {
                         for (label_key, section) in mod_sections {

@@ -288,12 +288,13 @@ fn AccountBarControls(
     app_state: BatchedSignal<AppState>,
     chat_data: BatchedSignal<ChatData>,
 ) -> Element {
+    let client_manager: BatchedSignal<ClientManager> = use_context();
     let nav = app_state.read().nav.clone();
     let backend_slug = nav
         .active_backend
         .cloned().map_or_else(|| "demo".to_string(), |backend| backend.slug().to_string());
     // Pack F (P61) — hide mic/deafen on backends with no voice support.
-    let show_voice = poly_client::capabilities_for_slug(&backend_slug).should_show_voice();
+    let show_voice = client_manager.peek().capabilities_for_slug(&backend_slug).should_show_voice();
     let settings_target = nav.active_account_id.cloned().map(|account_id| {
         let instance_id = nav.active_instance_id.cloned().unwrap_or_else(|| "demo".to_string());
         Route::AccountSettingsRoute {

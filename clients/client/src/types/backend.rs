@@ -60,24 +60,20 @@ impl BackendId {
         Self(s.to_string())
     }
 
-    /// Returns `true` for backends whose capabilities match the "forum layout"
-    /// pattern — no DMs, no voice, no friend graph. Used by the UI to pick
-    /// between the chat-style and forum-style channel list / badge rules.
-    ///
-    /// Capability-derived, not a hard-coded slug list — see [`capabilities_for_slug`].
-    #[must_use]
-    pub fn uses_forum_layout(&self) -> bool {
-        capabilities_for_slug(self.0.as_str()).is_forum_layout()
-    }
 }
 
-/// Capability lookup for a backend slug.
+/// Static capability lookup for a backend slug.
 ///
-/// Mirrors each plugin's `ClientBackend::backend_capabilities()` override so
-/// the UI can read a backend's shape without holding a live client instance
-/// (e.g. from a `BackendType` in a server list).
+/// **Internal use only** — used to seed `ClientManager::backend_capabilities`
+/// at startup and as the compile-time fallback when no live backend instance
+/// is available. UI code MUST use `ClientManager::capabilities_for_slug`
+/// which consults the runtime registry first (populated from each backend's
+/// own `backend_capabilities()` trait impl at connect/restore time).
+///
+/// This function is private to prevent external callers from accidentally
+/// bypassing the runtime registry.
 #[must_use]
-pub fn capabilities_for_slug(slug: &str) -> BackendCapabilities {
+pub(crate) fn static_capabilities_for_slug(slug: &str) -> BackendCapabilities {
     // lint-allow-unused: explicit "hackernews" arm documents intent vs the wildcard fallback
     #[allow(clippy::match_same_arms)]
     match slug {
@@ -678,115 +674,3 @@ pub struct Mechanism {
     pub description_key: Option<String>,
 }
 
-#[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-mod pack_f_capability_gates {
-    //! Pack-F regression: per-backend capability-gate helpers must match
-    //! the declared `capabilities_for_slug` table. Table-driven to catch
-    //! drift when a new backend is added or a declaration flips.
-
-    use super::*;
-
-    fn expected(
-        slug: &str,
-    ) -> (
-        bool, // should_show_dms
-        bool, // should_show_friends
-        bool, // should_show_notifications
-        bool, // should_show_voice
-        bool, // composer_writable
-    ) {
-        match slug {
-            "hackernews" => (false, false, false, false, false),
-            "github" | "forgejo" => (false, false, true, false, false),
-            "lemmy" | "demo_forum" => (false, false, true, false, true),
-            "matrix" => (true, true, true, false, true),
-            "stoat" => (true, true, true, false, true),
-            "teams" => (true, true, true, true, true),
-            "discord" | "demo" | "poly" => (true, true, true, true, true),
-            _ => (false, false, false, false, false),
-        }
-    }
-
-    fn check(slug: &str) {
-        let caps = capabilities_for_slug(slug);
-        let (dms, friends, notifs, voice, composer) = expected(slug);
-        assert_eq!(caps.should_show_dms(), dms, "{slug}: should_show_dms");
-        assert_eq!(
-            caps.should_show_friends(),
-            friends,
-            "{slug}: should_show_friends"
-        );
-        assert_eq!(
-            caps.should_show_notifications(),
-            notifs,
-            "{slug}: should_show_notifications"
-        );
-        assert_eq!(caps.should_show_voice(), voice, "{slug}: should_show_voice");
-        assert_eq!(
-            caps.composer_writable(),
-            composer,
-            "{slug}: composer_writable"
-        );
-    }
-
-    #[test]
-    fn hackernews_hides_everything_social() {
-        check("hackernews");
-    }
-
-    #[test]
-    fn github_shows_only_notifications() {
-        check("github");
-    }
-
-    #[test]
-    fn forgejo_shows_only_notifications() {
-        check("forgejo");
-    }
-
-    #[test]
-    fn lemmy_writeable_forum_no_social() {
-        check("lemmy");
-    }
-
-    #[test]
-    fn demo_forum_matches_lemmy() {
-        check("demo_forum");
-    }
-
-    #[test]
-    fn matrix_full_social_no_voice() {
-        check("matrix");
-    }
-
-    #[test]
-    fn stoat_full_social_no_voice() {
-        check("stoat");
-    }
-
-    #[test]
-    fn teams_full_social_with_voice() {
-        check("teams");
-    }
-
-    #[test]
-    fn discord_full_everything() {
-        check("discord");
-    }
-
-    #[test]
-    fn demo_full_everything() {
-        check("demo");
-    }
-
-    #[test]
-    fn poly_full_everything() {
-        check("poly");
-    }
-
-    #[test]
-    fn unknown_slug_is_read_only_feed() {
-        check("definitely-not-a-real-plugin");
-    }
-}

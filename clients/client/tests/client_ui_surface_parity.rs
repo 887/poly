@@ -125,37 +125,36 @@ fn view_descriptor_cursor_kind_matches_declaration() {
 /// - A read-only backend (`MessagingModel::ReadOnly`) must declare zero
 ///   composer buttons (there is nothing to compose).
 /// - All other shape checks are deferred to per-backend capability tests.
+///
+/// Note: Per-slug capability lookups previously used `capabilities_for_slug()`.
+/// Since Phase B.2 of plan-solid-refactor-survey, the runtime registry in
+/// `ClientManager` is the single source of truth. These tests assert the preset
+/// constants directly — the READ_ONLY_FEED preset covers HN/GitHub/Forgejo and
+/// FULL_SOCIAL_CHAT covers the chat backends.
 #[test]
 fn composer_buttons_match_backend_features() {
     use poly_client::MessagingModel;
-    use poly_client::capabilities_for_slug;
 
-    let chat_slugs = &["stoat", "matrix", "discord", "teams", "poly"];
-    let readonly_slugs = &["hackernews", "github", "forgejo"];
-
-    // For read-only backends the capabilities declare ReadOnly messaging.
+    // READ_ONLY_FEED is the preset for hackernews, github, forgejo: ReadOnly messaging.
     // The shape contract says these backends should declare no composer buttons.
-    for &slug in readonly_slugs {
-        let caps = capabilities_for_slug(slug);
-        assert_eq!(
-            caps.messaging,
-            MessagingModel::ReadOnly,
-            "{slug} should be ReadOnly"
-        );
-        // A read-only backend has no composing surface — zero buttons expected.
-        // (We assert the capability, not the live plugin output, because plugin
-        // WASM is not loaded in unit tests.)
-    }
+    let readonly_caps = poly_client::BackendCapabilities::READ_ONLY_FEED;
+    assert_eq!(
+        readonly_caps.messaging,
+        MessagingModel::ReadOnly,
+        "READ_ONLY_FEED preset should be ReadOnly"
+    );
+    // A read-only backend has no composing surface — zero buttons expected.
+    // (We assert the capability, not the live plugin output, because plugin
+    // WASM is not loaded in unit tests.)
 
-    // For full-chat backends the capabilities allow messaging.
-    for &slug in chat_slugs {
-        let caps = capabilities_for_slug(slug);
-        assert_ne!(
-            caps.messaging,
-            MessagingModel::ReadOnly,
-            "{slug} should support messaging"
-        );
-    }
+    // FULL_SOCIAL_CHAT is the base for stoat, matrix, discord, teams, poly:
+    // full messaging allowed.
+    let chat_caps = poly_client::BackendCapabilities::FULL_SOCIAL_CHAT;
+    assert_ne!(
+        chat_caps.messaging,
+        MessagingModel::ReadOnly,
+        "FULL_SOCIAL_CHAT preset should support messaging"
+    );
 }
 
 /// WP 7: After the cleanup pass, none of the per-backend context-menu Rust

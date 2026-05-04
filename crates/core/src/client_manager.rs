@@ -9,8 +9,9 @@
 
 use dioxus::prelude::{Callback, Element};
 use poly_client::{
-    AccountPresence, AuthCredentials, BackendType, ClientBackend, ConnectionStatus, Server,
-    Session, SignupCompleted, SignupContext, SignupMethod, TestAccountEntry,
+    AccountPresence, AuthCredentials, BackendCapabilities, BackendType, ClientBackend,
+    ConnectionStatus, Server, Session, SignupCompleted, SignupContext, SignupMethod,
+    TestAccountEntry,
 };
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -353,6 +354,15 @@ pub struct ClientManager {
     ///
     /// Accounts are removed from this set as they get restored.
     pub expected_account_ids: std::collections::HashSet<String>,
+    /// Runtime capability registry: slug → `BackendCapabilities`.
+    ///
+    /// Seeded at startup from the compile-time slug table for all known
+    /// built-in slugs, then overwritten per-slug as backends connect via
+    /// `commit_backend_account` (reading the live `backend_capabilities()`
+    /// trait impl). UI code reads this via `capabilities_for_slug` instead
+    /// of the old free function so caps always reflect the backend's own
+    /// declaration.
+    pub backend_capabilities: HashMap<String, BackendCapabilities>,
 }
 
 impl Clone for ClientManager {
@@ -369,6 +379,7 @@ impl Clone for ClientManager {
             signup_entries: self.signup_entries.clone(),
             test_account_entries: self.test_account_entries.clone(),
             expected_account_ids: self.expected_account_ids.clone(),
+            backend_capabilities: self.backend_capabilities.clone(),
         }
     }
 }
@@ -391,8 +402,109 @@ impl Default for ClientManager {
 
 impl ClientManager {
     /// Create a new empty client manager.
-    #[must_use] 
+    ///
+    /// The `backend_capabilities` registry is pre-seeded with the compile-time
+    /// static capability table for every known built-in slug. Capabilities are
+    /// overwritten per-slug when a live backend connects (via
+    /// `commit_backend_account`), so the registry always converges on the
+    /// backend's own `backend_capabilities()` declaration.
+    #[must_use]
     pub fn new() -> Self {
+        use poly_client::{CommunitySearchSupport, NotificationSupport, VoiceSupport};
+        // Seed the registry from the compile-time static table. Each entry is
+        // overwritten at runtime by `commit_backend_account` once a live backend
+        // is available — at that point `backend_capabilities()` on the trait impl
+        // becomes the source of truth. Discord and Teams are not built-in slugs
+        // (see BUILTIN_BACKENDS policy) but are listed here so sideloaded WASM
+        // versions have a sensible fallback before first connect.
+        let backend_capabilities: HashMap<String, BackendCapabilities> = [
+            ("hackernews", BackendCapabilities::READ_ONLY_FEED),
+            ("github", BackendCapabilities {
+                notifications: NotificationSupport::Activity,
+                ..BackendCapabilities::READ_ONLY_FEED
+            }),
+            ("forgejo", BackendCapabilities {
+                notifications: NotificationSupport::Activity,
+                ..BackendCapabilities::READ_ONLY_FEED
+            }),
+            ("lemmy", BackendCapabilities {
+                has_ban: true,
+                has_timed_ban: true,
+                has_moderation_log: true,
+                community_search: CommunitySearchSupport::SubscribedLocalAll,
+                supports_comment_feed: true,
+                ..BackendCapabilities::MESSAGING_NO_SOCIAL
+            }),
+            ("demo_forum", BackendCapabilities {
+                has_ban: true,
+                has_timed_ban: true,
+                has_moderation_log: true,
+                community_search: CommunitySearchSupport::SubscribedLocalAll,
+                supports_comment_feed: true,
+                ..BackendCapabilities::MESSAGING_NO_SOCIAL
+            }),
+            ("reddit", BackendCapabilities {
+                community_search: CommunitySearchSupport::Single,
+                ..BackendCapabilities::MESSAGING_NO_SOCIAL
+            }),
+            ("matrix", BackendCapabilities {
+                voice: VoiceSupport::None,
+                has_kick: true,
+                has_ban: true,
+                has_channel_mgmt: true,
+                ..BackendCapabilities::FULL_SOCIAL_CHAT
+            }),
+            ("stoat", BackendCapabilities {
+                voice: VoiceSupport::None,
+                has_roles: true,
+                has_kick: true,
+                has_ban: true,
+                has_timed_ban: true,
+                has_channel_mgmt: true,
+                has_moderation_log: false,
+                ..BackendCapabilities::FULL_SOCIAL_CHAT
+            }),
+            ("teams", BackendCapabilities {
+                supports_typing_indicators: false,
+                has_roles: false,
+                has_kick: true,
+                has_ban: false,
+                has_timed_ban: false,
+                has_channel_mgmt: true,
+                has_moderation_log: false,
+                ..BackendCapabilities::FULL_SOCIAL_CHAT
+            }),
+            ("discord", BackendCapabilities {
+                has_roles: true,
+                has_kick: true,
+                has_ban: true,
+                has_timed_ban: true,
+                has_channel_mgmt: true,
+                has_moderation_log: true,
+                ..BackendCapabilities::FULL_SOCIAL_CHAT
+            }),
+            ("demo", BackendCapabilities {
+                has_roles: true,
+                has_kick: true,
+                has_ban: true,
+                has_timed_ban: true,
+                has_channel_mgmt: true,
+                has_moderation_log: true,
+                ..BackendCapabilities::FULL_SOCIAL_CHAT
+            }),
+            ("poly", BackendCapabilities {
+                has_roles: true,
+                has_kick: true,
+                has_ban: true,
+                has_timed_ban: true,
+                has_channel_mgmt: true,
+                has_moderation_log: true,
+                ..BackendCapabilities::FULL_SOCIAL_CHAT
+            }),
+        ]
+        .into_iter()
+        .map(|(slug, caps)| (slug.to_string(), caps))
+        .collect();
         Self {
             backends: HashMap::new(),
             demo_active: false,
@@ -405,7 +517,27 @@ impl ClientManager {
             signup_entries: Vec::new(),
             test_account_entries: Vec::new(),
             expected_account_ids: std::collections::HashSet::new(),
+            backend_capabilities,
         }
+    }
+
+    /// Look up the capability set for a backend slug.
+    ///
+    /// Consults the runtime registry first (populated from each backend's own
+    /// `backend_capabilities()` trait impl at connect/restore time). Falls back
+    /// to `BackendCapabilities::READ_ONLY_FEED` for unknown slugs (defensive:
+    /// unknown plugins get the minimum capability set).
+    ///
+    /// **UI call sites must use this method** in place of the old
+    /// `poly_client::capabilities_for_slug` free function so capabilities
+    /// always reflect the backend's own declaration rather than a potentially
+    /// stale compile-time table.
+    #[must_use]
+    pub fn capabilities_for_slug(&self, slug: &str) -> BackendCapabilities {
+        self.backend_capabilities
+            .get(slug)
+            .copied()
+            .unwrap_or(BackendCapabilities::READ_ONLY_FEED)
     }
 
     /// Activate the demo client.
@@ -783,6 +915,11 @@ impl ClientManager {
     }
 
     /// Commit a pre-authenticated backend account synchronously.
+    ///
+    /// Also updates the `backend_capabilities` registry by attempting a
+    /// non-blocking `try_read()` on the backend handle. If the lock is
+    /// already held (unlikely — the backend was just created), the registry
+    /// retains the compile-time static entry seeded at `new()`.
     pub fn commit_backend_account(
         &mut self,
         account_id: String,
@@ -790,6 +927,13 @@ impl ClientManager {
         backend: BackendHandle,
         server_map: HashMap<String, String>,
     ) {
+        // Populate runtime capability registry from the live backend instance.
+        // `try_read()` is non-blocking — falls back silently if lock is held.
+        if let Ok(guard) = backend.try_read() {
+            let slug = guard.backend_type().slug().to_string();
+            let caps = guard.backend_capabilities();
+            self.backend_capabilities.insert(slug, caps);
+        }
         self.sessions.insert(account_id.clone(), session);
         self.backends.insert(account_id.clone(), backend);
         self.connection_statuses

@@ -295,8 +295,8 @@ pub fn FavoritesBar() -> Element {
                                 account_id: server.account_id.clone(),
                                 account_display_name: server.account_display_name.clone(),
                                 backend_name: server.backend.display_name().to_string(),
-                                unread: if server.backend.uses_forum_layout() { 0 } else { server.unread_count },
-                                mention: if server.backend.uses_forum_layout() { 0 } else { server.mention_count },
+                                unread: if client_manager.peek().capabilities_for_slug(server.backend.as_str()).is_forum_layout() { 0 } else { server.unread_count },
+                                mention: if client_manager.peek().capabilities_for_slug(server.backend.as_str()).is_forum_layout() { 0 } else { server.mention_count },
                                 icon_url: server.icon_url.clone(),
                             }
                         }
@@ -406,7 +406,7 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
         .read()
         .account_sessions
         .get(&account_id)
-        .is_some_and(|s| s.backend.uses_forum_layout());
+        .is_some_and(|s| client_manager.peek().capabilities_for_slug(s.backend.as_str()).is_forum_layout());
 
     let color = user_color(&account_id);
 
@@ -694,7 +694,7 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                             .get(&aid)
                             .map(|s| s.backend.slug().to_string());
                         let route_is_compatible = if let Some(slug) = backend_slug_for_route_check {
-                            let caps = poly_client::capabilities_for_slug(&slug);
+                            let caps = client_manager.peek().capabilities_for_slug(&slug);
                             let path = url.as_str();
                             let dm_path = path.contains("/dms");
                             let friends_path = path.contains("/friends");
@@ -753,7 +753,7 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                     .trim_start_matches("http://")
                     .trim_end_matches('/')
                     .to_string();
-                let caps = poly_client::capabilities_for_slug(&backend_slug);
+                let caps = client_manager.peek().capabilities_for_slug(&backend_slug);
                 let fallback_route = match caps.landing {
                     poly_client::LandingPage::Overview => {
                         Route::ServerOverviewRoute {
@@ -1112,7 +1112,7 @@ fn FavoriteServerIcon(
             }
             // Bottom-left: account connection status emoji icon (not for forum,
             // unless reauth is needed — forum accounts still surface the 🔑 badge).
-            if !poly_client::BackendType::from_slug(&backend_slug).uses_forum_layout() {
+            if !client_manager.peek().capabilities_for_slug(&backend_slug).is_forum_layout() {
                 span {
                     class: "account-conn-icon account-conn-icon--{_account_conn_class}",
                     "{conn_icon}"
@@ -1131,7 +1131,7 @@ fn FavoriteServerIcon(
                 span { class: "badge mention-count-badge", "{unread}" }
             }
             // Bottom-right: presence dot (not for forum)
-            if !poly_client::BackendType::from_slug(&backend_slug).uses_forum_layout() {
+            if !client_manager.peek().capabilities_for_slug(&backend_slug).is_forum_layout() {
                 span {
                     class: "status-dot presence-dot {account_presence_class}",
                 }

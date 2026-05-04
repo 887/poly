@@ -4248,7 +4248,7 @@ fn render_message_input_area(ctx: ChatViewMarkupCtx) -> Element {
         .active_backend
         .cloned().map_or_else(|| "demo".to_string(), |b| b.slug().to_string());
     let composer_writable =
-        poly_client::capabilities_for_slug(&backend_slug).composer_writable();
+        ctx.client_manager.peek().capabilities_for_slug(&backend_slug).composer_writable();
 
     rsx! {
         div { class: "message-input-area",

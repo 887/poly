@@ -21,12 +21,13 @@
 //! Every `#[component]` fn body in this module MUST stay under **150 lines**
 //! of RSX + logic. Extract sub-components rather than growing any file.
 
+use crate::client_manager::ClientManager;
 use crate::state::BatchedSignal;
 use crate::i18n::t;
 use crate::state::ChatData;
 use crate::ui::actions::{ActionCx, UiAction};
 use dioxus::prelude::*;
-use poly_client::{DmSpamFilterLevel, SensitiveContentLevel, capabilities_for_slug};
+use poly_client::{DmSpamFilterLevel, SensitiveContentLevel};
 use poly_ui_macros::{context_menu, ui_action};
 
 // ─── sub-components ─────────────────────────────────────────────────────────
@@ -387,7 +388,8 @@ impl UiAction for ContentSocialSettingsAction {
 #[component]
 pub fn ContentSocialSettings(_account_id: String, backend: String) -> Element {
     let chat_data = use_context::<BatchedSignal<ChatData>>();
-    let caps = capabilities_for_slug(&backend);
+    let client_manager = use_context::<BatchedSignal<ClientManager>>();
+    let caps = client_manager.peek().capabilities_for_slug(&backend);
     let has_dms = caps.should_show_dms();
     let has_friends = caps.should_show_friends();
     rsx! {

@@ -161,6 +161,7 @@ impl UiAction for ForumViewAction {
 pub fn ForumView() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
 
     // Channel id resolution (fixes back-button + server-switch bugs):
     //   1. Prefer `nav.selected_channel` (set by sync_route_to_app_state on
@@ -235,7 +236,7 @@ pub fn ForumView() -> Element {
             .map(|b| b.slug().to_string())
             .unwrap_or_default()
     };
-    let supports_comment_feed = poly_client::capabilities_for_slug(&backend_slug).supports_comment_feed;
+    let supports_comment_feed = client_manager.peek().capabilities_for_slug(&backend_slug).supports_comment_feed;
 
     // Phase D — current toggle value from AppState.
     let view_filter = app_state.peek().view_filter;

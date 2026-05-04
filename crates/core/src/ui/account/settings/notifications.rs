@@ -16,9 +16,9 @@
 //! `Storage::set_account_notification_settings`.
 
 use crate::i18n::t;
+use crate::state::BatchedSignal;
 use crate::storage::AccountNotificationSettings;
 use dioxus::prelude::*;
-use poly_client::capabilities_for_slug;
 use poly_ui_macros::{context_menu, ui_action};
 
 /// Typed actions for the per-account notification settings panel.
@@ -111,6 +111,7 @@ fn load_account_notif_settings(account_id: String, mut signals: NotifSignals) {
 #[context_menu(none)]
 #[component]
 pub fn NotificationsSettings(account_id: String, backend: String) -> Element {
+    let client_manager: BatchedSignal<crate::client_manager::ClientManager> = use_context();
     let notif_streams = use_signal(|| true);
     let notif_friends_voice = use_signal(|| true);
     let notif_reactions = use_signal(|| true);
@@ -128,7 +129,7 @@ pub fn NotificationsSettings(account_id: String, backend: String) -> Element {
         badge_unread,
     };
     let account_id_for_load = account_id.clone();
-    let caps = capabilities_for_slug(&backend);
+    let caps = client_manager.peek().capabilities_for_slug(&backend);
 
     let _load = use_future(move || {
         let aid = account_id_for_load.clone();

@@ -356,8 +356,11 @@ pub(crate) async fn toggle_demo(
                 };
                 let dms = guard.get_dm_channels().await.ok();
                 let groups = guard.get_groups().await.ok();
-                let is_forum = chat_data.read().account_sessions.get(aid)
-                    .is_some_and(|s| s.backend.uses_forum_layout());
+                let is_forum = {
+                    let slug = chat_data.read().account_sessions.get(aid)
+                        .map(|s| s.backend.slug().to_string());
+                    slug.is_some_and(|sl| client_manager.peek().capabilities_for_slug(&sl).is_forum_layout())
+                };
                 let notifs = if !is_forum {
                     guard.get_notifications().await.ok()
                 } else {

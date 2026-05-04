@@ -110,6 +110,7 @@ fn apply_bar2_drop(cd: &mut ChatData, drag_id: &str, target_id: &str, account_id
 pub fn AccountServerBar() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
+    let client_manager: BatchedSignal<crate::client_manager::ClientManager> = use_context();
 
     let nav = app_state.read().nav.clone();
     let active_account_id = nav.active_account_id.cloned();
@@ -153,7 +154,7 @@ pub fn AccountServerBar() -> Element {
     // Pack F (P57) — capability-gate the per-account nav buttons. HN / Lemmy /
     // GitHub declare `dms/friends/notifications = None` and must not render
     // these buttons; Discord / Stoat / Matrix keep the full row.
-    let caps = poly_client::capabilities_for_slug(&backend_slug);
+    let caps = client_manager.peek().capabilities_for_slug(&backend_slug);
     let show_dms = caps.should_show_dms();
     let show_friends = caps.should_show_friends();
     let show_notifs = caps.should_show_notifications();
@@ -212,8 +213,10 @@ pub fn AccountServerBar() -> Element {
                     Some(cd) => cd,
                     None => return,
                 };
-                let is_forum = poly_client::BackendType::from_slug(&backend_slug)
-                    .uses_forum_layout();
+                let is_forum = client_manager
+                    .peek()
+                    .capabilities_for_slug(&backend_slug)
+                    .is_forum_layout();
                 chat_data.batch(move |cd| {
                     for srv in servers {
                         if !cd.servers.iter().any(|s| s.id == srv.id) {

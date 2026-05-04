@@ -1210,6 +1210,7 @@ fn ServerLayout() -> Element {
 #[component]
 fn DmsHome(backend: String, instance_id: String, account_id: String) -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
     let nav = navigator();
     // Capability guard: backends without DMs (HN, Lemmy, GitHub) render an
     // unsupported-feature placeholder in place. We must NOT redirect here:
@@ -1218,7 +1219,7 @@ fn DmsHome(backend: String, instance_id: String, account_id: String) -> Element 
     // when combined with sync_route_to_app_state signal writes. The
     // favorites-sidebar click handler is responsible for picking the right
     // landing route for forum/non-DM accounts.
-    let caps = poly_client::capabilities_for_slug(&backend);
+    let caps = client_manager.peek().capabilities_for_slug(&backend);
     if matches!(caps.dms, poly_client::DmSupport::None) {
         return rsx! {
             FeatureUnsupportedPlaceholder {
@@ -1683,7 +1684,11 @@ fn ServerHome(
         let is_voice = server_matches
             && cd.current_channel.as_ref().is_some_and(|ch| matches!(ch.channel_type, ChannelType::Voice | ChannelType::Video));
         let is_forum = server_matches
-            && cd.current_server.as_ref().is_some_and(|s| s.backend.uses_forum_layout());
+            && cd.current_server.as_ref().is_some_and(|s| {
+                // poly-lint: allow render-time-read — capability lookup on slug, not a signal subscription
+                let slug = s.backend.as_str();
+                client_manager.peek().capabilities_for_slug(slug).is_forum_layout()
+            });
         // Empty server: server loaded but channels list is empty AND we're
         // not still in the initial loading window. Without this branch,
         // ChatView renders blank, which on a stale-deep-link redirect to
@@ -1802,7 +1807,7 @@ fn ServerChat(
     };
 
     let is_forum_backend = chat_data.read().current_server.as_ref()
-        .is_some_and(|s| s.backend.uses_forum_layout());
+        .is_some_and(|s| client_manager.peek().capabilities_for_slug(s.backend.as_str()).is_forum_layout());
     let is_voice = matches!(channel_type, Some(ChannelType::Voice) | Some(ChannelType::Video));
     let is_forum_channel = matches!(channel_type, Some(ChannelType::Forum));
     // Forum-layout backends (Lemmy, demo_forum) use the Lemmy-style ForumView.
@@ -1836,7 +1841,8 @@ fn ServerChat(
 #[ui_action(inherit)]
 #[component]
 fn FriendsRoute(backend: String, instance_id: String, account_id: String) -> Element {
-    let caps = poly_client::capabilities_for_slug(&backend);
+    let client_manager: BatchedSignal<ClientManager> = use_context();
+    let caps = client_manager.peek().capabilities_for_slug(&backend);
     if matches!(caps.friends, poly_client::FriendModel::None) {
         return rsx! {
             FeatureUnsupportedPlaceholder {
@@ -1969,7 +1975,8 @@ fn ServerOverviewAgentsRoute(backend: String, instance_id: String, account_id: S
 #[ui_action(inherit)]
 #[component]
 fn NotificationsRoute(backend: String, instance_id: String, account_id: String) -> Element {
-    let caps = poly_client::capabilities_for_slug(&backend);
+    let client_manager: BatchedSignal<ClientManager> = use_context();
+    let caps = client_manager.peek().capabilities_for_slug(&backend);
     if matches!(caps.notifications, poly_client::NotificationSupport::None) {
         return rsx! {
             FeatureUnsupportedPlaceholder {
@@ -1992,7 +1999,8 @@ fn NotificationsRoute(backend: String, instance_id: String, account_id: String) 
 #[ui_action(inherit)]
 #[component]
 fn DiscoverRoute(backend: String, instance_id: String, account_id: String) -> Element {
-    let caps = poly_client::capabilities_for_slug(&backend);
+    let client_manager: BatchedSignal<ClientManager> = use_context();
+    let caps = client_manager.peek().capabilities_for_slug(&backend);
     if matches!(caps.community_search, poly_client::CommunitySearchSupport::None) {
         return rsx! {
             FeatureUnsupportedPlaceholder {
