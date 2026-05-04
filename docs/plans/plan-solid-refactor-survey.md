@@ -233,8 +233,8 @@ Phase F unlocks all the per-effect work (`use_history_state_effect` etc.)
 that hang-class plans already name as the canonical examples but couldn't
 isolate.
 
-- [ ] **F.1** Move sub-components (`ChatHeaderActions` 347 lines,
-      `ChatUtilityRail` 205 lines) to `chat_view/{header,utility_rail}.rs`.
+- [x] **F.1** Move sub-components (`ChatHeaderActions` 347 lines,
+      `ChatUtilityRail` 205 lines) to `chat_view/{header,utility_rail}.rs`. — shipped in commit `<pending>`
 - [ ] **F.2** Move composer + search-filter helpers to
       `chat_view/{composer_helpers,search_filter}.rs`.
 - [ ] **F.3** Move all 12 `use_*_effect` hooks to

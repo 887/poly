@@ -13,6 +13,10 @@
 
 mod virtualization;
 use virtualization::*;
+mod header;
+use header::{ChatHeaderActions, render_search_tab_button, render_agent_toggle_button};
+mod utility_rail;
+use utility_rail::ChatUtilityRail;
 
 use crate::state::BatchedSignal;
 use super::super::super::routes::Route;
@@ -169,7 +173,7 @@ fn reply_preview_snippet(content: &MessageContent) -> String {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ChatUtilityPanel {
+pub(super) enum ChatUtilityPanel {
     Search,
     Pinned,
     Threads,
@@ -322,7 +326,7 @@ fn apply_search_filter_completion(existing: &str, completion_token: &str) -> Str
     format!("{} ", parts.join(" "))
 }
 
-fn message_plain_text(content: &MessageContent) -> String {
+pub(super) fn message_plain_text(content: &MessageContent) -> String {
     match content {
         MessageContent::Text(text) | MessageContent::WithAttachments { text, .. } => text.clone(),
     }
@@ -884,7 +888,7 @@ async fn persist_member_list_preferences(server_member_list_open: bool, dm_membe
     }
 }
 
-async fn persist_member_list_display_settings(
+pub(super) async fn persist_member_list_display_settings(
     grouping: crate::state::MemberListGrouping,
     sort_order: crate::state::MemberListSortOrder,
     show_offline: bool,
@@ -1277,45 +1281,6 @@ fn use_mobile_layout_resize_rerender_effect(mobile_layout_resize_tick: Signal<u6
 
 #[cfg(not(target_arch = "wasm32"))]
 fn use_mobile_layout_resize_rerender_effect(_mobile_layout_resize_tick: Signal<u64>) {}
-
-#[cfg(target_arch = "wasm32")]
-fn use_header_actions_overflow_effect(
-    mut header_actions_overflow: Signal<bool>,
-    mut header_actions_menu_open: Signal<bool>,
-    mobile_layout_resize_tick: Signal<u64>,
-) {
-    use_effect(move || { // poly-lint: allow stale-effect-capture — Signal-only; subscribes to mobile_layout_resize_tick Signal
-        let _resize_tick = *mobile_layout_resize_tick.read();
-
-        spawn(async move {
-            let is_overflowing = dioxus::document::eval(
-                r#"(() => {
-                    const wrap = document.querySelector('.chat-header-actions-wrap');
-                    const row = document.querySelector('.chat-header-actions-primary');
-                    if (!wrap || !row) return false;
-                    return row.scrollWidth > wrap.clientWidth + 1;
-                })()"#,
-            )
-            .await
-            .ok()
-            .and_then(|value| value.as_bool())
-            .unwrap_or(false);
-
-            header_actions_overflow.set(is_overflowing);
-            if !is_overflowing {
-                header_actions_menu_open.set(false);
-            }
-        });
-    });
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn use_header_actions_overflow_effect(
-    _header_actions_overflow: Signal<bool>,
-    _header_actions_menu_open: Signal<bool>,
-    _mobile_layout_resize_tick: Signal<u64>,
-) {
-}
 
 #[cfg(target_arch = "wasm32")]
 fn runtime_mobile_ui_active() -> bool {
@@ -2436,505 +2401,58 @@ fn render_mobile_chat_header_right_toggle(ctx: ChatViewMarkupCtx) -> Element {
 
 #[rustfmt::skip]
 #[ui_action(inherit)]
-#[context_menu(inherit)]
+#[context_menu(none)]
 #[component]
-fn HeaderOverflowItem(
-    icon: String,
-    label: String,
-    active: bool,
-    onclick: EventHandler<MouseEvent>,
+fn SearchFilterPopup(
+    suggestions: Vec<SearchFilterOption>,
+    active_index: usize,
+    on_append_filter: EventHandler<String>,
+    on_close: EventHandler<()>,
 ) -> Element {
-    let class_name = if active {
-        "chat-header-overflow-item active"
-    } else {
-        "chat-header-overflow-item"
-    };
-
     rsx! {
-        button {
-            class: "{class_name}",
-            onclick: move |evt| onclick.call(evt),
-            span { class: "chat-header-overflow-icon", "{icon}" }
-            span { class: "chat-header-overflow-label", "{label}" }
+        div { class: "search-filter-popup",
+            div { class: "search-filter-popup-header",
+                span { class: "search-filter-popup-title", {t("search-messages")} }
+                button { class: "close-btn", onclick: move |_| on_close.call(()), "✕" }
+            }
+            div { class: "search-filter-list",
+                for (index , suggestion) in suggestions.into_iter().enumerate() {
+                    SearchFilterRow {
+                        icon: suggestion.icon,
+                        title: suggestion.title,
+                        subtitle: suggestion.subtitle,
+                        token: suggestion.completion_token,
+                        selected: index == active_index,
+                        on_click: move |token| on_append_filter.call(token),
+                    }
+                }
+            }
         }
     }
 }
 
+#[rustfmt::skip]
 #[ui_action(inherit)]
 #[context_menu(inherit)]
 #[component]
-fn ChatHeaderActions(
-    app_state: BatchedSignal<AppState>,
-    utility_panel: Signal<Option<ChatUtilityPanel>>,
-    notifications_muted: Signal<bool>,
-    show_search_filters: Signal<bool>,
-    header_actions_menu_open: Signal<bool>,
-    header_actions_overflow: Signal<bool>,
-    chat_data: BatchedSignal<ChatData>,
-    client_manager: BatchedSignal<ClientManager>,
-    mobile_layout_resize_tick: Signal<u64>,
-    is_group_channel: bool,
-    is_dm_channel: bool,
-    dm_user: Option<User>,
-    channel_id: Option<String>,
-    member_list_visible: bool,
+fn SearchFilterRow(
+    icon: &'static str,
+    title: String,
+    subtitle: String,
+    token: String,
+    #[props(default)] selected: bool,
+    on_click: EventHandler<String>,
 ) -> Element {
-    use_header_actions_overflow_effect(header_actions_overflow, header_actions_menu_open, mobile_layout_resize_tick);
-
-    let app_state = app_state;
-    let mut utility_panel = utility_panel;
-    let notifications_muted = notifications_muted;
-    let mut show_search_filters = show_search_filters;
-    let mut header_actions_menu_open = header_actions_menu_open;
-    let header_actions_overflow = header_actions_overflow;
-    let chat_data = chat_data;
-    let client_manager = client_manager;
-    let active_dm_call = chat_data
-        .read()
-        .voice_connection
-        .clone()
-        .filter(|connection| connection.dm_id.as_deref() == channel_id.as_deref());
-    let member_sidebar_active = member_list_visible && utility_panel.read().is_none();
-    let threads_active = *utility_panel.read() == Some(ChatUtilityPanel::Threads);
-    let pinned_active = *utility_panel.read() == Some(ChatUtilityPanel::Pinned);
-    let settings_active = *utility_panel.read() == Some(ChatUtilityPanel::Settings);
-    let search_active = *utility_panel.read() == Some(ChatUtilityPanel::Search);
-    rsx! {
-        div { class: "chat-header-actions-wrap",
-            div { class: if *header_actions_overflow.read() { "chat-header-actions chat-header-actions-primary is-measuring" } else { "chat-header-actions chat-header-actions-primary" },
-                if is_dm_channel && active_dm_call.is_none() {
-                    if let Some(dm_target) = dm_user.clone() {
-                        button {
-                            class: "header-btn chat-header-btn-call",
-                            title: t("user-profile-call"),
-                            onclick: move |_| {
-                                navigate_to_pending_direct_call_from_active_account(
-                                    DirectCallRequest {
-                                        target_user: dm_target.clone(),
-                                        start_video: false,
-                                        allow_add_to_active_temporary: false,
-                                    },
-                                    app_state,
-                                    chat_data,
-                                    client_manager,
-                                    navigator(),
-                                );
-                            },
-                            "📞"
-                        }
-                    }
-                    if let Some(dm_target) = dm_user.clone() {
-                        button {
-                            class: "header-btn chat-header-btn-video",
-                            title: t("user-profile-video"),
-                            onclick: move |_| {
-                                navigate_to_pending_direct_call_from_active_account(
-                                    DirectCallRequest {
-                                        target_user: dm_target.clone(),
-                                        start_video: true,
-                                        allow_add_to_active_temporary: false,
-                                    },
-                                    app_state,
-                                    chat_data,
-                                    client_manager,
-                                    navigator(),
-                                );
-                            },
-                            "🎥"
-                        }
-                    }
-                }
-                {render_agent_toggle_button(app_state, utility_panel, show_search_filters, is_dm_channel, is_group_channel)}
-                {
-                    render_member_toggle_button(
-                        app_state,
-                        utility_panel,
-                        show_search_filters,
-                        is_group_channel,
-                        is_dm_channel,
-                    )
-                }
-                button {
-                    class: if threads_active { "header-btn active chat-header-btn-threads" } else { "header-btn chat-header-btn-threads" },
-                    title: t("threads"),
-                    onclick: move |_| {
-                        show_search_filters.set(false);
-                        let next = if *utility_panel.read() == Some(ChatUtilityPanel::Threads) {
-                            None
-                        } else {
-                            Some(ChatUtilityPanel::Threads)
-                        };
-                        utility_panel.set(next);
-                    },
-                    "🧵"
-                }
-                // Catch-me-up tab removed — feature relocated to chat
-                // settings as a "Copy last 20 messages" clipboard button.
-                button {
-                    class: if pinned_active { "header-btn active chat-header-btn-pinned" } else { "header-btn chat-header-btn-pinned" },
-                    title: t("pinned-messages"),
-                    onclick: move |_| {
-                        show_search_filters.set(false);
-                        let next = if *utility_panel.read() == Some(ChatUtilityPanel::Pinned) {
-                            None
-                        } else {
-                            Some(ChatUtilityPanel::Pinned)
-                        };
-                        utility_panel.set(next);
-                    },
-                    "📌"
-                }
-                {
-                    render_search_tab_button(
-                        utility_panel,
-                        show_search_filters,
-                        false,
-                        is_group_channel,
-                        is_dm_channel,
-                        app_state,
-                    )
-                }
-                button {
-                    class: if settings_active { "header-btn active chat-header-btn-settings" } else { "header-btn chat-header-btn-settings" },
-                    title: t("chat-settings"),
-                    onclick: move |_| {
-                        show_search_filters.set(false);
-                        let next = if *utility_panel.read() == Some(ChatUtilityPanel::Settings) {
-                            None
-                        } else {
-                            Some(ChatUtilityPanel::Settings)
-                        };
-                        utility_panel.set(next);
-                        if next.is_some() {
-                            app_state.batch(|st| {
-                                if is_dm_channel || is_group_channel {
-                                    st.nav.dm_right_sidebar_visible = false;
-                                } else {
-                                    st.nav.right_sidebar_visible = false;
-                                }
-                            });
-                        }
-                    },
-                    span { class: "chat-settings-btn-icon",
-                        span { class: "chat-settings-btn-icon-cog", "⚙️" }
-                        if *notifications_muted.read() {
-                            span { class: "chat-settings-btn-muted-dot" }
-                        }
-                    }
-                }
-            }
-            if *header_actions_overflow.read() {
-                div { class: "chat-header-overflow-anchor",
-                    button {
-                        class: if *header_actions_menu_open.read() { "header-btn active chat-header-btn-overflow" } else { "header-btn chat-header-btn-overflow" },
-                        title: t("action-more"),
-                        onclick: move |_| {
-                            let is_open = *header_actions_menu_open.read();
-                            header_actions_menu_open.set(!is_open);
-                        },
-                        "..."
-                    }
-                    if *header_actions_menu_open.read() {
-                        div { class: "chat-header-overflow-menu",
-                            if is_dm_channel && active_dm_call.is_none() {
-                                if let Some(dm_target) = dm_user.clone() {
-                                    HeaderOverflowItem {
-                                        icon: "📞".to_string(),
-                                        label: t("user-profile-call"),
-                                        active: false,
-                                        onclick: move |_| {
-                                            header_actions_menu_open.set(false);
-                                            navigate_to_pending_direct_call_from_active_account(
-                                                DirectCallRequest {
-                                                    target_user: dm_target.clone(),
-                                                    start_video: false,
-                                                    allow_add_to_active_temporary: false,
-                                                },
-                                                app_state,
-                                                chat_data,
-                                                client_manager,
-                                                navigator(),
-                                            );
-                                        },
-                                    }
-                                }
-                                if let Some(dm_target) = dm_user {
-                                    HeaderOverflowItem {
-                                        icon: "🎥".to_string(),
-                                        label: t("user-profile-video"),
-                                        active: false,
-                                        onclick: move |_| {
-                                            header_actions_menu_open.set(false);
-                                            navigate_to_pending_direct_call_from_active_account(
-                                                DirectCallRequest {
-                                                    target_user: dm_target.clone(),
-                                                    start_video: true,
-                                                    allow_add_to_active_temporary: false,
-                                                },
-                                                app_state,
-                                                chat_data,
-                                                client_manager,
-                                                navigator(),
-                                            );
-                                        },
-                                    }
-                                }
-                            }
-                            HeaderOverflowItem {
-                                icon: "🤖".to_string(),
-                                label: t("agent-panel-toggle"),
-                                active: false,
-                                onclick: move |_| {
-                                    header_actions_menu_open.set(false);
-                                    let current = false;
-                                    if !current {
-                                        // opening agent panel: close members
-                                        app_state.batch(|st| {
-                                            st.nav.dm_right_sidebar_visible = false;
-                                            st.nav.right_sidebar_visible = false;
-                                        });
-                                    }
-                                    utility_panel.set(None);
-                                    show_search_filters.set(false);
-                                },
-                            }
-                            HeaderOverflowItem {
-                                icon: if is_dm_channel { "👤".to_string() } else { "👥".to_string() },
-                                label: if is_dm_channel { t("chat-toggle-contact") } else { t("chat-toggle-members") },
-                                active: member_sidebar_active,
-                                onclick: move |_| {
-                                    header_actions_menu_open.set(false);
-                                    let current = if is_dm_channel || is_group_channel {
-                                        app_state.read().nav.dm_right_sidebar_visible
-                                    } else {
-                                        app_state.read().nav.right_sidebar_visible
-                                    };
-                                    app_state.batch(|st| {
-                                        if is_dm_channel || is_group_channel {
-                                            st.nav.dm_right_sidebar_visible = !current;
-                                            st.nav.mobile_dm_contact_detail_visible = false;
-                                        } else {
-                                            st.nav.right_sidebar_visible = !current;
-                                        }
-                                    });
-                                    // Opening members: close agent panel
-                                    utility_panel.set(None);
-                                    show_search_filters.set(false);
-                                },
-                            }
-                            HeaderOverflowItem {
-                                icon: "🧵".to_string(),
-                                label: t("threads"),
-                                active: threads_active,
-                                onclick: move |_| {
-                                    header_actions_menu_open.set(false);
-                                    show_search_filters.set(false);
-                                    let next = if *utility_panel.read() == Some(ChatUtilityPanel::Threads) {
-                                        None
-                                    } else {
-                                        Some(ChatUtilityPanel::Threads)
-                                    };
-                                    utility_panel.set(next);
-                                },
-                            }
-                            HeaderOverflowItem {
-                                icon: "📌".to_string(),
-                                label: t("pinned-messages"),
-                                active: pinned_active,
-                                onclick: move |_| {
-                                    header_actions_menu_open.set(false);
-                                    show_search_filters.set(false);
-                                    let next = if *utility_panel.read() == Some(ChatUtilityPanel::Pinned) {
-                                        None
-                                    } else {
-                                        Some(ChatUtilityPanel::Pinned)
-                                    };
-                                    utility_panel.set(next);
-                                },
-                            }
-                            HeaderOverflowItem {
-                                icon: "🔎".to_string(),
-                                label: t("search-messages"),
-                                active: search_active,
-                                onclick: move |_| {
-                                    header_actions_menu_open.set(false);
-                                    show_search_filters.set(false);
-                                    let next = if *utility_panel.read() == Some(ChatUtilityPanel::Search) {
-                                        None
-                                    } else {
-                                        Some(ChatUtilityPanel::Search)
-                                    };
-                                    utility_panel.set(next);
-                                    if next.is_some() {
-                                        app_state.batch(|st| {
-                                            if is_dm_channel || is_group_channel {
-                                                st.nav.dm_right_sidebar_visible = false;
-                                            } else {
-                                                st.nav.right_sidebar_visible = false;
-                                            }
-                                        });
-                                    }
-                                },
-                            }
-                            HeaderOverflowItem {
-                                icon: "⚙️".to_string(),
-                                label: t("chat-settings"),
-                                active: settings_active,
-                                onclick: move |_| {
-                                    header_actions_menu_open.set(false);
-                                    show_search_filters.set(false);
-                                    let next = if *utility_panel.read() == Some(ChatUtilityPanel::Settings) {
-                                        None
-                                    } else {
-                                        Some(ChatUtilityPanel::Settings)
-                                    };
-                                    utility_panel.set(next);
-                                    if next.is_some() {
-                                        app_state.batch(|st| {
-                                            if is_dm_channel || is_group_channel {
-                                                st.nav.dm_right_sidebar_visible = false;
-                                            } else {
-                                                st.nav.right_sidebar_visible = false;
-                                            }
-                                        });
-                                    }
-                                },
-                            }
-                            // B.5 drafts overflow item dropped — pending
-                            // drafts now live inside the agent panel
-                            // (per-chat) instead of a standalone tab.
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-fn render_search_tab_button(
-    mut utility_panel: Signal<Option<ChatUtilityPanel>>,
-    mut show_search_filters: Signal<bool>,
-    mobile_tools: bool,
-    is_group_channel: bool,
-    is_dm_channel: bool,
-    app_state: BatchedSignal<AppState>,
-) -> Element {
-    let active = *utility_panel.read() == Some(ChatUtilityPanel::Search);
-
     rsx! {
         button {
-            class: if active { "header-btn active chat-search-tab-btn chat-header-btn-search" } else { "header-btn chat-search-tab-btn chat-header-btn-search" },
-            title: t("search-messages"),
-            onclick: move |_| {
-                show_search_filters.set(false);
-                let next = if *utility_panel.read() == Some(ChatUtilityPanel::Search) {
-                    None
-                } else {
-                    Some(ChatUtilityPanel::Search)
-                };
-                utility_panel.set(next);
-                if mobile_tools || next.is_some() {
-                    app_state.batch(|st| {
-                        if is_dm_channel || is_group_channel {
-                            st.nav.dm_right_sidebar_visible = false;
-                        } else {
-                            st.nav.right_sidebar_visible = false;
-                        }
-                    });
-                }
-            },
-            span { class: "chat-search-tab-icon",
-                span { class: "chat-search-tab-icon-base", "📰" }
-                span { class: "chat-search-tab-icon-overlay", "🔎" }
+            class: if selected { "search-filter-row selected" } else { "search-filter-row" },
+            aria_selected: if selected { "true" } else { "false" },
+            onclick: move |_| on_click.call(token.clone()),
+            span { class: "search-filter-icon", "{icon}" }
+            div { class: "search-filter-copy",
+                div { class: "search-filter-title", "{title}" }
+                div { class: "search-filter-subtitle", "{subtitle}" }
             }
-        }
-    }
-}
-
-fn render_agent_toggle_button(
-    _app_state: BatchedSignal<AppState>,
-    mut utility_panel: Signal<Option<ChatUtilityPanel>>,
-    mut show_search_filters: Signal<bool>,
-    is_dm_channel: bool,
-    is_group_channel: bool,
-) -> Element {
-    let agent_active = *utility_panel.read() == Some(ChatUtilityPanel::Agent);
-    rsx! {
-        button {
-            class: if agent_active { "header-btn soft-active chat-header-btn-agent" } else { "header-btn chat-header-btn-agent" },
-            title: t("agent-panel-toggle"),
-            onclick: move |_| {
-                // Toggle the Agent utility-rail tab. The right wing also
-                // hosts Search/Members/Threads/Pinned/Settings/Drafts, so
-                // sharing the rail keeps all those reachable from a single
-                // toggle group instead of stacking a takeover panel on top.
-                let next = if *utility_panel.read() == Some(ChatUtilityPanel::Agent) {
-                    None
-                } else {
-                    Some(ChatUtilityPanel::Agent)
-                };
-                utility_panel.set(next);
-                show_search_filters.set(false);
-                let _ = (is_dm_channel, is_group_channel);
-            },
-            "🤖"
-        }
-    }
-}
-
-fn render_member_toggle_button(
-    app_state: BatchedSignal<AppState>,
-    mut utility_panel: Signal<Option<ChatUtilityPanel>>,
-    mut show_search_filters: Signal<bool>,
-    is_group_channel: bool,
-    is_dm_channel: bool,
-) -> Element {
-    if is_group_channel {
-        return rsx! {
-            button {
-                class: if app_state.read().nav.dm_right_sidebar_visible { "header-btn soft-active chat-members-toggle-btn chat-header-btn-members" } else { "header-btn chat-members-toggle-btn chat-header-btn-members" },
-                title: t("chat-toggle-members"),
-                onclick: move |_| {
-                    let current = app_state.read().nav.dm_right_sidebar_visible;
-                    app_state.batch(|st| st.nav.dm_right_sidebar_visible = !current);
-                    // Opening members: close agent panel
-                    utility_panel.set(None);
-                    show_search_filters.set(false);
-                },
-                "👥"
-            }
-        };
-    }
-
-    if is_dm_channel {
-        return rsx! {
-            button {
-                class: if app_state.read().nav.dm_right_sidebar_visible { "header-btn soft-active chat-members-toggle-btn chat-header-btn-members" } else { "header-btn chat-members-toggle-btn chat-header-btn-members" },
-                title: t("chat-toggle-contact"),
-                onclick: move |_| {
-                    let current = app_state.read().nav.dm_right_sidebar_visible;
-                    app_state.batch(|st| st.nav.dm_right_sidebar_visible = !current);
-                    // Opening contact panel: close agent panel
-                    utility_panel.set(None);
-                    show_search_filters.set(false);
-                },
-                "👤"
-            }
-        };
-    }
-
-    rsx! {
-        button {
-            class: if app_state.read().nav.right_sidebar_visible { "header-btn soft-active chat-members-toggle-btn chat-header-btn-members" } else { "header-btn chat-members-toggle-btn chat-header-btn-members" },
-            title: t("chat-toggle-members"),
-            onclick: move |_| {
-                let current = app_state.read().nav.right_sidebar_visible;
-                app_state.batch(|st| st.nav.right_sidebar_visible = !current);
-                // Opening members: close agent panel
-                utility_panel.set(None);
-                show_search_filters.set(false);
-            },
-            "👥"
         }
     }
 }
@@ -4946,216 +4464,6 @@ fn render_chat_overlays(ctx: ChatViewMarkupCtx) -> Element {
     }
 }
 
-#[rustfmt::skip]
-#[ui_action(inherit)]
-#[context_menu(none)]
-#[component]
-fn ChatUtilityRail(
-    panel: ChatUtilityPanel,
-    search_ui: Element,
-    search_query: String,
-    search_hits: Vec<MessageSearchHit>,
-    search_terms: Vec<String>,
-    pinned_messages: Vec<Message>,
-    current_channel_name: String,
-    on_open_search_hit: EventHandler<MessageSearchHit>,
-    on_open_pinned: EventHandler<Message>,
-    on_close: EventHandler<()>,
-    notifications_muted: Signal<bool>,
-    mut pinned_filter_open: Signal<bool>,
-    mut pinned_filter_query: Signal<String>,
-    mut threads_filter_open: Signal<bool>,
-    mut threads_filter_query: Signal<String>,
-) -> Element {
-    let title = if panel == ChatUtilityPanel::Search {
-        if search_query.is_empty() {
-            t("search-messages")
-        } else {
-            format!("{} {}", search_hits.len(), t("search-results"))
-        }
-    } else if panel == ChatUtilityPanel::Pinned {
-        t("pinned-messages")
-    } else if panel == ChatUtilityPanel::Settings {
-        t("chat-settings")
-    } else if panel == ChatUtilityPanel::Drafts {
-        t("agent-drafts-sidebar-title")
-    } else if panel == ChatUtilityPanel::Agent {
-        t("agent-panel-title")
-    } else {
-        t("threads")
-    };
-    let empty_label = if panel == ChatUtilityPanel::Pinned {
-        format!("📌 {}", t("no-pinned-messages"))
-    } else {
-        format!("🧵 {}", t("no-threads"))
-    };
-    // Per-tab filter visibility and queries
-    let filter_open = if panel == ChatUtilityPanel::Pinned {
-        *pinned_filter_open.read()
-    } else {
-        *threads_filter_open.read()
-    };
-    let filter_query = if panel == ChatUtilityPanel::Pinned {
-        pinned_filter_query.read().clone()
-    } else {
-        threads_filter_query.read().clone()
-    };
-    // Filtered pinned messages by query
-    let filtered_pinned: Vec<Message> = if filter_query.is_empty() {
-        pinned_messages.clone()
-    } else {
-        let q = filter_query.to_lowercase();
-        pinned_messages
-            .iter()
-            .filter(|m| {
-                let text = match &m.content {
-                    poly_client::MessageContent::Text(t) => t.as_str(),
-                    poly_client::MessageContent::WithAttachments { text, .. } => text.as_str(),
-                };
-                text.to_lowercase().contains(&q)
-            })
-            .cloned()
-            .collect()
-    };
-
-    rsx! {
-        aside { class: "chat-utility-rail",
-            div { class: "chat-utility-header",
-                h3 { class: "chat-utility-title", "{title}" }
-                // Per-tab filter toggle — shown on Pinned and Threads tabs only
-                if panel == ChatUtilityPanel::Pinned || panel == ChatUtilityPanel::Threads {
-                    button {
-                        class: if filter_open { "header-btn active chat-utility-filter-btn" } else { "header-btn chat-utility-filter-btn" },
-                        title: t("action-search"),
-                        onclick: move |_| {
-                            if panel == ChatUtilityPanel::Pinned {
-                                let was_open = *pinned_filter_open.read();
-                                pinned_filter_open.set(!was_open);
-                                if was_open {
-                                    pinned_filter_query.set(String::new());
-                                }
-                            } else {
-                                let was_open = *threads_filter_open.read();
-                                threads_filter_open.set(!was_open);
-                                if was_open {
-                                    threads_filter_query.set(String::new());
-                                }
-                            }
-                        },
-                        "🔍"
-                    }
-                }
-            }
-            // Per-tab filter input — shown when toggled on for Pinned/Threads
-            if (panel == ChatUtilityPanel::Pinned || panel == ChatUtilityPanel::Threads) && filter_open {
-                div { class: "chat-utility-filter-row",
-                    input {
-                        class: "chat-utility-filter-input",
-                        r#type: "text",
-                        placeholder: t("action-search"),
-                        value: "{filter_query}",
-                        oninput: move |e: Event<FormData>| {
-                            let val = e.value();
-                            if panel == ChatUtilityPanel::Pinned {
-                                pinned_filter_query.set(val);
-                            } else {
-                                threads_filter_query.set(val);
-                            }
-                        },
-                    }
-                }
-            }
-            if panel == ChatUtilityPanel::Search {
-                div { class: "chat-utility-body",
-                    div { class: "chat-utility-search-box",
-                        {search_ui}
-                    }
-                    if search_query.is_empty() || search_hits.is_empty() {
-                        div { class: "utility-empty-state",
-                            p { {t("search-no-results")} }
-                        }
-                    } else {
-                        div { class: "search-results-list",
-                            for hit in &search_hits {
-                                SearchResultCard {
-                                    hit: hit.clone(),
-                                    search_terms: search_terms.clone(),
-                                    on_open: move |hit| on_open_search_hit.call(hit),
-                                }
-                            }
-                        }
-                    }
-                }
-            } else if panel == ChatUtilityPanel::Pinned {
-                div { class: "chat-utility-body",
-                    if filtered_pinned.is_empty() {
-                        div { class: "utility-empty-state",
-                            p { "{empty_label}" }
-                        }
-                    } else {
-                        div { class: "search-results-list",
-                            for message in &filtered_pinned {
-                                PinnedMessageCard {
-                                    message: message.clone(),
-                                    channel_name: current_channel_name.clone(),
-                                    on_open: move |message| on_open_pinned.call(message),
-                                }
-                            }
-                        }
-                    }
-                }
-            } else if panel == ChatUtilityPanel::Settings {
-                ChatSettingsPanel { notifications_muted }
-            } else if panel == ChatUtilityPanel::Drafts {
-                // B.5 — Pending drafts across all chats for the active account.
-                {
-                    let rail_app_state: BatchedSignal<AppState> = use_context();
-                    let active_account_id = rail_app_state.read().nav.active_account_id
-                        .as_deref()
-                        .unwrap_or("")
-                        .to_string();
-                    rsx! {
-                        DraftsSidebar {
-                            account_id: active_account_id,
-                            on_open_chat: move |(_account_id, _chat_id): (String, String)| {
-                                // TODO: wire navigation when B.5 route is established.
-                            },
-                        }
-                    }
-                }
-            } else if panel == ChatUtilityPanel::Agent {
-                // Per-chat agent panel — same component as the standalone
-                // wing-takeover used to mount, just rendered inside the
-                // utility-rail tab so Search/Members/etc remain accessible.
-                {
-                    let rail_app_state: BatchedSignal<AppState> = use_context();
-                    let active_account_id = rail_app_state.read().nav.active_account_id
-                        .as_deref()
-                        .unwrap_or("")
-                        .to_string();
-                    let active_chat_id = rail_app_state.read().nav.selected_channel
-                        .as_deref()
-                        .unwrap_or("")
-                        .to_string();
-                    rsx! {
-                        AgentPanel {
-                            account_id: active_account_id,
-                            chat_id: active_chat_id,
-                            chat_name: current_channel_name.clone(),
-                        }
-                    }
-                }
-            } else {
-                div { class: "chat-utility-body",
-                    div { class: "utility-empty-state",
-                        p { "{empty_label}" }
-                    }
-                }
-            }
-        }
-    }
-}
-
 /// Build the "Copy last N messages" clipboard payload from the most
 /// recent `limit` messages in `chat_data`. Plain-text format
 /// (`- Author: body`) suitable for pasting into Claude Desktop or any
@@ -5180,301 +4488,6 @@ pub(crate) fn catch_up_clipboard_text(chat_data: &ChatData, channel_name: &str, 
         "Summarize the recent conversation in #{channel_name} (last {total} messages). \
          Pull out decisions, open questions, and action items.\n\n{body}"
     )
-}
-
-/// Chat settings panel — shown inside the utility rail when the ⚙️ tab is open.
-///
-/// Contains per-channel notification settings and member display preferences.
-#[rustfmt::skip]
-#[ui_action(inherit)]
-#[context_menu(none)]
-#[component]
-fn ChatSettingsPanel(mut notifications_muted: Signal<bool>) -> Element {
-    use crate::ui::settings::common::{PolySelect, SelectOption};
-    let app_state: BatchedSignal<AppState> = use_context();
-    let muted    = *notifications_muted.read();
-    let grouping = app_state.read().member_list_grouping;
-    let sort     = app_state.read().member_list_sort_order;
-    let show_off = app_state.read().member_list_show_offline;
-
-    let grouping_options = vec![
-        SelectOption { value: "by-status", label: t("chat-settings-grouping-by-status") },
-        SelectOption { value: "none",      label: t("chat-settings-grouping-none") },
-    ];
-    let sort_options = vec![
-        SelectOption { value: "alphabetical", label: t("chat-settings-sort-alphabetical") },
-        SelectOption { value: "online-first", label: t("chat-settings-sort-online-first") },
-        SelectOption { value: "join-order",   label: t("chat-settings-sort-join-order") },
-    ];
-
-    rsx! {
-        div { class: "chat-utility-body chat-settings-panel",
-
-            // ── Notifications ────────────────────────────────────────────
-            div { class: "chat-settings-section",
-                h4 { class: "chat-settings-section-title", {t("chat-settings-notifications")} }
-                label { class: "chat-settings-toggle-row",
-                    button {
-                        class: if muted { "chat-settings-mute-btn chat-settings-mute-btn-active" } else { "chat-settings-mute-btn" },
-                        title: if muted { t("unmute-notifications") } else { t("mute-notifications") },
-                        onclick: move |_| notifications_muted.set(!muted),
-                        span { class: "chat-mute-bell-icon",
-                            span { class: "chat-mute-bell-base", "🔔" }
-                            if muted {
-                                span { class: "chat-mute-bell-strike" }
-                            }
-                        }
-                        span { class: "chat-settings-toggle-label",
-                            if muted { {t("unmute-notifications")} } else { {t("mute-notifications")} }
-                        }
-                    }
-                }
-            }
-
-            // ── Member List ──────────────────────────────────────────────
-            div { class: "chat-settings-section",
-                h4 { class: "chat-settings-section-title", {t("chat-settings-member-list")} }
-
-                // Grouping
-                div { class: "chat-settings-row",
-                    label { class: "chat-settings-label", {t("chat-settings-grouping")} }
-                    PolySelect {
-                        options: grouping_options,
-                        value: grouping.as_str().to_string(),
-                        onchange: move |v: String| {
-                            let g = crate::state::MemberListGrouping::from_slug(&v);
-                            let (s, o) = app_state.map(|st| (st.member_list_sort_order, st.member_list_show_offline));
-                            app_state.batch(|st| st.member_list_grouping = g);
-                            spawn(async move { persist_member_list_display_settings(g, s, o).await; });
-                        },
-                    }
-                }
-
-                // Sort order
-                div { class: "chat-settings-row",
-                    label { class: "chat-settings-label", {t("chat-settings-sort-order")} }
-                    PolySelect {
-                        options: sort_options,
-                        value: sort.as_str().to_string(),
-                        onchange: move |v: String| {
-                            let s = crate::state::MemberListSortOrder::from_slug(&v);
-                            let (g, o) = app_state.map(|st| (st.member_list_grouping, st.member_list_show_offline));
-                            app_state.batch(|st| st.member_list_sort_order = s);
-                            spawn(async move { persist_member_list_display_settings(g, s, o).await; });
-                        },
-                    }
-                }
-
-                // Show offline toggle
-                div { class: "chat-settings-row",
-                    label { class: "chat-settings-label", {t("chat-settings-show-offline")} }
-                    button {
-                        class: if show_off { "chat-settings-toggle-btn chat-settings-toggle-btn-on" } else { "chat-settings-toggle-btn" },
-                        onclick: move |_| {
-                            let (prev, g, s) = app_state.map(|st| (st.member_list_show_offline, st.member_list_grouping, st.member_list_sort_order));
-                            let new_val = !prev;
-                            app_state.batch(|st| st.member_list_show_offline = new_val);
-                            spawn(async move { persist_member_list_display_settings(g, s, new_val).await; });
-                        },
-                        span { class: "chat-settings-toggle-track",
-                            span { class: if show_off { "chat-settings-toggle-knob on" } else { "chat-settings-toggle-knob" } }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-#[rustfmt::skip]
-#[ui_action(inherit)]
-#[context_menu(none)]
-#[component]
-fn SearchFilterPopup(
-    suggestions: Vec<SearchFilterOption>,
-    active_index: usize,
-    on_append_filter: EventHandler<String>,
-    on_close: EventHandler<()>,
-) -> Element {
-    rsx! {
-        div { class: "search-filter-popup",
-            div { class: "search-filter-popup-header",
-                span { class: "search-filter-popup-title", {t("search-messages")} }
-                button { class: "close-btn", onclick: move |_| on_close.call(()), "✕" }
-            }
-            div { class: "search-filter-list",
-                for (index , suggestion) in suggestions.into_iter().enumerate() {
-                    SearchFilterRow {
-                        icon: suggestion.icon,
-                        title: suggestion.title,
-                        subtitle: suggestion.subtitle,
-                        token: suggestion.completion_token,
-                        selected: index == active_index,
-                        on_click: move |token| on_append_filter.call(token),
-                    }
-                }
-            }
-        }
-    }
-}
-
-#[rustfmt::skip]
-#[ui_action(inherit)]
-#[context_menu(inherit)]
-#[component]
-fn SearchFilterRow(
-    icon: &'static str,
-    title: String,
-    subtitle: String,
-    token: String,
-    #[props(default)] selected: bool,
-    on_click: EventHandler<String>,
-) -> Element {
-    rsx! {
-        button {
-            class: if selected { "search-filter-row selected" } else { "search-filter-row" },
-            aria_selected: if selected { "true" } else { "false" },
-            onclick: move |_| on_click.call(token.clone()),
-            span { class: "search-filter-icon", "{icon}" }
-            div { class: "search-filter-copy",
-                div { class: "search-filter-title", "{title}" }
-                div { class: "search-filter-subtitle", "{subtitle}" }
-            }
-        }
-    }
-}
-
-#[rustfmt::skip]
-#[ui_action(inherit)]
-#[context_menu(inherit)]
-#[component]
-fn SearchResultCard(
-    hit: MessageSearchHit,
-    search_terms: Vec<String>,
-    on_open: EventHandler<MessageSearchHit>,
-) -> Element {
-    let preview = message_plain_text(&hit.message.content);
-    let preview_short = if preview.chars().count() > 140 {
-        format!("{}…", preview.chars().take(140).collect::<String>())
-    } else {
-        preview
-    };
-    let timestamp = hit.message.timestamp.format("%d/%m/%Y, %H:%M").to_string();
-    let avatar_url = hit.message.author.avatar_url.clone();
-    let author_name = hit.message.author.display_name.clone();
-    let fallback = author_name.chars().next().unwrap_or('?').to_string();
-    let channel_label = hit
-        .channel_name
-        .clone()
-        .unwrap_or_else(|| hit.channel_id.clone());
-
-    rsx! {
-        button {
-            class: "search-result-card",
-            onclick: move |_| on_open.call(hit.clone()),
-            div { class: "search-result-channel", "# {channel_label}" }
-            div { class: "search-result-content",
-                div { class: "search-result-avatar",
-                    if let Some(ref url) = avatar_url {
-                        img {
-                            class: "search-result-avatar-image",
-                            src: "{url}",
-                            alt: "{author_name}",
-                        }
-                    } else {
-                        span { class: "search-result-avatar-fallback", "{fallback}" }
-                    }
-                }
-                div { class: "search-result-copy",
-                    div { class: "search-result-meta",
-                        span { class: "search-result-author", "{author_name}" }
-                        span { class: "search-result-time", "{timestamp}" }
-                    }
-                    div { class: "search-result-preview",
-                        SearchPreviewText { text: preview_short, search_terms }
-                    }
-                }
-            }
-        }
-    }
-}
-
-#[rustfmt::skip]
-#[ui_action(inherit)]
-#[context_menu(inherit)]
-#[component]
-fn PinnedMessageCard(
-    message: Message,
-    channel_name: String,
-    on_open: EventHandler<Message>,
-) -> Element {
-    let preview = message_plain_text(&message.content);
-    let preview_short = if preview.chars().count() > 140 {
-        format!("{}…", preview.chars().take(140).collect::<String>())
-    } else {
-        preview
-    };
-    let timestamp = message.timestamp.format("%d/%m/%Y, %H:%M").to_string();
-    let avatar_url = message.author.avatar_url.clone();
-    let author_name = message.author.display_name.clone();
-    let fallback = author_name.chars().next().unwrap_or('?').to_string();
-
-    rsx! {
-        button {
-            class: "search-result-card",
-            onclick: move |_| on_open.call(message.clone()),
-            div { class: "search-result-channel", "# {channel_name}" }
-            div { class: "search-result-content",
-                div { class: "search-result-avatar",
-                    if let Some(ref url) = avatar_url {
-                        img {
-                            class: "search-result-avatar-image",
-                            src: "{url}",
-                            alt: "{author_name}",
-                        }
-                    } else {
-                        span { class: "search-result-avatar-fallback", "{fallback}" }
-                    }
-                }
-                div { class: "search-result-copy",
-                    div { class: "search-result-meta",
-                        span { class: "search-result-author", "{author_name}" }
-                        span { class: "search-result-time", "{timestamp}" }
-                    }
-                    div { class: "search-result-preview", "{preview_short}" }
-                }
-            }
-        }
-    }
-}
-
-#[rustfmt::skip]
-#[ui_action(None)]
-#[context_menu(inherit)]
-#[component]
-fn SearchPreviewText(text: String, search_terms: Vec<String>) -> Element {
-    let lowercase_text = text.to_lowercase();
-    let found_match = search_terms.into_iter().find_map(|term| {
-        let lowercase_term = term.to_lowercase();
-        lowercase_text
-            .find(&lowercase_term)
-            .map(|index| (index, index.saturating_add(lowercase_term.len())))
-    });
-
-    if let Some((start, end)) = found_match {
-        let before = text.get(..start).unwrap_or_default().to_string();
-        let matched = text.get(start..end).unwrap_or_default().to_string();
-        let after = text.get(end..).unwrap_or_default().to_string();
-        rsx! {
-            span {
-                "{before}"
-                mark { class: "search-result-match", "{matched}" }
-                "{after}"
-            }
-        }
-    } else {
-        rsx! { span { "{text}" } }
-    }
 }
 
 fn looks_like_markdown(text: &str) -> bool {
