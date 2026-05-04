@@ -156,13 +156,12 @@ These can land in parallel; they touch disjoint trees.
       `DemoClient2`, `DemoClient3` collapse into one parametric
       `DemoClientGeneric<F>` with type aliases. `lib.rs` 1867→514 LOC (73%),
       single `ClientBackend` impl body, all 7 tests pass. Effort M.
-      Source: B.1.2. — shipped in commit (see below).
-- [ ] **C.2** Pull `crates/core/src/ui/account/common/chat_view.rs`'s
-      virtualization engine (lines 1982-2342, ~360 lines of pure
-      window math) into `chat_view/virtualization.rs`. Stand-alone, no
-      Signal access — should be the easiest sub-module to extract first
-      and prove the split shape works before tackling the rest. Effort
-      M. Source: A.1#1.
+      Source: B.1.2. — shipped in commit `fc621b7b`.
+- [x] **C.2** Pulled `crates/core/src/ui/account/common/chat_view.rs`'s
+      virtualization engine into `chat_view/virtualization.rs` (~290 LOC,
+      10 pure functions + 2 data structs + ~5 constants). chat_view.rs
+      file→directory transition is now in place, de-risking Phase F.
+      Effort M. Source: A.1#1. — shipped in commit `74adc8e4`.
 
 ### Phase D — `ClientManager::with_backend` + `use_view_resource` (~3 days)
 
