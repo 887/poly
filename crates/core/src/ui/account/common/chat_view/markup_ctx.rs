@@ -7,7 +7,7 @@
 
 use dioxus::prelude::*;
 use crate::state::BatchedSignal;
-use crate::state::{AppState, ChatData};
+use crate::state::{AppState, ChatData, VoiceState};
 use crate::client_manager::ClientManager;
 use super::super::chat_history::ChatHistoryUiState;
 use super::composer_helpers::PendingAttachmentPreview;
@@ -31,6 +31,7 @@ pub(super) struct ChatViewMarkupCtx {
     pub(super) app_state: BatchedSignal<AppState>,
     pub(super) client_manager: BatchedSignal<ClientManager>,
     pub(super) chat_data: BatchedSignal<ChatData>,
+    pub(super) voice_state: BatchedSignal<VoiceState>,
     pub(super) channel_id: Option<String>,
     pub(super) messages: Vec<Message>,
     pub(super) current_channel: Option<Channel>,
@@ -111,6 +112,7 @@ pub(super) fn build_chat_view_markup_ctx(signals: &ChatViewSignals) -> ChatViewM
     let app_state = signals.app_state;
     let client_manager = signals.client_manager;
     let chat_data = signals.chat_data;
+    let voice_state = signals.voice_state;
     let nav = navigator();
     let channel_id = app_state.read().nav.selected_channel.cloned();
     let messages = chat_data.read().messages.clone();
@@ -150,6 +152,7 @@ pub(super) fn build_chat_view_markup_ctx(signals: &ChatViewSignals) -> ChatViewM
         app_state,
         client_manager,
         chat_data,
+        voice_state,
         channel_id: channel_id.clone(),
         messages,
         current_channel: current_channel.clone(),

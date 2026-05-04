@@ -9,7 +9,7 @@ use crate::state::BatchedSignal;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
-use crate::state::{AppState, ChatData};
+use crate::state::{AppState, ChatData, VoiceState};
 use crate::ui::routes::Route;
 use dioxus::prelude::*;
 use poly_client::VoiceConnectionKind;
@@ -29,6 +29,7 @@ pub fn OutgoingDirectCallOverlay(
 ) -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
+    let voice_state: BatchedSignal<VoiceState> = use_context();
     #[cfg(not(target_arch = "wasm32"))]
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let nav = navigator();
@@ -40,7 +41,7 @@ pub fn OutgoingDirectCallOverlay(
         .find(|dm| dm.account_id == account_id && dm.id == dm_id)
         .map(|dm| dm.user.clone());
 
-    let active_temp_call = chat_data
+    let active_temp_call = voice_state
         .read()
         .voice_connection
         .clone()
@@ -130,6 +131,7 @@ pub fn OutgoingDirectCallOverlay(
                     },
                     app_state,
                     chat_data,
+                    voice_state,
                     client_manager,
                 );
             }

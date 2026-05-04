@@ -29,7 +29,7 @@
 use crate::state::BatchedSignal;
 use super::direct_call::{disconnect_active_call, swap_to_first_held_call};
 use crate::i18n::t;
-use crate::state::ChatData;
+use crate::state::VoiceState;
 use crate::state::chat_data::user_color;
 use dioxus::prelude::*;
 use poly_client::VoiceConnectionKind;
@@ -111,8 +111,8 @@ const JS_STOP_ALL_STREAMS: &str = r#"
 #[context_menu(inherit)]
 #[component]
 pub fn VoiceBar() -> Element {
-    let chat_data: BatchedSignal<ChatData> = use_context();
-    let voice_conn = chat_data.read().voice_connection.clone();
+    let voice_state: BatchedSignal<VoiceState> = use_context();
+    let voice_conn = voice_state.read().voice_connection.clone();
 
     // Always render the preview panel so video element IDs exist in the DOM.
     let Some(conn) = voice_conn else {
@@ -127,7 +127,7 @@ pub fn VoiceBar() -> Element {
         };
     }
 
-    let participants = chat_data
+    let participants = voice_state
         .read()
         .voice_channel_participants
         .get(&conn.channel_id)
@@ -139,7 +139,7 @@ pub fn VoiceBar() -> Element {
         div { class: "voice-bar",
             VoiceDockInfo { conn: conn.clone() }
             VoiceDockParticipants { participants }
-            VoiceDockControls { conn: conn.clone(), chat_data }
+            VoiceDockControls { conn: conn.clone(), voice_state }
         }
     }
 }
@@ -243,12 +243,12 @@ fn VoiceDockTile(participant: poly_client::VoiceParticipant) -> Element {
 #[component]
 fn VoiceDockControls(
     conn: poly_client::VoiceConnection,
-    chat_data: BatchedSignal<ChatData>,
+    voice_state: BatchedSignal<VoiceState>,
 ) -> Element {
     let is_video_on = conn.is_video_on;
     let is_streaming = conn.is_streaming;
-    let noise_cancel = chat_data.read().voice_media_settings.noise_cancel_enabled;
-    let held_count = chat_data.read().held_voice_connections.len();
+    let noise_cancel = voice_state.read().voice_media_settings.noise_cancel_enabled;
+    let held_count = voice_state.read().held_voice_connections.len();
 
     rsx! {
         div { class: "voice-dock-controls",
@@ -256,7 +256,7 @@ fn VoiceDockControls(
                 button {
                     class: "voice-bar-quick-btn",
                     title: t("voice-swap-held-call"),
-                    onclick: move |_| swap_to_first_held_call(chat_data),
+                    onclick: move |_| swap_to_first_held_call(voice_state),
                     "🔁"
                 }
             }
@@ -267,8 +267,8 @@ fn VoiceDockControls(
                 onclick: move |_| {
                     if is_video_on {
                         let _ = document::eval(JS_STOP_CAMERA);
-                        chat_data.batch(|cd| {
-                            if let Some(ref mut vc) = cd.voice_connection {
+                        voice_state.batch(|v| {
+                            if let Some(ref mut vc) = v.voice_connection {
                                 vc.is_video_on = false;
                             }
                         });
@@ -276,8 +276,8 @@ fn VoiceDockControls(
                         spawn(async move {
                             let mut eval = document::eval(JS_START_CAMERA);
                             if matches!(eval.recv::<String>().await, Ok(ref s) if s == "ok") {
-                                chat_data.batch(|cd| {
-                                    if let Some(ref mut vc) = cd.voice_connection {
+                                voice_state.batch(|v| {
+                                    if let Some(ref mut vc) = v.voice_connection {
                                         vc.is_video_on = true;
                                     }
                                 });
@@ -294,8 +294,8 @@ fn VoiceDockControls(
                 onclick: move |_| {
                     if is_streaming {
                         let _ = document::eval(JS_STOP_SCREEN);
-                        chat_data.batch(|cd| {
-                            if let Some(ref mut vc) = cd.voice_connection {
+                        voice_state.batch(|v| {
+                            if let Some(ref mut vc) = v.voice_connection {
                                 vc.is_streaming = false;
                             }
                         });
@@ -303,8 +303,8 @@ fn VoiceDockControls(
                         spawn(async move {
                             let mut eval = document::eval(JS_START_SCREEN);
                             if matches!(eval.recv::<String>().await, Ok(ref s) if s == "ok") {
-                                chat_data.batch(|cd| {
-                                    if let Some(ref mut vc) = cd.voice_connection {
+                                voice_state.batch(|v| {
+                                    if let Some(ref mut vc) = v.voice_connection {
                                         vc.is_streaming = true;
                                     }
                                 });
@@ -348,9 +348,9 @@ fn VoiceDockControls(
                 class: if noise_cancel { "voice-bar-quick-btn active" } else { "voice-bar-quick-btn" },
                 title: if noise_cancel { t("voice-noise-cancel-on") } else { t("voice-noise-cancel-off") },
                 onclick: move |_| {
-                    chat_data.batch(|cd| {
-                        cd.voice_media_settings.noise_cancel_enabled =
-                            !cd.voice_media_settings.noise_cancel_enabled;
+                    voice_state.batch(|v| {
+                        v.voice_media_settings.noise_cancel_enabled =
+                            !v.voice_media_settings.noise_cancel_enabled;
                     });
                 },
                 svg {
@@ -384,7 +384,7 @@ fn VoiceDockControls(
                 title: "{t(\"voice-disconnect\")}",
                 onclick: move |_| {
                     let _ = document::eval(JS_STOP_ALL_STREAMS);
-                    disconnect_active_call(chat_data);
+                    disconnect_active_call(voice_state);
                 },
                 "📵"
             }

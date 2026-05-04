@@ -12,7 +12,7 @@
 use crate::state::BatchedSignal;
 use super::super::super::routes::Route;
 use crate::i18n::t;
-use crate::state::{AppState, ChatData, SettingsSection};
+use crate::state::{AppState, SettingsSection, VoiceState};
 use dioxus::prelude::*;
 use poly_ui_macros::{context_menu, ui_action};
 
@@ -26,8 +26,8 @@ use poly_ui_macros::{context_menu, ui_action};
 #[component]
 pub fn AccountSwitcher() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
-    let chat_data: BatchedSignal<ChatData> = use_context();
-    let voice_conn = chat_data.read().voice_connection.clone();
+    let voice_state: BatchedSignal<VoiceState> = use_context();
+    let voice_conn = voice_state.read().voice_connection.clone();
 
     let is_muted = voice_conn.as_ref().is_some_and(|vc| vc.is_muted);
     let is_deafened = voice_conn.as_ref().is_some_and(|vc| vc.is_deafened);
@@ -51,8 +51,8 @@ pub fn AccountSwitcher() -> Element {
                     class: if is_muted { "account-switcher-control-btn active" } else { "account-switcher-control-btn" },
                     title: if is_muted { t("voice-unmute") } else { t("voice-mute") },
                     onclick: move |_| {
-                        chat_data.batch(|cd| {
-                            if let Some(ref mut vc) = cd.voice_connection {
+                        voice_state.batch(|v| {
+                            if let Some(ref mut vc) = v.voice_connection {
                                 vc.is_muted = !vc.is_muted;
                             }
                         });
@@ -68,8 +68,8 @@ pub fn AccountSwitcher() -> Element {
                     class: if is_deafened { "account-switcher-control-btn active" } else { "account-switcher-control-btn" },
                     title: if is_deafened { t("voice-undeafen") } else { t("voice-deafen") },
                     onclick: move |_| {
-                        chat_data.batch(|cd| {
-                            if let Some(ref mut vc) = cd.voice_connection {
+                        voice_state.batch(|v| {
+                            if let Some(ref mut vc) = v.voice_connection {
                                 vc.is_deafened = !vc.is_deafened;
                             }
                         });

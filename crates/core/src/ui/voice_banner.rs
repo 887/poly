@@ -17,7 +17,7 @@ use crate::state::BatchedSignal;
 use super::routes::Route;
 use crate::i18n::t;
 use crate::state::chat_data::user_color;
-use crate::state::{AppState, ChatData};
+use crate::state::{AppState, VoiceState};
 use crate::ui::account::common::chat_history::remember_message_list_scroll_position;
 use crate::ui::account::common::direct_call::{disconnect_active_call, swap_to_first_held_call};
 use crate::ui::actions::{ActionCx, UiAction};
@@ -172,7 +172,7 @@ fn VoiceBannerControls(
     is_muted: bool,
     is_deafened: bool,
     held_count: usize,
-    chat_data: BatchedSignal<ChatData>,
+    voice_state: BatchedSignal<VoiceState>,
 ) -> Element {
     let mute_title = if is_muted {
         t("voice-unmute-mic")
@@ -191,7 +191,7 @@ fn VoiceBannerControls(
                 button {
                     class: "voice-ctrl-btn",
                     title: t("voice-swap-held-call"),
-                    onclick: move |_| swap_to_first_held_call(chat_data),
+                    onclick: move |_| swap_to_first_held_call(voice_state),
                     "🔁"
                 }
             }
@@ -199,8 +199,8 @@ fn VoiceBannerControls(
                 class: if is_muted { "voice-ctrl-btn muted" } else { "voice-ctrl-btn" },
                 title: "{mute_title}",
                 onclick: move |_| {
-                    chat_data.batch(|cd| {
-                        if let Some(ref mut vc) = cd.voice_connection {
+                    voice_state.batch(|v| {
+                        if let Some(ref mut vc) = v.voice_connection {
                             vc.is_muted = !vc.is_muted;
                         }
                     });
@@ -215,8 +215,8 @@ fn VoiceBannerControls(
                 class: if is_deafened { "voice-ctrl-btn muted" } else { "voice-ctrl-btn" },
                 title: "{deafen_title}",
                 onclick: move |_| {
-                    chat_data.batch(|cd| {
-                        if let Some(ref mut vc) = cd.voice_connection {
+                    voice_state.batch(|v| {
+                        if let Some(ref mut vc) = v.voice_connection {
                             vc.is_deafened = !vc.is_deafened;
                         }
                     });
@@ -231,7 +231,7 @@ fn VoiceBannerControls(
                 class: "voice-ctrl-btn disconnect",
                 title: "{t(\"voice-disconnect\")}",
                 onclick: move |_| {
-                    disconnect_active_call(chat_data);
+                    disconnect_active_call(voice_state);
                 },
                 "📵"
             }
@@ -249,15 +249,15 @@ fn VoiceBannerControls(
 #[component]
 pub fn VoiceBanner() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let voice_state: BatchedSignal<VoiceState> = use_context();
 
-    let voice_conn = chat_data.read().voice_connection.clone();
+    let voice_conn = voice_state.read().voice_connection.clone();
 
     let Some(conn) = voice_conn else {
         return rsx! {};
     };
 
-    let participants = chat_data
+    let participants = voice_state
         .read()
         .voice_channel_participants
         .get(&conn.channel_id)
@@ -273,7 +273,7 @@ pub fn VoiceBanner() -> Element {
     let instance_id = conn.instance_id.clone();
     let is_muted = conn.is_muted;
     let is_deafened = conn.is_deafened;
-    let held_count = chat_data.read().held_voice_connections.len();
+    let held_count = voice_state.read().held_voice_connections.len();
     let connection_kind = conn.kind;
     let dm_id = conn.dm_id.clone();
 
@@ -298,7 +298,7 @@ pub fn VoiceBanner() -> Element {
                 dm_id,
                 app_state,
             }
-            VoiceBannerControls { is_muted, is_deafened, held_count, chat_data }
+            VoiceBannerControls { is_muted, is_deafened, held_count, voice_state }
         }
     }
 }

@@ -18,7 +18,7 @@
 
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
-use crate::state::{AppState, BatchedSignal, ChatData, DmContextMenuState};
+use crate::state::{AppState, BatchedSignal, ChatData, DmContextMenuState, VoiceState};
 use crate::ui::account::common::chat_view::mark_channel_as_read;
 use crate::ui::account::common::direct_call::{
     DirectCallRequest, start_direct_call_from_active_account,
@@ -35,6 +35,7 @@ use poly_ui_macros::{context_menu, ui_action};
 pub fn DmContextMenuInner(menu: DmContextMenuState, close: EventHandler<()>) -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
+    let voice_state: BatchedSignal<VoiceState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
 
     let x = menu.x;
@@ -116,6 +117,7 @@ pub fn DmContextMenuInner(menu: DmContextMenuState, close: EventHandler<()>) -> 
                                 },
                                 app_state,
                                 chat_data,
+                                voice_state,
                                 client_manager,
                             );
                             close.call(());

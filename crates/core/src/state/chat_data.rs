@@ -6,8 +6,8 @@
 //!
 //! Provided as `Signal<ChatData>` at the `App` level.
 // TODO(phase-2.5.2): Reactive Data Stores
-// DECISION(V-4): VoiceMediaSettings lives in ChatData (runtime state);
-// persistence across sessions can be added later via storage.
+// DECISION(V-4): VoiceMediaSettings is defined here and re-exported via VoiceState
+// (phase-G.2 of plan-solid-refactor-survey.md). Persistence TBD.
 
 use poly_client::*;
 use std::collections::HashMap;
@@ -89,18 +89,6 @@ pub struct ChatData {
     pub current_server: Option<Server>,
     /// Currently selected channel info (for chat header).
     pub current_channel: Option<Channel>,
-    /// Participants in each voice channel, keyed by channel ID.
-    pub voice_channel_participants: HashMap<String, Vec<VoiceParticipant>>,
-    /// The local user's current voice connection (None if not in a call).
-    pub voice_connection: Option<VoiceConnection>,
-    /// Voice calls currently on hold.
-    ///
-    /// Poly only renders one active call at a time, but temporary direct calls can
-    /// suspend the previously active call (similar to Teams/Discord) so the user can
-    /// swap back later.
-    pub held_voice_connections: Vec<VoiceConnection>,
-    /// Voice and audio device settings (noise cancel, mic/speaker selection).
-    pub voice_media_settings: VoiceMediaSettings,
     /// Sessions keyed by account ID — one entry per active account.
     ///
     /// Used to look up `icon_emoji`, display name, and other per-account

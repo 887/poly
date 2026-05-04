@@ -26,6 +26,7 @@ use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::AppState;
 use crate::state::ChatData;
+use crate::state::VoiceState;
 use crate::state::chat_data::{backend_badge, user_color};
 use crate::ui::actions::{ActionCx, UiAction};
 use dioxus::prelude::*;
@@ -108,6 +109,7 @@ fn close_modal(app_state: BatchedSignal<AppState>) {
 pub fn UserProfileModal() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
+    let voice_state: BatchedSignal<VoiceState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let user = app_state.read().nav.profile_modal_user.clone();
     let Some(user) = user else {
@@ -191,7 +193,7 @@ pub fn UserProfileModal() -> Element {
     let backend_name = user.backend.display_name().to_string();
     let avatar_url = user.avatar_url.clone();
     let display_name = user.display_name.clone();
-    let active_temp_call = chat_data
+    let active_temp_call = voice_state
         .read()
         .voice_connection
         .clone()

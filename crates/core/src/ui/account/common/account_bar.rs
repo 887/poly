@@ -25,7 +25,7 @@ use super::super::super::routes::Route;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::chat_data::user_color;
-use crate::state::{AppState, ChatData};
+use crate::state::{AppState, ChatData, VoiceState};
 use dioxus::prelude::*;
 use poly_client::{AccountPresence, ConnectionStatus};
 use poly_ui_macros::{context_menu, ui_action};
@@ -286,7 +286,7 @@ fn AccountBarControls(
     is_muted: bool,
     is_deafened: bool,
     app_state: BatchedSignal<AppState>,
-    chat_data: BatchedSignal<ChatData>,
+    voice_state: BatchedSignal<VoiceState>,
 ) -> Element {
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let nav = app_state.read().nav.clone();
@@ -311,8 +311,8 @@ fn AccountBarControls(
                     class: if is_muted { "account-btn active" } else { "account-btn" },
                     title: if is_muted { t("voice-unmute") } else { t("voice-mute") },
                     onclick: move |_| {
-                        chat_data.batch(|cd| {
-                            if let Some(ref mut vc) = cd.voice_connection {
+                        voice_state.batch(|v| {
+                            if let Some(ref mut vc) = v.voice_connection {
                                 vc.is_muted = !vc.is_muted;
                             }
                         });
@@ -327,8 +327,8 @@ fn AccountBarControls(
                     class: if is_deafened { "account-btn active" } else { "account-btn" },
                     title: if is_deafened { t("voice-undeafen") } else { t("voice-deafen") },
                     onclick: move |_| {
-                        chat_data.batch(|cd| {
-                            if let Some(ref mut vc) = cd.voice_connection {
+                        voice_state.batch(|v| {
+                            if let Some(ref mut vc) = v.voice_connection {
                                 vc.is_deafened = !vc.is_deafened;
                             }
                         });
@@ -366,7 +366,8 @@ fn AccountBarControls(
 pub fn AccountBar() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
-    let voice_conn = chat_data.read().voice_connection.clone();
+    let voice_state: BatchedSignal<VoiceState> = use_context();
+    let voice_conn = voice_state.read().voice_connection.clone();
     let st_snap = app_state.read().clone();
     let cd_snap = chat_data.read().clone();
     let user = current_account_bar_user(&st_snap, &cd_snap);
@@ -381,7 +382,7 @@ pub fn AccountBar() -> Element {
                 is_muted,
                 is_deafened,
                 app_state,
-                chat_data,
+                voice_state,
             }
         }
     }

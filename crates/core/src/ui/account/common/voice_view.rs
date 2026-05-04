@@ -20,7 +20,7 @@ use super::direct_call::disconnect_active_call;
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::state::chat_data::{backend_badge, user_color};
-use crate::state::{AppState, ChatData};
+use crate::state::{AppState, ChatData, VoiceState};
 use crate::ui::account::common::chat_history::remember_message_list_scroll_position;
 use crate::ui::account::common::user_profile_modal::open_user_profile;
 use crate::ui::actions::{ActionCx, UiAction};
@@ -161,6 +161,7 @@ async fn join_voice_channel(
     current_server: Option<poly_client::Server>,
     client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
+    voice_state: BatchedSignal<VoiceState>,
     app_state: BatchedSignal<AppState>,
 ) {
     // Step 1: Request microphone permission so browser shows the prompt now.
@@ -168,9 +169,9 @@ async fn join_voice_channel(
     drop(perm_eval.recv::<String>().await); // proceed regardless of grant/deny
 
     // Step 2: Disconnect from any active voice channel before joining a new one.
-    if chat_data.read().voice_connection.is_some() {
+    if voice_state.read().voice_connection.is_some() {
         let _ = document::eval(JS_STOP_ALL_STREAMS);
-        chat_data.batch(|cd| cd.voice_connection = None);
+        voice_state.batch(|v| v.voice_connection = None);
     }
 
     let server_id = app_state.read().nav.selected_server.cloned();
@@ -222,8 +223,8 @@ async fn join_voice_channel(
     {
         let chid = channel_id.clone();
         let parts = participants;
-        chat_data.batch(move |cd| {
-            cd.voice_channel_participants.insert(chid, parts);
+        voice_state.batch(move |v| {
+            v.voice_channel_participants.insert(chid, parts);
         });
     }
 
@@ -259,7 +260,7 @@ async fn join_voice_channel(
         dm_id: None,
         participant_user_ids: Vec::new(),
     };
-    chat_data.batch(move |cd| cd.voice_connection = Some(voice_conn));
+    voice_state.batch(move |v| v.voice_connection = Some(voice_conn));
 
     if let Some(previous_channel_id) = app_state.read().nav.selected_channel.cloned() {
         remember_message_list_scroll_position(&previous_channel_id);
@@ -286,6 +287,7 @@ async fn join_voice_channel(
 #[component]
 pub fn VoiceChannelView() -> Element {
     let chat_data: BatchedSignal<ChatData> = use_context();
+    let voice_state: BatchedSignal<VoiceState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let app_state: BatchedSignal<AppState> = use_context();
 
@@ -296,7 +298,7 @@ pub fn VoiceChannelView() -> Element {
     let participants = channel_id
         .as_deref()
         .and_then(|cid| {
-            chat_data
+            voice_state
                 .read()
                 .voice_channel_participants
                 .get(cid)
@@ -304,7 +306,7 @@ pub fn VoiceChannelView() -> Element {
         })
         .unwrap_or_default();
 
-    let voice_conn = chat_data.read().voice_connection.clone();
+    let voice_conn = voice_state.read().voice_connection.clone();
     let is_connected = voice_conn
         .as_ref()
         .is_some_and(|vc| vc.channel_id == channel_id.clone().unwrap_or_default());
@@ -349,13 +351,14 @@ pub fn VoiceChannelView() -> Element {
                     current_server: current_server.clone(),
                     channel_type,
                     chat_data,
+                    voice_state,
                     client_manager,
                     app_state,
                 }
             }
             // Floating control bar — only when connected
             if is_connected {
-                VoiceChatBar { chat_data }
+                VoiceChatBar { voice_state }
             }
         }
     }
@@ -586,6 +589,7 @@ fn VoiceJoinButton(
     current_server: Option<poly_client::Server>,
     channel_type: ChannelType,
     chat_data: BatchedSignal<ChatData>,
+    voice_state: BatchedSignal<VoiceState>,
     client_manager: BatchedSignal<ClientManager>,
     app_state: BatchedSignal<AppState>,
 ) -> Element {
@@ -599,7 +603,7 @@ fn VoiceJoinButton(
                     let ch = chat_data.read().current_channel.clone();
                     let srv = chat_data.read().current_server.clone();
                     spawn(async move {
-                        join_voice_channel(cid, ch, srv, client_manager, chat_data, app_state)
+                        join_voice_channel(cid, ch, srv, client_manager, chat_data, voice_state, app_state)
                             .await;
                     });
                 },
@@ -624,8 +628,8 @@ fn VoiceJoinButton(
 #[rustfmt::skip]
 #[ui_action(inherit)]
 #[component]
-fn VoiceChatBar(mut chat_data: BatchedSignal<ChatData>) -> Element {
-    let voice_conn = chat_data.read().voice_connection.clone();
+fn VoiceChatBar(mut voice_state: BatchedSignal<VoiceState>) -> Element {
+    let voice_conn = voice_state.read().voice_connection.clone();
     let Some(ref conn) = voice_conn else {
         return rsx! {};
     };
@@ -634,7 +638,7 @@ fn VoiceChatBar(mut chat_data: BatchedSignal<ChatData>) -> Element {
     let is_deafened = conn.is_deafened;
     let is_video_on = conn.is_video_on;
     let is_streaming = conn.is_streaming;
-    let noise_cancel = chat_data.read().voice_media_settings.noise_cancel_enabled;
+    let noise_cancel = voice_state.read().voice_media_settings.noise_cancel_enabled;
 
     rsx! {
         div { class: "voice-chat-bar",
@@ -643,8 +647,8 @@ fn VoiceChatBar(mut chat_data: BatchedSignal<ChatData>) -> Element {
                 class: if is_muted { "voice-chat-btn active" } else { "voice-chat-btn" },
                 title: if is_muted { t("voice-unmute-mic") } else { t("voice-mute-mic") },
                 onclick: move |_| {
-                    chat_data.batch(|cd| {
-                        if let Some(ref mut vc) = cd.voice_connection {
+                    voice_state.batch(|v| {
+                        if let Some(ref mut vc) = v.voice_connection {
                             vc.is_muted = !vc.is_muted;
                         }
                     });
@@ -660,8 +664,8 @@ fn VoiceChatBar(mut chat_data: BatchedSignal<ChatData>) -> Element {
                 class: if is_deafened { "voice-chat-btn active" } else { "voice-chat-btn" },
                 title: if is_deafened { t("voice-undeafen") } else { t("voice-deafen") },
                 onclick: move |_| {
-                    chat_data.batch(|cd| {
-                        if let Some(ref mut vc) = cd.voice_connection {
+                    voice_state.batch(|v| {
+                        if let Some(ref mut vc) = v.voice_connection {
                             vc.is_deafened = !vc.is_deafened;
                         }
                     });
@@ -679,8 +683,8 @@ fn VoiceChatBar(mut chat_data: BatchedSignal<ChatData>) -> Element {
                 onclick: move |_| {
                     if is_video_on {
                         let _ = document::eval(JS_STOP_CAMERA);
-                        chat_data.batch(|cd| {
-                            if let Some(ref mut vc) = cd.voice_connection {
+                        voice_state.batch(|v| {
+                            if let Some(ref mut vc) = v.voice_connection {
                                 vc.is_video_on = false;
                             }
                         });
@@ -688,8 +692,8 @@ fn VoiceChatBar(mut chat_data: BatchedSignal<ChatData>) -> Element {
                         spawn(async move {
                             let mut eval = document::eval(JS_START_CAMERA);
                             if matches!(eval.recv::<String>().await, Ok(ref s) if s == "ok") {
-                                chat_data.batch(|cd| {
-                                    if let Some(ref mut vc) = cd.voice_connection {
+                                voice_state.batch(|v| {
+                                    if let Some(ref mut vc) = v.voice_connection {
                                         vc.is_video_on = true;
                                     }
                                 });
@@ -706,8 +710,8 @@ fn VoiceChatBar(mut chat_data: BatchedSignal<ChatData>) -> Element {
                 onclick: move |_| {
                     if is_streaming {
                         let _ = document::eval(JS_STOP_SCREEN);
-                        chat_data.batch(|cd| {
-                            if let Some(ref mut vc) = cd.voice_connection {
+                        voice_state.batch(|v| {
+                            if let Some(ref mut vc) = v.voice_connection {
                                 vc.is_streaming = false;
                             }
                         });
@@ -715,8 +719,8 @@ fn VoiceChatBar(mut chat_data: BatchedSignal<ChatData>) -> Element {
                         spawn(async move {
                             let mut eval = document::eval(JS_START_SCREEN);
                             if matches!(eval.recv::<String>().await, Ok(ref s) if s == "ok") {
-                                chat_data.batch(|cd| {
-                                    if let Some(ref mut vc) = cd.voice_connection {
+                                voice_state.batch(|v| {
+                                    if let Some(ref mut vc) = v.voice_connection {
                                         vc.is_streaming = true;
                                     }
                                 });
@@ -759,9 +763,9 @@ fn VoiceChatBar(mut chat_data: BatchedSignal<ChatData>) -> Element {
                 class: if noise_cancel { "voice-chat-btn active" } else { "voice-chat-btn" },
                 title: if noise_cancel { t("voice-noise-cancel-on") } else { t("voice-noise-cancel-off") },
                 onclick: move |_| {
-                    chat_data.batch(|cd| {
-                        cd.voice_media_settings.noise_cancel_enabled =
-                            !cd.voice_media_settings.noise_cancel_enabled;
+                    voice_state.batch(|v| {
+                        v.voice_media_settings.noise_cancel_enabled =
+                            !v.voice_media_settings.noise_cancel_enabled;
                     });
                 },
                 svg {
@@ -797,7 +801,7 @@ fn VoiceChatBar(mut chat_data: BatchedSignal<ChatData>) -> Element {
                 title: "{t(\"voice-disconnect\")}",
                 onclick: move |_| {
                     let _ = document::eval(JS_STOP_ALL_STREAMS);
-                    disconnect_active_call(chat_data);
+                    disconnect_active_call(voice_state);
                 },
                 "📵"
             }

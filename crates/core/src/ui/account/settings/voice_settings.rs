@@ -16,7 +16,7 @@
 
 use crate::state::BatchedSignal;
 use crate::i18n::t;
-use crate::state::ChatData;
+use crate::state::VoiceState;
 use dioxus::prelude::*;
 use poly_ui_macros::ui_action;
 
@@ -130,9 +130,9 @@ pub fn VoiceSettings() -> Element {
 #[context_menu(none)]
 #[component]
 fn MicDevicePicker(devices: Vec<(String, String)>) -> Element {
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let voice_state: BatchedSignal<VoiceState> = use_context();
 
-    let mic_id = chat_data
+    let mic_id = voice_state
         .read()
         .voice_media_settings
         .mic_device_id
@@ -148,7 +148,7 @@ fn MicDevicePicker(devices: Vec<(String, String)>) -> Element {
                 onchange: move |e: Event<FormData>| {
                     let val = e.value();
                     let id = if val.is_empty() { None } else { Some(val) };
-                    chat_data.batch(move |cd| cd.voice_media_settings.mic_device_id = id);
+                    voice_state.batch(move |v| v.voice_media_settings.mic_device_id = id);
                 },
                 option { value: "", "{t(\"voice-default-device\")}" }
                 for (id , label) in devices.iter() {
@@ -165,9 +165,9 @@ fn MicDevicePicker(devices: Vec<(String, String)>) -> Element {
 #[context_menu(none)]
 #[component]
 fn SpeakerDevicePicker(devices: Vec<(String, String)>) -> Element {
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let voice_state: BatchedSignal<VoiceState> = use_context();
 
-    let spk_id = chat_data
+    let spk_id = voice_state
         .read()
         .voice_media_settings
         .speaker_device_id
@@ -183,7 +183,7 @@ fn SpeakerDevicePicker(devices: Vec<(String, String)>) -> Element {
                 onchange: move |e: Event<FormData>| {
                     let val = e.value();
                     let id = if val.is_empty() { None } else { Some(val) };
-                    chat_data.batch(move |cd| cd.voice_media_settings.speaker_device_id = id);
+                    voice_state.batch(move |v| v.voice_media_settings.speaker_device_id = id);
                 },
                 option { value: "", "{t(\"voice-default-device\")}" }
                 for (id , label) in devices.iter() {
@@ -200,9 +200,9 @@ fn SpeakerDevicePicker(devices: Vec<(String, String)>) -> Element {
 #[context_menu(none)]
 #[component]
 fn NoiseCancelToggle() -> Element {
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let voice_state: BatchedSignal<VoiceState> = use_context();
 
-    let noise_cancel = chat_data.read().voice_media_settings.noise_cancel_enabled;
+    let noise_cancel = voice_state.read().voice_media_settings.noise_cancel_enabled;
 
     rsx! {
         div { class: "voice-settings-section",
@@ -216,9 +216,9 @@ fn NoiseCancelToggle() -> Element {
                         r#type: "checkbox",
                         checked: noise_cancel,
                         onchange: move |_| {
-                            chat_data.batch(|cd| {
-                                cd.voice_media_settings.noise_cancel_enabled =
-                                    !cd.voice_media_settings.noise_cancel_enabled;
+                            voice_state.batch(|v| {
+                                v.voice_media_settings.noise_cancel_enabled =
+                                    !v.voice_media_settings.noise_cancel_enabled;
                             });
                         },
                     }

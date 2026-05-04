@@ -267,9 +267,9 @@ ones (smaller signal subscriptions = less re-render churn).
       `state.rs:585-590` already calls out. Delete the 8 scalar
       `*_context_menu` fields once every site uses the stack. Source:
       D.4.5. — shipped (commit ID pending jj describe)
-- [ ] **G.2** Extract `BatchedSignal<VoiceState>` from `ChatData`
+- [x] **G.2** Extract `BatchedSignal<VoiceState>` from `ChatData`
       (80 sites, self-contained). Voice writes stop re-rendering chat
-      list. Source: D.3.
+      list. Source: D.3. — shipped (commit ID: TBD via jj describe)
 - [ ] **G.3** Extract `BatchedSignal<DragState>` from `ChatData`
       (61 sites, transient, very write-heavy during drag). Source: D.3.
 - [ ] **G.4** Add `ChatAction` enum + `ChatData::apply()`. Migrate the

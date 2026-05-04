@@ -19,7 +19,7 @@ use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::state::{
     AppState, ChannelContextMenuState, ChatData, DmContextMenuState, GroupDmContextMenuState,
-    View,
+    View, VoiceState,
 };
 use crate::ui::context_menu::menus::{channel_entry_at, dm_entry_at, group_dm_entry_at};
 use crate::ui::actions::{ActionCx, UiAction};
@@ -77,6 +77,7 @@ async fn load_channel_data(
     client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
     app_state: BatchedSignal<AppState>,
+    voice_state: BatchedSignal<VoiceState>,
 ) {
     // Fire an initial spinner cascade so the UI paints "loading" before we
     // start awaiting.  Every subsequent mutation is deferred into a single
@@ -127,8 +128,8 @@ async fn load_channel_data(
             // Voice/video channel — load participant list from backend
             if let Ok(participants) = guard.get_voice_participants(&channel_id).await {
                 let chid = channel_id.clone();
-                pending.set(move |cd| {
-                    cd.voice_channel_participants.insert(chid, participants);
+                voice_state.batch(move |v| {
+                    v.voice_channel_participants.insert(chid, participants);
                 });
             }
         }
@@ -1508,6 +1509,7 @@ fn CategorySection(
 fn ChannelItemRow(channel: Channel) -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
+    let voice_state: BatchedSignal<VoiceState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
 
     let selected_channel = app_state.read().nav.selected_channel.clone();
@@ -1547,7 +1549,7 @@ fn ChannelItemRow(channel: Channel) -> Element {
     };
 
     let voice_participants = if matches!(ch_type, ChannelType::Voice | ChannelType::Video) {
-        chat_data
+        voice_state
             .read()
             .voice_channel_participants
             .get(&ch_id)
@@ -1648,7 +1650,7 @@ fn ChannelItemRow(channel: Channel) -> Element {
                 });
                 let cid = ch_id.clone();
                 spawn(async move {
-                    load_channel_data(cid, client_manager, chat_data, app_state).await;
+                    load_channel_data(cid, client_manager, chat_data, app_state, voice_state).await;
                 });
                 let server_id = app_state.read().nav.selected_server.cloned().unwrap_or_default();
                 let (backend_slug, instance_id, account_id) = {

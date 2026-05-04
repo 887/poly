@@ -14,7 +14,7 @@
 
 use crate::state::BatchedSignal;
 use crate::client_manager::{BackendHandle, BackendHandleExt, ClientManager, PluginSettingsEntry};
-use crate::state::{AppState, ChatData};
+use crate::state::{AppState, ChatData, VoiceState};
 use crate::ui::account::common::chat_history::{
     read_message_list_scroll_metrics, request_scroll_to_bottom,
 };
@@ -53,6 +53,7 @@ const AUTO_SCROLL_THRESHOLD_PX: f64 = 60.0;
 pub(crate) async fn toggle_demo(
     client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
+    voice_state: BatchedSignal<VoiceState>,
     app_state: BatchedSignal<AppState>,
 ) {
     #[cfg(feature = "demo")]
@@ -125,13 +126,15 @@ pub(crate) async fn toggle_demo(
                     cd.members.clear();
                     cd.current_server = None;
                     cd.current_channel = None;
-                    cd.voice_channel_participants.clear();
-                    cd.voice_connection = None;
                     for aid in &demo_ids_c {
                         cd.account_sessions.remove(aid.as_str());
                     }
                     cd.favorited_server_ids = new_fav_ids_c;
                     cd.dragging_server_id = None;
+                });
+                voice_state.batch(|v| {
+                    v.voice_channel_participants.clear();
+                    v.voice_connection = None;
                 });
             }
 
@@ -410,8 +413,8 @@ pub(crate) async fn toggle_demo(
                                 && !participants.is_empty()
                             {
                                 let chid = ch.id.clone();
-                                chat_data.batch(move |cd| {
-                                    cd.voice_channel_participants.insert(chid, participants);
+                                voice_state.batch(move |v| {
+                                    v.voice_channel_participants.insert(chid, participants);
                                 });
                             }
                         }

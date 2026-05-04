@@ -9,6 +9,7 @@ use crate::client_manager::{ClientManager};
 use crate::i18n::t;
 use crate::state::{AppState, BatchedSignal};
 use crate::state::ChatData;
+use crate::state::VoiceState;
 use dioxus::prelude::*;
 use poly_client::User;
 use poly_ui_macros::{context_menu, ui_action};
@@ -95,6 +96,7 @@ pub(super) fn ChatHeaderActions(
     header_actions_menu_open: Signal<bool>,
     header_actions_overflow: Signal<bool>,
     chat_data: BatchedSignal<ChatData>,
+    voice_state: BatchedSignal<VoiceState>,
     client_manager: BatchedSignal<ClientManager>,
     mobile_layout_resize_tick: Signal<u64>,
     is_group_channel: bool,
@@ -113,7 +115,7 @@ pub(super) fn ChatHeaderActions(
     let header_actions_overflow = header_actions_overflow;
     let chat_data = chat_data;
     let client_manager = client_manager;
-    let active_dm_call = chat_data
+    let active_dm_call = voice_state
         .read()
         .voice_connection
         .clone()

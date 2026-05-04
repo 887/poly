@@ -7,7 +7,7 @@
 
 use dioxus::prelude::*;
 use crate::state::BatchedSignal;
-use crate::state::{AppState, ChatData};
+use crate::state::{AppState, ChatData, VoiceState};
 use crate::client_manager::ClientManager;
 use super::super::chat_history::ChatHistoryUiState;
 use super::composer_helpers::PendingAttachmentPreview;
@@ -20,6 +20,7 @@ pub(super) struct ChatViewSignals {
     pub(super) app_state: BatchedSignal<AppState>,
     pub(super) client_manager: BatchedSignal<ClientManager>,
     pub(super) chat_data: BatchedSignal<ChatData>,
+    pub(super) voice_state: BatchedSignal<VoiceState>,
     pub(super) message_input: Signal<String>,
     pub(super) show_input_emoji: Signal<bool>,
     pub(super) markdown_enabled: Signal<bool>,
@@ -68,6 +69,7 @@ pub(super) fn use_chat_view_signals() -> ChatViewSignals {
         app_state: use_context(),
         client_manager: use_context(),
         chat_data: use_context(),
+        voice_state: use_context(),
         message_input: use_signal(String::new),
         show_input_emoji: use_signal(|| false),
         markdown_enabled: use_signal(|| false),

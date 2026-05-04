@@ -24,7 +24,7 @@ use super::routes::Route;
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::state::chat_data::user_color;
-use crate::state::{AccountContextMenuState, AppState, ChatData, ContextMenuState, DragSource, View};
+use crate::state::{AccountContextMenuState, AppState, ChatData, ContextMenuState, DragSource, View, VoiceState};
 use crate::ui::context_menu::menus::{account_entry_at, server_icon_entry_at};
 use crate::ui::account::common::chat_history::{
     initial_message_query, remember_message_list_scroll_position,
@@ -1407,6 +1407,7 @@ pub async fn restore_server_channel(
     mut app_state: BatchedSignal<AppState>,
     client_manager: BatchedSignal<ClientManager>,
     chat_data: BatchedSignal<ChatData>,
+    voice_state: BatchedSignal<VoiceState>,
 ) -> Option<String> {
     // One initial cascade so the UI can paint a loading state while we
     // fetch. Every other mutation is deferred to a single terminal write
@@ -1575,11 +1576,13 @@ pub async fn restore_server_channel(
         if let Some(members) = loaded_members {
             cd.members = members;
         }
-        if let Some((id, participants)) = loaded_voice {
-            cd.voice_channel_participants.insert(id, participants);
-        }
         cd.loading = false;
     });
+    if let Some((id, participants)) = loaded_voice {
+        voice_state.batch(move |v| {
+            v.voice_channel_participants.insert(id, participants);
+        });
+    }
 
     if let Some(ch_id) = request_scroll_for {
         request_restore_scroll_position_or_bottom(&ch_id);

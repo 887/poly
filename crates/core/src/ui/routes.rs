@@ -87,7 +87,7 @@ use super::settings::SettingsPage;
 use super::split_shell::SplitMenuShell;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
-use crate::state::{AppState, ChatData, SettingsSection, View, use_spawn_once};
+use crate::state::{AppState, ChatData, SettingsSection, View, VoiceState, use_spawn_once};
 use crate::ui::account::common::VoiceAccountFooter;
 use crate::ui::account::common::{FeatureUnsupportedPlaceholder, UnsupportedFeature};
 use crate::ui::account::common::chat_history::initial_message_query;
@@ -1297,6 +1297,7 @@ fn DmsHome(backend: String, instance_id: String, account_id: String) -> Element 
 fn DmChat(backend: String, instance_id: String, account_id: String, dm_id: String) -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
+    let voice_state: BatchedSignal<VoiceState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let dm_id_for_pending = dm_id.clone();
     let account_id_for_pending = account_id.clone();
@@ -1345,6 +1346,7 @@ fn DmChat(backend: String, instance_id: String, account_id: String, dm_id: Strin
                 },
                 app_state,
                 chat_data,
+                voice_state,
                 client_manager,
             );
         },
@@ -1514,6 +1516,7 @@ fn ServerMediaViewerRoute(
     attachment_index: usize,
 ) -> Element {
     let chat_data: BatchedSignal<ChatData> = use_context();
+    let voice_state: BatchedSignal<VoiceState> = use_context();
     let app_state: BatchedSignal<AppState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let nav = navigator();
@@ -1563,6 +1566,7 @@ fn ServerMediaViewerRoute(
                 app_state,
                 client_manager,
                 chat_data,
+                voice_state,
             )
             .await;
 
@@ -1732,6 +1736,7 @@ fn ServerChat(
     channel_id: String,
 ) -> Element {
     let chat_data: BatchedSignal<ChatData> = use_context();
+    let voice_state: BatchedSignal<VoiceState> = use_context();
     let app_state: BatchedSignal<AppState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let nav = navigator();
@@ -1763,6 +1768,7 @@ fn ServerChat(
                 app_state,
                 client_manager,
                 chat_data,
+                voice_state,
             )
             .await;
 
