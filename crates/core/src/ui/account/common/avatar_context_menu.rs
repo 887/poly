@@ -1,11 +1,8 @@
 //! User avatar right-click context menu component.
 //!
-//! Rendered at the `MainLayout` level so it is never clipped by sidebars.
+//! Rendered via the `ContextMenuStack` host at the `MainLayout` level.
 //! Opened by right-clicking a user avatar `<img>` in message rows.
-//!
-//! State lives in `AppState.avatar_context_menu`. The `oncontextmenu`
-//! handler on the avatar image writes `Some(AvatarContextMenuState)`.
-//! A global click on the `MainLayout` root clears it.
+//! State is pushed onto `AppState.context_menu_stack`.
 //!
 //! ## Menu items
 //! - View profile — opens the UserProfileModal
@@ -22,46 +19,29 @@
 //! `UserRowContextMenu` annotations on sidebar rows are left untouched.
 
 use crate::i18n::t;
-use crate::state::{AppState, BatchedSignal};
+use crate::state::{AppState, AvatarContextMenuState, BatchedSignal};
 use crate::ui::account::common::user_profile_modal::open_user_profile;
 use dioxus::prelude::*;
 use poly_client::{PresenceStatus, User};
 use poly_ui_macros::{context_menu, ui_action};
 
-/// Avatar right-click context menu.
+/// Avatar right-click context menu — stack-based inner component.
 ///
-/// Reads `AppState.avatar_context_menu` and renders a floating div at the
-/// stored coordinates. Renders nothing when the state is `None`.
+/// Receives the deserialized `AvatarContextMenuState` from the stack host
+/// and a `close` callback to pop itself off the stack.
 #[ui_action(inherit)]
 #[context_menu(inherit)]
 #[component]
-pub fn AvatarContextMenu() -> Element {
+pub fn AvatarContextMenuInner(menu: AvatarContextMenuState, close: EventHandler<()>) -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
-
-    let Some(menu) = app_state.read().avatar_context_menu.clone() else {
-        return rsx! {};
-    };
 
     let x = menu.x;
     let y = menu.y;
     let user_id = menu.user_id.clone();
     let display_name = menu.user_display_name.clone();
 
-    let close = move || {
-        app_state.batch(|st| st.avatar_context_menu = None);
-    };
-
     rsx! {
-        // Transparent backdrop — closes menu on click and blocks native context menu.
-        div {
-            class: "context-menu-backdrop",
-            onclick: move |_| {
-                app_state.batch(|st| st.avatar_context_menu = None);
-            },
-            oncontextmenu: move |evt| evt.prevent_default(),
-        }
-
-        // The floating menu itself.
+        // The floating menu itself — backdrop + dismiss handled by the stack host.
         div {
             class: "context-menu",
             style: "left: {x}px; top: {y}px;",
@@ -88,7 +68,7 @@ pub fn AvatarContextMenu() -> Element {
                                 backend: poly_client::BackendType::from("demo"),
                             };
                             open_user_profile(app_state, user);
-                            close();
+                            close.call(());
                         },
                     }
                 }
@@ -106,7 +86,7 @@ pub fn AvatarContextMenu() -> Element {
                                 target: "poly::context_menu",
                                 "send-dm stub: user_id={uid}"
                             );
-                            close();
+                            close.call(());
                         },
                     }
                 }
@@ -127,7 +107,7 @@ pub fn AvatarContextMenu() -> Element {
                             let _ = document::eval(&format!(
                                 "navigator.clipboard && navigator.clipboard.writeText(`{escaped}`);"
                             ));
-                            close();
+                            close.call(());
                         },
                     }
                 }

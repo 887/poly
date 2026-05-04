@@ -21,6 +21,7 @@ use crate::state::{
     AppState, ChannelContextMenuState, ChatData, DmContextMenuState, GroupDmContextMenuState,
     View,
 };
+use crate::ui::context_menu::menus::{channel_entry_at, dm_entry_at, group_dm_entry_at};
 use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::main_layout::close_mobile_drawer;
 use chrono::{DateTime, Utc};
@@ -1158,17 +1159,21 @@ fn DMChannelItem(
     let dm_long_press = crate::ui::context_menu::long_press::LongPress::default_500ms(
         move |x, y| {
             app_state.batch(|st| {
-                st.dm_context_menu = Some(DmContextMenuState {
+                st.context_menu_stack.push(dm_entry_at(
+                    DmContextMenuState {
+                        x,
+                        y,
+                        channel_id: lp_channel_id.clone(),
+                        user_id: lp_user_id.clone(),
+                        display_name: lp_display_name.clone(),
+                        account_id: lp_account_id.clone(),
+                        instance_id: lp_instance_id.clone(),
+                        backend_slug: lp_backend_slug.clone(),
+                        unread_count: unread,
+                    },
                     x,
                     y,
-                    channel_id: lp_channel_id.clone(),
-                    user_id: lp_user_id.clone(),
-                    display_name: lp_display_name.clone(),
-                    account_id: lp_account_id.clone(),
-                    instance_id: lp_instance_id.clone(),
-                    backend_slug: lp_backend_slug.clone(),
-                    unread_count: unread,
-                });
+                ));
             });
         },
     );
@@ -1182,17 +1187,21 @@ fn DMChannelItem(
                 evt.stop_propagation();
                 let coords = evt.client_coordinates();
                 app_state.batch(|st| {
-                    st.dm_context_menu = Some(DmContextMenuState {
-                        x: coords.x,
-                        y: coords.y,
-                        channel_id: menu_channel_id.clone(),
-                        user_id: menu_user_id.clone(),
-                        display_name: menu_display_name.clone(),
-                        account_id: menu_account_id.clone(),
-                        instance_id: menu_instance_id.clone(),
-                        backend_slug: menu_backend_slug.clone(),
-                        unread_count: unread,
-                    });
+                    st.context_menu_stack.push(dm_entry_at(
+                        DmContextMenuState {
+                            x: coords.x,
+                            y: coords.y,
+                            channel_id: menu_channel_id.clone(),
+                            user_id: menu_user_id.clone(),
+                            display_name: menu_display_name.clone(),
+                            account_id: menu_account_id.clone(),
+                            instance_id: menu_instance_id.clone(),
+                            backend_slug: menu_backend_slug.clone(),
+                            unread_count: unread,
+                        },
+                        coords.x,
+                        coords.y,
+                    ));
                 });
             },
             ontouchstart: dm_long_press.on_touch_start(),
@@ -1311,16 +1320,20 @@ fn GroupChannelItem(
     let group_long_press = crate::ui::context_menu::long_press::LongPress::default_500ms(
         move |x, y| {
             app_state.batch(|st| {
-                st.group_dm_context_menu = Some(GroupDmContextMenuState {
+                st.context_menu_stack.push(group_dm_entry_at(
+                    GroupDmContextMenuState {
+                        x,
+                        y,
+                        channel_id: lp_channel_id.clone(),
+                        display_name: lp_display_name.clone(),
+                        account_id: lp_account_id.clone(),
+                        instance_id: lp_instance_id.clone(),
+                        backend_slug: lp_backend_slug.clone(),
+                        unread_count: 0,
+                    },
                     x,
                     y,
-                    channel_id: lp_channel_id.clone(),
-                    display_name: lp_display_name.clone(),
-                    account_id: lp_account_id.clone(),
-                    instance_id: lp_instance_id.clone(),
-                    backend_slug: lp_backend_slug.clone(),
-                    unread_count: 0,
-                });
+                ));
             });
         },
     );
@@ -1333,16 +1346,20 @@ fn GroupChannelItem(
                 evt.stop_propagation();
                 let coords = evt.client_coordinates();
                 app_state.batch(|st| {
-                    st.group_dm_context_menu = Some(GroupDmContextMenuState {
-                        x: coords.x,
-                        y: coords.y,
-                        channel_id: menu_channel_id.clone(),
-                        display_name: menu_display_name.clone(),
-                        account_id: menu_account_id.clone(),
-                        instance_id: menu_instance_id.clone(),
-                        backend_slug: menu_backend_slug.clone(),
-                        unread_count: 0,
-                    });
+                    st.context_menu_stack.push(group_dm_entry_at(
+                        GroupDmContextMenuState {
+                            x: coords.x,
+                            y: coords.y,
+                            channel_id: menu_channel_id.clone(),
+                            display_name: menu_display_name.clone(),
+                            account_id: menu_account_id.clone(),
+                            instance_id: menu_instance_id.clone(),
+                            backend_slug: menu_backend_slug.clone(),
+                            unread_count: 0,
+                        },
+                        coords.x,
+                        coords.y,
+                    ));
                 });
             },
             ontouchstart: group_long_press.on_touch_start(),
@@ -1551,16 +1568,20 @@ fn ChannelItemRow(channel: Channel) -> Element {
         let backend_slug = backend_slug_for_menu.clone();
         crate::ui::context_menu::long_press::LongPress::default_500ms(move |x, y| {
             app_state.batch(|st| {
-                st.channel_context_menu = Some(ChannelContextMenuState {
+                st.context_menu_stack.push(channel_entry_at(
+                    ChannelContextMenuState {
+                        x,
+                        y,
+                        channel_id: ch_id.clone(),
+                        channel_name: ch_name.clone(),
+                        account_id: account_id.clone(),
+                        server_id: server_id.clone(),
+                        instance_id: instance_id.clone(),
+                        backend_slug: backend_slug.clone(),
+                    },
                     x,
                     y,
-                    channel_id: ch_id.clone(),
-                    channel_name: ch_name.clone(),
-                    account_id: account_id.clone(),
-                    server_id: server_id.clone(),
-                    instance_id: instance_id.clone(),
-                    backend_slug: backend_slug.clone(),
-                });
+                ));
             });
         })
     };
@@ -1574,16 +1595,20 @@ fn ChannelItemRow(channel: Channel) -> Element {
                 evt.stop_propagation();
                 let coords = evt.client_coordinates();
                 app_state.batch(|st| {
-                    st.channel_context_menu = Some(ChannelContextMenuState {
-                        x: coords.x,
-                        y: coords.y,
-                        channel_id: ch_id_for_menu.clone(),
-                        channel_name: ch_name_for_menu.clone(),
-                        account_id: account_id_for_menu.clone(),
-                        server_id: server_id_for_menu.clone(),
-                        instance_id: instance_id_for_menu.clone(),
-                        backend_slug: backend_slug_for_menu.clone(),
-                    });
+                    st.context_menu_stack.push(channel_entry_at(
+                        ChannelContextMenuState {
+                            x: coords.x,
+                            y: coords.y,
+                            channel_id: ch_id_for_menu.clone(),
+                            channel_name: ch_name_for_menu.clone(),
+                            account_id: account_id_for_menu.clone(),
+                            server_id: server_id_for_menu.clone(),
+                            instance_id: instance_id_for_menu.clone(),
+                            backend_slug: backend_slug_for_menu.clone(),
+                        },
+                        coords.x,
+                        coords.y,
+                    ));
                 });
             },
             ontouchstart: long_press.on_touch_start(),

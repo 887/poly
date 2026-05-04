@@ -14,11 +14,7 @@
 //! Each `#[component]` fn body MUST stay under 150 lines of RSX+logic.
 //! Extract sub-components rather than growing this file.
 
-use super::account::{
-    AccountContextMenu, AccountServerBar, AttachmentContextMenu, AvatarContextMenu,
-    ChannelContextMenu, DmContextMenu, GroupDmContextMenu, ReactionContextMenu,
-    ServerContextMenu, UserProfileModal,
-};
+use super::account::{AccountServerBar, UserProfileModal};
 use super::context_menu::host::ContextMenuStack;
 use super::favorites_sidebar::FavoritesBar;
 use super::routes::{Route, route_targets_unknown_account, sync_route_to_app_state};
@@ -301,59 +297,26 @@ pub fn MainLayout() -> Element {
     rsx! {
         div {
             class: "main-layout",
-            // Dismiss context menu when clicking outside of it
+            // Dismiss any open context menu stack entries when clicking outside.
+            // Each stack entry has its own `dismiss_on_outside` flag; the stack
+            // host handles per-entry dismissal via its backdrop click handler.
+            // This handler is the belt-and-suspenders fallback — it clears the
+            // entire stack on a global click (same as the old scalar-field clears).
             onclick: move |_| {
-                // Collapse the 5 context-menu-clear writes into ONE batch —
-                // previously each .write() triggered a separate Dioxus reactive
-                // cascade. See CLAUDE.md § Common WASM-hang causes #1.
-                let (has_ctx, has_chan, has_dm, has_gdm, has_acc, has_att, has_react, has_stack) = {
-                    let st = app_state.read();
-                    (
-                        st.context_menu.is_some(),
-                        st.channel_context_menu.is_some(),
-                        st.dm_context_menu.is_some(),
-                        st.group_dm_context_menu.is_some(),
-                        st.account_context_menu.is_some(),
-                        st.attachment_context_menu.is_some(),
-                        st.reaction_context_menu.is_some(),
-                        !st.context_menu_stack.is_empty(),
-                    )
-                };
-                if has_ctx || has_chan || has_dm || has_gdm || has_acc || has_att || has_react || has_stack {
-                    app_state.batch(|st| {
-                        if has_ctx { st.context_menu = None; }
-                        if has_chan { st.channel_context_menu = None; }
-                        if has_dm { st.dm_context_menu = None; }
-                        if has_gdm { st.group_dm_context_menu = None; }
-                        if has_acc { st.account_context_menu = None; }
-                        if has_att { st.attachment_context_menu = None; }
-                        if has_react { st.reaction_context_menu = None; }
-                        if has_stack { st.context_menu_stack.clear(); }
-                    });
+                let has_stack = !app_state.read().context_menu_stack.is_empty();
+                if has_stack {
+                    app_state.batch(|st| st.context_menu_stack.clear());
                 }
             },
             // Belt-and-suspenders: suppress native browser context menu app-wide.
             // Per-component `allow_default` surfaces opt back in via stop_propagation.
             // Without this, every #[context_menu(None)] annotation has zero runtime effect.
             oncontextmenu: |evt| evt.prevent_default(),
-            // Floating server right-click context menu (position: fixed, above sidebars)
-            ServerContextMenu {}
-            // Floating channel right-click / long-press context menu
-            ChannelContextMenu {}
-            // Floating DM (1-on-1) right-click / long-press context menu
-            DmContextMenu {}
-            // Floating group-DM right-click / long-press context menu
-            GroupDmContextMenu {}
-            // Floating account-icon right-click / long-press context menu
-            AccountContextMenu {}
-            // Floating attachment (image) right-click context menu
-            AttachmentContextMenu {}
-            // Floating reaction chip right-click context menu (D2.b)
-            ReactionContextMenu {}
-            // Phase-A stack-based context menus (ForumPostContextMenu,
-            // UserRowContextMenu, and future stack-based menus).
-            // D1: mounted here so existing menus actually render — previously
-            // the stack was populated but never rendered.
+            // Stack-based context menus — all 10 menu types (server, channel,
+            // dm, group_dm, account, attachment, reaction, avatar, forum_post,
+            // user_row) are now routed through this single host. The scalar
+            // *_context_menu fields were retired in Phase G.1 of
+            // plan-solid-refactor-survey.md.
             ContextMenuStack {}
             // Voice connection banner — spans full width when connected
             VoiceBanner {}

@@ -1,12 +1,11 @@
 //! Channel right-click / long-press context menu component.
 //!
-//! Rendered at the `MainLayout` level (above sidebar overflow) so it is
-//! never clipped by `overflow: hidden` on the sidebar containers.
+//! Rendered via the `ContextMenuStack` host at the `MainLayout` level
+//! (above sidebar overflow) so it is never clipped by `overflow: hidden`.
 //!
-//! State lives in `AppState.channel_context_menu`. Any `oncontextmenu`
-//! handler (or mobile long-press handler) on a channel row sets
-//! `app_state.write().channel_context_menu = Some(...)`.
-//! A global click on the `MainLayout` root div clears it.
+//! State is pushed onto `AppState.context_menu_stack` by `oncontextmenu`
+//! handlers on channel rows. The stack host dispatches to `ChannelContextMenuInner`
+//! via `register_menu(CHANNEL_MENU_TYPE, render_channel)`.
 //!
 //! ## Menu items
 //! - Mark as Read
@@ -16,26 +15,22 @@
 use crate::state::BatchedSignal;
 use crate::i18n::t;
 use crate::nav;
-use crate::state::{AppState, ChatData};
+use crate::state::{AppState, ChannelContextMenuState, ChatData};
 use crate::ui::account::common::chat_view::mark_channel_as_read;
 use crate::ui::routes::Route;
 use dioxus::prelude::*;
 use poly_ui_macros::{context_menu, ui_action};
 
-/// Channel right-click / long-press context menu.
+/// Channel right-click / long-press context menu — stack-based inner component.
 ///
-/// Reads `AppState.channel_context_menu` and renders a floating div at the
-/// stored coordinates. Renders nothing when `channel_context_menu` is `None`.
+/// Receives the deserialized `ChannelContextMenuState` from the stack host
+/// and a `close` callback to pop itself off the stack when dismissed.
 #[ui_action(inherit)]
 #[context_menu(inherit)]
 #[component]
-pub fn ChannelContextMenu() -> Element {
+pub fn ChannelContextMenuInner(menu: ChannelContextMenuState, close: EventHandler<()>) -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
-
-    let Some(menu) = app_state.read().channel_context_menu.clone() else {
-        return rsx! {};
-    };
 
     let channel_id = menu.channel_id.clone();
     let mut muted = use_signal(|| false);
@@ -43,21 +38,8 @@ pub fn ChannelContextMenu() -> Element {
     let x = menu.x;
     let y = menu.y;
 
-    let close = move || {
-        app_state.batch(|st| st.channel_context_menu = None);
-    };
-
     rsx! {
-        // Transparent backdrop — closes menu on click and blocks native context menu.
-        div {
-            class: "context-menu-backdrop",
-            onclick: move |_| {
-                app_state.batch(|st| st.channel_context_menu = None);
-            },
-            oncontextmenu: move |evt| evt.prevent_default(),
-        }
-
-        // The floating menu itself.
+        // The floating menu itself — backdrop + dismiss handled by the stack host.
         div {
             class: "context-menu",
             style: "left: {x}px; top: {y}px;",
@@ -72,7 +54,7 @@ pub fn ChannelContextMenu() -> Element {
                         label: t("channel-menu-mark-read"),
                         onclick: move |_| {
                             mark_channel_as_read(chat_data, &channel_id);
-                            close();
+                            close.call(());
                         },
                     }
                 }
@@ -94,12 +76,12 @@ pub fn ChannelContextMenu() -> Element {
                 let account_id = menu.account_id.clone();
                 let channel_id_for_settings = channel_id.clone();
                 let backend_slug = app_state
-                    .read()
+                    .read() // poly-lint: allow render-time-read — nav snapshot for channel settings route; subscription intentional
                     .nav
                     .active_backend
                     .cloned().map_or_else(|| "demo".to_string(), |b| b.slug().to_string());
                 let instance_id = app_state
-                    .read()
+                    .read() // poly-lint: allow render-time-read — nav snapshot for instance_id route param
                     .nav
                     .active_instance_id
                     .cloned()
@@ -115,7 +97,7 @@ pub fn ChannelContextMenu() -> Element {
                                 server_id: server_id.clone(),
                                 channel_id: channel_id_for_settings.clone(),
                             });
-                            close();
+                            close.call(());
                         },
                     }
                 }
@@ -132,7 +114,7 @@ pub fn ChannelContextMenu() -> Element {
                         onclick: move |_| {
                             let cid2 = cid.clone();
                             #[allow(clippy::let_underscore_must_use)] let _ = document::eval(&format!("navigator.clipboard.writeText('{cid2}')"));
-                            close();
+                            close.call(());
                         },
                     }
                 }

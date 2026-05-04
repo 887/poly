@@ -1,5 +1,10 @@
 //! Right-click / long-press context menu for a 1-on-1 DM in the DM list.
 //!
+//! Rendered via the `ContextMenuStack` host. State is pushed onto
+//! `AppState.context_menu_stack` by `oncontextmenu` handlers on DM rows
+//! (and long-press on mobile). The stack host dispatches here via
+//! `register_menu(DM_MENU_TYPE, render_dm)`.
+//!
 //! Layout matches Discord's per-friend menu:
 //!   Mark as Read
 //!   ─
@@ -10,16 +15,10 @@
 //!   Mute @username
 //!   ─
 //!   Copy Display Name / Copy User ID / Copy Channel ID
-//!
-//! Backend ops are dispatched through `ClientBackend` trait methods
-//! (`block_user`, `ignore_user`, `remove_friend`, `set_friend_nickname`,
-//! `set_user_note`, `close_dm_channel`, `mute_conversation`,
-//! `invite_user_to_server`). Backends that don't implement an op return
-//! `NotSupported` and the user sees a toast.
 
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
-use crate::state::{AppState, BatchedSignal, ChatData};
+use crate::state::{AppState, BatchedSignal, ChatData, DmContextMenuState};
 use crate::ui::account::common::chat_view::mark_channel_as_read;
 use crate::ui::account::common::direct_call::{
     DirectCallRequest, start_direct_call_from_active_account,
@@ -33,14 +32,10 @@ use poly_ui_macros::{context_menu, ui_action};
 #[ui_action(inherit)]
 #[context_menu(inherit)]
 #[component]
-pub fn DmContextMenu() -> Element {
+pub fn DmContextMenuInner(menu: DmContextMenuState, close: EventHandler<()>) -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
-
-    let Some(menu) = app_state.read().dm_context_menu.clone() else {
-        return rsx! {};
-    };
 
     let x = menu.x;
     let y = menu.y;
@@ -51,18 +46,7 @@ pub fn DmContextMenu() -> Element {
     let mark_read_disabled = menu.unread_count == 0;
     let mut muted = use_signal(|| false);
 
-    let close = move || {
-        app_state.batch(|st| st.dm_context_menu = None);
-    };
-
     rsx! {
-        div {
-            class: "context-menu-backdrop",
-            onclick: move |_| {
-                app_state.batch(|st| st.dm_context_menu = None);
-            },
-            oncontextmenu: move |evt| evt.prevent_default(),
-        }
         div {
             class: "context-menu",
             style: "left: min({x}px, calc(100vw - 220px)); top: min({y}px, calc(100vh - 520px));",
@@ -79,7 +63,7 @@ pub fn DmContextMenu() -> Element {
                         onclick: move |_| {
                             if mark_read_disabled { return; }
                             mark_channel_as_read(chat_data, &cid);
-                            close();
+                            close.call(());
                         },
                     }
                 }
@@ -103,7 +87,7 @@ pub fn DmContextMenu() -> Element {
                                 backend: poly_client::BackendType::from("demo"),
                             };
                             open_user_profile(app_state, user);
-                            close();
+                            close.call(());
                         },
                     }
                 }
@@ -134,7 +118,7 @@ pub fn DmContextMenu() -> Element {
                                 chat_data,
                                 client_manager,
                             );
-                            close();
+                            close.call(());
                         },
                     }
                 }
@@ -151,7 +135,7 @@ pub fn DmContextMenu() -> Element {
                             if let Some(q) = try_consume_context::<Signal<Vec<ToastMessage>>>() {
                                 push_toast(q, ToastMessage::new("dm-action-coming-soon", ToastTone::Info));
                             }
-                            close();
+                            close.call(());
                         },
                     }
                 }
@@ -166,7 +150,7 @@ pub fn DmContextMenu() -> Element {
                             if let Some(q) = try_consume_context::<Signal<Vec<ToastMessage>>>() {
                                 push_toast(q, ToastMessage::new("dm-action-coming-soon", ToastTone::Info));
                             }
-                            close();
+                            close.call(());
                         },
                     }
                 }
@@ -187,7 +171,7 @@ pub fn DmContextMenu() -> Element {
                                     b.close_dm_channel(&cid).await
                                 }).await);
                             });
-                            close();
+                            close.call(());
                         },
                     }
                 }
@@ -204,7 +188,7 @@ pub fn DmContextMenu() -> Element {
                             if let Some(q) = try_consume_context::<Signal<Vec<ToastMessage>>>() {
                                 push_toast(q, ToastMessage::new("dm-action-coming-soon", ToastTone::Info));
                             }
-                            close();
+                            close.call(());
                         },
                     }
                 }
@@ -225,7 +209,7 @@ pub fn DmContextMenu() -> Element {
                                     b.remove_friend(&uid).await
                                 }).await);
                             });
-                            close();
+                            close.call(());
                         },
                     }
                 }
@@ -246,7 +230,7 @@ pub fn DmContextMenu() -> Element {
                                     b.ignore_user(&uid).await
                                 }).await);
                             });
-                            close();
+                            close.call(());
                         },
                     }
                 }
@@ -268,7 +252,7 @@ pub fn DmContextMenu() -> Element {
                                     b.block_user(&uid).await
                                 }).await);
                             });
-                            close();
+                            close.call(());
                         },
                     }
                 }
@@ -320,7 +304,7 @@ pub fn DmContextMenu() -> Element {
                             // lint-allow-unused: Eval is Copy — drop() is no-op, intentionally fire-and-forget
                             #[allow(let_underscore_drop, clippy::let_underscore_must_use)]
                             let _ = document::eval(&format!("navigator.clipboard.writeText('{dn}')"));
-                            close();
+                            close.call(());
                         },
                     }
                 }
@@ -337,7 +321,7 @@ pub fn DmContextMenu() -> Element {
                             // lint-allow-unused: Eval is Copy — drop() is no-op, intentionally fire-and-forget
                             #[allow(let_underscore_drop, clippy::let_underscore_must_use)]
                             let _ = document::eval(&format!("navigator.clipboard.writeText('{u}')"));
-                            close();
+                            close.call(());
                         },
                     }
                 }
@@ -354,7 +338,7 @@ pub fn DmContextMenu() -> Element {
                             // lint-allow-unused: Eval is Copy — drop() is no-op, intentionally fire-and-forget
                             #[allow(let_underscore_drop, clippy::let_underscore_must_use)]
                             let _ = document::eval(&format!("navigator.clipboard.writeText('{c}')"));
-                            close();
+                            close.call(());
                         },
                     }
                 }

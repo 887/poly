@@ -1,5 +1,8 @@
 //! Right-click / long-press context menu for a group DM in the DM list.
 //!
+//! Rendered via the `ContextMenuStack` host. State is pushed onto
+//! `AppState.context_menu_stack` by `oncontextmenu` handlers on group rows.
+//!
 //! Layout matches Discord's group menu:
 //!   Mark as Read
 //!   ─
@@ -11,7 +14,7 @@
 
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
-use crate::state::{AppState, BatchedSignal, ChatData};
+use crate::state::{AppState, BatchedSignal, ChatData, GroupDmContextMenuState};
 use crate::ui::account::common::chat_view::mark_channel_as_read;
 use crate::ui::client_ui::toast::{ToastMessage, push_toast};
 use dioxus::prelude::*;
@@ -21,14 +24,10 @@ use poly_ui_macros::{context_menu, ui_action};
 #[ui_action(inherit)]
 #[context_menu(inherit)]
 #[component]
-pub fn GroupDmContextMenu() -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
+pub fn GroupDmContextMenuInner(menu: GroupDmContextMenuState, close: EventHandler<()>) -> Element {
+    let _app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
-
-    let Some(menu) = app_state.read().group_dm_context_menu.clone() else {
-        return rsx! {};
-    };
 
     let x = menu.x;
     let y = menu.y;
@@ -37,18 +36,7 @@ pub fn GroupDmContextMenu() -> Element {
     let mark_read_disabled = menu.unread_count == 0;
     let mut muted = use_signal(|| false);
 
-    let close = move || {
-        app_state.batch(|st| st.group_dm_context_menu = None);
-    };
-
     rsx! {
-        div {
-            class: "context-menu-backdrop",
-            onclick: move |_| {
-                app_state.batch(|st| st.group_dm_context_menu = None);
-            },
-            oncontextmenu: move |evt| evt.prevent_default(),
-        }
         div {
             class: "context-menu",
             style: "left: min({x}px, calc(100vw - 220px)); top: min({y}px, calc(100vh - 280px));",
@@ -64,7 +52,7 @@ pub fn GroupDmContextMenu() -> Element {
                         onclick: move |_| {
                             if mark_read_disabled { return; }
                             mark_channel_as_read(chat_data, &cid);
-                            close();
+                            close.call(());
                         },
                     }
                 }
@@ -81,7 +69,7 @@ pub fn GroupDmContextMenu() -> Element {
                             if let Some(q) = try_consume_context::<Signal<Vec<ToastMessage>>>() {
                                 push_toast(q, ToastMessage::new("dm-action-coming-soon", ToastTone::Info));
                             }
-                            close();
+                            close.call(());
                         },
                     }
                 }
@@ -96,7 +84,7 @@ pub fn GroupDmContextMenu() -> Element {
                             if let Some(q) = try_consume_context::<Signal<Vec<ToastMessage>>>() {
                                 push_toast(q, ToastMessage::new("dm-action-coming-soon", ToastTone::Info));
                             }
-                            close();
+                            close.call(());
                         },
                     }
                 }
@@ -146,7 +134,7 @@ pub fn GroupDmContextMenu() -> Element {
                                     b.leave_group_dm(&cid).await
                                 }).await);
                             });
-                            close();
+                            close.call(());
                         },
                     }
                 }
@@ -163,7 +151,7 @@ pub fn GroupDmContextMenu() -> Element {
                         onclick: move |_| {
                             let c = cid.clone();
                             let _ = document::eval(&format!("navigator.clipboard.writeText('{c}')"));
-                            close();
+                            close.call(());
                         },
                     }
                 }

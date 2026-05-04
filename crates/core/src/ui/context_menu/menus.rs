@@ -17,7 +17,12 @@
 use super::host::register_menu;
 use super::ContextMenuFor;
 use crate::i18n::t;
-use crate::state::{ActiveContextMenu, AppState, BatchedSignal, MenuAnchor, ModerationDialog};
+use crate::state::{
+    AccountContextMenuState, ActiveContextMenu, AppState, AttachmentContextMenuState,
+    AvatarContextMenuState, BatchedSignal, ChannelContextMenuState, ContextMenuState,
+    DmContextMenuState, GroupDmContextMenuState, MenuAnchor, ModerationDialog,
+    ReactionContextMenuState,
+};
 use crate::ui::account::common::user_profile_modal::open_user_profile;
 use dioxus::events::MouseEvent;
 use dioxus::prelude::*;
@@ -298,10 +303,315 @@ impl ContextMenuFor<()> for UserRowContextMenu {
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ServerContextMenu — right-click on server icons in the sidebar.
+// ─────────────────────────────────────────────────────────────────────────────
+
+pub const SERVER_ICON_MENU_TYPE: &str = "server_icon";
+
+pub fn server_icon_entry(ctx: &ContextMenuState, evt: &MouseEvent) -> ActiveContextMenu {
+    let coords = evt.client_coordinates();
+    ActiveContextMenu {
+        id: next_menu_id(),
+        anchor: MenuAnchor::Cursor { x: coords.x, y: coords.y },
+        ctx_json: serde_json::to_value(ctx).unwrap_or(serde_json::Value::Null),
+        menu_type: SERVER_ICON_MENU_TYPE,
+        dismiss_on_outside: true,
+    }
+}
+
+/// Variant for long-press where coords come from touch (not a MouseEvent).
+pub fn server_icon_entry_at(ctx: ContextMenuState, x: f64, y: f64) -> ActiveContextMenu {
+    ActiveContextMenu {
+        id: next_menu_id(),
+        anchor: MenuAnchor::Cursor { x, y },
+        ctx_json: serde_json::to_value(&ctx).unwrap_or(serde_json::Value::Null),
+        menu_type: SERVER_ICON_MENU_TYPE,
+        dismiss_on_outside: true,
+    }
+}
+
+fn render_server_icon(ctx_json: &serde_json::Value, close: EventHandler<()>) -> Element {
+    let Ok(menu) = serde_json::from_value::<ContextMenuState>(ctx_json.clone()) else {
+        return rsx! {};
+    };
+    use crate::ui::account::server::context_menu::ServerContextMenuInner;
+    rsx! {
+        ServerContextMenuInner { menu, close }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ChannelContextMenu — right-click / long-press on channel rows.
+// ─────────────────────────────────────────────────────────────────────────────
+
+pub const CHANNEL_MENU_TYPE: &str = "channel";
+
+pub fn channel_entry(ctx: &ChannelContextMenuState, evt: &MouseEvent) -> ActiveContextMenu {
+    let coords = evt.client_coordinates();
+    ActiveContextMenu {
+        id: next_menu_id(),
+        anchor: MenuAnchor::Cursor { x: coords.x, y: coords.y },
+        ctx_json: serde_json::to_value(ctx).unwrap_or(serde_json::Value::Null),
+        menu_type: CHANNEL_MENU_TYPE,
+        dismiss_on_outside: true,
+    }
+}
+
+pub fn channel_entry_at(ctx: ChannelContextMenuState, x: f64, y: f64) -> ActiveContextMenu {
+    ActiveContextMenu {
+        id: next_menu_id(),
+        anchor: MenuAnchor::Cursor { x, y },
+        ctx_json: serde_json::to_value(&ctx).unwrap_or(serde_json::Value::Null),
+        menu_type: CHANNEL_MENU_TYPE,
+        dismiss_on_outside: true,
+    }
+}
+
+fn render_channel(ctx_json: &serde_json::Value, close: EventHandler<()>) -> Element {
+    let Ok(menu) = serde_json::from_value::<ChannelContextMenuState>(ctx_json.clone()) else {
+        return rsx! {};
+    };
+    use crate::ui::account::common::channel_context_menu::ChannelContextMenuInner;
+    rsx! {
+        ChannelContextMenuInner { menu, close }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DmContextMenu — right-click / long-press on 1-on-1 DM rows.
+// ─────────────────────────────────────────────────────────────────────────────
+
+pub const DM_MENU_TYPE: &str = "dm";
+
+pub fn dm_entry(ctx: &DmContextMenuState, evt: &MouseEvent) -> ActiveContextMenu {
+    let coords = evt.client_coordinates();
+    ActiveContextMenu {
+        id: next_menu_id(),
+        anchor: MenuAnchor::Cursor { x: coords.x, y: coords.y },
+        ctx_json: serde_json::to_value(ctx).unwrap_or(serde_json::Value::Null),
+        menu_type: DM_MENU_TYPE,
+        dismiss_on_outside: true,
+    }
+}
+
+pub fn dm_entry_at(ctx: DmContextMenuState, x: f64, y: f64) -> ActiveContextMenu {
+    ActiveContextMenu {
+        id: next_menu_id(),
+        anchor: MenuAnchor::Cursor { x, y },
+        ctx_json: serde_json::to_value(&ctx).unwrap_or(serde_json::Value::Null),
+        menu_type: DM_MENU_TYPE,
+        dismiss_on_outside: true,
+    }
+}
+
+fn render_dm(ctx_json: &serde_json::Value, close: EventHandler<()>) -> Element {
+    let Ok(menu) = serde_json::from_value::<DmContextMenuState>(ctx_json.clone()) else {
+        return rsx! {};
+    };
+    use crate::ui::account::common::dm_context_menu::DmContextMenuInner;
+    rsx! {
+        DmContextMenuInner { menu, close }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GroupDmContextMenu — right-click / long-press on group-DM rows.
+// ─────────────────────────────────────────────────────────────────────────────
+
+pub const GROUP_DM_MENU_TYPE: &str = "group_dm";
+
+pub fn group_dm_entry(ctx: &GroupDmContextMenuState, evt: &MouseEvent) -> ActiveContextMenu {
+    let coords = evt.client_coordinates();
+    ActiveContextMenu {
+        id: next_menu_id(),
+        anchor: MenuAnchor::Cursor { x: coords.x, y: coords.y },
+        ctx_json: serde_json::to_value(ctx).unwrap_or(serde_json::Value::Null),
+        menu_type: GROUP_DM_MENU_TYPE,
+        dismiss_on_outside: true,
+    }
+}
+
+pub fn group_dm_entry_at(ctx: GroupDmContextMenuState, x: f64, y: f64) -> ActiveContextMenu {
+    ActiveContextMenu {
+        id: next_menu_id(),
+        anchor: MenuAnchor::Cursor { x, y },
+        ctx_json: serde_json::to_value(&ctx).unwrap_or(serde_json::Value::Null),
+        menu_type: GROUP_DM_MENU_TYPE,
+        dismiss_on_outside: true,
+    }
+}
+
+fn render_group_dm(ctx_json: &serde_json::Value, close: EventHandler<()>) -> Element {
+    let Ok(menu) = serde_json::from_value::<GroupDmContextMenuState>(ctx_json.clone()) else {
+        return rsx! {};
+    };
+    use crate::ui::account::common::group_dm_context_menu::GroupDmContextMenuInner;
+    rsx! {
+        GroupDmContextMenuInner { menu, close }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AccountContextMenu — right-click on account icons in the favorites bar.
+// ─────────────────────────────────────────────────────────────────────────────
+
+pub const ACCOUNT_MENU_TYPE: &str = "account";
+
+pub fn account_entry(ctx: &AccountContextMenuState, evt: &MouseEvent) -> ActiveContextMenu {
+    let coords = evt.client_coordinates();
+    ActiveContextMenu {
+        id: next_menu_id(),
+        anchor: MenuAnchor::Cursor { x: coords.x, y: coords.y },
+        ctx_json: serde_json::to_value(ctx).unwrap_or(serde_json::Value::Null),
+        menu_type: ACCOUNT_MENU_TYPE,
+        dismiss_on_outside: true,
+    }
+}
+
+pub fn account_entry_at(ctx: AccountContextMenuState, x: f64, y: f64) -> ActiveContextMenu {
+    ActiveContextMenu {
+        id: next_menu_id(),
+        anchor: MenuAnchor::Cursor { x, y },
+        ctx_json: serde_json::to_value(&ctx).unwrap_or(serde_json::Value::Null),
+        menu_type: ACCOUNT_MENU_TYPE,
+        dismiss_on_outside: true,
+    }
+}
+
+fn render_account(ctx_json: &serde_json::Value, close: EventHandler<()>) -> Element {
+    let Ok(menu) = serde_json::from_value::<AccountContextMenuState>(ctx_json.clone()) else {
+        return rsx! {};
+    };
+    use crate::ui::account::common::account_context_menu::AccountContextMenuInner;
+    rsx! {
+        AccountContextMenuInner { menu, close }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AttachmentContextMenu — right-click on image attachments / media viewer.
+// ─────────────────────────────────────────────────────────────────────────────
+
+pub const ATTACHMENT_MENU_TYPE: &str = "attachment";
+
+pub fn attachment_entry(ctx: &AttachmentContextMenuState, evt: &MouseEvent) -> ActiveContextMenu {
+    let coords = evt.client_coordinates();
+    ActiveContextMenu {
+        id: next_menu_id(),
+        anchor: MenuAnchor::Cursor { x: coords.x, y: coords.y },
+        ctx_json: serde_json::to_value(ctx).unwrap_or(serde_json::Value::Null),
+        menu_type: ATTACHMENT_MENU_TYPE,
+        dismiss_on_outside: true,
+    }
+}
+
+pub fn attachment_entry_at(ctx: AttachmentContextMenuState, x: f64, y: f64) -> ActiveContextMenu {
+    ActiveContextMenu {
+        id: next_menu_id(),
+        anchor: MenuAnchor::Cursor { x, y },
+        ctx_json: serde_json::to_value(&ctx).unwrap_or(serde_json::Value::Null),
+        menu_type: ATTACHMENT_MENU_TYPE,
+        dismiss_on_outside: true,
+    }
+}
+
+fn render_attachment(ctx_json: &serde_json::Value, close: EventHandler<()>) -> Element {
+    let Ok(menu) = serde_json::from_value::<AttachmentContextMenuState>(ctx_json.clone()) else {
+        return rsx! {};
+    };
+    use crate::ui::account::common::attachment_context_menu::AttachmentContextMenuInner;
+    rsx! {
+        AttachmentContextMenuInner { menu, close }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ReactionContextMenu — right-click on emoji reaction pills in chat.
+// ─────────────────────────────────────────────────────────────────────────────
+
+pub const REACTION_MENU_TYPE: &str = "reaction";
+
+pub fn reaction_entry(ctx: &ReactionContextMenuState, evt: &MouseEvent) -> ActiveContextMenu {
+    let coords = evt.client_coordinates();
+    ActiveContextMenu {
+        id: next_menu_id(),
+        anchor: MenuAnchor::Cursor { x: coords.x, y: coords.y },
+        ctx_json: serde_json::to_value(ctx).unwrap_or(serde_json::Value::Null),
+        menu_type: REACTION_MENU_TYPE,
+        dismiss_on_outside: true,
+    }
+}
+
+pub fn reaction_entry_at(ctx: ReactionContextMenuState, x: f64, y: f64) -> ActiveContextMenu {
+    ActiveContextMenu {
+        id: next_menu_id(),
+        anchor: MenuAnchor::Cursor { x, y },
+        ctx_json: serde_json::to_value(&ctx).unwrap_or(serde_json::Value::Null),
+        menu_type: REACTION_MENU_TYPE,
+        dismiss_on_outside: true,
+    }
+}
+
+fn render_reaction(ctx_json: &serde_json::Value, close: EventHandler<()>) -> Element {
+    let Ok(menu) = serde_json::from_value::<ReactionContextMenuState>(ctx_json.clone()) else {
+        return rsx! {};
+    };
+    use crate::ui::account::common::reaction_context_menu::ReactionContextMenuInner;
+    rsx! {
+        ReactionContextMenuInner { menu, close }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AvatarContextMenu — right-click on user avatars in message rows.
+// ─────────────────────────────────────────────────────────────────────────────
+
+pub const AVATAR_MENU_TYPE: &str = "avatar";
+
+pub fn avatar_entry(ctx: &AvatarContextMenuState, evt: &MouseEvent) -> ActiveContextMenu {
+    let coords = evt.client_coordinates();
+    ActiveContextMenu {
+        id: next_menu_id(),
+        anchor: MenuAnchor::Cursor { x: coords.x, y: coords.y },
+        ctx_json: serde_json::to_value(ctx).unwrap_or(serde_json::Value::Null),
+        menu_type: AVATAR_MENU_TYPE,
+        dismiss_on_outside: true,
+    }
+}
+
+pub fn avatar_entry_at(ctx: AvatarContextMenuState, x: f64, y: f64) -> ActiveContextMenu {
+    ActiveContextMenu {
+        id: next_menu_id(),
+        anchor: MenuAnchor::Cursor { x, y },
+        ctx_json: serde_json::to_value(&ctx).unwrap_or(serde_json::Value::Null),
+        menu_type: AVATAR_MENU_TYPE,
+        dismiss_on_outside: true,
+    }
+}
+
+fn render_avatar(ctx_json: &serde_json::Value, close: EventHandler<()>) -> Element {
+    let Ok(menu) = serde_json::from_value::<AvatarContextMenuState>(ctx_json.clone()) else {
+        return rsx! {};
+    };
+    use crate::ui::account::common::avatar_context_menu::AvatarContextMenuInner;
+    rsx! {
+        AvatarContextMenuInner { menu, close }
+    }
+}
+
 /// Register every Phase-A menu render fn. Call once from `App` mount.
 pub fn register_all_menus() {
     register_menu(FORUM_POST_MENU_TYPE, render_forum_post);
     register_menu(USER_ROW_MENU_TYPE, render_user_row);
+    register_menu(SERVER_ICON_MENU_TYPE, render_server_icon);
+    register_menu(CHANNEL_MENU_TYPE, render_channel);
+    register_menu(DM_MENU_TYPE, render_dm);
+    register_menu(GROUP_DM_MENU_TYPE, render_group_dm);
+    register_menu(ACCOUNT_MENU_TYPE, render_account);
+    register_menu(ATTACHMENT_MENU_TYPE, render_attachment);
+    register_menu(REACTION_MENU_TYPE, render_reaction);
+    register_menu(AVATAR_MENU_TYPE, render_avatar);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

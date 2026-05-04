@@ -263,10 +263,10 @@ The biggest structural move. Land per-slice, not big-bang. Each
 sub-step is independently shippable; later steps benefit from earlier
 ones (smaller signal subscriptions = less re-render churn).
 
-- [ ] **G.1** Land the in-flight `context_menu_stack` migration that
+- [x] **G.1** Land the in-flight `context_menu_stack` migration that
       `state.rs:585-590` already calls out. Delete the 8 scalar
       `*_context_menu` fields once every site uses the stack. Source:
-      D.4.5.
+      D.4.5. — shipped (commit ID pending jj describe)
 - [ ] **G.2** Extract `BatchedSignal<VoiceState>` from `ChatData`
       (80 sites, self-contained). Voice writes stop re-rendering chat
       list. Source: D.3.

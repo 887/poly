@@ -24,26 +24,22 @@
 use crate::state::BatchedSignal;
 use super::super::super::routes::Route;
 use crate::i18n::{t, t_args};
-use crate::state::{AppState, ChatData};
+use crate::state::{AppState, ChatData, ContextMenuState};
 use crate::ui::client_ui::ClientMenu;
 use dioxus::prelude::*;
 use poly_client::MenuTargetKind;
 use poly_ui_macros::{context_menu, ui_action};
 
-/// Server right-click context menu.
+/// Server right-click context menu — stack-based inner component.
 ///
-/// Reads `AppState.context_menu` and renders a floating div at the stored
-/// coordinates. Renders nothing when `context_menu` is `None`.
+/// Receives the deserialized `ContextMenuState` from the stack host and
+/// a `close` callback to pop itself off the stack when the user dismisses.
 #[ui_action(inherit)]
 #[context_menu(inherit)]
 #[component]
-pub fn ServerContextMenu() -> Element {
+pub fn ServerContextMenuInner(menu: ContextMenuState, close: EventHandler<()>) -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
-
-    let Some(menu) = app_state.read().context_menu.clone() else {
-        return rsx! {};
-    };
 
     let server_id = menu.server_id.clone();
     let server_name = menu.server_name.clone();
@@ -74,32 +70,14 @@ pub fn ServerContextMenu() -> Element {
         });
     }
 
-    let close = move || {
-        app_state.batch(|st| st.context_menu = None);
-    };
-
     let x = menu.x;
     let y = menu.y;
 
     rsx! {
-        // Transparent backdrop that closes the menu on click AND prevents native context menu
-        div {
-            class: "context-menu-backdrop",
-            onclick: move |_| {
-                app_state.batch(|st| st.context_menu = None);
-            },
-            oncontextmenu: move |evt| {
-                // Prevent browser's native context menu from appearing
-                evt.prevent_default();
-                // Let event propagate so the right-clicked element's handler can fire
-            },
-        }
-
-        // The context menu itself
+        // The context menu itself — backdrop + dismiss is handled by the stack host.
         div {
             class: "context-menu",
             style: "left: {x}px; top: {y}px;",
-            // Stop click from bubbling to backdrop
             onclick: move |evt| evt.stop_propagation(),
 
             // Mark as Read
@@ -108,7 +86,7 @@ pub fn ServerContextMenu() -> Element {
                 onclick: {
                     move |_| {
                         // TODO(phase-3): mark all channels read via backend
-                        close();
+                        close.call(());
                     }
                 },
             }
@@ -132,7 +110,7 @@ pub fn ServerContextMenu() -> Element {
                         label: t("server-menu-notif-settings"),
                         has_arrow: true,
                         onclick: move |_| {
-                            close();
+                            close.call(());
                             navigator()
                                 .push(Route::ServerSettingsRoute {
                                     backend: bslug.clone(),
@@ -169,6 +147,7 @@ pub fn ServerContextMenu() -> Element {
                         server_name: server_name.clone(),
                         server_id: server_id.clone(),
                         oncancel: move |_| show_remove_confirm.set(false),
+                        onconfirm: move |()| close.call(()),
                     }
                 } else {
                     ContextMenuItem {
@@ -193,7 +172,7 @@ pub fn ServerContextMenu() -> Element {
                                 crate::ui::favorites_sidebar::persist_favorites(new_favs)
                                     .await;
                             });
-                            close();
+                            close.call(());
                         }
                     },
                 }
@@ -212,7 +191,7 @@ pub fn ServerContextMenu() -> Element {
                         label: t("server-menu-leave"),
                         danger: true,
                         onclick: move |_| {
-                            close();
+                            close.call(());
                             navigator()
                                 .push(Route::ServerSettingsRoute {
                                     backend: bslug.clone(),
@@ -236,7 +215,7 @@ pub fn ServerContextMenu() -> Element {
                         onclick: move |_| {
                             let sid2 = sid.clone();
                             #[allow(clippy::let_underscore_must_use)] let _ = document::eval(&format!("navigator.clipboard.writeText('{sid2}')"));
-                            close();
+                            close.call(());
                         },
                     }
                 }
@@ -309,8 +288,8 @@ fn RemoveFavoritesConfirm(
     server_name: String,
     server_id: String,
     oncancel: EventHandler<MouseEvent>,
+    onconfirm: EventHandler<()>,
 ) -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
 
     // Pre-compute the title using t_args so the Fluent {$name} placeholder is filled
@@ -338,8 +317,8 @@ fn RemoveFavoritesConfirm(
                             crate::ui::favorites_sidebar::persist_favorites(new_favs)
                                 .await;
                         });
-                        // Close menu
-                        app_state.batch(|st| st.context_menu = None);
+                        // Close menu via stack pop
+                        onconfirm.call(());
                     },
                     "{t(\"remove-favorites-confirm\")}"
                 }

@@ -1,12 +1,9 @@
 //! Attachment (image) right-click context menu component.
 //!
-//! Rendered at the `MainLayout` level so it is never clipped by sidebars.
+//! Rendered via the `ContextMenuStack` host at the `MainLayout` level.
 //! Opened by right-clicking an image attachment in chat or inside the
-//! full-screen `MessageMediaViewerOverlay`.
-//!
-//! State lives in `AppState.attachment_context_menu`. The `oncontextmenu`
-//! handler on the host element writes `Some(AttachmentContextMenuState)`.
-//! A global click on the `MainLayout` root clears it.
+//! full-screen `MessageMediaViewerOverlay`. State is pushed onto
+//! `AppState.context_menu_stack`.
 //!
 //! ## Menu items (Discord-parity)
 //! - Copy Image — best-effort fetch + `navigator.clipboard.write([blob])`
@@ -15,48 +12,29 @@
 //! - Open Media Link — `window.open(url, '_blank')`
 
 use crate::i18n::t;
-use crate::state::{AppState, BatchedSignal};
+use crate::state::AttachmentContextMenuState;
 use dioxus::prelude::*;
 use poly_ui_macros::{context_menu, ui_action};
 
-/// Attachment right-click context menu.
+/// Attachment right-click context menu — stack-based inner component.
 ///
-/// Reads `AppState.attachment_context_menu` and renders a floating div at
-/// the stored coordinates. Renders nothing when the state is `None`.
+/// Receives the deserialized `AttachmentContextMenuState` from the stack host
+/// and a `close` callback to pop itself off the stack.
 #[ui_action(inherit)]
 #[context_menu(inherit)]
 #[component]
-pub fn AttachmentContextMenu() -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
-
-    let Some(menu) = app_state.read().attachment_context_menu.clone() else {
-        return rsx! {};
-    };
-
+pub fn AttachmentContextMenuInner(menu: AttachmentContextMenuState, close: EventHandler<()>) -> Element {
     let x = menu.x;
     let y = menu.y;
     let url = menu.url.clone();
     let filename = menu.filename.clone();
 
-    let close = move || {
-        app_state.batch(|st| st.attachment_context_menu = None);
-    };
-
     rsx! {
         div {
-            class: "context-menu-backdrop",
-            // Sit above the media viewer overlay (.poly-media-viewer-overlay
+            class: "context-menu",
+            // z-index: sit above the media viewer overlay (.poly-media-viewer-overlay
             // is z-index 2100). Without this override the menu renders behind
             // the viewer and the user sees no menu at all.
-            style: "z-index: 2199;",
-            onclick: move |_| {
-                app_state.batch(|st| st.attachment_context_menu = None);
-            },
-            oncontextmenu: move |evt| evt.prevent_default(),
-        }
-
-        div {
-            class: "context-menu",
             style: "left: {x}px; top: {y}px; z-index: 2200;",
             onclick: move |evt| evt.stop_propagation(),
 
@@ -74,7 +52,7 @@ pub fn AttachmentContextMenu() -> Element {
                             // lint-allow-unused: Eval is fire-and-forget here (Copy + Future).
                             #[allow(clippy::let_underscore_must_use)]
                             let _ = document::eval(&js);
-                            close();
+                            close.call(());
                         },
                     }
                 }
@@ -96,7 +74,7 @@ pub fn AttachmentContextMenu() -> Element {
                             // lint-allow-unused: Eval is fire-and-forget here (Copy + Future).
                             #[allow(clippy::let_underscore_must_use)]
                             let _ = document::eval(&js);
-                            close();
+                            close.call(());
                         },
                     }
                 }
@@ -118,7 +96,7 @@ pub fn AttachmentContextMenu() -> Element {
                             // lint-allow-unused: Eval is fire-and-forget here (Copy + Future).
                             #[allow(clippy::let_underscore_must_use)]
                             let _ = document::eval(&js);
-                            close();
+                            close.call(());
                         },
                     }
                 }
@@ -138,7 +116,7 @@ pub fn AttachmentContextMenu() -> Element {
                             // lint-allow-unused: Eval is fire-and-forget here (Copy + Future).
                             #[allow(clippy::let_underscore_must_use)]
                             let _ = document::eval(&js);
-                            close();
+                            close.call(());
                         },
                     }
                 }

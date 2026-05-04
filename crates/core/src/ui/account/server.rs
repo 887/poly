@@ -12,5 +12,5 @@
 pub mod context_menu;
 pub mod settings;
 
-pub use context_menu::ServerContextMenu;
+pub use context_menu::ServerContextMenuInner;
 pub use settings::ServerSettingsPage;

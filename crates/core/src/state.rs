@@ -349,7 +349,7 @@ impl SettingsSection {
 ///
 /// Stored in `AppState` so the context menu component can be rendered
 /// at the `MainLayout` level (above sidebar overflow clipping).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ContextMenuState {
     /// Fixed X position (from `page_coordinates()`).
     pub x: f64,
@@ -418,7 +418,7 @@ pub struct ActiveContextMenu {
 ///
 /// Opened by right-clicking a user avatar `<img>` in message rows.
 /// Cleared by a global click on the `MainLayout` root.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AvatarContextMenuState {
     /// Fixed X position (from `page_coordinates()`).
     pub x: f64,
@@ -440,7 +440,7 @@ pub struct AvatarContextMenuState {
 ///
 /// Opened by right-clicking an emoji reaction pill on a message.
 /// Cleared by a global click on the `MainLayout` root.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ReactionContextMenuState {
     /// Fixed X position (from `page_coordinates()`).
     pub x: f64,
@@ -453,7 +453,7 @@ pub struct ReactionContextMenuState {
 }
 
 /// State for the active right-click attachment (image) context menu.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AttachmentContextMenuState {
     /// Fixed X position (from `page_coordinates()`).
     pub x: f64,
@@ -466,7 +466,7 @@ pub struct AttachmentContextMenuState {
 }
 
 /// State for the active right-click account-icon context menu.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AccountContextMenuState {
     pub x: f64,
     pub y: f64,
@@ -477,7 +477,7 @@ pub struct AccountContextMenuState {
 }
 
 /// State for the active right-click DM (1-on-1) context menu.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DmContextMenuState {
     pub x: f64,
     pub y: f64,
@@ -497,7 +497,7 @@ pub struct DmContextMenuState {
 }
 
 /// State for the active right-click group-DM context menu.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GroupDmContextMenuState {
     pub x: f64,
     pub y: f64,
@@ -517,7 +517,7 @@ pub struct GroupDmContextMenuState {
 // new menu types added in this commit.)
 
 /// State for the active right-click channel context menu.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ChannelContextMenuState {
     /// Fixed X position (from `page_coordinates()`).
     pub x: f64,
@@ -563,31 +563,12 @@ pub struct AppState {
     /// Used by account-scoped views to open the shared search route with a
     /// narrowed initial type filter (for example DMs + Groups only).
     pub search_type_seed: Option<Vec<String>>,
-    /// Active right-click context menu, if any.
-    ///
-    /// Set by `oncontextmenu` on server icons; cleared by a global
-    /// click handler in `MainLayout`.
-    pub context_menu: Option<ContextMenuState>,
-    /// Active right-click channel context menu, if any.
-    pub channel_context_menu: Option<ChannelContextMenuState>,
-    /// Active right-click DM (1-on-1) context menu, if any.
-    pub dm_context_menu: Option<DmContextMenuState>,
-    /// Active right-click group-DM context menu, if any.
-    pub group_dm_context_menu: Option<GroupDmContextMenuState>,
-    /// Active right-click account-icon context menu, if any.
-    pub account_context_menu: Option<AccountContextMenuState>,
-    /// Active right-click attachment (image) context menu, if any.
-    pub attachment_context_menu: Option<AttachmentContextMenuState>,
-    /// Active right-click reaction chip context menu, if any.
-    pub reaction_context_menu: Option<ReactionContextMenuState>,
-    /// Active right-click avatar context menu, if any.
-    pub avatar_context_menu: Option<AvatarContextMenuState>,
-    /// Stack of context menus for the new Phase A runtime (plan §4.1).
+    /// Stack of context menus (plan-context-menu-quality-control.md Phase A).
     ///
     /// Empty = no overlay. Pushing opens a submenu; popping closes it.
-    /// Consumed by `ui::context_menu::host::ContextMenuStack`. The older
-    /// `context_menu` / `channel_context_menu` scalar fields above will
-    /// be retired once every menu-opening site migrates.
+    /// Consumed by `ui::context_menu::host::ContextMenuStack`. All legacy
+    /// scalar `*_context_menu` fields have been migrated to this stack
+    /// (Phase G.1 of plan-solid-refactor-survey.md).
     pub context_menu_stack: Vec<ActiveContextMenu>,
     /// Pack B P28 — monotonic counter incremented on receipt of a
     /// [`poly_client::ClientEvent::SidebarInvalidated`] event from any
@@ -643,14 +624,6 @@ impl Default for AppState {
             member_list_sort_order: MemberListSortOrder::Alphabetical,
             member_list_show_offline: true,
             search_type_seed: None,
-            context_menu: None,
-            channel_context_menu: None,
-            dm_context_menu: None,
-            group_dm_context_menu: None,
-            account_context_menu: None,
-            attachment_context_menu: None,
-            reaction_context_menu: None,
-            avatar_context_menu: None,
             context_menu_stack: Vec::new(),
             sidebar_invalidated_tick: 0,
             last_known_perms: None,

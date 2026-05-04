@@ -8,6 +8,7 @@
 use crate::state::BatchedSignal;
 use crate::i18n::t;
 use crate::state::{AppState, AttachmentContextMenuState, ChatData};
+use crate::ui::context_menu::menus::attachment_entry_at;
 use dioxus::prelude::*;
 use poly_client::Attachment;
 use poly_ui_macros::{context_menu, ui_action};
@@ -68,7 +69,7 @@ pub fn MessageMediaViewerOverlay(props: MessageMediaViewerOverlayProps) -> Eleme
     #[cfg(target_arch = "wasm32")]
     {
         let img_count = image_attachments.len();
-        use_effect(move || {
+        use_effect(move || { // poly-lint: allow effect-self-write — active_pos/zoom/pan_x/pan_y are controlled by user gestures inside an eval loop; they converge on navigation
             spawn(async move {
                 let js = include_str!("../../../../assets/scripts/media_viewer_interactions.js");
                 let mut eval = document::eval(js);
@@ -270,12 +271,16 @@ pub fn MessageMediaViewerOverlay(props: MessageMediaViewerOverlayProps) -> Eleme
                             evt.stop_propagation();
                             let coords = evt.client_coordinates();
                             app_state.batch(|st| {
-                                st.attachment_context_menu = Some(AttachmentContextMenuState {
-                                    x: coords.x,
-                                    y: coords.y,
-                                    url: ctx_url.clone(),
-                                    filename: ctx_name.clone(),
-                                });
+                                st.context_menu_stack.push(attachment_entry_at(
+                                    AttachmentContextMenuState {
+                                        x: coords.x,
+                                        y: coords.y,
+                                        url: ctx_url.clone(),
+                                        filename: ctx_name.clone(),
+                                    },
+                                    coords.x,
+                                    coords.y,
+                                ));
                             });
                         }
                     },

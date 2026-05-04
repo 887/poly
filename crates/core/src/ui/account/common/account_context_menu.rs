@@ -1,11 +1,14 @@
 //! Right-click context menu for account icons in the leftmost favorites bar.
 //!
+//! Rendered via the `ContextMenuStack` host. State is pushed onto
+//! `AppState.context_menu_stack` by `oncontextmenu` on account icons.
+//!
 //! Items: Mark Account as Read / Account Settings / Sign Out / Copy Account ID.
 
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::nav;
-use crate::state::{AppState, BatchedSignal, ChatData};
+use crate::state::{AccountContextMenuState, AppState, BatchedSignal, ChatData};
 use crate::ui::account::common::chat_view::mark_channel_as_read;
 use crate::ui::routes::Route;
 use dioxus::prelude::*;
@@ -14,14 +17,10 @@ use poly_ui_macros::{context_menu, ui_action};
 #[ui_action(inherit)]
 #[context_menu(inherit)]
 #[component]
-pub fn AccountContextMenu() -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
+pub fn AccountContextMenuInner(menu: AccountContextMenuState, close: EventHandler<()>) -> Element {
+    let _app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
-
-    let Some(menu) = app_state.read().account_context_menu.clone() else {
-        return rsx! {};
-    };
 
     let x = menu.x;
     let y = menu.y;
@@ -32,7 +31,7 @@ pub fn AccountContextMenu() -> Element {
 
     // Total unread for this account = sum across all channels + DMs.
     let account_unread: u32 = {
-        let cd = chat_data.read();
+        let cd = chat_data.read(); // poly-lint: allow render-time-read — computing unread badge; subscription intentional
         let from_channels: u32 = cd
             .channels
             .iter()
@@ -49,18 +48,7 @@ pub fn AccountContextMenu() -> Element {
     };
     let mark_read_disabled = account_unread == 0;
 
-    let close = move || {
-        app_state.batch(|st| st.account_context_menu = None);
-    };
-
     rsx! {
-        div {
-            class: "context-menu-backdrop",
-            onclick: move |_| {
-                app_state.batch(|st| st.account_context_menu = None);
-            },
-            oncontextmenu: move |evt| evt.prevent_default(),
-        }
         div {
             class: "context-menu",
             style: "left: min({x}px, calc(100vw - 220px)); top: min({y}px, calc(100vh - 220px));",
@@ -79,14 +67,14 @@ pub fn AccountContextMenu() -> Element {
                         onclick: move |_| {
                             if mark_read_disabled { return; }
                             let dm_ids: Vec<String> = chat_data
-                                .read()
+                                .read() // poly-lint: allow render-time-read — inside click handler, not render path
                                 .dm_channels
                                 .iter()
                                 .filter(|d| d.account_id == aid && d.unread_count > 0)
                                 .map(|d| d.id.clone())
                                 .collect();
                             let chan_ids: Vec<String> = chat_data
-                                .read()
+                                .read() // poly-lint: allow render-time-read — inside click handler, not render path
                                 .channels
                                 .iter()
                                 .filter(|c| c.unread_count > 0)
@@ -95,7 +83,7 @@ pub fn AccountContextMenu() -> Element {
                             for id in dm_ids.iter().chain(chan_ids.iter()) {
                                 mark_channel_as_read(chat_data, id);
                             }
-                            close();
+                            close.call(());
                         },
                     }
                 }
@@ -117,7 +105,7 @@ pub fn AccountContextMenu() -> Element {
                                 instance_id: inst.clone(),
                                 account_id: aid.clone(),
                             });
-                            close();
+                            close.call(());
                         },
                     }
                 }
@@ -134,7 +122,7 @@ pub fn AccountContextMenu() -> Element {
                         onclick: move |_| {
                             let aid = aid.clone();
                             client_manager.batch(|cm| { cm.take_account(&aid); });
-                            close();
+                            close.call(());
                         },
                     }
                 }
@@ -151,7 +139,7 @@ pub fn AccountContextMenu() -> Element {
                         onclick: move |_| {
                             let a = aid.clone();
                             let _ = document::eval(&format!("navigator.clipboard.writeText('{a}')"));
-                            close();
+                            close.call(());
                         },
                     }
                 }

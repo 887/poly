@@ -1,12 +1,9 @@
 //! Reaction chip right-click context menu component.
 //!
-//! Rendered at the `MainLayout` level so it is never clipped by sidebars.
+//! Rendered via the `ContextMenuStack` host at the `MainLayout` level.
 //! Opened by right-clicking an emoji reaction pill (`.reaction-pill`) on
-//! a message in the chat view.
-//!
-//! State lives in `AppState.reaction_context_menu`. The `oncontextmenu`
-//! handler on the reaction `<button>` writes `Some(ReactionContextMenuState)`.
-//! A global click on the `MainLayout` root clears it.
+//! a message in the chat view. State is pushed onto
+//! `AppState.context_menu_stack`.
 //!
 //! ## Menu items
 //! - Show who reacted — debug stub (full reactors list is out of scope)
@@ -14,50 +11,32 @@
 
 use crate::state::BatchedSignal;
 use crate::i18n::t;
-use crate::state::{AppState, ChatData};
+use crate::state::{AppState, ChatData, ReactionContextMenuState};
 use crate::ui::account::common::chat_view::toggle_reaction_on_message;
 use dioxus::prelude::*;
 use poly_ui_macros::{context_menu, ui_action};
 
-/// Reaction chip right-click context menu.
+/// Reaction chip right-click context menu — stack-based inner component.
 ///
-/// Reads `AppState.reaction_context_menu` and renders a floating div at
-/// the stored coordinates. Renders nothing when the state is `None`.
+/// Receives the deserialized `ReactionContextMenuState` from the stack host
+/// and a `close` callback to pop itself off the stack.
 #[ui_action(inherit)]
 #[context_menu(inherit)]
 #[component]
-pub fn ReactionContextMenu() -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
+pub fn ReactionContextMenuInner(menu: ReactionContextMenuState, close: EventHandler<()>) -> Element {
+    let _app_state: BatchedSignal<AppState> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
-
-    let Some(menu) = app_state.read().reaction_context_menu.clone() else {
-        return rsx! {};
-    };
 
     let x = menu.x;
     let y = menu.y;
     let emoji = menu.emoji.clone();
     let message_id = menu.message_id.clone();
 
-    let close = move || {
-        app_state.batch(|st| st.reaction_context_menu = None);
-    };
-
     rsx! {
-        // Transparent backdrop — closes menu on click and blocks native context menu.
-        div {
-            class: "context-menu-backdrop",
-            onclick: move |_| {
-                app_state.batch(|st| st.reaction_context_menu = None);
-            },
-            oncontextmenu: move |evt| evt.prevent_default(),
-        }
-
-        // The floating menu itself.
+        // The floating menu itself — backdrop + dismiss handled by the stack host.
         div {
             class: "context-menu",
             style: "left: {x}px; top: {y}px;",
-            // Stop clicks from reaching the backdrop.
             onclick: move |evt| evt.stop_propagation(),
 
             // Show who reacted — stub (reaction-details UI is out of scope for this phase)
@@ -71,7 +50,7 @@ pub fn ReactionContextMenu() -> Element {
                                 target: "poly::context_menu",
                                 "show-reactors stub: emoji={e}"
                             );
-                            close();
+                            close.call(());
                         },
                     }
                 }
@@ -88,7 +67,7 @@ pub fn ReactionContextMenu() -> Element {
                         label: t("reaction-menu-remove"),
                         onclick: move |_| {
                             toggle_reaction_on_message(chat_data, &mid, &e);
-                            close();
+                            close.call(());
                         },
                     }
                 }

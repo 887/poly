@@ -24,7 +24,8 @@ use super::routes::Route;
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::state::chat_data::user_color;
-use crate::state::{AppState, ChatData, ContextMenuState, DragSource, View};
+use crate::state::{AccountContextMenuState, AppState, ChatData, ContextMenuState, DragSource, View};
+use crate::ui::context_menu::menus::{account_entry_at, server_icon_entry_at};
 use crate::ui::account::common::chat_history::{
     initial_message_query, remember_message_list_scroll_position,
     request_restore_scroll_position_or_bottom,
@@ -595,14 +596,18 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                 )
         };
         menu_app_state.batch(|st| {
-            st.account_context_menu = Some(crate::state::AccountContextMenuState {
-                x: coords.x,
-                y: coords.y,
-                account_id: menu_aid.clone(),
-                display_name: menu_display.clone(),
-                backend_slug: slug,
-                instance_id: inst,
-            });
+            st.context_menu_stack.push(account_entry_at(
+                AccountContextMenuState {
+                    x: coords.x,
+                    y: coords.y,
+                    account_id: menu_aid.clone(),
+                    display_name: menu_display.clone(),
+                    backend_slug: slug,
+                    instance_id: inst,
+                },
+                coords.x,
+                coords.y,
+            ));
         });
     };
 
@@ -967,15 +972,19 @@ fn FavoriteServerIcon(
                     evt.stop_propagation();
                     let coords = evt.client_coordinates();
                     app_state.batch(|st| {
-                        st.context_menu = Some(ContextMenuState {
-                            x: coords.x,
-                            y: coords.y,
-                            server_id: sid.clone(),
-                            server_name: sname.clone(),
-                            account_id: aid.clone(),
-                            instance_id: iid.clone(),
-                            backend_slug: bslug.clone(),
-                        });
+                        st.context_menu_stack.push(server_icon_entry_at(
+                            ContextMenuState {
+                                x: coords.x,
+                                y: coords.y,
+                                server_id: sid.clone(),
+                                server_name: sname.clone(),
+                                account_id: aid.clone(),
+                                instance_id: iid.clone(),
+                                backend_slug: bslug.clone(),
+                            },
+                            coords.x,
+                            coords.y,
+                        ));
                     });
                 }
             },

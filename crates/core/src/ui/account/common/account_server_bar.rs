@@ -28,6 +28,7 @@ use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::state::chat_data::user_color;
 use crate::state::{AppState, ChatData, ContextMenuState, DragSource, View};
+use crate::ui::context_menu::menus::server_icon_entry_at;
 use crate::ui::account::common::chat_history::remember_message_list_scroll_position;
 use crate::ui::favorites_sidebar::SidebarTooltip;
 use crate::ui::main_layout::{close_mobile_drawer, mobile_left_drawer_open};
@@ -357,15 +358,19 @@ fn AccountServerIcon(
         evt.stop_propagation();
         let coords = evt.client_coordinates();
         app_state.batch(|st| {
-            st.context_menu = Some(ContextMenuState {
-                x: coords.x,
-                y: coords.y,
-                server_id: sid_ctx.clone(),
-                server_name: sname_ctx.clone(),
-                account_id: aid_ctx.clone(),
-                instance_id: iid_ctx.clone(),
-                backend_slug: bslug_ctx.clone(),
-            });
+            st.context_menu_stack.push(server_icon_entry_at(
+                ContextMenuState {
+                    x: coords.x,
+                    y: coords.y,
+                    server_id: sid_ctx.clone(),
+                    server_name: sname_ctx.clone(),
+                    account_id: aid_ctx.clone(),
+                    instance_id: iid_ctx.clone(),
+                    backend_slug: bslug_ctx.clone(),
+                },
+                coords.x,
+                coords.y,
+            ));
         });
     };
 
