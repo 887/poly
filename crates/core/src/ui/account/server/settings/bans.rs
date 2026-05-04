@@ -6,9 +6,26 @@
 use crate::client_manager::ClientManager;
 use crate::state::BatchedSignal;
 use crate::i18n::t;
+use crate::ui::client_ui::use_view_resource::{use_view_resource, ViewQuery};
 use dioxus::prelude::*;
-use poly_client::BannedMember;
+use poly_client::{BannedMember, ClientBackend, ClientError, ClientResult};
 use poly_ui_macros::{context_menu, ui_action};
+
+// ── ViewQuery impl ────────────────────────────────────────────────────────────
+
+#[derive(Clone, PartialEq)]
+struct ServerBansQuery {
+    account_id: String,
+    server_id: String,
+}
+
+impl ViewQuery for ServerBansQuery {
+    type Output = Vec<BannedMember>;
+    fn account_id(&self) -> &str { &self.account_id }
+    async fn fetch(&self, b: &dyn ClientBackend) -> ClientResult<Self::Output> {
+        b.get_bans(&self.server_id).await
+    }
+}
 
 /// Bans tab component — shows the list of banned members and unban controls.
 #[ui_action(inherit)]
@@ -18,42 +35,39 @@ use poly_ui_macros::{context_menu, ui_action};
 pub fn BansTab(server_id: String, account_id: String) -> Element {
     let client_manager: BatchedSignal<ClientManager> = use_context();
 
-    let bans_resource = {
-        let server_id = server_id.clone();
-        let account_id = account_id.clone();
-        use_resource(move || {
-            let server_id = server_id.clone();
-            let account_id = account_id.clone();
-            let client_manager = client_manager;
-            async move {
-                client_manager.peek().with_backend(&account_id, async |b| {
-                    b.get_bans(&server_id).await
-                }).await.map_err(|e| e.to_string())
-            }
-        })
-    };
+    let bans_resource: Resource<ClientResult<Vec<BannedMember>>> = use_view_resource(ServerBansQuery {
+        account_id: account_id.clone(),
+        server_id: server_id.clone(),
+    });
 
-    let bans_snapshot = bans_resource.read_unchecked().as_ref().cloned();
+    // `ClientError` is not `Clone`, so we can't snapshot via `.cloned()`.
+    // Clone only the `Vec<BannedMember>` on success so we don't hold the guard
+    // across the rsx! render.
+    let bans_ok: Option<Vec<BannedMember>> = match &*bans_resource.read_unchecked() {
+        Some(Ok(v)) => Some(v.clone()),
+        _ => None,
+    };
+    let bans_err: Option<String> = match &*bans_resource.read_unchecked() {
+        Some(Err(e)) => Some(e.to_string()),
+        _ => None,
+    };
 
     rsx! {
         div { class: "bans-tab",
-            match &bans_snapshot {
-                None => rsx! {
-                    p { class: "tab-loading", "{t(\"bans-tab-loading\")}" }
-                },
-                Some(Err(e)) => rsx! {
-                    p { class: "tab-error", "{e}" }
-                },
-                Some(Ok(bans)) if bans.is_empty() => rsx! {
+            if bans_resource.read_unchecked().is_none() {
+                p { class: "tab-loading", "{t(\"bans-tab-loading\")}" }
+            } else if let Some(e) = bans_err {
+                p { class: "tab-error", "{e}" }
+            } else if let Some(bans) = bans_ok {
+                if bans.is_empty() {
                     p { class: "tab-empty", "{t(\"bans-tab-empty\")}" }
-                },
-                Some(Ok(bans)) => rsx! {
+                } else {
                     div { class: "bans-list",
-                        for ban in bans.iter() {
-                            {render_ban_row(ban.clone(), server_id.clone(), account_id.clone(), client_manager, bans_resource)}
+                        for ban in bans.into_iter() {
+                            {render_ban_row(ban, server_id.clone(), account_id.clone(), client_manager, bans_resource)}
                         }
                     }
-                },
+                }
             }
         }
     }
@@ -66,7 +80,7 @@ fn render_ban_row(
     server_id: String,
     account_id: String,
     client_manager: BatchedSignal<ClientManager>,
-    mut bans_resource: Resource<Result<Vec<BannedMember>, String>>,
+    mut bans_resource: Resource<ClientResult<Vec<BannedMember>>>,
 ) -> Element {
     let mut unban_error = use_signal(String::new);
 

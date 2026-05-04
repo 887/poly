@@ -74,13 +74,44 @@ pub fn is_bandwidth_constrained() -> bool {
     }
 }
 
-use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::state::{BatchedSignal, use_reactive_effect};
 use crate::ui::actions::{ActionCx, UiAction};
+use crate::ui::client_ui::use_view_resource::{use_view_resource, ViewQuery};
 use dioxus::prelude::*;
-use poly_client::{ClientError, ViewBody, ViewDescriptor};
+use poly_client::{ClientBackend, ClientError, ClientResult, ViewBody, ViewDescriptor};
 use poly_ui_macros::{context_menu, ui_action};
+
+// ── ViewQuery impls for this module ──────────────────────────────────────────
+
+/// Query: fetch the declared `ViewDescriptor` for a specific channel.
+#[derive(Clone, PartialEq)]
+struct ChannelViewQuery {
+    account_id: String,
+    channel_id: String,
+}
+
+impl ViewQuery for ChannelViewQuery {
+    type Output = ViewDescriptor;
+    fn account_id(&self) -> &str { &self.account_id }
+    async fn fetch(&self, b: &dyn ClientBackend) -> ClientResult<Self::Output> {
+        b.get_channel_view(&self.channel_id).await
+    }
+}
+
+/// Query: fetch the account-level overview `ViewDescriptor`.
+#[derive(Clone, PartialEq)]
+struct AccountOverviewViewQuery {
+    account_id: String,
+}
+
+impl ViewQuery for AccountOverviewViewQuery {
+    type Output = ViewDescriptor;
+    fn account_id(&self) -> &str { &self.account_id }
+    async fn fetch(&self, b: &dyn ClientBackend) -> ClientResult<Self::Output> {
+        b.get_account_overview_view().await
+    }
+}
 
 /// Actions for the account-overview header search input.
 #[derive(Debug, Clone)]
@@ -121,21 +152,10 @@ pub fn ClientView(
     #[props(default)]
     toolbar_leading: Option<Element>,
 ) -> Element {
-    let client_manager: BatchedSignal<ClientManager> = use_context();
-
-    let desc_res = {
-        let account_id = account_id.clone();
-        let channel_id = channel_id.clone();
-        use_resource(move || {
-            let account_id = account_id.clone();
-            let channel_id = channel_id.clone();
-            async move {
-                client_manager.peek().with_backend(&account_id, async |b| {
-                    b.get_channel_view(&channel_id).await
-                }).await
-            }
-        })
-    };
+    let desc_res = use_view_resource(ChannelViewQuery {
+        account_id: account_id.clone(),
+        channel_id: channel_id.clone(),
+    });
 
     match &*desc_res.read_unchecked() {
         None => rsx! {
@@ -174,20 +194,11 @@ pub fn ClientView(
 #[context_menu(inherit)]
 #[component]
 pub fn AccountOverviewView(account_id: String) -> Element {
-    let client_manager: BatchedSignal<ClientManager> = use_context();
     let mut search_query = use_signal(String::new);
 
-    let desc_res = {
-        let account_id = account_id.clone();
-        use_resource(move || {
-            let account_id = account_id.clone();
-            async move {
-                client_manager.peek().with_backend(&account_id, async |b| {
-                    b.get_account_overview_view().await
-                }).await
-            }
-        })
-    };
+    let desc_res = use_view_resource(AccountOverviewViewQuery {
+        account_id: account_id.clone(),
+    });
 
     // Extract the per-backend header strings from the plugin's descriptor
     // so the host-rendered title/subtitle/placeholder use backend-native

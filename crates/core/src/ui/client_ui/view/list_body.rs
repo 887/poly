@@ -24,11 +24,58 @@ use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::state::{AppState, BatchedSignal};
 use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::client_ui::CustomBlock;
+use crate::ui::client_ui::use_view_resource::{use_view_resource, ViewQuery};
 use crate::ui::context_menu::menus::{forum_post_entry, ForumPostCtx};
 use crate::ui::errors::{is_session_expired, SessionExpiredCard};
 use dioxus::prelude::*;
-use poly_client::{ClientError, Cursor, ListSpec, ViewDetail, ViewRow, ViewRowsPage};
+use poly_client::{ClientBackend, ClientError, ClientResult, Cursor, ListSpec, ViewDetail, ViewRow, ViewRowsPage};
 use poly_ui_macros::{context_menu, ui_action};
+
+// ── ViewQuery impls for this module ──────────────────────────────────────────
+
+/// Query: fetch the detail block for a selected row in `ViewRowDetail`.
+#[derive(Clone, PartialEq)]
+struct ViewRowDetailQuery {
+    account_id: String,
+    channel_id: String,
+    row_id: String,
+}
+
+impl ViewQuery for ViewRowDetailQuery {
+    type Output = ViewDetail;
+    fn account_id(&self) -> &str { &self.account_id }
+    async fn fetch(&self, b: &dyn ClientBackend) -> ClientResult<Self::Output> {
+        b.get_view_detail(&self.channel_id, &self.row_id).await
+    }
+}
+
+/// Query: fetch the first page of rows for `fetch_first_page`.
+///
+/// Sort/filter/tab params are part of the key so a toolbar selection change
+/// (which remounts the body with a new `key:`) produces a distinct query that
+/// fetches fresh data.
+#[derive(Clone, PartialEq)]
+struct FirstPageQuery {
+    account_id: String,
+    channel_id: String,
+    sort_id: Option<String>,
+    filter_id: Option<String>,
+    tab_id: Option<String>,
+}
+
+impl ViewQuery for FirstPageQuery {
+    type Output = ViewRowsPage;
+    fn account_id(&self) -> &str { &self.account_id }
+    async fn fetch(&self, b: &dyn ClientBackend) -> ClientResult<Self::Output> {
+        b.get_view_rows(
+            &self.channel_id,
+            None,
+            self.sort_id.as_deref(),
+            self.filter_id.as_deref(),
+            self.tab_id.as_deref(),
+        ).await
+    }
+}
 
 /// Actions for the flat-list body engine.
 ///
@@ -436,22 +483,11 @@ pub fn ListBodyRow(row: ViewRow, on_click: EventHandler<String>) -> Element {
 #[context_menu(inherit)]
 #[component]
 pub fn ViewRowDetail(channel_id: String, account_id: String, row_id: String) -> Element {
-    let client_manager: BatchedSignal<ClientManager> = use_context();
-    let detail_res: Resource<Result<ViewDetail, ClientError>> = {
-        let account_id = account_id.clone();
-        let channel_id = channel_id.clone();
-        let row_id = row_id.clone();
-        use_resource(move || {
-            let account_id = account_id.clone();
-            let channel_id = channel_id.clone();
-            let row_id = row_id.clone();
-            async move {
-                client_manager.peek().with_backend(&account_id, async |b| {
-                    b.get_view_detail(&channel_id, &row_id).await
-                }).await
-            }
-        })
-    };
+    let detail_res: Resource<ClientResult<ViewDetail>> = use_view_resource(ViewRowDetailQuery {
+        account_id: account_id.clone(),
+        channel_id: channel_id.clone(),
+        row_id: row_id.clone(),
+    });
 
     match &*detail_res.read_unchecked() {
         None => rsx! {
@@ -789,24 +825,12 @@ pub(super) fn fetch_first_page(
     sort_id: Option<String>,
     filter_id: Option<String>,
     tab_id: Option<String>,
-) -> Resource<Result<ViewRowsPage, ClientError>> {
-    let client_manager: BatchedSignal<ClientManager> = use_context();
-    use_resource(move || {
-        let account_id = account_id.clone();
-        let channel_id = channel_id.clone();
-        let sort_id = sort_id.clone();
-        let filter_id = filter_id.clone();
-        let tab_id = tab_id.clone();
-        async move {
-            client_manager.peek().with_backend(&account_id, async |b| {
-                b.get_view_rows(
-                    &channel_id,
-                    None,
-                    sort_id.as_deref(),
-                    filter_id.as_deref(),
-                    tab_id.as_deref(),
-                ).await
-            }).await
-        }
+) -> Resource<ClientResult<ViewRowsPage>> {
+    use_view_resource(FirstPageQuery {
+        account_id,
+        channel_id,
+        sort_id,
+        filter_id,
+        tab_id,
     })
 }

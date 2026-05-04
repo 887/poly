@@ -14,6 +14,7 @@ pub mod menu;
 pub mod settings_section;
 pub mod sidebar;
 pub mod toast;
+pub mod use_view_resource;
 pub mod view;
 
 pub use action_outcome::{handle_action_outcome, ActionOutcomeCx};
@@ -23,4 +24,5 @@ pub use menu::ClientMenu;
 pub use settings_section::PluginSettingsSection;
 pub use sidebar::ClientSidebar;
 pub use toast::{push_toast, ToastMessage, ToastOverlay};
+pub use use_view_resource::{use_view_resource, ViewQuery};
 pub use view::ClientView;

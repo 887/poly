@@ -43,13 +43,32 @@ use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::client_ui::action_outcome::{handle_action_outcome, ActionOutcomeCx};
 use crate::ui::client_ui::custom_block::{sanitize_html, CustomBlock};
 use crate::ui::client_ui::toast::ToastMessage;
+use crate::ui::client_ui::use_view_resource::{use_view_resource, ViewQuery};
 use dioxus::prelude::*;
 use poly_client::{
-    ClientError, CustomBlock as CustomBlockData, IconSource, MenuItem,
+    ClientBackend, ClientError, ClientResult, CustomBlock as CustomBlockData, IconSource, MenuItem,
     MenuItemVariant, MenuSlot, MenuTargetKind,
 };
 use poly_ui_macros::{context_menu, ui_action};
 use std::collections::{HashMap, HashSet};
+
+// ── ViewQuery impl ────────────────────────────────────────────────────────────
+
+/// Query: fetch plugin-declared context menu items for a specific target.
+#[derive(Clone, PartialEq)]
+struct ContextMenuItemsQuery {
+    account_id: String,
+    target: MenuTargetKind,
+    target_id: String,
+}
+
+impl ViewQuery for ContextMenuItemsQuery {
+    type Output = Vec<MenuItem>;
+    fn account_id(&self) -> &str { &self.account_id }
+    async fn fetch(&self, b: &dyn ClientBackend) -> ClientResult<Self::Output> {
+        b.get_context_menu_items(self.target, &self.target_id).await
+    }
+}
 
 // ─── Typed actions ───────────────────────────────────────────────────
 
@@ -107,22 +126,12 @@ pub fn ClientMenu(
     target_id: String,
     account_id: String,
 ) -> Element {
-    let client_manager: BatchedSignal<ClientManager> = use_context();
-
     // D24: fresh fetch on every mount.
-    let items_res = {
-        let account_id = account_id.clone();
-        let target_id = target_id.clone();
-        use_resource(move || {
-            let account_id = account_id.clone();
-            let target_id = target_id.clone();
-            async move {
-                client_manager.peek().with_backend(&account_id, async |b| {
-                    b.get_context_menu_items(target, &target_id).await
-                }).await
-            }
-        })
-    };
+    let items_res = use_view_resource(ContextMenuItemsQuery {
+        account_id: account_id.clone(),
+        target,
+        target_id: target_id.clone(),
+    });
 
     // P50: focused index for keyboard nav over top-level rendered items.
     let mut focused_index = use_signal(|| 0usize);

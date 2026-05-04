@@ -19,11 +19,46 @@ use crate::ui::account::server::context_menu::ContextMenuItem;
 use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::client_ui::action_outcome::{handle_action_outcome, ActionOutcomeCx};
 use crate::ui::client_ui::toast::ToastMessage;
+use crate::ui::client_ui::use_view_resource::{use_view_resource, ViewQuery};
 use dioxus::prelude::*;
 use poly_client::{
-    ActionOutcome, ClientError, ComposerButton, ComposerSlot, MenuItem, MenuItemVariant,
+    ActionOutcome, ClientBackend, ClientError, ClientResult, ComposerButton, ComposerSlot,
+    MenuItem, MenuItemVariant,
 };
 use poly_ui_macros::{context_menu, ui_action};
+
+// ── ViewQuery impls for this module ──────────────────────────────────────────
+
+/// Query: fetch plugin-declared composer buttons for a channel.
+#[derive(Clone, PartialEq)]
+struct ComposerButtonsQuery {
+    account_id: String,
+    channel_id: String,
+}
+
+impl ViewQuery for ComposerButtonsQuery {
+    type Output = Vec<ComposerButton>;
+    fn account_id(&self) -> &str { &self.account_id }
+    async fn fetch(&self, b: &dyn ClientBackend) -> ClientResult<Self::Output> {
+        b.get_composer_buttons(&self.channel_id).await
+    }
+}
+
+/// Query: fetch plugin-declared per-message actions for a channel + message.
+#[derive(Clone, PartialEq)]
+struct MessageActionsQuery {
+    account_id: String,
+    channel_id: String,
+    message_id: String,
+}
+
+impl ViewQuery for MessageActionsQuery {
+    type Output = Vec<MenuItem>;
+    fn account_id(&self) -> &str { &self.account_id }
+    async fn fetch(&self, b: &dyn ClientBackend) -> ClientResult<Self::Output> {
+        b.get_message_actions(&self.channel_id, &self.message_id).await
+    }
+}
 
 // ─── Typed actions ───────────────────────────────────────────────────
 
@@ -105,21 +140,10 @@ pub fn ComposerHooks(
     channel_id: String,
     slot: ComposerSlot,
 ) -> Element {
-    let client_manager: BatchedSignal<ClientManager> = use_context();
-
-    let buttons_res = {
-        let account_id = account_id.clone();
-        let channel_id = channel_id.clone();
-        use_resource(move || {
-            let account_id = account_id.clone();
-            let channel_id = channel_id.clone();
-            async move {
-                client_manager.peek().with_backend(&account_id, async |b| {
-                    b.get_composer_buttons(&channel_id).await
-                }).await
-            }
-        })
-    };
+    let buttons_res = use_view_resource(ComposerButtonsQuery {
+        account_id: account_id.clone(),
+        channel_id: channel_id.clone(),
+    });
 
     let buttons: Vec<ComposerButton> = match &*buttons_res.read_unchecked() {
         None => return rsx! {}, // still loading
@@ -204,23 +228,11 @@ pub fn MessageActions(
     channel_id: String,
     message_id: String,
 ) -> Element {
-    let client_manager: BatchedSignal<ClientManager> = use_context();
-
-    let items_res = {
-        let account_id = account_id.clone();
-        let channel_id = channel_id.clone();
-        let message_id = message_id.clone();
-        use_resource(move || {
-            let account_id = account_id.clone();
-            let channel_id = channel_id.clone();
-            let message_id = message_id.clone();
-            async move {
-                client_manager.peek().with_backend(&account_id, async |b| {
-                    b.get_message_actions(&channel_id, &message_id).await
-                }).await
-            }
-        })
-    };
+    let items_res = use_view_resource(MessageActionsQuery {
+        account_id: account_id.clone(),
+        channel_id: channel_id.clone(),
+        message_id: message_id.clone(),
+    });
 
     let items: Vec<MenuItem> = match &*items_res.read_unchecked() {
         None => return rsx! {},

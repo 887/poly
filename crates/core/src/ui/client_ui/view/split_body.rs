@@ -5,10 +5,28 @@ use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::state::{AppState, BatchedSignal};
 use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::client_ui::CustomBlock;
+use crate::ui::client_ui::use_view_resource::{use_view_resource, ViewQuery};
 use crate::ui::errors::{is_session_expired, SessionExpiredCard};
 use dioxus::prelude::*;
-use poly_client::{ClientError, SplitSpec, ViewDetail, ViewRowsPage};
+use poly_client::{ClientBackend, ClientError, ClientResult, SplitSpec, ViewDetail, ViewRowsPage};
 use poly_ui_macros::{context_menu, ui_action};
+
+// ── ViewQuery impls for this module ──────────────────────────────────────────
+
+/// Query: fetch the first page of rows for a split-body view.
+#[derive(Clone, PartialEq)]
+struct SplitBodyRowsQuery {
+    account_id: String,
+    channel_id: String,
+}
+
+impl ViewQuery for SplitBodyRowsQuery {
+    type Output = ViewRowsPage;
+    fn account_id(&self) -> &str { &self.account_id }
+    async fn fetch(&self, b: &dyn ClientBackend) -> ClientResult<Self::Output> {
+        b.get_view_rows(&self.channel_id, None, None, None, None).await
+    }
+}
 
 /// Actions for the split body engine — currently only row-selection.
 #[derive(Debug, Clone)]
@@ -40,19 +58,10 @@ pub fn SplitBody(channel_id: String, account_id: String, spec: SplitSpec) -> Ele
         (b, i)
     };
 
-    let rows_res: Resource<Result<ViewRowsPage, ClientError>> = {
-        let account_id = account_id.clone();
-        let channel_id = channel_id.clone();
-        use_resource(move || {
-            let account_id = account_id.clone();
-            let channel_id = channel_id.clone();
-            async move {
-                client_manager.peek().with_backend(&account_id, async |b| {
-                    b.get_view_rows(&channel_id, None, None, None, None).await
-                }).await
-            }
-        })
-    };
+    let rows_res: Resource<ClientResult<ViewRowsPage>> = use_view_resource(SplitBodyRowsQuery {
+        account_id: account_id.clone(),
+        channel_id: channel_id.clone(),
+    });
 
     let mut selected_id = use_signal(|| None::<String>);
 

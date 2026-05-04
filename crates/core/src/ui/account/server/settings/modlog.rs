@@ -3,12 +3,28 @@
 //! Fetches and displays moderation log entries.
 //! Gated by `BackendCapabilities::has_moderation_log`.
 
-use crate::client_manager::ClientManager;
-use crate::state::BatchedSignal;
 use crate::i18n::t;
+use crate::ui::client_ui::use_view_resource::{use_view_resource, ViewQuery};
 use dioxus::prelude::*;
-use poly_client::{ModerationAction, ModerationLogEntry};
+use poly_client::{ClientBackend, ClientError, ClientResult, ModerationAction, ModerationLogEntry};
 use poly_ui_macros::{context_menu, ui_action};
+
+// ── ViewQuery impl ────────────────────────────────────────────────────────────
+
+#[derive(Clone, PartialEq)]
+struct ServerModLogQuery {
+    account_id: String,
+    server_id: String,
+    limit: usize,
+}
+
+impl ViewQuery for ServerModLogQuery {
+    type Output = Vec<ModerationLogEntry>;
+    fn account_id(&self) -> &str { &self.account_id }
+    async fn fetch(&self, b: &dyn ClientBackend) -> ClientResult<Self::Output> {
+        b.get_moderation_log(&self.server_id, self.limit).await
+    }
+}
 
 const MODLOG_LIMIT: usize = 50;
 
@@ -18,28 +34,20 @@ const MODLOG_LIMIT: usize = 50;
 #[context_menu(none)]
 #[component]
 pub fn ModLogTab(server_id: String, account_id: String) -> Element {
-    let client_manager: BatchedSignal<ClientManager> = use_context();
+    let log_resource: Resource<ClientResult<Vec<ModerationLogEntry>>> =
+        use_view_resource(ServerModLogQuery {
+            account_id,
+            server_id,
+            limit: MODLOG_LIMIT,
+        });
 
-    let log_resource = {
-        let server_id = server_id.clone();
-        let account_id = account_id.clone();
-        use_resource(move || {
-            let server_id = server_id.clone();
-            let account_id = account_id.clone();
-            let client_manager = client_manager;
-            async move {
-                client_manager.peek().with_backend(&account_id, async |b| {
-                    b.get_moderation_log(&server_id, MODLOG_LIMIT).await
-                }).await.map_err(|e| e.to_string())
-            }
-        })
-    };
-
-    let log_snapshot = log_resource.read_unchecked().as_ref().cloned();
+    // `ClientError` is not `Clone`, so we can't snapshot via `.cloned()`.
+    // Read through `read_unchecked` directly.
+    let log = log_resource.read_unchecked();
 
     rsx! {
         div { class: "modlog-tab",
-            match &log_snapshot {
+            match &*log {
                 None => rsx! {
                     p { class: "tab-loading", "{t(\"modlog-tab-loading\")}" }
                 },
