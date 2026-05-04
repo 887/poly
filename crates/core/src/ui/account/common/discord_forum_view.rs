@@ -31,7 +31,7 @@
 
 use crate::state::BatchedSignal;
 use crate::client_manager::{BackendHandleExt, ClientManager};
-use crate::state::{AppState, ChatData};
+use crate::state::{AppState, ChatLists, ChatViewState};
 use crate::ui::routes::Route;
 use chrono::{DateTime, Utc};
 use dioxus::prelude::*;
@@ -87,10 +87,11 @@ fn is_media_channel(ch: &Channel) -> bool {
 pub fn DiscordForumView() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
     let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let chat_view_state: BatchedSignal<ChatViewState> = use_context();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
 
-    // Resolve channel + account from nav/chat_data (same pattern as ForumView).
+    // Resolve channel + account from nav/chat_view_state (same pattern as ForumView).
     let account_id = nav
         .read()
                 .active_account_id
@@ -103,7 +104,7 @@ pub fn DiscordForumView() -> Element {
             .cloned()
             .filter(|id| !id.is_empty())
             .unwrap_or_else(|| {
-                let cd = chat_data.read();
+                let cd = chat_view_state.read();
                 cd.current_channel
                     .as_ref()
                     .map(|ch| ch.id.clone())
@@ -123,7 +124,7 @@ pub fn DiscordForumView() -> Element {
     let show_modal = use_signal(|| false);
 
     // Fetch forum tags from the channel metadata.
-    let forum_tags: Vec<ForumTag> = chat_data
+    let forum_tags: Vec<ForumTag> = chat_lists
         .read()
         .channels
         .iter()
@@ -131,14 +132,14 @@ pub fn DiscordForumView() -> Element {
         .and_then(|ch| ch.forum_tags.clone())
         .unwrap_or_default();
 
-    let gallery_mode = chat_data
+    let gallery_mode = chat_lists
         .read()
         .channels
         .iter()
         .find(|ch| ch.id == channel_id)
         .is_some_and(is_media_channel);
 
-    let channel_name = chat_data
+    let channel_name = chat_lists
         .read()
         .channels
         .iter()
@@ -206,7 +207,7 @@ pub fn DiscordForumView() -> Element {
                 .active_instance_id
         .cloned()
         .unwrap_or_default();
-    let server_id = chat_data
+    let server_id = chat_view_state
         .read()
         .current_server
         .as_ref()

@@ -7,7 +7,7 @@
 use crate::state::BatchedSignal;
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
-use crate::state::{AppState, ChatData, NavState, PendingDirectCallRequest, UiOverlays, VoiceState};
+use crate::state::{AccountSessions, AppState, ChatLists, NavState, PendingDirectCallRequest, UiOverlays, VoiceState};
 use crate::ui::routes::Route;
 use dioxus::prelude::*;
 use poly_client::{DmChannel, User, VoiceConnection, VoiceConnectionKind, VoiceParticipant};
@@ -47,10 +47,10 @@ const JS_START_CAMERA: &str = r#"
 
 fn active_account_context(
     nav: BatchedSignal<NavState>,
-    chat_data: BatchedSignal<ChatData>,
+    account_sessions: BatchedSignal<AccountSessions>,
 ) -> Option<(String, String)> {
     let account_id = nav.read().active_account_id.cloned()?;
-    let instance_id = chat_data
+    let instance_id = account_sessions
         .read()
         .account_sessions
         .get(&account_id)
@@ -63,13 +63,14 @@ fn active_account_context(
 async fn resolve_direct_message_for_active_account(
     user_id: String,
     nav: BatchedSignal<NavState>,
-    chat_data: BatchedSignal<ChatData>,
+    chat_lists: BatchedSignal<ChatLists>,
+    account_sessions: BatchedSignal<AccountSessions>,
     client_manager: BatchedSignal<ClientManager>,
 ) -> Option<(DmChannel, String)> {
-    let (account_id, instance_id) = active_account_context(nav, chat_data)?;
+    let (account_id, instance_id) = active_account_context(nav, account_sessions)?;
 
     let existing_dm = {
-        let chat_data_read = chat_data.read();
+        let chat_data_read = chat_lists.read();
         chat_data_read
             .dm_channels
             .iter()
@@ -87,11 +88,11 @@ async fn resolve_direct_message_for_active_account(
 
     {
         let dm_c = opened_dm.clone();
-        chat_data.batch(move |cd| {
-            cd.dm_channels.retain(|dm| {
+        chat_lists.batch(move |cl| {
+            cl.dm_channels.retain(|dm| {
                 !(dm.account_id == account_id && (dm.id == dm_c.id || dm.user.id == user_id))
             });
-            cd.dm_channels.push(dm_c);
+            cl.dm_channels.push(dm_c);
         });
     }
 
@@ -103,7 +104,8 @@ pub(crate) fn navigate_to_pending_direct_call_from_active_account(
     request: DirectCallRequest,
     nav_state: BatchedSignal<NavState>,
     ui_overlays: BatchedSignal<UiOverlays>,
-    chat_data: BatchedSignal<ChatData>,
+    chat_lists: BatchedSignal<ChatLists>,
+    account_sessions: BatchedSignal<AccountSessions>,
     client_manager: BatchedSignal<ClientManager>,
     nav: crate::ui::dioxus_router::Navigator,
 ) {
@@ -111,7 +113,8 @@ pub(crate) fn navigate_to_pending_direct_call_from_active_account(
         let Some((dm, instance_id)) = resolve_direct_message_for_active_account(
             request.target_user.id.clone(),
             nav_state,
-            chat_data,
+            chat_lists,
+            account_sessions,
             client_manager,
         )
         .await
@@ -213,10 +216,11 @@ fn activate_existing_or_new_call(
     spec: TemporaryCallSpec,
     remote_users: Vec<User>,
     start_video: bool,
-    chat_data: BatchedSignal<ChatData>,
+    chat_lists: BatchedSignal<ChatLists>,
+    account_sessions: BatchedSignal<AccountSessions>,
     voice_state: BatchedSignal<VoiceState>,
 ) {
-    let self_session = chat_data
+    let self_session = account_sessions
         .read()
         .account_sessions
         .get(&spec.account_id)
@@ -323,7 +327,8 @@ async fn maybe_start_video_camera(start_video: bool, voice_state: BatchedSignal<
 pub(crate) fn start_direct_call_from_active_account(
     request: DirectCallRequest,
     nav_state: BatchedSignal<NavState>,
-    chat_data: BatchedSignal<ChatData>,
+    chat_lists: BatchedSignal<ChatLists>,
+    account_sessions: BatchedSignal<AccountSessions>,
     voice_state: BatchedSignal<VoiceState>,
     client_manager: BatchedSignal<ClientManager>,
 ) {
@@ -337,12 +342,13 @@ pub(crate) fn start_direct_call_from_active_account(
         let resolved_dm = resolve_direct_message_for_active_account(
             request.target_user.id.clone(),
             nav_state,
-            chat_data,
+            chat_lists,
+            account_sessions,
             client_manager,
         )
         .await;
 
-        let Some((account_id, instance_id)) = active_account_context(nav_state, chat_data) else {
+        let Some((account_id, instance_id)) = active_account_context(nav_state, account_sessions) else {
             return;
         };
 
@@ -356,7 +362,7 @@ pub(crate) fn start_direct_call_from_active_account(
                 .iter()
                 .any(|id| id == &request.target_user.id)
         {
-            let self_user_id = chat_data
+            let self_user_id = account_sessions
                 .read()
                 .account_sessions
                 .get(&account_id)
@@ -424,7 +430,8 @@ pub(crate) fn start_direct_call_from_active_account(
             },
             vec![request.target_user],
             request.start_video,
-            chat_data,
+            chat_lists,
+            account_sessions,
             voice_state,
         );
         maybe_start_video_camera(request.start_video, voice_state).await;

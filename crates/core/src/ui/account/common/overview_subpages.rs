@@ -7,7 +7,7 @@
 //! agents will fill these in with the real data sources.
 
 use crate::i18n::t;
-use crate::state::{BatchedSignal, ChatData};
+use crate::state::{AccountSessions, BatchedSignal, ChatLists};
 use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::routes::Route;
 use dioxus::prelude::*;
@@ -31,15 +31,16 @@ impl UiAction for OverviewSubpageAction {
 #[context_menu(inherit)]
 #[component]
 pub fn OverviewMissedView(account_id: String) -> Element {
-    let chat_data: BatchedSignal<ChatData> = use_context();
-    let notifs: Vec<_> = chat_data
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
+    let account_sessions: BatchedSignal<AccountSessions> = use_context();
+    let notifs: Vec<_> = chat_lists
         .read()
         .notifications
         .iter()
         .filter(|n| n.account_id == account_id && !n.read)
         .cloned()
         .collect();
-    let dm_unreads: Vec<_> = chat_data
+    let dm_unreads: Vec<_> = chat_lists
         .read()
         .dm_channels
         .iter()
@@ -65,7 +66,7 @@ pub fn OverviewMissedView(account_id: String) -> Element {
                                     let dm_id = dm.id.clone();
                                     let dm_account_id = dm.account_id.clone();
                                     let backend_slug = dm.backend.slug().to_string();
-                                    let instance_id = chat_data
+                                    let instance_id = account_sessions
                                         .read()
                                         .account_sessions
                                         .get(&dm_account_id).map_or_else(|| backend_slug.clone(), |s| s.instance_id.clone());
@@ -104,7 +105,7 @@ pub fn OverviewMissedView(account_id: String) -> Element {
                                     let n_id = n.id.clone();
                                     let n_account = n.account_id.clone();
                                     let backend_slug = n.backend.slug().to_string();
-                                    let instance_id = chat_data
+                                    let instance_id = account_sessions
                                         .read()
                                         .account_sessions
                                         .get(&n_account).map_or_else(|| backend_slug.clone(), |s| s.instance_id.clone());
@@ -164,8 +165,8 @@ pub fn OverviewMissedView(account_id: String) -> Element {
                                                     }
                                                 };
                                                 let nid = n_id.clone();
-                                                chat_data.batch(move |cd| {
-                                                    cd.notifications.retain(|notif| notif.id != nid);
+                                                chat_lists.batch(move |cl| {
+                                                    cl.notifications.retain(|notif| notif.id != nid);
                                                 });
                                                 crate::nav!(route);
                                             },
@@ -184,13 +185,13 @@ pub fn OverviewMissedView(account_id: String) -> Element {
     }
 }
 
-/// "Stats" — basic counts pulled from chat_data.
+/// "Stats" — basic counts pulled from chat_lists.
 #[ui_action(OverviewSubpageAction)]
 #[context_menu(inherit)]
 #[component]
 pub fn OverviewStatsView(account_id: String) -> Element {
-    let chat_data: BatchedSignal<ChatData> = use_context();
-    let cd = chat_data.read();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
+    let cd = chat_lists.read();
     let server_count = cd.servers.iter().filter(|s| s.account_id == account_id).count();
     let dm_count = cd.dm_channels.iter().filter(|d| d.account_id == account_id).count();
     let group_count = cd.groups.iter().filter(|g| g.account_id == account_id).count();

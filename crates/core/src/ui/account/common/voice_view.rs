@@ -20,7 +20,7 @@ use super::direct_call::disconnect_active_call;
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::state::chat_data::{backend_badge, user_color};
-use crate::state::{AppState, ChatData, NavState, UiOverlays, VoiceState};
+use crate::state::{AccountSessions, AppState, ChatViewState, NavState, UiOverlays, VoiceState};
 use crate::ui::account::common::chat_history::remember_message_list_scroll_position;
 use crate::ui::account::common::user_profile_modal::open_user_profile;
 use crate::ui::actions::{ActionCx, UiAction};
@@ -160,7 +160,8 @@ async fn join_voice_channel(
     current_channel: Option<poly_client::Channel>,
     current_server: Option<poly_client::Server>,
     client_manager: BatchedSignal<ClientManager>,
-    chat_data: BatchedSignal<ChatData>,
+    chat_view_state: BatchedSignal<ChatViewState>,
+    account_sessions: BatchedSignal<AccountSessions>,
     voice_state: BatchedSignal<VoiceState>,
     nav_state: BatchedSignal<NavState>,
 ) {
@@ -202,7 +203,7 @@ async fn join_voice_channel(
     };
 
     // Add local (self) user if not already in the list
-    let self_session = chat_data
+    let self_session = account_sessions
         .read()
         .account_sessions
         .get(&voice_account_id)
@@ -228,7 +229,7 @@ async fn join_voice_channel(
         });
     }
 
-    let voice_instance_id = chat_data
+    let voice_instance_id = account_sessions
         .read()
         .account_sessions
         .get(&voice_account_id)
@@ -286,14 +287,15 @@ async fn join_voice_channel(
 #[ui_action(VoiceChannelViewAction)]
 #[component]
 pub fn VoiceChannelView() -> Element {
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let chat_view_state: BatchedSignal<ChatViewState> = use_context();
+    let account_sessions: BatchedSignal<AccountSessions> = use_context();
     let voice_state: BatchedSignal<VoiceState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let app_state: BatchedSignal<AppState> = use_context();
     let nav_state: BatchedSignal<NavState> = use_context();
 
-    let current_channel = chat_data.read().current_channel.clone();
-    let current_server = chat_data.read().current_server.clone();
+    let current_channel = chat_view_state.read().current_channel.clone();
+    let current_server = chat_view_state.read().current_server.clone();
     let channel_id = nav_state.read().selected_channel.cloned();
 
     let participants = channel_id
@@ -351,7 +353,8 @@ pub fn VoiceChannelView() -> Element {
                     current_channel: current_channel.clone(),
                     current_server: current_server.clone(),
                     channel_type,
-                    chat_data,
+                    chat_view_state,
+                    account_sessions,
                     voice_state,
                     client_manager,
                     nav_state,
@@ -590,7 +593,8 @@ fn VoiceJoinButton(
     current_channel: Option<poly_client::Channel>,
     current_server: Option<poly_client::Server>,
     channel_type: ChannelType,
-    chat_data: BatchedSignal<ChatData>,
+    chat_view_state: BatchedSignal<ChatViewState>,
+    account_sessions: BatchedSignal<AccountSessions>,
     voice_state: BatchedSignal<VoiceState>,
     client_manager: BatchedSignal<ClientManager>,
     nav_state: BatchedSignal<NavState>,
@@ -602,10 +606,10 @@ fn VoiceJoinButton(
                 onclick: move |_| {
                     let Some(ref cid) = channel_id else { return };
                     let cid = cid.clone();
-                    let ch = chat_data.read().current_channel.clone();
-                    let srv = chat_data.read().current_server.clone();
+                    let ch = chat_view_state.read().current_channel.clone();
+                    let srv = chat_view_state.read().current_server.clone();
                     spawn(async move {
-                        join_voice_channel(cid, ch, srv, client_manager, chat_data, voice_state, nav_state)
+                        join_voice_channel(cid, ch, srv, client_manager, chat_view_state, account_sessions, voice_state, nav_state)
                             .await;
                     });
                 },

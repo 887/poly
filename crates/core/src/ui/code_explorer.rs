@@ -14,7 +14,7 @@ use crate::state::BatchedSignal;
 use dioxus::prelude::*;
 use poly_client::FileEntry;
 
-use crate::state::ChatData;
+use crate::state::{AccountSessions, ChatViewState};
 use poly_ui_macros::{context_menu, ui_action};
 
 /// Two-pane explorer rendered when the current channel is `ChannelType::Code`.
@@ -23,19 +23,20 @@ use poly_ui_macros::{context_menu, ui_action};
 #[rustfmt::skip]
 #[component]
 pub fn CodeExplorerView(#[props(default)] route_channel_id: String) -> Element {
-    let chat_data = use_context::<BatchedSignal<ChatData>>();
+    let chat_view_state = use_context::<BatchedSignal<ChatViewState>>();
+    let account_sessions = use_context::<BatchedSignal<AccountSessions>>();
     let client_manager = use_context::<BatchedSignal<crate::client_manager::ClientManager>>();
 
     let (channel_id, server_id) = {
-        let cd = chat_data.read();
+        let cv = chat_view_state.read();
         let ch_id = if route_channel_id.is_empty() {
-            cd.current_channel.as_ref().map(|c| c.id.clone())
+            cv.current_channel.as_ref().map(|c| c.id.clone())
         } else {
             Some(route_channel_id.clone())
         };
         (
             ch_id,
-            cd.current_server.as_ref().map(|s| s.id.clone()),
+            cv.current_server.as_ref().map(|s| s.id.clone()),
         )
     };
 
@@ -46,7 +47,7 @@ pub fn CodeExplorerView(#[props(default)] route_channel_id: String) -> Element {
             .read()
             .get_backend_for_server(sid)
             .map(|(a, _)| a)?;
-        chat_data
+        account_sessions
             .read()
             .account_sessions
             .get(&acct)

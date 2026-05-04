@@ -24,8 +24,7 @@ use super::channel_list::open_direct_message_from_active_account;
 use super::direct_call::{DirectCallRequest, navigate_to_pending_direct_call_from_active_account};
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
-use crate::state::ChatData;
-use crate::state::{NavState, UiOverlays};
+use crate::state::{AccountSessions, ChatData, ChatLists, NavState, UiOverlays};
 use crate::state::VoiceState;
 use crate::state::chat_data::{backend_badge, user_color};
 use crate::ui::actions::{ActionCx, UiAction};
@@ -107,6 +106,8 @@ pub fn UserProfileModal() -> Element {
     let nav_state: BatchedSignal<NavState> = use_context();
     let ui_overlays: BatchedSignal<UiOverlays> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
+    let account_sessions: BatchedSignal<AccountSessions> = use_context();
     let voice_state: BatchedSignal<VoiceState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let user = ui_overlays.read().profile_modal_user.clone();
@@ -300,7 +301,8 @@ pub fn UserProfileModal() -> Element {
                                     },
                                     nav_state,
                                     ui_overlays,
-                                    chat_data,
+                                    chat_lists,
+                                    account_sessions,
                                     client_manager,
                                     navigator(),
                                 );
@@ -321,7 +323,8 @@ pub fn UserProfileModal() -> Element {
                                     },
                                     nav_state,
                                     ui_overlays,
-                                    chat_data,
+                                    chat_lists,
+                                    account_sessions,
                                     client_manager,
                                     navigator(),
                                 );

@@ -87,7 +87,7 @@ use super::settings::SettingsPage;
 use super::split_shell::SplitMenuShell;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
-use crate::state::{AppState, ChatData, NavState, SettingsSection, UiOverlays, View, VoiceState, use_spawn_once};
+use crate::state::{AccountSessions, AppState, ChatData, ChatLists, NavState, SettingsSection, UiOverlays, View, VoiceState, use_spawn_once};
 use crate::ui::account::common::VoiceAccountFooter;
 use crate::ui::account::common::{FeatureUnsupportedPlaceholder, UnsupportedFeature};
 use crate::ui::account::common::chat_history::initial_message_query;
@@ -1267,6 +1267,8 @@ fn DmChat(backend: String, instance_id: String, account_id: String, dm_id: Strin
     let nav_state: BatchedSignal<NavState> = use_context();
     let ui_overlays: BatchedSignal<UiOverlays> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
+    let account_sessions: BatchedSignal<AccountSessions> = use_context();
     let voice_state: BatchedSignal<VoiceState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let dm_id_for_pending = dm_id.clone();
@@ -1315,7 +1317,8 @@ fn DmChat(backend: String, instance_id: String, account_id: String, dm_id: Strin
                     allow_add_to_active_temporary: pending.allow_add_to_active_temporary,
                 },
                 nav_state,
-                chat_data,
+                chat_lists,
+                account_sessions,
                 voice_state,
                 client_manager,
             );

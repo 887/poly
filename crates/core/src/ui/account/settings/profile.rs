@@ -16,7 +16,7 @@
 use crate::state::BatchedSignal;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
-use crate::state::ChatData;
+use crate::state::AccountSessions;
 use crate::state::chat_data::user_color;
 use dioxus::prelude::*;
 use poly_client::AccountPresence;
@@ -48,13 +48,13 @@ impl crate::ui::actions::UiAction for PolyProfileSettingsAction {
 #[context_menu(none)]
 #[component]
 pub fn PolyProfileSettings(account_id: String) -> Element {
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let account_sessions: BatchedSignal<AccountSessions> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
 
     // Read session info for display name and avatar.
     let (display_name, avatar_url, first_char, color) = {
-        let cd = chat_data.read();
-        if let Some(session) = cd.account_sessions.get(&account_id) {
+        let as_ = account_sessions.read();
+        if let Some(session) = as_.account_sessions.get(&account_id) {
             let name = session.user.display_name.clone();
             let fc = name.chars().next().map(|c| c.to_string()).unwrap_or_default();
             let col = user_color(&session.user.id).to_string();

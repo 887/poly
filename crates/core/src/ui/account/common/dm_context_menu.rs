@@ -18,7 +18,7 @@
 
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
-use crate::state::{AppState, BatchedSignal, ChatData, DmContextMenuState, NavState, UiOverlays, VoiceState};
+use crate::state::{AccountSessions, AppState, BatchedSignal, ChatData, ChatLists, DmContextMenuState, NavState, UiOverlays, VoiceState};
 use crate::ui::account::common::chat_view::mark_channel_as_read;
 use crate::ui::account::common::direct_call::{
     DirectCallRequest, start_direct_call_from_active_account,
@@ -37,6 +37,8 @@ pub fn DmContextMenuInner(menu: DmContextMenuState, close: EventHandler<()>) -> 
     let nav_state: BatchedSignal<NavState> = use_context();
     let ui_overlays: BatchedSignal<UiOverlays> = use_context();
     let chat_data: BatchedSignal<ChatData> = use_context();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
+    let account_sessions: BatchedSignal<AccountSessions> = use_context();
     let voice_state: BatchedSignal<VoiceState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
 
@@ -118,7 +120,8 @@ pub fn DmContextMenuInner(menu: DmContextMenuState, close: EventHandler<()>) -> 
                                     allow_add_to_active_temporary: true,
                                 },
                                 nav_state,
-                                chat_data,
+                                chat_lists,
+                                account_sessions,
                                 voice_state,
                                 client_manager,
                             );

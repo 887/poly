@@ -14,18 +14,18 @@
 
 use crate::state::BatchedSignal;
 use crate::i18n::t;
-use crate::state::{AppState, ChatData, NavState, View};
+use crate::state::{AppState, ChatViewState, NavState, View};
 use dioxus::prelude::*;
 use poly_ui_macros::{context_menu, ui_action};
 
-fn current_title(app_state: &AppState, nav_state: &NavState, chat_data: &ChatData) -> String {
+fn current_title(app_state: &AppState, nav_state: &NavState, chat_view_state: &ChatViewState) -> String {
     if !app_state.is_setup_complete {
         return t("app-title");
     }
 
     match *nav_state.view {
         View::Overview => t("account-bar-overview-tooltip"),
-        View::DmsFriends => chat_data
+        View::DmsFriends => chat_view_state
             .current_channel
             .as_ref().map_or_else(|| t("nav-dms"), |ch| ch.name.clone()),
         View::Friends => t("nav-friends"),
@@ -35,9 +35,9 @@ fn current_title(app_state: &AppState, nav_state: &NavState, chat_data: &ChatDat
         View::Agent => t("agent-page-title"),
         View::Search => t("search-page-title"),
         View::Server => {
-            if let Some(ch) = &chat_data.current_channel {
+            if let Some(ch) = &chat_view_state.current_channel {
                 format!("# {}", ch.name)
-            } else if let Some(sv) = &chat_data.current_server {
+            } else if let Some(sv) = &chat_view_state.current_server {
                 sv.name.clone()
             } else {
                 t("app-title")
@@ -115,7 +115,7 @@ pub fn ElectronTitleBar() -> Element {
     let mut is_electron = use_signal(|| false);
     let app_state: BatchedSignal<AppState> = use_context();
     let nav_state: BatchedSignal<NavState> = use_context();
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let chat_view_state: BatchedSignal<ChatViewState> = use_context();
 
     use_future(move || async move {
         let mut eval = document::eval("dioxus.send(Boolean(window.polyElectron?.isElectron));");
@@ -132,7 +132,7 @@ pub fn ElectronTitleBar() -> Element {
 
     let st_snap = app_state.read().clone();
     let nav_snap = nav_state.read().clone();
-    let cd_snap = chat_data.read().clone();
+    let cd_snap = chat_view_state.read().clone();
     let title = current_title(&st_snap, &nav_snap, &cd_snap);
 
     // Keep the OS-level window title (taskbar/dock) in sync with the custom titlebar.

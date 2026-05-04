@@ -7,7 +7,7 @@
 
 use crate::client_manager::{ClientManager};
 use crate::i18n::t;
-use crate::state::{AppState, BatchedSignal};
+use crate::state::{AccountSessions, AppState, BatchedSignal, ChatLists};
 use crate::state::ChatData;
 use crate::state::VoiceState;
 use dioxus::prelude::*;
@@ -110,13 +110,15 @@ pub(super) fn ChatHeaderActions(
     let ui_layout: crate::state::BatchedSignal<crate::state::UiLayout> = use_context();
     let nav_state: crate::state::BatchedSignal<crate::state::NavState> = use_context();
     let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
+    let account_sessions: BatchedSignal<AccountSessions> = use_context();
     let app_state = app_state;
     let mut utility_panel = utility_panel;
     let notifications_muted = notifications_muted;
     let mut show_search_filters = show_search_filters;
     let mut header_actions_menu_open = header_actions_menu_open;
     let header_actions_overflow = header_actions_overflow;
-    let chat_data = chat_data;
+    let _chat_data = chat_data; // chat_data kept as prop for API compatibility; navigation now uses chat_lists + account_sessions
     let client_manager = client_manager;
     let active_dm_call = voice_state
         .read()
@@ -145,7 +147,8 @@ pub(super) fn ChatHeaderActions(
                                     },
                                     nav_state,
                                     ui_overlays,
-                                    chat_data,
+                                    chat_lists,
+                                    account_sessions,
                                     client_manager,
                                     navigator(),
                                 );
@@ -166,7 +169,8 @@ pub(super) fn ChatHeaderActions(
                                     },
                                     nav_state,
                                     ui_overlays,
-                                    chat_data,
+                                    chat_lists,
+                                    account_sessions,
                                     client_manager,
                                     navigator(),
                                 );
@@ -284,7 +288,8 @@ pub(super) fn ChatHeaderActions(
                                                 },
                                                 nav_state,
                                                 ui_overlays,
-                                                chat_data,
+                                                chat_lists,
+                                                account_sessions,
                                                 client_manager,
                                                 navigator(),
                                             );
@@ -306,7 +311,8 @@ pub(super) fn ChatHeaderActions(
                                                 },
                                                 nav_state,
                                                 ui_overlays,
-                                                chat_data,
+                                                chat_lists,
+                                                account_sessions,
                                                 client_manager,
                                                 navigator(),
                                             );

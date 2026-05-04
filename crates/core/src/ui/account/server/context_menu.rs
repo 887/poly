@@ -24,7 +24,7 @@
 use crate::state::BatchedSignal;
 use super::super::super::routes::Route;
 use crate::i18n::{t, t_args};
-use crate::state::{AppState, ChatData, ContextMenuState};
+use crate::state::{AccountSessions, AppState, ContextMenuState};
 use crate::ui::client_ui::ClientMenu;
 use dioxus::prelude::*;
 use poly_client::MenuTargetKind;
@@ -39,7 +39,7 @@ use poly_ui_macros::{context_menu, ui_action};
 #[component]
 pub fn ServerContextMenuInner(menu: ContextMenuState, close: EventHandler<()>) -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let account_sessions: BatchedSignal<AccountSessions> = use_context();
 
     let server_id = menu.server_id.clone();
     let server_name = menu.server_name.clone();
@@ -54,7 +54,7 @@ pub fn ServerContextMenuInner(menu: ContextMenuState, close: EventHandler<()>) -
     let mut show_remove_confirm = use_signal(|| false);
 
     // Is this server in the user's favorites?
-    let is_favorited = chat_data.read().favorited_server_ids.contains(&server_id);
+    let is_favorited = account_sessions.read().favorited_server_ids.contains(&server_id);
 
     // Reset the inline-confirm flag anytime a different server menu is opened.
     {
@@ -162,11 +162,11 @@ pub fn ServerContextMenuInner(menu: ContextMenuState, close: EventHandler<()>) -
                     onclick: {
                         let sid = server_id.clone();
                         move |_| {
-                            let new_favs = chat_data.batch(|cd| {
-                                if !cd.favorited_server_ids.contains(&sid) {
-                                    cd.favorited_server_ids.push(sid.clone());
+                            let new_favs = account_sessions.batch(|as_| {
+                                if !as_.favorited_server_ids.contains(&sid) {
+                                    as_.favorited_server_ids.push(sid.clone());
                                 }
-                                cd.favorited_server_ids.clone()
+                                as_.favorited_server_ids.clone()
                             });
                             spawn(async move {
                                 crate::ui::favorites_sidebar::persist_favorites(new_favs)
@@ -290,7 +290,7 @@ fn RemoveFavoritesConfirm(
     oncancel: EventHandler<MouseEvent>,
     onconfirm: EventHandler<()>,
 ) -> Element {
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let account_sessions: BatchedSignal<AccountSessions> = use_context();
 
     // Pre-compute the title using t_args so the Fluent {$name} placeholder is filled
     let remove_title = t_args("remove-favorites-title", &[("name", server_name.as_str())]);
@@ -309,9 +309,9 @@ fn RemoveFavoritesConfirm(
                     class: "btn-danger",
                     onclick: move |_evt| {
                         let sid = server_id.clone();
-                        let new_favs = chat_data.batch(|cd| {
-                            cd.favorited_server_ids.retain(|id| id != &sid);
-                            cd.favorited_server_ids.clone()
+                        let new_favs = account_sessions.batch(|as_| {
+                            as_.favorited_server_ids.retain(|id| id != &sid);
+                            as_.favorited_server_ids.clone()
                         });
                         spawn(async move {
                             crate::ui::favorites_sidebar::persist_favorites(new_favs)

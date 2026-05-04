@@ -61,7 +61,7 @@ use crate::ui::client_ui::{ComposerHooks, MessageActions};
 use poly_client::ComposerSlot;
 use crate::i18n::{t, t_args};
 use crate::state::chat_data::{backend_badge, format_file_size, user_color};
-use crate::state::{AppState, ChatData, UiOverlays, VoiceState, use_reactive_effect, use_spawn_once};
+use crate::state::{AccountSessions, AppState, ChatData, ChatLists, UiOverlays, VoiceState, use_reactive_effect, use_spawn_once};
 use crate::ui::split_shell::RightWingShell;
 use dioxus::html::HasFileData;
 use dioxus::prelude::*;
@@ -955,6 +955,8 @@ fn render_mobile_chat_header_right_toggle(ctx: ChatViewMarkupCtx) -> Element {
     let current_channel = ctx.current_channel.clone();
     let dm_user = ctx.dm_user.clone();
     let chat_data = ctx.chat_data;
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
+    let account_sessions: BatchedSignal<AccountSessions> = use_context();
     let voice_state = ctx.voice_state;
     let client_manager = ctx.client_manager;
     let is_dm_channel = ctx.is_dm_channel;
@@ -1009,7 +1011,8 @@ fn render_mobile_chat_header_right_toggle(ctx: ChatViewMarkupCtx) -> Element {
                                 },
                                 nav_state,
                                 ui_overlays,
-                                chat_data,
+                                chat_lists,
+                                account_sessions,
                                 client_manager,
                                 navigator(),
                             );
@@ -1030,7 +1033,8 @@ fn render_mobile_chat_header_right_toggle(ctx: ChatViewMarkupCtx) -> Element {
                                 },
                                 nav_state,
                                 ui_overlays,
-                                chat_data,
+                                chat_lists,
+                                account_sessions,
                                 client_manager,
                                 navigator(),
                             );
