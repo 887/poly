@@ -413,11 +413,12 @@ caveat).
 - [x] **H.1** Carve out `ContentPolicyBackend` (3 methods, 0 implementers).
       Pure deletion — no migration burden. Defines the dispatch pattern. Effort S. Source: C.2.1.
       Shipped in change `umkzvsqt`.
-- [ ] **H.2** Carve out `CodeRepoBackend` + `ForumBackend` +
+- [x] **H.2** Carve out `CodeRepoBackend` + `ForumBackend` +
       `ThreadsBackend` (7 methods total, 4 implementers). Update
       `code_explorer.rs` + forum routes to take the narrower trait
       via `as_forum()` / `as_code_repo()` / `as_threads()`. Validates
       dispatch on real plugins. Effort M. Source: C.2.2.
+      Shipped in changes `tuommlty` (H.2.a) + `umvwqzmx` (H.2.b) + `kkulmluuolls` (H.2.c).
 - [ ] **H.3** Carve out `Moderation` + `SocialGraph` + `DmsAndGroups`
       (38 methods, ~43% of trait). Touches every backend; do
       one-trait-at-a-time. Effort L per trait. Source: C.2.3.

@@ -28,8 +28,8 @@ use poly_client::{
     ClientResult, ComposerButton, Cursor, CustomEmoji, DmChannel, ForumBackend, ForumPost,
     ForumSortOrder, Group, MenuItem, MenuTargetKind, Message, MessageContent, MessageQuery,
     MessageSearchHit, MessageSearchQuery, Notification, PendingHandle, PresenceStatus, Server,
-    Session, SettingsScope, SettingsSection, SidebarDeclaration, StickerItem, ThreadInfo, User,
-    ViewDescriptor, ViewDetail, ViewRowsPage, VoiceParticipant,
+    Session, SettingsScope, SettingsSection, SidebarDeclaration, StickerItem, ThreadInfo,
+    ThreadsBackend, User, ViewDescriptor, ViewDetail, ViewRowsPage, VoiceParticipant,
 };
 
 use super::bridge;
@@ -1158,42 +1158,10 @@ impl ClientBackend for PluginBackend {
         Some(self)
     }
 
-    async fn get_active_threads(&self, server_id: &str) -> ClientResult<Vec<ThreadInfo>> {
-        refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_messenger_client()
-            .call_get_active_threads(&mut *store, server_id)
-            .await;
-        match result {
-            Ok(Ok(threads)) => {
-                Ok(threads.into_iter().map(bridge::from_wit_thread_info).collect())
-            }
-            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
-            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
-        }
-    }
+    // --- Thread channels (H.2.c — moved to ThreadsBackend) ---
 
-    async fn get_archived_threads(
-        &self,
-        parent_channel_id: &str,
-        limit: Option<u32>,
-    ) -> ClientResult<Vec<ThreadInfo>> {
-        refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_messenger_client()
-            .call_get_archived_threads(&mut *store, parent_channel_id, limit)
-            .await;
-        match result {
-            Ok(Ok(threads)) => {
-                Ok(threads.into_iter().map(bridge::from_wit_thread_info).collect())
-            }
-            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
-            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
-        }
+    fn as_threads(&self) -> Option<&dyn ThreadsBackend> {
+        Some(self)
     }
 
 }
@@ -1253,5 +1221,44 @@ impl ForumBackend for PluginBackend {
         // natively.  WASM plugins that want this capability must do it via
         // get-view-rows or a custom sidebar action.
         Err(ClientError::NotSupported("get_recent_comments".to_string()))
+    }
+}
+
+// ── H.2.c — ThreadsBackend ───────────────────────────────────────────────────
+
+#[async_trait]
+impl ThreadsBackend for PluginBackend {
+    async fn get_active_threads(&self, server_id: &str) -> ClientResult<Vec<ThreadInfo>> {
+        refuel(&self.store).await;
+        let mut store = self.store.lock().await;
+        let result = self
+            .instance
+            .poly_messenger_messenger_client()
+            .call_get_active_threads(&mut *store, server_id)
+            .await;
+        match result {
+            Ok(Ok(threads)) => Ok(threads.into_iter().map(bridge::from_wit_thread_info).collect()),
+            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
+            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
+        }
+    }
+
+    async fn get_archived_threads(
+        &self,
+        parent_channel_id: &str,
+        limit: Option<u32>,
+    ) -> ClientResult<Vec<ThreadInfo>> {
+        refuel(&self.store).await;
+        let mut store = self.store.lock().await;
+        let result = self
+            .instance
+            .poly_messenger_messenger_client()
+            .call_get_archived_threads(&mut *store, parent_channel_id, limit)
+            .await;
+        match result {
+            Ok(Ok(threads)) => Ok(threads.into_iter().map(bridge::from_wit_thread_info).collect()),
+            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
+            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
+        }
     }
 }

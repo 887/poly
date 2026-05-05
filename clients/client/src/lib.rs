@@ -10,6 +10,7 @@ pub mod code_repo;
 pub mod content_policy;
 pub mod events;
 pub mod forum;
+pub mod threads;
 pub mod types;
 pub mod ui_surface;
 
@@ -17,6 +18,7 @@ pub use code_repo::CodeRepoBackend;
 pub use content_policy::ContentPolicyBackend;
 pub use events::*;
 pub use forum::ForumBackend;
+pub use threads::ThreadsBackend;
 pub use types::*;
 pub use ui_surface::*;
 
@@ -795,29 +797,12 @@ pub trait ClientBackend: Send + Sync {
 
     // --- Thread channels (H.2.c — ThreadsBackend) ---
 
-    /// Get all active (non-archived) threads in a server.
+    /// Returns `Some(self)` if this backend implements [`ThreadsBackend`].
     ///
-    /// Backends that do not support threads return `NotSupported`.
-    async fn get_active_threads(&self, server_id: &str) -> ClientResult<Vec<ThreadInfo>> {
-        let _ = server_id;
-        Err(ClientError::NotSupported(
-            "get_active_threads not implemented".into(),
-        ))
-    }
-
-    /// Get archived threads for a parent channel (text or forum).
-    ///
-    /// `limit` caps the number returned; `None` uses the backend default.
-    /// Backends that do not support threads return `NotSupported`.
-    async fn get_archived_threads(
-        &self,
-        parent_channel_id: &str,
-        limit: Option<u32>,
-    ) -> ClientResult<Vec<ThreadInfo>> {
-        let _ = (parent_channel_id, limit);
-        Err(ClientError::NotSupported(
-            "get_archived_threads not implemented".into(),
-        ))
+    /// Override to `Some(self)` in backends that expose Discord-style thread
+    /// channels (`ChannelType::Thread`).  Default: `None`.
+    fn as_threads(&self) -> Option<&dyn ThreadsBackend> {
+        None
     }
 
     // --- Client-provided UI surface (WP 1 / plan-client-ui-surface) ----
@@ -1022,7 +1007,7 @@ pub trait ClientBackend: Send + Sync {
 /// | `as_content_policy` | [`ContentPolicyBackend`] | H.1 |
 /// | `as_code_repo` | [`CodeRepoBackend`] | H.2.a |
 /// | `as_forum` | [`ForumBackend`] | H.2.b |
-/// | `as_threads` | (H.2.c) | pending |
+/// | `as_threads` | [`ThreadsBackend`] | H.2.c |
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 pub trait IsBackend: Send + Sync {
@@ -1078,6 +1063,14 @@ pub trait IsBackend: Send + Sync {
     fn as_forum(&self) -> Option<&dyn ForumBackend> {
         None
     }
+
+    /// Returns `Some(self)` if this backend implements [`ThreadsBackend`].
+    ///
+    /// Default: `None`.  Override in backends that expose Discord-style thread
+    /// channels (`ChannelType::Thread`) — currently `poly-discord` and WIT plugins.
+    fn as_threads(&self) -> Option<&dyn ThreadsBackend> {
+        None
+    }
 }
 
 // Blanket implementation: every `ClientBackend` automatically is an `IsBackend`.
@@ -1120,6 +1113,11 @@ impl<T: ClientBackend + ?Sized> IsBackend for T {
     #[inline]
     fn as_forum(&self) -> Option<&dyn ForumBackend> {
         ClientBackend::as_forum(self)
+    }
+
+    #[inline]
+    fn as_threads(&self) -> Option<&dyn ThreadsBackend> {
+        ClientBackend::as_threads(self)
     }
 }
 

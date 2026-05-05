@@ -831,18 +831,10 @@ impl ClientBackend for DiscordClient {
         Some(self)
     }
 
-    async fn get_active_threads(&self, server_id: &str) -> ClientResult<Vec<ThreadInfo>> {
-        let resp = self.http.get_active_threads(server_id).await?;
-        Ok(resp.threads.into_iter().map(|t| Self::discord_thread_to_thread_info(&t)).collect())
-    }
+    // --- Thread channels (H.2.c — moved to ThreadsBackend) ---
 
-    async fn get_archived_threads(
-        &self,
-        parent_channel_id: &str,
-        limit: Option<u32>,
-    ) -> ClientResult<Vec<ThreadInfo>> {
-        let resp = self.http.get_archived_threads_public(parent_channel_id, limit).await?;
-        Ok(resp.threads.into_iter().map(|t| Self::discord_thread_to_thread_info(&t)).collect())
+    fn as_threads(&self) -> Option<&dyn poly_client::ThreadsBackend> {
+        Some(self)
     }
 
     async fn send_typing(&self, channel_id: &str) -> ClientResult<()> {
@@ -2132,5 +2124,25 @@ impl poly_client::ForumBackend for DiscordClient {
         _query: MessageQuery,
     ) -> ClientResult<Vec<Message>> {
         Err(ClientError::NotSupported("get_recent_comments".to_string()))
+    }
+}
+
+// ── H.2.c — ThreadsBackend ───────────────────────────────────────────────────
+
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::ThreadsBackend for DiscordClient {
+    async fn get_active_threads(&self, server_id: &str) -> ClientResult<Vec<ThreadInfo>> {
+        let resp = self.http.get_active_threads(server_id).await?;
+        Ok(resp.threads.into_iter().map(|t| Self::discord_thread_to_thread_info(&t)).collect())
+    }
+
+    async fn get_archived_threads(
+        &self,
+        parent_channel_id: &str,
+        limit: Option<u32>,
+    ) -> ClientResult<Vec<ThreadInfo>> {
+        let resp = self.http.get_archived_threads_public(parent_channel_id, limit).await?;
+        Ok(resp.threads.into_iter().map(|t| Self::discord_thread_to_thread_info(&t)).collect())
     }
 }

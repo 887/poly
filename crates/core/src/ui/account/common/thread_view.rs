@@ -172,7 +172,10 @@ pub fn ActiveThreadsBar() -> Element {
             let cid = channel_id?;
             let aid = account_id?;
             client_manager.peek().with_backend(&aid, async |b| {
-                b.get_active_threads(&sid).await
+                match b.as_threads() {
+                    Some(tb) => tb.get_active_threads(&sid).await,
+                    None => Ok(vec![]),
+                }
             }).await.ok().and_then(|all| {
                 Some(all.into_iter().filter(|t| t.parent_channel_id == cid).collect::<Vec<_>>())
             })
