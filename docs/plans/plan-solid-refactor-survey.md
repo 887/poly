@@ -332,7 +332,22 @@ ones (smaller signal subscriptions = less re-render churn).
         `account_server_bar.rs` operates on a local `&[Server]` slice.
         — shipped in commit (see G.6f commit below)
 
-### Phase G.6g — vestigial `ChatData` type deletion — shipped in commit <G.6g-pending>
+### Phase G.6g — vestigial `ChatData` type deletion — shipped in commit `a81777cc`
+
+### Phase G.6h — action stub migration — shipped in commit <G.6h-pending>
+
+- [x] **G.6h.1** `VoiceBannerAction::ToggleMute` — toggle `voice_connection.is_muted` via `try_consume_context::<BatchedSignal<VoiceState>>()`.
+- [x] **G.6h.2** `VoiceBannerAction::ToggleDeafen` — toggle `voice_connection.is_deafened` via VoiceState context.
+- [x] **G.6h.3** `VoiceBannerAction::Disconnect` — call `disconnect_active_call(voice_state)` via VoiceState context.
+- [x] **G.6h.4** `VoiceBannerAction::GoToChannel` — read `VoiceState.voice_connection` via `.peek()`, push `Route::DmChat` or `Route::ServerChat` via `cx.navigator`, remember scroll position via `NavState` context.
+- [x] **G.6h.5** `VoiceBannerAction::SwapHeldCall` — call `swap_to_first_held_call(voice_state)` via VoiceState context.
+- [x] **G.6h.6** `NotificationsViewAction::SetFilter` — component-local `Signal<NotificationMenuFilter>` is unreachable from the action system without providing it as context; implemented as documented no-op; inline `onclick` handler remains authoritative.
+- [x] **G.6h.7** `NotificationsViewAction::MarkAllRead` — clear all notifications for the active account via `ChatLists` context; cannot honour current filter (component-local).
+- [x] **G.6h.8** `NotificationsViewAction::AcceptFriendRequest` / `DenyFriendRequest` — derive `account_id` from `ChatLists.notifications` lookup by notif_id; optimistically remove notification; spawn `handle_friend_request_action` async task. Both use `ChatLists` + `ClientManager` context.
+- [x] **G.6h.9** `NotificationsViewAction::AcceptServerInvite` / `Dismiss` — remove notification from `ChatLists` via context; deeper server-join flow remains in inline component handlers.
+- [x] **G.6h.10** `ActionCx` NOT extended (no new fields) — `try_consume_context` is the right boundary since VoiceState and ChatLists are not universally available at all `apply` call sites.
+- [x] **G.6h.11** Regenerated `baseline.json` twice (after voice_banner.rs and notifications.rs edits shifted pre-existing lint violations to new line numbers). Final count: 867 entries.
+- [x] **G.6h.12** Verify: `cargo check -p poly-core` clean; `cargo check --target wasm32-unknown-unknown` clean; `cargo test -p poly-core` 257 passed, 0 failed. Zero `todo!("phase-E:")` in `voice_banner.rs` and `notifications.rs`.
 
 - [x] **G.6g.1** Audit `\bChatData\b` across `crates/` — confirmed live sites were `state.rs` re-export, `state/chat_data.rs` itself, and test helper in `account_restore.rs`. All comment-only references confirmed harmless.
 - [x] **G.6g.2** Migrate test fixture: dropped `BatchedSignal<ChatData>` from `make_signals_in_runtime` return tuple in `account_restore.rs`; updated all 4 test call sites to pass 3-tuple `(cm, cl, as_)` matching the public `restore_native_accounts` signature.

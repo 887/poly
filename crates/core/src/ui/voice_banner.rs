@@ -41,22 +41,63 @@ pub enum VoiceBannerAction {
 }
 
 impl UiAction for VoiceBannerAction {
-    fn apply(self, _cx: ActionCx<'_>) {
+    fn apply(self, cx: ActionCx<'_>) {
+        let Some(voice_state) = dioxus::prelude::try_consume_context::<BatchedSignal<VoiceState>>()
+        else {
+            return;
+        };
         match self {
             Self::ToggleMute => {
-                todo!("phase-E: VoiceBannerAction::ToggleMute requires ChatData signal");
+                voice_state.batch(|v| {
+                    if let Some(ref mut vc) = v.voice_connection {
+                        vc.is_muted = !vc.is_muted;
+                    }
+                });
             }
             Self::ToggleDeafen => {
-                todo!("phase-E: VoiceBannerAction::ToggleDeafen requires ChatData signal");
+                voice_state.batch(|v| {
+                    if let Some(ref mut vc) = v.voice_connection {
+                        vc.is_deafened = !vc.is_deafened;
+                    }
+                });
             }
             Self::Disconnect => {
-                todo!("phase-E: VoiceBannerAction::Disconnect requires ChatData signal");
+                disconnect_active_call(voice_state);
             }
             Self::GoToChannel => {
-                todo!("phase-E: VoiceBannerAction::GoToChannel requires Navigator + ChatData");
+                let conn = voice_state.peek().voice_connection.clone();
+                let Some(conn) = conn else { return; };
+                let Some(nav) = cx.navigator else { return; };
+                if conn.kind == poly_client::VoiceConnectionKind::TemporaryCall {
+                    if let Some(dm_id) = conn.dm_id {
+                        nav.push(Route::DmChat {
+                            backend: conn.backend.slug().to_string(),
+                            instance_id: conn.instance_id,
+                            account_id: conn.account_id,
+                            dm_id,
+                        });
+                    }
+                } else {
+                    let nav_state: BatchedSignal<NavState> =
+                        dioxus::prelude::try_consume_context().unwrap_or_else(|| {
+                            BatchedSignal::from_signal(dioxus::prelude::Signal::new(
+                                NavState::default(),
+                            ))
+                        });
+                    if let Some(prev_channel_id) = nav_state.read().selected_channel.cloned() { // poly-lint: allow render-time-read — inside apply() event handler, not a render fn
+                        remember_message_list_scroll_position(&prev_channel_id);
+                    }
+                    nav.push(Route::ServerChat {
+                        backend: conn.backend.slug().to_string(),
+                        instance_id: conn.instance_id,
+                        account_id: conn.account_id,
+                        server_id: conn.server_id,
+                        channel_id: conn.channel_id,
+                    });
+                }
             }
             Self::SwapHeldCall => {
-                todo!("phase-E: VoiceBannerAction::SwapHeldCall requires ChatData signal");
+                swap_to_first_held_call(voice_state);
             }
         }
     }

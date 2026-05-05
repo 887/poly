@@ -50,17 +50,117 @@ pub enum NotificationsViewAction {
 impl UiAction for NotificationsViewAction {
     fn apply(self, cx: ActionCx<'_>) {
         match self {
-            Self::SetFilter(_) => {
-                todo!("phase-E: NotificationsViewAction::SetFilter requires Signal handle");
+            Self::SetFilter(_filter) => {
+                // SetFilter targets a component-local Signal<NotificationMenuFilter> that cannot
+                // be reached via context. The inline onclick handler in NotificationsView is the
+                // authoritative path for this action; this action variant is kept for completeness
+                // but is a no-op when dispatched through the action system.
             }
             Self::MarkAllRead => {
-                todo!("phase-E: NotificationsViewAction::MarkAllRead requires Signal handle");
+                // Mark all notifications as read for the active account by removing them from
+                // ChatLists. Cannot honour the current kind-filter (component-local Signal) from
+                // here, so this removes all notifications for the active account unconditionally.
+                let Some(chat_lists) = dioxus::prelude::try_consume_context::<BatchedSignal<ChatLists>>()
+                else {
+                    return;
+                };
+                let account_id = cx.nav.active_account_id.cloned().unwrap_or_default();
+                if !account_id.is_empty() {
+                    chat_lists.batch(move |cl| {
+                        cl.notifications.retain(|n| n.account_id != account_id);
+                    });
+                }
             }
-            Self::AcceptFriendRequest { .. }
-            | Self::DenyFriendRequest { .. }
-            | Self::AcceptServerInvite(_)
-            | Self::Dismiss(_) => {
-                todo!("phase-E: NotificationsViewAction requires ChatData signal + backend");
+            Self::AcceptFriendRequest { notif_id, user_id } => {
+                let Some(chat_lists) =
+                    dioxus::prelude::try_consume_context::<BatchedSignal<ChatLists>>()
+                else {
+                    return;
+                };
+                let Some(client_manager) =
+                    dioxus::prelude::try_consume_context::<BatchedSignal<ClientManager>>()
+                else {
+                    return;
+                };
+                // Derive account_id from the notification record itself.
+                let account_id = {
+                    let cl = chat_lists.peek();
+                    cl.notifications
+                        .iter()
+                        .find(|n| n.id == notif_id)
+                        .map(|n| n.account_id.clone())
+                        .unwrap_or_default()
+                };
+                if account_id.is_empty() {
+                    return;
+                }
+                // Optimistically remove the notification, then fire the backend call.
+                {
+                    let nid = notif_id.clone();
+                    chat_lists.batch(move |cl| cl.notifications.retain(|n| n.id != nid));
+                }
+                let chat_lists_clone = chat_lists;
+                dioxus::prelude::spawn(async move {
+                    handle_friend_request_action(
+                        client_manager,
+                        chat_lists_clone,
+                        account_id,
+                        user_id,
+                        notif_id,
+                        true,
+                    )
+                    .await;
+                });
+            }
+            Self::DenyFriendRequest { notif_id, user_id } => {
+                let Some(chat_lists) =
+                    dioxus::prelude::try_consume_context::<BatchedSignal<ChatLists>>()
+                else {
+                    return;
+                };
+                let Some(client_manager) =
+                    dioxus::prelude::try_consume_context::<BatchedSignal<ClientManager>>()
+                else {
+                    return;
+                };
+                let account_id = {
+                    let cl = chat_lists.peek();
+                    cl.notifications
+                        .iter()
+                        .find(|n| n.id == notif_id)
+                        .map(|n| n.account_id.clone())
+                        .unwrap_or_default()
+                };
+                if account_id.is_empty() {
+                    return;
+                }
+                {
+                    let nid = notif_id.clone();
+                    chat_lists.batch(move |cl| cl.notifications.retain(|n| n.id != nid));
+                }
+                let chat_lists_clone = chat_lists;
+                dioxus::prelude::spawn(async move {
+                    handle_friend_request_action(
+                        client_manager,
+                        chat_lists_clone,
+                        account_id,
+                        user_id,
+                        notif_id,
+                        false,
+                    )
+                    .await;
+                });
+            }
+            Self::AcceptServerInvite(notif_id) | Self::Dismiss(notif_id) => {
+                // Remove the notification from ChatLists. Deeper backend operations (joining a
+                // server for an invite) require UI flow not expressible in apply(); the inline
+                // component handles those. From the action system we at minimum clear the badge.
+                let Some(chat_lists) =
+                    dioxus::prelude::try_consume_context::<BatchedSignal<ChatLists>>()
+                else {
+                    return;
+                };
+                chat_lists.batch(move |cl| cl.notifications.retain(|n| n.id != notif_id));
             }
             Self::Reauth(account_id) => {
                 // Navigator is optional in ActionCx — only available at runtime.
