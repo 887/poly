@@ -6,11 +6,13 @@
 //! implementations (Stoat, Matrix, Discord, Teams, Demo) must implement.
 //! It also defines the shared data types used across all backends.
 
+pub mod code_repo;
 pub mod content_policy;
 pub mod events;
 pub mod types;
 pub mod ui_surface;
 
+pub use code_repo::CodeRepoBackend;
 pub use content_policy::ContentPolicyBackend;
 pub use events::*;
 pub use types::*;
@@ -769,25 +771,14 @@ pub trait ClientBackend: Send + Sync {
         PluginManifest::default()
     }
 
-    // --- Code repository channels ---
+    // --- Code repository channels (H.2.a — CodeRepoBackend) ---
 
-    /// List entries at the given path within a code-type channel.
+    /// Returns `Some(self)` if this backend implements [`CodeRepoBackend`].
     ///
-    /// `path` is repo-relative; an empty string means the repo root. Backends
-    /// that do not have code channels should return the default
-    /// `Err(ClientError::NotSupported(...))` provided here.
-    async fn list_files(&self, channel_id: &str, path: &str) -> ClientResult<Vec<FileEntry>> {
-        let _ = (channel_id, path);
-        Err(ClientError::NotSupported("list_files".to_string()))
-    }
-
-    /// Read the raw bytes of a file in a code-type channel.
-    ///
-    /// Backends that do not have code channels should return the default
-    /// `Err(ClientError::NotSupported(...))` provided here.
-    async fn read_file(&self, channel_id: &str, path: &str) -> ClientResult<FileContent> {
-        let _ = (channel_id, path);
-        Err(ClientError::NotSupported("read_file".to_string()))
+    /// Override to `Some(self)` in backends that expose code-repository
+    /// channels (`ChannelType::Code`).  Default: `None`.
+    fn as_code_repo(&self) -> Option<&dyn CodeRepoBackend> {
+        None
     }
 
     // --- Forum channels and threads ---
@@ -1053,9 +1044,10 @@ pub trait ClientBackend: Send + Sync {
 // `IsBackend` is the future replacement for `ClientBackend` as the storage
 // type (`Box<dyn IsBackend>`).  Right now it sits alongside `ClientBackend`
 // and is implemented for free via the blanket impl below.  Capability
-// sub-traits (`ForumBackend`, `CodeRepoBackend`, …) will be added in H.1-H.3;
-// capability accessor methods (`as_forum`, `as_code_repo`, …) will be added
-// to `IsBackend` at the same time.
+// sub-traits (`ContentPolicyBackend`, `CodeRepoBackend`, `ForumBackend`,
+// `ThreadsBackend`, …) are being added in H.1-H.3; capability accessor
+// methods (`as_content_policy`, `as_code_repo`, `as_forum`, `as_threads`, …)
+// are added to `IsBackend` at the same time.
 //
 // H.0 defines only the universal surface — the methods every single backend
 // has in common with no opt-out.
@@ -1079,7 +1071,8 @@ pub trait ClientBackend: Send + Sync {
 /// | accessor | sub-trait | phase |
 /// |---|---|---|
 /// | `as_content_policy` | [`ContentPolicyBackend`] | H.1 |
-/// | `as_forum` / `as_threads` / `as_code_repo` | (H.2) | pending |
+/// | `as_code_repo` | [`CodeRepoBackend`] | H.2.a |
+/// | `as_forum` / `as_threads` | (H.2.b/H.2.c) | pending |
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 pub trait IsBackend: Send + Sync {
@@ -1119,6 +1112,14 @@ pub trait IsBackend: Send + Sync {
     fn as_content_policy(&self) -> Option<&dyn ContentPolicyBackend> {
         None
     }
+
+    /// Returns `Some(self)` if this backend implements [`CodeRepoBackend`].
+    ///
+    /// Default: `None`.  Override in backends that expose code-repository
+    /// channels (`ChannelType::Code`) — currently `poly-github` and `poly-forgejo`.
+    fn as_code_repo(&self) -> Option<&dyn CodeRepoBackend> {
+        None
+    }
 }
 
 // Blanket implementation: every `ClientBackend` automatically is an `IsBackend`.
@@ -1151,6 +1152,11 @@ impl<T: ClientBackend + ?Sized> IsBackend for T {
     #[inline]
     async fn logout(&mut self) -> ClientResult<()> {
         ClientBackend::logout(self).await
+    }
+
+    #[inline]
+    fn as_code_repo(&self) -> Option<&dyn CodeRepoBackend> {
+        ClientBackend::as_code_repo(self)
     }
 }
 

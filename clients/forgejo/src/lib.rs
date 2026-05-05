@@ -838,8 +838,45 @@ impl ClientBackend for ForgejoClient {
         Err(ClientError::NotFound(format!("unknown message action: {action_id}")))
     }
 
-    // --- Code repository channels ---
+    // --- Code repository channels (H.2.a — moved to CodeRepoBackend) ---
 
+    fn as_code_repo(&self) -> Option<&dyn poly_client::CodeRepoBackend> {
+        Some(self)
+    }
+
+    fn get_signup_method(&self, server_url: Option<&str>) -> SignupMethod {
+        let base = server_url.unwrap_or("https://codeberg.org");
+        SignupMethod::External(format!("{}/user/sign_up", base.trim_end_matches('/')))
+    }
+
+    fn client_version(&self) -> String {
+        self.version_override
+            .lock()
+            .ok()
+            .and_then(|g| g.clone())
+            .unwrap_or_else(|| api::DEFAULT_CLIENT_VERSION.to_string())
+    }
+
+    async fn set_client_version_override(
+        &self,
+        version_override: Option<String>,
+    ) -> ClientResult<()> {
+        let new_ua = version_override
+            .clone()
+            .unwrap_or_else(|| api::DEFAULT_CLIENT_VERSION.to_string());
+        if let Ok(mut lock) = self.version_override.lock() {
+            *lock = version_override;
+        }
+        self.api.set_user_agent(new_ua);
+        Ok(())
+    }
+}
+
+// ── H.2.a — CodeRepoBackend ──────────────────────────────────────────────────
+
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::CodeRepoBackend for ForgejoClient {
     async fn list_files(&self, channel_id: &str, path: &str) -> ClientResult<Vec<FileEntry>> {
         let (owner, repo) = mapping::parse_code_channel(channel_id)
             .ok_or_else(|| ClientError::NotFound(format!("not a code channel: {channel_id}")))?;
@@ -869,33 +906,6 @@ impl ClientBackend for ForgejoClient {
             bytes,
             truncated: false,
         })
-    }
-
-    fn get_signup_method(&self, server_url: Option<&str>) -> SignupMethod {
-        let base = server_url.unwrap_or("https://codeberg.org");
-        SignupMethod::External(format!("{}/user/sign_up", base.trim_end_matches('/')))
-    }
-
-    fn client_version(&self) -> String {
-        self.version_override
-            .lock()
-            .ok()
-            .and_then(|g| g.clone())
-            .unwrap_or_else(|| api::DEFAULT_CLIENT_VERSION.to_string())
-    }
-
-    async fn set_client_version_override(
-        &self,
-        version_override: Option<String>,
-    ) -> ClientResult<()> {
-        let new_ua = version_override
-            .clone()
-            .unwrap_or_else(|| api::DEFAULT_CLIENT_VERSION.to_string());
-        if let Ok(mut lock) = self.version_override.lock() {
-            *lock = version_override;
-        }
-        self.api.set_user_agent(new_ua);
-        Ok(())
     }
 }
 

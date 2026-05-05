@@ -1,9 +1,9 @@
 //! Code repository explorer view (`ChannelType::Code`).
 //!
 //! Two-pane layout: a directory listing on the left and the contents of the
-//! selected file on the right. Backed by [`ClientBackend::list_files`] and
-//! [`ClientBackend::read_file`] — works against any backend that exposes a
-//! code-channel (currently only `poly-github`).
+//! selected file on the right. Backed by [`poly_client::CodeRepoBackend`] via
+//! the `as_code_repo()` capability accessor — works against any backend that
+//! opts in to `CodeRepoBackend` (currently `poly-github` and `poly-forgejo`).
 //!
 //! Search is intentionally external: the view shows a "Search on the web"
 //! button that opens the backend's instance URL with the relevant search
@@ -80,9 +80,15 @@ pub fn CodeExplorerView(#[props(default)] route_channel_id: String) -> Element {
                     return;
                 };
                 let guard = handle.read().await;
-                match guard.list_files(&ch_id, &path).await {
-                    Ok(list) => entries.set(list),
-                    Err(e) => error_msg.set(Some(format!("{e}"))),
+                // H.2.a — capability-gate: only backends that impl CodeRepoBackend
+                // have code channels; if accessor returns None, the channel type
+                // would never have been ChannelType::Code, so this is defensive.
+                match guard.as_code_repo() {
+                    Some(cr) => match cr.list_files(&ch_id, &path).await {
+                        Ok(list) => entries.set(list),
+                        Err(e) => error_msg.set(Some(format!("{e}"))),
+                    },
+                    None => error_msg.set(Some("backend does not support code channels".into())),
                 }
                 loading.set(false);
             });
@@ -158,12 +164,16 @@ pub fn CodeExplorerView(#[props(default)] route_channel_id: String) -> Element {
                                                     return;
                                                 };
                                                 let guard = handle.read().await;
-                                                match guard.read_file(&ch_id, &path).await {
-                                                    Ok(content) => {
-                                                        let text = String::from_utf8_lossy(&content.bytes).into_owned();
-                                                        file_text.set(Some(text));
-                                                    }
-                                                    Err(e) => file_text.set(Some(format!("{e}"))),
+                                                // H.2.a — capability-gate via CodeRepoBackend accessor.
+                                                match guard.as_code_repo() {
+                                                    Some(cr) => match cr.read_file(&ch_id, &path).await {
+                                                        Ok(content) => {
+                                                            let text = String::from_utf8_lossy(&content.bytes).into_owned();
+                                                            file_text.set(Some(text));
+                                                        }
+                                                        Err(e) => file_text.set(Some(format!("{e}"))),
+                                                    },
+                                                    None => file_text.set(Some("backend does not support code channels".into())),
                                                 }
                                             });
                                         }
