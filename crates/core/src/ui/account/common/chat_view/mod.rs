@@ -1614,7 +1614,6 @@ fn render_jump_to_present(ctx: ChatViewMarkupCtx) -> Element {
 
     let new_count = *ctx.new_messages_while_scrolled_up.read();
     let mut new_messages_while_scrolled_up = ctx.new_messages_while_scrolled_up;
-    let app_state = ctx.app_state;
     let nav = ctx.nav;
     let client_manager = ctx.client_manager;
     let chat_view_state = ctx.chat_view_state;
@@ -2102,7 +2101,6 @@ fn render_message_input_row(ctx: ChatViewMarkupCtx) -> Element {
     let channel_id = ctx.channel_id.clone();
     let client_manager = ctx.client_manager;
     let chat_view_state_for_composer = ctx.chat_view_state;
-    let app_state = ctx.app_state;
     let nav = ctx.nav;
     // Typing-mode persists per chat-view mount (i.e. across channel switches
     // within the same session). Owned here so the textarea oninput and the
