@@ -257,7 +257,7 @@ isolate.
       `chat_view/message_list.rs`, `chat_view/composer.rs`,
       `chat_view/context_menu_overlay.rs` (separate task). — shipped in this commit
 
-### Phase G — `AppState` + `ChatData` slice signals (~2 weeks, phased) — G.1–G.6 shipped
+### Phase G — `AppState` + `ChatData` slice signals (~2 weeks, phased) — G.1–G.5 + G.6a + G.6b shipped; G.6c-G.6f pending
 
 The biggest structural move. Land per-slice, not big-bang. Each
 sub-step is independently shippable; later steps benefit from earlier
@@ -282,18 +282,50 @@ ones (smaller signal subscriptions = less re-render churn).
 - [x] **G.6** Split remaining `ChatData` into `ChatLists`,
       `ChatViewState`, `AccountSessions`. Add by-id `HashMap` shadows
       so the 9 linear `iter().find` lookups become O(1). Source: D.3.
-      — G.6a shipped in commit `efee96e5`. Sub-structs defined + registered as
-      contexts; single-bucket consumers migrated (content_social, account_bar,
-      discord_forum_view, dm_user_sidebar, user_sidebar, voice_view,
-      code_explorer, electron_titlebar, context_menu, profile, notifications,
-      overview_subpages, create_server, direct_call, direct_call_overlay,
-      dm_context_menu, user_profile_modal, routes).
-      — G.6b fixup shipped in commit `2928682e`: fixed multi-bucket consumers
-      (direct_call.rs needed AccountSessions + ChatLists; callers updated).
-      `ChatData` retains fields for remaining multi-bucket files (mod.rs,
-      channel_list.rs, routes.rs heavy paths, favorites_sidebar.rs).
-      `ChatViewState::apply()` is the new dispatch target; `ChatData::apply()`
-      kept as backward-compat shim.
+      Broken into sub-steps below — original G.6 scope was understated;
+      first two passes shipped infrastructure + ~30% of consumer
+      migration but left `ChatData` intact with all 21 fields and the
+      new sub-signals partially-empty at runtime.
+  - [x] **G.6a** Define `ChatLists` / `ChatViewState` / `AccountSessions`
+        structs in `crates/core/src/state/{chat_lists,chat_view_state,account_sessions}.rs`.
+        Add by-id `HashMap` shadows + invariant-preserving setters
+        (`set_servers` / `push_server` / `server_by_id` etc.) on
+        `ChatLists`. Wire 3 `provide_context` calls in `ui.rs`. Move
+        `ChatAction::apply` to `ChatViewState::apply`; keep
+        `ChatData::apply` as backward-compat shim. Migrated single-bucket
+        consumers (content_social, account_bar, discord_forum_view,
+        dm_user_sidebar, user_sidebar, voice_view, code_explorer,
+        electron_titlebar, context_menu, profile, notifications,
+        overview_subpages, create_server, direct_call, direct_call_overlay,
+        dm_context_menu, user_profile_modal, routes). — shipped in
+        commit `efee96e5`.
+  - [x] **G.6b** Fix multi-bucket consumer cascade
+        (`direct_call.rs` reads both `dm_channels` from `ChatLists`
+        AND `account_sessions` from `AccountSessions`; callers updated).
+        Both targets build clean. — shipped in commit `2928682e`.
+  - [ ] **G.6c** Writer-completeness migration. Every
+        `chat_data.X = ...` / `chat_data.batch(|cd| cd.X.push(...))`
+        site reroutes to the matching sub-signal. **MUST** use
+        invariant-preserving setters when writing through `ChatLists`
+        (otherwise `_by_id` shadows desync from canonical Vecs).
+        Greppable proof: zero `chat_data\.batch` and zero `cd\.<field>
+        =` patterns for any field that lives in a sub-state.
+  - [ ] **G.6d** Reader migration. ~128 remaining
+        `chat_data: BatchedSignal<ChatData>` parameters or
+        `use_context` sites reroute to the actual sub-signals each
+        consumer needs. Drop the `chat_data` prop from ~30 component
+        signatures.
+  - [ ] **G.6e** Eliminate `ChatData` itself. Drop the 21 duplicate
+        fields, drop the `provide_context(BatchedSignal::new(ChatData::default()))`
+        from `ui.rs`, drop the `ChatData::apply` shim, delete
+        `crates/core/src/state/chat_data.rs`, drop the `state.rs`
+        re-export. Net: zero references to `ChatData` outside the
+        `state/` module's deletion commit.
+  - [ ] **G.6f** By-id audit. Migrate the 9 remaining `iter().find()`
+        linear lookups (`servers / channels / dm_channels / groups /
+        messages`) to `*_by_id` helpers. Verify every writer to a
+        shadowed Vec goes through the corresponding setter (not bare
+        `cl.servers.push(...)`).
 
 ### Phase H — `ClientBackend` capability sub-traits (~1 month, long-horizon)
 
