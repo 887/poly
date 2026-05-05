@@ -155,8 +155,12 @@ pub fn DiscordForumView() -> Element {
             let aid = aid.clone();
             let cur_sort = *sort.read();
             async move {
+                // H.2.b — capability-gate via ForumBackend accessor.
                 match client_manager.peek().with_backend(&aid, async |b| {
-                    b.get_forum_posts(&cid, cur_sort, Some(50)).await
+                    match b.as_forum() {
+                        Some(fb) => fb.get_forum_posts(&cid, cur_sort, Some(50)).await,
+                        None => Err(poly_client::ClientError::NotSupported("as_forum".to_string())),
+                    }
                 }).await {
                     Ok(posts) => Some(posts),
                     Err(poly_client::ClientError::NotFound(_) | poly_client::ClientError::Internal(_)) => None,
@@ -697,8 +701,12 @@ fn NewPostModal(
                             let post_body = body.read().clone();
                             let post_tags = selected_tag_ids.read().clone();
                             spawn(async move {
+                                // H.2.b — capability-gate via ForumBackend accessor.
                                 match client_manager.peek().with_backend(&aid, async |b| {
-                                    b.create_forum_post(&cid, &post_title, &post_body, post_tags).await
+                                    match b.as_forum() {
+                                        Some(fb) => fb.create_forum_post(&cid, &post_title, &post_body, post_tags).await,
+                                        None => Err(poly_client::ClientError::NotSupported("as_forum".to_string())),
+                                    }
                                 }).await {
                                     Ok(_new_post) => {
                                         tracing::info!("create_forum_post succeeded for {cid}");

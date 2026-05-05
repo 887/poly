@@ -25,11 +25,11 @@ use wasmtime::{Engine, Store};
 
 use poly_client::{
     ActionOutcome, AuthCredentials, BackendType, Channel, ClientBackend, ClientError, ClientEvent,
-    ClientResult, ComposerButton, Cursor, CustomEmoji, DmChannel, ForumPost, ForumSortOrder, Group,
-    MenuItem, MenuTargetKind, Message, MessageContent, MessageQuery, MessageSearchHit,
-    MessageSearchQuery, Notification, PendingHandle, PresenceStatus, Server, Session, SettingsScope,
-    SettingsSection, SidebarDeclaration, StickerItem, ThreadInfo, User, ViewDescriptor, ViewDetail,
-    ViewRowsPage, VoiceParticipant,
+    ClientResult, ComposerButton, Cursor, CustomEmoji, DmChannel, ForumBackend, ForumPost,
+    ForumSortOrder, Group, MenuItem, MenuTargetKind, Message, MessageContent, MessageQuery,
+    MessageSearchHit, MessageSearchQuery, Notification, PendingHandle, PresenceStatus, Server,
+    Session, SettingsScope, SettingsSection, SidebarDeclaration, StickerItem, ThreadInfo, User,
+    ViewDescriptor, ViewDetail, ViewRowsPage, VoiceParticipant,
 };
 
 use super::bridge;
@@ -1152,25 +1152,10 @@ impl ClientBackend for PluginBackend {
         }
     }
 
-    async fn get_forum_posts(
-        &self,
-        forum_channel_id: &str,
-        sort: ForumSortOrder,
-        limit: Option<u32>,
-    ) -> ClientResult<Vec<ForumPost>> {
-        refuel(&self.store).await;
-        let wit_sort = bridge::to_wit_forum_sort_order(sort);
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_messenger_client()
-            .call_get_forum_posts(&mut *store, forum_channel_id, wit_sort, limit)
-            .await;
-        match result {
-            Ok(Ok(posts)) => Ok(posts.into_iter().map(bridge::from_wit_forum_post).collect()),
-            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
-            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
-        }
+    // --- Forum channels (H.2.b — moved to ForumBackend) ---
+
+    fn as_forum(&self) -> Option<&dyn ForumBackend> {
+        Some(self)
     }
 
     async fn get_active_threads(&self, server_id: &str) -> ClientResult<Vec<ThreadInfo>> {
@@ -1211,6 +1196,33 @@ impl ClientBackend for PluginBackend {
         }
     }
 
+}
+
+// ── H.2.b — ForumBackend ─────────────────────────────────────────────────────
+
+#[async_trait]
+impl ForumBackend for PluginBackend {
+    async fn get_forum_posts(
+        &self,
+        forum_channel_id: &str,
+        sort: ForumSortOrder,
+        limit: Option<u32>,
+    ) -> ClientResult<Vec<ForumPost>> {
+        refuel(&self.store).await;
+        let wit_sort = bridge::to_wit_forum_sort_order(sort);
+        let mut store = self.store.lock().await;
+        let result = self
+            .instance
+            .poly_messenger_messenger_client()
+            .call_get_forum_posts(&mut *store, forum_channel_id, wit_sort, limit)
+            .await;
+        match result {
+            Ok(Ok(posts)) => Ok(posts.into_iter().map(bridge::from_wit_forum_post).collect()),
+            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
+            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
+        }
+    }
+
     async fn create_forum_post(
         &self,
         forum_channel_id: &str,
@@ -1230,5 +1242,16 @@ impl ClientBackend for PluginBackend {
             Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
             Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
         }
+    }
+
+    async fn get_recent_comments(
+        &self,
+        _channel_id: &str,
+        _query: MessageQuery,
+    ) -> ClientResult<Vec<Message>> {
+        // WIT bridge does not expose get-recent-comments; only Lemmy implements this
+        // natively.  WASM plugins that want this capability must do it via
+        // get-view-rows or a custom sidebar action.
+        Err(ClientError::NotSupported("get_recent_comments".to_string()))
     }
 }

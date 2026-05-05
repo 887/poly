@@ -946,39 +946,10 @@ impl ClientBackend for LemmyClient {
         })
     }
 
-    /// C.7 — wire `create_forum_post` for Lemmy via `POST /api/v3/post`.
-    ///
-    /// `forum_channel_id` must be `lemmy-feed-{community_id}`.  Tags are
-    /// ignored (Lemmy's tag system requires community-specific tag IDs that
-    /// the UI doesn't yet expose).
-    async fn create_forum_post(
-        &self,
-        forum_channel_id: &str,
-        title: &str,
-        body: &str,
-        _tags: Vec<String>,
-    ) -> ClientResult<ForumPost> {
-        let community_id = Self::parse_feed_channel(forum_channel_id).ok_or_else(|| {
-            ClientError::NotFound(format!(
-                "create_forum_post: expected lemmy-feed-<id>, got: {forum_channel_id}"
-            ))
-        })?;
+    // --- Forum channels (H.2.b — moved to ForumBackend) ---
 
-        let post_view = self
-            .http
-            .create_post(community_id, title, Some(body), None)
-            .await?;
-
-        Ok(ForumPost {
-            thread: poly_client::ThreadInfo {
-                thread_id: format!("lemmy-post-{}", post_view.post.id),
-                parent_channel_id: forum_channel_id.to_string(),
-                message_count: 0,
-                member_count: 0,
-            },
-            applied_tags: vec![],
-            starter_message_id: None,
-        })
+    fn as_forum(&self) -> Option<&dyn poly_client::ForumBackend> {
+        Some(self)
     }
 
     async fn get_composer_buttons(&self, _channel_id: &str) -> ClientResult<Vec<ComposerButton>> {
@@ -1453,8 +1424,56 @@ impl ClientBackend for LemmyClient {
         self.http.set_user_agent(new_ua);
         Ok(())
     }
+}
 
-    // ── Phase D — Posts / Comments toggle ────────────────────────────────────
+// ── H.2.b — ForumBackend ─────────────────────────────────────────────────────
+
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::ForumBackend for LemmyClient {
+    async fn get_forum_posts(
+        &self,
+        _forum_channel_id: &str,
+        _sort: ForumSortOrder,
+        _limit: Option<u32>,
+    ) -> ClientResult<Vec<ForumPost>> {
+        Err(ClientError::NotSupported("get_forum_posts".to_string()))
+    }
+
+    /// C.7 — wire `create_forum_post` for Lemmy via `POST /api/v3/post`.
+    ///
+    /// `forum_channel_id` must be `lemmy-feed-{community_id}`.  Tags are
+    /// ignored (Lemmy's tag system requires community-specific tag IDs that
+    /// the UI doesn't yet expose).
+    async fn create_forum_post(
+        &self,
+        forum_channel_id: &str,
+        title: &str,
+        body: &str,
+        _tags: Vec<String>,
+    ) -> ClientResult<ForumPost> {
+        let community_id = Self::parse_feed_channel(forum_channel_id).ok_or_else(|| {
+            ClientError::NotFound(format!(
+                "create_forum_post: expected lemmy-feed-<id>, got: {forum_channel_id}"
+            ))
+        })?;
+
+        let post_view = self
+            .http
+            .create_post(community_id, title, Some(body), None)
+            .await?;
+
+        Ok(ForumPost {
+            thread: poly_client::ThreadInfo {
+                thread_id: format!("lemmy-post-{}", post_view.post.id),
+                parent_channel_id: forum_channel_id.to_string(),
+                message_count: 0,
+                member_count: 0,
+            },
+            applied_tags: vec![],
+            starter_message_id: None,
+        })
+    }
 
     /// Return recent comments across a Lemmy community (Phase D).
     ///

@@ -373,7 +373,7 @@ pub struct BackendCapabilities {
     /// (Phase D — Posts | Comments toggle in the forum view).
     ///
     /// When `true`, `ForumView` renders the Posts | Comments pill; clicking
-    /// "Comments" calls `ClientBackend::get_recent_comments` instead of the
+    /// "Comments" calls `ForumBackend::get_recent_comments` instead of the
     /// normal post feed. Currently only Lemmy sets this to `true`.
     ///
     /// `#[serde(default)]` keeps older WASM plugin capability blobs valid —

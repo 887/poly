@@ -9,12 +9,14 @@
 pub mod code_repo;
 pub mod content_policy;
 pub mod events;
+pub mod forum;
 pub mod types;
 pub mod ui_surface;
 
 pub use code_repo::CodeRepoBackend;
 pub use content_policy::ContentPolicyBackend;
 pub use events::*;
+pub use forum::ForumBackend;
 pub use types::*;
 pub use ui_surface::*;
 
@@ -781,25 +783,17 @@ pub trait ClientBackend: Send + Sync {
         None
     }
 
-    // --- Forum channels and threads ---
+    // --- Forum channels (H.2.b — ForumBackend) ---
 
-    /// Get forum posts (threads) in a forum channel.
+    /// Returns `Some(self)` if this backend implements [`ForumBackend`].
     ///
-    /// Posts are sorted according to `sort`. `limit` caps the number returned;
-    /// `None` uses the backend default.
-    ///
-    /// Backends that do not support forum channels return `NotSupported`.
-    async fn get_forum_posts(
-        &self,
-        forum_channel_id: &str,
-        sort: ForumSortOrder,
-        limit: Option<u32>,
-    ) -> ClientResult<Vec<ForumPost>> {
-        let _ = (forum_channel_id, sort, limit);
-        Err(ClientError::NotSupported(
-            "get_forum_posts not implemented".into(),
-        ))
+    /// Override to `Some(self)` in backends that expose forum channels
+    /// (`ChannelType::Forum`).  Default: `None`.
+    fn as_forum(&self) -> Option<&dyn ForumBackend> {
+        None
     }
+
+    // --- Thread channels (H.2.c — ThreadsBackend) ---
 
     /// Get all active (non-archived) threads in a server.
     ///
@@ -823,27 +817,6 @@ pub trait ClientBackend: Send + Sync {
         let _ = (parent_channel_id, limit);
         Err(ClientError::NotSupported(
             "get_archived_threads not implemented".into(),
-        ))
-    }
-
-    /// Create a new forum post (thread) in a forum channel.
-    ///
-    /// `title` is the post/thread name, `body` is the starter message text,
-    /// and `tags` is the list of tag IDs to apply.
-    ///
-    /// Returns the newly-created [`ForumPost`] on success.
-    /// Backends that do not support forum post creation return
-    /// [`ClientError::NotSupported`].
-    async fn create_forum_post(
-        &self,
-        forum_channel_id: &str,
-        title: &str,
-        body: &str,
-        tags: Vec<String>,
-    ) -> ClientResult<ForumPost> {
-        let _ = (forum_channel_id, title, body, tags);
-        Err(ClientError::NotSupported(
-            "create_forum_post not implemented".into(),
         ))
     }
 
@@ -1013,30 +986,6 @@ pub trait ClientBackend: Send + Sync {
         message_id: &str,
     ) -> ClientResult<ActionOutcome>;
 
-    // --- Phase D — Posts / Comments toggle --------------------------------
-
-    /// Fetch recent comments across a community (Phase D).
-    ///
-    /// `channel_id` is the feed channel for the community (e.g. for Lemmy,
-    /// `lemmy-feed-{community_id}`). Returns up to `query.limit` (default 50)
-    /// of the most recently-posted comments across all posts in the community,
-    /// mapped to `Message` values so the existing comment-rendering path in
-    /// `ForumPostView` can display them without changes.
-    ///
-    /// `query.limit` caps the number returned. Other `MessageQuery` fields
-    /// (`before`, `after`, `around`) are forwarded to the backend where the
-    /// backend's API supports them.
-    ///
-    /// Default returns `Err(ClientError::NotSupported(...))`. Backends that set
-    /// `BackendCapabilities::supports_comment_feed = true` MUST implement this.
-    async fn get_recent_comments(
-        &self,
-        channel_id: &str,
-        query: MessageQuery,
-    ) -> ClientResult<Vec<Message>> {
-        let _ = (channel_id, query);
-        Err(ClientError::NotSupported("get_recent_comments".to_string()))
-    }
 }
 
 // ── IsBackend — thin parent trait (Phase H) ──────────────────────────────────
@@ -1072,7 +1021,8 @@ pub trait ClientBackend: Send + Sync {
 /// |---|---|---|
 /// | `as_content_policy` | [`ContentPolicyBackend`] | H.1 |
 /// | `as_code_repo` | [`CodeRepoBackend`] | H.2.a |
-/// | `as_forum` / `as_threads` | (H.2.b/H.2.c) | pending |
+/// | `as_forum` | [`ForumBackend`] | H.2.b |
+/// | `as_threads` | (H.2.c) | pending |
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 pub trait IsBackend: Send + Sync {
@@ -1120,6 +1070,14 @@ pub trait IsBackend: Send + Sync {
     fn as_code_repo(&self) -> Option<&dyn CodeRepoBackend> {
         None
     }
+
+    /// Returns `Some(self)` if this backend implements [`ForumBackend`].
+    ///
+    /// Default: `None`.  Override in backends that expose forum channels
+    /// (`ChannelType::Forum`) — currently `poly-discord` and `poly-lemmy`.
+    fn as_forum(&self) -> Option<&dyn ForumBackend> {
+        None
+    }
 }
 
 // Blanket implementation: every `ClientBackend` automatically is an `IsBackend`.
@@ -1157,6 +1115,11 @@ impl<T: ClientBackend + ?Sized> IsBackend for T {
     #[inline]
     fn as_code_repo(&self) -> Option<&dyn CodeRepoBackend> {
         ClientBackend::as_code_repo(self)
+    }
+
+    #[inline]
+    fn as_forum(&self) -> Option<&dyn ForumBackend> {
+        ClientBackend::as_forum(self)
     }
 }
 
