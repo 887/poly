@@ -41,7 +41,7 @@ use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::favorites_sidebar::FavoritesBar;
 use crate::ui::routes::Route;
 use dioxus::prelude::*;
-use poly_client::{SignupCompleted, SignupContext};
+use poly_client::{IsBackend, SignupCompleted, SignupContext};
 use std::collections::HashMap;
 use std::sync::Arc;
 use poly_ui_macros::{context_menu, ui_action};
@@ -250,8 +250,16 @@ fn build_on_complete_inner(
                 let groups = guard.get_groups().await.ok();
                 let notifs = guard.get_notifications().await.ok();
                 let friends = guard.get_friends().await.ok();
-                let blocked = guard.get_blocked_users().await.ok();
-                let policy = guard.get_content_policy().await.ok();
+                // Use capability accessor (H.1 — ContentPolicyBackend).
+                // Returns None for all current backends; preserved for future opt-ins.
+                let (blocked, policy) = if let Some(cp) = guard.as_content_policy() {
+                    (
+                        cp.get_blocked_users().await.ok(),
+                        cp.get_content_policy().await.ok(),
+                    )
+                } else {
+                    (None, None)
+                };
                 let aid = account_id.clone();
                 chat_lists.batch(move |cl| {
                     if let Some(dms) = dms {

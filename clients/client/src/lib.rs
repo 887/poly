@@ -6,10 +6,12 @@
 //! implementations (Stoat, Matrix, Discord, Teams, Demo) must implement.
 //! It also defines the shared data types used across all backends.
 
+pub mod content_policy;
 pub mod events;
 pub mod types;
 pub mod ui_surface;
 
+pub use content_policy::ContentPolicyBackend;
 pub use events::*;
 pub use types::*;
 pub use ui_surface::*;
@@ -284,31 +286,6 @@ pub trait ClientBackend: Send + Sync {
         Err(ClientError::NotSupported(
             "respond_to_server_invite".to_string(),
         ))
-    }
-
-    // --- Content & Social Policy ---
-
-    /// Get the account's content and social policy settings.
-    ///
-    /// Returns [`ClientError::NotSupported`] if the backend does not expose
-    /// content policy settings — the UI will fall back to locally-stored defaults.
-    async fn get_content_policy(&self) -> ClientResult<ContentPolicy> {
-        Err(ClientError::NotSupported("get_content_policy".to_string()))
-    }
-
-    /// Update the account's content and social policy settings.
-    ///
-    /// Backends that do not support this action return `NotSupported`.
-    async fn set_content_policy(&self, policy: ContentPolicy) -> ClientResult<()> {
-        let _ = policy;
-        Err(ClientError::NotSupported("set_content_policy".to_string()))
-    }
-
-    /// Get the list of users blocked by the authenticated user.
-    ///
-    /// Returns an empty list if the backend does not track blocks.
-    async fn get_blocked_users(&self) -> ClientResult<Vec<BlockedUser>> {
-        Ok(Vec::new())
     }
 
     /// Unblock a previously blocked user.
@@ -1095,9 +1072,14 @@ pub trait ClientBackend: Send + Sync {
 ///
 /// # Capability accessors
 ///
-/// Accessors (`fn as_forum(&self) -> Option<&dyn ForumBackend>`, …) will
-/// be added here in Phase H.1-H.3 alongside their sub-traits.  H.0 defines
-/// only the universal surface.
+/// Each accessor returns `None` by default.  A backend opts in to a
+/// capability by implementing the corresponding sub-trait *and* overriding
+/// the accessor to return `Some(self)`.
+///
+/// | accessor | sub-trait | phase |
+/// |---|---|---|
+/// | `as_content_policy` | [`ContentPolicyBackend`] | H.1 |
+/// | `as_forum` / `as_threads` / `as_code_repo` | (H.2) | pending |
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 pub trait IsBackend: Send + Sync {
@@ -1128,6 +1110,15 @@ pub trait IsBackend: Send + Sync {
 
     /// Log out and invalidate the current session.
     async fn logout(&mut self) -> ClientResult<()>;
+
+    // --- Capability accessors (H.1+) ---
+
+    /// Returns `Some(self)` if this backend implements [`ContentPolicyBackend`].
+    ///
+    /// Default: `None` (no backend currently opts in).
+    fn as_content_policy(&self) -> Option<&dyn ContentPolicyBackend> {
+        None
+    }
 }
 
 // Blanket implementation: every `ClientBackend` automatically is an `IsBackend`.
