@@ -433,12 +433,12 @@ caveat).
       moderation routes — each module taking only the capability traits
       it needs (DIP win). Effort L. Source: C.3.3.
 
-### Phase J — `mcp/chat-mcp/src/{tools,memory}.rs` split (~3 days)
+### Phase J — `mcp/chat-mcp/src/{tools,memory}.rs` split (~3 days) — shipped in commits `4a43d4c8` (J.1) + `bada60a6` (J.2)
 
-- [ ] **J.1** Split `tools.rs` (4081 lines, 80+ handlers) into
+- [x] **J.1** Split `tools.rs` (4081 lines, 80+ handlers) into
       `tools/` sub-modules per CLAUDE.md's persona-handler family.
-      Source: A.1#3.
-- [ ] **J.2** Split `memory.rs` (2695 lines, 8 SQLite schemas, 57
+      Source: A.1#3. shipped in commit `4a43d4c8`
+- [x] **J.2** Split `memory.rs` (2695 lines, 8 SQLite schemas, 57
       methods) into `memory/{facts, chat_notes, drafts, persona/, …}`.
       Convert the 9-11 param functions (`update_persona`,
       `query_persona_audit`) to builder structs. Source: A.1#5.
