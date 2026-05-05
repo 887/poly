@@ -393,25 +393,34 @@ Surfaced after G.6k shipped: navigating to a github (or any forum-layout) channe
 - [x] **G.6l.2** Cfg-gate `account_sessions` in `direct_call_overlay.rs:34` to `#[cfg(not(target_arch = "wasm32"))]` — last residual G.6k unused-var on wasm, missed by an earlier sed when nav_state's cfg-gate insert shifted line numbers.
 - [x] **G.6l.3** Verify live in poly-web: navigate to `/github/github.com/gh-github.com-887/channels/gh-63975513` — forum view renders cleanly, Open/Closed tab clicks succeed, 0 console messages.
 
-### Phase H — `ClientBackend` capability sub-traits (~1 month, long-horizon)
+### Phase H — `ClientBackend` capability sub-traits (~1 month, long-horizon) — design locked, ready for code
 
 Gated on Phase B (capabilities single-source) + Phase D (with_backend)
 landing. Trait split must mirror WIT interface boundaries (C.1.3
 caveat).
 
+#### Design decisions (locked 2026-05-05)
+
+- **Dispatch shape (was H.4):** parent trait exposes capability accessors `fn as_forum(&self) -> Option<&dyn ForumBackend> { None }`, etc. Backends opt-in by overriding to `Some(self)`. `BackendCapabilities` bitflags remain the runtime hint for "is this accessor going to return Some" — accessors are the type-system enforcement. No `Any` downcasts, no enum-of-backends (would break `plugin-host`'s runtime-loaded WIT plugins).
+- **Trait granularity:** WIT 1:1 mapping — `poly:client/{content-policy, code-repo, forum, threads, moderation, social, dms}` → Rust traits with the same names. Plugin-host's existing `from_wit_backend_capabilities` translation stays a single source of truth; no Rust↔WIT drift layer.
+- **Fate of `ClientBackend` itself:** **delete entirely.** UI storage becomes `Box<dyn IsBackend>` where `IsBackend` is a thin parent trait — `Send + Sync`, slug/version/capabilities, basic auth (login/logout/get_account). All other ~85 methods live exclusively on capability sub-traits, reachable only through accessors. Big upfront churn (every `with_backend` call site in `crates/core/src/ui/` — ~58 sites — has to capability-check), but eliminates the kitchen-sink trait completely. No deprecation half-life.
+- **`Err(NotSupported)` replacement:** sub-traits have **no default impls.** Capability is opt-in by impl-presence. Backend doesn't `impl ForumBackend` → `as_forum()` returns `None` → UI hits the type-system check, can't even *call* the methods. Eliminates all 52 `NotSupported` stubs as part of the migration.
+- **Migration order:** bottom-up — H.1 → H.2 → H.3. H.1 is the proof-of-pattern (zero implementers = pure deletion); H.2 validates dispatch on real plugins; H.3 only after the pattern is hardened.
+
+#### Sub-steps
+
+- [ ] **H.0** Carve out `IsBackend` parent trait (`Send + Sync`, slug, version, capabilities, login/logout/get_account, the capability accessors). Move it to `clients/client/src/lib.rs` alongside the soon-to-be-deleted `ClientBackend`. Effort S.
 - [ ] **H.1** Carve out `ContentPolicy` (3 methods, 0 implementers).
-      Pure deletion — no migration burden. Effort S. Source: C.2.1.
+      Pure deletion — no migration burden. Defines the dispatch pattern. Effort S. Source: C.2.1.
 - [ ] **H.2** Carve out `CodeRepoBackend` + `ForumBackend` +
       `ThreadsBackend` (7 methods total, 4 implementers). Update
-      `code_explorer.rs` + forum routes to take the narrower trait.
-      Effort M. Source: C.2.2.
+      `code_explorer.rs` + forum routes to take the narrower trait
+      via `as_forum()` / `as_code_repo()` / `as_threads()`. Validates
+      dispatch on real plugins. Effort M. Source: C.2.2.
 - [ ] **H.3** Carve out `Moderation` + `SocialGraph` + `DmsAndGroups`
       (38 methods, ~43% of trait). Touches every backend; do
       one-trait-at-a-time. Effort L per trait. Source: C.2.3.
-- [ ] **H.4** Decide on the dispatch shape — `Box<dyn ClientBackend>`
-      stays the storage type; capability traits are accessed via
-      blanket `dyn ClientBackend -> Option<&dyn Cap>` accessors keyed
-      on `BackendCapabilities` bitflags. Source: C.1.3 caveat 2.
+- [ ] **H.4** Delete `ClientBackend` trait — all method moved out by H.1-H.3. Migrate all `Box<dyn ClientBackend>` storage sites to `Box<dyn IsBackend>`. Migrate all `~58` `with_backend` UI call sites to capability-gate via accessors. Final cleanup; ratchets the pattern.
 
 ### Phase I — Routes.rs decomposition (~1 week, after Phase H starts)
 
