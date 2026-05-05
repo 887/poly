@@ -50,7 +50,6 @@ impl UiAction for ClientViewSplitAction {
 pub fn SplitBody(channel_id: String, account_id: String, spec: SplitSpec) -> Element {
     let _ = spec;
     let client_manager: BatchedSignal<ClientManager> = use_context();
-    let app_state: BatchedSignal<AppState> = use_context();
     let nav_sig: BatchedSignal<crate::state::NavState> = use_context();
     let (nav_backend, nav_instance_id) = {
         let s = nav_sig.read();

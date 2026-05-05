@@ -25,7 +25,6 @@ use poly_ui_macros::{context_menu, ui_action};
 #[context_menu(inherit)]
 #[component]
 pub fn AccountSwitcher() -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
     let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
     let voice_state: BatchedSignal<VoiceState> = use_context();
     let voice_conn = voice_state.read().voice_connection.clone();

@@ -39,7 +39,6 @@ fn repo_action_id(repo_id: &str, tab_suffix: &str) -> String {
 #[context_menu(inherit)]
 #[component]
 pub fn RepoTreeLayout() -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
     let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
 

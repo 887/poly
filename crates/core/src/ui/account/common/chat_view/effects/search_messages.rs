@@ -6,7 +6,6 @@ use super::super::ChatUtilityPanel;
 use super::super::search_filter::build_search_query;
 
 pub(in super::super) fn use_search_messages_effect(signals: &ChatViewSignals, ctx: &ChatViewMarkupCtx) {
-    let app_state = signals.app_state;
     let nav = signals.nav;
     let client_manager = signals.client_manager;
     let mut search_hits = signals.search_hits;

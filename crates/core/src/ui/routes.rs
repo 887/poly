@@ -1263,7 +1263,6 @@ fn DmsHome(backend: String, instance_id: String, account_id: String) -> Element 
 #[ui_action(inherit)]
 #[component]
 fn DmChat(backend: String, instance_id: String, account_id: String, dm_id: String) -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
     let nav_state: BatchedSignal<NavState> = use_context();
     let ui_overlays: BatchedSignal<UiOverlays> = use_context();
     let chat_lists: BatchedSignal<ChatLists> = use_context();
@@ -1611,7 +1610,6 @@ fn ServerHome(
     account_id: String,
     server_id: String,
 ) -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
     let nav_state: BatchedSignal<NavState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let chat_lists: BatchedSignal<ChatLists> = use_context();

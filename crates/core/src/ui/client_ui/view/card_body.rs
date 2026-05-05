@@ -41,7 +41,6 @@ pub fn CardBody(
 ) -> Element {
     let _ = spec;
     let rows_res = fetch_first_page(channel_id.clone(), account_id.clone(), None, None, None);
-    let app_state: BatchedSignal<AppState> = use_context();
     let nav_sig: BatchedSignal<crate::state::NavState> = use_context();
     // CardBody's overview-context detection: the host's
     // `AccountOverviewView` calls `render_descriptor` with an empty

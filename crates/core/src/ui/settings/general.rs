@@ -332,7 +332,6 @@ async fn run_reset_flow(
 #[component]
 fn ResetButton(kind: ResetKind, busy: Signal<bool>, on_error: EventHandler<String>) -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
-    let ui_layout: crate::state::BatchedSignal<crate::state::UiLayout> = use_context();
     let client_manager: BatchedSignal<crate::client_manager::ClientManager> = use_context();
     let chat_lists: BatchedSignal<crate::state::ChatLists> = use_context();
     let account_sessions: BatchedSignal<crate::state::AccountSessions> = use_context();

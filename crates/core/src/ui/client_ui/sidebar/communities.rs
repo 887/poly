@@ -66,7 +66,6 @@ impl CommunitiesTab {
 #[context_menu(inherit)]
 #[component]
 pub fn CommunitiesLayout() -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
     let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
 

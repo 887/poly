@@ -6,7 +6,6 @@ use super::super::signals::ChatViewSignals;
 /// This gives the user immediate keyboard focus so they can start typing
 /// right after clicking a channel or DM, matching Discord UX.
 pub(in super::super) fn use_composer_focus_effect(signals: &ChatViewSignals) {
-    let app_state = signals.app_state;
     let nav = signals.nav;
     use_effect(move || { // poly-lint: allow stale-effect-capture — Signal-only; subscribes to app_state Signal for channel/account changes
         // Depend on channel + active account so switching DMs also refocuses.

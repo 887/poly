@@ -520,7 +520,6 @@ pub fn ServerSettingsPage(
     let _locale = crate::i18n::use_locale().read().clone();
     let search_text = use_signal(String::new);
     let chat_lists: BatchedSignal<crate::state::ChatLists> = use_context();
-    let app_state: BatchedSignal<AppState> = use_context();
     let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
     let mut published_section = use_signal(String::new);
 

@@ -160,7 +160,6 @@ async fn join_voice_channel(
     current_channel: Option<poly_client::Channel>,
     current_server: Option<poly_client::Server>,
     client_manager: BatchedSignal<ClientManager>,
-    chat_view_state: BatchedSignal<ChatViewState>,
     account_sessions: BatchedSignal<AccountSessions>,
     voice_state: BatchedSignal<VoiceState>,
     nav_state: BatchedSignal<NavState>,
@@ -291,7 +290,6 @@ pub fn VoiceChannelView() -> Element {
     let account_sessions: BatchedSignal<AccountSessions> = use_context();
     let voice_state: BatchedSignal<VoiceState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
-    let app_state: BatchedSignal<AppState> = use_context();
     let nav_state: BatchedSignal<NavState> = use_context();
 
     let current_channel = chat_view_state.read().current_channel.clone();
@@ -502,7 +500,6 @@ fn VoiceParticipantGrid(
 fn VoiceTile(participant: VoiceParticipant) -> Element {
     let user = &participant.user;
     let ui_overlays: BatchedSignal<UiOverlays> = use_context();
-    let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
     let color = user_color(&user.id);
     let first_char: String = user
         .display_name
@@ -609,7 +606,7 @@ fn VoiceJoinButton(
                     let ch = chat_view_state.read().current_channel.clone();
                     let srv = chat_view_state.read().current_server.clone();
                     spawn(async move {
-                        join_voice_channel(cid, ch, srv, client_manager, chat_view_state, account_sessions, voice_state, nav_state)
+                        join_voice_channel(cid, ch, srv, client_manager, account_sessions, voice_state, nav_state)
                             .await;
                     });
                 },

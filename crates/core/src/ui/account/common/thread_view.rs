@@ -82,9 +82,6 @@ pub fn ViewThreadButton(
     /// The `ThreadInfo` attached to the parent message.
     thread: ThreadInfo,
 ) -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
-    let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
-    let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
     let nav_state: BatchedSignal<crate::state::NavState> = use_context();
     let ui_overlays: BatchedSignal<crate::state::UiOverlays> = use_context();
     let nav = navigator();
@@ -154,9 +151,7 @@ pub fn ViewThreadButton(
 #[context_menu(inherit)]
 #[component]
 pub fn ActiveThreadsBar() -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
     let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
-    let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let chat_view_state: BatchedSignal<ChatViewState> = use_context();
 
@@ -205,9 +200,6 @@ pub fn ActiveThreadsBar() -> Element {
 #[context_menu(inherit)]
 #[component]
 fn ActiveThreadChip(thread: ThreadInfo) -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
-    let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
-    let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
     let nav_state: BatchedSignal<crate::state::NavState> = use_context();
     let ui_overlays: BatchedSignal<crate::state::UiOverlays> = use_context();
     let nav = navigator();
@@ -262,7 +254,6 @@ fn ActiveThreadChip(thread: ThreadInfo) -> Element {
 #[context_menu(inherit)]
 #[component]
 pub fn ThreadPanel() -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
     let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
     let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
@@ -345,8 +336,6 @@ pub fn ThreadPanelHeader(
     /// Fallback thread ID shown when the channel name is not yet loaded.
     thread_id: String,
 ) -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
-    let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
     let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
 
     let name = channel
@@ -435,9 +424,7 @@ fn ThreadMessageRow(message: Message) -> Element {
 #[context_menu(inherit)]
 #[component]
 pub fn ThreadFullView(thread_id: String) -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
     let nav_state: crate::state::BatchedSignal<crate::state::NavState> = use_context();
-    let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let nav = navigator();
 

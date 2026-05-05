@@ -27,7 +27,6 @@ pub fn OutgoingDirectCallOverlay(
     start_video: bool,
     allow_add_to_active_temporary: bool,
 ) -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
     let nav_state: BatchedSignal<NavState> = use_context();
     let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
     let chat_lists: BatchedSignal<ChatLists> = use_context();

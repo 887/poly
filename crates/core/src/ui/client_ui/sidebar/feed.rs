@@ -38,7 +38,6 @@ const FEEDS: &[(&str, &str)] = &[
 #[context_menu(inherit)]
 #[component]
 pub fn FeedLayout() -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
     let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
     // Track which feed the user selected most recently. Used only for

@@ -33,7 +33,6 @@ use poly_ui_macros::{context_menu, ui_action};
 #[context_menu(inherit)]
 #[component]
 pub fn AvatarContextMenuInner(menu: AvatarContextMenuState, close: EventHandler<()>) -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
     let ui_overlays: BatchedSignal<UiOverlays> = use_context();
 
     let x = menu.x;

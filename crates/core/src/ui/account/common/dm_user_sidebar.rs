@@ -45,7 +45,6 @@ fn presence_dot_class(status: &PresenceStatus) -> &'static str {
 #[context_menu(inherit)]
 #[component]
 pub fn DmUserSidebar() -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
     let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
     let ui_overlays: BatchedSignal<UiOverlays> = use_context();
     let ui_layout: crate::state::BatchedSignal<crate::state::UiLayout> = use_context();

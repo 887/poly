@@ -216,7 +216,6 @@ fn activate_existing_or_new_call(
     spec: TemporaryCallSpec,
     remote_users: Vec<User>,
     start_video: bool,
-    chat_lists: BatchedSignal<ChatLists>,
     account_sessions: BatchedSignal<AccountSessions>,
     voice_state: BatchedSignal<VoiceState>,
 ) {
@@ -430,7 +429,6 @@ pub(crate) fn start_direct_call_from_active_account(
             },
             vec![request.target_user],
             request.start_video,
-            chat_lists,
             account_sessions,
             voice_state,
         );

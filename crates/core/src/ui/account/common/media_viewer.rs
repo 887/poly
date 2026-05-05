@@ -26,7 +26,6 @@ pub struct MessageMediaViewerOverlayProps {
 #[component]
 pub fn MessageMediaViewerOverlay(props: MessageMediaViewerOverlayProps) -> Element {
     let chat_view_state: BatchedSignal<ChatViewState> = use_context();
-    let app_state: BatchedSignal<AppState> = use_context();
     let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
     let nav = navigator();
     let mut zoom = use_signal(|| 1.0_f32);

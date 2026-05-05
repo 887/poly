@@ -354,6 +354,19 @@ ones (smaller signal subscriptions = less re-render churn).
 - [x] **G.6g.3** Delete `ChatData` struct + `impl ChatData` from `state/chat_data.rs`; updated module-level doc. Removed `pub use chat_data::ChatData` from `state.rs`. `mod chat_data` retained for `user_color`, `backend_badge`, `format_file_size`, `VoiceMediaSettings` helpers still consumed by ~15 call sites.
 - [x] **G.6g.4** Verify: `cargo check -p poly-core` clean (106 warnings, 0 errors); `cargo check --target wasm32-unknown-unknown` clean; `cargo test -p poly-core` 257 passed, 0 failed. Zero `\bChatData\b` type references in `crates/` (all remaining occurrences are in comments or `todo!` string literals fixed in G.6h).
 
+### Phase G.6i — orphaned use_context preamble cleanup — shipped in commit `<pending-6i>`
+
+Deleted 102 orphaned `let X = use_context()` (and equivalent) bindings left by the G.6a–G.6h ChatData → sub-signal migrations. Files touched span 46 files across `crates/core/src/ui/`. For function parameters (e.g. `app_state` in `load_older_messages`, `chat_lists` in `activate_existing_or_new_call`), the parameter was removed from both the function signature and all call sites.
+
+- [x] **G.6i.1** Delete orphaned `use_context` preambles in `thread_view.rs` (13 bindings across 5 functions: `ViewThreadButton`, `ActiveThreadsBar`, `ThreadList`, `ThreadSummaryPanel`, `ThreadsView`).
+- [x] **G.6i.2** Delete orphaned binding in `header.rs` (chat_view): remove `app_state` param from `render_search_tab_button` + fix 2 call sites in `header.rs` and `mod.rs`.
+- [x] **G.6i.3** Delete orphaned bindings in `context_menu/menus.rs` and `context_menu/host.rs` (3 lines).
+- [x] **G.6i.4** Delete orphaned bindings in `chat_view/mod.rs` (7 sites: unused param in `load_older_messages`, `load_newer_messages`, `maybe_send_real_typing`; local bindings in `render_mobile_chat_header_right_toggle`, `TypingModeButton`, emoji closure, line 2307).
+- [x] **G.6i.5** Delete orphaned bindings in `main_layout.rs` (4 bindings: `app_state`, `nav`, `ui_layout`, `user_prefs`).
+- [x] **G.6i.6** Delete orphaned bindings in `channel_list.rs` (26 bindings across 8 functions).
+- [x] **G.6i.7** Delete orphaned bindings in remaining 40 files (account_server_bar, account_switcher, avatar_context_menu, channel_context_menu, dm_context_menu, utility_rail, effects/mobile_side_column, effects/composer_focus, effects/search_messages, effects/pinned_messages, effects/command_preload, conversation_search_view, direct_call_overlay, discord_forum_view, dm_user_sidebar, forum_view, friends_panel, media_viewer, new_conversation_view, overview_sidebar, user_sidebar, voice_view, account/server/context_menu, account/server/settings, client_ui/sidebar/communities, client_ui/sidebar/feed, client_ui/sidebar/repo_tree, client_ui/view/card_body, client_ui/view/list_body, client_ui/view/split_body, dialogs/ban_member, dialogs/edit_channel, dialogs/kick_member, dialogs/timeout_member, routes.rs, search.rs, settings/general.rs, settings.rs, voice_banner.rs, direct_call.rs).
+- [x] **G.6i.8** Verify: zero `unused variable: \`(app_state|nav|ui_overlays|ui_layout|user_prefs)\`` warnings; zero Rust compile errors; zero new unused import warnings.
+
 ### Phase H — `ClientBackend` capability sub-traits (~1 month, long-horizon)
 
 Gated on Phase B (capabilities single-source) + Phase D (with_backend)

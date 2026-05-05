@@ -33,7 +33,6 @@ use poly_ui_macros::{context_menu, ui_action};
 #[context_menu(inherit)]
 #[component]
 pub fn DmContextMenuInner(menu: DmContextMenuState, close: EventHandler<()>) -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
     let nav_state: BatchedSignal<NavState> = use_context();
     let ui_overlays: BatchedSignal<UiOverlays> = use_context();
     let chat_lists: BatchedSignal<ChatLists> = use_context();

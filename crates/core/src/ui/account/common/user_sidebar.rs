@@ -108,7 +108,6 @@ fn HighlightedName(name: String, query: String) -> Element {
 #[component]
 pub fn UserSidebar() -> Element {
     let chat_view_state: BatchedSignal<ChatViewState> = use_context();
-    let app_state: BatchedSignal<AppState> = use_context();
     let ui_overlays: BatchedSignal<UiOverlays> = use_context();
     let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
     let members = chat_view_state.read().members.clone(); // poly-lint: allow render-time-read — render snapshot; subscription intentional

@@ -334,7 +334,6 @@ fn SettingsNavigation(
 ) -> Element {
     let filter = search_text.read().to_lowercase();
     let active_plugin = active_plugin_slug.read().clone();
-    let app_state: BatchedSignal<AppState> = use_context();
     let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
     let client_manager: BatchedSignal<crate::client_manager::ClientManager> = use_context();
     // Snapshot the registered plugin settings pages so we don't hold the read
@@ -565,7 +564,6 @@ fn SettingsAllSections(search_query: String) -> Element {
 #[ui_action(inherit)]
 #[component]
 pub fn SettingsPage() -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
     let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
     let locale_key = crate::i18n::use_locale().read().clone();
     let mut search_text = use_signal(String::new);

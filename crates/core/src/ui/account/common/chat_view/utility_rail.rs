@@ -5,7 +5,7 @@
 //! `SearchResultCard`, `PinnedMessageCard`, `ChatSettingsPanel`, `SearchPreviewText`.
 
 use crate::i18n::t;
-use crate::state::{AppState, BatchedSignal};
+use crate::state::BatchedSignal;
 use dioxus::prelude::*;
 use poly_client::{Message, MessageContent, MessageSearchHit};
 use poly_ui_macros::{context_menu, ui_action};
@@ -181,7 +181,6 @@ pub(super) fn ChatUtilityRail(
             } else if panel == ChatUtilityPanel::Drafts {
                 // B.5 — Pending drafts across all chats for the active account.
                 {
-                    let rail_app_state: BatchedSignal<AppState> = use_context();
                     let active_account_id = rail_nav.read().active_account_id
                         .as_deref()
                         .unwrap_or("")
@@ -200,7 +199,6 @@ pub(super) fn ChatUtilityRail(
                 // wing-takeover used to mount, just rendered inside the
                 // utility-rail tab so Search/Members/etc remain accessible.
                 {
-                    let rail_app_state: BatchedSignal<AppState> = use_context();
                     let active_account_id = rail_nav.read().active_account_id
                         .as_deref()
                         .unwrap_or("")
@@ -372,7 +370,6 @@ fn SearchPreviewText(text: String, search_terms: Vec<String>) -> Element {
 #[component]
 fn ChatSettingsPanel(mut notifications_muted: Signal<bool>) -> Element {
     use crate::ui::settings::common::{PolySelect, SelectOption};
-    let app_state: BatchedSignal<AppState> = use_context();
     let user_prefs: BatchedSignal<crate::state::UserPrefs> = use_context();
     let muted    = *notifications_muted.read();
     let grouping = user_prefs.read().member_list_grouping;

@@ -58,7 +58,6 @@ fn current_page(route: &Route) -> OverviewPage {
 #[context_menu(inherit)]
 #[component]
 pub fn OverviewSidebar() -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
     let nav_state: BatchedSignal<NavState> = use_context();
     let _nav = navigator();
     let route: Route = use_route();

@@ -39,7 +39,6 @@ pub fn EditChannelDialog(
     let show_slowmode = backend_slug != "teams";
 
     let client_manager: BatchedSignal<ClientManager> = use_context();
-    let app_state: BatchedSignal<AppState> = use_context();
     let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
 
     rsx! {

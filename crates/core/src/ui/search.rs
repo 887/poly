@@ -552,7 +552,6 @@ pub fn SearchPage(
     /// When `None`, all accounts start enabled (global search).
     locked_account_id: Option<String>,
 ) -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
     let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
     let chat_lists: BatchedSignal<ChatLists> = use_context();
     let account_sessions: BatchedSignal<AccountSessions> = use_context();

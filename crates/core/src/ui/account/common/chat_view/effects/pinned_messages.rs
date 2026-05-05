@@ -5,7 +5,6 @@ use super::super::signals::ChatViewSignals;
 use super::super::ChatUtilityPanel;
 
 pub(in super::super) fn use_pinned_messages_effect(signals: &ChatViewSignals) {
-    let app_state = signals.app_state;
     let nav = signals.nav;
     let client_manager = signals.client_manager;
     let mut pinned_messages = signals.pinned_messages;

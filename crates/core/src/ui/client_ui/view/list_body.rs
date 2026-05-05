@@ -339,7 +339,6 @@ pub fn ListBody(
 #[context_menu(inherit)]
 #[component]
 pub fn ListBodyRow(row: ViewRow, on_click: EventHandler<String>) -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
     let ui_overlays: BatchedSignal<UiOverlays> = use_context();
     let id = row.id.clone();
     let id_for_click = id.clone();

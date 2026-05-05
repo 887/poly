@@ -85,7 +85,6 @@ fn is_media_channel(ch: &Channel) -> bool {
 #[context_menu(None)]
 #[component]
 pub fn DiscordForumView() -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
     let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
     let chat_view_state: BatchedSignal<ChatViewState> = use_context();
     let chat_lists: BatchedSignal<ChatLists> = use_context();

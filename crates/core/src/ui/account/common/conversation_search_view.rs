@@ -168,7 +168,6 @@ fn ConversationTypeFilters(enabled_types: Signal<std::collections::HashSet<Strin
 #[context_menu(inherit)]
 #[component]
 pub fn ConversationSearchView() -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
     let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
     let chat_lists: BatchedSignal<ChatLists> = use_context();
     let account_sessions: BatchedSignal<AccountSessions> = use_context();

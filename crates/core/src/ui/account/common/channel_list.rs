@@ -403,11 +403,7 @@ pub(crate) fn open_direct_message_from_active_account(
 #[ui_action(ChannelListAction)]
 #[component]
 pub fn ChannelList() -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
     let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
-    let ui_layout: crate::state::BatchedSignal<crate::state::UiLayout> = use_context();
-    let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
-    let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
     let chat_view_state: BatchedSignal<ChatViewState> = use_context();
     let current_view = *nav.read().view;
     let current_server = chat_view_state.read().current_server.clone(); // poly-lint: allow render-time-read — render snapshot for conditional rendering; subscription intentional
@@ -460,11 +456,7 @@ fn ServerBanner(
     current_server: Option<Server>,
     visible_category_ids: Signal<Vec<String>>,
 ) -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
     let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
-    let ui_layout: crate::state::BatchedSignal<crate::state::UiLayout> = use_context();
-    let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
-    let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
     let mut dropdown_open = use_signal(|| false);
     let mut channels_roles_open = use_signal(|| false);
 
@@ -647,11 +639,7 @@ fn ServerBanner(
 #[ui_action(inherit)]
 #[component]
 fn DMFriendsView() -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
     let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
-    let ui_layout: crate::state::BatchedSignal<crate::state::UiLayout> = use_context();
-    let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
-    let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
     let chat_lists: BatchedSignal<ChatLists> = use_context();
     let account_sessions: BatchedSignal<AccountSessions> = use_context();
 
@@ -818,10 +806,7 @@ fn DMFriendsView() -> Element {
 #[ui_action(inherit)]
 #[component]
 fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
     let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
-    let ui_layout: crate::state::BatchedSignal<crate::state::UiLayout> = use_context();
-    let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
     let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
     let _client_manager: BatchedSignal<ClientManager> = use_context();
     let chat_lists: BatchedSignal<ChatLists> = use_context();
@@ -1136,11 +1121,9 @@ fn DMChannelItem(
 ) -> Element {
     use crate::state::chat_data::user_color;
     use poly_client::PresenceStatus;
-    let app_state: BatchedSignal<AppState> = use_context();
     let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
     let ui_layout: crate::state::BatchedSignal<crate::state::UiLayout> = use_context();
     let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
-    let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let chat_view_state: BatchedSignal<ChatViewState> = use_context();
     let chat_lists: BatchedSignal<ChatLists> = use_context();
@@ -1312,11 +1295,8 @@ fn GroupChannelItem(
     /// Instance ID for federated routing (e.g. `"demo"`, `"matrix.org"`).
     instance_id: String,
 ) -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
     let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
-    let ui_layout: crate::state::BatchedSignal<crate::state::UiLayout> = use_context();
     let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
-    let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
     let chat_lists: BatchedSignal<ChatLists> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let chat_view_state: BatchedSignal<ChatViewState> = use_context();
@@ -1449,11 +1429,7 @@ fn GroupChannelItem(
 fn FriendItem(display_name: String, user_id: String) -> Element {
     use crate::state::chat_data::user_color;
 
-    let app_state: BatchedSignal<AppState> = use_context();
     let nav_state: crate::state::BatchedSignal<crate::state::NavState> = use_context();
-    let ui_layout: crate::state::BatchedSignal<crate::state::UiLayout> = use_context();
-    let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
-    let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
     let account_sessions: BatchedSignal<AccountSessions> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let chat_lists: BatchedSignal<ChatLists> = use_context();
@@ -1538,9 +1514,7 @@ fn CategorySection(
 fn ChannelItemRow(channel: Channel) -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
     let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
-    let ui_layout: crate::state::BatchedSignal<crate::state::UiLayout> = use_context();
     let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
-    let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
     let chat_lists: BatchedSignal<ChatLists> = use_context();
     let voice_state: BatchedSignal<VoiceState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();

@@ -162,9 +162,7 @@ impl UiAction for ForumViewAction {
 #[context_menu(None)]
 #[component]
 pub fn ForumView() -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
     let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
-    let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
     let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
     let chat_lists: BatchedSignal<ChatLists> = use_context();
     let chat_view_state: BatchedSignal<crate::state::ChatViewState> = use_context();
@@ -376,9 +374,6 @@ pub fn ForumPostView(channel_id: String, post_id: String) -> Element {
     let chat_lists: BatchedSignal<ChatLists> = use_context();
     let chat_view_state: BatchedSignal<crate::state::ChatViewState> = use_context();
     let app_state: BatchedSignal<AppState> = use_context();
-    let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
-    let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
-    let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
     let nav: BatchedSignal<crate::state::NavState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let voice_state: BatchedSignal<VoiceState> = use_context();
@@ -638,10 +633,7 @@ fn ForumThreadView(post: Message, comments: Vec<Message>, loading: bool) -> Elem
 #[rustfmt::skip]
 #[component]
 fn ForumComment(node: ForumCommentNode) -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
-    let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
     let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
-    let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
     let msg = &node.msg;
     let depth = node.depth;
     let children = node.children.clone();

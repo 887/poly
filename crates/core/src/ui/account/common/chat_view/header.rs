@@ -223,7 +223,6 @@ pub(super) fn ChatHeaderActions(
                         false,
                         is_group_channel,
                         is_dm_channel,
-                        app_state,
                         ui_layout,
                     )
                 }
@@ -456,7 +455,6 @@ pub(super) fn render_search_tab_button(
     mobile_tools: bool,
     is_group_channel: bool,
     is_dm_channel: bool,
-    app_state: BatchedSignal<AppState>,
     ui_layout: crate::state::BatchedSignal<crate::state::UiLayout>,
 ) -> Element {
     let active = *utility_panel.read() == Some(ChatUtilityPanel::Search);

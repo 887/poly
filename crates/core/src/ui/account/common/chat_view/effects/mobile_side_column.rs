@@ -4,7 +4,6 @@ use super::super::markup_ctx::ChatViewMarkupCtx;
 use super::super::sync_mobile_side_column_open;
 
 pub(in super::super) fn use_mobile_side_column_effect(signals: &ChatViewSignals, ctx: &ChatViewMarkupCtx) {
-    let app_state = signals.app_state;
     let ui_layout = signals.ui_layout;
     let utility_panel = signals.utility_panel;
     let is_dm_channel = ctx.is_dm_channel;

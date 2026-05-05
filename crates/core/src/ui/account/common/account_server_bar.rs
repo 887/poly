@@ -778,7 +778,6 @@ fn AccountBarDiscoverButton(
 #[context_menu(inherit)]
 #[component]
 fn CreateServerButton(account_id: String) -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
     let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
     let backend_slug = nav
         .read()

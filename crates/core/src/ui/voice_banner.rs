@@ -291,7 +291,6 @@ fn VoiceBannerControls(
 #[component]
 pub fn VoiceBanner() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
-    let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
     let voice_state: BatchedSignal<VoiceState> = use_context();
 
     let voice_conn = voice_state.read().voice_connection.clone();

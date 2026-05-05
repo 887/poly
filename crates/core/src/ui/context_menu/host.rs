@@ -59,7 +59,6 @@ fn lookup(menu_type: &str) -> Option<RenderFn> {
 #[context_menu(None)]
 #[component]
 pub fn ContextMenuStack() -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
     let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
     let stack = ui_overlays.read().context_menu_stack.clone();
 
@@ -89,7 +88,6 @@ pub fn ContextMenuStack() -> Element {
 #[context_menu(None)]
 #[component]
 fn ContextMenuStackEntry(entry: ActiveContextMenu, depth: usize, is_mobile: bool) -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
     let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
 
     let menu_id = entry.id;

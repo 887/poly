@@ -4,7 +4,6 @@ use crate::state::use_spawn_once;
 use super::super::signals::ChatViewSignals;
 
 pub(in super::super) fn use_command_preload_effect(signals: &ChatViewSignals, channel_id: &Option<String>) {
-    let app_state = signals.app_state;
     let nav = signals.nav;
     let client_manager = signals.client_manager;
     let mut command_suggestions = signals.command_suggestions;

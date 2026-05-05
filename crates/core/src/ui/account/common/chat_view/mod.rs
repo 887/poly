@@ -704,7 +704,6 @@ fn spawn_message_list_scroll_work(mut ctx: MessageListScrollWorkCtx) {
             {
                 ctx.history_state.batch(|h| h.loading_before = true);
                 load_older_messages(
-                    ctx.app_state,
                     ctx.nav,
                     ctx.client_manager,
                     ctx.chat_view_state,
@@ -720,7 +719,6 @@ fn spawn_message_list_scroll_work(mut ctx: MessageListScrollWorkCtx) {
             {
                 ctx.history_state.batch(|h| h.loading_after = true);
                 load_newer_messages(
-                    ctx.app_state,
                     ctx.nav,
                     ctx.client_manager,
                     ctx.chat_view_state,
@@ -953,7 +951,6 @@ fn close_chat_side_column_state(
 // lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
 #[allow(clippy::needless_pass_by_value)]
 fn render_mobile_chat_header_right_toggle(ctx: ChatViewMarkupCtx) -> Element {
-    let app_state = ctx.app_state;
     let nav_state = ctx.nav;
     let ui_overlays = ctx.ui_overlays;
     let ui_layout = ctx.ui_layout;
@@ -1275,7 +1272,6 @@ fn render_message_list_loading_overlays(ctx: ChatViewMarkupCtx) -> Element {
 }
 
 async fn load_older_messages(
-    app_state: BatchedSignal<AppState>,
     nav: BatchedSignal<crate::state::NavState>,
     client_manager: BatchedSignal<ClientManager>,
     chat_view_state: BatchedSignal<ChatViewState>,
@@ -1374,7 +1370,6 @@ async fn load_older_messages(
 }
 
 async fn load_newer_messages(
-    app_state: BatchedSignal<AppState>,
     nav: BatchedSignal<crate::state::NavState>,
     client_manager: BatchedSignal<ClientManager>,
     chat_view_state: BatchedSignal<ChatViewState>,
@@ -1634,7 +1629,7 @@ fn render_jump_to_present(ctx: ChatViewMarkupCtx) -> Element {
                     if history_state.read().has_more_after && !history_state.read().loading_after {
                         history_state.batch(|h| h.loading_after = true);
                         spawn(async move {
-                            load_newer_messages(app_state, nav, client_manager, chat_view_state, history_state).await;
+                            load_newer_messages(nav, client_manager, chat_view_state, history_state).await;
                             // RAF-deferred so it runs after Dioxus applies the new messages to the DOM.
                             request_scroll_to_bottom_deferred();
                         });
@@ -2182,7 +2177,6 @@ fn render_message_input_row(ctx: ChatViewMarkupCtx) -> Element {
                                     maybe_send_real_typing(
                                         real_typing_channel.clone(),
                                         typing_send_in_flight,
-                                        app_state,
                                         nav,
                                         client_manager,
                                     );
@@ -2237,7 +2231,6 @@ fn render_composer_toolbar(
 fn maybe_send_real_typing(
     channel_id: Option<String>,
     mut in_flight: Signal<bool>,
-    app_state: BatchedSignal<AppState>,
     nav: BatchedSignal<crate::state::NavState>,
     client_manager: BatchedSignal<ClientManager>,
 ) {
@@ -2304,7 +2297,6 @@ impl TypingMode {
 #[context_menu(none)]
 #[component]
 fn TypingModeButton(mut typing_mode: Signal<TypingMode>) -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
     let nav: BatchedSignal<crate::state::NavState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let mode = *typing_mode.read();
@@ -2620,11 +2612,9 @@ fn render_input_emoji_picker(ctx: ChatViewMarkupCtx) -> Element {
     // Hooks must be called before any early return for stable hook ordering.
     // Load custom emojis for the current channel on mount.
     let custom_emojis = use_signal(Vec::<poly_client::CustomEmoji>::new);
-    let app_state_for_emoji = ctx.app_state;
     use_reactive_effect(channel_id.clone(), move |channel_id| {
         let mut custom_emojis = custom_emojis;
         let client_manager = client_manager;
-        let app_state = app_state_for_emoji;
         spawn(async move {
             let Some(ref cid) = channel_id else { return };
             let Some(account_id) = nav.peek().active_account_id.cloned() else { return };
@@ -2779,7 +2769,6 @@ fn render_chat_tools_panel(ctx: ChatViewMarkupCtx) -> Element {
                             true,
                             is_group_channel,
                             is_dm_channel,
-                            app_state,
                             ui_layout,
                         )
                     }

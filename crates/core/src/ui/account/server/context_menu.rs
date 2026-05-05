@@ -38,7 +38,6 @@ use poly_ui_macros::{context_menu, ui_action};
 #[context_menu(inherit)]
 #[component]
 pub fn ServerContextMenuInner(menu: ContextMenuState, close: EventHandler<()>) -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
     let account_sessions: BatchedSignal<AccountSessions> = use_context();
 
     let server_id = menu.server_id.clone();

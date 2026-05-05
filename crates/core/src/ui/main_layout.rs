@@ -356,11 +356,7 @@ pub fn MainLayout() -> Element {
 #[context_menu(none)]
 #[component]
 fn ModerationDialogOverlay() -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
-    let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
-    let ui_layout: crate::state::BatchedSignal<crate::state::UiLayout> = use_context();
     let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
-    let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
     let dialog = ui_overlays.read().active_moderation_dialog.clone();
 
     let on_close = move |_| {
