@@ -3,9 +3,9 @@
 //! Ported from `tools/scripts/forbid-unaudited-persona-tool.sh` (Phase Q.2 of
 //! plan-persona-quality-gates.md).
 //!
-//! Scans `mcp/chat-mcp/src/tools.rs` for every `fn handle_meta_persona_*` and
-//! `fn handle_client_settings_*` function and asserts each calls the appropriate
-//! audit helper at least once in its body.
+//! After J.1 (tools.rs split), scans two files:
+//!   - `mcp/chat-mcp/src/tools/persona.rs`        — `fn handle_meta_persona_*`
+//!   - `mcp/chat-mcp/src/tools/client_settings.rs` — `fn handle_client_settings_*`
 //!
 //! For `handle_meta_persona_*`:
 //!   Acceptable: `audit(mem,` or `record_persona_audit(`
@@ -23,81 +23,86 @@ use crate::allowlist;
 use crate::violation::Violation;
 use crate::walk::WorkspaceWalker;
 
-const TOOLS_FILE: &str = "mcp/chat-mcp/src/tools.rs";
+const PERSONA_TOOLS_FILE: &str = "mcp/chat-mcp/src/tools/persona.rs";
+const CLIENT_SETTINGS_TOOLS_FILE: &str = "mcp/chat-mcp/src/tools/client_settings.rs";
 const RULE: &str = "forbid_unaudited_persona_tool";
 const PERSONA_ALLOWLIST: &str = "tools/scripts/unaudited-persona-tool-allowlist.txt";
 const CLIENT_ALLOWLIST: &str = "tools/scripts/unaudited-client-settings-tool-allowlist.txt";
 
 pub fn scan(_walker: &WorkspaceWalker, ws_root: &Path, violations: &mut Vec<Violation>) {
-    let tools_path = ws_root.join(TOOLS_FILE);
-    if !tools_path.exists() {
-        return;
-    }
-    let Ok(content) = std::fs::read_to_string(&tools_path) else {
-        return;
-    };
-
     let persona_allowlist = load_suffix_allowlist(&ws_root.join(PERSONA_ALLOWLIST));
     let client_allowlist = load_suffix_allowlist(&ws_root.join(CLIENT_ALLOWLIST));
 
-    // Parse the file into functions and check each.
-    let functions = extract_functions(&content);
-
-    for func in &functions {
-        if func.name.starts_with("handle_meta_persona_") {
-            let suffix = func.name["handle_meta_persona_".len()..].to_string();
-            // Check allowlist by suffix.
-            let allow_suffix = format!("_{suffix}");
-            if persona_allowlist.contains(&allow_suffix) || persona_allowlist.contains(&suffix) {
-                continue;
-            }
-            if func.has_inline_allow {
-                continue;
-            }
-            // Check for audit call.
-            let has_audit = func.body.contains("audit(mem,") || func.body.contains("record_persona_audit(");
-            if !has_audit {
-                violations.push(Violation {
-                    rule: RULE.to_string(),
-                    path: TOOLS_FILE.to_string(),
-                    line: func.start_line,
-                    detail: format!(
-                        "`handle_meta_persona_{suffix}` has no audit call — persona class P2. \
-                         Add audit(mem, slug, \"invoke\", ...) or add the suffix to \
-                         tools/scripts/unaudited-persona-tool-allowlist.txt. \
-                         See: docs/plans/plan-persona-quality-gates.md Phase Q.2."
-                    ),
-                });
-            }
-        } else if func.name.starts_with("handle_client_settings_") {
-            let suffix = func.name["handle_client_settings_".len()..].to_string();
-            let allow_suffix = format!("_{suffix}");
-            if client_allowlist.contains(&allow_suffix) || client_allowlist.contains(&suffix) {
-                continue;
-            }
-            if func.has_inline_allow {
-                continue;
-            }
-            // Check for audit call (on non-comment lines).
-            let has_audit = func.body.lines().any(|l| {
-                let trimmed = l.trim_start();
-                if trimmed.starts_with("//") {
-                    return false;
+    // Scan persona.rs for handle_meta_persona_* functions.
+    let persona_path = ws_root.join(PERSONA_TOOLS_FILE);
+    if persona_path.exists() {
+        if let Ok(content) = std::fs::read_to_string(&persona_path) {
+            for func in extract_functions(&content) {
+                if !func.name.starts_with("handle_meta_persona_") {
+                    continue;
                 }
-                l.contains("audit_client_settings(") || l.contains("record_client_settings_audit(")
-            });
-            if !has_audit {
-                violations.push(Violation {
-                    rule: RULE.to_string(),
-                    path: TOOLS_FILE.to_string(),
-                    line: func.start_line,
-                    detail: format!(
-                        "`handle_client_settings_{suffix}` has no audit call — persona class P2. \
-                         Add audit_client_settings(...) or add the suffix to \
-                         tools/scripts/unaudited-client-settings-tool-allowlist.txt. \
-                         See: docs/plans/plan-persona-quality-gates.md Phase Q.2."
-                    ),
+                let suffix = func.name["handle_meta_persona_".len()..].to_string();
+                let allow_suffix = format!("_{suffix}");
+                if persona_allowlist.contains(&allow_suffix) || persona_allowlist.contains(&suffix) {
+                    continue;
+                }
+                if func.has_inline_allow {
+                    continue;
+                }
+                let has_audit = func.body.contains("audit(mem,") || func.body.contains("record_persona_audit(");
+                if !has_audit {
+                    violations.push(Violation {
+                        rule: RULE.to_string(),
+                        path: PERSONA_TOOLS_FILE.to_string(),
+                        line: func.start_line,
+                        detail: format!(
+                            "`handle_meta_persona_{suffix}` has no audit call — persona class P2. \
+                             Add audit(mem, slug, \"invoke\", ...) or add the suffix to \
+                             tools/scripts/unaudited-persona-tool-allowlist.txt. \
+                             See: docs/plans/plan-persona-quality-gates.md Phase Q.2."
+                        ),
+                    });
+                }
+            }
+        }
+    }
+
+    // Scan client_settings.rs for handle_client_settings_* functions.
+    let client_path = ws_root.join(CLIENT_SETTINGS_TOOLS_FILE);
+    if client_path.exists() {
+        if let Ok(content) = std::fs::read_to_string(&client_path) {
+            for func in extract_functions(&content) {
+                if !func.name.starts_with("handle_client_settings_") {
+                    continue;
+                }
+                let suffix = func.name["handle_client_settings_".len()..].to_string();
+                let allow_suffix = format!("_{suffix}");
+                if client_allowlist.contains(&allow_suffix) || client_allowlist.contains(&suffix) {
+                    continue;
+                }
+                if func.has_inline_allow {
+                    continue;
+                }
+                let has_audit = func.body.lines().any(|l| {
+                    let trimmed = l.trim_start();
+                    if trimmed.starts_with("//") {
+                        return false;
+                    }
+                    l.contains("audit_client_settings(") || l.contains("record_client_settings_audit(")
                 });
+                if !has_audit {
+                    violations.push(Violation {
+                        rule: RULE.to_string(),
+                        path: CLIENT_SETTINGS_TOOLS_FILE.to_string(),
+                        line: func.start_line,
+                        detail: format!(
+                            "`handle_client_settings_{suffix}` has no audit call — persona class P2. \
+                             Add audit_client_settings(...) or add the suffix to \
+                             tools/scripts/unaudited-client-settings-tool-allowlist.txt. \
+                             See: docs/plans/plan-persona-quality-gates.md Phase Q.2."
+                        ),
+                    });
+                }
             }
         }
     }
