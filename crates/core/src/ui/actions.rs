@@ -49,11 +49,15 @@ pub trait UiAction: Sized + 'static {
 
 /// Dispatch a typed action from a Dioxus event handler.
 ///
+/// Acquires `app_state` via `.batch()` so the action can mutate `AppState`
+/// if it needs to, while also being correct for actions that use
+/// `try_consume_context` (e.g. `VoiceBannerAction`).
+///
 /// # Example
 /// ```ignore
-/// let mut app_state = use_context::<BatchedSignal<AppState>>();
+/// let app_state = use_context::<BatchedSignal<AppState>>();
 /// let nav_state = use_context::<BatchedSignal<NavState>>();
-/// let nav = use_navigator();
+/// let nav = navigator();
 /// onclick: move |_| dispatch_action!(MyAction::Save, app_state, nav_state, nav),
 /// ```
 #[macro_export]
@@ -61,10 +65,15 @@ macro_rules! dispatch_action {
     ($action:expr, $state:expr, $nav_state:expr, $nav:expr) => {{
         fn _assert_ui_action<T: $crate::ui::actions::UiAction>(_: &T) {}
         _assert_ui_action(&$action);
-        $action.apply($crate::ui::actions::ActionCx::live(
-            &mut $state.write(),
-            &*$nav_state.read(),
-            $nav.clone(),
-        ));
+        let _action = $action;
+        let _nav_snap = $nav_state.peek().clone();
+        let _nav_val = $nav.clone();
+        $state.batch(move |state| {
+            _action.apply($crate::ui::actions::ActionCx::live(
+                state,
+                &_nav_snap,
+                _nav_val,
+            ));
+        });
     }};
 }

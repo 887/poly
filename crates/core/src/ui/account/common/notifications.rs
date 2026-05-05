@@ -15,7 +15,7 @@
 use crate::state::BatchedSignal;
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
-use crate::state::{AccountSessions, ChatLists};
+use crate::state::{AccountSessions, AppState, ChatLists, NavState};
 use crate::state::chat_data::backend_badge;
 use crate::ui::account::common::VoiceAccountFooter;
 use crate::ui::actions::{ActionCx, UiAction};
@@ -50,11 +50,11 @@ pub enum NotificationsViewAction {
 impl UiAction for NotificationsViewAction {
     fn apply(self, cx: ActionCx<'_>) {
         match self {
-            Self::SetFilter(_filter) => {
-                // SetFilter targets a component-local Signal<NotificationMenuFilter> that cannot
-                // be reached via context. The inline onclick handler in NotificationsView is the
-                // authoritative path for this action; this action variant is kept for completeness
-                // but is a no-op when dispatched through the action system.
+            Self::SetFilter(filter) => {
+                // NotificationsView provides kind_filter via context so SetFilter can update it.
+                if let Some(mut sig) = dioxus::prelude::try_consume_context::<Signal<NotificationMenuFilter>>() {
+                    sig.set(filter);
+                }
             }
             Self::MarkAllRead => {
                 // Mark all notifications as read for the active account by removing them from
@@ -273,7 +273,10 @@ pub(crate) fn filters_for_backend(slug: &str, caps: poly_client::BackendCapabili
 pub fn NotificationsView(account_id: String, backend_slug: String) -> Element {
     let chat_lists: BatchedSignal<ChatLists> = use_context();
     let account_sessions: BatchedSignal<AccountSessions> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
+    let nav_state: BatchedSignal<NavState> = use_context();
     let mut kind_filter = use_signal(|| NotificationMenuFilter::All);
+    use_context_provider(|| kind_filter);
     let notifications = chat_lists.read().notifications.iter()
         .filter(|n| n.account_id == account_id)
         .cloned()
@@ -355,15 +358,7 @@ pub fn NotificationsView(account_id: String, backend_slug: String) -> Element {
                     if total_count > 0 {
                         button {
                             class: "special-page-sidebar-button",
-                            onclick: move |_| {
-                                let active_kind = *kind_filter.read();
-                                let aid = account_id.clone();
-                                chat_lists.batch(move |cl| {
-                                    cl.notifications.retain(|n| {
-                                        !(n.account_id == aid && active_kind.matches(&n.kind))
-                                    });
-                                });
-                            },
+                            onclick: move |_| crate::dispatch_action!(NotificationsViewAction::MarkAllRead, app_state, nav_state, navigator()),
                             "{notifications_mark_read}"
                         }
                     }
@@ -459,9 +454,6 @@ fn NotificationFilter(
 #[ui_action(inherit)]
 #[component]
 fn NotificationList(notifications: Vec<poly_client::Notification>) -> Element {
-    let chat_lists: BatchedSignal<ChatLists> = use_context();
-    let client_manager: BatchedSignal<ClientManager> = use_context();
-
     rsx! {
         div { class: "notification-list",
             if notifications.is_empty() {
@@ -484,8 +476,6 @@ fn NotificationList(notifications: Vec<poly_client::Notification>) -> Element {
                                 badge: badge.to_string(),
                                 preview,
                                 time_ago,
-                                chat_lists,
-                                client_manager,
                             }
                         }
                     }
@@ -507,10 +497,9 @@ fn NotificationItemContent(
     badge: String,
     preview: String,
     time_ago: String,
-    chat_lists: BatchedSignal<ChatLists>,
-    client_manager: BatchedSignal<ClientManager>,
 ) -> Element {
-    let account_sessions: BatchedSignal<AccountSessions> = use_context();
+    let app_state: BatchedSignal<AppState> = use_context();
+    let nav_state: BatchedSignal<NavState> = use_context();
     let (kind_icon, kind_label) = match &kind {
         NotificationKind::Mention { .. } => ("💬", "Mention"),
         NotificationKind::FriendRequest { .. } => ("👤", "Friend Request"),
@@ -519,10 +508,6 @@ fn NotificationItemContent(
         NotificationKind::ReauthRequired { .. } => ("🔑", "Reconnect"),
         NotificationKind::Other(_) => ("🔔", "Notification"),
     };
-
-    let dismiss_id = notif_id.clone();
-    let accept_id = notif_id.clone();
-    let mark_id = notif_id.clone();
 
     rsx! {
         div { class: "notification-icon", "{kind_icon}" }
@@ -538,172 +523,115 @@ fn NotificationItemContent(
                 match &kind {
                     NotificationKind::FriendRequest { from_user_id } => {
                         let user_id = from_user_id.clone();
+                        let nid_accept = notif_id.clone();
+                        let nid_deny = notif_id.clone();
                         rsx! {
                             button {
                                 class: "btn btn-success btn-sm notif-action-accept",
                                 onclick: {
                                     let uid = user_id.clone();
-                                    let nid = accept_id.clone();
-                                    let aid = account_id.clone();
-                                    let cm = client_manager;
-                                    move |_| {
-                                        {
-                                            let nid_c = nid.clone();
-                                            chat_lists.batch(move |cl| cl.notifications.retain(|n| n.id != nid_c));
-                                        }
-                                        let uid = uid.clone();
-                                        let nid = nid.clone();
-                                        let aid = aid.clone();
-                                        let chat_lists = chat_lists;
-                                        spawn(async move {
-                                            handle_friend_request_action(
-                                                cm,
-                                                chat_lists,
-                                                aid,
-                                                uid,
-                                                nid,
-                                                true,
-                                            )
-                                            .await;
-                                        });
-                                    }
+                                    let nid = nid_accept.clone();
+                                    move |_| crate::dispatch_action!(
+                                        NotificationsViewAction::AcceptFriendRequest { notif_id: nid.clone(), user_id: uid.clone() },
+                                        app_state, nav_state, navigator()
+                                    )
                                 },
                                 "{t(\"notifications-accept\")}"
                             }
                             button {
                                 class: "btn btn-ghost btn-sm notif-action-deny",
                                 onclick: {
-                                    let nid = dismiss_id.clone();
                                     let uid = user_id.clone();
-                                    let aid = account_id.clone();
-                                    let cm = client_manager;
-                                    move |_| {
-                                        {
-                                            let nid_c = nid.clone();
-                                            chat_lists.batch(move |cl| cl.notifications.retain(|n| n.id != nid_c));
-                                        }
-                                        let uid = uid.clone();
-                                        let nid = nid.clone();
-                                        let aid = aid.clone();
-                                        let chat_lists = chat_lists;
-                                        spawn(async move {
-                                            handle_friend_request_action(
-                                                cm,
-                                                chat_lists,
-                                                aid,
-                                                uid,
-                                                nid,
-                                                false,
-                                            )
-                                            .await;
-                                        });
-                                    }
+                                    let nid = nid_deny.clone();
+                                    move |_| crate::dispatch_action!(
+                                        NotificationsViewAction::DenyFriendRequest { notif_id: nid.clone(), user_id: uid.clone() },
+                                        app_state, nav_state, navigator()
+                                    )
                                 },
                                 "{t(\"notifications-deny\")}"
                             }
                         }
                     }
                     NotificationKind::ServerInvite { .. } => {
+                        let nid_accept = notif_id.clone();
+                        let nid_deny = notif_id.clone();
                         rsx! {
                             button {
                                 class: "btn btn-success btn-sm notif-action-accept",
                                 onclick: {
-                                    let nid = accept_id.clone();
-                                    move |_| {
-                                        {
-                                            let nid_c = nid.clone();
-                                            chat_lists.batch(move |cl| cl.notifications.retain(|n| n.id != nid_c));
-                                        }
-                                    }
+                                    let nid = nid_accept.clone();
+                                    move |_| crate::dispatch_action!(
+                                        NotificationsViewAction::AcceptServerInvite(nid.clone()),
+                                        app_state, nav_state, navigator()
+                                    )
                                 },
                                 "{t(\"notifications-accept\")}"
                             }
                             button {
                                 class: "btn btn-ghost btn-sm notif-action-deny",
                                 onclick: {
-                                    let nid = dismiss_id.clone();
-                                    move |_| {
-                                        {
-                                            let nid_c = nid.clone();
-                                            chat_lists.batch(move |cl| cl.notifications.retain(|n| n.id != nid_c));
-                                        }
-                                    }
+                                    let nid = nid_deny.clone();
+                                    move |_| crate::dispatch_action!(
+                                        NotificationsViewAction::Dismiss(nid.clone()),
+                                        app_state, nav_state, navigator()
+                                    )
                                 },
                                 "{t(\"notifications-decline\")}"
                             }
                         }
                     }
-                    NotificationKind::VoiceChannelInvite { channel_name, .. } => {
-                        let _ch_name = channel_name.clone();
+                    NotificationKind::VoiceChannelInvite { .. } => {
+                        let nid_join = notif_id.clone();
+                        let nid_dismiss = notif_id.clone();
                         rsx! {
                             button {
                                 class: "btn btn-success btn-sm notif-action-join",
                                 onclick: {
-                                    let nid = accept_id.clone();
-                                    move |_| {
-                                        {
-                                            let nid_c = nid.clone();
-                                            chat_lists.batch(move |cl| cl.notifications.retain(|n| n.id != nid_c));
-                                        }
-                                    }
+                                    let nid = nid_join.clone();
+                                    move |_| crate::dispatch_action!(
+                                        NotificationsViewAction::Dismiss(nid.clone()),
+                                        app_state, nav_state, navigator()
+                                    )
                                 },
                                 "{t(\"notifications-join-voice\")}"
                             }
                             button {
                                 class: "btn btn-ghost btn-sm notif-action-deny",
                                 onclick: {
-                                    let nid = dismiss_id.clone();
-                                    move |_| {
-                                        {
-                                            let nid_c = nid.clone();
-                                            chat_lists.batch(move |cl| cl.notifications.retain(|n| n.id != nid_c));
-                                        }
-                                    }
+                                    let nid = nid_dismiss.clone();
+                                    move |_| crate::dispatch_action!(
+                                        NotificationsViewAction::Dismiss(nid.clone()),
+                                        app_state, nav_state, navigator()
+                                    )
                                 },
                                 "{t(\"notifications-dismiss\")}"
                             }
                         }
                     }
-                    NotificationKind::ReauthRequired { backend_slug } => {
-                        let slug = backend_slug.clone();
+                    NotificationKind::ReauthRequired { .. } => {
                         let aid = account_id.clone();
-                        let nid = dismiss_id.clone();
-                        let instance_id = account_sessions
-                            .read()
-                            .account_sessions
-                            .get(&aid)
-                            .map(|s| s.instance_id.clone())
-                            .unwrap_or_default();
                         rsx! {
                             button {
                                 class: "btn btn-warning btn-sm notif-action-reauth",
-                                onclick: move |_| {
-                                    {
-                                            let nid_c = nid.clone();
-                                            chat_lists.batch(move |cl| cl.notifications.retain(|n| n.id != nid_c));
-                                        }
-                                    navigator().push(super::super::super::routes::Route::ReauthAccount {
-                                        backend: slug.clone(),
-                                        instance_id: instance_id.clone(),
-                                        account_id: aid.clone(),
-                                    });
-                                },
+                                onclick: move |_| crate::dispatch_action!(
+                                    NotificationsViewAction::Reauth(aid.clone()),
+                                    app_state, nav_state, navigator()
+                                ),
                                 "{t(\"notifications-reconnect\")}"
                             }
                         }
                     }
                     NotificationKind::Mention { .. } | NotificationKind::Other(_) => {
+                        let nid = notif_id.clone();
                         rsx! {
                             button {
                                 class: "btn btn-ghost btn-sm notif-action-read",
                                 onclick: {
-                                    let nid = mark_id.clone();
-                                    move |_| {
-                                        {
-                                            let nid_c = nid.clone();
-                                            chat_lists.batch(move |cl| cl.notifications.retain(|n| n.id != nid_c));
-                                        }
-                                    }
+                                    let nid = nid.clone();
+                                    move |_| crate::dispatch_action!(
+                                        NotificationsViewAction::Dismiss(nid.clone()),
+                                        app_state, nav_state, navigator()
+                                    )
                                 },
                                 "{t(\"notifications-mark-read\")}"
                             }

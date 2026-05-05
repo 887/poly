@@ -154,17 +154,11 @@ fn VoiceBannerParticipants(
 #[ui_action(inherit)]
 #[component]
 fn VoiceBannerChannelLink(
-    channel_id: String,
-    server_id: String,
     channel_name: String,
     server_name: String,
-    backend_slug: String,
-    instance_id: String,
-    account_id: String,
     connection_kind: VoiceConnectionKind,
-    dm_id: Option<String>,
-    app_state: BatchedSignal<AppState>,
 ) -> Element {
+    let app_state: BatchedSignal<AppState> = use_context();
     let nav_state: BatchedSignal<NavState> = use_context();
     rsx! {
         button {
@@ -174,31 +168,7 @@ fn VoiceBannerChannelLink(
             } else {
                 t("voice-go-to-channel")
             },
-            onclick: move |_| {
-                if connection_kind == VoiceConnectionKind::TemporaryCall {
-                    if let Some(dm_id) = dm_id.clone() {
-                        crate::nav!(Route::DmChat {
-                            backend: backend_slug.clone(),
-                            instance_id: instance_id.clone(),
-                            account_id: account_id.clone(),
-                            dm_id,
-                        });
-                    }
-                } else {
-                    if let Some(previous_channel_id) = nav_state.read().selected_channel.cloned()
-                    {
-                        remember_message_list_scroll_position(&previous_channel_id);
-                    }
-                    navigator()
-                        .push(Route::ServerChat {
-                            backend: backend_slug.clone(),
-                            instance_id: instance_id.clone(),
-                            account_id: account_id.clone(),
-                            server_id: server_id.clone(),
-                            channel_id: channel_id.clone(),
-                        });
-                }
-            },
+            onclick: move |_| crate::dispatch_action!(VoiceBannerAction::GoToChannel, app_state, nav_state, navigator()),
             span { class: "voice-banner-icon", "🔊" }
             span { class: "voice-banner-channel", "{channel_name}" }
             span { class: "voice-banner-server", "— {server_name}" }
@@ -214,8 +184,9 @@ fn VoiceBannerControls(
     is_muted: bool,
     is_deafened: bool,
     held_count: usize,
-    voice_state: BatchedSignal<VoiceState>,
 ) -> Element {
+    let app_state: BatchedSignal<AppState> = use_context();
+    let nav_state: BatchedSignal<NavState> = use_context();
     let mute_title = if is_muted {
         t("voice-unmute-mic")
     } else {
@@ -233,20 +204,14 @@ fn VoiceBannerControls(
                 button {
                     class: "voice-ctrl-btn",
                     title: t("voice-swap-held-call"),
-                    onclick: move |_| swap_to_first_held_call(voice_state),
+                    onclick: move |_| crate::dispatch_action!(VoiceBannerAction::SwapHeldCall, app_state, nav_state, navigator()),
                     "🔁"
                 }
             }
             button {
                 class: if is_muted { "voice-ctrl-btn muted" } else { "voice-ctrl-btn" },
                 title: "{mute_title}",
-                onclick: move |_| {
-                    voice_state.batch(|v| {
-                        if let Some(ref mut vc) = v.voice_connection {
-                            vc.is_muted = !vc.is_muted;
-                        }
-                    });
-                },
+                onclick: move |_| crate::dispatch_action!(VoiceBannerAction::ToggleMute, app_state, nav_state, navigator()),
                 if is_muted {
                     "🔇"
                 } else {
@@ -256,13 +221,7 @@ fn VoiceBannerControls(
             button {
                 class: if is_deafened { "voice-ctrl-btn muted" } else { "voice-ctrl-btn" },
                 title: "{deafen_title}",
-                onclick: move |_| {
-                    voice_state.batch(|v| {
-                        if let Some(ref mut vc) = v.voice_connection {
-                            vc.is_deafened = !vc.is_deafened;
-                        }
-                    });
-                },
+                onclick: move |_| crate::dispatch_action!(VoiceBannerAction::ToggleDeafen, app_state, nav_state, navigator()),
                 if is_deafened {
                     "🔕"
                 } else {
@@ -272,9 +231,7 @@ fn VoiceBannerControls(
             button {
                 class: "voice-ctrl-btn disconnect",
                 title: "{t(\"voice-disconnect\")}",
-                onclick: move |_| {
-                    disconnect_active_call(voice_state);
-                },
+                onclick: move |_| crate::dispatch_action!(VoiceBannerAction::Disconnect, app_state, nav_state, navigator()),
                 "📵"
             }
         }
@@ -290,7 +247,6 @@ fn VoiceBannerControls(
 #[ui_action(VoiceBannerAction)]
 #[component]
 pub fn VoiceBanner() -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
     let voice_state: BatchedSignal<VoiceState> = use_context();
 
     let voice_conn = voice_state.read().voice_connection.clone();
@@ -306,18 +262,12 @@ pub fn VoiceBanner() -> Element {
         .cloned()
         .unwrap_or_default();
 
-    let channel_id = conn.channel_id.clone();
-    let server_id = conn.server_id.clone();
     let channel_name = conn.channel_name.clone();
     let server_name = conn.server_name.clone();
-    let backend_slug = conn.backend.slug().to_string();
-    let account_id = conn.account_id.clone();
-    let instance_id = conn.instance_id.clone();
     let is_muted = conn.is_muted;
     let is_deafened = conn.is_deafened;
     let held_count = voice_state.read().held_voice_connections.len();
     let connection_kind = conn.kind;
-    let dm_id = conn.dm_id.clone();
 
     let banner_class = if conn.kind == VoiceConnectionKind::TemporaryCall {
         "voice-banner voice-banner--temporary-call"
@@ -328,19 +278,8 @@ pub fn VoiceBanner() -> Element {
     rsx! {
         div { class: "{banner_class}",
             VoiceBannerParticipants { participants, connection_kind }
-            VoiceBannerChannelLink {
-                channel_id,
-                server_id,
-                channel_name,
-                server_name,
-                backend_slug,
-                instance_id,
-                account_id,
-                connection_kind,
-                dm_id,
-                app_state,
-            }
-            VoiceBannerControls { is_muted, is_deafened, held_count, voice_state }
+            VoiceBannerChannelLink { channel_name, server_name, connection_kind }
+            VoiceBannerControls { is_muted, is_deafened, held_count }
         }
     }
 }

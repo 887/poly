@@ -354,7 +354,7 @@ ones (smaller signal subscriptions = less re-render churn).
 - [x] **G.6g.3** Delete `ChatData` struct + `impl ChatData` from `state/chat_data.rs`; updated module-level doc. Removed `pub use chat_data::ChatData` from `state.rs`. `mod chat_data` retained for `user_color`, `backend_badge`, `format_file_size`, `VoiceMediaSettings` helpers still consumed by ~15 call sites.
 - [x] **G.6g.4** Verify: `cargo check -p poly-core` clean (106 warnings, 0 errors); `cargo check --target wasm32-unknown-unknown` clean; `cargo test -p poly-core` 257 passed, 0 failed. Zero `\bChatData\b` type references in `crates/` (all remaining occurrences are in comments or `todo!` string literals fixed in G.6h).
 
-### Phase G.6i — orphaned use_context preamble cleanup — shipped in commit `<pending-6i>`
+### Phase G.6i — orphaned use_context preamble cleanup — shipped in commit `c68b8d91`
 
 Deleted 102 orphaned `let X = use_context()` (and equivalent) bindings left by the G.6a–G.6h ChatData → sub-signal migrations. Files touched span 46 files across `crates/core/src/ui/`. For function parameters (e.g. `app_state` in `load_older_messages`, `chat_lists` in `activate_existing_or_new_call`), the parameter was removed from both the function signature and all call sites.
 
@@ -366,6 +366,24 @@ Deleted 102 orphaned `let X = use_context()` (and equivalent) bindings left by t
 - [x] **G.6i.6** Delete orphaned bindings in `channel_list.rs` (26 bindings across 8 functions).
 - [x] **G.6i.7** Delete orphaned bindings in remaining 40 files (account_server_bar, account_switcher, avatar_context_menu, channel_context_menu, dm_context_menu, utility_rail, effects/mobile_side_column, effects/composer_focus, effects/search_messages, effects/pinned_messages, effects/command_preload, conversation_search_view, direct_call_overlay, discord_forum_view, dm_user_sidebar, forum_view, friends_panel, media_viewer, new_conversation_view, overview_sidebar, user_sidebar, voice_view, account/server/context_menu, account/server/settings, client_ui/sidebar/communities, client_ui/sidebar/feed, client_ui/sidebar/repo_tree, client_ui/view/card_body, client_ui/view/list_body, client_ui/view/split_body, dialogs/ban_member, dialogs/edit_channel, dialogs/kick_member, dialogs/timeout_member, routes.rs, search.rs, settings/general.rs, settings.rs, voice_banner.rs, direct_call.rs).
 - [x] **G.6i.8** Verify: zero `unused variable: \`(app_state|nav|ui_overlays|ui_layout|user_prefs)\`` warnings; zero Rust compile errors; zero new unused import warnings.
+
+### Phase G.6j — flip VoiceBanner + Notifications inline handlers through action system — shipped in commit `da00be00`
+
+All inline onclick handlers in `voice_banner.rs` and `notifications.rs` now route through
+`dispatch_action!`, making `VoiceBannerAction::apply` / `NotificationsViewAction::apply` the
+single authoritative execution path. Also fixes `dispatch_action!` macro to use `.batch()`
+instead of the broken `.write()`.
+
+- [x] **G.6j.1** Fix `dispatch_action!` macro in `actions.rs`: replace `$state.write()` (deprecated, panics on `BatchedSignal`) with `$state.batch(move |state| { ... })`.
+- [x] **G.6j.2** Update `SetFilter::apply` from no-op to real: consume `Signal<NotificationMenuFilter>` from context and call `.set(filter)`.
+- [x] **G.6j.3** Add `use_context_provider(|| kind_filter)` in `NotificationsView` to make the `kind_filter` signal reachable from `SetFilter::apply`.
+- [x] **G.6j.4** Flip `VoiceBannerControls` (ToggleMute, ToggleDeafen, Disconnect, SwapHeldCall): remove `voice_state` prop, add `app_state`/`nav_state` via `use_context()`, replace 4 inline handlers with `dispatch_action!`.
+- [x] **G.6j.5** Flip `VoiceBannerChannelLink` (GoToChannel): remove `app_state` prop + 6 props now derived inside `apply`, add `app_state`/`nav_state` via `use_context()`, replace inline onclick with `dispatch_action!(VoiceBannerAction::GoToChannel, ...)`.
+- [x] **G.6j.6** Update `VoiceBanner` call sites: no longer passes `voice_state` to `VoiceBannerControls`; `VoiceBannerChannelLink` now only receives `channel_name`, `server_name`, `connection_kind`.
+- [x] **G.6j.7** Flip `NotificationsView::MarkAllRead` onclick to `dispatch_action!`; add `app_state`/`nav_state` use_context bindings.
+- [x] **G.6j.8** Flip all `NotificationItemContent` inline handlers (AcceptFriendRequest, DenyFriendRequest, AcceptServerInvite, Dismiss, Reauth): remove `chat_lists`/`client_manager` props, add `app_state`/`nav_state` use_context, replace inline bodies with `dispatch_action!`.
+- [x] **G.6j.9** Update `NotificationList`: remove `chat_lists`/`client_manager` use_context bindings and stop passing them as props to `NotificationItemContent`.
+- [x] **G.6j.10** Verify: 0 Rust compiler errors, 0 Rust warnings; no new poly-lint-gate violations beyond pre-existing baseline; all 5 `VoiceBannerAction` variants and 7 `NotificationsViewAction` variants route exclusively through `apply()`.
 
 ### Phase H — `ClientBackend` capability sub-traits (~1 month, long-horizon)
 
