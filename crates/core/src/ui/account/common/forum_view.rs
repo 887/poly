@@ -147,10 +147,15 @@ pub(crate) enum ForumViewAction {
 impl UiAction for ForumViewAction {
     fn apply(self, _cx: ActionCx<'_>) {
         match self {
-            // view_filter moved to UserPrefs — direct signal mutation via user_prefs.batch()
-            // in the button onclick handlers; the UiAction path is unused for these.
             Self::ShowPosts | Self::ShowComments => {
-                todo!("phase-G.5: ForumViewAction::ShowPosts/ShowComments require UserPrefs signal");
+                let next = match self {
+                    Self::ShowPosts => PostsOrComments::Posts,
+                    Self::ShowComments => PostsOrComments::Comments,
+                    Self::SetFilter(_) => return,
+                };
+                if let Some(user_prefs) = try_consume_context::<BatchedSignal<crate::state::UserPrefs>>() {
+                    user_prefs.batch(|s| s.view_filter = next);
+                }
             }
             // Filter text is local signal; no mutation needed.
             Self::SetFilter(_) => {}

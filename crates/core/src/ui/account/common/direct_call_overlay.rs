@@ -31,6 +31,7 @@ pub fn OutgoingDirectCallOverlay(
     let nav_state: BatchedSignal<NavState> = use_context();
     let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
     let chat_lists: BatchedSignal<ChatLists> = use_context();
+    #[cfg(not(target_arch = "wasm32"))]
     let account_sessions: BatchedSignal<AccountSessions> = use_context();
     let voice_state: BatchedSignal<VoiceState> = use_context();
     #[cfg(not(target_arch = "wasm32"))]

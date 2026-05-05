@@ -1736,13 +1736,13 @@
     },
     {
       "detail": "render-time .read() silently subscribes the parent component — CLAUDE.md hang class #7. Use .peek() for key computation / snapshots. See docs/dev/reactive-state.md. Inline-allowlist: // poly-lint: allow render-time-read — <reason>",
-      "line": 41,
+      "line": 42,
       "path": "crates/core/src/ui/account/common/direct_call_overlay.rs",
       "rule": "forbid_render_time_read"
     },
     {
       "detail": "render-time .read() silently subscribes the parent component — CLAUDE.md hang class #7. Use .peek() for key computation / snapshots. See docs/dev/reactive-state.md. Inline-allowlist: // poly-lint: allow render-time-read — <reason>",
-      "line": 48,
+      "line": 49,
       "path": "crates/core/src/ui/account/common/direct_call_overlay.rs",
       "rule": "forbid_render_time_read"
     },
@@ -1976,67 +1976,61 @@
     },
     {
       "detail": "render-time .read() silently subscribes the parent component — CLAUDE.md hang class #7. Use .peek() for key computation / snapshots. See docs/dev/reactive-state.md. Inline-allowlist: // poly-lint: allow render-time-read — <reason>",
-      "line": 182,
-      "path": "crates/core/src/ui/account/common/forum_view.rs",
-      "rule": "forbid_render_time_read"
-    },
-    {
-      "detail": "render-time .read() silently subscribes the parent component — CLAUDE.md hang class #7. Use .peek() for key computation / snapshots. See docs/dev/reactive-state.md. Inline-allowlist: // poly-lint: allow render-time-read — <reason>",
       "line": 187,
       "path": "crates/core/src/ui/account/common/forum_view.rs",
       "rule": "forbid_render_time_read"
     },
     {
       "detail": "render-time .read() silently subscribes the parent component — CLAUDE.md hang class #7. Use .peek() for key computation / snapshots. See docs/dev/reactive-state.md. Inline-allowlist: // poly-lint: allow render-time-read — <reason>",
-      "line": 236,
+      "line": 192,
       "path": "crates/core/src/ui/account/common/forum_view.rs",
       "rule": "forbid_render_time_read"
     },
     {
       "detail": "render-time .read() silently subscribes the parent component — CLAUDE.md hang class #7. Use .peek() for key computation / snapshots. See docs/dev/reactive-state.md. Inline-allowlist: // poly-lint: allow render-time-read — <reason>",
-      "line": 259,
+      "line": 241,
       "path": "crates/core/src/ui/account/common/forum_view.rs",
       "rule": "forbid_render_time_read"
     },
     {
       "detail": "render-time .read() silently subscribes the parent component — CLAUDE.md hang class #7. Use .peek() for key computation / snapshots. See docs/dev/reactive-state.md. Inline-allowlist: // poly-lint: allow render-time-read — <reason>",
-      "line": 297,
+      "line": 264,
       "path": "crates/core/src/ui/account/common/forum_view.rs",
       "rule": "forbid_render_time_read"
     },
     {
       "detail": "render-time .read() silently subscribes the parent component — CLAUDE.md hang class #7. Use .peek() for key computation / snapshots. See docs/dev/reactive-state.md. Inline-allowlist: // poly-lint: allow render-time-read — <reason>",
-      "line": 457,
+      "line": 462,
       "path": "crates/core/src/ui/account/common/forum_view.rs",
       "rule": "forbid_render_time_read"
     },
     {
       "detail": "render-time .read() silently subscribes the parent component — CLAUDE.md hang class #7. Use .peek() for key computation / snapshots. See docs/dev/reactive-state.md. Inline-allowlist: // poly-lint: allow render-time-read — <reason>",
-      "line": 500,
+      "line": 505,
       "path": "crates/core/src/ui/account/common/forum_view.rs",
       "rule": "forbid_render_time_read"
     },
     {
       "detail": "render-time .read() silently subscribes the parent component — CLAUDE.md hang class #7. Use .peek() for key computation / snapshots. See docs/dev/reactive-state.md. Inline-allowlist: // poly-lint: allow render-time-read — <reason>",
-      "line": 510,
+      "line": 515,
       "path": "crates/core/src/ui/account/common/forum_view.rs",
       "rule": "forbid_render_time_read"
     },
     {
       "detail": "render-time .read() silently subscribes the parent component — CLAUDE.md hang class #7. Use .peek() for key computation / snapshots. See docs/dev/reactive-state.md. Inline-allowlist: // poly-lint: allow render-time-read — <reason>",
-      "line": 511,
+      "line": 516,
       "path": "crates/core/src/ui/account/common/forum_view.rs",
       "rule": "forbid_render_time_read"
     },
     {
       "detail": "render-time .read() silently subscribes the parent component — CLAUDE.md hang class #7. Use .peek() for key computation / snapshots. See docs/dev/reactive-state.md. Inline-allowlist: // poly-lint: allow render-time-read — <reason>",
-      "line": 683,
+      "line": 688,
       "path": "crates/core/src/ui/account/common/forum_view.rs",
       "rule": "forbid_render_time_read"
     },
     {
       "detail": "render-time .read() silently subscribes the parent component — CLAUDE.md hang class #7. Use .peek() for key computation / snapshots. See docs/dev/reactive-state.md. Inline-allowlist: // poly-lint: allow render-time-read — <reason>",
-      "line": 684,
+      "line": 689,
       "path": "crates/core/src/ui/account/common/forum_view.rs",
       "rule": "forbid_render_time_read"
     },
@@ -4766,13 +4760,13 @@
     },
     {
       "detail": "raw use_effect(move ||) — potential hang class #6 (stale non-Signal closure capture). Use use_reactive_effect<Deps>(deps, body) or use_spawn_once<K>(key, async_fn) instead. Inline-allowlist: // poly-lint: allow stale-effect-capture — <reason>",
-      "line": 97,
+      "line": 98,
       "path": "crates/core/src/ui/account/common/direct_call_overlay.rs",
       "rule": "forbid_stale_effect_capture"
     },
     {
       "detail": "raw use_effect(move ||) — potential hang class #6 (stale non-Signal closure capture). Use use_reactive_effect<Deps>(deps, body) or use_spawn_once<K>(key, async_fn) instead. Inline-allowlist: // poly-lint: allow stale-effect-capture — <reason>",
-      "line": 258,
+      "line": 263,
       "path": "crates/core/src/ui/account/common/forum_view.rs",
       "rule": "forbid_stale_effect_capture"
     },
