@@ -412,7 +412,7 @@ caveat).
 - [x] **H.0** Carve out `IsBackend` parent trait (`Send + Sync`, slug, version, capabilities, login/logout/get_account, the capability accessors). Move it to `clients/client/src/lib.rs` alongside the soon-to-be-deleted `ClientBackend`. `is_authenticated` intentionally excluded to avoid blanket-impl/method-name ambiguity at backend call sites. Effort S. — shipped in commit `rylxrxno`.
 - [x] **H.1** Carve out `ContentPolicyBackend` (3 methods, 0 implementers).
       Pure deletion — no migration burden. Defines the dispatch pattern. Effort S. Source: C.2.1.
-      Shipped in change `<pending>`.
+      Shipped in change `umkzvsqt`.
 - [ ] **H.2** Carve out `CodeRepoBackend` + `ForumBackend` +
       `ThreadsBackend` (7 methods total, 4 implementers). Update
       `code_explorer.rs` + forum routes to take the narrower trait
