@@ -2,7 +2,7 @@
 
 > Owner: alexander.stuermer@aareon.com
 > Created: 2026-05-03
-> Status: 🟡 IN PROGRESS — phases A-G shipped (G.6g+G.6h landed `a81777cc` `55a7821a`); phases H-J pending
+> Status: 🟡 IN PROGRESS — phases A-G shipped (G.6g+G.6h+G.6i+G.6j+G.6k landed `a81777cc` `55a7821a` `c68b8d91` `873cb1af` `<G.6k-pending>`); phases H-J pending
 >
 > Source shards (raw findings, do not delete — referenced throughout):
 > - `docs/plans/.solid-survey-shards/A.md` — Single Responsibility (oversize)
