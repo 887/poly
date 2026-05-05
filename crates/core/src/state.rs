@@ -25,7 +25,6 @@ pub use account_sessions::AccountSessions;
 pub use bisect_log::bisect_log;
 pub use batched_signal::{BatchedSignal, PendingUpdate, use_batched_context};
 pub use chat_actions::ChatAction;
-pub use chat_data::ChatData;
 pub use chat_lists::ChatLists;
 pub use chat_view_state::ChatViewState;
 pub use drag_state::{DragSource, DragState};

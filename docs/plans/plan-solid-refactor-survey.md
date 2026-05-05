@@ -332,6 +332,13 @@ ones (smaller signal subscriptions = less re-render churn).
         `account_server_bar.rs` operates on a local `&[Server]` slice.
         — shipped in commit (see G.6f commit below)
 
+### Phase G.6g — vestigial `ChatData` type deletion — shipped in commit <G.6g-pending>
+
+- [x] **G.6g.1** Audit `\bChatData\b` across `crates/` — confirmed live sites were `state.rs` re-export, `state/chat_data.rs` itself, and test helper in `account_restore.rs`. All comment-only references confirmed harmless.
+- [x] **G.6g.2** Migrate test fixture: dropped `BatchedSignal<ChatData>` from `make_signals_in_runtime` return tuple in `account_restore.rs`; updated all 4 test call sites to pass 3-tuple `(cm, cl, as_)` matching the public `restore_native_accounts` signature.
+- [x] **G.6g.3** Delete `ChatData` struct + `impl ChatData` from `state/chat_data.rs`; updated module-level doc. Removed `pub use chat_data::ChatData` from `state.rs`. `mod chat_data` retained for `user_color`, `backend_badge`, `format_file_size`, `VoiceMediaSettings` helpers still consumed by ~15 call sites.
+- [x] **G.6g.4** Verify: `cargo check -p poly-core` clean (106 warnings, 0 errors); `cargo check --target wasm32-unknown-unknown` clean; `cargo test -p poly-core` 257 passed, 0 failed. Zero `\bChatData\b` type references in `crates/` (all remaining occurrences are in comments or `todo!` string literals fixed in G.6h).
+
 ### Phase H — `ClientBackend` capability sub-traits (~1 month, long-horizon)
 
 Gated on Phase B (capabilities single-source) + Phase D (with_backend)

@@ -473,13 +473,12 @@ mod tests {
 
     fn make_signals_in_runtime(
         vdom: &VirtualDom,
-    ) -> (BatchedSignal<ClientManager>, BatchedSignal<ChatData>, BatchedSignal<crate::state::ChatLists>, BatchedSignal<crate::state::AccountSessions>) {
+    ) -> (BatchedSignal<ClientManager>, BatchedSignal<crate::state::ChatLists>, BatchedSignal<crate::state::AccountSessions>) {
         vdom.in_scope(ScopeId::ROOT, || {
             let cm = BatchedSignal::from_signal(Signal::new(ClientManager::default()));
-            let cd = BatchedSignal::from_signal(Signal::new(ChatData::default()));
             let cl = BatchedSignal::from_signal(Signal::new(crate::state::ChatLists::default()));
             let as_ = BatchedSignal::from_signal(Signal::new(crate::state::AccountSessions::default()));
-            (cm, cd, cl, as_)
+            (cm, cl, as_)
         })
     }
 
@@ -527,16 +526,16 @@ mod tests {
     fn restore_empty_storage_is_noop() {
         run_test(|vdom| async move {
             let storage = make_storage().await;
-            let (cm, cd, cl, as_) = make_signals_in_runtime(&vdom);
+            let (cm, cl, as_) = make_signals_in_runtime(&vdom);
             vdom.in_scope(ScopeId::ROOT, || {
                 let storage = storage.clone();
                 // We're inside in_scope — batch is valid. But restore is async,
                 // so we just prime state here and run restore outside.
-                let _ = (storage, cm, cd, cl, as_);
+                let _ = (storage, cm, cl, as_);
             });
             // restore_native_accounts calls batch internally; it runs outside
             // in_scope but on the same thread as the vdom, so the arena is valid.
-            restore_native_accounts(&storage, cm, cd, cl, as_, None).await;
+            restore_native_accounts(&storage, cm, cl, as_, None).await;
         });
     }
 
@@ -559,13 +558,13 @@ mod tests {
                 .await
                 .unwrap();
 
-            let (cm, cd, cl, as_) = make_signals_in_runtime(&vdom);
+            let (cm, cl, as_) = make_signals_in_runtime(&vdom);
             // Set disabled backends while in scope.
             vdom.in_scope(ScopeId::ROOT, || {
                 cm.batch(|c| c.set_disabled_native_backends(vec!["discord".to_string()]));
             });
 
-            restore_native_accounts(&storage, cm, cd, cl, as_, None).await;
+            restore_native_accounts(&storage, cm, cl, as_, None).await;
 
             let sessions_count = vdom.in_scope(ScopeId::ROOT, || {
                 as_.peek().account_sessions.len()
@@ -593,7 +592,7 @@ mod tests {
                 .await
                 .unwrap();
 
-            let (cm, cd, cl, as_) = make_signals_in_runtime(&vdom);
+            let (cm, cl, as_) = make_signals_in_runtime(&vdom);
 
             let dummy_session = Session {
                 id: "discord-user-2".to_string(),
@@ -622,7 +621,7 @@ mod tests {
                 });
             });
 
-            restore_native_accounts(&storage, cm, cd, cl, as_, None).await;
+            restore_native_accounts(&storage, cm, cl, as_, None).await;
 
             let count = vdom.in_scope(ScopeId::ROOT, || as_.peek().account_sessions.len());
             assert_eq!(count, 1, "already-restored account should not be duplicated");
@@ -648,9 +647,9 @@ mod tests {
                 .await
                 .unwrap();
 
-            let (cm, cd, cl, as_) = make_signals_in_runtime(&vdom);
+            let (cm, cl, as_) = make_signals_in_runtime(&vdom);
 
-            restore_native_accounts(&storage, cm, cd, cl, as_, Some("stoat")).await;
+            restore_native_accounts(&storage, cm, cl, as_, Some("stoat")).await;
 
             let count = vdom.in_scope(ScopeId::ROOT, || as_.peek().account_sessions.len());
             assert_eq!(count, 0, "slug filter should skip non-matching backends");
