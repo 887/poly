@@ -2,7 +2,7 @@
 
 > Owner: alexander.stuermer@aareon.com
 > Created: 2026-05-03
-> Status: 🟡 IN PROGRESS — phases A-G shipped (G.6c-G.6f landed); phases H-J pending
+> Status: 🟡 IN PROGRESS — phases A-G shipped (G.6g+G.6h landed `a81777cc` `55a7821a`); phases H-J pending
 >
 > Source shards (raw findings, do not delete — referenced throughout):
 > - `docs/plans/.solid-survey-shards/A.md` — Single Responsibility (oversize)
@@ -334,7 +334,7 @@ ones (smaller signal subscriptions = less re-render churn).
 
 ### Phase G.6g — vestigial `ChatData` type deletion — shipped in commit `a81777cc`
 
-### Phase G.6h — action stub migration — shipped in commit <G.6h-pending>
+### Phase G.6h — action stub migration — shipped in commit `55a7821a`
 
 - [x] **G.6h.1** `VoiceBannerAction::ToggleMute` — toggle `voice_connection.is_muted` via `try_consume_context::<BatchedSignal<VoiceState>>()`.
 - [x] **G.6h.2** `VoiceBannerAction::ToggleDeafen` — toggle `voice_connection.is_deafened` via VoiceState context.
