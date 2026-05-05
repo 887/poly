@@ -409,7 +409,7 @@ caveat).
 
 #### Sub-steps
 
-- [ ] **H.0** Carve out `IsBackend` parent trait (`Send + Sync`, slug, version, capabilities, login/logout/get_account, the capability accessors). Move it to `clients/client/src/lib.rs` alongside the soon-to-be-deleted `ClientBackend`. Effort S.
+- [x] **H.0** Carve out `IsBackend` parent trait (`Send + Sync`, slug, version, capabilities, login/logout/get_account, the capability accessors). Move it to `clients/client/src/lib.rs` alongside the soon-to-be-deleted `ClientBackend`. Effort S. shipped in commit `b757a081554f`
 - [ ] **H.1** Carve out `ContentPolicy` (3 methods, 0 implementers).
       Pure deletion — no migration burden. Defines the dispatch pattern. Effort S. Source: C.2.1.
 - [ ] **H.2** Carve out `CodeRepoBackend` + `ForumBackend` +

@@ -1071,6 +1071,98 @@ pub trait ClientBackend: Send + Sync {
     }
 }
 
+// ── IsBackend — thin parent trait (Phase H) ──────────────────────────────────
+//
+// `IsBackend` is the future replacement for `ClientBackend` as the storage
+// type (`Box<dyn IsBackend>`).  Right now it sits alongside `ClientBackend`
+// and is implemented for free via the blanket impl below.  Capability
+// sub-traits (`ForumBackend`, `CodeRepoBackend`, …) will be added in H.1-H.3;
+// capability accessor methods (`as_forum`, `as_code_repo`, …) will be added
+// to `IsBackend` at the same time.
+//
+// H.0 defines only the universal surface — the methods every single backend
+// has in common with no opt-out.
+
+/// Thin parent trait shared by every Poly backend.
+///
+/// Every type that implements [`ClientBackend`] automatically gets
+/// `IsBackend` via the blanket impl below — no code changes required in
+/// individual backend crates.
+///
+/// This is the long-horizon storage type: after Phase H.4 ships,
+/// `Box<dyn IsBackend>` replaces `Box<dyn ClientBackend>` everywhere.
+/// For now, the trait is additive and the migration is H.1+.
+///
+/// # Capability accessors
+///
+/// Accessors (`fn as_forum(&self) -> Option<&dyn ForumBackend>`, …) will
+/// be added here in Phase H.1-H.3 alongside their sub-traits.  H.0 defines
+/// only the universal surface.
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+pub trait IsBackend: Send + Sync {
+    /// The type identifier (slug) for this backend.
+    ///
+    /// Returns the same value as [`ClientBackend::backend_type`].  Use
+    /// `.slug()` on the returned `BackendType` to get the string slug
+    /// (e.g. `"discord"`, `"matrix"`).
+    fn backend_type(&self) -> BackendType;
+
+    /// Runtime capability flags for this backend instance.
+    ///
+    /// The UI uses these flags to hide controls that don't apply (e.g. mic /
+    /// speaker buttons for read-only news feeds).
+    fn backend_capabilities(&self) -> BackendCapabilities;
+
+    /// The version string the plugin advertises on outbound requests.
+    fn client_version(&self) -> String;
+
+    /// Authenticate with the backend using the provided credentials.
+    ///
+    /// Takes `&mut self` because most backends need to store the resulting
+    /// session token in their own fields.
+    async fn authenticate(
+        &mut self,
+        credentials: AuthCredentials,
+    ) -> ClientResult<Session>;
+
+    /// Log out and invalidate the current session.
+    async fn logout(&mut self) -> ClientResult<()>;
+}
+
+// Blanket implementation: every `ClientBackend` automatically is an `IsBackend`.
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl<T: ClientBackend + ?Sized> IsBackend for T {
+    #[inline]
+    fn backend_type(&self) -> BackendType {
+        ClientBackend::backend_type(self)
+    }
+
+    #[inline]
+    fn backend_capabilities(&self) -> BackendCapabilities {
+        ClientBackend::backend_capabilities(self)
+    }
+
+    #[inline]
+    fn client_version(&self) -> String {
+        ClientBackend::client_version(self)
+    }
+
+    #[inline]
+    async fn authenticate(
+        &mut self,
+        credentials: AuthCredentials,
+    ) -> ClientResult<Session> {
+        ClientBackend::authenticate(self, credentials).await
+    }
+
+    #[inline]
+    async fn logout(&mut self) -> ClientResult<()> {
+        ClientBackend::logout(self).await
+    }
+}
+
 // ── Signup plugin interface ──────────────────────────────────────────────────
 
 /// Host-provided context passed to a signup page component when it renders.
