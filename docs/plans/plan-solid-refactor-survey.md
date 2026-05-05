@@ -2,7 +2,7 @@
 
 > Owner: alexander.stuermer@aareon.com
 > Created: 2026-05-03
-> Status: 🟡 IN PROGRESS — Phase G fully closed (G.6g `a81777cc`, G.6h `55a7821a`, G.6i `c68b8d91`, G.6j `873cb1af`, G.6k `ae8d96b3`+`080e246b`, G.6l `c6b67d22`); phases H-J pending
+> Status: 🟡 IN PROGRESS — Phase G fully closed; Phase H started (H.0 `c14a6423`); Phase J fully closed (J.1 `4a43d4c8`, J.2 `4089f0ea`); H.1-H.4 + I pending
 >
 > Source shards (raw findings, do not delete — referenced throughout):
 > - `docs/plans/.solid-survey-shards/A.md` — Single Responsibility (oversize)
@@ -409,7 +409,7 @@ caveat).
 
 #### Sub-steps
 
-- [x] **H.0** Carve out `IsBackend` parent trait (`Send + Sync`, slug, version, capabilities, login/logout/get_account, the capability accessors). Move it to `clients/client/src/lib.rs` alongside the soon-to-be-deleted `ClientBackend`. Effort S. shipped in commit `b757a081554f`
+- [x] **H.0** Carve out `IsBackend` parent trait (`Send + Sync`, slug, version, capabilities, login/logout/get_account, the capability accessors). Move it to `clients/client/src/lib.rs` alongside the soon-to-be-deleted `ClientBackend`. `is_authenticated` intentionally excluded to avoid blanket-impl/method-name ambiguity at backend call sites. Effort S. — shipped in commit `c14a6423`.
 - [ ] **H.1** Carve out `ContentPolicy` (3 methods, 0 implementers).
       Pure deletion — no migration burden. Defines the dispatch pattern. Effort S. Source: C.2.1.
 - [ ] **H.2** Carve out `CodeRepoBackend` + `ForumBackend` +
@@ -433,15 +433,19 @@ caveat).
       moderation routes — each module taking only the capability traits
       it needs (DIP win). Effort L. Source: C.3.3.
 
-### Phase J — `mcp/chat-mcp/src/{tools,memory}.rs` split (~3 days) — shipped in commits `4a43d4c8` (J.1) + `bada60a6` (J.2)
+### Phase J — `mcp/chat-mcp/src/{tools,memory}.rs` split (~3 days) — shipped in commits `4a43d4c8` (J.1) + `4089f0ea` (J.2)
 
 - [x] **J.1** Split `tools.rs` (4081 lines, 80+ handlers) into
-      `tools/` sub-modules per CLAUDE.md's persona-handler family.
-      Source: A.1#3. shipped in commit `4a43d4c8`
+      `tools/` sub-modules: `chat`, `client_ui`, `memory_ops`, `drafts`,
+      `chat_style`, `events`, `persona`, `client_settings`. Updated
+      `forbid_unaudited_persona_tool` lint to scan the new per-family
+      paths. Source: A.1#3. — shipped in commit `4a43d4c8`.
 - [x] **J.2** Split `memory.rs` (2695 lines, 8 SQLite schemas, 57
-      methods) into `memory/{facts, chat_notes, drafts, persona/, …}`.
-      Convert the 9-11 param functions (`update_persona`,
-      `query_persona_audit`) to builder structs. Source: A.1#5.
+      methods) into `memory/{mod, helpers, facts, notes_summaries,
+      drafts, chat_style, client_settings, persona, tests}.rs`.
+      Converted `update_persona` (10 params) + `query_persona_audit`
+      (9 params) to `UpdatePersonaArgs<'a>` / `QueryPersonaAuditArgs<'a>`
+      builder structs. Source: A.1#5. — shipped in commit `4089f0ea`.
 
 ---
 
