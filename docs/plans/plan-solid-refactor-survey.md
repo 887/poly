@@ -2,7 +2,7 @@
 
 > Owner: alexander.stuermer@aareon.com
 > Created: 2026-05-03
-> Status: 🟡 IN PROGRESS — phases A-G shipped (G.6g+G.6h+G.6i+G.6j+G.6k landed `a81777cc` `55a7821a` `c68b8d91` `873cb1af` `080e246b`); phases H-J pending
+> Status: 🟡 IN PROGRESS — Phase G fully closed (G.6g `a81777cc`, G.6h `55a7821a`, G.6i `c68b8d91`, G.6j `873cb1af`, G.6k `ae8d96b3`+`080e246b`, G.6l `c6b67d22`); phases H-J pending
 >
 > Source shards (raw findings, do not delete — referenced throughout):
 > - `docs/plans/.solid-survey-shards/A.md` — Single Responsibility (oversize)
@@ -367,7 +367,7 @@ Deleted 102 orphaned `let X = use_context()` (and equivalent) bindings left by t
 - [x] **G.6i.7** Delete orphaned bindings in remaining 40 files (account_server_bar, account_switcher, avatar_context_menu, channel_context_menu, dm_context_menu, utility_rail, effects/mobile_side_column, effects/composer_focus, effects/search_messages, effects/pinned_messages, effects/command_preload, conversation_search_view, direct_call_overlay, discord_forum_view, dm_user_sidebar, forum_view, friends_panel, media_viewer, new_conversation_view, overview_sidebar, user_sidebar, voice_view, account/server/context_menu, account/server/settings, client_ui/sidebar/communities, client_ui/sidebar/feed, client_ui/sidebar/repo_tree, client_ui/view/card_body, client_ui/view/list_body, client_ui/view/split_body, dialogs/ban_member, dialogs/edit_channel, dialogs/kick_member, dialogs/timeout_member, routes.rs, search.rs, settings/general.rs, settings.rs, voice_banner.rs, direct_call.rs).
 - [x] **G.6i.8** Verify: zero `unused variable: \`(app_state|nav|ui_overlays|ui_layout|user_prefs)\`` warnings; zero Rust compile errors; zero new unused import warnings.
 
-### Phase G.6j — flip VoiceBanner + Notifications inline handlers through action system — shipped in commit `da00be00`
+### Phase G.6j — flip VoiceBanner + Notifications inline handlers through action system — shipped in commit `873cb1af`
 
 All inline onclick handlers in `voice_banner.rs` and `notifications.rs` now route through
 `dispatch_action!`, making `VoiceBannerAction::apply` / `NotificationsViewAction::apply` the
@@ -384,6 +384,14 @@ instead of the broken `.write()`.
 - [x] **G.6j.8** Flip all `NotificationItemContent` inline handlers (AcceptFriendRequest, DenyFriendRequest, AcceptServerInvite, Dismiss, Reauth): remove `chat_lists`/`client_manager` props, add `app_state`/`nav_state` use_context, replace inline bodies with `dispatch_action!`.
 - [x] **G.6j.9** Update `NotificationList`: remove `chat_lists`/`client_manager` use_context bindings and stop passing them as props to `NotificationItemContent`.
 - [x] **G.6j.10** Verify: 0 Rust compiler errors, 0 Rust warnings; no new poly-lint-gate violations beyond pre-existing baseline; all 5 `VoiceBannerAction` variants and 7 `NotificationsViewAction` variants route exclusively through `apply()`.
+
+### Phase G.6l — `ForumViewAction` `todo!()` panic fix — shipped in commit `c6b67d22`
+
+Surfaced after G.6k shipped: navigating to a github (or any forum-layout) channel route triggered `RuntimeError: unreachable` in WASM. Root cause was a `todo!("phase-G.5: …")` stub in `ForumViewAction::apply()` at `forum_view.rs:153` that G.6h's sweep missed (it only matched on `phase-E:` labels, not `phase-G.5:`).
+
+- [x] **G.6l.1** Implement `ForumViewAction::ShowPosts` / `ShowComments` `apply()` body via `try_consume_context::<BatchedSignal<UserPrefs>>()` + `user_prefs.batch(|s| s.view_filter = next)` — same shape as G.6h's voice/notifications fixes.
+- [x] **G.6l.2** Cfg-gate `account_sessions` in `direct_call_overlay.rs:34` to `#[cfg(not(target_arch = "wasm32"))]` — last residual G.6k unused-var on wasm, missed by an earlier sed when nav_state's cfg-gate insert shifted line numbers.
+- [x] **G.6l.3** Verify live in poly-web: navigate to `/github/github.com/gh-github.com-887/channels/gh-63975513` — forum view renders cleanly, Open/Closed tab clicks succeed, 0 console messages.
 
 ### Phase H — `ClientBackend` capability sub-traits (~1 month, long-horizon)
 
