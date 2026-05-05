@@ -104,10 +104,16 @@ exceptions, no "I'll add checkboxes later".
 2. **Sub-step checkboxes** in each phase: `- [ ] **A.1** …`,
    `- [ ] **A.2** …`. A phase with no sub-step checkboxes is forbidden
    — if you can't articulate sub-steps, you don't have a plan yet.
-3. **Tick `- [x]` AS WORK LANDS** with a "shipped in commit `<id>`"
+3. **Tick `- [x]` AS WORK LANDS** with a "shipped in change `<jj-change-id>`"
    note on the phase header. Do not batch.
+   - **Use jj change IDs (the alphabetic prefix like `opknvmpk`),
+     NEVER git commit hashes.** Get them via
+     `jj log -r <revset> -T 'change_id.short()'` or read the first
+     column of `jj log` output. Change IDs are stable across rebases;
+     commit hashes shift on every history rewrite and break plan-doc
+     references immediately.
 4. **Mark plan DONE** at the top: `## Status: ✅ DONE — all phases
-   shipped (commits a, b, c)`. Obsolete plans get
+   shipped (changes a, b, c)`. Obsolete plans get
    `## Status: OBSOLETE — superseded by …`.
 5. **Repo plans live in the repo.** A plan describing work in this
    repo MUST be at `docs/plans/`. Anything in `~/.claude/plans/` is

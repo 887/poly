@@ -2,7 +2,7 @@
 
 > Owner: alexander.stuermer@aareon.com
 > Created: 2026-05-03
-> Status: 🟡 IN PROGRESS — Phase G fully closed; Phase H started (H.0 `c14a6423`); Phase J fully closed (J.1 `4a43d4c8`, J.2 `4089f0ea`); H.1-H.4 + I pending
+> Status: 🟡 IN PROGRESS — Phase G fully closed; Phase H started (H.0 `rylxrxno`); Phase J fully closed (J.1 `rpnypolk`, J.2 `slqplxlt`); H.1-H.4 + I pending
 >
 > Source shards (raw findings, do not delete — referenced throughout):
 > - `docs/plans/.solid-survey-shards/A.md` — Single Responsibility (oversize)
@@ -332,9 +332,9 @@ ones (smaller signal subscriptions = less re-render churn).
         `account_server_bar.rs` operates on a local `&[Server]` slice.
         — shipped in commit (see G.6f commit below)
 
-### Phase G.6g — vestigial `ChatData` type deletion — shipped in commit `a81777cc`
+### Phase G.6g — vestigial `ChatData` type deletion — shipped in commit `xqkntrum`
 
-### Phase G.6h — action stub migration — shipped in commit `55a7821a`
+### Phase G.6h — action stub migration — shipped in commit `owmotpwx`
 
 - [x] **G.6h.1** `VoiceBannerAction::ToggleMute` — toggle `voice_connection.is_muted` via `try_consume_context::<BatchedSignal<VoiceState>>()`.
 - [x] **G.6h.2** `VoiceBannerAction::ToggleDeafen` — toggle `voice_connection.is_deafened` via VoiceState context.
@@ -354,7 +354,7 @@ ones (smaller signal subscriptions = less re-render churn).
 - [x] **G.6g.3** Delete `ChatData` struct + `impl ChatData` from `state/chat_data.rs`; updated module-level doc. Removed `pub use chat_data::ChatData` from `state.rs`. `mod chat_data` retained for `user_color`, `backend_badge`, `format_file_size`, `VoiceMediaSettings` helpers still consumed by ~15 call sites.
 - [x] **G.6g.4** Verify: `cargo check -p poly-core` clean (106 warnings, 0 errors); `cargo check --target wasm32-unknown-unknown` clean; `cargo test -p poly-core` 257 passed, 0 failed. Zero `\bChatData\b` type references in `crates/` (all remaining occurrences are in comments or `todo!` string literals fixed in G.6h).
 
-### Phase G.6i — orphaned use_context preamble cleanup — shipped in commit `c68b8d91`
+### Phase G.6i — orphaned use_context preamble cleanup — shipped in commit `nupxnqvw`
 
 Deleted 102 orphaned `let X = use_context()` (and equivalent) bindings left by the G.6a–G.6h ChatData → sub-signal migrations. Files touched span 46 files across `crates/core/src/ui/`. For function parameters (e.g. `app_state` in `load_older_messages`, `chat_lists` in `activate_existing_or_new_call`), the parameter was removed from both the function signature and all call sites.
 
@@ -367,7 +367,7 @@ Deleted 102 orphaned `let X = use_context()` (and equivalent) bindings left by t
 - [x] **G.6i.7** Delete orphaned bindings in remaining 40 files (account_server_bar, account_switcher, avatar_context_menu, channel_context_menu, dm_context_menu, utility_rail, effects/mobile_side_column, effects/composer_focus, effects/search_messages, effects/pinned_messages, effects/command_preload, conversation_search_view, direct_call_overlay, discord_forum_view, dm_user_sidebar, forum_view, friends_panel, media_viewer, new_conversation_view, overview_sidebar, user_sidebar, voice_view, account/server/context_menu, account/server/settings, client_ui/sidebar/communities, client_ui/sidebar/feed, client_ui/sidebar/repo_tree, client_ui/view/card_body, client_ui/view/list_body, client_ui/view/split_body, dialogs/ban_member, dialogs/edit_channel, dialogs/kick_member, dialogs/timeout_member, routes.rs, search.rs, settings/general.rs, settings.rs, voice_banner.rs, direct_call.rs).
 - [x] **G.6i.8** Verify: zero `unused variable: \`(app_state|nav|ui_overlays|ui_layout|user_prefs)\`` warnings; zero Rust compile errors; zero new unused import warnings.
 
-### Phase G.6j — flip VoiceBanner + Notifications inline handlers through action system — shipped in commit `873cb1af`
+### Phase G.6j — flip VoiceBanner + Notifications inline handlers through action system — shipped in commit `mxrokzsl`
 
 All inline onclick handlers in `voice_banner.rs` and `notifications.rs` now route through
 `dispatch_action!`, making `VoiceBannerAction::apply` / `NotificationsViewAction::apply` the
@@ -385,7 +385,7 @@ instead of the broken `.write()`.
 - [x] **G.6j.9** Update `NotificationList`: remove `chat_lists`/`client_manager` use_context bindings and stop passing them as props to `NotificationItemContent`.
 - [x] **G.6j.10** Verify: 0 Rust compiler errors, 0 Rust warnings; no new poly-lint-gate violations beyond pre-existing baseline; all 5 `VoiceBannerAction` variants and 7 `NotificationsViewAction` variants route exclusively through `apply()`.
 
-### Phase G.6l — `ForumViewAction` `todo!()` panic fix — shipped in commit `c6b67d22`
+### Phase G.6l — `ForumViewAction` `todo!()` panic fix — shipped in commit `qlpttplp`
 
 Surfaced after G.6k shipped: navigating to a github (or any forum-layout) channel route triggered `RuntimeError: unreachable` in WASM. Root cause was a `todo!("phase-G.5: …")` stub in `ForumViewAction::apply()` at `forum_view.rs:153` that G.6h's sweep missed (it only matched on `phase-E:` labels, not `phase-G.5:`).
 
@@ -409,7 +409,7 @@ caveat).
 
 #### Sub-steps
 
-- [x] **H.0** Carve out `IsBackend` parent trait (`Send + Sync`, slug, version, capabilities, login/logout/get_account, the capability accessors). Move it to `clients/client/src/lib.rs` alongside the soon-to-be-deleted `ClientBackend`. `is_authenticated` intentionally excluded to avoid blanket-impl/method-name ambiguity at backend call sites. Effort S. — shipped in commit `c14a6423`.
+- [x] **H.0** Carve out `IsBackend` parent trait (`Send + Sync`, slug, version, capabilities, login/logout/get_account, the capability accessors). Move it to `clients/client/src/lib.rs` alongside the soon-to-be-deleted `ClientBackend`. `is_authenticated` intentionally excluded to avoid blanket-impl/method-name ambiguity at backend call sites. Effort S. — shipped in commit `rylxrxno`.
 - [ ] **H.1** Carve out `ContentPolicy` (3 methods, 0 implementers).
       Pure deletion — no migration burden. Defines the dispatch pattern. Effort S. Source: C.2.1.
 - [ ] **H.2** Carve out `CodeRepoBackend` + `ForumBackend` +
@@ -433,19 +433,19 @@ caveat).
       moderation routes — each module taking only the capability traits
       it needs (DIP win). Effort L. Source: C.3.3.
 
-### Phase J — `mcp/chat-mcp/src/{tools,memory}.rs` split (~3 days) — shipped in commits `4a43d4c8` (J.1) + `4089f0ea` (J.2)
+### Phase J — `mcp/chat-mcp/src/{tools,memory}.rs` split (~3 days) — shipped in commits `rpnypolk` (J.1) + `slqplxlt` (J.2)
 
 - [x] **J.1** Split `tools.rs` (4081 lines, 80+ handlers) into
       `tools/` sub-modules: `chat`, `client_ui`, `memory_ops`, `drafts`,
       `chat_style`, `events`, `persona`, `client_settings`. Updated
       `forbid_unaudited_persona_tool` lint to scan the new per-family
-      paths. Source: A.1#3. — shipped in commit `4a43d4c8`.
+      paths. Source: A.1#3. — shipped in commit `rpnypolk`.
 - [x] **J.2** Split `memory.rs` (2695 lines, 8 SQLite schemas, 57
       methods) into `memory/{mod, helpers, facts, notes_summaries,
       drafts, chat_style, client_settings, persona, tests}.rs`.
       Converted `update_persona` (10 params) + `query_persona_audit`
       (9 params) to `UpdatePersonaArgs<'a>` / `QueryPersonaAuditArgs<'a>`
-      builder structs. Source: A.1#5. — shipped in commit `4089f0ea`.
+      builder structs. Source: A.1#5. — shipped in commit `slqplxlt`.
 
 ---
 
