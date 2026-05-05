@@ -98,7 +98,7 @@ pub(crate) use runtime_js::load_js_asset;
 pub use setup_wizard::SetupWizard;
 
 use crate::client_manager::{ClientManager, SignupEntry};
-use crate::state::{AccountSessions, AppState, BatchedSignal, ChatData, ChatLists, ChatViewState, DragState, LayoutMode, NavState, SettingsSection, UiLayout, UiOverlays, UserPrefs, View, VoiceState};
+use crate::state::{AccountSessions, AppState, BatchedSignal, ChatLists, ChatViewState, DragState, LayoutMode, NavState, SettingsSection, UiLayout, UiOverlays, UserPrefs, View, VoiceState};
 use dioxus::prelude::*;
 use poly_ui_macros::{context_menu, ui_action};
 use routes::{route_targets_unknown_account, sync_route_to_app_state};
@@ -242,7 +242,7 @@ fn startup_log_lines(
     setup_complete: bool,
     ui_layout: &UiLayout,
     client_manager: &ClientManager,
-    chat_data: &ChatData,
+    chat_view_state: &ChatViewState,
 ) -> Vec<String> {
     let mut lines = Vec::new();
     lines.push(if storage_ready {
@@ -287,7 +287,7 @@ fn startup_log_lines(
         }
     }
 
-    lines.push(if chat_data.loading {
+    lines.push(if chat_view_state.loading {
         "[..] chat data still populating for active route".to_string()
     } else {
         "[ok] route data stable enough to reveal UI".to_string()
@@ -301,7 +301,7 @@ fn startup_overlay_state(
     params: StartupOverlayParams,
     ui_layout: &UiLayout,
     client_manager: &ClientManager,
-    chat_data: &ChatData,
+    chat_view_state: &ChatViewState,
 ) -> StartupOverlayState {
     let StartupOverlayParams {
         enabled,
@@ -334,9 +334,9 @@ fn startup_overlay_state(
         setup_complete,
         ui_layout,
         client_manager,
-        chat_data,
+        chat_view_state,
     );
-    let ready = storage_ready && setup_complete && !chat_data.loading;
+    let ready = storage_ready && setup_complete && !chat_view_state.loading;
 
     StartupOverlayState {
         enabled,
@@ -925,7 +925,6 @@ fn auto_signin_opted_in() -> bool {
 #[cfg(debug_assertions)]
 fn auto_signin_test_accounts(
     client_manager: BatchedSignal<ClientManager>,
-    chat_data: BatchedSignal<ChatData>,
 ) {
     if !auto_signin_opted_in() {
         // Skipped — flip the flag so route_targets_unknown_account stops
@@ -944,7 +943,7 @@ fn auto_signin_test_accounts(
         return;
     }
     let client_manager_w = client_manager;
-    let on_complete = crate::ui::signup::build_on_complete_no_nav(client_manager, chat_data);
+    let on_complete = crate::ui::signup::build_on_complete_no_nav(client_manager);
     spawn(async move {
         for entry in entries {
             let auth_fn = entry.authenticate;
@@ -1012,7 +1011,8 @@ fn auto_signin_test_accounts(
 async fn restore_poly_accounts(
     storage: &crate::storage::Storage,
     client_manager: BatchedSignal<ClientManager>,
-    chat_data: BatchedSignal<ChatData>,
+    chat_lists: BatchedSignal<ChatLists>,
+    account_sessions: BatchedSignal<AccountSessions>,
 ) {
     use crate::client_manager::BackendHandle;
     use poly_client::ClientBackend as _;
@@ -1089,12 +1089,12 @@ async fn restore_poly_accounts(
                 }
                 {
                     let aid = account_id.clone();
-                    chat_data.batch(move |cd| {
-                        cd.account_sessions.insert(aid, session);
+                    account_sessions.batch(move |as_| {
+                        as_.account_sessions.insert(aid, session);
                     });
                 }
 
-                // Populate servers in chat_data and update the offline server
+                // Populate servers in chat_lists and update the offline server
                 // metadata cache so they survive the next restart even when the
                 // server is unreachable.
                 {
@@ -1113,19 +1113,21 @@ async fn restore_poly_accounts(
                         .collect();
                     let new_fav_ids: Vec<String> = servers.iter().map(|s| s.id.clone()).collect();
 
-                    let all_fav_ids = chat_data.batch(|cd| {
-                        for id in &new_fav_ids {
-                            if !cd.favorited_server_ids.contains(id) {
-                                cd.favorited_server_ids.push(id.clone());
-                            }
-                        }
+                    chat_lists.batch(|cl| {
                         // Avoid duplicates if servers list was already populated.
                         for srv in servers {
-                            if !cd.servers.iter().any(|s| s.id == srv.id) {
-                                cd.servers.push(srv);
+                            if !cl.servers.iter().any(|s| s.id == srv.id) {
+                                cl.push_server(srv);
                             }
                         }
-                        cd.favorited_server_ids.clone()
+                    });
+                    let all_fav_ids = account_sessions.batch(|as_| {
+                        for id in &new_fav_ids {
+                            if !as_.favorited_server_ids.contains(id) {
+                                as_.favorited_server_ids.push(id.clone());
+                            }
+                        }
+                        as_.favorited_server_ids.clone()
                     });
 
                     // Persist cache + favourites without holding any Signal lock.
@@ -1141,15 +1143,15 @@ async fn restore_poly_accounts(
                     let dms = guard.get_dm_channels().await.ok();
                     let friends = guard.get_friends().await.ok();
                     let aid = account_id.clone();
-                    chat_data.batch(move |cd| {
+                    chat_lists.batch(move |cl| {
                         if let Some(dms) = dms {
-                            cd.dm_channels.extend(dms);
+                            cl.dm_channels.extend(dms);
                         }
                         if let Some(friends) = friends {
                             for friend in friends {
-                                let already = cd.friends.get(&aid).is_some_and(|v| v.iter().any(|f| f.id == friend.id));
+                                let already = cl.friends.get(&aid).is_some_and(|v| v.iter().any(|f| f.id == friend.id));
                                 if !already {
-                                    cd.friends.entry(aid.clone()).or_default().push(friend);
+                                    cl.friends.entry(aid.clone()).or_default().push(friend);
                                 }
                             }
                         }
@@ -1188,8 +1190,8 @@ async fn restore_poly_accounts(
                 {
                     let aid_c = token.account_id.clone();
                     let sess_c = offline_session;
-                    chat_data.batch(move |cd| {
-                        cd.account_sessions.insert(aid_c, sess_c);
+                    account_sessions.batch(move |as_| {
+                        as_.account_sessions.insert(aid_c, sess_c);
                     });
                 }
 
@@ -1219,10 +1221,10 @@ async fn restore_poly_accounts(
                     })
                     .collect();
                 if !account_servers.is_empty() {
-                    chat_data.batch(move |cd| {
+                    chat_lists.batch(move |cl| {
                         for srv in account_servers {
-                            if !cd.servers.iter().any(|s| s.id == srv.id) {
-                                cd.servers.push(srv);
+                            if !cl.servers.iter().any(|s| s.id == srv.id) {
+                                cl.push_server(srv);
                             }
                         }
                     });
@@ -1248,7 +1250,9 @@ async fn init_storage(
     user_prefs: BatchedSignal<UserPrefs>,
     mut locale_sig: Signal<String>,
     client_manager: BatchedSignal<ClientManager>,
-    chat_data: BatchedSignal<ChatData>,
+    chat_lists: BatchedSignal<ChatLists>,
+    account_sessions: BatchedSignal<AccountSessions>,
+    chat_view_state: BatchedSignal<ChatViewState>,
     voice_state: BatchedSignal<VoiceState>,
     drag_state: BatchedSignal<DragState>,
 ) {
@@ -1317,8 +1321,8 @@ async fn init_storage(
                     // on launch — before the server list is fetched from the network.
                     if !settings.favorited_server_ids.is_empty() {
                         let fav_ids = settings.favorited_server_ids.clone();
-                        chat_data.batch(move |cd| {
-                            cd.favorited_server_ids = fav_ids;
+                        account_sessions.batch(move |as_| {
+                            as_.favorited_server_ids = fav_ids;
                         });
                         tracing::info!(
                             "Restored {} favorited server(s) from storage",
@@ -1345,7 +1349,7 @@ async fn init_storage(
                     // toggle_demo activates all demo data; the Router's Root component
                     // then redirects to /demo/demo/dms once it mounts.
                     if settings.demo_active {
-                        demo::toggle_demo(client_manager, chat_data, voice_state, drag_state, app_state, nav, ui_layout, ui_overlays, user_prefs).await;
+                        demo::toggle_demo(client_manager, voice_state, drag_state, app_state, nav, ui_layout, ui_overlays, user_prefs, chat_lists, account_sessions, chat_view_state).await;
                     }
                     // Collapse the sidebar visibility cascade into one batch on UiLayout.
                     // Mobile layout forces both visibility bits to false.
@@ -1378,12 +1382,13 @@ async fn init_storage(
                     // Restore poly server accounts from persisted tokens.
                     // This runs after demo restore so both can coexist.
                     #[cfg(feature = "server")]
-                    restore_poly_accounts(&storage, client_manager, chat_data).await;
+                    restore_poly_accounts(&storage, client_manager, chat_lists, account_sessions).await;
                     // Restore all other native (non-poly) accounts from persisted tokens.
                     crate::account_restore::restore_native_accounts(
                         &storage,
                         client_manager,
-                        chat_data,
+                        chat_lists,
+                        account_sessions,
                         None,
                     )
                     .await;
@@ -1500,13 +1505,15 @@ fn router_config(
 fn AppBody(storage_ready: bool, setup_complete: bool, app_state: BatchedSignal<AppState>) -> Element {
     // Pull context signals so we can activate demo after setup completes.
     let client_manager: BatchedSignal<ClientManager> = use_context();
-    let chat_data: BatchedSignal<ChatData> = use_context();
     let voice_state: BatchedSignal<VoiceState> = use_context();
     let drag_state: BatchedSignal<DragState> = use_context();
     let nav: BatchedSignal<NavState> = use_context();
     let ui_layout: BatchedSignal<UiLayout> = use_context();
     let ui_overlays: BatchedSignal<UiOverlays> = use_context();
     let user_prefs: BatchedSignal<UserPrefs> = use_context();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
+    let account_sessions: BatchedSignal<AccountSessions> = use_context();
+    let chat_view_state: BatchedSignal<ChatViewState> = use_context();
     rsx! {
         if !storage_ready {
             div { class: "storage-loading" }
@@ -1524,7 +1531,7 @@ fn AppBody(storage_ready: bool, setup_complete: bool, app_state: BatchedSignal<A
                         // right away without needing an app restart.
                         // demo_active is true in persist_setup_completion so it
                         // will also be restored correctly on subsequent launches.
-                        demo::toggle_demo(client_manager, chat_data, voice_state, drag_state, app_state, nav, ui_layout, ui_overlays, user_prefs).await;
+                        demo::toggle_demo(client_manager, voice_state, drag_state, app_state, nav, ui_layout, ui_overlays, user_prefs, chat_lists, account_sessions, chat_view_state).await;
                         // Only now flip is_setup_complete — this mounts the Router
                         // with demo already active, so on_update's initial redirect
                         // lands on DmsHome.
@@ -1710,12 +1717,6 @@ pub fn App() -> Element {
         BatchedSignal::from_signal(use_signal(ClientManager::new));
     provide_context(client_manager);
 
-    // ChatData is declared here (before the startup use_effect) so that the
-    // auto-connect helper can capture it by copy in the same effect.
-    let chat_data: BatchedSignal<ChatData> =
-        BatchedSignal::from_signal(use_signal(ChatData::default));
-    provide_context(chat_data);
-
     // DECISION(G.6): Three sub-signal contexts split off from ChatData to narrow
     // subscriber sets. Writing to ChatViewState (new message) does NOT re-render
     // components that only subscribe to ChatLists (server sidebar) or
@@ -1769,9 +1770,8 @@ pub fn App() -> Element {
         register_native_test_accounts(&mut client_manager);
         #[cfg(debug_assertions)]
         {
-            auto_signin_test_accounts(client_manager, chat_data);
+            auto_signin_test_accounts(client_manager);
         }
-        let _ = chat_data;
     });
 
     // Provide app_state as context so child components subscribe independently
@@ -1816,7 +1816,9 @@ pub fn App() -> Element {
             user_prefs,
             locale_sig,
             client_manager,
-            chat_data,
+            chat_lists,
+            account_sessions,
+            chat_view_state,
             voice_state,
             drag_state,
         )
@@ -1829,7 +1831,7 @@ pub fn App() -> Element {
     let setup_complete = app_state_snapshot.is_setup_complete;
     let root_class = app_root_class(&ui_layout_snapshot);
     let client_manager_snapshot = client_manager.read().clone();
-    let chat_data_snapshot = chat_data.read().clone();
+    let chat_view_state_snapshot = chat_view_state.read().clone();
 
     use_effect(move || {
         // poly-lint: allow effect-self-write — boot overlay state machine has
@@ -1908,7 +1910,7 @@ pub fn App() -> Element {
             },
             &ui_layout_snapshot,
             &client_manager_snapshot,
-            &chat_data_snapshot,
+            &chat_view_state_snapshot,
         );
         let script = format!(
             "window.__polyStartupState = {{ enabled: {}, visible: {}, phase: '{}' }}; document.documentElement.setAttribute('data-poly-startup-phase', '{}');",
@@ -1929,7 +1931,7 @@ pub fn App() -> Element {
         },
         &ui_layout_snapshot,
         &client_manager_snapshot,
-        &chat_data_snapshot,
+        &chat_view_state_snapshot,
     );
 
     rsx! {

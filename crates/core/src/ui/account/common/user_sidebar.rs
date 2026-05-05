@@ -19,9 +19,8 @@
 
 use crate::state::BatchedSignal;
 use crate::i18n::t;
-use crate::state::ChatData;
 use crate::state::chat_data::user_color;
-use crate::state::{AppState, MemberListGrouping, MemberListSortOrder, UiOverlays};
+use crate::state::{AppState, ChatViewState, MemberListGrouping, MemberListSortOrder, UiOverlays};
 use crate::ui::account::common::user_profile_modal::open_user_profile;
 use dioxus::prelude::*;
 use poly_client::{PresenceStatus, User};
@@ -108,11 +107,11 @@ fn HighlightedName(name: String, query: String) -> Element {
 #[context_menu(UserRowContextMenu)]
 #[component]
 pub fn UserSidebar() -> Element {
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let chat_view_state: BatchedSignal<ChatViewState> = use_context();
     let app_state: BatchedSignal<AppState> = use_context();
     let ui_overlays: BatchedSignal<UiOverlays> = use_context();
     let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
-    let members = chat_data.read().members.clone();
+    let members = chat_view_state.read().members.clone(); // poly-lint: allow render-time-read — render snapshot; subscription intentional
     let mut filter_open = use_signal(|| false);
     let mut filter_text = use_signal(String::new);
 

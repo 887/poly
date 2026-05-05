@@ -7,7 +7,7 @@
 
 use dioxus::prelude::*;
 use crate::state::BatchedSignal;
-use crate::state::{AppState, ChatData, NavState, UiLayout, UiOverlays, VoiceState};
+use crate::state::{AccountSessions, AppState, ChatLists, ChatViewState, NavState, UiLayout, UiOverlays, VoiceState};
 use crate::client_manager::ClientManager;
 use super::super::chat_history::ChatHistoryUiState;
 use super::composer_helpers::PendingAttachmentPreview;
@@ -22,7 +22,9 @@ pub(super) struct ChatViewSignals {
     pub(super) ui_layout: BatchedSignal<UiLayout>,
     pub(super) ui_overlays: BatchedSignal<UiOverlays>,
     pub(super) client_manager: BatchedSignal<ClientManager>,
-    pub(super) chat_data: BatchedSignal<ChatData>,
+    pub(super) chat_lists: BatchedSignal<ChatLists>,
+    pub(super) chat_view_state: BatchedSignal<ChatViewState>,
+    pub(super) account_sessions: BatchedSignal<AccountSessions>,
     pub(super) voice_state: BatchedSignal<VoiceState>,
     pub(super) message_input: Signal<String>,
     pub(super) show_input_emoji: Signal<bool>,
@@ -74,7 +76,9 @@ pub(super) fn use_chat_view_signals() -> ChatViewSignals {
         ui_layout: use_context(),
         ui_overlays: use_context(),
         client_manager: use_context(),
-        chat_data: use_context(),
+        chat_lists: use_context(),
+        chat_view_state: use_context(),
+        account_sessions: use_context(),
         voice_state: use_context(),
         message_input: use_signal(String::new),
         show_input_emoji: use_signal(|| false),

@@ -17,7 +17,7 @@ use crate::state::BatchedSignal;
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::state::chat_data::user_color;
-use crate::state::{AppState, ChatData, UiOverlays};
+use crate::state::{AppState, UiOverlays};
 use crate::ui::account::common::user_profile_modal::open_user_profile;
 use dioxus::prelude::*;
 use poly_client::{PresenceStatus, User};
@@ -49,13 +49,13 @@ pub fn DmUserSidebar() -> Element {
     let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
     let ui_overlays: BatchedSignal<UiOverlays> = use_context();
     let ui_layout: crate::state::BatchedSignal<crate::state::UiLayout> = use_context();
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let chat_view_state: BatchedSignal<crate::state::ChatViewState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
 
-    let members = if chat_data.read().members.is_empty() {
-        chat_data.read().active_group_members.clone()
+    let members = if chat_view_state.read().members.is_empty() { // poly-lint: allow render-time-read — render snapshot; subscription intentional
+        chat_view_state.read().active_group_members.clone() // poly-lint: allow render-time-read — render snapshot; subscription intentional
     } else {
-        chat_data.read().members.clone()
+        chat_view_state.read().members.clone() // poly-lint: allow render-time-read — render snapshot; subscription intentional
     };
     let group_id = nav.read().selected_channel.cloned();
     let active_account_id = nav.read().active_account_id.cloned();
@@ -84,7 +84,6 @@ pub fn DmUserSidebar() -> Element {
                             member: member.clone(),
                             group_id: group_id.clone().unwrap_or_default(),
                             account_id: active_account_id.clone().unwrap_or_default(),
-                            chat_data,
                             client_manager,
                             ui_overlays,
                         }
@@ -104,10 +103,10 @@ fn DmMemberRow(
     member: User,
     group_id: String,
     account_id: String,
-    chat_data: BatchedSignal<ChatData>,
     client_manager: BatchedSignal<ClientManager>,
     ui_overlays: BatchedSignal<UiOverlays>,
 ) -> Element {
+    let chat_view_state: BatchedSignal<crate::state::ChatViewState> = use_context();
     let color = user_color(&member.id);
     let first_char: String = member
         .display_name
@@ -152,7 +151,7 @@ fn DmMemberRow(
                     let gid = group_id.clone();
                     let aid = account_id.clone();
                     spawn(async move {
-                        remove_member(gid, mid, aid, client_manager, chat_data).await;
+                        remove_member(gid, mid, aid, client_manager, chat_view_state).await;
                     });
                 },
                 "{t(\"group-member-remove\")}"
@@ -167,16 +166,16 @@ async fn remove_member(
     user_id: String,
     account_id: String,
     client_manager: BatchedSignal<ClientManager>,
-    chat_data: BatchedSignal<ChatData>,
+    chat_view_state: BatchedSignal<crate::state::ChatViewState>,
 ) {
     let result = client_manager.peek().with_backend(&account_id, async |b| {
         b.remove_group_member(&group_id, &user_id).await
     }).await;
     if result.is_ok() {
         // Remove the member from local state immediately for instant feedback.
-        chat_data.batch(|cd| {
-            cd.active_group_members.retain(|m| m.id != user_id);
-            cd.members.retain(|m| m.id != user_id);
+        chat_view_state.batch(|cv| {
+            cv.active_group_members.retain(|m| m.id != user_id);
+            cv.members.retain(|m| m.id != user_id);
         });
     }
 }

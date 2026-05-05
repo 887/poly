@@ -7,7 +7,7 @@
 
 use dioxus::prelude::*;
 use crate::state::BatchedSignal;
-use crate::state::{AppState, ChatData, NavState, UiLayout, UiOverlays, VoiceState};
+use crate::state::{AppState, ChatLists, ChatViewState, NavState, UiLayout, UiOverlays, VoiceState};
 use crate::client_manager::ClientManager;
 use super::super::chat_history::ChatHistoryUiState;
 use super::composer_helpers::PendingAttachmentPreview;
@@ -33,7 +33,8 @@ pub(super) struct ChatViewMarkupCtx {
     pub(super) ui_layout: BatchedSignal<UiLayout>,
     pub(super) ui_overlays: BatchedSignal<UiOverlays>,
     pub(super) client_manager: BatchedSignal<ClientManager>,
-    pub(super) chat_data: BatchedSignal<ChatData>,
+    pub(super) chat_lists: BatchedSignal<ChatLists>,
+    pub(super) chat_view_state: BatchedSignal<ChatViewState>,
     pub(super) voice_state: BatchedSignal<VoiceState>,
     pub(super) channel_id: Option<String>,
     pub(super) messages: Vec<Message>,
@@ -117,16 +118,17 @@ pub(super) fn build_chat_view_markup_ctx(signals: &ChatViewSignals) -> ChatViewM
     let ui_layout = signals.ui_layout;
     let ui_overlays = signals.ui_overlays;
     let client_manager = signals.client_manager;
-    let chat_data = signals.chat_data;
+    let chat_lists = signals.chat_lists;
+    let chat_view_state = signals.chat_view_state;
     let voice_state = signals.voice_state;
     let nav = navigator();
     let channel_id = nav_signal.read().selected_channel.cloned();
-    let messages = chat_data.read().messages.clone();
-    let current_channel = chat_data.read().current_channel.clone();
-    let current_server = chat_data.read().current_server.clone();
-    let loading = chat_data.read().loading;
+    let messages = chat_view_state.read().messages.clone();
+    let current_channel = chat_view_state.read().current_channel.clone();
+    let current_server = chat_view_state.read().current_server.clone();
+    let loading = chat_view_state.read().loading;
     let reaction_picker_id = signals.reaction_picker_msg.read().clone();
-    let group_members = chat_data.read().active_group_members.clone();
+    let group_members = chat_view_state.read().active_group_members.clone();
     let search_query_input_value = signals.search_query.read().clone();
     let search_query_value = search_query_input_value.trim().to_string();
     let current_channel_name = current_channel
@@ -160,7 +162,8 @@ pub(super) fn build_chat_view_markup_ctx(signals: &ChatViewSignals) -> ChatViewM
         ui_layout,
         ui_overlays,
         client_manager,
-        chat_data,
+        chat_lists,
+        chat_view_state,
         voice_state,
         channel_id: channel_id.clone(),
         messages,
@@ -195,9 +198,9 @@ pub(super) fn build_chat_view_markup_ctx(signals: &ChatViewSignals) -> ChatViewM
         unread_banner_date,
         unread_banner_channel_id: channel_id.clone(),
         self_user_id: current_self_user_id(nav_signal, client_manager),
-        dm_user: current_dm_user(chat_data, &channel_id, is_dm_channel),
-        dm_user_avatar: current_dm_user_avatar(chat_data, &channel_id, is_dm_channel),
-        dm_user_presence: current_dm_user_presence(chat_data, &channel_id, is_dm_channel),
+        dm_user: current_dm_user(chat_lists, &channel_id, is_dm_channel),
+        dm_user_avatar: current_dm_user_avatar(chat_lists, &channel_id, is_dm_channel),
+        dm_user_presence: current_dm_user_presence(chat_lists, &channel_id, is_dm_channel),
         search_hit_channel_id: channel_id.clone(),
         pinned_hit_channel_id: channel_id,
         search_hit_server: current_server.clone(),
@@ -295,7 +298,7 @@ fn current_self_user_id(
 }
 
 fn current_dm_user_avatar(
-    chat_data: BatchedSignal<ChatData>,
+    chat_lists: BatchedSignal<ChatLists>,
     channel_id: &Option<String>,
     is_dm_channel: bool,
 ) -> Option<String> {
@@ -304,7 +307,7 @@ fn current_dm_user_avatar(
     }
 
     let cid = channel_id.clone().unwrap_or_default();
-    chat_data
+    chat_lists
         .read()
         .dm_channels
         .iter()
@@ -313,7 +316,7 @@ fn current_dm_user_avatar(
 }
 
 fn current_dm_user(
-    chat_data: BatchedSignal<ChatData>,
+    chat_lists: BatchedSignal<ChatLists>,
     channel_id: &Option<String>,
     is_dm_channel: bool,
 ) -> Option<User> {
@@ -322,7 +325,7 @@ fn current_dm_user(
     }
 
     let cid = channel_id.clone().unwrap_or_default();
-    chat_data
+    chat_lists
         .read()
         .dm_channels
         .iter()
@@ -331,7 +334,7 @@ fn current_dm_user(
 }
 
 fn current_dm_user_presence(
-    chat_data: BatchedSignal<ChatData>,
+    chat_lists: BatchedSignal<ChatLists>,
     channel_id: &Option<String>,
     is_dm_channel: bool,
 ) -> PresenceStatus {
@@ -340,7 +343,7 @@ fn current_dm_user_presence(
     }
 
     let cid = channel_id.clone().unwrap_or_default();
-    chat_data
+    chat_lists
         .read()
         .dm_channels
         .iter()

@@ -36,7 +36,7 @@ use register_link::RegisterLink;
 use crate::state::BatchedSignal;
 use crate::client_manager::{BackendHandle, ClientManager};
 use crate::i18n::t;
-use crate::state::ChatData;
+use crate::state::{AccountSessions, ChatLists};
 use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::favorites_sidebar::FavoritesBar;
 use crate::ui::routes::Route;
@@ -99,9 +99,8 @@ impl UiAction for ReauthAccountPageAction {
 /// Used by both the normal per-backend signup flow and the quick test-account panel.
 pub(crate) fn build_on_complete(
     client_manager: BatchedSignal<ClientManager>,
-    chat_data: BatchedSignal<ChatData>,
 ) -> Callback<SignupCompleted> {
-    build_on_complete_inner(client_manager, chat_data, true)
+    build_on_complete_inner(client_manager, true)
 }
 
 /// Variant that skips the terminal `navigator().push(landing)`. Needed by
@@ -111,16 +110,18 @@ pub(crate) fn build_on_complete(
 /// is already on whatever route they restored to at startup.
 pub(crate) fn build_on_complete_no_nav(
     client_manager: BatchedSignal<ClientManager>,
-    chat_data: BatchedSignal<ChatData>,
 ) -> Callback<SignupCompleted> {
-    build_on_complete_inner(client_manager, chat_data, false)
+    build_on_complete_inner(client_manager, false)
 }
 
 fn build_on_complete_inner(
     client_manager: BatchedSignal<ClientManager>,
-    chat_data: BatchedSignal<ChatData>,
     nav_on_complete: bool,
 ) -> Callback<SignupCompleted> {
+    // Capture the sub-signals from context so writes route to the correct stores.
+    // These are always provided at the App level alongside chat_data.
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
+    let account_sessions: BatchedSignal<AccountSessions> = use_context();
     Callback::new(move |completed: SignupCompleted| {
         let backend_handle: BackendHandle =
             Arc::new(tokio::sync::RwLock::new(completed.backend));
@@ -208,7 +209,7 @@ fn build_on_complete_inner(
             }
             {
                 let aid = account_id.clone();
-                chat_data.batch(move |cd| { cd.account_sessions.insert(aid, session); });
+                account_sessions.batch(move |as_| { as_.account_sessions.insert(aid, session); });
             }
             // Phase 3: async data load — no Signal lock held during awaits.
             {
@@ -227,7 +228,13 @@ fn build_on_complete_inner(
                                 account_display_name: display_name.clone(),
                             })
                             .collect();
-                    chat_data.batch(move |cd| cd.servers.extend(servers));
+                    chat_lists.batch(move |cl| {
+                        for srv in servers {
+                            if !cl.servers.iter().any(|s| s.id == srv.id) {
+                                cl.push_server(srv);
+                            }
+                        }
+                    });
 
                     if let Some(storage) = crate::STORAGE.get()
                         && let Err(e) =
@@ -246,31 +253,36 @@ fn build_on_complete_inner(
                 let blocked = guard.get_blocked_users().await.ok();
                 let policy = guard.get_content_policy().await.ok();
                 let aid = account_id.clone();
-                chat_data.batch(move |cd| {
+                chat_lists.batch(move |cl| {
                     if let Some(dms) = dms {
-                        cd.dm_channels.extend(dms);
+                        cl.dm_channels.extend(dms);
                     }
                     if let Some(groups) = groups {
-                        cd.groups.extend(groups);
+                        cl.groups.extend(groups);
                     }
                     if let Some(notifs) = notifs {
-                        cd.notifications.extend(notifs.into_iter().filter(|n| !n.read));
+                        cl.notifications.extend(notifs.into_iter().filter(|n| !n.read));
                     }
                     if let Some(friends) = friends {
                         for friend in friends {
-                            let already = cd.friends.get(&aid).is_some_and(|v| v.iter().any(|f| f.id == friend.id));
+                            let already = cl.friends.get(&aid).is_some_and(|v| v.iter().any(|f| f.id == friend.id));
                             if !already {
-                                cd.friends.entry(aid.clone()).or_default().push(friend);
+                                cl.friends.entry(aid.clone()).or_default().push(friend);
                             }
                         }
                     }
-                    if let Some(blocked) = blocked {
-                        cd.blocked_users.insert(aid.clone(), blocked);
-                    }
-                    if let Some(policy) = policy {
-                        cd.content_policy = policy;
-                    }
                 });
+                if let Some(blocked) = blocked {
+                    let aid = account_id.clone();
+                    account_sessions.batch(move |as_| {
+                        as_.blocked_users.insert(aid, blocked);
+                    });
+                }
+                if let Some(policy) = policy {
+                    account_sessions.batch(move |as_| {
+                        as_.content_policy = policy;
+                    });
+                }
             }
             let caps = client_manager.peek().capabilities_for_slug(&backend_slug);
             let landing = match caps.landing {
@@ -280,7 +292,7 @@ fn build_on_complete_inner(
                     account_id,
                 },
                 poly_client::LandingPage::FirstServer => {
-                    let first_server = chat_data.read().servers.iter()
+                    let first_server = chat_lists.peek().servers.iter()
                         .find(|s| s.account_id == account_id)
                         .map(|s| s.id.clone());
                     if let Some(server_id) = first_server {
@@ -328,8 +340,9 @@ fn build_on_complete_inner(
 fn build_on_complete_reauth(
     target_account_id: String,
     client_manager: BatchedSignal<ClientManager>,
-    chat_data: BatchedSignal<ChatData>,
 ) -> Callback<SignupCompleted> {
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
+    let account_sessions: BatchedSignal<AccountSessions> = use_context();
     Callback::new(move |completed: SignupCompleted| {
         let backend_handle: BackendHandle =
             Arc::new(tokio::sync::RwLock::new(completed.backend));
@@ -379,7 +392,7 @@ fn build_on_complete_reauth(
             }
             {
                 let aid = account_id.clone();
-                chat_data.batch(move |cd| { cd.account_sessions.insert(aid, session); });
+                account_sessions.batch(move |as_| { as_.account_sessions.insert(aid, session); });
             }
 
             let caps = client_manager.peek().capabilities_for_slug(&backend_slug);
@@ -390,7 +403,7 @@ fn build_on_complete_reauth(
                     account_id,
                 },
                 poly_client::LandingPage::FirstServer => {
-                    let first_server = chat_data.read().servers.iter()
+                    let first_server = chat_lists.peek().servers.iter()
                         .find(|s| s.account_id == account_id)
                         .map(|s| s.id.clone());
                     if let Some(server_id) = first_server {
@@ -426,8 +439,9 @@ async fn remove_backend_account_now(
     account_id: String,
     backend_slug: String,
     client_manager: BatchedSignal<ClientManager>,
-    chat_data: BatchedSignal<ChatData>,
 ) {
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
+    let account_sessions: BatchedSignal<AccountSessions> = use_context();
     let aid = account_id.clone();
     let handle = client_manager.batch(move |cm| cm.take_account(&aid));
     if let Some(h) = handle {
@@ -436,15 +450,20 @@ async fn remove_backend_account_now(
     }
     {
         let aid = account_id.clone();
-        chat_data.batch(move |cd| {
-            cd.servers.retain(|s| s.account_id != aid);
-            cd.dm_channels.retain(|d| d.account_id != aid);
-            cd.groups.retain(|g| g.account_id != aid);
-            cd.notifications.retain(|n| n.account_id != aid);
-            cd.friends.remove(&aid);
-            cd.account_sessions.remove(&aid);
-            let live_server_ids: Vec<String> = cd.servers.iter().map(|s| s.id.clone()).collect();
-            cd.favorited_server_ids.retain(|id| live_server_ids.contains(id));
+        chat_lists.batch(move |cl| {
+            cl.set_servers(cl.servers.iter().filter(|s| s.account_id != aid).cloned().collect());
+            cl.dm_channels.retain(|d| d.account_id != aid);
+            cl.groups.retain(|g| g.account_id != aid);
+            cl.notifications.retain(|n| n.account_id != aid);
+            cl.friends.remove(&aid);
+        });
+    }
+    {
+        let aid = account_id.clone();
+        let live_server_ids: Vec<String> = chat_lists.peek().servers.iter().map(|s| s.id.clone()).collect();
+        account_sessions.batch(move |as_| {
+            as_.account_sessions.remove(&aid);
+            as_.favorited_server_ids.retain(|id| live_server_ids.contains(id));
         });
     }
     if let Some(storage) = crate::STORAGE.get() {
@@ -564,8 +583,7 @@ fn AddAccountNav(selected_slug: Option<String>) -> Element {
 #[component]
 fn TestAccountsPanel() -> Element {
     let client_manager = use_context::<BatchedSignal<ClientManager>>();
-    let chat_data = use_context::<BatchedSignal<ChatData>>();
-    let on_complete = build_on_complete(client_manager, chat_data);
+    let on_complete = build_on_complete(client_manager);
     let entries: Vec<poly_client::TestAccountEntry> = client_manager
         .read()
         .test_account_entries
@@ -687,7 +705,6 @@ pub(crate) fn SignupPickerPage() -> Element {
 pub(crate) fn ClientSignupPage(client: String) -> Element {
     let _locale = crate::i18n::use_locale().read().clone();
     let client_manager = use_context::<BatchedSignal<ClientManager>>();
-    let chat_data      = use_context::<BatchedSignal<ChatData>>();
 
     // Load private key async — hooks must run unconditionally before any returns.
     let key_resource = use_resource({
@@ -737,7 +754,7 @@ pub(crate) fn ClientSignupPage(client: String) -> Element {
                     t: crate::i18n::t,
                     navigate_back: navigate_back_to_settings,
                 };
-                let on_complete = build_on_complete(client_manager, chat_data);
+                let on_complete = build_on_complete(client_manager);
                 let slug_for_register = client.clone();
                 rsx! {
                     div { class: "signup-content",
@@ -838,9 +855,9 @@ pub(crate) fn ReauthAccountPage(
     let _locale = crate::i18n::use_locale().read().clone();
     let _ = instance_id; // carried in the URL for /:backend/:instance_id/:account_id symmetry
     let client_manager = use_context::<BatchedSignal<ClientManager>>();
-    let chat_data      = use_context::<BatchedSignal<ChatData>>();
+    let account_sessions = use_context::<BatchedSignal<AccountSessions>>();
 
-    let display_name = chat_data
+    let display_name = account_sessions
         .read()
         .account_sessions
         .get(&account_id).map_or_else(|| account_id.clone(), |s| s.user.display_name.clone());
@@ -860,7 +877,7 @@ pub(crate) fn ReauthAccountPage(
             t: crate::i18n::t,
             navigate_back: navigate_back_to_settings,
         };
-        let on_complete = build_on_complete_reauth(account_id.clone(), client_manager, chat_data);
+        let on_complete = build_on_complete_reauth(account_id.clone(), client_manager);
         let aid_for_remove = account_id.clone();
         let slug_for_remove = backend.clone();
         let mut confirm_remove = use_signal(|| false);
@@ -883,7 +900,7 @@ pub(crate) fn ReauthAccountPage(
                                     let aid = aid_for_remove.clone();
                                     let slug = slug_for_remove.clone();
                                     spawn(async move {
-                                        remove_backend_account_now(aid, slug, client_manager, chat_data).await;
+                                        remove_backend_account_now(aid, slug, client_manager).await;
                                     });
                                 },
                                 "Yes, remove"

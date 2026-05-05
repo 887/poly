@@ -14,9 +14,10 @@ use super::super::mark_channel_as_read;
 pub(in super::super) fn use_auto_dismiss_divider_effect(signals: &ChatViewSignals) {
     let scrolled_from_bottom = signals.scrolled_from_bottom;
     let history_state = signals.history_state;
-    let chat_data = signals.chat_data;
+    let chat_lists = signals.chat_lists;
+    let chat_view_state = signals.chat_view_state;
 
-    use_effect(move || { // poly-lint: allow stale-effect-capture — Signal-only; subscribes to scrolled_from_bottom, history_state, chat_data Signals
+    use_effect(move || { // poly-lint: allow stale-effect-capture — Signal-only; subscribes to scrolled_from_bottom, history_state, chat_view_state, chat_lists Signals
         // Only act when the user is at the bottom (not scrolled away from live tail).
         if *scrolled_from_bottom.read() {
             return;
@@ -41,7 +42,7 @@ pub(in super::super) fn use_auto_dismiss_divider_effect(signals: &ChatViewSignal
 
         // Also clear bold / server badge so they don't linger.
         if let Some(channel_id) = channel_id {
-            mark_channel_as_read(chat_data, &channel_id);
+            mark_channel_as_read(chat_lists, chat_view_state, &channel_id);
         }
     });
 }

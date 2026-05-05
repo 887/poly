@@ -9,7 +9,7 @@ use crate::state::BatchedSignal;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
-use crate::state::{AccountSessions, AppState, ChatData, ChatLists, NavState, VoiceState};
+use crate::state::{AccountSessions, AppState, ChatLists, NavState, VoiceState};
 use crate::ui::routes::Route;
 use dioxus::prelude::*;
 use poly_client::VoiceConnectionKind;
@@ -30,7 +30,6 @@ pub fn OutgoingDirectCallOverlay(
     let app_state: BatchedSignal<AppState> = use_context();
     let nav_state: BatchedSignal<NavState> = use_context();
     let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
-    let chat_data: BatchedSignal<ChatData> = use_context();
     let chat_lists: BatchedSignal<ChatLists> = use_context();
     let account_sessions: BatchedSignal<AccountSessions> = use_context();
     let voice_state: BatchedSignal<VoiceState> = use_context();

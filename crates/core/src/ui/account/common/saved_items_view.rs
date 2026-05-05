@@ -9,7 +9,7 @@ use super::VoiceAccountFooter;
 use super::chat_view::{highlight_message, open_message_hit};
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
-use crate::state::{AppState, ChatData, NavState};
+use crate::state::{AccountSessions, AppState, ChatLists, ChatViewState, NavState};
 use crate::ui::split_shell::SplitMenuShell;
 use dioxus::prelude::*;
 use poly_client::{MessageContent, MessageSearchHit};
@@ -106,7 +106,9 @@ fn build_saved_sources(items: &[SavedPinnedItem]) -> Vec<SavedSourceSummary> {
 pub fn SavedItemsView() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
     let nav_state: BatchedSignal<NavState> = use_context();
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
+    let account_sessions: BatchedSignal<AccountSessions> = use_context();
+    let chat_view_state: BatchedSignal<ChatViewState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let nav = navigator();
     let title = t("saved-items-title");
@@ -117,13 +119,13 @@ pub fn SavedItemsView() -> Element {
     let mut selected_source = use_signal(|| None::<String>);
 
     let account_id = nav_state.read().active_account_id.cloned().unwrap_or_default();
-    let active_user_id = chat_data
-        .read()
+    let active_user_id = account_sessions
+        .read() // poly-lint: allow render-time-read — render snapshot; subscription intentional
         .account_sessions
         .get(&account_id)
         .map(|session| session.user.id.clone());
-    let dm_channels: Vec<_> = chat_data
-        .read()
+    let dm_channels: Vec<_> = chat_lists
+        .read() // poly-lint: allow render-time-read — render snapshot; subscription intentional
         .dm_channels
         .iter()
         .filter(|dm| {
@@ -132,8 +134,8 @@ pub fn SavedItemsView() -> Element {
         })
         .cloned()
         .collect();
-    let groups: Vec<_> = chat_data
-        .read()
+    let groups: Vec<_> = chat_lists
+        .read() // poly-lint: allow render-time-read — render snapshot; subscription intentional
         .groups
         .iter()
         .filter(|group| group.account_id == account_id)
@@ -310,7 +312,7 @@ pub fn SavedItemsView() -> Element {
                                                     current_channel_id,
                                                     current_server_id,
                                                     client_manager,
-                                                    chat_data,
+                                                    chat_view_state,
                                                     app_state,
                                                     nav_state,
                                                 ).await {

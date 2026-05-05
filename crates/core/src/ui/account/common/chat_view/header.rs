@@ -8,7 +8,6 @@
 use crate::client_manager::{ClientManager};
 use crate::i18n::t;
 use crate::state::{AccountSessions, AppState, BatchedSignal, ChatLists};
-use crate::state::ChatData;
 use crate::state::VoiceState;
 use dioxus::prelude::*;
 use poly_client::User;
@@ -95,7 +94,6 @@ pub(super) fn ChatHeaderActions(
     show_search_filters: Signal<bool>,
     header_actions_menu_open: Signal<bool>,
     header_actions_overflow: Signal<bool>,
-    chat_data: BatchedSignal<ChatData>,
     voice_state: BatchedSignal<VoiceState>,
     client_manager: BatchedSignal<ClientManager>,
     mobile_layout_resize_tick: Signal<u64>,
@@ -118,7 +116,6 @@ pub(super) fn ChatHeaderActions(
     let mut show_search_filters = show_search_filters;
     let mut header_actions_menu_open = header_actions_menu_open;
     let header_actions_overflow = header_actions_overflow;
-    let _chat_data = chat_data; // chat_data kept as prop for API compatibility; navigation now uses chat_lists + account_sessions
     let client_manager = client_manager;
     let active_dm_call = voice_state
         .read()

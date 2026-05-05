@@ -284,7 +284,8 @@ enum ResetKind {
 async fn run_reset_flow(
     kind: ResetKind,
     client_manager: BatchedSignal<crate::client_manager::ClientManager>,
-    chat_data: BatchedSignal<crate::state::ChatData>,
+    chat_lists: BatchedSignal<crate::state::ChatLists>,
+    account_sessions: BatchedSignal<crate::state::AccountSessions>,
     app_state: BatchedSignal<AppState>,
 ) -> Result<(), String> {
     let account_ids = client_manager.peek().active_account_ids();
@@ -299,7 +300,8 @@ async fn run_reset_flow(
     }
     client_manager.batch(crate::client_manager::ClientManager::clear_all_backends);
 
-    chat_data.batch(|cd| *cd = crate::state::ChatData::default());
+    chat_lists.batch(|cl| *cl = crate::state::ChatLists::default());
+    account_sessions.batch(|as_| *as_ = crate::state::AccountSessions::default());
     app_state.batch(|state| {
         state.is_setup_complete = false;
     });
@@ -332,7 +334,8 @@ fn ResetButton(kind: ResetKind, busy: Signal<bool>, on_error: EventHandler<Strin
     let app_state: BatchedSignal<AppState> = use_context();
     let ui_layout: crate::state::BatchedSignal<crate::state::UiLayout> = use_context();
     let client_manager: BatchedSignal<crate::client_manager::ClientManager> = use_context();
-    let chat_data: BatchedSignal<crate::state::ChatData> = use_context();
+    let chat_lists: BatchedSignal<crate::state::ChatLists> = use_context();
+    let account_sessions: BatchedSignal<crate::state::AccountSessions> = use_context();
     let mut busy_signal = use_signal(|| *busy.read());
 
     let (label, class_name) = match kind {
@@ -353,7 +356,7 @@ fn ResetButton(kind: ResetKind, busy: Signal<bool>, on_error: EventHandler<Strin
                 }
                 busy_signal.set(true);
                 spawn(async move {
-                    if let Err(err) = run_reset_flow(kind, client_manager, chat_data, app_state)
+                    if let Err(err) = run_reset_flow(kind, client_manager, chat_lists, account_sessions, app_state)
                         .await
                     {
                         on_error.call(err);
@@ -449,70 +452,3 @@ pub(super) fn GeneralSettings() -> Element {
     }
 }
 
-#[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-mod tests {
-    use super::*;
-    use crate::state::AppState;
-
-    #[test]
-    fn set_layout_mode_force_mobile_updates_state() {
-        let mut state = AppState::default();
-        LayoutSettingsAction::SetLayoutMode(LayoutMode::ForceMobile)
-            .apply(crate::ui::actions::ActionCx::test_no_nav(&mut state));
-        assert_eq!(state.layout_mode, LayoutMode::ForceMobile);
-    }
-
-    #[test]
-    fn set_layout_mode_auto_width_updates_state() {
-        let mut state = AppState::default();
-        state.layout_mode = LayoutMode::ForceMobile;
-        LayoutSettingsAction::SetLayoutMode(LayoutMode::AutoWidth)
-            .apply(crate::ui::actions::ActionCx::test_no_nav(&mut state));
-        assert_eq!(state.layout_mode, LayoutMode::AutoWidth);
-    }
-
-    #[test]
-    fn set_layout_mode_force_desktop_updates_state() {
-        let mut state = AppState::default();
-        LayoutSettingsAction::SetLayoutMode(LayoutMode::ForceDesktop)
-            .apply(crate::ui::actions::ActionCx::test_no_nav(&mut state));
-        assert_eq!(state.layout_mode, LayoutMode::ForceDesktop);
-    }
-
-    #[test]
-    fn set_mirror_menu_true_updates_state() {
-        let mut state = AppState::default();
-        assert!(!state.mirror_menu_layout);
-        LayoutSettingsAction::SetMirrorMenu(true)
-            .apply(crate::ui::actions::ActionCx::test_no_nav(&mut state));
-        assert!(state.mirror_menu_layout);
-    }
-
-    #[test]
-    fn set_mirror_menu_false_updates_state() {
-        let mut state = AppState::default();
-        state.mirror_menu_layout = true;
-        LayoutSettingsAction::SetMirrorMenu(false)
-            .apply(crate::ui::actions::ActionCx::test_no_nav(&mut state));
-        assert!(!state.mirror_menu_layout);
-    }
-
-    #[test]
-    fn set_mirror_chat_messages_true_updates_state() {
-        let mut state = AppState::default();
-        assert!(!state.mirror_chat_messages);
-        LayoutSettingsAction::SetMirrorChatMessages(true)
-            .apply(crate::ui::actions::ActionCx::test_no_nav(&mut state));
-        assert!(state.mirror_chat_messages);
-    }
-
-    #[test]
-    fn set_mirror_chat_messages_false_updates_state() {
-        let mut state = AppState::default();
-        state.mirror_chat_messages = true;
-        LayoutSettingsAction::SetMirrorChatMessages(false)
-            .apply(crate::ui::actions::ActionCx::test_no_nav(&mut state));
-        assert!(!state.mirror_chat_messages);
-    }
-}

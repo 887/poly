@@ -8,7 +8,7 @@
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::nav;
-use crate::state::{AccountContextMenuState, AppState, BatchedSignal, ChatData};
+use crate::state::{AccountContextMenuState, AppState, BatchedSignal, ChatLists, ChatViewState};
 use crate::ui::account::common::chat_view::mark_channel_as_read;
 use crate::ui::routes::Route;
 use dioxus::prelude::*;
@@ -19,7 +19,8 @@ use poly_ui_macros::{context_menu, ui_action};
 #[component]
 pub fn AccountContextMenuInner(menu: AccountContextMenuState, close: EventHandler<()>) -> Element {
     let _app_state: BatchedSignal<AppState> = use_context();
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
+    let chat_view_state: BatchedSignal<ChatViewState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
 
     let x = menu.x;
@@ -31,14 +32,14 @@ pub fn AccountContextMenuInner(menu: AccountContextMenuState, close: EventHandle
 
     // Total unread for this account = sum across all channels + DMs.
     let account_unread: u32 = {
-        let cd = chat_data.read(); // poly-lint: allow render-time-read — computing unread badge; subscription intentional
-        let from_channels: u32 = cd
+        let cl = chat_lists.read(); // poly-lint: allow render-time-read — computing unread badge; subscription intentional
+        let from_channels: u32 = cl
             .channels
             .iter()
             .filter(|c| !c.id.is_empty())
             .map(|c| c.unread_count)
             .sum();
-        let from_dms: u32 = cd
+        let from_dms: u32 = cl
             .dm_channels
             .iter()
             .filter(|d| d.account_id == account_id)
@@ -66,22 +67,22 @@ pub fn AccountContextMenuInner(menu: AccountContextMenuState, close: EventHandle
                         disabled: mark_read_disabled,
                         onclick: move |_| {
                             if mark_read_disabled { return; }
-                            let dm_ids: Vec<String> = chat_data
-                                .read() // poly-lint: allow render-time-read — inside click handler, not render path
+                            let dm_ids: Vec<String> = chat_lists
+                                .peek()
                                 .dm_channels
                                 .iter()
                                 .filter(|d| d.account_id == aid && d.unread_count > 0)
                                 .map(|d| d.id.clone())
                                 .collect();
-                            let chan_ids: Vec<String> = chat_data
-                                .read() // poly-lint: allow render-time-read — inside click handler, not render path
+                            let chan_ids: Vec<String> = chat_lists
+                                .peek()
                                 .channels
                                 .iter()
                                 .filter(|c| c.unread_count > 0)
                                 .map(|c| c.id.clone())
                                 .collect();
                             for id in dm_ids.iter().chain(chan_ids.iter()) {
-                                mark_channel_as_read(chat_data, id);
+                                mark_channel_as_read(chat_lists, chat_view_state, id);
                             }
                             close.call(());
                         },

@@ -87,7 +87,7 @@ use super::settings::SettingsPage;
 use super::split_shell::SplitMenuShell;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
-use crate::state::{AccountSessions, AppState, ChatData, ChatLists, NavState, SettingsSection, UiOverlays, View, VoiceState, use_spawn_once};
+use crate::state::{AccountSessions, AppState, ChatLists, ChatViewState, NavState, SettingsSection, UiOverlays, View, VoiceState, use_spawn_once};
 use crate::ui::account::common::VoiceAccountFooter;
 use crate::ui::account::common::{FeatureUnsupportedPlaceholder, UnsupportedFeature};
 use crate::ui::account::common::chat_history::initial_message_query;
@@ -993,11 +993,12 @@ pub fn sync_route_to_app_state(route: &Route, app_state: BatchedSignal<AppState>
 fn restore_dm_chat(
     dm_id: String,
     account_id: String,
-    chat_data: BatchedSignal<ChatData>,
     client_manager: BatchedSignal<ClientManager>,
+    chat_lists: BatchedSignal<ChatLists>,
+    chat_view_state: BatchedSignal<ChatViewState>,
 ) {
-    let already_set = chat_data
-        .read()
+    let already_set = chat_view_state
+        .peek()
         .current_channel
         .as_ref()
         .is_some_and(|ch| ch.id == dm_id);
@@ -1006,8 +1007,8 @@ fn restore_dm_chat(
     }
 
     let channel = {
-        let data = chat_data.read();
-        data.dm_channels
+        let cl = chat_lists.peek();
+        cl.dm_channels
             .iter()
             .find(|dm| dm.id == dm_id && dm.account_id == account_id)
             .map(|dm| Channel {
@@ -1023,7 +1024,7 @@ fn restore_dm_chat(
                 thread_metadata: None,
             })
             .or_else(|| {
-                data.groups
+                cl.groups
                     .iter()
                     .find(|g| g.id == dm_id && g.account_id == account_id)
                     .map(|g| {
@@ -1049,27 +1050,26 @@ fn restore_dm_chat(
                     })
             })
     };
-
     if let Some(ch) = channel {
         // Single write guard — batching current_channel + current_server into
         // one guard so Dioxus schedules one re-render, not two.
-        chat_data.batch(move |cd| {
-            cd.current_channel = Some(ch);
-            cd.current_server = None;
+        chat_view_state.batch(move |cv| {
+            cv.current_channel = Some(ch);
+            cv.current_server = None;
         });
     }
 
     spawn(async move {
         // Fire an initial reset cascade so the UI paints a loading state
         // before we await the backend.
-        chat_data.batch(|cd| {
-            cd.loading = true;
-            cd.messages = Vec::new();
-            cd.members = Vec::new();
+        chat_view_state.batch(|cv| {
+            cv.loading = true;
+            cv.set_messages(Vec::new());
+            cv.members = Vec::new();
         });
 
-        let unread_count = chat_data
-            .read()
+        let unread_count = chat_view_state
+            .peek()
             .current_channel
             .as_ref()
             .filter(|channel| channel.id == dm_id)
@@ -1077,7 +1077,7 @@ fn restore_dm_chat(
 
         let backend_arc = client_manager.peek().get_backend(&account_id);
         let Some(backend_arc) = backend_arc else {
-            chat_data.batch(|cd| cd.loading = false);
+            chat_view_state.batch(|cv| cv.loading = false);
             return;
         };
 
@@ -1093,15 +1093,15 @@ fn restore_dm_chat(
         drop(guard);
 
         // ONE terminal cascade for the whole fetch.
-        let mut pending = chat_data.pending_update();
+        let mut pending = chat_view_state.pending_update();
         if let Some(msgs) = messages {
-            pending.set(move |cd| cd.messages = msgs);
+            pending.set(move |cv| cv.set_messages(msgs));
             request_restore_scroll_position_or_bottom(&dm_id);
         }
         if let Some(mbrs) = members {
-            pending.set(move |cd| cd.members = mbrs);
+            pending.set(move |cv| cv.members = mbrs);
         }
-        pending.set(|cd| cd.loading = false);
+        pending.set(|cv| cv.loading = false);
         pending.apply();
     });
 }
@@ -1266,16 +1266,16 @@ fn DmChat(backend: String, instance_id: String, account_id: String, dm_id: Strin
     let app_state: BatchedSignal<AppState> = use_context();
     let nav_state: BatchedSignal<NavState> = use_context();
     let ui_overlays: BatchedSignal<UiOverlays> = use_context();
-    let chat_data: BatchedSignal<ChatData> = use_context();
     let chat_lists: BatchedSignal<ChatLists> = use_context();
     let account_sessions: BatchedSignal<AccountSessions> = use_context();
     let voice_state: BatchedSignal<VoiceState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
+    let chat_view_state: BatchedSignal<ChatViewState> = use_context();
     let dm_id_for_pending = dm_id.clone();
     let account_id_for_pending = account_id.clone();
 
     use_effect(move || {
-        restore_dm_chat(dm_id.clone(), account_id.clone(), chat_data, client_manager);
+        restore_dm_chat(dm_id.clone(), account_id.clone(), client_manager, chat_lists, chat_view_state);
     });
 
     // Key on the route's own (account_id, dm_id) — stable props that uniquely
@@ -1410,8 +1410,9 @@ fn DmPendingCallInner(
     start_video: bool,
     allow_add_to_active_temporary: bool,
 ) -> Element {
-    let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
+    let chat_view_state: BatchedSignal<ChatViewState> = use_context();
     let dm_id_for_effect = dm_id.clone();
     let account_id_for_effect = account_id.clone();
 
@@ -1419,8 +1420,9 @@ fn DmPendingCallInner(
         restore_dm_chat(
             dm_id_for_effect.clone(),
             account_id_for_effect.clone(),
-            chat_data,
             client_manager,
+            chat_lists,
+            chat_view_state,
         );
     });
 
@@ -1449,8 +1451,9 @@ fn DmMediaViewerRoute(
     message_id: String,
     attachment_index: usize,
 ) -> Element {
-    let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
+    let chat_view_state: BatchedSignal<ChatViewState> = use_context();
     let overlay_channel_id = dm_id.clone();
     let overlay_message_id = message_id.clone();
     let dm_id_for_effect = dm_id.clone();
@@ -1460,8 +1463,9 @@ fn DmMediaViewerRoute(
         restore_dm_chat(
             dm_id_for_effect.clone(),
             account_id_for_effect.clone(),
-            chat_data,
             client_manager,
+            chat_lists,
+            chat_view_state,
         );
     });
 
@@ -1488,10 +1492,11 @@ fn ServerMediaViewerRoute(
     message_id: String,
     attachment_index: usize,
 ) -> Element {
-    let chat_data: BatchedSignal<ChatData> = use_context();
     let voice_state: BatchedSignal<VoiceState> = use_context();
     let app_state: BatchedSignal<AppState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
+    let chat_view_state: BatchedSignal<ChatViewState> = use_context();
     let nav = navigator();
     let overlay_channel_id = channel_id.clone();
     let overlay_message_id = message_id.clone();
@@ -1518,16 +1523,17 @@ fn ServerMediaViewerRoute(
             // Cheap early return if click-navigation already populated the
             // channel + server. Peek so we don't subscribe.
             let already_loaded = {
-                let snapshot = chat_data.peek();
-                snapshot
+                let cv_snap = chat_view_state.peek();
+                let cl_snap = chat_lists.peek();
+                cv_snap
                     .current_server
                     .as_ref()
                     .is_some_and(|server| server.id == sid)
-                    && snapshot
+                    && cv_snap
                         .current_channel
                         .as_ref()
                         .is_some_and(|ch| ch.id == cid && ch.server_id == sid)
-                    && snapshot.channels.iter().any(|ch| ch.id == cid)
+                    && cl_snap.channels.iter().any(|ch| ch.id == cid)
             };
             if already_loaded {
                 return;
@@ -1538,8 +1544,9 @@ fn ServerMediaViewerRoute(
                 cid.clone(),
                 app_state,
                 client_manager,
-                chat_data,
                 voice_state,
+                chat_lists,
+                chat_view_state,
             )
             .await;
 
@@ -1604,10 +1611,11 @@ fn ServerHome(
     account_id: String,
     server_id: String,
 ) -> Element {
-    let chat_data: BatchedSignal<ChatData> = use_context();
     let app_state: BatchedSignal<AppState> = use_context();
     let nav_state: BatchedSignal<NavState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
+    let chat_view_state: BatchedSignal<ChatViewState> = use_context();
 
     // URL-restore: server data is absent after a hard reload. Load it now.
     //
@@ -1635,7 +1643,8 @@ fn ServerHome(
                     sid,
                     nav_state,
                     client_manager,
-                    chat_data,
+                    chat_lists,
+                    chat_view_state,
                 )
                 .await;
             } else {
@@ -1643,7 +1652,8 @@ fn ServerHome(
                     sid,
                     nav_state,
                     client_manager,
-                    chat_data,
+                    chat_lists,
+                    chat_view_state,
                 )
                 .await;
             }
@@ -1657,12 +1667,13 @@ fn ServerHome(
     // runs — which triggers `getUserMedia` / audio-device access and can
     // hard-crash Chromium on Linux.
     let (is_voice_channel, is_forum_server, is_empty_server) = {
-        let cd = chat_data.read();
-        let server_matches = cd.current_server.as_ref().is_some_and(|s| s.id == server_id);
+        let cv = chat_view_state.read(); // poly-lint: allow render-time-read — render snapshot; subscription intentional
+        let cl = chat_lists.read(); // poly-lint: allow render-time-read — render snapshot; subscription intentional
+        let server_matches = cv.current_server.as_ref().is_some_and(|s| s.id == server_id);
         let is_voice = server_matches
-            && cd.current_channel.as_ref().is_some_and(|ch| matches!(ch.channel_type, ChannelType::Voice | ChannelType::Video));
+            && cv.current_channel.as_ref().is_some_and(|ch| matches!(ch.channel_type, ChannelType::Voice | ChannelType::Video));
         let is_forum = server_matches
-            && cd.current_server.as_ref().is_some_and(|s| {
+            && cv.current_server.as_ref().is_some_and(|s| {
                 // poly-lint: allow render-time-read — capability lookup on slug, not a signal subscription
                 let slug = s.backend.as_str();
                 client_manager.peek().capabilities_for_slug(slug).is_forum_layout()
@@ -1672,7 +1683,7 @@ fn ServerHome(
         // ChatView renders blank, which on a stale-deep-link redirect to
         // ServerHome (see ServerChat use_effect) leaves the user staring at
         // an empty pane with no explanation.
-        let is_empty = server_matches && cd.channels.is_empty() && !cd.loading;
+        let is_empty = server_matches && cl.channels.is_empty() && !cv.loading;
         (is_voice, is_forum, is_empty)
     };
 
@@ -1709,10 +1720,11 @@ fn ServerChat(
     server_id: String,
     channel_id: String,
 ) -> Element {
-    let chat_data: BatchedSignal<ChatData> = use_context();
     let voice_state: BatchedSignal<VoiceState> = use_context();
     let app_state: BatchedSignal<AppState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
+    let chat_view_state: BatchedSignal<ChatViewState> = use_context();
     let nav = navigator();
     let route_channel_id = channel_id.clone();
     // `use_spawn_once` keys on the URL channel id and refuses to re-spawn
@@ -1741,8 +1753,9 @@ fn ServerChat(
                 cid.clone(),
                 app_state,
                 client_manager,
-                chat_data,
                 voice_state,
+                chat_lists,
+                chat_view_state,
             )
             .await;
 
@@ -1777,16 +1790,17 @@ fn ServerChat(
     // current_channel (set asynchronously by restore_server_channel) so the
     // view stays correct while the async load is in flight.
     let channel_type = {
-        let snapshot = chat_data.read();
-        snapshot
+        let cl_snap = chat_lists.read(); // poly-lint: allow render-time-read — render snapshot; subscription intentional
+        let cv_snap = chat_view_state.read(); // poly-lint: allow render-time-read — render snapshot; subscription intentional
+        cl_snap
             .channels
             .iter()
             .find(|ch| ch.id == route_channel_id)
             .map(|ch| ch.channel_type)
-            .or_else(|| snapshot.current_channel.as_ref().map(|ch| ch.channel_type))
+            .or_else(|| cv_snap.current_channel.as_ref().map(|ch| ch.channel_type))
     };
 
-    let is_forum_backend = chat_data.read().current_server.as_ref()
+    let is_forum_backend = chat_view_state.read().current_server.as_ref() // poly-lint: allow render-time-read — render snapshot; subscription intentional
         .is_some_and(|s| client_manager.peek().capabilities_for_slug(s.backend.as_str()).is_forum_layout());
     let is_voice = matches!(channel_type, Some(ChannelType::Voice) | Some(ChannelType::Video));
     let is_forum_channel = matches!(channel_type, Some(ChannelType::Forum));

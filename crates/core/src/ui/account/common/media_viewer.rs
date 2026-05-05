@@ -7,7 +7,7 @@
 
 use crate::state::BatchedSignal;
 use crate::i18n::t;
-use crate::state::{AppState, AttachmentContextMenuState, ChatData};
+use crate::state::{AppState, AttachmentContextMenuState, ChatViewState};
 use crate::ui::context_menu::menus::attachment_entry_at;
 use dioxus::prelude::*;
 use poly_client::Attachment;
@@ -25,7 +25,7 @@ pub struct MessageMediaViewerOverlayProps {
 #[context_menu(none)]
 #[component]
 pub fn MessageMediaViewerOverlay(props: MessageMediaViewerOverlayProps) -> Element {
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let chat_view_state: BatchedSignal<ChatViewState> = use_context();
     let app_state: BatchedSignal<AppState> = use_context();
     let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
     let nav = navigator();
@@ -36,7 +36,7 @@ pub fn MessageMediaViewerOverlay(props: MessageMediaViewerOverlayProps) -> Eleme
 
     // Collect image attachments + author info in a single message lookup.
     let (image_attachments, author_name, ts_str): (Vec<(usize, Attachment)>, String, String) = {
-        let snapshot = chat_data.read();
+        let snapshot = chat_view_state.read(); // poly-lint: allow render-time-read — render snapshot; subscription intentional
         if let Some(msg) = snapshot.messages.iter().find(|m| m.id == props.message_id) {
             let images = msg.attachments
                 .iter()

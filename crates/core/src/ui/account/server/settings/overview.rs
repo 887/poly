@@ -14,7 +14,7 @@
 use crate::state::BatchedSignal;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
-use crate::state::ChatData;
+use crate::state::ChatLists;
 use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::client_ui::toast::{ToastMessage, push_toast};
 use dioxus::prelude::*;
@@ -48,7 +48,8 @@ fn IconPanel(
     initial_url: String,
     local_only: bool,
 ) -> Element {
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let chat_lists: BatchedSignal<crate::state::ChatLists> = use_context();
+    let chat_view_state: BatchedSignal<crate::state::ChatViewState> = use_context();
     let mut url_input = use_signal(|| initial_url);
     let mut saved = use_signal(|| false);
     let preview_url = url_input.read().clone();
@@ -100,14 +101,18 @@ fn IconPanel(
                             {
                                 let url_c = url.clone();
                                 let sid_c = sid.clone();
-                                chat_data.batch(move |cd| {
-                                    if let Some(s) = cd.servers.iter_mut().find(|s| s.id == sid_c) {
+                                let url_cv = url.clone();
+                                let sid_cv = sid.clone();
+                                chat_lists.batch(move |cl| {
+                                    if let Some(s) = cl.servers.iter_mut().find(|s| s.id == sid_c) {
                                         s.icon_url = if url_c.is_empty() { None } else { Some(url_c.clone()) };
                                     }
-                                    if let Some(ref mut cs) = cd.current_server
-                                        && cs.id == sid_c
+                                });
+                                chat_view_state.batch(move |cv| {
+                                    if let Some(ref mut cs) = cv.current_server
+                                        && cs.id == sid_cv
                                     {
-                                        cs.icon_url = if url_c.is_empty() { None } else { Some(url_c) };
+                                        cs.icon_url = if url_cv.is_empty() { None } else { Some(url_cv) };
                                     }
                                 });
                             }
@@ -167,7 +172,8 @@ fn BannerPanel(
     initial_url: String,
     account_id: String,
 ) -> Element {
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let chat_lists: BatchedSignal<crate::state::ChatLists> = use_context();
+    let chat_view_state: BatchedSignal<crate::state::ChatViewState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let mut url_input = use_signal(|| initial_url);
     let mut saved = use_signal(|| false);
@@ -215,17 +221,21 @@ fn BannerPanel(
                             {
                                 let url_c = url.clone();
                                 let sid_c = sid.clone();
-                                chat_data.batch(move |cd| {
-                                    if let Some(s) = cd.servers.iter_mut().find(|s| s.id == sid_c) {
+                                let url_cv = url.clone();
+                                let sid_cv = sid.clone();
+                                chat_lists.batch(move |cl| {
+                                    if let Some(s) = cl.servers.iter_mut().find(|s| s.id == sid_c) {
                                         s.banner_url = if url_c.is_empty() { None } else { Some(url_c.clone()) };
                                     }
-                                    if let Some(ref mut cs) = cd.current_server
-                                        && cs.id == sid_c
+                                });
+                                chat_view_state.batch(move |cv| {
+                                    if let Some(ref mut cs) = cv.current_server
+                                        && cs.id == sid_cv
                                     {
-                                        cs.banner_url = if url_c.is_empty() {
+                                        cs.banner_url = if url_cv.is_empty() {
                                             None
                                         } else {
-                                            Some(url_c)
+                                            Some(url_cv)
                                         };
                                     }
                                 });
@@ -303,11 +313,11 @@ pub fn ServerOverviewSettings(
     account_id: String,
 ) -> Element {
     let _ = backend_slug; // backend slug no longer gates rendering; kept for prop stability
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
 
-    // Read current icon / banner URLs from chat_data (may already include
+    // Read current icon / banner URLs from chat_lists (may already include
     // any override applied by apply_server_icon_overrides).
-    let current_icon = chat_data
+    let current_icon = chat_lists
         .read()
         .servers
         .iter()
@@ -315,7 +325,7 @@ pub fn ServerOverviewSettings(
         .and_then(|s| s.icon_url.clone())
         .unwrap_or_default();
 
-    let current_banner = chat_data
+    let current_banner = chat_lists
         .read()
         .servers
         .iter()

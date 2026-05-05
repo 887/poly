@@ -13,7 +13,7 @@
 use crate::state::BatchedSignal;
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
-use crate::state::ChatData;
+use crate::state::ChatLists;
 use crate::ui::account::common::VoiceAccountFooter;
 use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::client_ui::PluginSettingsSection;
@@ -133,10 +133,10 @@ pub fn ChannelSettingsPage(
     channel_id: String,
 ) -> Element {
     let _ = (&backend, &instance_id, &server_id);
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
 
-    // Resolve channel name from ChatData, fallback to channel_id.
-    let channel_name = chat_data
+    // Resolve channel name from ChatLists, fallback to channel_id.
+    let channel_name = chat_lists
         .read()
         .channels
         .iter()

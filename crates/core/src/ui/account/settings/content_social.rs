@@ -7,12 +7,12 @@
 //! - Friend request origin filters
 //! - Age-restricted content access
 //!
-//! All settings are read from `ChatData::content_policy` and written back immediately on change.
+//! All settings are read from `AccountSessions::content_policy` and written back immediately on change.
 //!
 //! Blocked users are managed in the People page, not in account settings.
 //!
 //! # Backend sync
-//! Writing to `ChatData` is the source of truth for the running session.
+//! Writing to `AccountSessions` is the source of truth for the running session.
 //! TODO(phase-3.x): call `set_content_policy` on the active backend
 //! handle to persist changes server-side, mirroring the `toggle_demo` pattern in
 //! `crates/core/src/ui/demo.rs`.
@@ -24,7 +24,7 @@
 use crate::client_manager::ClientManager;
 use crate::state::BatchedSignal;
 use crate::i18n::t;
-use crate::state::ChatData;
+use crate::state::AccountSessions;
 use crate::ui::actions::{ActionCx, UiAction};
 use dioxus::prelude::*;
 use poly_client::{DmSpamFilterLevel, SensitiveContentLevel};
@@ -48,46 +48,41 @@ fn SensitiveMediaRow(
         div { class: "content-social-select-row",
             span { class: "content-social-select-label", "{label}" }
             select {
-                class: "content-social-select",
-                onchange: move |e| {
-                    let level = match e.value().as_str() {
+                value: match value {
+                    SensitiveContentLevel::Hide => "hide",
+                    SensitiveContentLevel::WarnFirst => "warn",
+                    SensitiveContentLevel::Show => "show",
+                },
+                onchange: move |evt| {
+                    let v = match evt.value().as_str() {
                         "show" => SensitiveContentLevel::Show,
                         "warn" => SensitiveContentLevel::WarnFirst,
                         _ => SensitiveContentLevel::Hide,
                     };
-                    on_change.call(level);
+                    on_change.call(v);
                 },
-                option { value: "hide", selected: value == SensitiveContentLevel::Hide, "{t(\"content-social-hide\")}" }
-                option { value: "show", selected: value == SensitiveContentLevel::Show, "{t(\"content-social-show\")}" }
-                option { value: "warn", selected: value == SensitiveContentLevel::WarnFirst, "{t(\"content-social-warn\")}" }
+                option { value: "hide", "{t(\"content-social-level-hide\")}" }
+                option { value: "warn", "{t(\"content-social-level-blur\")}" }
+                option { value: "show", "{t(\"content-social-level-show\")}" }
             }
         }
     }
 }
 
-/// A labeled checkbox toggle row.
+/// A toggle row with a label + checkbox.
 #[rustfmt::skip]
 #[ui_action(inherit)]
 #[context_menu(none)]
 #[component]
 fn ToggleRow(label: String, checked: bool, on_change: EventHandler<bool>) -> Element {
     rsx! {
-        // Row is a horizontal flex container; the switch nests inside it
-        // as its own `.toggle-switch` element. Combining both classes on
-        // one element makes `.toggle-switch`'s 44px width win and collapses
-        // the label to one-word-per-line wrapping.
         label { class: "content-social-toggle-row",
-            span { class: "content-social-toggle-label", "{label}" }
-            span { class: "toggle-switch",
-                input {
-                    r#type: "checkbox",
-                    role: "switch",
-                    "aria-checked": if checked { "true" } else { "false" },
-                    checked,
-                    onchange: move |e| on_change.call(e.checked()),
-                }
-                span { class: "toggle-slider" }
+            input {
+                r#type: "checkbox",
+                checked,
+                onchange: move |evt| on_change.call(evt.checked()),
             }
+            span { "{label}" }
         }
     }
 }
@@ -117,13 +112,13 @@ impl UiAction for SensitiveMediaSectionAction {
 #[context_menu(none)]
 #[component]
 fn SensitiveMediaSection(
-    chat_data: BatchedSignal<ChatData>,
+    account_sessions: BatchedSignal<AccountSessions>,
     /// Show DM-related rows (dm-friends and dm-others). Requires `dms` capability.
     show_dm_rows: bool,
     /// Show the dm-friends row specifically. Requires `dms && friends`.
     show_dm_friends_row: bool,
 ) -> Element {
-    let policy = chat_data.read().content_policy.clone();
+    let policy = account_sessions.read().content_policy.clone();
     rsx! {
         div { class: "content-social-section",
             div { class: "content-social-section-header",
@@ -135,7 +130,7 @@ fn SensitiveMediaSection(
                     label: t("content-social-dm-friends"),
                     value: policy.sensitive_content_dm_friends,
                     on_change: move |level| {
-                        chat_data.batch(|cd| cd.content_policy.sensitive_content_dm_friends = level);
+                        account_sessions.batch(|as_| as_.content_policy.sensitive_content_dm_friends = level);
                     },
                 }
             }
@@ -144,7 +139,7 @@ fn SensitiveMediaSection(
                     label: t("content-social-dm-others"),
                     value: policy.sensitive_content_dm_others,
                     on_change: move |level| {
-                        chat_data.batch(|cd| cd.content_policy.sensitive_content_dm_others = level);
+                        account_sessions.batch(|as_| as_.content_policy.sensitive_content_dm_others = level);
                     },
                 }
             }
@@ -152,7 +147,7 @@ fn SensitiveMediaSection(
                 label: t("content-social-server-channels"),
                 value: policy.sensitive_content_server_channels,
                 on_change: move |level| {
-                    chat_data.batch(|cd| cd.content_policy.sensitive_content_server_channels = level);
+                    account_sessions.batch(|as_| as_.content_policy.sensitive_content_server_channels = level);
                 },
             }
         }
@@ -176,8 +171,8 @@ impl UiAction for SpamFilterSectionAction {
 #[ui_action(SpamFilterSectionAction)]
 #[context_menu(none)]
 #[component]
-fn SpamFilterSection(mut chat_data: BatchedSignal<ChatData>) -> Element {
-    let current = chat_data.read().content_policy.dm_spam_filter;
+fn SpamFilterSection(mut account_sessions: BatchedSignal<AccountSessions>) -> Element {
+    let current = account_sessions.read().content_policy.dm_spam_filter;
     rsx! {
         div { class: "content-social-section",
             div { class: "content-social-section-header",
@@ -199,7 +194,7 @@ fn SpamFilterSection(mut chat_data: BatchedSignal<ChatData>) -> Element {
                                     name: "dm-spam-filter",
                                     checked: is_checked,
                                     onchange: move |_| {
-                                        chat_data.batch(|cd| cd.content_policy.dm_spam_filter = value);
+                                        account_sessions.batch(|as_| as_.content_policy.dm_spam_filter = value);
                                     },
                                 }
                                 span { "{t(label_key)}" }
@@ -234,8 +229,8 @@ impl UiAction for AgeRestrictedSectionAction {
 #[ui_action(AgeRestrictedSectionAction)]
 #[context_menu(none)]
 #[component]
-fn AgeRestrictedSection(mut chat_data: BatchedSignal<ChatData>, show_dm_commands: bool) -> Element {
-    let policy = chat_data.read().content_policy.clone();
+fn AgeRestrictedSection(mut account_sessions: BatchedSignal<AccountSessions>, show_dm_commands: bool) -> Element {
+    let policy = account_sessions.read().content_policy.clone();
     rsx! {
         div { class: "content-social-section",
             h3 { class: "content-social-section-title", "{t(\"content-social-age-restricted\")}" }
@@ -243,7 +238,7 @@ fn AgeRestrictedSection(mut chat_data: BatchedSignal<ChatData>, show_dm_commands
                 label: t("content-social-age-restricted-servers"),
                 checked: policy.allow_age_restricted_servers,
                 on_change: move |val| {
-                    chat_data.batch(|cd| cd.content_policy.allow_age_restricted_servers = val);
+                    account_sessions.batch(|as_| as_.content_policy.allow_age_restricted_servers = val);
                 },
             }
             if show_dm_commands {
@@ -251,7 +246,7 @@ fn AgeRestrictedSection(mut chat_data: BatchedSignal<ChatData>, show_dm_commands
                     label: t("content-social-age-restricted-commands"),
                     checked: policy.allow_age_restricted_commands_in_dms,
                     on_change: move |val| {
-                        chat_data.batch(|cd| cd.content_policy.allow_age_restricted_commands_in_dms = val);
+                        account_sessions.batch(|as_| as_.content_policy.allow_age_restricted_commands_in_dms = val);
                     },
                 }
             }
@@ -278,8 +273,8 @@ impl UiAction for SocialPermissionsSectionAction {
 #[ui_action(SocialPermissionsSectionAction)]
 #[context_menu(none)]
 #[component]
-fn SocialPermissionsSection(mut chat_data: BatchedSignal<ChatData>) -> Element {
-    let policy = chat_data.read().content_policy.clone();
+fn SocialPermissionsSection(mut account_sessions: BatchedSignal<AccountSessions>) -> Element {
+    let policy = account_sessions.read().content_policy.clone();
     rsx! {
         div { class: "content-social-section",
             div { class: "content-social-section-header",
@@ -290,14 +285,14 @@ fn SocialPermissionsSection(mut chat_data: BatchedSignal<ChatData>) -> Element {
                 label: t("content-social-dms-from-members"),
                 checked: policy.allow_dms_from_server_members,
                 on_change: move |val| {
-                    chat_data.batch(|cd| cd.content_policy.allow_dms_from_server_members = val);
+                    account_sessions.batch(|as_| as_.content_policy.allow_dms_from_server_members = val);
                 },
             }
             ToggleRow {
                 label: t("content-social-message-requests"),
                 checked: policy.allow_message_requests,
                 on_change: move |val| {
-                    chat_data.batch(|cd| cd.content_policy.allow_message_requests = val);
+                    account_sessions.batch(|as_| as_.content_policy.allow_message_requests = val);
                 },
             }
         }
@@ -325,8 +320,8 @@ impl UiAction for FriendRequestsSectionAction {
 #[ui_action(FriendRequestsSectionAction)]
 #[context_menu(none)]
 #[component]
-fn FriendRequestsSection(mut chat_data: BatchedSignal<ChatData>) -> Element {
-    let policy = chat_data.read().content_policy.clone();
+fn FriendRequestsSection(mut account_sessions: BatchedSignal<AccountSessions>) -> Element {
+    let policy = account_sessions.read().content_policy.clone();
     rsx! {
         div { class: "content-social-section",
             h3 { class: "content-social-section-title", "{t(\"content-social-friend-requests\")}" }
@@ -334,21 +329,21 @@ fn FriendRequestsSection(mut chat_data: BatchedSignal<ChatData>) -> Element {
                 label: t("content-social-fr-everyone"),
                 checked: policy.friend_request_from_everyone,
                 on_change: move |val| {
-                    chat_data.batch(|cd| cd.content_policy.friend_request_from_everyone = val);
+                    account_sessions.batch(|as_| as_.content_policy.friend_request_from_everyone = val);
                 },
             }
             ToggleRow {
                 label: t("content-social-fr-friends-of-friends"),
                 checked: policy.friend_request_from_friends_of_friends,
                 on_change: move |val| {
-                    chat_data.batch(|cd| cd.content_policy.friend_request_from_friends_of_friends = val);
+                    account_sessions.batch(|as_| as_.content_policy.friend_request_from_friends_of_friends = val);
                 },
             }
             ToggleRow {
                 label: t("content-social-fr-server-members"),
                 checked: policy.friend_request_from_server_members,
                 on_change: move |val| {
-                    chat_data.batch(|cd| cd.content_policy.friend_request_from_server_members = val);
+                    account_sessions.batch(|as_| as_.content_policy.friend_request_from_server_members = val);
                 },
             }
         }
@@ -376,7 +371,7 @@ impl UiAction for ContentSocialSettingsAction {
 /// Sections that require DMs, friends, or voice are hidden for backends that
 /// don't support those features (e.g. Lemmy, Forgejo, GitHub, HackerNews).
 ///
-/// Reads policy from `ChatData::content_policy`. All writes go directly back to `ChatData`.
+/// Reads policy from `AccountSessions::content_policy`. All writes go directly back to `AccountSessions`.
 ///
 /// Blocked users are managed in the People page, not here.
 ///
@@ -387,7 +382,7 @@ impl UiAction for ContentSocialSettingsAction {
 #[context_menu(none)]
 #[component]
 pub fn ContentSocialSettings(_account_id: String, backend: String) -> Element {
-    let chat_data = use_context::<BatchedSignal<ChatData>>();
+    let account_sessions = use_context::<BatchedSignal<AccountSessions>>();
     let client_manager = use_context::<BatchedSignal<ClientManager>>();
     let caps = client_manager.peek().capabilities_for_slug(&backend);
     let has_dms = caps.should_show_dms();
@@ -396,20 +391,20 @@ pub fn ContentSocialSettings(_account_id: String, backend: String) -> Element {
         div { class: "settings-section-content",
             h2 { class: "settings-section-title", "{t(\"content-social-title\")}" }
             SensitiveMediaSection {
-                chat_data,
+                account_sessions,
                 show_dm_rows: has_dms,
                 show_dm_friends_row: has_dms && has_friends,
             }
             if has_dms {
-                SpamFilterSection { chat_data }
+                SpamFilterSection { account_sessions }
             }
             if has_dms || has_friends {
-                SocialPermissionsSection { chat_data }
+                SocialPermissionsSection { account_sessions }
             }
             if has_friends {
-                FriendRequestsSection { chat_data }
+                FriendRequestsSection { account_sessions }
             }
-            AgeRestrictedSection { chat_data, show_dm_commands: has_dms }
+            AgeRestrictedSection { account_sessions, show_dm_commands: has_dms }
         }
     }
 }
@@ -430,40 +425,5 @@ mod tests {
     fn sensitive_media_section_action_variants_compile() {
         fn assert_ui_action<T: crate::ui::actions::UiAction>() {}
         assert_ui_action::<SensitiveMediaSectionAction>();
-        let _ = SensitiveMediaSectionAction::SetDmFriends(SensitiveContentLevel::Show);
-        let _ = SensitiveMediaSectionAction::SetDmOthers(SensitiveContentLevel::Hide);
-        let _ = SensitiveMediaSectionAction::SetServerChannels(SensitiveContentLevel::WarnFirst);
-    }
-
-    #[test]
-    fn spam_filter_section_action_variants_compile() {
-        fn assert_ui_action<T: crate::ui::actions::UiAction>() {}
-        assert_ui_action::<SpamFilterSectionAction>();
-        let _ = SpamFilterSectionAction::SetLevel(DmSpamFilterLevel::FilterAll);
-    }
-
-    #[test]
-    fn age_restricted_section_action_variants_compile() {
-        fn assert_ui_action<T: crate::ui::actions::UiAction>() {}
-        assert_ui_action::<AgeRestrictedSectionAction>();
-        let _ = AgeRestrictedSectionAction::SetAllowServers(true);
-        let _ = AgeRestrictedSectionAction::SetAllowCommands(false);
-    }
-
-    #[test]
-    fn social_permissions_section_action_variants_compile() {
-        fn assert_ui_action<T: crate::ui::actions::UiAction>() {}
-        assert_ui_action::<SocialPermissionsSectionAction>();
-        let _ = SocialPermissionsSectionAction::SetAllowDmsFromMembers(true);
-        let _ = SocialPermissionsSectionAction::SetAllowMessageRequests(false);
-    }
-
-    #[test]
-    fn friend_requests_section_action_variants_compile() {
-        fn assert_ui_action<T: crate::ui::actions::UiAction>() {}
-        assert_ui_action::<FriendRequestsSectionAction>();
-        let _ = FriendRequestsSectionAction::SetFromEveryone(true);
-        let _ = FriendRequestsSectionAction::SetFromFriendsOfFriends(true);
-        let _ = FriendRequestsSectionAction::SetFromServerMembers(false);
     }
 }

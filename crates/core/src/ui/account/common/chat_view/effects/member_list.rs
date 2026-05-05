@@ -4,10 +4,10 @@ use crate::state::use_spawn_once;
 use super::super::signals::ChatViewSignals;
 
 pub(in super::super) fn use_member_list_effect(signals: &ChatViewSignals) {
-    let app_state = signals.app_state;
+    let _app_state = signals.app_state;
     let nav = signals.nav;
     let client_manager = signals.client_manager;
-    let chat_data = signals.chat_data;
+    let chat_view_state = signals.chat_view_state;
 
     // Key on Option<String> so channel-unset also has a stable key and we
     // only clear members once per transition. PartialEq on Option handles
@@ -26,11 +26,11 @@ pub(in super::super) fn use_member_list_effect(signals: &ChatViewSignals) {
     // so channel switches still propagate.
     let active_channel_id = nav.peek().selected_channel.cloned();
     use_spawn_once(active_channel_id, move |active_channel_id| async move {
-        let chat_data = chat_data;
+        let chat_view_state = chat_view_state;
         let Some(active_channel_id) = active_channel_id else {
-            chat_data.batch(|cd| {
-                cd.members = Vec::new();
-                cd.active_group_members = Vec::new();
+            chat_view_state.batch(|cv| {
+                cv.members = Vec::new();
+                cv.active_group_members = Vec::new();
             });
             return;
         };
@@ -50,9 +50,9 @@ pub(in super::super) fn use_member_list_effect(signals: &ChatViewSignals) {
             None
         };
         let Some(backend) = backend else {
-            chat_data.batch(|cd| {
-                cd.members = Vec::new();
-                cd.active_group_members = Vec::new();
+            chat_view_state.batch(|cv| {
+                cv.members = Vec::new();
+                cv.active_group_members = Vec::new();
             });
             return;
         };
@@ -65,9 +65,9 @@ pub(in super::super) fn use_member_list_effect(signals: &ChatViewSignals) {
         };
         match guard.get_channel_members(&active_channel_id).await {
             Ok(members) => {
-                chat_data.batch(move |cd| {
-                    cd.members = members.clone();
-                    cd.active_group_members = if is_group { members } else { Vec::new() };
+                chat_view_state.batch(move |cv| {
+                    cv.members = members.clone();
+                    cv.active_group_members = if is_group { members } else { Vec::new() };
                 });
             }
             Err(err) => {
@@ -76,9 +76,9 @@ pub(in super::super) fn use_member_list_effect(signals: &ChatViewSignals) {
                     active_channel_id,
                     err
                 );
-                chat_data.batch(|cd| {
-                    cd.members = Vec::new();
-                    cd.active_group_members = Vec::new();
+                chat_view_state.batch(|cv| {
+                    cv.members = Vec::new();
+                    cv.active_group_members = Vec::new();
                 });
             }
         }

@@ -14,7 +14,7 @@
 
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
-use crate::state::{AppState, BatchedSignal, ChatData, GroupDmContextMenuState};
+use crate::state::{AppState, BatchedSignal, ChatLists, ChatViewState, GroupDmContextMenuState};
 use crate::ui::account::common::chat_view::mark_channel_as_read;
 use crate::ui::client_ui::toast::{ToastMessage, push_toast};
 use dioxus::prelude::*;
@@ -26,7 +26,8 @@ use poly_ui_macros::{context_menu, ui_action};
 #[component]
 pub fn GroupDmContextMenuInner(menu: GroupDmContextMenuState, close: EventHandler<()>) -> Element {
     let _app_state: BatchedSignal<AppState> = use_context();
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
+    let chat_view_state: BatchedSignal<ChatViewState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
 
     let x = menu.x;
@@ -51,7 +52,7 @@ pub fn GroupDmContextMenuInner(menu: GroupDmContextMenuState, close: EventHandle
                         disabled: mark_read_disabled,
                         onclick: move |_| {
                             if mark_read_disabled { return; }
-                            mark_channel_as_read(chat_data, &cid);
+                            mark_channel_as_read(chat_lists, chat_view_state, &cid);
                             close.call(());
                         },
                     }

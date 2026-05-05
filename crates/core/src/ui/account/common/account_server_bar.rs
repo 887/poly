@@ -27,7 +27,7 @@ use super::super::super::routes::Route;
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::state::chat_data::user_color;
-use crate::state::{AppState, ChatAction, ChatData, ContextMenuState, DragSource, DragState, NavState, UiOverlays, View};
+use crate::state::{AccountSessions, AppState, ChatAction, ChatLists, ChatViewState, ContextMenuState, DragSource, DragState, NavState, UiOverlays, View};
 use crate::ui::context_menu::menus::server_icon_entry_at;
 use crate::ui::account::common::chat_history::remember_message_list_scroll_position;
 use crate::ui::favorites_sidebar::SidebarTooltip;
@@ -37,11 +37,11 @@ use poly_ui_macros::{context_menu, ui_action};
 
 /// Compute the display-ordered server list for an account, respecting saved drag-drop ordering.
 fn get_ordered_servers(
-    chat_data: &ChatData,
+    account_sessions: &AccountSessions,
     account_id: &str,
     account_servers: &[poly_client::Server],
 ) -> Vec<poly_client::Server> {
-    if let Some(order) = chat_data.account_server_order.get(account_id) {
+    if let Some(order) = account_sessions.account_server_order.get(account_id) {
         let mut ordered: Vec<_> = order
             .iter()
             .filter_map(|id| account_servers.iter().find(|s| &s.id == id))
@@ -87,16 +87,22 @@ fn compute_bar2_reorder(
     order
 }
 
-/// Apply a Bar-2 drop event: update `ChatData` with the new server order.
-fn apply_bar2_drop(cd: &mut ChatData, drag_id: &str, target_id: &str, account_id: &str) {
+/// Apply a Bar-2 drop event: update `AccountSessions` with the new server order.
+fn apply_bar2_drop(
+    account_sessions: &mut AccountSessions,
+    servers: &[poly_client::Server],
+    drag_id: &str,
+    target_id: &str,
+    account_id: &str,
+) {
     let order = compute_bar2_reorder(
-        cd.account_server_order.get(account_id),
-        &cd.servers,
+        account_sessions.account_server_order.get(account_id),
+        servers,
         account_id,
         drag_id,
         target_id,
     );
-    cd.account_server_order
+    account_sessions.account_server_order
         .insert(account_id.to_string(), order);
 }
 
@@ -109,9 +115,10 @@ fn apply_bar2_drop(cd: &mut ChatData, drag_id: &str, target_id: &str, account_id
 #[context_menu(inherit)]
 #[component]
 pub fn AccountServerBar() -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
+    let _app_state: BatchedSignal<AppState> = use_context();
     let nav_state: BatchedSignal<NavState> = use_context();
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
+    let account_sessions: BatchedSignal<AccountSessions> = use_context();
     let client_manager: BatchedSignal<crate::client_manager::ClientManager> = use_context();
 
     let (active_account_id, active_backend, active_instance_id, current_view, selected_server) = {
@@ -135,7 +142,7 @@ pub fn AccountServerBar() -> Element {
     let instance_id = active_instance_id.unwrap_or_else(|| "demo".to_string());
 
     // Get all servers for this account (not just favorites)
-    let all_servers = chat_data.read().servers.clone();
+    let all_servers = chat_lists.read().servers.clone();
     let account_servers: Vec<_> = all_servers
         .iter()
         .filter(|s| s.account_id == account_id)
@@ -145,12 +152,12 @@ pub fn AccountServerBar() -> Element {
     // Apply per-account ordering from drag-and-drop reordering.
     // Falls back to default (insertion) order if no ordering has been set.
     let ordered_account_servers = {
-        let cd = chat_data.read();
-        get_ordered_servers(&cd, &account_id, &account_servers)
+        let as_ = account_sessions.read();
+        get_ordered_servers(&as_, &account_id, &account_servers)
     };
 
     // Count unread notifications for this account
-    let notif_count = chat_data
+    let notif_count = chat_lists
         .read()
         .notifications
         .iter()
@@ -205,36 +212,42 @@ pub fn AccountServerBar() -> Element {
                 // Only add servers not already present (avoid duplicates on
                 // repeated renders). The `account_id` field on each Server is
                 // set by the backend so the AccountServerBar filter picks them up.
-                let chat_data: BatchedSignal<ChatData> = match try_consume_context() {
-                    Some(cd) => cd,
+                let chat_lists: BatchedSignal<ChatLists> = match try_consume_context() {
+                    Some(cl) => cl,
+                    None => return,
+                };
+                let account_sessions: BatchedSignal<AccountSessions> = match try_consume_context() {
+                    Some(as_) => as_,
                     None => return,
                 };
                 let is_forum = client_manager
                     .peek()
                     .capabilities_for_slug(&backend_slug)
                     .is_forum_layout();
-                chat_data.batch(move |cd| {
+                chat_lists.batch(move |cl| {
                     for srv in servers {
-                        if !cd.servers.iter().any(|s| s.id == srv.id) {
-                            cd.servers.push(srv);
-                        }
-                    }
-                    // Forum backends: ensure all servers are in favorited_server_ids
-                    // so they also appear in Bar-1 (favorites sidebar).
-                    if is_forum {
-                        for srv in cd
-                            .servers
-                            .iter()
-                            .filter(|s| s.account_id == account_id)
-                            .map(|s| s.id.clone())
-                            .collect::<Vec<_>>()
-                        {
-                            if !cd.favorited_server_ids.contains(&srv) {
-                                cd.favorited_server_ids.push(srv);
-                            }
+                        if !cl.servers.iter().any(|s| s.id == srv.id) {
+                            cl.push_server(srv);
                         }
                     }
                 });
+                // Forum backends: ensure all servers are in favorited_server_ids
+                // so they also appear in Bar-1 (favorites sidebar).
+                if is_forum {
+                    let srv_ids: Vec<String> = chat_lists.read()
+                        .servers
+                        .iter()
+                        .filter(|s| s.account_id == account_id)
+                        .map(|s| s.id.clone())
+                        .collect();
+                    account_sessions.batch(move |as_| {
+                        for srv in srv_ids {
+                            if !as_.favorited_server_ids.contains(&srv) {
+                                as_.favorited_server_ids.push(srv);
+                            }
+                        }
+                    });
+                }
             }
         })
     };
@@ -340,11 +353,13 @@ fn AccountServerIcon(
     /// `None`, falls back to a colored first-letter placeholder.
     icon_url: Option<String>,
 ) -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
+    let _app_state: BatchedSignal<AppState> = use_context();
     let ui_overlays: BatchedSignal<UiOverlays> = use_context();
     let nav_state: BatchedSignal<NavState> = use_context();
     let _client_manager: BatchedSignal<ClientManager> = use_context();
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
+    let chat_view_state: BatchedSignal<ChatViewState> = use_context();
+    let account_sessions: BatchedSignal<AccountSessions> = use_context();
     let drag_state: BatchedSignal<DragState> = use_context();
 
     let is_drag_over = drag_state.read().drag_over_id.as_deref() == Some(server_id.as_str());
@@ -420,7 +435,8 @@ fn AccountServerIcon(
             return;
         };
         if matches!(src, DragSource::AccountServer) && drag_id != tid {
-            chat_data.batch(|cd| apply_bar2_drop(cd, &drag_id, &tid, &aid_drop));
+            let servers_snapshot = chat_lists.read().servers.clone();
+            account_sessions.batch(|as_| apply_bar2_drop(as_, &servers_snapshot, &drag_id, &tid, &aid_drop));
         }
     };
 
@@ -441,7 +457,8 @@ fn AccountServerIcon(
         // type can flip `ServerHome` into rendering `VoiceChannelView` even before
         // `load_server_data` fires, which requests audio permission and hard-crashes
         // Chromium on Linux.
-        chat_data.batch(|cd| cd.apply(ChatAction::ClearChannelContext));
+        chat_view_state.batch(|cv| cv.apply(ChatAction::ClearChannelContext));
+        chat_lists.batch(|cl| cl.set_channels(Vec::new()));
         // NOTE: do NOT spawn `load_server_data` here even when not in mobile
         // drawer context. `ServerHome::use_effect` (via `use_spawn_once`)
         // already kicks off the load when the route mounts. Spawning a second
@@ -549,7 +566,8 @@ fn AccountBarOverviewButton(
     instance_id: String,
     account_id: String,
 ) -> Element {
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let chat_view_state: BatchedSignal<ChatViewState> = use_context();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
 
     rsx! {
         div {
@@ -558,7 +576,8 @@ fn AccountBarOverviewButton(
                 if current_view == View::Overview {
                     return;
                 }
-                chat_data.batch(|cd| cd.apply(ChatAction::ClearChannelContext));
+                chat_view_state.batch(|cv| cv.apply(ChatAction::ClearChannelContext));
+                chat_lists.batch(|cl| cl.set_channels(Vec::new()));
                 navigator()
                     .push(Route::ServerOverviewRoute {
                         backend: backend_slug.clone(),
@@ -586,7 +605,8 @@ fn AccountBarDmsButton(
     instance_id: String,
     account_id: String,
 ) -> Element {
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let chat_view_state: BatchedSignal<ChatViewState> = use_context();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
 
     rsx! {
         div {
@@ -595,7 +615,8 @@ fn AccountBarDmsButton(
                 if current_view == View::DmsFriends {
                     return;
                 }
-                chat_data.batch(|cd| cd.apply(ChatAction::ClearChannelContext));
+                chat_view_state.batch(|cv| cv.apply(ChatAction::ClearChannelContext));
+                chat_lists.batch(|cl| cl.set_channels(Vec::new()));
                 navigator()
                     .push(Route::DmsHome {
                         backend: backend_slug.clone(),
@@ -625,7 +646,8 @@ fn AccountBarFriendsButton(
     account_id: String,
 ) -> Element {
     let _app_state: BatchedSignal<AppState> = use_context();
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let chat_view_state: BatchedSignal<ChatViewState> = use_context();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
 
     rsx! {
         div {
@@ -634,7 +656,8 @@ fn AccountBarFriendsButton(
                 if current_view == View::Friends {
                     return;
                 }
-                chat_data.batch(|cd| cd.apply(ChatAction::ClearChannelContext));
+                chat_view_state.batch(|cv| cv.apply(ChatAction::ClearChannelContext));
+                chat_lists.batch(|cl| cl.set_channels(Vec::new()));
                 crate::nav!(Route::FriendsRoute {
                     backend: backend_slug.clone(),
                     instance_id: instance_id.clone(),
@@ -657,9 +680,10 @@ fn AccountBarFriendsButton(
 #[context_menu(inherit)]
 #[component]
 fn AccountBarNotifsButton(current_view: View, notif_count: usize) -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
+    let _app_state: BatchedSignal<AppState> = use_context();
     let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let chat_view_state: BatchedSignal<ChatViewState> = use_context();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
     let backend_slug = nav
         .read()
                 .active_backend
@@ -683,7 +707,8 @@ fn AccountBarNotifsButton(current_view: View, notif_count: usize) -> Element {
                 if current_view == View::Notifications {
                     return;
                 }
-                chat_data.batch(|cd| cd.apply(ChatAction::ClearChannelContext));
+                chat_view_state.batch(|cv| cv.apply(ChatAction::ClearChannelContext));
+                chat_lists.batch(|cl| cl.set_channels(Vec::new()));
                 crate::nav!(Route::NotificationsRoute {
                     backend: backend_slug.clone(),
                     instance_id: instance_id.clone(),
@@ -716,7 +741,8 @@ fn AccountBarDiscoverButton(
     instance_id: String,
     account_id: String,
 ) -> Element {
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let chat_view_state: BatchedSignal<ChatViewState> = use_context();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
     rsx! {
         div {
             class: if current_view == View::DiscoverCommunities { "server-icon active" } else { "server-icon" },
@@ -724,7 +750,8 @@ fn AccountBarDiscoverButton(
                 if current_view == View::DiscoverCommunities {
                     return;
                 }
-                chat_data.batch(|cd| cd.apply(ChatAction::ClearChannelContext));
+                chat_view_state.batch(|cv| cv.apply(ChatAction::ClearChannelContext));
+                chat_lists.batch(|cl| cl.set_channels(Vec::new()));
                 crate::nav!(Route::DiscoverRoute {
                     backend: backend_slug.clone(),
                     instance_id: instance_id.clone(),

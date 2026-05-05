@@ -13,7 +13,7 @@
 use crate::state::BatchedSignal;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
-use crate::state::ChatData;
+use crate::state::ChatLists;
 use crate::ui::routes::Route;
 use dioxus::prelude::*;
 use poly_ui_macros::{context_menu, ui_action};
@@ -48,7 +48,7 @@ pub(crate) fn CreateServerPage(
     account_id: String,
 ) -> Element {
     let client_manager: BatchedSignal<ClientManager> = use_context();
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
 
     let mut server_name = use_signal(String::new);
     let creating = use_signal(|| false);
@@ -88,7 +88,7 @@ pub(crate) fn CreateServerPage(
                                             account_id_kd.clone(),
                                             backend_kd.clone(),
                                             instance_id_kd.clone(),
-                                            CreateSignals { client_manager, chat_data, creating, error_msg },
+                                            CreateSignals { client_manager, chat_lists, creating, error_msg },
                                         );
                                     }
                                 }
@@ -123,7 +123,7 @@ pub(crate) fn CreateServerPage(
                                     account_id.clone(),
                                     backend.clone(),
                                     instance_id.clone(),
-                                    CreateSignals { client_manager, chat_data, creating, error_msg },
+                                    CreateSignals { client_manager, chat_lists, creating, error_msg },
                                 );
                             },
                             if *creating.read() { "{t(\"create-server-creating\")}" } else { "{t(\"create-server-submit\")}" }
@@ -138,7 +138,7 @@ pub(crate) fn CreateServerPage(
 /// Bundle of mutable signals passed to the create-server async task.
 struct CreateSignals {
     client_manager: BatchedSignal<ClientManager>,
-    chat_data: BatchedSignal<ChatData>,
+    chat_lists: BatchedSignal<ChatLists>,
     creating: Signal<bool>,
     error_msg: Signal<String>,
 }
@@ -154,7 +154,7 @@ fn do_create_server(
 ) {
     let CreateSignals {
         client_manager,
-        chat_data,
+        chat_lists,
         mut creating,
         mut error_msg,
     } = signals;
@@ -171,7 +171,7 @@ fn do_create_server(
                 let aid = account_id.clone();
                 client_manager.batch(move |cm| cm.register_server(sid, aid));
                 // Only add to servers, NOT to favorited_server_ids.
-                chat_data.batch(move |cd| cd.servers.push(server));
+                chat_lists.batch(move |cl| cl.push_server(server));
                 creating.set(false);
                 // Navigate to the new server's home.
                 crate::nav!(Route::ServerHome {

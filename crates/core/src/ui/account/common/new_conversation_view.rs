@@ -8,7 +8,7 @@ use crate::state::BatchedSignal;
 use super::channel_list::open_direct_message_from_active_account;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
-use crate::state::{AppState, ChatData};
+use crate::state::{AccountSessions, AppState, ChatLists};
 use dioxus::prelude::*;
 use poly_ui_macros::{context_menu, ui_action};
 
@@ -19,8 +19,9 @@ use poly_ui_macros::{context_menu, ui_action};
 pub fn NewConversationView() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
     let nav_state: BatchedSignal<crate::state::NavState> = use_context();
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let account_sessions: BatchedSignal<AccountSessions> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
     let nav = navigator();
 
     let mut search_filter = use_signal(String::new);
@@ -28,7 +29,7 @@ pub fn NewConversationView() -> Element {
     let search_lower = search_filter.read().to_lowercase();
     let active_backend = nav_state.read().active_backend.cloned();
 
-    let friends: Vec<_> = chat_data
+    let friends: Vec<_> = chat_lists
         .read()
         .friends
         .values()
@@ -127,9 +128,10 @@ pub fn NewConversationView() -> Element {
                             open_direct_message_from_active_account(
                                 friend_id,
                                 nav_state,
-                                chat_data,
+                                account_sessions,
                                 client_manager,
                                 nav,
+                                chat_lists,
                             );
                         },
                         "{start_dm_label}" 

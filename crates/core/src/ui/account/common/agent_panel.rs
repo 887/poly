@@ -24,7 +24,7 @@
 //! Each `#[component]` fn body MUST stay under 150 lines of RSX + logic.
 
 use crate::i18n::{t, t_args};
-use crate::state::{AppState, BatchedSignal, ChatData};
+use crate::state::{AppState, BatchedSignal, ChatViewState};
 use crate::ui::account::common::chat_view::catch_up_clipboard_text;
 use crate::ui::agent::persona::talk_to_overlay::{PersonaTalkToOverlay, TalkSession};
 use crate::ui::agent::persona::{PersonaListPanel, PersonaSummary};
@@ -238,7 +238,7 @@ fn AgentDraftsSection(access_enabled: bool) -> Element {
 #[context_menu(inherit)]
 #[component]
 fn AgentCatchUpSection(channel_name: String) -> Element {
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let chat_view_state: BatchedSignal<ChatViewState> = use_context();
     let mut copy_status: Signal<Option<String>> = use_signal(|| None);
     rsx! {
         div { class: "agent-panel-section agent-panel-catch-up",
@@ -251,7 +251,7 @@ fn AgentCatchUpSection(channel_name: String) -> Element {
                 onclick: {
                     let chan = channel_name.clone();
                     move |_| {
-                        let snapshot = chat_data.read().clone();
+                        let snapshot = chat_view_state.peek().clone();
                         let payload = catch_up_clipboard_text(&snapshot, &chan, 20);
                         let escaped = payload.replace('\\', r"\\").replace('`', r"\`");
                         let _ = document::eval(&format!(

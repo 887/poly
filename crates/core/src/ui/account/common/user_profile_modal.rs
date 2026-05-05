@@ -24,7 +24,7 @@ use super::channel_list::open_direct_message_from_active_account;
 use super::direct_call::{DirectCallRequest, navigate_to_pending_direct_call_from_active_account};
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
-use crate::state::{AccountSessions, ChatData, ChatLists, NavState, UiOverlays};
+use crate::state::{AccountSessions, ChatLists, NavState, UiOverlays};
 use crate::state::VoiceState;
 use crate::state::chat_data::{backend_badge, user_color};
 use crate::ui::actions::{ActionCx, UiAction};
@@ -105,7 +105,6 @@ fn close_modal(ui_overlays: BatchedSignal<UiOverlays>) {
 pub fn UserProfileModal() -> Element {
     let nav_state: BatchedSignal<NavState> = use_context();
     let ui_overlays: BatchedSignal<UiOverlays> = use_context();
-    let chat_data: BatchedSignal<ChatData> = use_context();
     let chat_lists: BatchedSignal<ChatLists> = use_context();
     let account_sessions: BatchedSignal<AccountSessions> = use_context();
     let voice_state: BatchedSignal<VoiceState> = use_context();
@@ -280,9 +279,10 @@ pub fn UserProfileModal() -> Element {
                                 open_direct_message_from_active_account(
                                     action_user.id.clone(),
                                     nav_state,
-                                    chat_data,
+                                    account_sessions,
                                     client_manager,
                                     navigator(),
+                                    chat_lists,
                                 );
                             },
                             span { class: "poly-profile-action-icon", "💬" }

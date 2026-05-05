@@ -6,7 +6,7 @@
 use crate::state::BatchedSignal;
 use super::super::super::super::routes::Route;
 use crate::i18n::{t, t_args};
-use crate::state::{AppState, ChatData};
+use crate::state::AppState;
 use crate::ui::actions::{ActionCx, UiAction};
 use dioxus::prelude::*;
 use poly_ui_macros::{context_menu, ui_action};
@@ -97,7 +97,8 @@ fn LeaveServerConfirm(
     oncancel: EventHandler<MouseEvent>,
 ) -> Element {
     let _app_state: BatchedSignal<AppState> = use_context();
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let chat_lists: BatchedSignal<crate::state::ChatLists> = use_context();
+    let account_sessions: BatchedSignal<crate::state::AccountSessions> = use_context();
 
     let aid_nav = account_id.clone();
     let iid_nav = instance_id.clone();
@@ -121,15 +122,18 @@ fn LeaveServerConfirm(
                     onclick: move |_| {
                         // Remove server from chat data
                         let sid = sid_remove.clone();
-                        let new_favs = chat_data.batch(|cd| {
-                            cd.servers.retain(|s| s.id != sid);
-                            cd.favorited_server_ids.retain(|id| id != &sid);
-                            cd.account_server_order
+                        let sid2 = sid.clone();
+                        chat_lists.batch(move |cl| {
+                            cl.set_servers(cl.servers.iter().filter(|s| s.id != sid).cloned().collect());
+                        });
+                        let new_favs = account_sessions.batch(|as_| {
+                            as_.favorited_server_ids.retain(|id| id != &sid2);
+                            as_.account_server_order
                                 .values_mut()
                                 .for_each(|v| {
-                                    v.retain(|id| id != &sid);
+                                    v.retain(|id| id != &sid2);
                                 });
-                            cd.favorited_server_ids.clone()
+                            as_.favorited_server_ids.clone()
                         });
                         spawn(async move {
                             crate::ui::favorites_sidebar::persist_favorites(new_favs).await;

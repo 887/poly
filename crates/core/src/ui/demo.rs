@@ -14,7 +14,7 @@
 
 use crate::state::BatchedSignal;
 use crate::client_manager::{BackendHandle, BackendHandleExt, ClientManager, PluginSettingsEntry};
-use crate::state::{AppState, ChatAction, ChatData, DragState, NavState, UiLayout, UiOverlays, UserPrefs, VoiceState};
+use crate::state::{AppState, ChatAction, DragState, NavState, UiLayout, UiOverlays, UserPrefs, VoiceState};
 use crate::ui::account::common::chat_history::{
     read_message_list_scroll_metrics, request_scroll_to_bottom,
 };
@@ -52,7 +52,6 @@ const AUTO_SCROLL_THRESHOLD_PX: f64 = 60.0;
 /// guard must never be held across an await boundary.
 pub(crate) async fn toggle_demo(
     client_manager: BatchedSignal<ClientManager>,
-    chat_data: BatchedSignal<ChatData>,
     voice_state: BatchedSignal<VoiceState>,
     drag_state: BatchedSignal<DragState>,
     app_state: BatchedSignal<AppState>,
@@ -60,6 +59,9 @@ pub(crate) async fn toggle_demo(
     _ui_layout: BatchedSignal<UiLayout>,
     _ui_overlays: BatchedSignal<UiOverlays>,
     _user_prefs: BatchedSignal<UserPrefs>,
+    chat_lists: BatchedSignal<crate::state::ChatLists>,
+    account_sessions: BatchedSignal<crate::state::AccountSessions>,
+    chat_view_state: BatchedSignal<crate::state::ChatViewState>,
 ) {
     #[cfg(feature = "demo")]
     {
@@ -81,14 +83,15 @@ pub(crate) async fn toggle_demo(
             // any write or await.
             let demo_ids = client_manager.read().demo_account_ids();
             let (demo_server_ids, new_fav_ids) = {
-                let cd = chat_data.read();
-                let sids: Vec<String> = cd
+                let sids: Vec<String> = chat_lists
+                    .peek()
                     .servers
                     .iter()
                     .filter(|s| s.backend == "demo")
                     .map(|s| s.id.clone())
                     .collect();
-                let fav_ids: Vec<String> = cd
+                let fav_ids: Vec<String> = account_sessions
+                    .peek()
                     .favorited_server_ids
                     .iter()
                     .filter(|id| !sids.contains(*id))
@@ -105,33 +108,34 @@ pub(crate) async fn toggle_demo(
             {
                 let new_fav_ids_c = new_fav_ids.clone();
                 let demo_ids_c = demo_ids.clone();
-                chat_data.batch(move |cd| {
-                    cd.servers.retain(|s| {
-                        s.backend != "demo"
-                            && s.backend != "demo_forum"
+                let demo_ids_as = demo_ids.clone();
+                chat_lists.batch(move |cl| {
+                    cl.set_servers(cl.servers.iter().filter(|s| {
+                        s.backend != "demo" && s.backend != "demo_forum"
+                    }).cloned().collect());
+                    cl.dm_channels.retain(|d| {
+                        d.backend != "demo" && d.backend != "demo_forum"
                     });
-                    cd.dm_channels.retain(|d| {
-                        d.backend != "demo"
-                            && d.backend != "demo_forum"
+                    cl.groups.retain(|g| {
+                        g.backend != "demo" && g.backend != "demo_forum"
                     });
-                    cd.groups.retain(|g| {
-                        g.backend != "demo"
-                            && g.backend != "demo_forum"
-                    });
-                    cd.notifications.retain(|n| {
-                        n.backend != "demo"
-                            && n.backend != "demo_forum"
+                    cl.notifications.retain(|n| {
+                        n.backend != "demo" && n.backend != "demo_forum"
                     });
                     for aid in &demo_ids_c {
-                        cd.friends.remove(aid.as_str());
-                        cd.blocked_users.remove(aid.as_str());
+                        cl.friends.remove(aid.as_str());
                     }
-                    cd.apply(ChatAction::ClearChannelContext);
-                    for aid in &demo_ids_c {
-                        cd.account_sessions.remove(aid.as_str());
-                    }
-                    cd.favorited_server_ids = new_fav_ids_c;
                 });
+                account_sessions.batch(move |as_| {
+                    for aid in &demo_ids_as {
+                        as_.blocked_users.remove(aid.as_str());
+                        as_.account_sessions.remove(aid.as_str());
+                    }
+                    as_.favorited_server_ids = new_fav_ids_c;
+                });
+                // clear channel context in ChatViewState (already have chat_lists from param)
+                chat_view_state.batch(|cv| cv.apply(ChatAction::ClearChannelContext));
+                chat_lists.batch(|cl| cl.set_channels(Vec::new()));
                 drag_state.batch(|d| { d.dragging_server_id = None; });
                 voice_state.batch(|v| {
                     v.voice_channel_participants.clear();
@@ -306,9 +310,9 @@ pub(crate) async fn toggle_demo(
                     .filter_map(|aid| cm.sessions.get(aid).map(|s| (aid.clone(), s.clone())))
                     .collect()
             };
-            chat_data.batch(|cd| {
+            account_sessions.batch(|as_| {
                 for (aid, sess) in sessions_to_insert {
-                    cd.account_sessions.insert(aid, sess);
+                    as_.account_sessions.insert(aid, sess);
                 }
             });
 
@@ -339,13 +343,15 @@ pub(crate) async fn toggle_demo(
             // Users can remove entries by rearranging; dragging from Bar 2 adds to this list.
             {
                 let fav_sids: Vec<String> = servers.iter().map(|s| s.id.clone()).collect();
-                chat_data.batch(move |cd| {
+                chat_lists.batch(move |cl| {
+                    cl.set_servers(servers);
+                });
+                account_sessions.batch(move |as_| {
                     for sid in fav_sids {
-                        if !cd.favorited_server_ids.contains(&sid) {
-                            cd.favorited_server_ids.push(sid);
+                        if !as_.favorited_server_ids.contains(&sid) {
+                            as_.favorited_server_ids.push(sid);
                         }
                     }
-                    cd.servers = servers;
                 });
             }
 
@@ -361,7 +367,7 @@ pub(crate) async fn toggle_demo(
                 let dms = guard.get_dm_channels().await.ok();
                 let groups = guard.get_groups().await.ok();
                 let is_forum = {
-                    let slug = chat_data.read().account_sessions.get(aid)
+                    let slug = account_sessions.peek().account_sessions.get(aid)
                         .map(|s| s.backend.slug().to_string());
                     slug.is_some_and(|sl| client_manager.peek().capabilities_for_slug(&sl).is_forum_layout())
                 };
@@ -371,35 +377,37 @@ pub(crate) async fn toggle_demo(
                     None
                 };
                 let friends = guard.get_friends().await.ok();
-                // ONE batch absorbs all per-account writes for this iteration.
+                // Split writes by sub-signal.
                 let aid_c = aid.clone();
-                chat_data.batch(move |cd| {
+                let aid_as = aid.clone();
+                chat_lists.batch(move |cl| {
                     if let Some(dms) = dms {
-                        cd.dm_channels.extend(dms);
+                        cl.dm_channels.extend(dms);
                     }
                     if let Some(groups) = groups {
-                        cd.groups.extend(groups);
+                        cl.groups.extend(groups);
                     }
                     if let Some(notifs) = notifs {
-                        cd.notifications.extend(notifs.into_iter().filter(|n| !n.read));
+                        cl.notifications.extend(notifs.into_iter().filter(|n| !n.read));
                     }
                     if let Some(friends) = friends {
                         for friend in friends {
-                            let already = cd.friends.get(aid_c.as_str()).is_some_and(|v| v.iter().any(|f| f.id == friend.id));
+                            let already = cl.friends.get(aid_c.as_str()).is_some_and(|v| v.iter().any(|f| f.id == friend.id));
                             if !already {
-                                cd.friends.entry(aid_c.clone()).or_default().push(friend);
+                                cl.friends.entry(aid_c.clone()).or_default().push(friend);
                             }
                         }
                     }
-                    // Load content policy and blocked users for the first account only.
-                    // (content policy is per-account; use the first demo account's data.)
-                    if !cd.blocked_users.contains_key(aid_c.as_str()) {
-                        cd.content_policy = poly_demo::data::demo_content_policy();
-                        cd.blocked_users.insert(aid_c.clone(), poly_demo::data::demo_blocked_users());
+                });
+                // Load content policy and blocked users for the first account only.
+                account_sessions.batch(move |as_| {
+                    if !as_.blocked_users.contains_key(aid_as.as_str()) {
+                        as_.content_policy = poly_demo::data::demo_content_policy();
+                        as_.blocked_users.insert(aid_as.clone(), poly_demo::data::demo_blocked_users());
                     }
                 });
                 // Load voice participants for all voice channels.
-                let servers_snapshot = chat_data.read().servers.clone();
+                let servers_snapshot = chat_lists.peek().servers.clone();
                 for server in &servers_snapshot {
                     if server.account_id != *aid {
                         continue;
@@ -429,7 +437,7 @@ pub(crate) async fn toggle_demo(
                 let mut settings = s.get_app_settings().await.unwrap_or_default();
                 settings.demo_active = true;
                 settings.setup_complete = true;
-                settings.favorited_server_ids = chat_data.read().favorited_server_ids.clone();
+                settings.favorited_server_ids = account_sessions.peek().favorited_server_ids.clone();
                 if let Err(e) = s.set_app_settings(&settings).await {
                     tracing::warn!("Failed to persist demo_active=true: {e}");
                 }
@@ -438,7 +446,7 @@ pub(crate) async fn toggle_demo(
             // Start real-time event stream listeners for each demo account.
             // Re-use the already-cloned handles — no extra Signal read needed.
             for (aid, backend) in backend_handles {
-                spawn_event_stream_listener(aid, backend, app_state, nav, chat_data, client_manager);
+                spawn_event_stream_listener(aid, backend, app_state, nav, client_manager, chat_view_state);
             }
         }
     }
@@ -453,7 +461,8 @@ pub(crate) async fn toggle_demo(
 #[cfg(feature = "demo")]
 pub(crate) async fn toggle_demo_forum_on(
     client_manager: BatchedSignal<ClientManager>,
-    chat_data: BatchedSignal<ChatData>,
+    chat_lists: BatchedSignal<crate::state::ChatLists>,
+    account_sessions: BatchedSignal<crate::state::AccountSessions>,
 ) {
     // Guard: bail if platypus is already registered.
     if client_manager.read().sessions.contains_key("demo-platypus") {
@@ -503,15 +512,22 @@ pub(crate) async fn toggle_demo_forum_on(
             cm.commit_backend_account("demo-platypus".to_string(), sess, handle, server_map);
         });
     }
-    chat_data.batch(move |cd| {
-        cd.account_sessions.insert("demo-platypus".to_string(), session);
+    account_sessions.batch(move |as_| {
+        as_.account_sessions.insert("demo-platypus".to_string(), session);
+    });
+    chat_lists.batch(move |cl| {
         // Populate servers + favorites.
         for srv in servers {
-            if !cd.servers.iter().any(|s| s.id == srv.id) {
-                cd.servers.push(srv.clone());
+            if !cl.servers.iter().any(|s| s.id == srv.id) {
+                cl.push_server(srv.clone());
             }
-            if !cd.favorited_server_ids.contains(&srv.id) {
-                cd.favorited_server_ids.push(srv.id.clone());
+        }
+    });
+    account_sessions.batch(move |as_| {
+        let cl = chat_lists.peek();
+        for srv in cl.servers.iter().filter(|s| s.account_id == "demo-platypus") {
+            if !as_.favorited_server_ids.contains(&srv.id) {
+                as_.favorited_server_ids.push(srv.id.clone());
             }
         }
     });
@@ -537,8 +553,8 @@ pub(crate) fn spawn_event_stream_listener(
     backend: BackendHandle,
     app_state: BatchedSignal<AppState>,
     nav: BatchedSignal<NavState>,
-    chat_data: BatchedSignal<ChatData>,
     client_manager: BatchedSignal<ClientManager>,
+    chat_view_state: BatchedSignal<crate::state::ChatViewState>,
 ) {
     use futures::StreamExt as _;
     use poly_client::ClientEvent;
@@ -582,7 +598,7 @@ pub(crate) fn spawn_event_stream_listener(
                     if selected.as_deref() == Some(channel_id.as_str()) {
                         // Currently viewing this channel — append message live.
                         let msg_c = message.clone();
-                        chat_data.batch(move |cd| cd.messages.push(msg_c));
+                        chat_view_state.batch(move |cv| cv.push_message(msg_c));
                         tracing::trace!(
                             "Live message in #{channel_id}: {}",
                             message.author.display_name
@@ -612,8 +628,8 @@ pub(crate) fn spawn_event_stream_listener(
                     status,
                 } => {
                     let user_id_c = user_id.clone();
-                    chat_data.batch(move |cd| {
-                        for member in &mut cd.members {
+                    chat_view_state.batch(move |cv| {
+                        for member in &mut cv.members {
                             if member.id == user_id_c {
                                 member.presence = status;
                                 break;

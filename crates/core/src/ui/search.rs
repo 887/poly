@@ -13,7 +13,7 @@
 use crate::client_manager::BackendHandleExt;
 use crate::state::BatchedSignal;
 use crate::i18n::{t, t_args};
-use crate::state::{AppState, ChatData};
+use crate::state::{AccountSessions, AppState, ChatLists};
 use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::main_layout::close_mobile_drawer;
 use crate::ui::routes::Route;
@@ -70,10 +70,10 @@ fn backend_icon(_bt: &BackendType) -> &'static str {
 /// Build a compact attribution string for a node: "Cat · Demo".
 fn account_attribution(
     account_id: &str,
-    chat_data: &ChatData,
+    account_sessions: &AccountSessions,
     client_manager: &crate::client_manager::ClientManager,
 ) -> String {
-    let display_name = chat_data
+    let display_name = account_sessions
         .account_sessions
         .get(account_id).map_or_else(|| account_id.to_string(), |s| s.user.display_name.clone());
     let backend_name = client_manager
@@ -554,7 +554,8 @@ pub fn SearchPage(
 ) -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
     let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
+    let account_sessions: BatchedSignal<AccountSessions> = use_context();
     let client_manager: BatchedSignal<crate::client_manager::ClientManager> = use_context();
     let query = use_signal(String::new);
     let initial_type_seed = user_prefs.read().search_type_seed.clone();
@@ -595,11 +596,11 @@ pub fn SearchPage(
     let query_text = query.read().clone();
     let q_lower = query_text.to_lowercase();
     let highlight_terms = build_highlight_terms(&query_text);
-    let servers = chat_data.read().servers.clone();
-    let mut dm_channels = chat_data.read().dm_channels.clone();
-    let mut groups = chat_data.read().groups.clone();
-    let account_user_ids: std::collections::HashMap<String, String> = chat_data
-        .read()
+    let servers = chat_lists.read().servers.clone(); // poly-lint: allow render-time-read — render snapshot; subscription intentional
+    let mut dm_channels = chat_lists.read().dm_channels.clone(); // poly-lint: allow render-time-read — render snapshot; subscription intentional
+    let mut groups = chat_lists.read().groups.clone(); // poly-lint: allow render-time-read — render snapshot; subscription intentional
+    let account_user_ids: std::collections::HashMap<String, String> = account_sessions
+        .read() // poly-lint: allow render-time-read — render snapshot; subscription intentional
         .account_sessions
         .iter()
         .map(|(account_id, session)| (account_id.clone(), session.user.id.clone()))
@@ -678,9 +679,9 @@ pub fn SearchPage(
                     }
                     for aid in &account_ids {
                         {
-                            let cd = chat_data.read();
+                            let as_ = account_sessions.peek();
                             let cm = client_manager.read();
-                            let session = cd.account_sessions.get(aid);
+                            let session = as_.account_sessions.get(aid);
                             let display_name = session.map_or_else(|| aid.clone(), |s| s.user.display_name.clone());
                             let avatar_url = session
                                 .and_then(|s| s.user.avatar_url.clone());
@@ -689,7 +690,7 @@ pub fn SearchPage(
                             let backend_name = bt.display_name().to_string();
                             let backend_icon_str = backend_icon(&bt).to_string();
                             let enabled = enabled_accounts.read().contains(aid);
-                            drop(cd);
+                            drop(as_);
                             drop(cm);
                             rsx! {
                                 AccountFilter {
@@ -752,11 +753,11 @@ pub fn SearchPage(
                             }
                             let attribution = account_attribution(
                                 &server.account_id,
-                                &chat_data.read(),
+                                &account_sessions.peek(),
                                 &client_manager.read(),
                             );
-                            let instance_id = chat_data
-                                .read()
+                            let instance_id = account_sessions
+                                .peek()
                                 .account_sessions
                                 .get(&server.account_id).map_or_else(|| "demo".to_string(), |s| s.instance_id.clone());
                             rsx! {
@@ -799,11 +800,11 @@ pub fn SearchPage(
                             let bs = dm.backend.slug().to_string();
                             let attribution = account_attribution(
                                 &dm.account_id,
-                                &chat_data.read(),
+                                &account_sessions.peek(),
                                 &client_manager.read(),
                             );
-                            let iid = chat_data
-                                .read()
+                            let iid = account_sessions
+                                .peek()
                                 .account_sessions
                                 .get(&dm.account_id).map_or_else(|| "demo".to_string(), |s| s.instance_id.clone());
                             let aid = dm.account_id.clone();
@@ -870,11 +871,11 @@ pub fn SearchPage(
                             let bs = group.backend.slug().to_string();
                             let attribution = account_attribution(
                                 &group.account_id,
-                                &chat_data.read(),
+                                &account_sessions.peek(),
                                 &client_manager.read(),
                             );
-                            let iid = chat_data
-                                .read()
+                            let iid = account_sessions
+                                .peek()
                                 .account_sessions
                                 .get(&group.account_id).map_or_else(|| "demo".to_string(), |s| s.instance_id.clone());
                             let aid = group.account_id.clone();

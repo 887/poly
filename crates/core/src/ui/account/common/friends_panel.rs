@@ -6,7 +6,7 @@ use super::channel_list::open_direct_message_from_active_account;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::chat_data::user_color;
-use crate::state::{AppState, ChatData};
+use crate::state::{AccountSessions, AppState, ChatLists};
 use crate::ui::account::common::chat_history::remember_message_list_scroll_position;
 use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::client_ui::toast::{ToastMessage, push_toast};
@@ -49,9 +49,10 @@ enum FriendsManagementTab {
 #[ui_action(FriendsPanelAction)]
 #[component]
 pub fn FriendsPanel(account_id: String, backend_slug: String) -> Element {
-    let chat_data: BatchedSignal<ChatData> = use_context();
-    let friends = chat_data.read().friends.get(&account_id).cloned().unwrap_or_default();
-    let blocked_users = chat_data.read().blocked_users.get(&account_id).cloned().unwrap_or_default();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
+    let account_sessions: BatchedSignal<AccountSessions> = use_context();
+    let friends = chat_lists.read().friends.get(&account_id).cloned().unwrap_or_default(); // poly-lint: allow render-time-read — render snapshot; subscription intentional
+    let blocked_users = account_sessions.read().blocked_users.get(&account_id).cloned().unwrap_or_default(); // poly-lint: allow render-time-read — render snapshot; subscription intentional
 
     let search_filter = use_signal(String::new);
     let account_filter = use_signal(|| None::<String>);
@@ -209,8 +210,9 @@ fn FriendsFilterBar(
 fn FriendsGrid(friends: Vec<poly_client::User>, backend_slug: String) -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
     let nav_state: BatchedSignal<crate::state::NavState> = use_context();
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let account_sessions: BatchedSignal<AccountSessions> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
     let nav = navigator();
     let message_label = t("friends-management-message");
     let is_demo = backend_slug == "demo" || backend_slug == "demo_forum";
@@ -282,9 +284,10 @@ fn FriendsGrid(friends: Vec<poly_client::User>, backend_slug: String) -> Element
                                     open_direct_message_from_active_account(
                                         friend_id.clone(),
                                         nav_state,
-                                        chat_data,
+                                        account_sessions,
                                         client_manager,
                                         nav,
+                                        chat_lists,
                                     );
                                 },
                                 div { class: "friend-info",

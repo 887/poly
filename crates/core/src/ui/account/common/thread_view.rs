@@ -11,7 +11,7 @@
 use crate::state::BatchedSignal;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
-use crate::state::{AppState, ChatData, use_reactive_effect, use_spawn_once};
+use crate::state::{AppState, ChatViewState, use_reactive_effect, use_spawn_once};
 use crate::ui::routes::Route;
 use dioxus::prelude::*;
 use poly_client::{Channel, ChannelType, Message, MessageQuery, ThreadInfo};
@@ -158,10 +158,10 @@ pub fn ActiveThreadsBar() -> Element {
     let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
     let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let chat_view_state: BatchedSignal<ChatViewState> = use_context();
 
-    let server_id = chat_data
-        .read()
+    let server_id = chat_view_state
+        .read() // poly-lint: allow render-time-read — render snapshot; subscription intentional
         .current_server
         .as_ref()
         .map(|s| s.id.clone());

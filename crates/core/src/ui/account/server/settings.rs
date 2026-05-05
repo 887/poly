@@ -519,7 +519,7 @@ pub fn ServerSettingsPage(
     }
     let _locale = crate::i18n::use_locale().read().clone();
     let search_text = use_signal(String::new);
-    let chat_data: BatchedSignal<crate::state::ChatData> = use_context();
+    let chat_lists: BatchedSignal<crate::state::ChatLists> = use_context();
     let app_state: BatchedSignal<AppState> = use_context();
     let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
     let mut published_section = use_signal(String::new);
@@ -533,8 +533,8 @@ pub fn ServerSettingsPage(
     #[cfg(target_arch = "wasm32")]
     let server_id_for_route = server_id.clone();
 
-    // Resolve server name from ChatData, fallback to server_id
-    let server_name = chat_data
+    // Resolve server name from ChatLists, fallback to server_id
+    let server_name = chat_lists
         .read()
         .servers
         .iter()

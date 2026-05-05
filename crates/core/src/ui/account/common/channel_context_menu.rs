@@ -15,7 +15,7 @@
 use crate::state::BatchedSignal;
 use crate::i18n::t;
 use crate::nav;
-use crate::state::{AppState, ChannelContextMenuState, ChatData};
+use crate::state::{AppState, ChannelContextMenuState, ChatLists, ChatViewState};
 use crate::ui::account::common::chat_view::mark_channel_as_read;
 use crate::ui::routes::Route;
 use dioxus::prelude::*;
@@ -31,7 +31,8 @@ use poly_ui_macros::{context_menu, ui_action};
 pub fn ChannelContextMenuInner(menu: ChannelContextMenuState, close: EventHandler<()>) -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
     let nav_state: BatchedSignal<crate::state::NavState> = use_context();
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
+    let chat_view_state: BatchedSignal<ChatViewState> = use_context();
 
     let channel_id = menu.channel_id.clone();
     let mut muted = use_signal(|| false);
@@ -54,7 +55,7 @@ pub fn ChannelContextMenuInner(menu: ChannelContextMenuState, close: EventHandle
                     ChannelMenuItem {
                         label: t("channel-menu-mark-read"),
                         onclick: move |_| {
-                            mark_channel_as_read(chat_data, &channel_id);
+                            mark_channel_as_read(chat_lists, chat_view_state, &channel_id);
                             close.call(());
                         },
                     }

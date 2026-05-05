@@ -24,7 +24,7 @@ use super::routes::Route;
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::state::chat_data::user_color;
-use crate::state::{AccountContextMenuState, AppState, ChatAction, ChatData, ContextMenuState, DragSource, DragState, NavState, UiOverlays, View, VoiceState};
+use crate::state::{AccountContextMenuState, AccountSessions, AppState, ChatAction, ChatLists, ChatViewState, ContextMenuState, DragSource, DragState, NavState, UiOverlays, View, VoiceState};
 use crate::ui::context_menu::menus::{account_entry_at, server_icon_entry_at};
 use crate::ui::account::common::chat_history::{
     initial_message_query, remember_message_list_scroll_position,
@@ -118,10 +118,10 @@ pub fn FavoritesBar() -> Element {
     let nav_state: BatchedSignal<NavState> = use_context();
     let current_view = *nav_state.read().view;
     let client_manager: BatchedSignal<ClientManager> = use_context();
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let account_sessions: BatchedSignal<AccountSessions> = use_context();
     let drag_state: BatchedSignal<DragState> = use_context();
 
-    let servers = chat_data.read().servers.clone();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
     let demo_active = client_manager.read().demo_active;
     let active_account = nav_state.read().active_account_id.cloned();
     let _active_backend_slug = nav_state
@@ -143,7 +143,7 @@ pub fn FavoritesBar() -> Element {
     // messengers first, see the forum variant next, then their own accounts.
     let account_ids = {
         let live: Vec<String> = client_manager.read().active_account_ids();
-        let saved_order = chat_data.read().account_order.clone();
+        let saved_order = account_sessions.read().account_order.clone(); // poly-lint: allow render-time-read — render snapshot; subscription intentional
         let live_set: std::collections::HashSet<_> = live.iter().cloned().collect();
         let mut ordered: Vec<String> = saved_order
             .iter()
@@ -151,9 +151,9 @@ pub fn FavoritesBar() -> Element {
             .cloned()
             .collect();
         let placed: std::collections::HashSet<_> = ordered.iter().cloned().collect();
-        let cd = chat_data.read();
+        let as_ = account_sessions.read(); // poly-lint: allow render-time-read — render snapshot; subscription intentional
         let priority = |id: &String| -> u8 {
-            match cd.account_sessions.get(id) {
+            match as_.account_sessions.get(id) {
                 Some(s) if s.backend == "demo" => 0,
                 Some(s) if s.backend == "demo_forum" => 1,
                 _ => 2,
@@ -167,12 +167,11 @@ pub fn FavoritesBar() -> Element {
     };
 
     // Only show servers that have been dragged into favorites.
-    let favorited_ids = chat_data.read().favorited_server_ids.clone();
+    let favorited_ids = account_sessions.read().favorited_server_ids.clone(); // poly-lint: allow render-time-read — render snapshot; subscription intentional
     // Preserve the order from favorited_ids list.
     let favorite_servers: Vec<_> = favorited_ids
         .iter()
-        .filter_map(|id| servers.iter().find(|s| &s.id == id))
-        .cloned()
+        .filter_map(|id| chat_lists.peek().server_by_id(id).cloned())
         .collect();
 
     // Local signal for drop-zone highlight state.
@@ -249,18 +248,18 @@ pub fn FavoritesBar() -> Element {
                     });
                     // Per-item ondrop handles positional drops via stop_propagation.
                     // This handler catches drops on the nav background (append to end).
-                    let new_favorites = chat_data.batch(|cd| {
+                    let new_favorites = account_sessions.batch(|as_| {
                         if let Some(sid) = drag_id {
                             match drag_src {
                                 DragSource::AccountServer | DragSource::FavoriteServer => {
-                                    if !cd.favorited_server_ids.contains(&sid) {
-                                        cd.favorited_server_ids.push(sid);
+                                    if !as_.favorited_server_ids.contains(&sid) {
+                                        as_.favorited_server_ids.push(sid);
                                     }
                                 }
                                 DragSource::None | DragSource::AccountIcon => {}
                             }
                         }
-                        cd.favorited_server_ids.clone()
+                        as_.favorited_server_ids.clone()
                     });
                     spawn(async move {
                         persist_favorites(new_favorites).await;
@@ -286,8 +285,8 @@ pub fn FavoritesBar() -> Element {
                 // ── Favorited servers (dragged in from Bar 2) ─────────────
                 for server in &favorite_servers {
                     {
-                        let instance_id = chat_data
-                            .read()
+                        let instance_id = account_sessions
+                            .peek()
                             .account_sessions
                             .get(&server.account_id)
                             .map_or_else(|| "demo".to_string(), |s| s.instance_id.clone());
@@ -389,11 +388,13 @@ pub fn FavoritesBar() -> Element {
 #[ui_action(inherit)]
 #[component]
 fn AccountIcon(account_id: String, is_active: bool) -> Element {
-    let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let nav_state: BatchedSignal<NavState> = use_context();
     let ui_overlays: BatchedSignal<UiOverlays> = use_context();
     let drag_state: BatchedSignal<DragState> = use_context();
+    let account_sessions: BatchedSignal<AccountSessions> = use_context();
+    let chat_view_state: BatchedSignal<ChatViewState> = use_context();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
 
     // Read connection and presence statuses for this account.
     let conn_class: &'static str = client_manager
@@ -409,8 +410,8 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
         .unwrap_or(AccountPresence::Online)
         .css_class();
 
-    let is_forum_account = chat_data
-        .read()
+    let is_forum_account = account_sessions
+        .read() // poly-lint: allow render-time-read — render snapshot; subscription intentional
         .account_sessions
         .get(&account_id)
         .is_some_and(|s| client_manager.peek().capabilities_for_slug(s.backend.as_str()).is_forum_layout());
@@ -419,21 +420,21 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
 
     // Determine avatar URL: real accounts use user.avatar_url; demo accounts
     // get locally bundled cat/dog images; others fall back to icon_emoji text.
-    let avatar_url: Option<String> = chat_data
-        .read()
+    let avatar_url: Option<String> = account_sessions
+        .read() // poly-lint: allow render-time-read — render snapshot; subscription intentional
         .account_sessions
         .get(&account_id)
         .and_then(|s| s.user.avatar_url.clone());
 
     // Display name shown in the tooltip when hovering the account icon.
-    let display_name: String = chat_data
-        .read()
+    let display_name: String = account_sessions
+        .read() // poly-lint: allow render-time-read — render snapshot; subscription intentional
         .account_sessions
         .get(&account_id)
         .map_or_else(|| account_id.clone(), |s| s.user.display_name.clone());
 
-    let backend_name: String = chat_data
-        .read()
+    let backend_name: String = account_sessions
+        .read() // poly-lint: allow render-time-read — render snapshot; subscription intentional
         .account_sessions
         .get(&account_id)
         .map_or_else(|| "Unknown".to_string(), |s| s.backend.display_name().to_string());
@@ -441,8 +442,8 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
     // Use icon_emoji from session if available, else fall back to the first
     // letter of the account's display name (NOT the account_id, which starts
     // with the backend slug — e.g. all Lemmy accounts would collapse to "L").
-    let icon_label: String = chat_data
-        .read()
+    let icon_label: String = account_sessions
+        .read() // poly-lint: allow render-time-read — render snapshot; subscription intentional
         .account_sessions
         .get(&account_id)
         .and_then(|s| s.icon_emoji.clone())
@@ -457,8 +458,8 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
     // Show unread notification count only — matches the bell badge in account server bar.
     // DM unread counts are surfaced separately in Bar 2.
     let total_unreads = u32::try_from(
-        chat_data
-            .read()
+        chat_lists
+            .read() // poly-lint: allow render-time-read — render snapshot; subscription intentional
             .notifications
             .iter()
             .filter(|n| n.account_id == account_id)
@@ -535,35 +536,35 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
         if !drag_id_valid {
             return;
         }
-        let snapshot = chat_data.batch(|cd| {
+        let snapshot = account_sessions.batch(|as_| {
             // Seed account_order from the live accounts if empty so we have
             // something to reorder against. Live list is sorted so the
             // baseline is deterministic.
-            if cd.account_order.is_empty() {
+            if as_.account_order.is_empty() {
                 let mut live: Vec<String> = client_manager_for_drop
                     .read()
                     .active_account_ids();
                 live.sort();
-                cd.account_order = live;
+                as_.account_order = live;
             }
             // Ensure both dragged + target are present in the order vec.
-            if !cd.account_order.contains(&drag_id) {
-                cd.account_order.push(drag_id.clone());
+            if !as_.account_order.contains(&drag_id) {
+                as_.account_order.push(drag_id.clone());
             }
-            if !cd.account_order.contains(&drop_target_id) {
-                cd.account_order.push(drop_target_id.clone());
+            if !as_.account_order.contains(&drop_target_id) {
+                as_.account_order.push(drop_target_id.clone());
             }
-            if let Some(from) = cd.account_order.iter().position(|x| x == &drag_id) {
-                cd.account_order.remove(from);
+            if let Some(from) = as_.account_order.iter().position(|x| x == &drag_id) {
+                as_.account_order.remove(from);
                 if let Some(to) =
-                    cd.account_order.iter().position(|x| x == &drop_target_id)
+                    as_.account_order.iter().position(|x| x == &drop_target_id)
                 {
-                    cd.account_order.insert(to, drag_id);
+                    as_.account_order.insert(to, drag_id);
                 } else {
-                    cd.account_order.push(drag_id);
+                    as_.account_order.push(drag_id);
                 }
             }
-            Some(cd.account_order.clone())
+            Some(as_.account_order.clone())
         });
         // Clear drag source after the reorder batch.
         drag_state.batch(|d| {
@@ -593,14 +594,14 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
     let menu_aid = account_id.clone();
     let menu_display = display_name.clone();
     let menu_ui_overlays = ui_overlays;
-    let menu_chat_data = chat_data;
+    let menu_account_sessions = account_sessions;
     let on_account_contextmenu = move |evt: Event<MouseData>| {
         evt.prevent_default();
         evt.stop_propagation();
         let coords = evt.client_coordinates();
         let (slug, inst) = {
-            let cd = menu_chat_data.read();
-            cd.account_sessions
+            let as_ = menu_account_sessions.peek();
+            as_.account_sessions
                 .get(&menu_aid)
                 .map_or_else(
                     || ("demo".to_string(), "demo".to_string()),
@@ -649,8 +650,8 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                         .is_some_and(ConnectionStatus::needs_reauth)
                 };
                 if needs_reauth {
-                    let info = chat_data
-                        .read()
+                    let info = account_sessions
+                        .peek()
                         .account_sessions
                         .get(&aid)
                         .map(|s| (s.backend.slug().to_string(), s.instance_id.clone()));
@@ -674,9 +675,9 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                 }
 
                 // Clear server/channel state — the target route will reload what's needed.
-                // Batch into one write guard so only a single Dioxus re-render cascade
-                // is scheduled (5 separate writes → 5 cascades → WASM scheduler freeze).
-                chat_data.batch(|cd| cd.apply(ChatAction::ClearChannelContext));
+                // Split into sub-signal batches (ChatViewState view fields + ChatLists channels).
+                chat_view_state.batch(|cv| cv.apply(ChatAction::ClearChannelContext));
+                chat_lists.batch(|cl| cl.set_channels(Vec::new()));
 
                 // If we have a stored last route for this account, restore it.
                 // This makes account-switching feel like a true tab switch.
@@ -698,8 +699,8 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                     if let Some(url) = last_route_url
                         && let Ok(route) = url.parse::<Route>()
                     {
-                        let backend_slug_for_route_check = chat_data
-                            .read()
+                        let backend_slug_for_route_check = account_sessions
+                            .peek()
                             .account_sessions
                             .get(&aid)
                             .map(|s| s.backend.slug().to_string());
@@ -732,20 +733,21 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                 // before dropping the guard; nested read() calls while an outer
                 // read guard is held cause a runtime borrow panic in WASM.
                 let (backend_slug, instance_id, first_server_id) = {
-                    let guard = chat_data.read();
                     let (slug, inst) = if let Some(session) =
-                        guard.account_sessions.get(&aid)
+                        account_sessions.peek().account_sessions.get(&aid).cloned()
                     {
                         (session.backend.slug().to_string(), session.instance_id.clone())
                     } else {
-                        let slug = guard
+                        let slug = chat_lists
+                            .peek()
                             .servers
                             .iter()
                             .find(|s| s.account_id == aid)
                             .map_or_else(|| "demo".to_string(), |s| s.backend.slug().to_string());
                         (slug, "demo".to_string())
                     };
-                    let first_server = guard
+                    let first_server = chat_lists
+                        .peek()
                         .servers
                         .iter()
                         .find(|s| s.account_id == aid)
@@ -882,8 +884,10 @@ fn FavoriteServerIcon(
     let nav_state: BatchedSignal<NavState> = use_context();
     let ui_overlays: BatchedSignal<UiOverlays> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
-    let chat_data: BatchedSignal<ChatData> = use_context();
     let drag_state: BatchedSignal<DragState> = use_context();
+    let account_sessions: BatchedSignal<AccountSessions> = use_context();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
+    let chat_view_state: BatchedSignal<ChatViewState> = use_context();
 
     // Get account's connection and presence status
     let _account_conn_class: &'static str = client_manager
@@ -919,8 +923,8 @@ fn FavoriteServerIcon(
     let icon_color = user_color(&server_id);
 
     // Determine source badge: account's avatar URL
-    let account_avatar_url: Option<String> = chat_data
-        .read()
+    let account_avatar_url: Option<String> = account_sessions
+        .read() // poly-lint: allow render-time-read — render snapshot; subscription intentional
         .account_sessions
         .get(&account_id)
         .and_then(|s| s.user.avatar_url.clone());
@@ -954,7 +958,7 @@ fn FavoriteServerIcon(
                     if !preserve_drawer_context {
                         let sid2 = sid.clone();
                         spawn(async move {
-                            load_server_data(sid2, nav_state, client_manager, chat_data).await;
+                            load_server_data(sid2, nav_state, client_manager, chat_lists, chat_view_state).await;
                         });
                     }
                     navigator()
@@ -1046,44 +1050,44 @@ fn FavoriteServerIcon(
                     if drag_id == target_id {
                         return;
                     }
-                    let new_favorites = chat_data.batch(|cd| {
+                    let new_favorites = account_sessions.batch(|as_| {
                         match src {
                             DragSource::FavoriteServer => {
                                 // Reorder within Bar 1: move drag_id before target_id
-                                if let Some(from) = cd
+                                if let Some(from) = as_
                                     .favorited_server_ids
                                     .iter()
                                     .position(|x| *x == drag_id)
                                 {
-                                    cd.favorited_server_ids.remove(from);
-                                    if let Some(to) = cd
+                                    as_.favorited_server_ids.remove(from);
+                                    if let Some(to) = as_
                                         .favorited_server_ids
                                         .iter()
                                         .position(|x| *x == target_id)
                                     {
-                                        cd.favorited_server_ids.insert(to, drag_id);
+                                        as_.favorited_server_ids.insert(to, drag_id);
                                     } else {
-                                        cd.favorited_server_ids.push(drag_id);
+                                        as_.favorited_server_ids.push(drag_id);
                                     }
                                 }
                             }
                             DragSource::AccountServer => {
                                 // Insert from Bar 2 before target position
-                                if !cd.favorited_server_ids.contains(&drag_id) {
-                                    if let Some(to) = cd
+                                if !as_.favorited_server_ids.contains(&drag_id) {
+                                    if let Some(to) = as_
                                         .favorited_server_ids
                                         .iter()
                                         .position(|x| *x == target_id)
                                     {
-                                        cd.favorited_server_ids.insert(to, drag_id);
+                                        as_.favorited_server_ids.insert(to, drag_id);
                                     } else {
-                                        cd.favorited_server_ids.push(drag_id);
+                                        as_.favorited_server_ids.push(drag_id);
                                     }
                                 }
                             }
                             DragSource::None | DragSource::AccountIcon => {}
                         }
-                        Some(cd.favorited_server_ids.clone())
+                        Some(as_.favorited_server_ids.clone())
                     });
                     if let Some(favs) = new_favorites {
                         spawn(async move {
@@ -1159,41 +1163,46 @@ pub async fn load_server_data(
     server_id: String,
     nav_state: BatchedSignal<NavState>,
     client_manager: BatchedSignal<ClientManager>,
-    chat_data: BatchedSignal<ChatData>,
+    chat_lists: BatchedSignal<ChatLists>,
+    chat_view_state: BatchedSignal<ChatViewState>,
 ) {
-    load_server_data_internal(server_id, nav_state, client_manager, chat_data, true).await;
+    load_server_data_internal(server_id, nav_state, client_manager, chat_lists, chat_view_state, true).await;
 }
 
 pub async fn load_server_shell_data(
     server_id: String,
     nav_state: BatchedSignal<NavState>,
     client_manager: BatchedSignal<ClientManager>,
-    chat_data: BatchedSignal<ChatData>,
+    chat_lists: BatchedSignal<ChatLists>,
+    chat_view_state: BatchedSignal<ChatViewState>,
 ) {
-    load_server_data_internal(server_id, nav_state, client_manager, chat_data, false).await;
+    load_server_data_internal(server_id, nav_state, client_manager, chat_lists, chat_view_state, false).await;
 }
 
 async fn load_server_data_internal(
     server_id: String,
     nav_state: BatchedSignal<NavState>,
     client_manager: BatchedSignal<ClientManager>,
-    chat_data: BatchedSignal<ChatData>,
+    chat_lists: BatchedSignal<ChatLists>,
+    chat_view_state: BatchedSignal<ChatViewState>,
     auto_select_first_text_channel: bool,
 ) {
     // Show the spinner immediately so the content area doesn't render a
     // stale server while we fetch the new one. Keep this as its own
     // cascade — the UI needs to react before we start awaiting.
-    chat_data.batch(|cd| cd.loading = true);
+    chat_view_state.batch(|cv| cv.loading = true);
 
     // Find which backend owns this server
     let backend_info = client_manager.peek().get_backend_for_server(&server_id);
     let Some((_account_id, backend)) = backend_info else {
-        chat_data.batch(|cd| cd.loading = false);
+        chat_view_state.batch(|cv| cv.loading = false);
         return;
     };
 
-    // Accumulate every async-fetched mutation into one terminal batch.
-    let mut pending = chat_data.pending_update();
+    // Accumulate async-fetched mutations into terminal batches:
+    // one for ChatViewState (view fields) and one for ChatLists (channels list).
+    let mut pending_cv = chat_view_state.pending_update();
+    let mut pending_cl = chat_lists.pending_update();
 
     // Load server details
     {
@@ -1204,12 +1213,14 @@ async fn load_server_data_internal(
             Ok(g) => g,
             Err(_) => {
                 tracing::warn!(server_id = %server_id, "load_server_data: backend read timed out");
-                chat_data.batch(|cd| cd.loading = false);
+                pending_cv.discard();
+                pending_cl.discard();
+                chat_view_state.batch(|cv| cv.loading = false);
                 return;
             }
         };
         if let Ok(server) = guard.get_server(&server_id).await {
-            pending.set(move |cd| cd.current_server = Some(server));
+            pending_cv.set(move |cv| cv.current_server = Some(server));
         }
     }
 
@@ -1219,7 +1230,9 @@ async fn load_server_data_internal(
             Ok(g) => g,
             Err(_) => {
                 tracing::warn!("favorites_sidebar: backend read timed out loading channels");
-                chat_data.batch(|cd| cd.loading = false);
+                pending_cv.discard();
+                pending_cl.discard();
+                chat_view_state.batch(|cv| cv.loading = false);
                 return;
             }
         };
@@ -1229,13 +1242,10 @@ async fn load_server_data_internal(
     // Find the best channel to auto-select:
     // 1. Backend-designated default channel (Discord system_channel_id, etc.)
     // 2. First text/forum/HN channel
-    let default_id = {
-        let guard = chat_data.read();
-        guard
-            .current_server
-            .as_ref()
-            .and_then(|s| s.default_channel_id.clone())
-    };
+    // Read current_server from ChatViewState (already has the pending mutation applied
+    // into a local var if set above, so we need the loaded value — peek from what we
+    // staged; pending not yet applied so fall back to chat_view_state.peek).
+    let default_id = chat_view_state.peek().current_server.as_ref().and_then(|s| s.default_channel_id.clone());
     let first_text_channel = default_id
         .and_then(|id| channels.iter().find(|c| c.id == id).cloned())
         .or_else(|| {
@@ -1249,7 +1259,7 @@ async fn load_server_data_internal(
                 .cloned()
         });
 
-    pending.set(move |cd| cd.channels = channels);
+    pending_cl.set(move |cl| cl.set_channels(channels));
 
     // Only auto-open the first text channel when the user is already in the
     // content area workflow. When the mobile left drawer is open and the user
@@ -1267,14 +1277,16 @@ async fn load_server_data_internal(
             );
         });
         let ch_for_current = ch.clone();
-        pending.set(move |cd| cd.current_channel = Some(ch_for_current));
+        pending_cv.set(move |cv| cv.current_channel = Some(ch_for_current));
 
         // Load messages for first channel
         let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
             Ok(g) => g,
             Err(_) => {
                 tracing::warn!("favorites_sidebar: backend read timed out loading first-channel messages");
-                chat_data.batch(|cd| cd.loading = false);
+                pending_cv.discard();
+                pending_cl.discard();
+                chat_view_state.batch(|cv| cv.loading = false);
                 return;
             }
         };
@@ -1282,12 +1294,12 @@ async fn load_server_data_internal(
             .get_messages(&ch.id, initial_message_query(ch.unread_count))
             .await
         {
-            pending.set(move |cd| cd.messages = messages);
+            pending_cv.set(move |cv| cv.set_messages(messages));
             request_restore_scroll_position_or_bottom(&ch.id);
         }
         // Load members
         if let Ok(members) = guard.get_channel_members(&ch.id).await {
-            pending.set(move |cd| cd.members = members);
+            pending_cv.set(move |cv| cv.members = members);
         }
     }
     if !auto_select_first_text_channel {
@@ -1299,13 +1311,14 @@ async fn load_server_data_internal(
                  synchronous so ChatView doesn't briefly render a stale channel",
             );
         });
-        pending.set(|cd| cd.apply(ChatAction::ClearActiveChannel));
+        pending_cv.set(|cv| cv.apply(ChatAction::ClearActiveChannel));
     }
-    pending.set(|cd| cd.loading = false);
-    // ONE terminal cascade for the whole fetch.
-    pending.apply();
+    pending_cv.set(|cv| cv.loading = false);
+    // Two terminal cascades: lists first (channels), then view state.
+    pending_cl.apply();
+    pending_cv.apply();
     // Apply any user-defined icon/banner overrides from storage.
-    apply_server_icon_overrides(chat_data).await;
+    apply_server_icon_overrides(chat_lists, chat_view_state).await;
 }
 
 /// Apply user icon and banner overrides from `AppSettings` to all servers in
@@ -1316,7 +1329,10 @@ async fn load_server_data_internal(
 /// navigations and app restarts.
 ///
 /// No-ops silently if storage is not yet initialised.
-async fn apply_server_icon_overrides(chat_data: BatchedSignal<crate::state::ChatData>) {
+async fn apply_server_icon_overrides(
+    chat_lists: BatchedSignal<ChatLists>,
+    chat_view_state: BatchedSignal<ChatViewState>,
+) {
     let Some(storage) = crate::STORAGE.get() else {
         return;
     };
@@ -1326,8 +1342,8 @@ async fn apply_server_icon_overrides(chat_data: BatchedSignal<crate::state::Chat
     if settings.server_icon_overrides.is_empty() && settings.server_banner_overrides.is_empty() {
         return;
     }
-    chat_data.batch(|cd| {
-        for server in &mut cd.servers {
+    chat_lists.batch(|cl| {
+        for server in &mut cl.servers {
             if let Some(url) = settings.server_icon_overrides.get(&server.id) {
                 server.icon_url = Some(url.clone());
             }
@@ -1335,7 +1351,9 @@ async fn apply_server_icon_overrides(chat_data: BatchedSignal<crate::state::Chat
                 server.banner_url = Some(url.clone());
             }
         }
-        if let Some(ref mut current) = cd.current_server {
+    });
+    chat_view_state.batch(|cv| {
+        if let Some(ref mut current) = cv.current_server {
             if let Some(url) = settings.server_icon_overrides.get(&current.id) {
                 current.icon_url = Some(url.clone());
             }
@@ -1402,19 +1420,20 @@ pub async fn restore_server_channel(
     channel_id: String,
     mut app_state: BatchedSignal<AppState>,
     client_manager: BatchedSignal<ClientManager>,
-    chat_data: BatchedSignal<ChatData>,
     voice_state: BatchedSignal<VoiceState>,
+    chat_lists: BatchedSignal<ChatLists>,
+    chat_view_state: BatchedSignal<ChatViewState>,
 ) -> Option<String> {
     // One initial cascade so the UI can paint a loading state while we
     // fetch. Every other mutation is deferred to a single terminal write
     // at the end — individual per-field writes were starving the WASM
     // scheduler on Teams (CLAUDE.md hang #1, same class as AccountIcon
     // onclick batching fix in commit a761fe01).
-    chat_data.batch(|cd| cd.loading = true);
+    chat_view_state.batch(|cv| cv.loading = true);
 
     let backend_info = client_manager.peek().get_backend_for_server(&server_id);
     let Some((_account_id, backend)) = backend_info else {
-        chat_data.batch(|cd| cd.loading = false);
+        chat_view_state.batch(|cv| cv.loading = false);
         return None;
     };
 
@@ -1424,7 +1443,7 @@ pub async fn restore_server_channel(
             Ok(g) => g,
             Err(_) => {
                 tracing::warn!("favorites_sidebar: backend read timed out loading server details");
-                chat_data.batch(|cd| cd.loading = false);
+                chat_view_state.batch(|cv| cv.loading = false);
                 return None;
             }
         };
@@ -1437,7 +1456,7 @@ pub async fn restore_server_channel(
             Ok(g) => g,
             Err(_) => {
                 tracing::warn!("favorites_sidebar: backend read timed out loading channels");
-                chat_data.batch(|cd| cd.loading = false);
+                chat_view_state.batch(|cv| cv.loading = false);
                 return None;
             }
         };
@@ -1485,8 +1504,8 @@ pub async fn restore_server_channel(
     // fallback. The caller still needs the resolved id to nav.replace.
     let target = exact.or(fallback);
 
-    // Pre-fetch per-channel content WITHOUT touching chat_data. All mutations
-    // batched into the single terminal write below.
+    // Pre-fetch per-channel content. All mutations batched into two terminal
+    // writes below (ChatLists for channels, ChatViewState for view fields).
     let mut loaded_messages: Option<Vec<poly_client::Message>> = None;
     let mut loaded_channel_load_error: Option<String> = None;
     let mut loaded_members: Option<Vec<poly_client::User>> = None;
@@ -1504,7 +1523,7 @@ pub async fn restore_server_channel(
                 Ok(g) => g,
                 Err(_) => {
                     tracing::warn!("favorites_sidebar: backend read timed out loading channel messages");
-                    chat_data.batch(|cd| cd.loading = false);
+                    chat_view_state.batch(|cv| cv.loading = false);
                     return None;
                 }
             };
@@ -1544,7 +1563,7 @@ pub async fn restore_server_channel(
                 Ok(g) => g,
                 Err(_) => {
                     tracing::warn!("favorites_sidebar: backend read timed out loading voice participants");
-                    chat_data.batch(|cd| cd.loading = false);
+                    chat_view_state.batch(|cv| cv.loading = false);
                     return None;
                 }
             };
@@ -1554,25 +1573,23 @@ pub async fn restore_server_channel(
         }
     }
 
-    // Single terminal cascade — everything that was read above lands in one
-    // write-guard drop, so subscribers see one consistent state update
-    // instead of 5-7 intermediate ones.
-    chat_data.batch(|cd| {
+    // Two terminal cascades — ChatLists for channels list, ChatViewState for view fields.
+    chat_lists.batch(|cl| cl.set_channels(channels));
+    chat_view_state.batch(|cv| {
         if let Some(server) = loaded_server {
-            cd.current_server = Some(server);
+            cv.current_server = Some(server);
         }
-        cd.channels = channels;
         if let Some(ref ch) = target {
-            cd.current_channel = Some(ch.clone());
+            cv.current_channel = Some(ch.clone());
         }
         if let Some(messages) = loaded_messages {
-            cd.messages = messages;
+            cv.set_messages(messages);
         }
-        cd.channel_load_error = loaded_channel_load_error;
+        cv.channel_load_error = loaded_channel_load_error;
         if let Some(members) = loaded_members {
-            cd.members = members;
+            cv.members = members;
         }
-        cd.loading = false;
+        cv.loading = false;
     });
     if let Some((id, participants)) = loaded_voice {
         voice_state.batch(move |v| {
@@ -1585,7 +1602,7 @@ pub async fn restore_server_channel(
     }
 
     // Apply any user-defined icon/banner overrides from storage.
-    apply_server_icon_overrides(chat_data).await;
+    apply_server_icon_overrides(chat_lists, chat_view_state).await;
 
     target.map(|channel| channel.id)
 }

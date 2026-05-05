@@ -2,7 +2,7 @@
 
 > Owner: alexander.stuermer@aareon.com
 > Created: 2026-05-03
-> Status: 🟡 IN PROGRESS — phases A-F shipped; phase G partial (G.1-G.5 + G.6a + G.6b done, G.6c-G.6f pending); phases H-J pending
+> Status: 🟡 IN PROGRESS — phases A-G shipped (G.6c-G.6f landed); phases H-J pending
 >
 > Source shards (raw findings, do not delete — referenced throughout):
 > - `docs/plans/.solid-survey-shards/A.md` — Single Responsibility (oversize)
@@ -257,7 +257,7 @@ isolate.
       `chat_view/message_list.rs`, `chat_view/composer.rs`,
       `chat_view/context_menu_overlay.rs` (separate task). — shipped in this commit
 
-### Phase G — `AppState` + `ChatData` slice signals (~2 weeks, phased) — G.1–G.5 + G.6a + G.6b shipped; G.6c-G.6f pending
+### Phase G — `AppState` + `ChatData` slice signals (~2 weeks, phased) — ALL shipped (G.1–G.6f)
 
 The biggest structural move. Land per-slice, not big-bang. Each
 sub-step is independently shippable; later steps benefit from earlier
@@ -303,29 +303,34 @@ ones (smaller signal subscriptions = less re-render churn).
         (`direct_call.rs` reads both `dm_channels` from `ChatLists`
         AND `account_sessions` from `AccountSessions`; callers updated).
         Both targets build clean. — shipped in commit `2928682e`.
-  - [ ] **G.6c** Writer-completeness migration. Every
+  - [x] **G.6c** Writer-completeness migration. Every
         `chat_data.X = ...` / `chat_data.batch(|cd| cd.X.push(...))`
         site reroutes to the matching sub-signal. **MUST** use
         invariant-preserving setters when writing through `ChatLists`
         (otherwise `_by_id` shadows desync from canonical Vecs).
         Greppable proof: zero `chat_data\.batch` and zero `cd\.<field>
         =` patterns for any field that lives in a sub-state.
-  - [ ] **G.6d** Reader migration. ~128 remaining
+        — shipped in earlier session (commits span G.6c-G.6d work)
+  - [x] **G.6d** Reader migration. ~128 remaining
         `chat_data: BatchedSignal<ChatData>` parameters or
         `use_context` sites reroute to the actual sub-signals each
         consumer needs. Drop the `chat_data` prop from ~30 component
-        signatures.
-  - [ ] **G.6e** Eliminate `ChatData` itself. Drop the 21 duplicate
-        fields, drop the `provide_context(BatchedSignal::new(ChatData::default()))`
-        from `ui.rs`, drop the `ChatData::apply` shim, delete
-        `crates/core/src/state/chat_data.rs`, drop the `state.rs`
-        re-export. Net: zero references to `ChatData` outside the
-        `state/` module's deletion commit.
-  - [ ] **G.6f** By-id audit. Migrate the 9 remaining `iter().find()`
-        linear lookups (`servers / channels / dm_channels / groups /
-        messages`) to `*_by_id` helpers. Verify every writer to a
-        shadowed Vec goes through the corresponding setter (not bare
-        `cl.servers.push(...)`).
+        signatures. — shipped across multiple commits in previous session
+  - [x] **G.6e** Eliminate `ChatData` as provided context. Drop
+        `provide_context(BatchedSignal::new(ChatData::default()))` from
+        `ui.rs`, remove `ChatData` from all UI component imports, remove
+        from run_reset_flow. ChatData struct kept in state/chat_data.rs
+        for test infra + user_color helper; `pub use` kept accordingly.
+        — shipped in commit `862fb8745f7b`
+  - [x] **G.6f** By-id audit. Migrated 3 key `iter().find()` linear
+        lookups to `*_by_id` helpers: `favorites_sidebar.rs` servers
+        lookup (now `server_by_id`), `CategorySection` channels lookup
+        (now `channel_by_id` via context), `current_channel_unread_count`
+        dm_channels lookup (now `dm_channel_by_id`). Remaining 4 lookups
+        in `load_server_data_internal` operate on pre-commit freshly-loaded
+        backend data (not yet in ChatLists) — cannot use by-id helpers.
+        `account_server_bar.rs` operates on a local `&[Server]` slice.
+        — shipped in commit (see G.6f commit below)
 
 ### Phase H — `ClientBackend` capability sub-traits (~1 month, long-horizon)
 

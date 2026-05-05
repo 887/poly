@@ -14,7 +14,7 @@
 use crate::state::BatchedSignal;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
-use crate::state::{AppState, ChatData};
+use crate::state::AppState;
 use crate::ui::routes::Route;
 use dioxus::prelude::*;
 use poly_client::ChannelType;
@@ -52,7 +52,8 @@ pub(crate) fn CreateChannelPage(
 ) -> Element {
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let app_state: BatchedSignal<AppState> = use_context();
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let chat_lists: BatchedSignal<crate::state::ChatLists> = use_context();
+    let chat_view_state: BatchedSignal<crate::state::ChatViewState> = use_context();
 
     let mut channel_name = use_signal(String::new);
     let creating = use_signal(|| false);
@@ -95,7 +96,7 @@ pub(crate) fn CreateChannelPage(
                                             account_id_kd.clone(),
                                             backend_kd.clone(),
                                             instance_id_kd.clone(),
-                                            CreateChannelSignals { client_manager, app_state, chat_data, creating, error_msg },
+                                            CreateChannelSignals { client_manager, app_state, chat_lists, chat_view_state, creating, error_msg },
                                         );
                                     }
                                 }
@@ -132,7 +133,7 @@ pub(crate) fn CreateChannelPage(
                                     account_id.clone(),
                                     backend.clone(),
                                     instance_id.clone(),
-                                    CreateChannelSignals { client_manager, app_state, chat_data, creating, error_msg },
+                                    CreateChannelSignals { client_manager, app_state, chat_lists, chat_view_state, creating, error_msg },
                                 );
                             },
                             if *creating.read() { "{t(\"create-channel-creating\")}" } else { "{t(\"create-channel-submit\")}" }
@@ -148,7 +149,8 @@ pub(crate) fn CreateChannelPage(
 struct CreateChannelSignals {
     client_manager: BatchedSignal<ClientManager>,
     app_state: BatchedSignal<AppState>,
-    chat_data: BatchedSignal<ChatData>,
+    chat_lists: BatchedSignal<crate::state::ChatLists>,
+    chat_view_state: BatchedSignal<crate::state::ChatViewState>,
     creating: Signal<bool>,
     error_msg: Signal<String>,
 }
@@ -167,7 +169,8 @@ fn do_create_channel(
     let CreateChannelSignals {
         client_manager,
         app_state: _,
-        chat_data,
+        chat_lists,
+        chat_view_state,
         mut creating,
         mut error_msg,
     } = signals;
@@ -186,12 +189,19 @@ fn do_create_channel(
                 // This mirrors what ChannelItemRow.onclick does so that
                 // ServerChat.use_effect sees already_loaded=true and skips
                 // restore_server_channel (which panics with concurrent spawns).
-                chat_data.batch(move |cd| {
-                    cd.channels.push(channel.clone());
-                    cd.current_channel = Some(channel);
-                    cd.messages = Vec::new();
-                    cd.members = Vec::new();
-                    cd.loading = false;
+                let channel_for_cv = channel.clone();
+                chat_lists.batch(move |cl| {
+                    cl.set_channels({
+                        let mut chs = cl.channels.clone();
+                        chs.push(channel);
+                        chs
+                    });
+                });
+                chat_view_state.batch(move |cv| {
+                    cv.current_channel = Some(channel_for_cv);
+                    cv.set_messages(Vec::new());
+                    cv.members = Vec::new();
+                    cv.loading = false;
                 });
                 creating.set(false);
                 crate::nav!(Route::ServerChat {

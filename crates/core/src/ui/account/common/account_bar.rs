@@ -25,7 +25,7 @@ use super::super::super::routes::Route;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::chat_data::user_color;
-use crate::state::{AppState, ChatData, NavState, VoiceState};
+use crate::state::{AccountSessions, AppState, NavState, VoiceState};
 use dioxus::prelude::*;
 use poly_client::{AccountPresence, ConnectionStatus};
 use poly_ui_macros::{context_menu, ui_action};
@@ -47,7 +47,7 @@ struct AccountBarUserState {
     account_id: Option<String>,
 }
 
-fn current_account_bar_user(nav: &NavState, chat_data: &ChatData) -> AccountBarUserState {
+fn current_account_bar_user(nav: &NavState, account_sessions: &AccountSessions) -> AccountBarUserState {
     let aid = nav.active_account_id.as_deref();
     let client_manager = use_context::<BatchedSignal<ClientManager>>();
     let cm = client_manager.read();
@@ -60,10 +60,10 @@ fn current_account_bar_user(nav: &NavState, chat_data: &ChatData) -> AccountBarU
         .and_then(|id| cm.presence_statuses.get(id).copied())
         .unwrap_or(AccountPresence::Online);
     let presence_class = presence.css_class();
-    // Drop read guard before accessing chat_data to avoid double-borrow.
+    // Drop read guard before accessing account_sessions to avoid double-borrow.
     drop(cm);
 
-    let session = aid.and_then(|id| chat_data.account_sessions.get(id).cloned());
+    let session = aid.and_then(|id| account_sessions.account_sessions.get(id).cloned());
     if let Some(s) = session {
         let name = s.user.display_name.clone();
         let id = s.user.id.clone();
@@ -367,12 +367,12 @@ fn AccountBarControls(
 pub fn AccountBar() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
     let nav_state: BatchedSignal<NavState> = use_context();
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let account_sessions: BatchedSignal<crate::state::AccountSessions> = use_context();
     let voice_state: BatchedSignal<VoiceState> = use_context();
     let voice_conn = voice_state.read().voice_connection.clone();
     let nav_snap = nav_state.read().clone();
-    let cd_snap = chat_data.read().clone();
-    let user = current_account_bar_user(&nav_snap, &cd_snap);
+    let as_snap = account_sessions.read().clone(); // poly-lint: allow render-time-read — render snapshot; subscription intentional
+    let user = current_account_bar_user(&nav_snap, &as_snap);
 
     let is_muted = voice_conn.as_ref().is_some_and(|vc| vc.is_muted);
     let is_deafened = voice_conn.as_ref().is_some_and(|vc| vc.is_deafened);

@@ -6,23 +6,24 @@ use super::super::current_channel_unread_count;
 use super::super::mark_channel_as_read_with_backend;
 
 pub(in super::super) fn use_history_state_effect(signals: &ChatViewSignals) {
-    let app_state = signals.app_state;
     let nav = signals.nav;
-    let chat_data = signals.chat_data;
+    let chat_lists = signals.chat_lists;
+    let chat_view_state = signals.chat_view_state;
     let client_manager = signals.client_manager;
     let history_state = signals.history_state;
     let mut scrolled_from_bottom = signals.scrolled_from_bottom;
     let mut new_messages_while_scrolled_up = signals.new_messages_while_scrolled_up;
 
-    use_effect(move || { // poly-lint: allow stale-effect-capture — Signal-only; subscribes to app_state, chat_data, history_state Signals
+    use_effect(move || { // poly-lint: allow stale-effect-capture — Signal-only; subscribes to app_state, chat_view_state, chat_lists, history_state Signals
         let Some(active_channel_id) = nav.read().selected_channel.cloned() else {
             // hang #8 countermeasure: skip the write when already default,
             // otherwise the unconditional write re-fires the effect.
             history_state.set_if_changed(ChatHistoryUiState::default());
             return;
         };
-        let chat_snapshot = chat_data.read().clone();
-        if chat_snapshot.loading {
+        let cv_snapshot = chat_view_state.read().clone();
+        let cl_snapshot = chat_lists.read().clone();
+        if cv_snapshot.loading {
             return;
         }
         let prev_channel_id = history_state.read().channel_id.clone();
@@ -37,14 +38,14 @@ pub(in super::super) fn use_history_state_effect(signals: &ChatViewSignals) {
             scrolled_from_bottom.set(false);
             new_messages_while_scrolled_up.set(0);
         }
-        let messages = chat_snapshot.messages.clone();
+        let messages = cv_snapshot.messages.clone();
         let unread_count = current_channel_unread_count(
             Some(&active_channel_id),
-            chat_snapshot.current_channel.as_ref(),
-            &chat_snapshot.dm_channels,
+            cv_snapshot.current_channel.as_ref(),
+            &cl_snapshot,
         );
         let messages_loaded = !messages.is_empty();
-        let has_more_after = messages_loaded && chat_snapshot.messages_loaded_via_anchor;
+        let has_more_after = messages_loaded && cv_snapshot.messages_loaded_via_anchor;
         let active_channel_id_for_mark = active_channel_id.clone();
         let mut next_history = ChatHistoryUiState {
             channel_id: Some(active_channel_id),
@@ -58,7 +59,7 @@ pub(in super::super) fn use_history_state_effect(signals: &ChatViewSignals) {
             unread_marker_message_id: unread_marker_message_id(&messages, unread_count),
             // Show the unread divider on channel open when there are unread messages.
             // The divider persists until the channel is switched — we capture the
-            // marker position now and (below) flush chat_data.unread_count to 0 so
+            // marker position now and (below) flush unread_count to 0 so
             // re-entering the channel later (without new messages) shows no divider.
             unread_divider_visible: unread_count > 0,
             messages_loaded,
@@ -74,23 +75,24 @@ pub(in super::super) fn use_history_state_effect(signals: &ChatViewSignals) {
         // re-renders for one load_server_data call).
         history_state.set_if_changed(next_history);
 
-        // Mark the channel as read in chat_data the moment the user actually
-        // sees it with messages loaded. Discord-style: the in-channel divider
-        // stays visible for this visit (preserved in history_state above), but
-        // the sidebar bolding + server unread badge clear immediately, and the
-        // next time the user opens this channel they get a clean view (unless
-        // new messages arrived). Two entry conditions cover both code paths:
-        //   - sync: channel switch + messages already in chat_data
+        // Mark the channel as read the moment the user actually sees it with
+        // messages loaded. Discord-style: the in-channel divider stays visible
+        // for this visit (preserved in history_state above), but the sidebar
+        // bolding + server unread badge clear immediately, and the next time
+        // the user opens this channel they get a clean view (unless new
+        // messages arrived). Two entry conditions cover both code paths:
+        //   - sync: channel switch + messages already loaded
         //   - async: channel switch with empty messages, then messages load
-        // The early-return guard above prevents the resulting chat_data write
-        // from re-running the marker computation and erasing the divider.
+        // The early-return guard above prevents the resulting write from
+        // re-running the marker computation and erasing the divider.
         let entered_with_messages =
             messages_loaded && unread_count > 0 && (is_channel_switch || !prev_messages_loaded);
         if entered_with_messages {
             let server_id = nav.read().selected_server.cloned();
             let account_id = nav.read().active_account_id.cloned();
             mark_channel_as_read_with_backend(
-                chat_data,
+                chat_lists,
+                chat_view_state,
                 client_manager,
                 account_id,
                 server_id,

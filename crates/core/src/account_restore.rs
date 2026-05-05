@@ -28,7 +28,7 @@ use poly_client::{AuthCredentials, BackendType, ClientBackend, PresenceStatus, S
 use tokio::sync::RwLock;
 
 use crate::client_manager::{BackendHandle, BackendHandleExt};
-use crate::state::{BatchedSignal, ChatData};
+use crate::state::{AccountSessions, BatchedSignal, ChatLists};
 use crate::storage::{OfflineServerRecord, Storage};
 use crate::client_manager::ClientManager;
 
@@ -134,7 +134,8 @@ fn build_backend_for_slug(
 pub async fn restore_native_accounts(
     storage: &Storage,
     client_manager: BatchedSignal<ClientManager>,
-    chat_data: BatchedSignal<ChatData>,
+    chat_lists: BatchedSignal<ChatLists>,
+    account_sessions: BatchedSignal<AccountSessions>,
     slug_filter: Option<&str>,
 ) {
     let Ok(tokens) = storage.get_account_tokens().await else {
@@ -261,8 +262,8 @@ pub async fn restore_native_accounts(
                 }
                 {
                     let aid = account_id.clone();
-                    chat_data.batch(move |cd| {
-                        cd.account_sessions.insert(aid, session.clone());
+                    account_sessions.batch(move |as_| {
+                        as_.account_sessions.insert(aid, session.clone());
                     });
                 }
 
@@ -282,18 +283,20 @@ pub async fn restore_native_accounts(
                     .collect();
                 let new_fav_ids: Vec<String> = servers.iter().map(|s| s.id.clone()).collect();
 
-                let all_fav_ids = chat_data.batch(|cd| {
-                    for id in &new_fav_ids {
-                        if !cd.favorited_server_ids.contains(id) {
-                            cd.favorited_server_ids.push(id.clone());
-                        }
-                    }
+                chat_lists.batch(|cl| {
                     for srv in servers {
-                        if !cd.servers.iter().any(|s| s.id == srv.id) {
-                            cd.servers.push(srv);
+                        if !cl.servers.iter().any(|s| s.id == srv.id) {
+                            cl.push_server(srv);
                         }
                     }
-                    cd.favorited_server_ids.clone()
+                });
+                let all_fav_ids = account_sessions.batch(|as_| {
+                    for id in &new_fav_ids {
+                        if !as_.favorited_server_ids.contains(id) {
+                            as_.favorited_server_ids.push(id.clone());
+                        }
+                    }
+                    as_.favorited_server_ids.clone()
                 });
 
                 if let Err(e) = storage.upsert_offline_server_cache(&cache_records).await {
@@ -311,18 +314,18 @@ pub async fn restore_native_accounts(
                             let dms = guard.get_dm_channels().await.ok();
                             let friends = guard.get_friends().await.ok();
                             let aid = account_id.clone();
-                            chat_data.batch(move |cd| {
+                            chat_lists.batch(move |cl| {
                                 if let Some(dms) = dms {
-                                    cd.dm_channels.extend(dms);
+                                    cl.dm_channels.extend(dms);
                                 }
                                 if let Some(friends) = friends {
                                     for friend in friends {
-                                        let already = cd
+                                        let already = cl
                                             .friends
                                             .get(&aid)
                                             .is_some_and(|v| v.iter().any(|f| f.id == friend.id));
                                         if !already {
-                                            cd.friends
+                                            cl.friends
                                                 .entry(aid.clone())
                                                 .or_default()
                                                 .push(friend);
@@ -396,8 +399,8 @@ pub async fn restore_native_accounts(
                 }
                 {
                     let aid = token.account_id.clone();
-                    chat_data.batch(move |cd| {
-                        cd.account_sessions.insert(aid, offline_session.clone());
+                    account_sessions.batch(move |as_| {
+                        as_.account_sessions.insert(aid, offline_session.clone());
                     });
                 }
 
@@ -427,10 +430,10 @@ pub async fn restore_native_accounts(
                     .collect();
 
                 if !account_servers.is_empty() {
-                    chat_data.batch(move |cd| {
+                    chat_lists.batch(move |cl| {
                         for srv in account_servers {
-                            if !cd.servers.iter().any(|s| s.id == srv.id) {
-                                cd.servers.push(srv);
+                            if !cl.servers.iter().any(|s| s.id == srv.id) {
+                                cl.push_server(srv);
                             }
                         }
                     });
@@ -470,11 +473,13 @@ mod tests {
 
     fn make_signals_in_runtime(
         vdom: &VirtualDom,
-    ) -> (BatchedSignal<ClientManager>, BatchedSignal<ChatData>) {
+    ) -> (BatchedSignal<ClientManager>, BatchedSignal<ChatData>, BatchedSignal<crate::state::ChatLists>, BatchedSignal<crate::state::AccountSessions>) {
         vdom.in_scope(ScopeId::ROOT, || {
             let cm = BatchedSignal::from_signal(Signal::new(ClientManager::default()));
             let cd = BatchedSignal::from_signal(Signal::new(ChatData::default()));
-            (cm, cd)
+            let cl = BatchedSignal::from_signal(Signal::new(crate::state::ChatLists::default()));
+            let as_ = BatchedSignal::from_signal(Signal::new(crate::state::AccountSessions::default()));
+            (cm, cd, cl, as_)
         })
     }
 
@@ -522,16 +527,16 @@ mod tests {
     fn restore_empty_storage_is_noop() {
         run_test(|vdom| async move {
             let storage = make_storage().await;
-            let (cm, cd) = make_signals_in_runtime(&vdom);
+            let (cm, cd, cl, as_) = make_signals_in_runtime(&vdom);
             vdom.in_scope(ScopeId::ROOT, || {
                 let storage = storage.clone();
                 // We're inside in_scope — batch is valid. But restore is async,
                 // so we just prime state here and run restore outside.
-                let _ = (storage, cm, cd);
+                let _ = (storage, cm, cd, cl, as_);
             });
             // restore_native_accounts calls batch internally; it runs outside
             // in_scope but on the same thread as the vdom, so the arena is valid.
-            restore_native_accounts(&storage, cm, cd, None).await;
+            restore_native_accounts(&storage, cm, cd, cl, as_, None).await;
         });
     }
 
@@ -554,16 +559,16 @@ mod tests {
                 .await
                 .unwrap();
 
-            let (cm, cd) = make_signals_in_runtime(&vdom);
+            let (cm, cd, cl, as_) = make_signals_in_runtime(&vdom);
             // Set disabled backends while in scope.
             vdom.in_scope(ScopeId::ROOT, || {
                 cm.batch(|c| c.set_disabled_native_backends(vec!["discord".to_string()]));
             });
 
-            restore_native_accounts(&storage, cm, cd, None).await;
+            restore_native_accounts(&storage, cm, cd, cl, as_, None).await;
 
             let sessions_count = vdom.in_scope(ScopeId::ROOT, || {
-                cd.peek().account_sessions.len()
+                as_.peek().account_sessions.len()
             });
             assert_eq!(sessions_count, 0, "disabled backend should be skipped");
         });
@@ -588,7 +593,7 @@ mod tests {
                 .await
                 .unwrap();
 
-            let (cm, cd) = make_signals_in_runtime(&vdom);
+            let (cm, cd, cl, as_) = make_signals_in_runtime(&vdom);
 
             let dummy_session = Session {
                 id: "discord-user-2".to_string(),
@@ -612,14 +617,14 @@ mod tests {
                     c.sessions.insert("discord-user-2".to_string(), sess);
                 });
                 let ds = dummy_session.clone();
-                cd.batch(move |c| {
-                    c.account_sessions.insert("discord-user-2".to_string(), ds);
+                as_.batch(move |a| {
+                    a.account_sessions.insert("discord-user-2".to_string(), ds);
                 });
             });
 
-            restore_native_accounts(&storage, cm, cd, None).await;
+            restore_native_accounts(&storage, cm, cd, cl, as_, None).await;
 
-            let count = vdom.in_scope(ScopeId::ROOT, || cd.peek().account_sessions.len());
+            let count = vdom.in_scope(ScopeId::ROOT, || as_.peek().account_sessions.len());
             assert_eq!(count, 1, "already-restored account should not be duplicated");
         });
     }
@@ -643,11 +648,11 @@ mod tests {
                 .await
                 .unwrap();
 
-            let (cm, cd) = make_signals_in_runtime(&vdom);
+            let (cm, cd, cl, as_) = make_signals_in_runtime(&vdom);
 
-            restore_native_accounts(&storage, cm, cd, Some("stoat")).await;
+            restore_native_accounts(&storage, cm, cd, cl, as_, Some("stoat")).await;
 
-            let count = vdom.in_scope(ScopeId::ROOT, || cd.peek().account_sessions.len());
+            let count = vdom.in_scope(ScopeId::ROOT, || as_.peek().account_sessions.len());
             assert_eq!(count, 0, "slug filter should skip non-matching backends");
         });
     }

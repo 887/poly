@@ -18,7 +18,7 @@ use super::chat_history::{
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::state::{
-    AppState, ChannelContextMenuState, ChatData, DmContextMenuState, GroupDmContextMenuState,
+    AccountSessions, AppState, ChannelContextMenuState, ChatLists, ChatViewState, DmContextMenuState, GroupDmContextMenuState,
     NavState, View, VoiceState,
 };
 use crate::ui::context_menu::menus::{channel_entry_at, dm_entry_at, group_dm_entry_at};
@@ -75,18 +75,18 @@ fn group_last_incoming_timestamp(
 async fn load_channel_data(
     channel_id: String,
     client_manager: BatchedSignal<ClientManager>,
-    chat_data: BatchedSignal<ChatData>,
     app_state: BatchedSignal<AppState>,
     nav: BatchedSignal<crate::state::NavState>,
     voice_state: BatchedSignal<VoiceState>,
+    chat_view_state: BatchedSignal<ChatViewState>,
 ) {
     // Fire an initial spinner cascade so the UI paints "loading" before we
     // start awaiting.  Every subsequent mutation is deferred into a single
     // terminal PendingUpdate::apply().
-    chat_data.batch(|cd| cd.loading = true);
+    chat_view_state.batch(|cv| cv.loading = true);
 
-    let unread_count = chat_data
-        .read()
+    let unread_count = chat_view_state
+        .peek()
         .current_channel
         .as_ref()
         .filter(|channel| channel.id == channel_id)
@@ -95,19 +95,19 @@ async fn load_channel_data(
     // Get selected server to find the right backend
     let server_id = nav.read().selected_server.cloned();
     let Some(server_id) = server_id else {
-        chat_data.batch(|cd| cd.loading = false);
+        chat_view_state.batch(|cv| cv.loading = false);
         return;
     };
 
-    let channel_type = chat_data
-        .read()
+    let channel_type = chat_view_state
+        .peek()
         .current_channel
         .as_ref()
         .map(|ch| ch.channel_type);
 
     let backend_info = client_manager.peek().get_backend_for_server(&server_id);
     let Some((_account_id, backend)) = backend_info else {
-        chat_data.batch(|cd| cd.loading = false);
+        chat_view_state.batch(|cv| cv.loading = false);
         return;
     };
 
@@ -118,11 +118,11 @@ async fn load_channel_data(
         Ok(g) => g,
         Err(_) => {
             tracing::warn!(channel_id = %channel_id, "load_channel_data: backend read timed out");
-            chat_data.batch(|cd| cd.loading = false);
+            chat_view_state.batch(|cv| cv.loading = false);
             return;
         }
     };
-    let mut pending = chat_data.pending_update();
+    let mut pending = chat_view_state.pending_update();
 
     match channel_type {
         Some(poly_client::ChannelType::Voice) | Some(poly_client::ChannelType::Video) => {
@@ -151,9 +151,9 @@ async fn load_channel_data(
             let anchor_for_scroll = anchor.clone();
             if let Ok(messages) = guard.get_messages(&channel_id, query).await {
                 let had_anchor = anchor.is_some();
-                pending.set(move |cd| {
-                    cd.messages = messages;
-                    cd.messages_loaded_via_anchor = had_anchor;
+                pending.set(move |cv| {
+                    cv.set_messages(messages);
+                    cv.messages_loaded_via_anchor = had_anchor;
                 });
                 if let Some((ref element_id, _, offset_px)) = anchor_for_scroll {
                     request_restore_to_anchor(&channel_id, element_id, offset_px);
@@ -163,13 +163,14 @@ async fn load_channel_data(
             }
             let members = guard.get_channel_members(&channel_id).await.ok();
             if let Some(mbrs) = members {
-                pending.set(move |cd| cd.members = mbrs);
+                pending.set(move |cv| cv.members = mbrs);
             }
         }
     }
 
-    pending.set(|cd| cd.loading = false);
+    pending.set(|cv| cv.loading = false);
     pending.apply();
+    let _ = app_state;
 }
 /// Load messages for a DM or group channel using the account backend directly
 /// (does not require a selected server).
@@ -177,7 +178,7 @@ async fn load_dm_messages(
     channel_id: String,
     account_id: String,
     client_manager: BatchedSignal<ClientManager>,
-    chat_data: BatchedSignal<ChatData>,
+    chat_view_state: BatchedSignal<ChatViewState>,
 ) {
     tracing::info!(
         channel_id = %channel_id,
@@ -186,14 +187,14 @@ async fn load_dm_messages(
     );
     // One cascade for the initial reset so subscribers paint the empty
     // loading state before we start awaiting.
-    chat_data.batch(|cd| {
-        cd.loading = true;
-        cd.messages = Vec::new();
-        cd.members = Vec::new();
+    chat_view_state.batch(|cv| {
+        cv.loading = true;
+        cv.set_messages(Vec::new());
+        cv.members = Vec::new();
     });
 
-    let unread_count = chat_data
-        .read()
+    let unread_count = chat_view_state
+        .peek()
         .current_channel
         .as_ref()
         .filter(|channel| channel.id == channel_id)
@@ -208,7 +209,7 @@ async fn load_dm_messages(
         Ok(pair) => pair,
         Err(_) => {
             tracing::warn!(account_id = %account_id, "load_dm_messages: no backend or timed out");
-            chat_data.batch(|cd| cd.loading = false);
+            chat_view_state.batch(|cv| cv.loading = false);
             return;
         }
     };
@@ -221,15 +222,15 @@ async fn load_dm_messages(
     );
 
     // ONE terminal cascade for the whole async fetch.
-    let mut pending = chat_data.pending_update();
+    let mut pending = chat_view_state.pending_update();
     if let Some(msgs) = messages {
-        pending.set(move |cd| cd.messages = msgs);
+        pending.set(move |cv| cv.set_messages(msgs));
         request_restore_scroll_position_or_bottom(&channel_id);
     }
     if let Some(mbrs) = members {
-        pending.set(move |cd| cd.members = mbrs);
+        pending.set(move |cv| cv.members = mbrs);
     }
-    pending.set(|cd| cd.loading = false);
+    pending.set(|cv| cv.loading = false);
     pending.apply();
 }
 
@@ -239,7 +240,6 @@ fn activate_dm_channel(
     dm: DmChannel,
     instance_id: String,
     nav_state: BatchedSignal<NavState>,
-    chat_data: BatchedSignal<ChatData>,
     client_manager: BatchedSignal<ClientManager>,
     nav: crate::ui::dioxus_router::Navigator,
 ) {
@@ -263,7 +263,7 @@ fn activate_dm_channel(
     // the same URL works because it skips the pre-mutation, and DmChat's own
     // use_effect (restore_dm_chat) loads the channel + messages from the route
     // params. Friend-click now walks the same path.
-    let _ = (dm.unread_count, &dm.last_message, &chat_data);
+    let _ = (dm.unread_count, &dm.last_message);
 
     nav.push(Route::DmChat {
         backend: dm.backend.slug().to_string(),
@@ -277,10 +277,10 @@ fn activate_dm_channel(
 
 fn active_account_context(
     nav_state: BatchedSignal<crate::state::NavState>,
-    chat_data: BatchedSignal<ChatData>,
+    account_sessions: BatchedSignal<AccountSessions>,
 ) -> Option<(String, String)> {
     let account_id = nav_state.read().active_account_id.cloned()?;
-    let instance_id = chat_data
+    let instance_id = account_sessions
         .read()
         .account_sessions
         .get(&account_id)
@@ -295,13 +295,14 @@ fn active_account_context(
 pub(crate) fn open_direct_message_from_active_account(
     user_id: String,
     nav_state: BatchedSignal<crate::state::NavState>,
-    chat_data: BatchedSignal<ChatData>,
+    account_sessions: BatchedSignal<AccountSessions>,
     client_manager: BatchedSignal<ClientManager>,
     nav: crate::ui::dioxus_router::Navigator,
+    chat_lists: BatchedSignal<ChatLists>,
 ) {
     tracing::info!(user_id = %user_id, "open_direct_message_from_active_account: start");
 
-    let Some((account_id, instance_id)) = active_account_context(nav_state, chat_data) else {
+    let Some((account_id, instance_id)) = active_account_context(nav_state, account_sessions) else {
         tracing::warn!("open_direct_message_from_active_account: no active account");
         return;
     };
@@ -313,12 +314,9 @@ pub(crate) fn open_direct_message_from_active_account(
     );
 
     // Read `dm_channels` under a scoped borrow that is dropped before any write.
-    // Holding this read guard into `activate_dm_channel` (which calls `.write()`)
-    // would panic in Dioxus's borrow checker.
     let existing_dm = {
-        let chat_data_read = chat_data.read();
-        chat_data_read
-            .dm_channels
+        let cl = chat_lists.peek();
+        cl.dm_channels
             .iter()
             .find(|dm| dm.account_id == account_id && dm.user.id == user_id)
             .cloned()
@@ -333,7 +331,6 @@ pub(crate) fn open_direct_message_from_active_account(
             existing_dm,
             instance_id,
             nav_state,
-            chat_data,
             client_manager,
             nav,
         );
@@ -377,12 +374,12 @@ pub(crate) fn open_direct_message_from_active_account(
         // Single write guard: dedup + push under one lock so one re-render fires.
         {
             let opened_clone = opened_dm.clone();
-            chat_data.batch(|cd| {
-                cd.dm_channels.retain(|dm| {
+            chat_lists.batch(|cl| {
+                cl.dm_channels.retain(|dm| {
                     !(dm.account_id == account_id
                         && (dm.id == opened_clone.id || dm.user.id == user_id))
                 });
-                cd.dm_channels.push(opened_clone);
+                cl.dm_channels.push(opened_clone);
             });
         }
 
@@ -394,7 +391,6 @@ pub(crate) fn open_direct_message_from_active_account(
             opened_dm,
             instance_id,
             nav_state,
-            chat_data,
             client_manager,
             nav,
         );
@@ -412,9 +408,9 @@ pub fn ChannelList() -> Element {
     let ui_layout: crate::state::BatchedSignal<crate::state::UiLayout> = use_context();
     let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
     let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let chat_view_state: BatchedSignal<ChatViewState> = use_context();
     let current_view = *nav.read().view;
-    let current_server = chat_data.read().current_server.clone();
+    let current_server = chat_view_state.read().current_server.clone(); // poly-lint: allow render-time-read — render snapshot for conditional rendering; subscription intentional
     let visible_category_ids = use_signal(Vec::<String>::new);
 
     rsx! {
@@ -656,12 +652,13 @@ fn DMFriendsView() -> Element {
     let ui_layout: crate::state::BatchedSignal<crate::state::UiLayout> = use_context();
     let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
     let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
+    let account_sessions: BatchedSignal<AccountSessions> = use_context();
 
     // Only show DMs and groups belonging to the currently active account.
     let active_account_id = nav.read().active_account_id.cloned();
     let active_user_id = active_account_id.as_ref().and_then(|account_id| {
-        chat_data
+        account_sessions
             .read()
             .account_sessions
             .get(account_id)
@@ -669,7 +666,7 @@ fn DMFriendsView() -> Element {
     });
     let new_conversation_label = t("dm-new-conversation");
     let saved_messages_label = t("dm-saved-messages");
-    let dm_channels: Vec<_> = chat_data
+    let dm_channels: Vec<_> = chat_lists
         .read()
         .dm_channels
         .iter()
@@ -679,7 +676,7 @@ fn DMFriendsView() -> Element {
         })
         .cloned()
         .collect();
-    let groups: Vec<_> = chat_data
+    let groups: Vec<_> = chat_lists
         .read()
         .groups
         .iter()
@@ -710,7 +707,7 @@ fn DMFriendsView() -> Element {
     let dm_instance_ids: Vec<String> = sorted_dms
         .iter()
         .map(|dm| {
-            chat_data
+            account_sessions
                 .read()
                 .account_sessions
                 .get(&dm.account_id)
@@ -721,7 +718,7 @@ fn DMFriendsView() -> Element {
     let group_instance_ids: Vec<String> = sorted_groups
         .iter()
         .map(|g| {
-            chat_data
+            account_sessions
                 .read()
                 .account_sessions
                 .get(&g.account_id)
@@ -827,10 +824,10 @@ fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
     let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
     let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
     let _client_manager: BatchedSignal<ClientManager> = use_context();
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
+    let chat_view_state: BatchedSignal<ChatViewState> = use_context();
 
-    let channels = chat_data.read().channels.clone();
-    let current_server = chat_data.read().current_server.clone();
+    let current_server = chat_view_state.read().current_server.clone(); // poly-lint: allow render-time-read — render snapshot; subscription intentional
 
     // Derive route construction fields for InlineCreateChannel.
     let instance_id = nav.read().active_instance_id.cloned().unwrap_or_default();
@@ -845,7 +842,9 @@ fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
             .collect();
 
         // Uncategorized: channels loaded from the server but not in any category.
-        let uncategorized_ids: Vec<String> = channels
+        let uncategorized_ids: Vec<String> = chat_lists
+            .peek()
+            .channels
             .iter()
             .filter(|ch| !categorized_ids.contains(&ch.id))
             .map(|ch| ch.id.clone())
@@ -862,10 +861,10 @@ fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
 
         // Is the current channel a (Lemmy-style) forum channel?
         // HackerNews uses its own sidebar, so it is excluded here.
-        let current_ch_type = chat_data.read().current_channel.as_ref()
+        let current_ch_type = chat_view_state.read().current_channel.as_ref() // poly-lint: allow render-time-read — render snapshot; subscription intentional
             .map(|ch| ch.channel_type);
         let is_forum = matches!(current_ch_type, Some(ChannelType::Forum));
-        let current_channel_id = chat_data.read().current_channel.as_ref()
+        let current_channel_id = chat_view_state.read().current_channel.as_ref() // poly-lint: allow render-time-read — render snapshot; subscription intentional
             .map(|ch| ch.id.clone())
             .unwrap_or_default();
 
@@ -880,7 +879,6 @@ fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
                     CategorySection {
                         cat_name: t("channel-list-text-channels"),
                         cat_channel_ids: uncategorized_ids,
-                        channels: channels.clone(),
                     }
                 }
                 for category in &server.categories {
@@ -890,7 +888,6 @@ fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
                         CategorySection {
                             cat_name: category.name.clone(),
                             cat_channel_ids: category.channel_ids.clone(),
-                            channels: channels.clone(),
                         }
                     }
                 }
@@ -908,7 +905,7 @@ fn ServerChannelView(visible_category_ids: Signal<Vec<String>>) -> Element {
             // Forge (GitHub/Forgejo) sidebar: Issues / Pull Requests / Code channel links.
             if is_forge {
                 div { class: "forge-sidebar-channels",
-                    for ch in channels.iter().filter(|c| c.server_id == server_id) {
+                    for ch in chat_lists.peek().channels.iter().filter(|c| c.server_id == server_id) {
                         {
                             let ch_id = ch.id.clone();
                             // Use nav.selected_channel (updated synchronously by
@@ -1144,8 +1141,9 @@ fn DMChannelItem(
     let ui_layout: crate::state::BatchedSignal<crate::state::UiLayout> = use_context();
     let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
     let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
-    let chat_data: BatchedSignal<ChatData> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
+    let chat_view_state: BatchedSignal<ChatViewState> = use_context();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
 
     let color = user_color(&user_id);
     let first_char: String = display_name
@@ -1244,15 +1242,16 @@ fn DMChannelItem(
                     parent_channel_id: None,
                     thread_metadata: None,
                 };
-                chat_data.batch(|cd| {
-                    cd.active_group_members = Vec::new();
-                    cd.current_channel = Some(cur_chan);
-                    cd.current_server = None;
+                chat_view_state.batch(|cv| {
+                    cv.active_group_members = Vec::new();
+                    cv.current_channel = Some(cur_chan);
+                    cv.current_server = None;
                 });
                 // Clear unread on click + tell the backend so the next
                 // get_dm_channels refetch doesn't restore the badge.
                 crate::ui::account::common::chat_view::mark_channel_as_read_with_backend(
-                    chat_data,
+                    chat_lists,
+                    chat_view_state,
                     client_manager,
                     Some(account_id.clone()),
                     None,
@@ -1262,7 +1261,7 @@ fn DMChannelItem(
                 let cid = channel_id.clone();
                 let aid = account_id.clone();
                 spawn(async move {
-                    load_dm_messages(cid, aid, client_manager, chat_data).await;
+                    load_dm_messages(cid, aid, client_manager, chat_view_state).await;
                 });
                 navigator()
                     .push(Route::DmChat {
@@ -1318,8 +1317,9 @@ fn GroupChannelItem(
     let ui_layout: crate::state::BatchedSignal<crate::state::UiLayout> = use_context();
     let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
     let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
+    let chat_view_state: BatchedSignal<ChatViewState> = use_context();
 
     let display_name = group_name.unwrap_or_else(|| {
         members
@@ -1407,13 +1407,14 @@ fn GroupChannelItem(
                     parent_channel_id: None,
                     thread_metadata: None,
                 };
-                chat_data.batch(|cd| {
-                    cd.active_group_members = group_members_clone;
-                    cd.current_channel = Some(cur_chan);
-                    cd.current_server = None;
+                chat_view_state.batch(|cv| {
+                    cv.active_group_members = group_members_clone;
+                    cv.current_channel = Some(cur_chan);
+                    cv.current_server = None;
                 });
                 crate::ui::account::common::chat_view::mark_channel_as_read_with_backend(
-                    chat_data,
+                    chat_lists,
+                    chat_view_state,
                     client_manager,
                     Some(account_id.clone()),
                     None,
@@ -1422,7 +1423,7 @@ fn GroupChannelItem(
                 let cid = group_id.clone();
                 let aid = account_id.clone();
                 spawn(async move {
-                    load_dm_messages(cid, aid, client_manager, chat_data).await;
+                    load_dm_messages(cid, aid, client_manager, chat_view_state).await;
                 });
                 navigator()
                     .push(Route::DmChat {
@@ -1453,8 +1454,9 @@ fn FriendItem(display_name: String, user_id: String) -> Element {
     let ui_layout: crate::state::BatchedSignal<crate::state::UiLayout> = use_context();
     let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
     let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let account_sessions: BatchedSignal<AccountSessions> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
     let nav = navigator();
 
     let color = user_color(&user_id);
@@ -1473,9 +1475,10 @@ fn FriendItem(display_name: String, user_id: String) -> Element {
                     open_direct_message_from_active_account(
                         target_user_id.clone(),
                         nav_state,
-                        chat_data,
+                        account_sessions,
                         client_manager,
                         nav,
+                        chat_lists,
                     );
                 }
             },
@@ -1495,8 +1498,8 @@ fn FriendItem(display_name: String, user_id: String) -> Element {
 fn CategorySection(
     cat_name: String,
     cat_channel_ids: Vec<String>,
-    channels: Vec<Channel>,
 ) -> Element {
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
     let mut collapsed = use_signal(|| false);
     let is_collapsed = *collapsed.read();
 
@@ -1513,7 +1516,7 @@ fn CategorySection(
             if !is_collapsed {
                 for ch_id in &cat_channel_ids {
                     {
-                        if let Some(channel) = channels.iter().find(|c| &c.id == ch_id).cloned() {
+                        if let Some(channel) = chat_lists.peek().channel_by_id(ch_id).cloned() {
                             rsx! {
                                 ChannelItemRow { channel }
                             }
@@ -1538,9 +1541,10 @@ fn ChannelItemRow(channel: Channel) -> Element {
     let ui_layout: crate::state::BatchedSignal<crate::state::UiLayout> = use_context();
     let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
     let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
     let voice_state: BatchedSignal<VoiceState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
+    let chat_view_state: BatchedSignal<ChatViewState> = use_context();
 
     let selected_channel = nav.read().selected_channel.clone();
     let ch_id = channel.id.clone();
@@ -1653,13 +1657,14 @@ fn ChannelItemRow(channel: Channel) -> Element {
                 }
                 {
                     let ch = channel_for_click.clone();
-                    chat_data.batch(|cd| cd.current_channel = Some(ch));
+                    chat_view_state.batch(|cv| cv.current_channel = Some(ch));
                 }
                 // Clear unread on click. Tells the backend too so the next
                 // get_channels refetch doesn't restore the unread count.
                 let server_id_for_mark = nav.read().selected_server.cloned();
                 crate::ui::account::common::chat_view::mark_channel_as_read_with_backend(
-                    chat_data,
+                    chat_lists,
+                    chat_view_state,
                     client_manager,
                     None,
                     server_id_for_mark,
@@ -1679,7 +1684,7 @@ fn ChannelItemRow(channel: Channel) -> Element {
                 });
                 let cid = ch_id.clone();
                 spawn(async move {
-                    load_channel_data(cid, client_manager, chat_data, app_state, nav, voice_state).await;
+                    load_channel_data(cid, client_manager, app_state, nav, voice_state, chat_view_state).await;
                 });
                 let server_id = nav.read().selected_server.cloned().unwrap_or_default();
                 let (backend_slug, instance_id, account_id) = {

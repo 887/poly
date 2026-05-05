@@ -6,7 +6,7 @@
 
 use crate::state::BatchedSignal;
 use crate::i18n::{t, t_args};
-use crate::state::{AppState, ChatData};
+use crate::state::{AccountSessions, AppState, ChatLists};
 use crate::ui::main_layout::close_mobile_drawer;
 use crate::ui::routes::Route;
 use chrono::{DateTime, Utc};
@@ -170,7 +170,8 @@ fn ConversationTypeFilters(enabled_types: Signal<std::collections::HashSet<Strin
 pub fn ConversationSearchView() -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
     let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
+    let account_sessions: BatchedSignal<AccountSessions> = use_context();
     let query = use_signal(String::new);
     let enabled_types: Signal<std::collections::HashSet<String>> = use_signal(|| {
         ["dms", "groups"]
@@ -182,22 +183,22 @@ pub fn ConversationSearchView() -> Element {
     let mut grp_visible: Signal<usize> = use_signal(|| 20_usize);
 
     let active_account_id = nav.read().active_account_id.cloned().unwrap_or_default();
-    let active_user_id = chat_data
-        .read()
+    let active_user_id = account_sessions
+        .read() // poly-lint: allow render-time-read — render snapshot; subscription intentional
         .account_sessions
         .get(&active_account_id)
         .map(|session| session.user.id.clone());
     let q_lower = query.read().to_lowercase();
 
-    let mut dm_channels: Vec<_> = chat_data
-        .read()
+    let mut dm_channels: Vec<_> = chat_lists
+        .read() // poly-lint: allow render-time-read — render snapshot; subscription intentional
         .dm_channels
         .iter()
         .filter(|dm| dm.account_id == active_account_id)
         .cloned()
         .collect();
-    let mut groups: Vec<_> = chat_data
-        .read()
+    let mut groups: Vec<_> = chat_lists
+        .read() // poly-lint: allow render-time-read — render snapshot; subscription intentional
         .groups
         .iter()
         .filter(|group| group.account_id == active_account_id)
@@ -235,18 +236,18 @@ pub fn ConversationSearchView() -> Element {
 
     let dm_total = visible_dms.len();
     let grp_total = visible_grps.len();
-    let account_label = chat_data
-        .read()
+    let account_label = account_sessions
+        .read() // poly-lint: allow render-time-read — render snapshot; subscription intentional
         .account_sessions
         .get(&active_account_id).map_or_else(|| active_account_id.clone(), |session| session.user.display_name.clone());
-    let instance_id = chat_data
-        .read()
+    let instance_id = account_sessions
+        .read() // poly-lint: allow render-time-read — render snapshot; subscription intentional
         .account_sessions
         .get(&active_account_id)
         .map(|session| session.instance_id.clone())
         .unwrap_or_default();
-    let backend_slug = chat_data
-        .read()
+    let backend_slug = account_sessions
+        .read() // poly-lint: allow render-time-read — render snapshot; subscription intentional
         .account_sessions
         .get(&active_account_id).map_or_else(|| "demo".to_string(), |session| session.user.backend.slug().to_string());
 

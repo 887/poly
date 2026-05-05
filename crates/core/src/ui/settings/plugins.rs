@@ -375,7 +375,8 @@ fn AddWasmPlugin(on_add: EventHandler<WasmPluginEntry>) -> Element {
 #[component]
 pub fn PluginsSettings() -> Element {
     let client_manager: BatchedSignal<crate::client_manager::ClientManager> = use_context();
-    let chat_data: BatchedSignal<crate::state::ChatData> = use_context();
+    let chat_lists: BatchedSignal<crate::state::ChatLists> = use_context();
+    let account_sessions: BatchedSignal<crate::state::AccountSessions> = use_context();
     let voice_state: BatchedSignal<crate::state::VoiceState> = use_context();
     let drag_state: BatchedSignal<crate::state::DragState> = use_context();
     let app_state: crate::state::BatchedSignal<crate::state::AppState> = use_context();
@@ -383,6 +384,7 @@ pub fn PluginsSettings() -> Element {
     let ui_layout: crate::state::BatchedSignal<crate::state::UiLayout> = use_context();
     let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
     let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
+    let chat_view_state: BatchedSignal<crate::state::ChatViewState> = use_context();
 
     // Local reactive copies of the persisted list — updated on every toggle/add/remove.
     let mut disabled: Signal<Vec<String>> = use_signal(Vec::new);
@@ -449,7 +451,7 @@ pub fn PluginsSettings() -> Element {
                                         // visibility in sync across the whole app.
                                         spawn(async move {
                                             crate::ui::demo::toggle_demo(
-                                                client_manager, chat_data, voice_state, drag_state, app_state, nav, ui_layout, ui_overlays, user_prefs,
+                                                client_manager, voice_state, drag_state, app_state, nav, ui_layout, ui_overlays, user_prefs, chat_lists, account_sessions, chat_view_state,
                                             ).await;
                                         });
                                     } else {
@@ -489,45 +491,44 @@ pub fn PluginsSettings() -> Element {
                                                     // is a soft mute; remove-account is the
                                                     // destructive path.
                                                     drop(handles);
-                                                    // Phase 3: clean up ChatData so the UI
+                                                    // Phase 3: clean up chat state so the UI
                                                     // reflects the disable immediately.
                                                     if !removed_ids.is_empty() {
-                                                        chat_data.batch(|cd| {
-                                                            cd.servers.retain(|s| {
-                                                                s.backend != bt
-                                                                    || !removed_ids
-                                                                        .contains(&s.account_id)
+                                                        let bt_cl = bt;
+                                                        let rid_cl = removed_ids.clone();
+                                                        let rid_as = removed_ids;
+                                                        chat_lists.batch(move |cl| {
+                                                            cl.set_servers(cl.servers.iter().filter(|s| {
+                                                                s.backend != bt_cl
+                                                                    || !rid_cl.contains(&s.account_id)
+                                                            }).cloned().collect());
+                                                            cl.dm_channels.retain(|d| {
+                                                                d.backend != bt_cl
+                                                                    || !rid_cl.contains(&d.account_id)
                                                             });
-                                                            cd.dm_channels.retain(|d| {
-                                                                d.backend != bt
-                                                                    || !removed_ids
-                                                                        .contains(&d.account_id)
+                                                            cl.groups.retain(|g| {
+                                                                g.backend != bt_cl
+                                                                    || !rid_cl.contains(&g.account_id)
                                                             });
-                                                            cd.groups.retain(|g| {
-                                                                g.backend != bt
-                                                                    || !removed_ids
-                                                                        .contains(&g.account_id)
+                                                            cl.notifications.retain(|n| {
+                                                                n.backend != bt_cl
+                                                                    || !rid_cl.contains(&n.account_id)
                                                             });
-                                                            cd.notifications.retain(|n| {
-                                                                n.backend != bt
-                                                                    || !removed_ids
-                                                                        .contains(&n.account_id)
-                                                            });
-                                                            for id in &removed_ids {
-                                                                cd.friends.remove(id.as_str());
+                                                            for id in &rid_cl {
+                                                                cl.friends.remove(id.as_str());
                                                             }
-                                                            for id in &removed_ids {
-                                                                cd.account_sessions
-                                                                    .remove(id.as_str());
+                                                        });
+                                                        let live_server_ids: Vec<String> = chat_lists
+                                                            .peek()
+                                                            .servers
+                                                            .iter()
+                                                            .map(|s| s.id.clone())
+                                                            .collect();
+                                                        account_sessions.batch(move |as_| {
+                                                            for id in &rid_as {
+                                                                as_.account_sessions.remove(id.as_str());
                                                             }
-                                                            // Retain only favorites that still have a matching server.
-                                                            // Collect the server IDs first to avoid concurrent borrow.
-                                                            let live_server_ids: Vec<String> = cd
-                                                                .servers
-                                                                .iter()
-                                                                .map(|s| s.id.clone())
-                                                                .collect();
-                                                            cd.favorited_server_ids
+                                                            as_.favorited_server_ids
                                                                 .retain(|fid| live_server_ids.contains(fid));
                                                         });
                                                     }
@@ -565,7 +566,8 @@ pub fn PluginsSettings() -> Element {
                                                     crate::account_restore::restore_native_accounts(
                                                         storage,
                                                         client_manager,
-                                                        chat_data,
+                                                        chat_lists,
+                                                        account_sessions,
                                                         Some(&toggled_for_restore),
                                                     )
                                                     .await;

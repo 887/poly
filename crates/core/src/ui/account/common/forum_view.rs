@@ -5,7 +5,7 @@
 use crate::state::BatchedSignal;
 use crate::client_manager::ClientManager;
 use crate::state::chat_data::user_color;
-use crate::state::{AppState, ChatData, VoiceState, PostsOrComments, use_spawn_once};
+use crate::state::{AppState, ChatLists, VoiceState, PostsOrComments, use_spawn_once};
 use crate::ui::account::common::forum_composer::{ComposerMode, ForumComposer, SubmitPayload};
 use crate::ui::client_ui::ClientView;
 use crate::ui::context_menu::menus::{forum_post_entry, ForumPostCtx};
@@ -166,7 +166,8 @@ pub fn ForumView() -> Element {
     let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
     let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
     let user_prefs: crate::state::BatchedSignal<crate::state::UserPrefs> = use_context();
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
+    let chat_view_state: BatchedSignal<crate::state::ChatViewState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
 
     // Channel id resolution (fixes back-button + server-switch bugs):
@@ -197,24 +198,24 @@ pub fn ForumView() -> Element {
         }
     };
     let channel_id = if channel_id.is_empty() {
-        let cd = chat_data.read();
         // Fall back to current_channel only if it's actually in the CURRENT
         // server's channel list — after switching servers, `current_channel`
         // can lag the `channels` vec for a tick. Taking a stale
         // current_channel here leaks the previous server's posts into the new
         // server's forum view.
-        let current_matches_server = cd
-            .current_channel
+        let current_channel = chat_view_state.read().current_channel.clone(); // poly-lint: allow render-time-read — render snapshot; subscription intentional
+        let channels = chat_lists.read().channels.clone(); // poly-lint: allow render-time-read — render snapshot; subscription intentional
+        let current_matches_server = current_channel
             .as_ref()
-            .is_some_and(|ch| cd.channels.iter().any(|c| c.id == ch.id));
+            .is_some_and(|ch| channels.iter().any(|c| c.id == ch.id));
         if current_matches_server {
-            cd.current_channel
+            current_channel
                 .as_ref()
                 .map(|ch| ch.id.clone())
-                .or_else(|| cd.channels.first().map(|ch| ch.id.clone()))
+                .or_else(|| channels.first().map(|ch| ch.id.clone()))
                 .unwrap_or_default()
         } else {
-            cd.channels
+            channels
                 .first()
                 .map(|ch| ch.id.clone())
                 .unwrap_or_default()
@@ -372,7 +373,8 @@ pub fn ForumView() -> Element {
 #[rustfmt::skip]
 #[component]
 pub fn ForumPostView(channel_id: String, post_id: String) -> Element {
-    let chat_data: BatchedSignal<ChatData> = use_context();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
+    let chat_view_state: BatchedSignal<crate::state::ChatViewState> = use_context();
     let app_state: BatchedSignal<AppState> = use_context();
     let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
     let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
@@ -435,7 +437,7 @@ pub fn ForumPostView(channel_id: String, post_id: String) -> Element {
             let _ = account_id_resolved;
 
             let already_loaded = {
-                let snap = chat_data.peek();
+                let snap = chat_view_state.peek();
                 snap.current_channel.as_ref().is_some_and(|ch| ch.id == cid)
                     && snap.current_server.as_ref().is_some_and(|s| s.id == server_id)
             };
@@ -446,8 +448,9 @@ pub fn ForumPostView(channel_id: String, post_id: String) -> Element {
                     cid,
                     app_state,
                     client_manager,
-                    chat_data,
                     voice_state,
+                    chat_lists,
+                    chat_view_state,
                 )
                 .await;
             }
@@ -477,10 +480,10 @@ pub fn ForumPostView(channel_id: String, post_id: String) -> Element {
                         .filter(|m| m.id == pid_msg_id)
                         .cloned()
                         .collect();
-                    chat_data.batch(move |cd| {
+                    chat_view_state.batch(move |cv| {
                         for m in to_inject {
-                            if !cd.messages.iter().any(|x| x.id == m.id) {
-                                cd.messages.push(m);
+                            if !cv.messages.iter().any(|x| x.id == m.id) {
+                                cv.push_message(m);
                             }
                         }
                     });
@@ -492,7 +495,7 @@ pub fn ForumPostView(channel_id: String, post_id: String) -> Element {
     );
 
     // Find the post in the currently loaded messages.
-    let post = chat_data.read().messages.iter()
+    let post = chat_view_state.read().messages.iter() // poly-lint: allow render-time-read — render snapshot; subscription intentional
         .find(|m| m.id == post_id)
         .cloned();
 
