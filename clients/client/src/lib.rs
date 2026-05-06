@@ -10,6 +10,7 @@ pub mod code_repo;
 pub mod content_policy;
 pub mod events;
 pub mod forum;
+pub mod moderation;
 pub mod threads;
 pub mod types;
 pub mod ui_surface;
@@ -18,6 +19,7 @@ pub use code_repo::CodeRepoBackend;
 pub use content_policy::ContentPolicyBackend;
 pub use events::*;
 pub use forum::ForumBackend;
+pub use moderation::ModerationBackend;
 pub use threads::ThreadsBackend;
 pub use types::*;
 pub use ui_surface::*;
@@ -445,161 +447,6 @@ pub trait ClientBackend: Send + Sync {
     /// Set the authenticated user's presence status.
     async fn set_presence(&self, status: PresenceStatus) -> ClientResult<()>;
 
-    // --- Moderation (optional capability — Wave 1 scaffolding) ---
-
-    /// Get the calling user's effective permissions in a server (and optionally
-    /// a specific channel).
-    ///
-    /// Backends that do not expose a permission model return `NotSupported`.
-    async fn get_my_permissions(
-        &self,
-        server_id: &str,
-        channel_id: Option<&str>,
-    ) -> ClientResult<MemberPermissions> {
-        let _ = (server_id, channel_id);
-        Err(ClientError::NotSupported("get_my_permissions".to_string()))
-    }
-
-    /// Kick a member from a server.
-    ///
-    /// Backends that do not support kick return `NotSupported`.
-    async fn kick_member(
-        &self,
-        server_id: &str,
-        member_id: &str,
-        reason: Option<&str>,
-    ) -> ClientResult<()> {
-        let _ = (server_id, member_id, reason);
-        Err(ClientError::NotSupported("kick_member".to_string()))
-    }
-
-    /// Permanently ban a member from a server.
-    ///
-    /// Use `timeout_member` for temporary suspensions. Backends that do not
-    /// support permanent bans return `NotSupported`.
-    async fn ban_member(
-        &self,
-        server_id: &str,
-        member_id: &str,
-        reason: Option<&str>,
-        delete_message_history_secs: Option<u64>,
-    ) -> ClientResult<()> {
-        let _ = (server_id, member_id, reason, delete_message_history_secs);
-        Err(ClientError::NotSupported("ban_member".to_string()))
-    }
-
-    /// Lift a ban for a member.
-    ///
-    /// Backends that do not support bans return `NotSupported`.
-    async fn unban_member(
-        &self,
-        server_id: &str,
-        member_id: &str,
-    ) -> ClientResult<()> {
-        let _ = (server_id, member_id);
-        Err(ClientError::NotSupported("unban_member".to_string()))
-    }
-
-    /// Temporarily suspend a member until `until`.
-    ///
-    /// This maps to Discord's `communication_disabled_until`, Stoat's native
-    /// timeout field, or Lemmy's `expires`-bearing ban — each backend uses its
-    /// own native primitive. Backends that do not support timed suspensions
-    /// return `NotSupported`.
-    async fn timeout_member(
-        &self,
-        server_id: &str,
-        member_id: &str,
-        until: chrono::DateTime<chrono::Utc>,
-        reason: Option<&str>,
-    ) -> ClientResult<()> {
-        let _ = (server_id, member_id, until, reason);
-        Err(ClientError::NotSupported("timeout_member".to_string()))
-    }
-
-    /// Remove a timeout / suspension from a member.
-    ///
-    /// Backends that do not support timeouts return `NotSupported`.
-    async fn untimeout_member(
-        &self,
-        server_id: &str,
-        member_id: &str,
-    ) -> ClientResult<()> {
-        let _ = (server_id, member_id);
-        Err(ClientError::NotSupported("untimeout_member".to_string()))
-    }
-
-    /// Get the list of banned members for a server.
-    ///
-    /// Backends that do not support bans return `NotSupported`.
-    async fn get_bans(&self, server_id: &str) -> ClientResult<Vec<BannedMember>> {
-        let _ = server_id;
-        Err(ClientError::NotSupported("get_bans".to_string()))
-    }
-
-    /// Delete a single message by ID.
-    ///
-    /// The caller should already have verified the user has `manage_messages`
-    /// permission or is the message author. Backends that do not support
-    /// message deletion return `NotSupported`.
-    async fn delete_message(
-        &self,
-        channel_id: &str,
-        message_id: &str,
-    ) -> ClientResult<()> {
-        let _ = (channel_id, message_id);
-        Err(ClientError::NotSupported("delete_message".to_string()))
-    }
-
-    /// Update channel settings (name, topic, slow-mode, nsfw, position).
-    ///
-    /// Only fields set to `Some` are changed. Backends that do not support
-    /// channel editing return `NotSupported`.
-    async fn update_channel(
-        &self,
-        channel_id: &str,
-        update: UpdateChannelParams,
-    ) -> ClientResult<()> {
-        let _ = (channel_id, update);
-        Err(ClientError::NotSupported("update_channel".to_string()))
-    }
-
-    /// Reorder channels within a server.
-    ///
-    /// `ordering` is the desired channel-ID order (all channels, including
-    /// those not being moved). Backends that do not support reordering return
-    /// `NotSupported`.
-    async fn reorder_channels(
-        &self,
-        server_id: &str,
-        ordering: Vec<String>,
-    ) -> ClientResult<()> {
-        let _ = (server_id, ordering);
-        Err(ClientError::NotSupported("reorder_channels".to_string()))
-    }
-
-    /// Fetch recent moderation log entries for a server.
-    ///
-    /// `limit` caps the number of entries returned. Backends that do not
-    /// expose a moderation log return `NotSupported`.
-    async fn get_moderation_log(
-        &self,
-        server_id: &str,
-        limit: usize,
-    ) -> ClientResult<Vec<ModerationLogEntry>> {
-        let _ = (server_id, limit);
-        Err(ClientError::NotSupported("get_moderation_log".to_string()))
-    }
-
-    /// Fetch the role list for a server.
-    ///
-    /// Returns roles sorted by position (ascending). Backends that do not
-    /// expose roles return `NotSupported`.
-    async fn get_server_roles(&self, server_id: &str) -> ClientResult<Vec<Role>> {
-        let _ = server_id;
-        Err(ClientError::NotSupported("get_server_roles".to_string()))
-    }
-
     // --- Server management (optional capability) ---
 
     /// Create a new server/guild in this backend.
@@ -802,6 +649,16 @@ pub trait ClientBackend: Send + Sync {
     /// Override to `Some(self)` in backends that expose Discord-style thread
     /// channels (`ChannelType::Thread`).  Default: `None`.
     fn as_threads(&self) -> Option<&dyn ThreadsBackend> {
+        None
+    }
+
+    // --- Moderation (H.3.a — ModerationBackend) ---
+
+    /// Returns `Some(self)` if this backend implements [`ModerationBackend`].
+    ///
+    /// Override to `Some(self)` in backends that support server moderation
+    /// (kick, ban, timeout, delete messages, roles, etc.).  Default: `None`.
+    fn as_moderation(&self) -> Option<&dyn ModerationBackend> {
         None
     }
 
@@ -1008,6 +865,7 @@ pub trait ClientBackend: Send + Sync {
 /// | `as_code_repo` | [`CodeRepoBackend`] | H.2.a |
 /// | `as_forum` | [`ForumBackend`] | H.2.b |
 /// | `as_threads` | [`ThreadsBackend`] | H.2.c |
+/// | `as_moderation` | [`ModerationBackend`] | H.3.a |
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 pub trait IsBackend: Send + Sync {
@@ -1045,6 +903,16 @@ pub trait IsBackend: Send + Sync {
     ///
     /// Default: `None` (no backend currently opts in).
     fn as_content_policy(&self) -> Option<&dyn ContentPolicyBackend> {
+        None
+    }
+
+    /// Returns `Some(self)` if this backend implements [`ModerationBackend`].
+    ///
+    /// Default: `None`.  Override in backends that support server moderation
+    /// (kick, ban, timeout, delete messages, etc.) — currently `poly-discord`,
+    /// `poly-matrix`, `poly-stoat`, `poly-lemmy`, `poly-server-client`,
+    /// `poly-teams`, and `poly-forgejo`.
+    fn as_moderation(&self) -> Option<&dyn ModerationBackend> {
         None
     }
 
@@ -1103,6 +971,11 @@ impl<T: ClientBackend + ?Sized> IsBackend for T {
     #[inline]
     async fn logout(&mut self) -> ClientResult<()> {
         ClientBackend::logout(self).await
+    }
+
+    #[inline]
+    fn as_moderation(&self) -> Option<&dyn ModerationBackend> {
+        ClientBackend::as_moderation(self)
     }
 
     #[inline]

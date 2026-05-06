@@ -103,7 +103,10 @@ pub fn BanMemberDialog(
                                 let aid = account_id.clone();
                                 spawn(async move {
                                     match client_manager.peek().with_backend(&aid, async |b| {
-                                        b.ban_member(&sid, &mid, reason_opt.as_deref(), delete_secs).await
+                                        match b.as_moderation() {
+                                            Some(m) => m.ban_member(&sid, &mid, reason_opt.as_deref(), delete_secs).await,
+                                            None => Err(poly_client::ClientError::NotSupported("ban_member".to_string())),
+                                        }
                                     }).await {
                                         Ok(()) => {
                                             submitting.set(false);

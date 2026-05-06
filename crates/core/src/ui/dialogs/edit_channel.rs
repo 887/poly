@@ -140,7 +140,10 @@ pub fn EditChannelDialog(
                                 let aid = account_id.clone();
                                 spawn(async move {
                                     match client_manager.peek().with_backend(&aid, async |b| {
-                                        b.update_channel(&cid, params).await
+                                        match b.as_moderation() {
+                                            Some(m) => m.update_channel(&cid, params).await,
+                                            None => Err(poly_client::ClientError::NotSupported("update_channel".to_string())),
+                                        }
                                     }).await {
                                         Ok(_) => {
                                             submitting.set(false);

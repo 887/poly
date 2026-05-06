@@ -23,7 +23,10 @@ impl ViewQuery for ServerBansQuery {
     type Output = Vec<BannedMember>;
     fn account_id(&self) -> &str { &self.account_id }
     async fn fetch(&self, b: &dyn ClientBackend) -> ClientResult<Self::Output> {
-        b.get_bans(&self.server_id).await
+        match b.as_moderation() {
+            Some(m) => m.get_bans(&self.server_id).await,
+            None => Err(ClientError::NotSupported("get_bans".to_string())),
+        }
     }
 }
 
@@ -110,7 +113,10 @@ fn render_ban_row(
                             let aid = account_id.clone();
                             spawn(async move {
                                 match client_manager.peek().with_backend(&aid, async |b| {
-                                    b.unban_member(&sid, &mid).await
+                                    match b.as_moderation() {
+                                        Some(m) => m.unban_member(&sid, &mid).await,
+                                        None => Err(poly_client::ClientError::NotSupported("unban_member".to_string())),
+                                    }
                                 }).await {
                                     Ok(()) => {
                                         unban_error.set(String::new());

@@ -3686,7 +3686,10 @@ fn render_context_menu_danger_item(
                     let aid = account_id.clone();
                     spawn(async move {
                         if let Err(e) = client_manager.peek().with_backend(&aid, async |b| {
-                            b.delete_message(&cid, &mid).await
+                            match b.as_moderation() {
+                                Some(m) => m.delete_message(&cid, &mid).await,
+                                None => Err(poly_client::ClientError::NotSupported("delete_message".to_string())),
+                            }
                         }).await {
                             tracing::warn!("delete_message failed: {e}");
                         }

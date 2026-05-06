@@ -22,7 +22,10 @@ impl ViewQuery for ServerRolesQuery {
     type Output = Vec<Role>;
     fn account_id(&self) -> &str { &self.account_id }
     async fn fetch(&self, b: &dyn ClientBackend) -> ClientResult<Self::Output> {
-        b.get_server_roles(&self.server_id).await
+        match b.as_moderation() {
+            Some(m) => m.get_server_roles(&self.server_id).await,
+            None => Err(ClientError::NotSupported("get_server_roles".to_string())),
+        }
     }
 }
 

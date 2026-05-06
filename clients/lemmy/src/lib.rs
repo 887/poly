@@ -1016,7 +1016,197 @@ impl ClientBackend for LemmyClient {
         }
     }
 
-    // ── Moderation ────────────────────────────────────────────────────────────
+    // ── Moderation methods moved to ModerationBackend (H.3.a) ────────────────
+
+    fn as_moderation(&self) -> Option<&dyn poly_client::ModerationBackend> {
+        Some(self)
+    }
+
+    // ── Backend info ──────────────────────────────────────────────────────────
+
+    fn backend_type(&self) -> BackendType {
+        BackendType::from(crate::SLUG)
+    }
+
+    fn backend_name(&self) -> &str {
+        "Lemmy"
+    }
+
+    fn backend_capabilities(&self) -> BackendCapabilities {
+        BackendCapabilities {
+            has_roles: false,
+            has_kick: false,
+            has_ban: true,
+            has_timed_ban: true,
+            has_channel_mgmt: false,
+            has_moderation_log: true,
+            community_search: CommunitySearchSupport::SubscribedLocalAll,
+            // Phase D — Posts | Comments toggle.
+            supports_comment_feed: true,
+            ..BackendCapabilities::MESSAGING_NO_SOCIAL
+        }
+    }
+
+    async fn search_communities(
+        &self,
+        query: &str,
+        scope: CommunityScope,
+        cursor: Option<String>,
+    ) -> ClientResult<CommunityPage> {
+        let listing_type = match scope {
+            CommunityScope::Subscribed => "Subscribed",
+            CommunityScope::Local => "Local",
+            CommunityScope::All => "All",
+        };
+        let session = self.http.session().ok_or_else(|| {
+            ClientError::AuthFailed("Lemmy: not authenticated".to_string())
+        })?;
+        let account_id = session.user_id.to_string();
+        let account_display_name = session.user_display_name.clone();
+        let resp = self.http.search_communities(
+            query,
+            listing_type,
+            cursor.as_deref(),
+        ).await?;
+
+        // Lemmy returns exactly `limit` items (50) when a full page exists.
+        // Next page cursor is the 1-based page number incremented as a string.
+        let current_page: u32 = cursor
+            .as_deref()
+            .and_then(|c| c.parse().ok())
+            .unwrap_or(1u32);
+        let next_cursor = if resp.communities.len() == 50 {
+            Some((current_page + 1).to_string())
+        } else {
+            None
+        };
+
+        let items = resp
+            .communities
+            .iter()
+            .map(|view| map_community_to_server(view, &account_id, &account_display_name))
+            .collect();
+
+        Ok(CommunityPage { items, next_cursor })
+    }
+
+    fn get_signup_method(&self, server_url: Option<&str>) -> SignupMethod {
+        let base = server_url.unwrap_or("https://lemmy.ml");
+        SignupMethod::External(format!("{}/signup", base.trim_end_matches('/')))
+    }
+
+    fn client_version(&self) -> String {
+        self.version_override
+            .lock()
+            .ok()
+            .and_then(|g| g.clone())
+            .unwrap_or_else(|| api::DEFAULT_CLIENT_VERSION.to_string())
+    }
+
+    async fn set_client_version_override(
+        &self,
+        version_override: Option<String>,
+    ) -> ClientResult<()> {
+        let new_ua = version_override
+            .clone()
+            .unwrap_or_else(|| api::DEFAULT_CLIENT_VERSION.to_string());
+        if let Ok(mut lock) = self.version_override.lock() {
+            *lock = version_override;
+        }
+        self.http.set_user_agent(new_ua);
+        Ok(())
+    }
+}
+
+// ── H.2.b — ForumBackend ─────────────────────────────────────────────────────
+
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::ForumBackend for LemmyClient {
+    async fn get_forum_posts(
+        &self,
+        _forum_channel_id: &str,
+        _sort: ForumSortOrder,
+        _limit: Option<u32>,
+    ) -> ClientResult<Vec<ForumPost>> {
+        Err(ClientError::NotSupported("get_forum_posts".to_string()))
+    }
+
+    /// C.7 — wire `create_forum_post` for Lemmy via `POST /api/v3/post`.
+    ///
+    /// `forum_channel_id` must be `lemmy-feed-{community_id}`.  Tags are
+    /// ignored (Lemmy's tag system requires community-specific tag IDs that
+    /// the UI doesn't yet expose).
+    async fn create_forum_post(
+        &self,
+        forum_channel_id: &str,
+        title: &str,
+        body: &str,
+        _tags: Vec<String>,
+    ) -> ClientResult<ForumPost> {
+        let community_id = Self::parse_feed_channel(forum_channel_id).ok_or_else(|| {
+            ClientError::NotFound(format!(
+                "create_forum_post: expected lemmy-feed-<id>, got: {forum_channel_id}"
+            ))
+        })?;
+
+        let post_view = self
+            .http
+            .create_post(community_id, title, Some(body), None)
+            .await?;
+
+        Ok(ForumPost {
+            thread: poly_client::ThreadInfo {
+                thread_id: format!("lemmy-post-{}", post_view.post.id),
+                parent_channel_id: forum_channel_id.to_string(),
+                message_count: 0,
+                member_count: 0,
+            },
+            applied_tags: vec![],
+            starter_message_id: None,
+        })
+    }
+
+    /// Return recent comments across a Lemmy community (Phase D).
+    ///
+    /// `channel_id` must be a `lemmy-feed-{community_id}` channel. Returns up
+    /// to `query.limit` (default 50) comments sorted by newest first, each
+    /// mapped to a `Message` via `map_comment_to_message`.
+    async fn get_recent_comments(
+        &self,
+        channel_id: &str,
+        query: MessageQuery,
+    ) -> ClientResult<Vec<Message>> {
+        let community_id = Self::parse_feed_channel(channel_id).ok_or_else(|| {
+            ClientError::NotFound(format!(
+                "get_recent_comments: expected lemmy-feed-<id>, got: {channel_id}"
+            ))
+        })?;
+
+        let limit = query.limit.unwrap_or(50).min(200);
+        let resp = self.http.fetch_community_comments(community_id, limit).await?;
+
+        let messages: Vec<Message> = resp
+            .comments
+            .iter()
+            .map(|view| map_comment_to_message(view))
+            .collect();
+
+        Ok(messages)
+    }
+}
+
+// ── H.3.a — ModerationBackend ────────────────────────────────────────────────
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::ModerationBackend for LemmyClient {
+    async fn get_my_permissions(
+        &self,
+        _server_id: &str,
+        _channel_id: Option<&str>,
+    ) -> ClientResult<MemberPermissions> {
+        Err(ClientError::NotSupported("Lemmy: permission model not exposed".to_string()))
+    }
 
     /// Lemmy has no kick concept — community membership is implicit.
     async fn kick_member(
@@ -1330,176 +1520,7 @@ impl ClientBackend for LemmyClient {
         Ok(entries)
     }
 
-    // ── Backend info ──────────────────────────────────────────────────────────
-
-    fn backend_type(&self) -> BackendType {
-        BackendType::from(crate::SLUG)
-    }
-
-    fn backend_name(&self) -> &str {
-        "Lemmy"
-    }
-
-    fn backend_capabilities(&self) -> BackendCapabilities {
-        BackendCapabilities {
-            has_roles: false,
-            has_kick: false,
-            has_ban: true,
-            has_timed_ban: true,
-            has_channel_mgmt: false,
-            has_moderation_log: true,
-            community_search: CommunitySearchSupport::SubscribedLocalAll,
-            // Phase D — Posts | Comments toggle.
-            supports_comment_feed: true,
-            ..BackendCapabilities::MESSAGING_NO_SOCIAL
-        }
-    }
-
-    async fn search_communities(
-        &self,
-        query: &str,
-        scope: CommunityScope,
-        cursor: Option<String>,
-    ) -> ClientResult<CommunityPage> {
-        let listing_type = match scope {
-            CommunityScope::Subscribed => "Subscribed",
-            CommunityScope::Local => "Local",
-            CommunityScope::All => "All",
-        };
-        let session = self.http.session().ok_or_else(|| {
-            ClientError::AuthFailed("Lemmy: not authenticated".to_string())
-        })?;
-        let account_id = session.user_id.to_string();
-        let account_display_name = session.user_display_name.clone();
-        let resp = self.http.search_communities(
-            query,
-            listing_type,
-            cursor.as_deref(),
-        ).await?;
-
-        // Lemmy returns exactly `limit` items (50) when a full page exists.
-        // Next page cursor is the 1-based page number incremented as a string.
-        let current_page: u32 = cursor
-            .as_deref()
-            .and_then(|c| c.parse().ok())
-            .unwrap_or(1u32);
-        let next_cursor = if resp.communities.len() == 50 {
-            Some((current_page + 1).to_string())
-        } else {
-            None
-        };
-
-        let items = resp
-            .communities
-            .iter()
-            .map(|view| map_community_to_server(view, &account_id, &account_display_name))
-            .collect();
-
-        Ok(CommunityPage { items, next_cursor })
-    }
-
-    fn get_signup_method(&self, server_url: Option<&str>) -> SignupMethod {
-        let base = server_url.unwrap_or("https://lemmy.ml");
-        SignupMethod::External(format!("{}/signup", base.trim_end_matches('/')))
-    }
-
-    fn client_version(&self) -> String {
-        self.version_override
-            .lock()
-            .ok()
-            .and_then(|g| g.clone())
-            .unwrap_or_else(|| api::DEFAULT_CLIENT_VERSION.to_string())
-    }
-
-    async fn set_client_version_override(
-        &self,
-        version_override: Option<String>,
-    ) -> ClientResult<()> {
-        let new_ua = version_override
-            .clone()
-            .unwrap_or_else(|| api::DEFAULT_CLIENT_VERSION.to_string());
-        if let Ok(mut lock) = self.version_override.lock() {
-            *lock = version_override;
-        }
-        self.http.set_user_agent(new_ua);
-        Ok(())
-    }
-}
-
-// ── H.2.b — ForumBackend ─────────────────────────────────────────────────────
-
-#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
-#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-impl poly_client::ForumBackend for LemmyClient {
-    async fn get_forum_posts(
-        &self,
-        _forum_channel_id: &str,
-        _sort: ForumSortOrder,
-        _limit: Option<u32>,
-    ) -> ClientResult<Vec<ForumPost>> {
-        Err(ClientError::NotSupported("get_forum_posts".to_string()))
-    }
-
-    /// C.7 — wire `create_forum_post` for Lemmy via `POST /api/v3/post`.
-    ///
-    /// `forum_channel_id` must be `lemmy-feed-{community_id}`.  Tags are
-    /// ignored (Lemmy's tag system requires community-specific tag IDs that
-    /// the UI doesn't yet expose).
-    async fn create_forum_post(
-        &self,
-        forum_channel_id: &str,
-        title: &str,
-        body: &str,
-        _tags: Vec<String>,
-    ) -> ClientResult<ForumPost> {
-        let community_id = Self::parse_feed_channel(forum_channel_id).ok_or_else(|| {
-            ClientError::NotFound(format!(
-                "create_forum_post: expected lemmy-feed-<id>, got: {forum_channel_id}"
-            ))
-        })?;
-
-        let post_view = self
-            .http
-            .create_post(community_id, title, Some(body), None)
-            .await?;
-
-        Ok(ForumPost {
-            thread: poly_client::ThreadInfo {
-                thread_id: format!("lemmy-post-{}", post_view.post.id),
-                parent_channel_id: forum_channel_id.to_string(),
-                message_count: 0,
-                member_count: 0,
-            },
-            applied_tags: vec![],
-            starter_message_id: None,
-        })
-    }
-
-    /// Return recent comments across a Lemmy community (Phase D).
-    ///
-    /// `channel_id` must be a `lemmy-feed-{community_id}` channel. Returns up
-    /// to `query.limit` (default 50) comments sorted by newest first, each
-    /// mapped to a `Message` via `map_comment_to_message`.
-    async fn get_recent_comments(
-        &self,
-        channel_id: &str,
-        query: MessageQuery,
-    ) -> ClientResult<Vec<Message>> {
-        let community_id = Self::parse_feed_channel(channel_id).ok_or_else(|| {
-            ClientError::NotFound(format!(
-                "get_recent_comments: expected lemmy-feed-<id>, got: {channel_id}"
-            ))
-        })?;
-
-        let limit = query.limit.unwrap_or(50).min(200);
-        let resp = self.http.fetch_community_comments(community_id, limit).await?;
-
-        let messages: Vec<Message> = resp
-            .comments
-            .iter()
-            .map(|view| map_comment_to_message(view))
-            .collect();
-
-        Ok(messages)
+    async fn get_server_roles(&self, _server_id: &str) -> ClientResult<Vec<Role>> {
+        Err(ClientError::NotSupported("Lemmy: no role concept".to_string()))
     }
 }

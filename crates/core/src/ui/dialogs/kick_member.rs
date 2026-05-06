@@ -90,7 +90,10 @@ pub fn KickMemberDialog(
                                 let aid = account_id.clone();
                                 spawn(async move {
                                     match client_manager.peek().with_backend(&aid, async |b| {
-                                        b.kick_member(&sid, &mid, reason_opt.as_deref()).await
+                                        match b.as_moderation() {
+                                            Some(m) => m.kick_member(&sid, &mid, reason_opt.as_deref()).await,
+                                            None => Err(poly_client::ClientError::NotSupported("kick_member".to_string())),
+                                        }
                                     }).await {
                                         Ok(()) => {
                                             submitting.set(false);

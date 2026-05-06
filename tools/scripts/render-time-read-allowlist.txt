@@ -515,6 +515,7 @@ crates/core/src/ui/account/server/settings/overview.rs:316 # MEDIUM — render-t
 crates/core/src/ui/account/server/settings/bans.rs:29 # MEDIUM — render-time read drives output or child prop, subscription is intent
 crates/core/src/ui/account/server/settings/bans.rs:84 # MEDIUM — render-time read drives output or child prop, subscription is intent
 crates/core/src/ui/account/server/settings/bans.rs:94 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/server/settings/bans.rs:101 # MEDIUM — unban_error signal display; line shifted by H.3.a fetch expansion
 crates/core/src/ui/account/server/settings/modlog.rs:31 # MEDIUM — render-time read drives output or child prop, subscription is intent
 crates/core/src/ui/account/server/settings/roles.rs:29 # MEDIUM — render-time read drives output or child prop, subscription is intent
 crates/core/src/ui/account/server/settings/mod.rs:148 # MEDIUM — render-time read drives output or child prop, subscription is intent
@@ -1318,6 +1319,9 @@ crates/core/src/ui/account/common/chat_view.rs:750 # MEDIUM — render-time read
 crates/core/src/ui/account/common/chat_view.rs:756 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
 crates/core/src/ui/account/common/chat_view.rs:839 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
 crates/core/src/ui/account/common/chat_view.rs:871 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
+crates/core/src/ui/account/common/chat_view/mod.rs:3923 # MEDIUM — DmContactListPanel active_account_id; line shifted by H.3.a delete_message expansion
+crates/core/src/ui/account/common/chat_view/mod.rs:3927 # MEDIUM — DmContactListPanel dm channel read; line shifted by H.3.a
+crates/core/src/ui/account/common/chat_view/mod.rs:3935 # MEDIUM — DmContactListPanel self_user read; line shifted by H.3.a
 crates/core/src/ui/account/common/dm_context_menu.rs:193 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
 crates/core/src/ui/account/common/dm_context_menu.rs:237 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
 crates/core/src/ui/account/common/dm_context_menu.rs:263 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger

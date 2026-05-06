@@ -22,7 +22,10 @@ impl ViewQuery for ServerModLogQuery {
     type Output = Vec<ModerationLogEntry>;
     fn account_id(&self) -> &str { &self.account_id }
     async fn fetch(&self, b: &dyn ClientBackend) -> ClientResult<Self::Output> {
-        b.get_moderation_log(&self.server_id, self.limit).await
+        match b.as_moderation() {
+            Some(m) => m.get_moderation_log(&self.server_id, self.limit).await,
+            None => Err(ClientError::NotSupported("get_moderation_log".to_string())),
+        }
     }
 }
 

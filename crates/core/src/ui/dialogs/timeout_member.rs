@@ -123,7 +123,10 @@ pub fn TimeoutMemberDialog(
                                 let aid = account_id.clone();
                                 spawn(async move {
                                     match client_manager.peek().with_backend(&aid, async |b| {
-                                        b.timeout_member(&sid, &mid, until, reason_opt.as_deref()).await
+                                        match b.as_moderation() {
+                                            Some(m) => m.timeout_member(&sid, &mid, until, reason_opt.as_deref()).await,
+                                            None => Err(poly_client::ClientError::NotSupported("timeout_member".to_string())),
+                                        }
                                     }).await {
                                         Ok(()) => {
                                             submitting.set(false);
