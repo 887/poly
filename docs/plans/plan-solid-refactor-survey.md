@@ -419,9 +419,11 @@ caveat).
       via `as_forum()` / `as_code_repo()` / `as_threads()`. Validates
       dispatch on real plugins. Effort M. Source: C.2.2.
       Shipped in changes `tuommlty` (H.2.a) + `umvwqzmx` (H.2.b) + `kkulmluuolls` (H.2.c).
-- [ ] **H.3** Carve out `Moderation` + `SocialGraph` + `DmsAndGroups`
+- [x] **H.3** Carve out `Moderation` + `SocialGraph` + `DmsAndGroups`
       (38 methods, ~43% of trait). Touches every backend; do
       one-trait-at-a-time. Effort L per trait. Source: C.2.3.
+      Shipped in changes `3abb6289` (H.3.a ModerationBackend) +
+      `3569129e` (H.3.b SocialGraphBackend) + `91923aca` (H.3.c DmsAndGroupsBackend).
 - [ ] **H.4** Delete `ClientBackend` trait — all method moved out by H.1-H.3. Migrate all `Box<dyn ClientBackend>` storage sites to `Box<dyn IsBackend>`. Migrate all `~58` `with_backend` UI call sites to capability-gate via accessors. Final cleanup; ratchets the pattern.
 
 ### Phase I — Routes.rs decomposition (~1 week, after Phase H starts)
