@@ -385,6 +385,21 @@ instead of the broken `.write()`.
 - [x] **G.6j.9** Update `NotificationList`: remove `chat_lists`/`client_manager` use_context bindings and stop passing them as props to `NotificationItemContent`.
 - [x] **G.6j.10** Verify: 0 Rust compiler errors, 0 Rust warnings; no new poly-lint-gate violations beyond pre-existing baseline; all 5 `VoiceBannerAction` variants and 7 `NotificationsViewAction` variants route exclusively through `apply()`.
 
+### Phase G.6k — finish unused-binding sweep (drive cargo-check unused-var count to zero) — shipped in changes `uqvpmyus` + `lxoxxxxq`
+
+After G.6i shipped a partial sweep and G.6j's prop-removal exposed additional unused let-bindings, `cargo check -p poly-core` still showed 106 native + 108 wasm unused-variable warnings. G.6k drove both targets to literal zero. Done by-hand (no agent dispatch — two prior agents fabricated verification claims about this work).
+
+- [x] **G.6k.1** Bulk-delete 100 simple `let X: T = use_context();` and `let X = signals.X;` orphans across 47 files via `sed -i 'Nd;...'` keyed off `cargo check -p poly-core` warning line numbers.
+- [x] **G.6k.2** Remove `app_state` parameter from `render_search_tab_button` (`chat_view/header.rs`) + 2 call sites (in same file and `chat_view/mod.rs`).
+- [x] **G.6k.3** Remove `app_state` parameter from `load_older_messages`, `load_newer_messages`, `maybe_send_real_typing` (`chat_view/mod.rs`) + all 4 call sites.
+- [x] **G.6k.4** Remove `chat_lists` parameter from `activate_existing_or_new_call` (`direct_call.rs`) + call site.
+- [x] **G.6k.5** Remove `chat_view_state` parameter from `join_voice_channel` (`voice_view.rs`) + call site.
+- [x] **G.6k.6** Delete unused local rebindings: `let app_state_for_emoji = ctx.app_state;` in `ChatView` body, plus 2 unused `let app_state = ctx.app_state;` lines exposed by parameter removals.
+- [x] **G.6k.7** Cfg-gate `nav_state` and `account_sessions` in `direct_call_overlay.rs` to `#[cfg(not(target_arch = "wasm32"))]` (used only inside the existing native-only block).
+- [x] **G.6k.8** Regenerate `baseline.json`.
+- [x] **G.6k.9** Verify all four numeric gates: native unused-var = 0, wasm unused-var = 0, native errors = 0, wasm errors = 0.
+- [x] **G.6k.10 (follow-up)** Apply the manual sweep edits in the main jj workspace (chat_view/mod.rs:1617 + 2105 unused locals + direct_call_overlay account_sessions cfg-gate) — the original orchestrator session was operating from a `.claude/worktrees/agent-<id>/` sibling directory copy that didn't propagate to tracked files; redone in main workspace and pushed in change `lxoxxxxq`.
+
 ### Phase G.6l — `ForumViewAction` `todo!()` panic fix — shipped in commit `qlpttplp`
 
 Surfaced after G.6k shipped: navigating to a github (or any forum-layout) channel route triggered `RuntimeError: unreachable` in WASM. Root cause was a `todo!("phase-G.5: …")` stub in `ForumViewAction::apply()` at `forum_view.rs:153` that G.6h's sweep missed (it only matched on `phase-E:` labels, not `phase-G.5:`).
