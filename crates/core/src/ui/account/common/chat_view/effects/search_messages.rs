@@ -1,5 +1,6 @@
 use dioxus::prelude::*;
 use crate::state::use_spawn_once;
+use poly_client::MessagingBackend;
 use super::super::signals::ChatViewSignals;
 use super::super::markup_ctx::ChatViewMarkupCtx;
 use super::super::ChatUtilityPanel;
@@ -60,7 +61,10 @@ pub(in super::super) fn use_search_messages_effect(signals: &ChatViewSignals, ct
                     is_group_channel,
                 );
                 match client_manager.peek().with_backend(&account_id, async |b| {
-                    b.search_messages(parsed_query).await
+                    match b.as_messaging() {
+                        Some(mb) => mb.search_messages(parsed_query).await,
+                        None => Ok(Vec::new()),
+                    }
                 }).await {
                     Ok(hits) => search_hits.set(hits),
                     Err(err) => {

@@ -6,8 +6,8 @@ use serde_json::Value;
 use super::{err_result, ok_result, parse_backend_type, str_arg, u64_arg};
 
 use poly_client::{
-    AuthCredentials, DmSupport, FriendModel, MessageContent, MessageQuery, MessagingModel,
-    NotificationSupport, PluginManifest, VoiceSupport,
+    AuthCredentials, DmSupport, FriendModel, MessageContent, MessageQuery,
+    MessagingModel, NotificationSupport, PluginManifest, VoiceSupport,
 };
 
 // ─── Backend lookup ───────────────────────────────────────────────────────────
@@ -256,9 +256,12 @@ pub(super) async fn handle_send_typing(args: &Value, pool: &BackendPool) -> Valu
         Some(c) => c,
         None => return err_result("missing 'channel_id'"),
     };
-    match entry.backend.send_typing(channel_id).await {
-        Ok(()) => ok_result("typing indicator sent"),
-        Err(e) => err_result(format!("send_typing failed: {e}")),
+    match entry.backend.as_messaging() {
+        Some(mb) => match mb.send_typing(channel_id).await {
+            Ok(()) => ok_result("typing indicator sent"),
+            Err(e) => err_result(format!("send_typing failed: {e}")),
+        },
+        None => err_result("backend does not support typing indicators"),
     }
 }
 

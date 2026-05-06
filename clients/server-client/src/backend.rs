@@ -420,39 +420,10 @@ impl ClientBackend for PolyServerBackend {
         Ok(Self::map_message(&msg, &self.base_url))
     }
 
-    async fn send_typing(&self, channel_id: &str) -> ClientResult<()> {
-        #[cfg(feature = "native")]
-        {
-            self.ws
-                .send_typing(channel_id)
-                .await
-                .map_err(|e| ClientError::Network(e.to_string()))
-        }
-        #[cfg(not(feature = "native"))]
-        {
-            let _ = channel_id;
-            Ok(())
-        }
-    }
+    // ── Messaging extras (H.4.a — moved to MessagingBackend) ────────────────
 
-    async fn send_reply_message(
-        &self,
-        channel_id: &str,
-        reply_to_message_id: &str,
-        content: MessageContent,
-    ) -> ClientResult<Message> {
-        let text = match &content {
-            MessageContent::Text(t) => t.clone(),
-            MessageContent::WithAttachments { text, .. } => text.clone(),
-        };
-
-        let msg = self
-            .http
-            .send_message(channel_id, &text, Some(reply_to_message_id), None)
-            .await
-            .map_err(|e| ClientError::Network(e.to_string()))?;
-
-        Ok(Self::map_message(&msg, &self.base_url))
+    fn as_messaging(&self) -> Option<&dyn poly_client::MessagingBackend> {
+        Some(self)
     }
 
     async fn get_messages(
@@ -1522,5 +1493,77 @@ fn map_server_event(event: srv::ServerEvent) -> Option<ClientEvent> {
         | srv::ServerEvent::Ping
         | srv::ServerEvent::ReactionAdded { .. }
         | srv::ServerEvent::ReactionRemoved { .. } => None,
+    }
+}
+
+// ── H.4.a — MessagingBackend ─────────────────────────────────────────────────
+
+#[async_trait]
+impl poly_client::MessagingBackend for PolyServerBackend {
+    async fn send_typing(&self, channel_id: &str) -> ClientResult<()> {
+        #[cfg(feature = "native")]
+        {
+            self.ws
+                .send_typing(channel_id)
+                .await
+                .map_err(|e| ClientError::Network(e.to_string()))
+        }
+        #[cfg(not(feature = "native"))]
+        {
+            let _ = channel_id;
+            Ok(())
+        }
+    }
+
+    async fn send_reply_message(
+        &self,
+        channel_id: &str,
+        reply_to_message_id: &str,
+        content: MessageContent,
+    ) -> ClientResult<Message> {
+        let text = match &content {
+            MessageContent::Text(t) => t.clone(),
+            MessageContent::WithAttachments { text, .. } => text.clone(),
+        };
+
+        let msg = self
+            .http
+            .send_message(channel_id, &text, Some(reply_to_message_id), None)
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+
+        Ok(Self::map_message(&msg, &self.base_url))
+    }
+
+    async fn search_messages(
+        &self,
+        _query: MessageSearchQuery,
+    ) -> ClientResult<Vec<MessageSearchHit>> {
+        Err(ClientError::NotSupported("search_messages: poly-server search not yet implemented".to_string()))
+    }
+
+    async fn get_pinned_messages(&self, _channel_id: &str) -> ClientResult<Vec<Message>> {
+        Err(ClientError::NotSupported("get_pinned_messages: not yet implemented for poly-server".to_string()))
+    }
+
+    async fn set_message_pinned(
+        &self,
+        _channel_id: &str,
+        _message_id: &str,
+        _pinned: bool,
+    ) -> ClientResult<()> {
+        Err(ClientError::NotSupported("set_message_pinned: not yet implemented for poly-server".to_string()))
+    }
+
+    async fn get_channel_commands(&self, _channel_id: &str) -> ClientResult<Vec<ChatCommand>> {
+        Ok(Vec::new())
+    }
+
+    async fn get_available_emojis(&self, _channel_id: &str) -> ClientResult<Vec<CustomEmoji>> {
+        Ok(Vec::new())
+    }
+
+    async fn get_available_stickers(&self, _channel_id: &str) -> ClientResult<Vec<StickerItem>> {
+        Ok(Vec::new())
     }
 }

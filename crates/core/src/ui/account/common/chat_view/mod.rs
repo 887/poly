@@ -68,7 +68,7 @@ use dioxus::prelude::*;
 use poly_client::{
     Attachment, BackendType, Channel, ChatCommand, DmChannel, Message,
     MessageContent, MessageQuery, MessageReplyPreview, MessageSearchHit,
-    PresenceStatus, User,
+    MessagingBackend, PresenceStatus, User,
 };
 use poly_ui_macros::{context_menu, ui_action};
 use std::sync::{
@@ -2250,7 +2250,9 @@ fn maybe_send_real_typing(
                 .read_with_timeout(std::time::Duration::from_secs(2))
                 .await
         {
-            drop(backend.send_typing(&channel_id).await);
+            if let Some(mb) = backend.as_messaging() {
+                drop(mb.send_typing(&channel_id).await);
+            }
         }
         #[cfg(target_arch = "wasm32")]
         gloo_timers::future::TimeoutFuture::new(5_000).await;
@@ -2338,7 +2340,9 @@ fn TypingModeButton(mut typing_mode: Signal<TypingMode>) -> Element {
                                 .read_with_timeout(std::time::Duration::from_secs(2))
                                 .await
                         {
-                            drop(backend.send_typing(&channel_id).await);
+                            if let Some(mb) = backend.as_messaging() {
+                                drop(mb.send_typing(&channel_id).await);
+                            }
                         }
                         #[cfg(target_arch = "wasm32")]
                         gloo_timers::future::TimeoutFuture::new(5_000).await;
@@ -2617,7 +2621,10 @@ fn render_input_emoji_picker(ctx: ChatViewMarkupCtx) -> Element {
             let Some(ref cid) = channel_id else { return };
             let Some(account_id) = nav.peek().active_account_id.cloned() else { return };
             if let Ok(emojis) = client_manager.peek().with_backend(&account_id, async |b| {
-                b.get_available_emojis(cid).await
+                match b.as_messaging() {
+                    Some(mb) => mb.get_available_emojis(cid).await,
+                    None => Ok(Vec::new()),
+                }
             }).await {
                 custom_emojis.set(emojis);
             }
@@ -3382,9 +3389,11 @@ async fn send_message(ctx: SendMessageCtx) {
         MessageContent::WithAttachments { text, attachments }
     };
     let result = if let Some(reply_id) = reply_to_message_id {
-        guard
-            .send_reply_message(&channel_id, &reply_id, content)
-            .await
+        if let Some(mb) = guard.as_messaging() {
+            mb.send_reply_message(&channel_id, &reply_id, content).await
+        } else {
+            guard.send_message(&channel_id, content).await
+        }
     } else {
         guard.send_message(&channel_id, content).await
     };

@@ -808,41 +808,10 @@ impl ClientBackend for MatrixClient {
         self.build_message_from_send(result.event_id, body)
     }
 
-    async fn send_reply_message(
-        &self,
-        channel_id: &str,
-        reply_to_message_id: &str,
-        content: MessageContent,
-    ) -> ClientResult<Message> {
-        let txn_id = uuid::Uuid::new_v4().to_string();
-        let body = Self::extract_body(&content);
+    // ── Messaging extras (H.4.a — moved to MessagingBackend) ────────────────
 
-        let send_req = api::SendMessageRequest {
-            msgtype: "m.text".to_string(),
-            body: body.clone(),
-            formatted_body: None,
-            format: None,
-            relates_to: Some(api::RelatesTo {
-                in_reply_to: Some(api::InReplyTo {
-                    event_id: reply_to_message_id.to_string(),
-                }),
-            }),
-        };
-
-        let result = self
-            .http
-            .send_message(channel_id, &txn_id, &send_req)
-            .await?;
-
-        self.build_message_from_send(result.event_id, body)
-    }
-
-    async fn send_typing(&self, channel_id: &str) -> ClientResult<()> {
-        // Stub: Matrix supports PUT /_matrix/client/v3/rooms/{roomId}/typing/{userId}
-        // but the HTTP wiring is not yet plumbed through MatrixHttpClient.
-        // TODO: wire real endpoint in http.rs.
-        tracing::warn!("send_typing stub for matrix (channel_id={channel_id})");
-        Ok(())
+    fn as_messaging(&self) -> Option<&dyn poly_client::MessagingBackend> {
+        Some(self)
     }
 
     async fn get_messages(
@@ -1988,6 +1957,80 @@ impl poly_client::DmsAndGroupsBackend for MatrixClient {
             }
         }
         Ok(())
+    }
+}
+
+// ── H.4.a — MessagingBackend ─────────────────────────────────────────────────
+
+#[async_trait]
+impl poly_client::MessagingBackend for MatrixClient {
+    async fn send_typing(&self, channel_id: &str) -> ClientResult<()> {
+        // Stub: Matrix supports PUT /_matrix/client/v3/rooms/{roomId}/typing/{userId}
+        // but the HTTP wiring is not yet plumbed through MatrixHttpClient.
+        // TODO: wire real endpoint in http.rs.
+        tracing::warn!("send_typing stub for matrix (channel_id={channel_id})");
+        Ok(())
+    }
+
+    async fn send_reply_message(
+        &self,
+        channel_id: &str,
+        reply_to_message_id: &str,
+        content: MessageContent,
+    ) -> ClientResult<Message> {
+        let txn_id = uuid::Uuid::new_v4().to_string();
+        let body = Self::extract_body(&content);
+
+        let send_req = api::SendMessageRequest {
+            msgtype: "m.text".to_string(),
+            body: body.clone(),
+            formatted_body: None,
+            format: None,
+            relates_to: Some(api::RelatesTo {
+                in_reply_to: Some(api::InReplyTo {
+                    event_id: reply_to_message_id.to_string(),
+                }),
+            }),
+        };
+
+        let result = self
+            .http
+            .send_message(channel_id, &txn_id, &send_req)
+            .await?;
+
+        self.build_message_from_send(result.event_id, body)
+    }
+
+    async fn search_messages(
+        &self,
+        _query: MessageSearchQuery,
+    ) -> ClientResult<Vec<MessageSearchHit>> {
+        Err(ClientError::NotSupported("search_messages: Matrix search not yet implemented".to_string()))
+    }
+
+    async fn get_pinned_messages(&self, _channel_id: &str) -> ClientResult<Vec<Message>> {
+        Err(ClientError::NotSupported("get_pinned_messages: not yet implemented for Matrix".to_string()))
+    }
+
+    async fn set_message_pinned(
+        &self,
+        _channel_id: &str,
+        _message_id: &str,
+        _pinned: bool,
+    ) -> ClientResult<()> {
+        Err(ClientError::NotSupported("set_message_pinned: not yet implemented for Matrix".to_string()))
+    }
+
+    async fn get_channel_commands(&self, _channel_id: &str) -> ClientResult<Vec<ChatCommand>> {
+        Ok(Vec::new())
+    }
+
+    async fn get_available_emojis(&self, _channel_id: &str) -> ClientResult<Vec<CustomEmoji>> {
+        Ok(Vec::new())
+    }
+
+    async fn get_available_stickers(&self, _channel_id: &str) -> ClientResult<Vec<StickerItem>> {
+        Ok(Vec::new())
     }
 }
 

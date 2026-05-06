@@ -340,14 +340,16 @@ pub fn spawn_worker(
                 TickDecision::Pulse => {
                     // Only send an actual HTTP pulse every PULSE_INTERVAL_MS ms.
                     if elapsed_ms.saturating_sub(last_pulse_ms) >= PULSE_INTERVAL_MS || last_pulse_ms == 0 {
-                        match backend.send_typing(&chat_id).await {
-                            Ok(()) => {
-                                tracing::trace!("typing pulse sent for chat {chat_id} at {elapsed_ms}ms");
-                                last_pulse_ms = elapsed_ms;
-                            }
-                            Err(e) => {
-                                tracing::warn!("send_typing failed for chat {chat_id}: {e}");
-                                // Non-fatal: keep trying on the next pulse window.
+                        if let Some(mb) = backend.as_messaging() {
+                            match mb.send_typing(&chat_id).await {
+                                Ok(()) => {
+                                    tracing::trace!("typing pulse sent for chat {chat_id} at {elapsed_ms}ms");
+                                    last_pulse_ms = elapsed_ms;
+                                }
+                                Err(e) => {
+                                    tracing::warn!("send_typing failed for chat {chat_id}: {e}");
+                                    // Non-fatal: keep trying on the next pulse window.
+                                }
                             }
                         }
                     }

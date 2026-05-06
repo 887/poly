@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
 use crate::client_manager::BackendHandleExt;
 use crate::state::use_spawn_once;
+use poly_client::MessagingBackend;
 use super::super::signals::ChatViewSignals;
 
 pub(in super::super) fn use_command_preload_effect(signals: &ChatViewSignals, channel_id: &Option<String>) {
@@ -38,7 +39,11 @@ pub(in super::super) fn use_command_preload_effect(signals: &ChatViewSignals, ch
                 return;
             }
         };
-        match guard.get_channel_commands(&cid).await {
+        let result = match guard.as_messaging() {
+            Some(mb) => mb.get_channel_commands(&cid).await,
+            None => Ok(Vec::new()),
+        };
+        match result {
             Ok(cmds) => command_suggestions.set(cmds),
             Err(err) => tracing::warn!("get_channel_commands failed: {err}"),
         }

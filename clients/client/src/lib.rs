@@ -11,6 +11,7 @@ pub mod content_policy;
 pub mod dms_and_groups;
 pub mod events;
 pub mod forum;
+pub mod messaging;
 pub mod moderation;
 pub mod social_graph;
 pub mod threads;
@@ -22,6 +23,7 @@ pub use content_policy::ContentPolicyBackend;
 pub use dms_and_groups::DmsAndGroupsBackend;
 pub use events::*;
 pub use forum::ForumBackend;
+pub use messaging::MessagingBackend;
 pub use moderation::ModerationBackend;
 pub use social_graph::SocialGraphBackend;
 pub use threads::ThreadsBackend;
@@ -117,34 +119,10 @@ pub trait ClientBackend: Send + Sync {
         content: MessageContent,
     ) -> ClientResult<Message>;
 
-    /// Broadcast a typing indicator for the given channel.
-    ///
-    /// Fire-and-forget — callers should not block on the result. Backends that
-    /// do not support typing indicators return [`ClientError::NotSupported`].
-    async fn send_typing(&self, channel_id: &str) -> ClientResult<()> {
-        let _ = channel_id;
-        Err(ClientError::NotSupported("send_typing".to_string()))
-    }
-
-    /// Send a reply to an existing message.
-    ///
-    /// Default implementation returns `Err(NotSupported)` so callers can
-    /// detect the missing capability and either hide the reply UI or fall
-    /// back to a normal send. The previous default silently downgraded
-    /// replies to top-level posts (discarding `reply_to_message_id`),
-    /// which corrupted user intent without any signal — see
-    /// `docs/plans/plan-solid-refactor-survey.md` Phase B.2.4 (LSP).
-    async fn send_reply_message(
-        &self,
-        channel_id: &str,
-        reply_to_message_id: &str,
-        content: MessageContent,
-    ) -> ClientResult<Message> {
-        let _ = (channel_id, reply_to_message_id, content);
-        Err(ClientError::NotSupported(
-            "send_reply_message".to_string(),
-        ))
-    }
+    // ── Messaging extras (H.4.a — moved to MessagingBackend) ────────────────
+    // send_typing, send_reply_message, search_messages, get_pinned_messages,
+    // set_message_pinned, get_channel_commands, get_available_emojis,
+    // get_available_stickers → see clients/client/src/messaging.rs
 
     /// Get messages from a channel with query options.
     async fn get_messages(
@@ -152,71 +130,6 @@ pub trait ClientBackend: Send + Sync {
         channel_id: &str,
         query: MessageQuery,
     ) -> ClientResult<Vec<Message>>;
-
-    /// Search messages using the backend's native search implementation.
-    ///
-    /// Backends that do not support search should return the default
-    /// `Err(ClientError::NotSupported(...))` provided below.
-    async fn search_messages(
-        &self,
-        query: MessageSearchQuery,
-    ) -> ClientResult<Vec<MessageSearchHit>> {
-        let _ = query;
-        Err(ClientError::NotSupported("search_messages".to_string()))
-    }
-
-    /// Get pinned messages for a channel.
-    ///
-    /// Backends that do not support pinning should override to return
-    /// `Err(NotSupported)` (this is the default). Returning `Ok(vec![])`
-    /// would be ambiguous — readers cannot distinguish "no pins" from
-    /// "unsupported", so the pin-button UI hides on any empty list and
-    /// supported-but-empty channels lose the affordance. See
-    /// `plan-solid-refactor-survey.md` Phase B.2.3.
-    async fn get_pinned_messages(&self, channel_id: &str) -> ClientResult<Vec<Message>> {
-        let _ = channel_id;
-        Err(ClientError::NotSupported(
-            "get_pinned_messages".to_string(),
-        ))
-    }
-
-    /// Get slash commands available in a channel.
-    ///
-    /// Returns app/bot-provided commands valid for `channel_id`. The UI layer
-    /// prepends built-in Poly commands (shrug, me, tableflip, …) before showing
-    /// the autocomplete popup, so backends do not need to include those.
-    ///
-    /// Backends that do not support slash commands should return an empty list.
-    async fn get_channel_commands(&self, channel_id: &str) -> ClientResult<Vec<ChatCommand>> {
-        let _ = channel_id;
-        Ok(Vec::new())
-    }
-
-    /// Get the custom emoji usable in a channel.
-    async fn get_available_emojis(&self, channel_id: &str) -> ClientResult<Vec<CustomEmoji>> {
-        let _ = channel_id;
-        Ok(Vec::new())
-    }
-
-    /// Get the stickers usable in a channel.
-    async fn get_available_stickers(&self, channel_id: &str) -> ClientResult<Vec<StickerItem>> {
-        let _ = channel_id;
-        Ok(Vec::new())
-    }
-
-    /// Pin or unpin a message in a channel.
-    ///
-    /// Backends that do not support pin mutation should return the default
-    /// `Err(ClientError::NotSupported(...))` provided below.
-    async fn set_message_pinned(
-        &self,
-        channel_id: &str,
-        message_id: &str,
-        pinned: bool,
-    ) -> ClientResult<()> {
-        let _ = (channel_id, message_id, pinned);
-        Err(ClientError::NotSupported("set_message_pinned".to_string()))
-    }
 
     // --- Users (get_user + get_friends moved to SocialGraphBackend — H.3.b) ---
 
@@ -519,6 +432,17 @@ pub trait ClientBackend: Send + Sync {
         None
     }
 
+    // --- Messaging extras (H.4.a — MessagingBackend) ---
+
+    /// Returns `Some(self)` if this backend implements [`MessagingBackend`].
+    ///
+    /// Override to `Some(self)` in backends that support typing indicators,
+    /// reply threading, message search, pin management, and composer extras.
+    /// Default: `None`.
+    fn as_messaging(&self) -> Option<&dyn MessagingBackend> {
+        None
+    }
+
     // --- Client-provided UI surface (WP 1 / plan-client-ui-surface) ----
     //
     // Per D9 these methods have **no default implementation** — every
@@ -725,6 +649,7 @@ pub trait ClientBackend: Send + Sync {
 /// | `as_moderation` | [`ModerationBackend`] | H.3.a |
 /// | `as_social_graph` | [`SocialGraphBackend`] | H.3.b |
 /// | `as_dms_and_groups` | [`DmsAndGroupsBackend`] | H.3.c |
+/// | `as_messaging` | [`MessagingBackend`] | H.4.a |
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 pub trait IsBackend: Send + Sync {
@@ -815,6 +740,17 @@ pub trait IsBackend: Send + Sync {
     fn as_dms_and_groups(&self) -> Option<&dyn DmsAndGroupsBackend> {
         None
     }
+
+    /// Returns `Some(self)` if this backend implements [`MessagingBackend`].
+    ///
+    /// Default: `None`.  Override in backends that support messaging extras:
+    /// typing indicators, reply threading, message search, pin management,
+    /// and composer extras (commands, emojis, stickers).
+    /// Currently: `poly-demo`, `poly-discord`, `poly-matrix`, `poly-stoat`,
+    /// `poly-teams`, `poly-server-client`, `poly-lemmy`.
+    fn as_messaging(&self) -> Option<&dyn MessagingBackend> {
+        None
+    }
 }
 
 // Blanket implementation: every `ClientBackend` automatically is an `IsBackend`.
@@ -877,6 +813,11 @@ impl<T: ClientBackend + ?Sized> IsBackend for T {
     #[inline]
     fn as_dms_and_groups(&self) -> Option<&dyn DmsAndGroupsBackend> {
         ClientBackend::as_dms_and_groups(self)
+    }
+
+    #[inline]
+    fn as_messaging(&self) -> Option<&dyn MessagingBackend> {
+        ClientBackend::as_messaging(self)
     }
 }
 

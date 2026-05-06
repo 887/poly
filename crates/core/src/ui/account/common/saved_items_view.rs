@@ -12,7 +12,7 @@ use crate::i18n::t;
 use crate::state::{AccountSessions, AppState, ChatLists, ChatViewState, NavState};
 use crate::ui::split_shell::SplitMenuShell;
 use dioxus::prelude::*;
-use poly_client::{MessageContent, MessageSearchHit};
+use poly_client::{MessageContent, MessageSearchHit, MessagingBackend};
 use poly_ui_macros::{context_menu, ui_action};
 
 #[derive(Clone, PartialEq)]
@@ -150,8 +150,9 @@ pub fn SavedItemsView() -> Element {
             client_manager.peek().with_backend(&account_id, async |b| {
                 let mut items = Vec::new();
 
+                if let Some(mb) = b.as_messaging() {
                 for dm in dm_channels {
-                    if let Ok(messages) = b.get_pinned_messages(&dm.id).await {
+                    if let Ok(messages) = mb.get_pinned_messages(&dm.id).await {
                         for message in messages {
                             items.push(SavedPinnedItem {
                                 channel_name: dm.user.display_name.clone(),
@@ -167,7 +168,7 @@ pub fn SavedItemsView() -> Element {
                 }
 
                 for group in groups {
-                    if let Ok(messages) = b.get_pinned_messages(&group.id).await {
+                    if let Ok(messages) = mb.get_pinned_messages(&group.id).await {
                         let group_name = group.name.clone().unwrap_or_else(|| {
                             group
                                 .members
@@ -192,6 +193,7 @@ pub fn SavedItemsView() -> Element {
                 }
 
                 items.sort_by(|a, b| b.hit.message.timestamp.cmp(&a.hit.message.timestamp));
+                } // end if let Some(mb)
                 Ok(items)
             }).await.unwrap_or_default()
         }

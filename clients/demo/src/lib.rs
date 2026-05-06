@@ -189,19 +189,6 @@ impl<F: DemoFlavour> ClientBackend for DemoClientGeneric<F> {
         Ok(F::send_message_for(channel_id, content))
     }
 
-    async fn send_reply_message(
-        &self,
-        channel_id: &str,
-        reply_to_message_id: &str,
-        content: MessageContent,
-    ) -> ClientResult<Message> {
-        Ok(data::demo_sent_reply_message(channel_id, reply_to_message_id, content))
-    }
-
-    async fn send_typing(&self, _channel_id: &str) -> ClientResult<()> {
-        Ok(()) // Demo silently accepts typing indicators.
-    }
-
     async fn get_messages(
         &self,
         channel_id: &str,
@@ -210,27 +197,10 @@ impl<F: DemoFlavour> ClientBackend for DemoClientGeneric<F> {
         Ok(F::messages(channel_id, &query))
     }
 
-    async fn search_messages(
-        &self,
-        query: MessageSearchQuery,
-    ) -> ClientResult<Vec<MessageSearchHit>> {
-        Ok(F::search_messages(&query))
-    }
+    // ── Messaging extras (H.4.a — moved to MessagingBackend) ────────────────
 
-    async fn get_pinned_messages(&self, channel_id: &str) -> ClientResult<Vec<Message>> {
-        Ok(F::pinned_messages(channel_id))
-    }
-
-    async fn get_channel_commands(&self, channel_id: &str) -> ClientResult<Vec<ChatCommand>> {
-        Ok(data::demo_channel_commands(channel_id))
-    }
-
-    async fn get_available_emojis(&self, channel_id: &str) -> ClientResult<Vec<CustomEmoji>> {
-        Ok(data::demo_available_emojis(channel_id))
-    }
-
-    async fn get_available_stickers(&self, channel_id: &str) -> ClientResult<Vec<StickerItem>> {
-        Ok(data::demo_available_stickers(channel_id))
+    fn as_messaging(&self) -> Option<&dyn poly_client::MessagingBackend> {
+        Some(self)
     }
 
     // ── Social graph (H.3.b — moved to SocialGraphBackend) ──────────────────
@@ -564,6 +534,58 @@ impl<F: DemoFlavour> poly_client::DmsAndGroupsBackend for DemoClientGeneric<F> {
         _avatar_url: Option<&str>,
     ) -> ClientResult<()> {
         Ok(())
+    }
+}
+
+// ── H.4.a — MessagingBackend ──────────────────────────────────────────────────
+
+#[cfg(feature = "native")]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
+impl<F: DemoFlavour> poly_client::MessagingBackend for DemoClientGeneric<F> {
+    async fn send_typing(&self, _channel_id: &str) -> ClientResult<()> {
+        Ok(()) // Demo silently accepts typing indicators.
+    }
+
+    async fn send_reply_message(
+        &self,
+        channel_id: &str,
+        reply_to_message_id: &str,
+        content: MessageContent,
+    ) -> ClientResult<Message> {
+        Ok(data::demo_sent_reply_message(channel_id, reply_to_message_id, content))
+    }
+
+    async fn search_messages(
+        &self,
+        query: MessageSearchQuery,
+    ) -> ClientResult<Vec<MessageSearchHit>> {
+        Ok(F::search_messages(&query))
+    }
+
+    async fn get_pinned_messages(&self, channel_id: &str) -> ClientResult<Vec<Message>> {
+        Ok(F::pinned_messages(channel_id))
+    }
+
+    async fn set_message_pinned(
+        &self,
+        _channel_id: &str,
+        _message_id: &str,
+        _pinned: bool,
+    ) -> ClientResult<()> {
+        Ok(()) // Demo: accept pin/unpin without persisting.
+    }
+
+    async fn get_channel_commands(&self, channel_id: &str) -> ClientResult<Vec<ChatCommand>> {
+        Ok(data::demo_channel_commands(channel_id))
+    }
+
+    async fn get_available_emojis(&self, channel_id: &str) -> ClientResult<Vec<CustomEmoji>> {
+        Ok(data::demo_available_emojis(channel_id))
+    }
+
+    async fn get_available_stickers(&self, channel_id: &str) -> ClientResult<Vec<StickerItem>> {
+        Ok(data::demo_available_stickers(channel_id))
     }
 }
 

@@ -594,58 +594,10 @@ impl ClientBackend for RedditBackend {
         ))
     }
 
-    async fn send_reply_message(
-        &self,
-        _channel_id: &str,
-        reply_to_message_id: &str,
-        content: MessageContent,
-    ) -> ClientResult<Message> {
-        let text = match &content {
-            MessageContent::Text(s) => s.clone(),
-            MessageContent::WithAttachments { text, .. } => text.clone(),
-        };
+    // ── Messaging extras (H.4.a — moved to MessagingBackend) ────────────────
 
-        // reply_to_message_id is t3_<id> for posts or t1_<id> for comments.
-        let is_post = reply_to_message_id.starts_with("t3_");
-        let is_comment = reply_to_message_id.starts_with("t1_");
-
-        if is_post || is_comment {
-            self.client
-                .reply_comment(reply_to_message_id, &text)
-                .await
-                .map_err(ClientError::from)?;
-        } else {
-            return Err(ClientError::NotSupported(format!(
-                "cannot reply to id: {reply_to_message_id}"
-            )));
-        }
-
-        // Reddit's reply endpoint does not return the new comment ID.
-        // Return a placeholder message so the host can show optimistic send.
-        let now = chrono::Utc::now();
-        let account_display = self.account_display_name().to_string();
-        let bt = Self::backend_type();
-        Ok(Message {
-            id: format!("t1_pending-{}", now.timestamp_millis()),
-            author: User {
-                id: self
-                    .session
-                    .as_ref()
-                    .map_or("u_me".to_string(), |s| s.user.id.clone()),
-                display_name: account_display,
-                avatar_url: None,
-                presence: PresenceStatus::Offline,
-                backend: bt,
-            },
-            content,
-            timestamp: now,
-            attachments: Vec::new(),
-            reactions: Vec::new(),
-            reply_to: None,
-            edited: false,
-            thread: None,
-            preview_image_url: None,
-        })
+    fn as_messaging(&self) -> Option<&dyn poly_client::MessagingBackend> {
+        Some(self)
     }
 
     async fn get_messages(
@@ -1423,5 +1375,100 @@ impl poly_client::DmsAndGroupsBackend for RedditBackend {
         _avatar_url: Option<&str>,
     ) -> ClientResult<()> {
         Err(ClientError::NotSupported("Reddit has no group DMs".to_string()))
+    }
+}
+
+// ── H.4.a — MessagingBackend ─────────────────────────────────────────────────
+
+#[async_trait]
+impl poly_client::MessagingBackend for RedditBackend {
+    async fn send_typing(&self, _channel_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported("Reddit has no typing indicators".to_string()))
+    }
+
+    async fn send_reply_message(
+        &self,
+        _channel_id: &str,
+        reply_to_message_id: &str,
+        content: MessageContent,
+    ) -> ClientResult<Message> {
+        let text = match &content {
+            MessageContent::Text(s) => s.clone(),
+            MessageContent::WithAttachments { text, .. } => text.clone(),
+        };
+
+        // reply_to_message_id is t3_<id> for posts or t1_<id> for comments.
+        let is_post = reply_to_message_id.starts_with("t3_");
+        let is_comment = reply_to_message_id.starts_with("t1_");
+
+        if is_post || is_comment {
+            self.client
+                .reply_comment(reply_to_message_id, &text)
+                .await
+                .map_err(ClientError::from)?;
+        } else {
+            return Err(ClientError::NotSupported(format!(
+                "cannot reply to id: {reply_to_message_id}"
+            )));
+        }
+
+        // Reddit's reply endpoint does not return the new comment ID.
+        // Return a placeholder message so the host can show optimistic send.
+        let now = chrono::Utc::now();
+        let account_display = self.account_display_name().to_string();
+        let bt = Self::backend_type();
+        Ok(Message {
+            id: format!("t1_pending-{}", now.timestamp_millis()),
+            author: User {
+                id: self
+                    .session
+                    .as_ref()
+                    .map_or("u_me".to_string(), |s| s.user.id.clone()),
+                display_name: account_display,
+                avatar_url: None,
+                presence: PresenceStatus::Offline,
+                backend: bt,
+            },
+            content,
+            timestamp: now,
+            attachments: Vec::new(),
+            reactions: Vec::new(),
+            reply_to: None,
+            edited: false,
+            thread: None,
+            preview_image_url: None,
+        })
+    }
+
+    async fn search_messages(
+        &self,
+        _query: MessageSearchQuery,
+    ) -> ClientResult<Vec<MessageSearchHit>> {
+        Err(ClientError::NotSupported("search_messages: Reddit search not yet implemented".to_string()))
+    }
+
+    async fn get_pinned_messages(&self, _channel_id: &str) -> ClientResult<Vec<Message>> {
+        Err(ClientError::NotSupported("get_pinned_messages: not supported by Reddit".to_string()))
+    }
+
+    async fn set_message_pinned(
+        &self,
+        _channel_id: &str,
+        _message_id: &str,
+        _pinned: bool,
+    ) -> ClientResult<()> {
+        Err(ClientError::NotSupported("set_message_pinned: not supported by Reddit".to_string()))
+    }
+
+    async fn get_channel_commands(&self, _channel_id: &str) -> ClientResult<Vec<ChatCommand>> {
+        Ok(Vec::new())
+    }
+
+    async fn get_available_emojis(&self, _channel_id: &str) -> ClientResult<Vec<CustomEmoji>> {
+        Ok(Vec::new())
+    }
+
+    async fn get_available_stickers(&self, _channel_id: &str) -> ClientResult<Vec<StickerItem>> {
+        Ok(Vec::new())
     }
 }

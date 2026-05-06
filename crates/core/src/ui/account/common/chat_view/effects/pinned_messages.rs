@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
 use crate::client_manager::BackendHandleExt;
 use crate::state::use_spawn_once;
+use poly_client::MessagingBackend;
 use super::super::signals::ChatViewSignals;
 use super::super::ChatUtilityPanel;
 
@@ -55,7 +56,11 @@ pub(in super::super) fn use_pinned_messages_effect(signals: &ChatViewSignals) {
                     return;
                 }
             };
-            match guard.get_pinned_messages(&target_channel_id).await {
+            let result = match guard.as_messaging() {
+                Some(mb) => mb.get_pinned_messages(&target_channel_id).await,
+                None => Ok(Vec::new()),
+            };
+            match result {
                 Ok(messages) => pinned_messages.set(messages),
                 Err(err) => {
                     tracing::warn!("get_pinned_messages failed: {err}");

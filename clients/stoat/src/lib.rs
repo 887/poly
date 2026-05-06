@@ -639,22 +639,10 @@ impl ClientBackend for StoatClient {
         self.send_message_internal(channel_id, content, None).await
     }
 
-    async fn send_reply_message(
-        &self,
-        channel_id: &str,
-        reply_to_message_id: &str,
-        content: MessageContent,
-    ) -> ClientResult<Message> {
-        self.send_message_internal(channel_id, content, Some(reply_to_message_id))
-            .await
-    }
+    // ── Messaging extras (H.4.a — moved to MessagingBackend) ────────────────
 
-    async fn send_typing(&self, channel_id: &str) -> ClientResult<()> {
-        // Stub: Stoat has a typing-indicator WebSocket event but the HTTP
-        // wiring is not yet plumbed through StoatClient.
-        // TODO: wire real endpoint in http.rs.
-        tracing::warn!("send_typing stub for stoat (channel_id={channel_id})");
-        Ok(())
+    fn as_messaging(&self) -> Option<&dyn poly_client::MessagingBackend> {
+        Some(self)
     }
 
     async fn get_messages(
@@ -1863,6 +1851,61 @@ fn parse_bonfire_event(json: &serde_json::Value) -> Option<ClientEvent> {
             })
         }
         _ => None,
+    }
+}
+
+// ── H.4.a — MessagingBackend ─────────────────────────────────────────────────
+
+#[async_trait]
+impl poly_client::MessagingBackend for StoatClient {
+    async fn send_typing(&self, channel_id: &str) -> ClientResult<()> {
+        // Stub: Stoat has a typing-indicator WebSocket event but the HTTP
+        // wiring is not yet plumbed through StoatClient.
+        // TODO: wire real endpoint in http.rs.
+        tracing::warn!("send_typing stub for stoat (channel_id={channel_id})");
+        Ok(())
+    }
+
+    async fn send_reply_message(
+        &self,
+        channel_id: &str,
+        reply_to_message_id: &str,
+        content: MessageContent,
+    ) -> ClientResult<Message> {
+        self.send_message_internal(channel_id, content, Some(reply_to_message_id))
+            .await
+    }
+
+    async fn search_messages(
+        &self,
+        _query: MessageSearchQuery,
+    ) -> ClientResult<Vec<MessageSearchHit>> {
+        Err(ClientError::NotSupported("search_messages: Stoat search not yet implemented".to_string()))
+    }
+
+    async fn get_pinned_messages(&self, _channel_id: &str) -> ClientResult<Vec<Message>> {
+        Err(ClientError::NotSupported("get_pinned_messages: not yet implemented for Stoat".to_string()))
+    }
+
+    async fn set_message_pinned(
+        &self,
+        _channel_id: &str,
+        _message_id: &str,
+        _pinned: bool,
+    ) -> ClientResult<()> {
+        Err(ClientError::NotSupported("set_message_pinned: not yet implemented for Stoat".to_string()))
+    }
+
+    async fn get_channel_commands(&self, _channel_id: &str) -> ClientResult<Vec<ChatCommand>> {
+        Ok(Vec::new())
+    }
+
+    async fn get_available_emojis(&self, _channel_id: &str) -> ClientResult<Vec<CustomEmoji>> {
+        Ok(Vec::new())
+    }
+
+    async fn get_available_stickers(&self, _channel_id: &str) -> ClientResult<Vec<StickerItem>> {
+        Ok(Vec::new())
     }
 }
 
