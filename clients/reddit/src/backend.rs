@@ -1194,39 +1194,10 @@ impl ClientBackend for RedditBackend {
         )))
     }
 
-    // ── Phase E: community search ─────────────────────────────────────────────
+    // ── Phase E: community search (moved to DiscoverBackend H.4.c) ────────────
 
-    async fn search_communities(
-        &self,
-        query: &str,
-        _scope: poly_client::CommunityScope,
-        cursor: Option<String>,
-    ) -> poly_client::ClientResult<poly_client::CommunityPage> {
-        let (subs, next_after) = self
-            .client
-            .search_subreddits(query, cursor.as_deref())
-            .await
-            .map_err(ClientError::from)?;
-
-        let account_id = self.account_id().to_string();
-        let account_display_name = self.account_display_name().to_string();
-        let bt = Self::backend_type();
-
-        let items = subs
-            .into_iter()
-            .map(|sub| {
-                let mut server = build_sub_server(&sub.name, &account_id, &account_display_name, &bt);
-                if let Some(url) = sub.icon_url {
-                    server.icon_url = Some(url);
-                }
-                server
-            })
-            .collect();
-
-        Ok(poly_client::CommunityPage {
-            items,
-            next_cursor: next_after,
-        })
+    fn as_discover(&self) -> Option<&dyn poly_client::DiscoverBackend> {
+        Some(self)
     }
 }
 
@@ -1380,7 +1351,8 @@ impl poly_client::DmsAndGroupsBackend for RedditBackend {
 
 // ── H.4.a — MessagingBackend ─────────────────────────────────────────────────
 
-#[async_trait]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl poly_client::MessagingBackend for RedditBackend {
     async fn send_typing(&self, _channel_id: &str) -> ClientResult<()> {
         Err(ClientError::NotSupported("Reddit has no typing indicators".to_string()))
@@ -1470,5 +1442,44 @@ impl poly_client::MessagingBackend for RedditBackend {
 
     async fn get_available_stickers(&self, _channel_id: &str) -> ClientResult<Vec<StickerItem>> {
         Ok(Vec::new())
+    }
+}
+
+// ── H.4.c — DiscoverBackend ──────────────────────────────────────────────────
+
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::DiscoverBackend for RedditBackend {
+    async fn search_communities(
+        &self,
+        query: &str,
+        _scope: poly_client::CommunityScope,
+        cursor: Option<String>,
+    ) -> poly_client::ClientResult<poly_client::CommunityPage> {
+        let (subs, next_after) = self
+            .client
+            .search_subreddits(query, cursor.as_deref())
+            .await
+            .map_err(ClientError::from)?;
+
+        let account_id = self.account_id().to_string();
+        let account_display_name = self.account_display_name().to_string();
+        let bt = Self::backend_type();
+
+        let items = subs
+            .into_iter()
+            .map(|sub| {
+                let mut server = build_sub_server(&sub.name, &account_id, &account_display_name, &bt);
+                if let Some(url) = sub.icon_url {
+                    server.icon_url = Some(url);
+                }
+                server
+            })
+            .collect();
+
+        Ok(poly_client::CommunityPage {
+            items,
+            next_cursor: next_after,
+        })
     }
 }

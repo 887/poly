@@ -11,8 +11,10 @@ pub mod content_policy;
 pub mod dms_and_groups;
 pub mod events;
 pub mod forum;
+pub mod discover;
 pub mod messaging;
 pub mod moderation;
+pub mod server_admin;
 pub mod social_graph;
 pub mod threads;
 pub mod types;
@@ -23,7 +25,9 @@ pub use content_policy::ContentPolicyBackend;
 pub use dms_and_groups::DmsAndGroupsBackend;
 pub use events::*;
 pub use forum::ForumBackend;
+pub use discover::DiscoverBackend;
 pub use messaging::MessagingBackend;
+pub use server_admin::ServerAdminBackend;
 pub use moderation::ModerationBackend;
 pub use social_graph::SocialGraphBackend;
 pub use threads::ThreadsBackend;
@@ -150,38 +154,12 @@ pub trait ClientBackend: Send + Sync {
     //  unignore_user, add_friend, remove_friend, set_friend_nickname,
     //  set_user_note — all 9 moved to SocialGraphBackend)
 
-    /// Accept or decline a pending server invite.
-    ///
-    /// Backends that do not support this action return `NotSupported`.
-    async fn respond_to_server_invite(&self, server_id: &str, accept: bool) -> ClientResult<()> {
-        let _ = (server_id, accept);
-        Err(ClientError::NotSupported(
-            "respond_to_server_invite".to_string(),
-        ))
-    }
-
-    /// Mark a channel (server channel or DM) as read on the backend.
-    ///
-    /// Hosts call this alongside the local `mark_channel_as_read` so that
-    /// the next `get_channels` / `get_dm_channels` refetch returns
-    /// `unread_count = 0` for the channel — without it, the local clear is
-    /// overwritten by the backend's stale unread snapshot.
-    async fn mark_channel_read(&self, channel_id: &str) -> ClientResult<()> {
-        let _ = channel_id;
-        Err(ClientError::NotSupported("mark_channel_read".to_string()))
-    }
-
     // --- Conversation lifecycle (H.3.c — moved to DmsAndGroupsBackend) ---
 
-    /// Send a server invite to a specific user (DM-style invite).
-    async fn invite_user_to_server(
-        &self,
-        server_id: &str,
-        user_id: &str,
-    ) -> ClientResult<()> {
-        let _ = (server_id, user_id);
-        Err(ClientError::NotSupported("invite_user_to_server".to_string()))
-    }
+    // ── Server admin (H.4.b — moved to ServerAdminBackend) ──────────────────
+    // respond_to_server_invite, mark_channel_read, invite_user_to_server,
+    // create_server, create_channel, update_server_banner
+    // → see clients/client/src/server_admin.rs
 
     // --- Presence ---
 
@@ -197,83 +175,8 @@ pub trait ClientBackend: Send + Sync {
 
     // --- Presence (get_presence + set_presence moved to SocialGraphBackend — H.3.b) ---
 
-    // --- Server management (optional capability) ---
-
-    /// Create a new server/guild in this backend.
-    ///
-    /// Returns the newly created [`Server`].
-    ///
-    /// Backends that do not support server creation should return the default
-    /// `Err(ClientError::NotSupported(...))` provided here.
-    async fn create_server(&self, _name: &str) -> ClientResult<Server> {
-        Err(ClientError::NotSupported("create_server".to_string()))
-    }
-
-    /// Create a new channel inside a server.
-    ///
-    /// `server_id` is the backend-specific ID of the parent server.
-    /// `name` is the channel display name.
-    /// `channel_type` selects Text, Voice, or Video.
-    ///
-    /// Returns the newly created [`Channel`].
-    ///
-    /// Backends that do not support channel creation should return the default
-    /// `Err(ClientError::NotSupported(...))` provided here.
-    async fn create_channel(
-        &self,
-        _server_id: &str,
-        _name: &str,
-        _channel_type: ChannelType,
-    ) -> ClientResult<Channel> {
-        Err(ClientError::NotSupported("create_channel".to_string()))
-    }
-
-    /// Update the banner image URL for a server.
-    ///
-    /// `server_id` is the backend-specific server/guild/community ID.
-    /// `banner_url` is a URL string pointing to the new banner image, or `None`
-    /// to clear the banner.
-    ///
-    /// ## Format contract
-    ///
-    /// Pass a publicly accessible URL. For Discord, this must be a base64 data
-    /// URI (`data:image/png;base64,…`) because the Discord API does not accept
-    /// remote URLs; the real-Discord path is therefore not implementable without
-    /// a binary upload step (noted out-of-scope). The Spacebar/test-server path
-    /// accepts a URL string for test convenience.
-    ///
-    /// Backends that do not support banner updates return
-    /// [`ClientError::NotSupported`] — including backends where the banner is
-    /// a local-only `AppSettings` override (Matrix, Teams, Demo).
-    async fn update_server_banner(
-        &self,
-        _server_id: &str,
-        _banner_url: Option<&str>,
-    ) -> ClientResult<()> {
-        Err(ClientError::NotSupported("update_server_banner".to_string()))
-    }
-
-    // --- Discover Communities (Phase E) ---
-
-    /// Search for communities / subreddits matching `query`.
-    ///
-    /// `scope` is only meaningful for backends with
-    /// [`CommunitySearchSupport::SubscribedLocalAll`] (Lemmy). Reddit ignores
-    /// the scope and always searches across all of Reddit. `cursor` is the
-    /// opaque pagination token returned by the previous call's
-    /// `CommunityPage::next_cursor`; pass `None` for the first page.
-    ///
-    /// Default impl returns [`ClientError::NotSupported`]; Lemmy and Reddit
-    /// override this.
-    async fn search_communities(
-        &self,
-        query: &str,
-        scope: CommunityScope,
-        cursor: Option<String>,
-    ) -> ClientResult<CommunityPage> {
-        let _ = (query, scope, cursor);
-        Err(ClientError::NotSupported("search_communities".to_string()))
-    }
+    // --- Discover Communities (H.4.c — moved to DiscoverBackend) ---
+    // search_communities → see clients/client/src/discover.rs
 
     // --- Real-time events ---
 
@@ -429,6 +332,26 @@ pub trait ClientBackend: Send + Sync {
     /// Override to `Some(self)` in backends that expose direct messaging
     /// and group DM operations.  Default: `None`.
     fn as_dms_and_groups(&self) -> Option<&dyn DmsAndGroupsBackend> {
+        None
+    }
+
+    // --- Server admin (H.4.b — ServerAdminBackend) ---
+
+    /// Returns `Some(self)` if this backend implements [`ServerAdminBackend`].
+    ///
+    /// Override to `Some(self)` in backends that support server management
+    /// (create/modify servers and channels, mark-read, invite).  Default: `None`.
+    fn as_server_admin(&self) -> Option<&dyn ServerAdminBackend> {
+        None
+    }
+
+    // --- Discover communities (H.4.c — DiscoverBackend) ---
+
+    /// Returns `Some(self)` if this backend implements [`DiscoverBackend`].
+    ///
+    /// Override to `Some(self)` in backends that support community search.
+    /// Currently: `poly-lemmy`, `poly-reddit`.  Default: `None`.
+    fn as_discover(&self) -> Option<&dyn DiscoverBackend> {
         None
     }
 
@@ -751,6 +674,24 @@ pub trait IsBackend: Send + Sync {
     fn as_messaging(&self) -> Option<&dyn MessagingBackend> {
         None
     }
+
+    /// Returns `Some(self)` if this backend implements [`ServerAdminBackend`].
+    ///
+    /// Default: `None`.  Override in backends that support server management
+    /// (create/modify servers and channels, mark-read, invite).
+    /// Currently: `poly-demo`, `poly-discord`, `poly-lemmy`, `poly-matrix`,
+    /// `poly-server-client`.
+    fn as_server_admin(&self) -> Option<&dyn ServerAdminBackend> {
+        None
+    }
+
+    /// Returns `Some(self)` if this backend implements [`DiscoverBackend`].
+    ///
+    /// Default: `None`.  Override in backends that support community search.
+    /// Currently: `poly-lemmy`, `poly-reddit`.
+    fn as_discover(&self) -> Option<&dyn DiscoverBackend> {
+        None
+    }
 }
 
 // Blanket implementation: every `ClientBackend` automatically is an `IsBackend`.
@@ -818,6 +759,16 @@ impl<T: ClientBackend + ?Sized> IsBackend for T {
     #[inline]
     fn as_messaging(&self) -> Option<&dyn MessagingBackend> {
         ClientBackend::as_messaging(self)
+    }
+
+    #[inline]
+    fn as_server_admin(&self) -> Option<&dyn ServerAdminBackend> {
+        ClientBackend::as_server_admin(self)
+    }
+
+    #[inline]
+    fn as_discover(&self) -> Option<&dyn DiscoverBackend> {
+        ClientBackend::as_discover(self)
     }
 }
 

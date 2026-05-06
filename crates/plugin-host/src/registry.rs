@@ -492,6 +492,13 @@ impl ClientBackend for PluginBackend {
         Some(self)
     }
 
+    // ── Server admin (H.4.b — moved to ServerAdminBackend) ──────────────────
+    // WIT does not expose server management → NotSupported stubs
+
+    fn as_server_admin(&self) -> Option<&dyn poly_client::ServerAdminBackend> {
+        None
+    }
+
     // ── Social graph (H.3.b — moved to SocialGraphBackend) ──────────────────
 
     fn as_social_graph(&self) -> Option<&dyn poly_client::SocialGraphBackend> {

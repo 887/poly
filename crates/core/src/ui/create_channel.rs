@@ -17,7 +17,7 @@ use crate::i18n::t;
 use crate::state::AppState;
 use crate::ui::routes::Route;
 use dioxus::prelude::*;
-use poly_client::ChannelType;
+use poly_client::{ChannelType, ServerAdminBackend};
 use poly_ui_macros::{context_menu, ui_action};
 use tracing::{error, info};
 
@@ -180,7 +180,10 @@ fn do_create_channel(
     spawn(async move {
         info!("do_create_channel: async task started");
         match client_manager.peek().with_backend_for_server(&server_id, async |_aid, b| {
-            b.create_channel(&server_id, &name, ChannelType::Text).await
+            match b.as_server_admin() {
+                Some(sa) => sa.create_channel(&server_id, &name, ChannelType::Text).await,
+                None => Err(poly_client::ClientError::NotSupported("backend does not support channel creation".to_string())),
+            }
         }).await {
             Ok(channel) => {
                 info!("do_create_channel: channel created id={:?}", channel.id);

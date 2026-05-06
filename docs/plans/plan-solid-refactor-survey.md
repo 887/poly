@@ -2,7 +2,7 @@
 
 > Owner: alexander.stuermer@aareon.com
 > Created: 2026-05-03
-> Status: 🟡 IN PROGRESS — Phase G fully closed; Phase H started (H.0 `rylxrxno`); Phase J fully closed (J.1 `rpnypolk`, J.2 `slqplxlt`); H.1-H.4 + I pending
+> Status: 🟡 IN PROGRESS — Phase G fully closed; Phase H started (H.0 `rylxrxno`); Phase J fully closed (J.1 `rpnypolk`, J.2 `slqplxlt`); H.1-H.3 shipped; H.4.a `zuoruovy`, H.4.b+c `xxqtynuy` shipped; H.4.d-i + I pending
 >
 > Source shards (raw findings, do not delete — referenced throughout):
 > - `docs/plans/.solid-survey-shards/A.md` — Single Responsibility (oversize)
@@ -425,6 +425,15 @@ caveat).
       Shipped in changes `3abb6289` (H.3.a ModerationBackend) +
       `3569129e` (H.3.b SocialGraphBackend) + `91923aca` (H.3.c DmsAndGroupsBackend).
 - [ ] **H.4** Delete `ClientBackend` trait — all method moved out by H.1-H.3. Migrate all `Box<dyn ClientBackend>` storage sites to `Box<dyn IsBackend>`. Migrate all `~58` `with_backend` UI call sites to capability-gate via accessors. Final cleanup; ratchets the pattern.
+  - [x] **H.4.a** Carve `MessagingBackend` (8 methods: send_typing, send_reply_message, search_messages, get_pinned_messages, set_message_pinned, get_channel_commands, get_available_emojis, get_available_stickers). All backends + 6 UI call sites migrated. Shipped in `zuoruovy`.
+  - [x] **H.4.b** Carve `ServerAdminBackend` (6 methods: create_server, create_channel, update_server_banner, mark_channel_read, respond_to_server_invite, invite_user_to_server). All backends + 4 UI call sites migrated. Shipped in `xxqtynuy`.
+  - [x] **H.4.c** Carve `DiscoverBackend` (1 method: search_communities). All backends + 1 UI call site migrated. Shipped in `xxqtynuy`.
+  - [ ] **H.4.d** Carve remaining universals to `IsBackend` or new sub-traits: client-config/metadata group (is_authenticated, backend_name, get_signup_method, client_version, set_client_version_override, client_mechanisms, set_client_mechanism, plugin_manifest).
+  - [ ] **H.4.e** Carve D9 UI surface group (get_context_menu_items, invoke_context_action, poll_action, get_settings_sections, settings_storage, get_setting_value, set_setting_value, get_sidebar_declaration, invoke_sidebar_action, get_account_overview_view, get_channel_view, get_view_rows, get_view_detail, get_composer_buttons, get_message_actions, invoke_composer_action, invoke_message_action) + remaining core universals (get_servers, get_server, get_channels, get_channel, send_message, get_messages, get_channel_members, get_notifications, get_voice_participants, event_stream).
+  - [ ] **H.4.f** Delete `ClientBackend` trait entirely.
+  - [ ] **H.4.g** Flip `Box<dyn ClientBackend>` storage to `Box<dyn IsBackend>` in client_manager.rs, account_restore.rs, SignupCompleted, TestAuthFn, client_manager_timeout.rs.
+  - [ ] **H.4.h** Each backend implements `IsBackend` directly (no more `ClientBackend`). Add universal methods to `IsBackend`.
+  - [ ] **H.4.i** Migrate remaining `with_backend` UI call sites to capability-gate pattern; final cleanup.
 
 ### Phase I — Routes.rs decomposition (~1 week, after Phase H starts)
 

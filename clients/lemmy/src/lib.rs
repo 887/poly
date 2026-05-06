@@ -329,16 +329,12 @@ impl ClientBackend for LemmyClient {
         Ok(map_community_to_server(&view, &account_id, &account_display_name))
     }
 
-    async fn update_server_banner(
-        &self,
-        server_id: &str,
-        banner_url: Option<&str>,
-    ) -> ClientResult<()> {
-        let community_id = Self::parse_community_id(server_id)?;
-        self.http
-            .put_community(community_id, banner_url)
-            .await
-            .map(|_| ())
+    fn as_server_admin(&self) -> Option<&dyn poly_client::ServerAdminBackend> {
+        Some(self)
+    }
+
+    fn as_discover(&self) -> Option<&dyn poly_client::DiscoverBackend> {
+        Some(self)
     }
 
     // ── Channels ────────────────────────────────────────────────────────────
@@ -962,48 +958,7 @@ impl ClientBackend for LemmyClient {
         }
     }
 
-    async fn search_communities(
-        &self,
-        query: &str,
-        scope: CommunityScope,
-        cursor: Option<String>,
-    ) -> ClientResult<CommunityPage> {
-        let listing_type = match scope {
-            CommunityScope::Subscribed => "Subscribed",
-            CommunityScope::Local => "Local",
-            CommunityScope::All => "All",
-        };
-        let session = self.http.session().ok_or_else(|| {
-            ClientError::AuthFailed("Lemmy: not authenticated".to_string())
-        })?;
-        let account_id = session.user_id.to_string();
-        let account_display_name = session.user_display_name.clone();
-        let resp = self.http.search_communities(
-            query,
-            listing_type,
-            cursor.as_deref(),
-        ).await?;
-
-        // Lemmy returns exactly `limit` items (50) when a full page exists.
-        // Next page cursor is the 1-based page number incremented as a string.
-        let current_page: u32 = cursor
-            .as_deref()
-            .and_then(|c| c.parse().ok())
-            .unwrap_or(1u32);
-        let next_cursor = if resp.communities.len() == 50 {
-            Some((current_page + 1).to_string())
-        } else {
-            None
-        };
-
-        let items = resp
-            .communities
-            .iter()
-            .map(|view| map_community_to_server(view, &account_id, &account_display_name))
-            .collect();
-
-        Ok(CommunityPage { items, next_cursor })
-    }
+    // search_communities moved to DiscoverBackend below (H.4.c)
 
     fn get_signup_method(&self, server_url: Option<&str>) -> SignupMethod {
         let base = server_url.unwrap_or("https://lemmy.ml");
@@ -1616,7 +1571,8 @@ impl poly_client::DmsAndGroupsBackend for LemmyClient {
 
 // ── H.4.a — MessagingBackend ─────────────────────────────────────────────────
 
-#[async_trait]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl poly_client::MessagingBackend for LemmyClient {
     async fn send_typing(&self, _channel_id: &str) -> ClientResult<()> {
         Err(ClientError::NotSupported("Lemmy has no typing indicators".to_string()))
@@ -1677,5 +1633,97 @@ impl poly_client::MessagingBackend for LemmyClient {
 
     async fn get_available_stickers(&self, _channel_id: &str) -> ClientResult<Vec<StickerItem>> {
         Ok(Vec::new())
+    }
+}
+
+// ── H.4.b — ServerAdminBackend ───────────────────────────────────────────────
+
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::ServerAdminBackend for LemmyClient {
+    async fn create_server(&self, _name: &str) -> ClientResult<Server> {
+        Err(ClientError::NotSupported("lemmy: create_server not implemented".to_string()))
+    }
+
+    async fn create_channel(
+        &self,
+        _server_id: &str,
+        _name: &str,
+        _channel_type: ChannelType,
+    ) -> ClientResult<Channel> {
+        Err(ClientError::NotSupported("lemmy: create_channel not implemented".to_string()))
+    }
+
+    async fn update_server_banner(
+        &self,
+        server_id: &str,
+        banner_url: Option<&str>,
+    ) -> ClientResult<()> {
+        let community_id = LemmyClient::parse_community_id(server_id)?;
+        self.http
+            .put_community(community_id, banner_url)
+            .await
+            .map(|_| ())
+    }
+
+    async fn mark_channel_read(&self, _channel_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported("lemmy: mark_channel_read not implemented".to_string()))
+    }
+
+    async fn respond_to_server_invite(&self, _server_id: &str, _accept: bool) -> ClientResult<()> {
+        Err(ClientError::NotSupported("lemmy: respond_to_server_invite not implemented".to_string()))
+    }
+
+    async fn invite_user_to_server(&self, _server_id: &str, _user_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported("lemmy: invite_user_to_server not implemented".to_string()))
+    }
+}
+
+// ── H.4.c — DiscoverBackend ──────────────────────────────────────────────────
+
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::DiscoverBackend for LemmyClient {
+    async fn search_communities(
+        &self,
+        query: &str,
+        scope: CommunityScope,
+        cursor: Option<String>,
+    ) -> ClientResult<CommunityPage> {
+        let listing_type = match scope {
+            CommunityScope::Subscribed => "Subscribed",
+            CommunityScope::Local => "Local",
+            CommunityScope::All => "All",
+        };
+        let session = self.http.session().ok_or_else(|| {
+            ClientError::AuthFailed("Lemmy: not authenticated".to_string())
+        })?;
+        let account_id = session.user_id.to_string();
+        let account_display_name = session.user_display_name.clone();
+        let resp = self.http.search_communities(
+            query,
+            listing_type,
+            cursor.as_deref(),
+        ).await?;
+
+        // Lemmy returns exactly `limit` items (50) when a full page exists.
+        // Next page cursor is the 1-based page number incremented as a string.
+        let current_page: u32 = cursor
+            .as_deref()
+            .and_then(|c| c.parse().ok())
+            .unwrap_or(1u32);
+        let next_cursor = if resp.communities.len() == 50 {
+            Some((current_page + 1).to_string())
+        } else {
+            None
+        };
+
+        let items = resp
+            .communities
+            .iter()
+            .map(|view| map_community_to_server(view, &account_id, &account_display_name))
+            .collect();
+
+        Ok(CommunityPage { items, next_cursor })
     }
 }

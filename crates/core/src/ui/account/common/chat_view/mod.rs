@@ -68,7 +68,7 @@ use dioxus::prelude::*;
 use poly_client::{
     Attachment, BackendType, Channel, ChatCommand, DmChannel, Message,
     MessageContent, MessageQuery, MessageReplyPreview, MessageSearchHit,
-    MessagingBackend, PresenceStatus, User,
+    MessagingBackend, PresenceStatus, ServerAdminBackend, User,
 };
 use poly_ui_macros::{context_menu, ui_action};
 use std::sync::{
@@ -184,7 +184,9 @@ pub(crate) fn mark_channel_as_read_with_backend(
                 .read_with_timeout(std::time::Duration::from_secs(5))
                 .await
         {
-            drop(backend.mark_channel_read(&cid).await);
+            if let Some(sa) = backend.as_server_admin() {
+                drop(sa.mark_channel_read(&cid).await);
+            }
         }
     });
     cleared

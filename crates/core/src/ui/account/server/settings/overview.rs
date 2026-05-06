@@ -18,7 +18,7 @@ use crate::state::ChatLists;
 use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::client_ui::toast::{ToastMessage, push_toast};
 use dioxus::prelude::*;
-use poly_client::ToastTone;
+use poly_client::{ServerAdminBackend, ToastTone};
 use poly_ui_macros::{context_menu, ui_action};
 
 pub enum IconPanelAction {
@@ -260,7 +260,12 @@ fn BannerPanel(
                                 let banner_arg_is_empty = url2.is_empty();
                                 let result = client_manager.peek().with_backend(&aid2, async |b| {
                                     let banner_arg = if banner_arg_is_empty { None } else { Some(url2.as_str()) };
-                                    b.update_server_banner(&sid2, banner_arg).await
+                                    match b.as_server_admin() {
+                                        Some(sa) => sa.update_server_banner(&sid2, banner_arg).await,
+                                        None => Err(poly_client::ClientError::NotSupported(
+                                            "backend does not support banner updates".to_string(),
+                                        )),
+                                    }
                                 }).await;
                                 match result {
                                     Ok(()) => {

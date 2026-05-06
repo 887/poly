@@ -789,22 +789,6 @@ impl ClientBackend for DiscordClient {
         })
     }
 
-    async fn update_server_banner(
-        &self,
-        server_id: &str,
-        banner_url: Option<&str>,
-    ) -> ClientResult<()> {
-        // The Discord API accepts `banner` as a base64 data URI for real Discord.
-        // Our test server (Spacebar-compatible) accepts a URL string directly.
-        // We pass the value as-is — for test servers this is a URL; for real
-        // Discord the caller is responsible for encoding.
-        let body = serde_json::json!({ "banner": banner_url });
-        self.http
-            .patch_guild(server_id, body)
-            .await
-            .map(|_| ())
-    }
-
     async fn get_channels(&self, server_id: &str) -> ClientResult<Vec<Channel>> {
         use twilight_model::channel::ChannelType as DcChType;
         Ok(self.http.get_guild_channels(server_id).await?.into_iter()
@@ -1485,39 +1469,12 @@ impl ClientBackend for DiscordClient {
     // ── Social graph methods moved to SocialGraphBackend (H.3.b) ────────────
     // ── DMs and groups moved to DmsAndGroupsBackend (H.3.c) ─────────────────
 
-    /// Send a server invite to a specific user via DM.
-    ///
-    /// Two-step:
-    /// 1. Fetch the server's `default_channel_id` (system channel), then create
-    ///    an invite with `POST /channels/:channel_id/invites`.
-    /// 2. Open a DM with the user and send the invite URL as a message.
-    ///
-    /// If the server has no system channel configured, returns `NotSupported`.
-    async fn invite_user_to_server(
-        &self,
-        server_id: &str,
-        user_id: &str,
-    ) -> ClientResult<()> {
-        // Step 1: resolve system channel.
-        let guild = self.http.get_guild(server_id).await?;
-        let system_channel_id = guild.system_channel_id.ok_or_else(|| {
-            ClientError::NotSupported(
-                "invite_user_to_server: server has no system channel; cannot create invite".to_string(),
-            )
-        })?;
-
-        // Step 2: create invite (1 day, 1 use).
-        let invite_code = self
-            .http
-            .create_invite(&system_channel_id, 86400, 1)
-            .await?;
-        let invite_url = format!("https://discord.gg/{invite_code}");
-
-        // Step 3: open DM and send the invite URL.
-        let dm_channel_id = self.http.open_dm(user_id).await?;
-        self.http.send_message(&dm_channel_id, &invite_url).await?;
-        Ok(())
+    fn as_server_admin(&self) -> Option<&dyn poly_client::ServerAdminBackend> {
+        Some(self)
     }
+
+    // ── Server admin methods moved to ServerAdminBackend (H.4.b) ─────────────
+    // update_server_banner, invite_user_to_server → impl ServerAdminBackend below
 
     fn get_signup_method(&self, _server_url: Option<&str>) -> SignupMethod {
         SignupMethod::External("https://discord.com/register".into())
@@ -2077,7 +2034,8 @@ impl poly_client::SocialGraphBackend for DiscordClient {
 // Discord supports DM channels, group DMs, and lifecycle management.
 // Mute/unmute require guild context and are not yet implemented.
 
-#[async_trait::async_trait]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl poly_client::DmsAndGroupsBackend for DiscordClient {
     async fn get_groups(&self) -> ClientResult<Vec<Group>> {
         Ok(vec![])
@@ -2185,7 +2143,8 @@ impl poly_client::DmsAndGroupsBackend for DiscordClient {
 
 // ── H.4.a — MessagingBackend ─────────────────────────────────────────────────
 
-#[async_trait]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl poly_client::MessagingBackend for DiscordClient {
     async fn send_typing(&self, channel_id: &str) -> ClientResult<()> {
         self.http.trigger_typing(channel_id).await
@@ -2237,5 +2196,70 @@ impl poly_client::MessagingBackend for DiscordClient {
 
     async fn get_available_stickers(&self, _channel_id: &str) -> ClientResult<Vec<StickerItem>> {
         Ok(Vec::new())
+    }
+}
+
+// ── H.4.b — ServerAdminBackend ───────────────────────────────────────────────
+
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::ServerAdminBackend for DiscordClient {
+    async fn create_server(&self, _name: &str) -> ClientResult<Server> {
+        Err(ClientError::NotSupported("discord: create_server not implemented".to_string()))
+    }
+
+    async fn create_channel(
+        &self,
+        _server_id: &str,
+        _name: &str,
+        _channel_type: ChannelType,
+    ) -> ClientResult<Channel> {
+        Err(ClientError::NotSupported("discord: create_channel not implemented".to_string()))
+    }
+
+    async fn update_server_banner(
+        &self,
+        server_id: &str,
+        banner_url: Option<&str>,
+    ) -> ClientResult<()> {
+        let body = serde_json::json!({ "banner": banner_url });
+        self.http
+            .patch_guild(server_id, body)
+            .await
+            .map(|_| ())
+    }
+
+    async fn mark_channel_read(&self, _channel_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported("discord: mark_channel_read not implemented".to_string()))
+    }
+
+    async fn respond_to_server_invite(&self, _server_id: &str, _accept: bool) -> ClientResult<()> {
+        Err(ClientError::NotSupported("discord: respond_to_server_invite not implemented".to_string()))
+    }
+
+    async fn invite_user_to_server(
+        &self,
+        server_id: &str,
+        user_id: &str,
+    ) -> ClientResult<()> {
+        // Step 1: resolve system channel.
+        let guild = self.http.get_guild(server_id).await?;
+        let system_channel_id = guild.system_channel_id.ok_or_else(|| {
+            ClientError::NotSupported(
+                "invite_user_to_server: server has no system channel; cannot create invite".to_string(),
+            )
+        })?;
+
+        // Step 2: create invite (1 day, 1 use).
+        let invite_code = self
+            .http
+            .create_invite(&system_channel_id, 86400, 1)
+            .await?;
+        let invite_url = format!("https://discord.gg/{invite_code}");
+
+        // Step 3: open DM and send the invite URL.
+        let dm_channel_id = self.http.open_dm(user_id).await?;
+        self.http.send_message(&dm_channel_id, &invite_url).await?;
+        Ok(())
     }
 }

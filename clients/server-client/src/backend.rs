@@ -473,50 +473,10 @@ impl ClientBackend for PolyServerBackend {
         Ok(Vec::new())
     }
 
-    // ── Server management ────────────────────────────────────────────────────
+    // ── Server management (moved to ServerAdminBackend H.4.b) ───────────────
 
-    async fn create_server(&self, name: &str) -> ClientResult<Server> {
-        let wire = self
-            .http
-            .create_server(name)
-            .await
-            .map_err(|e| ClientError::Network(e.to_string()))?;
-
-        let account_id = self.account_id.clone().unwrap_or_default();
-        let display_name = self.display_name.clone().unwrap_or_default();
-        Ok(Self::map_server(&wire, &[], &account_id, &display_name))
-    }
-
-    async fn update_server_banner(
-        &self,
-        server_id: &str,
-        banner_url: Option<&str>,
-    ) -> ClientResult<()> {
-        self.http
-            .update_server_banner(server_id, banner_url)
-            .await
-            .map(|_| ())
-            .map_err(|e| ClientError::Network(e.to_string()))
-    }
-
-    async fn create_channel(
-        &self,
-        server_id: &str,
-        name: &str,
-        channel_type: ChannelType,
-    ) -> ClientResult<Channel> {
-        let kind_str = match channel_type {
-            ChannelType::Text | ChannelType::Thread | ChannelType::Announcement => "text",
-            ChannelType::Voice | ChannelType::Video => "voice",
-            ChannelType::Forum | ChannelType::HackerNews => "forum",
-            ChannelType::Code => "code",
-        };
-        let wire = self
-            .http
-            .create_channel(server_id, name, kind_str, None)
-            .await
-            .map_err(|e| ClientError::Network(e.to_string()))?;
-        Ok(Self::map_channel(&wire))
+    fn as_server_admin(&self) -> Option<&dyn poly_client::ServerAdminBackend> {
+        Some(self)
     }
 
     // ── Moderation methods moved to ModerationBackend (H.3.a) ────────────────
@@ -533,16 +493,7 @@ impl ClientBackend for PolyServerBackend {
 
     // ── Conversation lifecycle (moved to DmsAndGroupsBackend H.3.c) ──────────
 
-    async fn invite_user_to_server(
-        &self,
-        server_id: &str,
-        user_id: &str,
-    ) -> ClientResult<()> {
-        self.http
-            .invite_user_to_server(server_id, user_id)
-            .await
-            .map_err(|e| ClientError::Network(e.to_string()))
-    }
+    // invite_user_to_server → moved to ServerAdminBackend below (H.4.b)
 
     // ── Voice ────────────────────────────────────────────────────────────────
 
@@ -1187,7 +1138,8 @@ impl poly_client::SocialGraphBackend for PolyServerBackend {
 
 // poly-server supports full DM/group DM lifecycle via REST API.
 
-#[async_trait::async_trait]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl poly_client::DmsAndGroupsBackend for PolyServerBackend {
     async fn get_groups(&self) -> ClientResult<Vec<Group>> {
         let channels = self
@@ -1498,7 +1450,8 @@ fn map_server_event(event: srv::ServerEvent) -> Option<ClientEvent> {
 
 // ── H.4.a — MessagingBackend ─────────────────────────────────────────────────
 
-#[async_trait]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl poly_client::MessagingBackend for PolyServerBackend {
     async fn send_typing(&self, channel_id: &str) -> ClientResult<()> {
         #[cfg(feature = "native")]
@@ -1565,5 +1518,74 @@ impl poly_client::MessagingBackend for PolyServerBackend {
 
     async fn get_available_stickers(&self, _channel_id: &str) -> ClientResult<Vec<StickerItem>> {
         Ok(Vec::new())
+    }
+}
+
+// ── H.4.b — ServerAdminBackend ───────────────────────────────────────────────
+
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::ServerAdminBackend for PolyServerBackend {
+    async fn create_server(&self, name: &str) -> ClientResult<Server> {
+        let wire = self
+            .http
+            .create_server(name)
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+
+        let account_id = self.account_id.clone().unwrap_or_default();
+        let display_name = self.display_name.clone().unwrap_or_default();
+        Ok(Self::map_server(&wire, &[], &account_id, &display_name))
+    }
+
+    async fn create_channel(
+        &self,
+        server_id: &str,
+        name: &str,
+        channel_type: ChannelType,
+    ) -> ClientResult<Channel> {
+        let kind_str = match channel_type {
+            ChannelType::Text | ChannelType::Thread | ChannelType::Announcement => "text",
+            ChannelType::Voice | ChannelType::Video => "voice",
+            ChannelType::Forum | ChannelType::HackerNews => "forum",
+            ChannelType::Code => "code",
+        };
+        let wire = self
+            .http
+            .create_channel(server_id, name, kind_str, None)
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+        Ok(Self::map_channel(&wire))
+    }
+
+    async fn update_server_banner(
+        &self,
+        server_id: &str,
+        banner_url: Option<&str>,
+    ) -> ClientResult<()> {
+        self.http
+            .update_server_banner(server_id, banner_url)
+            .await
+            .map(|_| ())
+            .map_err(|e| ClientError::Network(e.to_string()))
+    }
+
+    async fn mark_channel_read(&self, _channel_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported("server-client: mark_channel_read not implemented".to_string()))
+    }
+
+    async fn respond_to_server_invite(&self, _server_id: &str, _accept: bool) -> ClientResult<()> {
+        Err(ClientError::NotSupported("server-client: respond_to_server_invite not implemented".to_string()))
+    }
+
+    async fn invite_user_to_server(
+        &self,
+        server_id: &str,
+        user_id: &str,
+    ) -> ClientResult<()> {
+        self.http
+            .invite_user_to_server(server_id, user_id)
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))
     }
 }

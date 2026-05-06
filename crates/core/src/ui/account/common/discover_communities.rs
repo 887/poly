@@ -13,7 +13,7 @@ use crate::i18n::t;
 use crate::state::{BatchedSignal, use_reactive_effect};
 use crate::ui::routes::Route;
 use dioxus::prelude::*;
-use poly_client::{CommunityScope, CommunitySearchSupport, Server};
+use poly_client::{CommunityScope, CommunitySearchSupport, DiscoverBackend, Server};
 use poly_ui_macros::{context_menu, ui_action};
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -115,7 +115,12 @@ pub fn DiscoverCommunitiesView(
             match client_manager.peek().with_backend_timeout(
                 &aid,
                 std::time::Duration::from_secs(10),
-                async |b| b.search_communities(&q, sc, None).await,
+                async |b| match b.as_discover() {
+                    Some(db) => db.search_communities(&q, sc, None).await,
+                    None => Err(poly_client::ClientError::NotSupported(
+                        "backend does not support community search".to_string(),
+                    )),
+                },
             ).await {
                 Ok(page) => load_state.set(LoadState::Results(page.items)),
                 Err(poly_client::ClientError::NotFound(_)) => {

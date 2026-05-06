@@ -16,6 +16,7 @@ use crate::i18n::t;
 use crate::state::ChatLists;
 use crate::ui::routes::Route;
 use dioxus::prelude::*;
+use poly_client::ServerAdminBackend;
 use poly_ui_macros::{context_menu, ui_action};
 
 /// Typed actions for the Create Server modal form.
@@ -162,7 +163,10 @@ fn do_create_server(
     error_msg.set(String::new());
     spawn(async move {
         match client_manager.peek().with_backend(&account_id, async |b| {
-            b.create_server(&name).await
+            match b.as_server_admin() {
+                Some(sa) => sa.create_server(&name).await,
+                None => Err(poly_client::ClientError::NotSupported("backend does not support server creation".to_string())),
+            }
         }).await {
             Ok(server) => {
                 let server_id = server.id.clone();

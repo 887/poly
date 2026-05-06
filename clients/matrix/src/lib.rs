@@ -1030,25 +1030,12 @@ impl ClientBackend for MatrixClient {
 
     /// Invite a user to a server (Matrix Space).
     ///
-    /// Matrix has no "server invite" concept equivalent to Discord. The closest
-    /// mapping is inviting to the Space room directly. If `server_id` looks like
-    /// a Matrix room ID (`!...`) the invite is sent; otherwise `NotSupported` is
-    /// returned.
-    async fn invite_user_to_server(
-        &self,
-        server_id: &str,
-        user_id: &str,
-    ) -> ClientResult<()> {
-        if server_id.starts_with('!') {
-            self.http.invite_to_room(server_id, user_id).await
-        } else {
-            Err(ClientError::NotSupported(
-                "invite_user_to_server: server_id is not a Matrix room ID; \
-                 Matrix has no invite-link concept — pass the Space room ID instead"
-                    .to_string(),
-            ))
-        }
+    fn as_server_admin(&self) -> Option<&dyn poly_client::ServerAdminBackend> {
+        Some(self)
     }
+
+    // ── Server admin methods moved to ServerAdminBackend (H.4.b) ─────────────
+    // invite_user_to_server → impl ServerAdminBackend below
 
     fn backend_type(&self) -> BackendType {
         BackendType::from(crate::SLUG)
@@ -1962,7 +1949,8 @@ impl poly_client::DmsAndGroupsBackend for MatrixClient {
 
 // ── H.4.a — MessagingBackend ─────────────────────────────────────────────────
 
-#[async_trait]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl poly_client::MessagingBackend for MatrixClient {
     async fn send_typing(&self, channel_id: &str) -> ClientResult<()> {
         // Stub: Matrix supports PUT /_matrix/client/v3/rooms/{roomId}/typing/{userId}
@@ -2031,6 +2019,61 @@ impl poly_client::MessagingBackend for MatrixClient {
 
     async fn get_available_stickers(&self, _channel_id: &str) -> ClientResult<Vec<StickerItem>> {
         Ok(Vec::new())
+    }
+}
+
+// ── H.4.b — ServerAdminBackend ───────────────────────────────────────────────
+
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::ServerAdminBackend for MatrixClient {
+    async fn create_server(&self, _name: &str) -> ClientResult<Server> {
+        Err(ClientError::NotSupported("matrix: create_server not implemented".to_string()))
+    }
+
+    async fn create_channel(
+        &self,
+        _server_id: &str,
+        _name: &str,
+        _channel_type: ChannelType,
+    ) -> ClientResult<Channel> {
+        Err(ClientError::NotSupported("matrix: create_channel not implemented".to_string()))
+    }
+
+    async fn update_server_banner(
+        &self,
+        _server_id: &str,
+        _banner_url: Option<&str>,
+    ) -> ClientResult<()> {
+        Err(ClientError::NotSupported("matrix: update_server_banner not implemented".to_string()))
+    }
+
+    async fn mark_channel_read(&self, _channel_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported("matrix: mark_channel_read not implemented".to_string()))
+    }
+
+    async fn respond_to_server_invite(&self, _server_id: &str, _accept: bool) -> ClientResult<()> {
+        Err(ClientError::NotSupported("matrix: respond_to_server_invite not implemented".to_string()))
+    }
+
+    /// Matrix has no "server invite" concept equivalent to Discord. The closest
+    /// mapping is inviting to the Space room directly. If `server_id` looks like
+    /// a Matrix room ID (`!...`) the invite is sent; otherwise `NotSupported` is
+    /// returned.
+    async fn invite_user_to_server(
+        &self,
+        server_id: &str,
+        user_id: &str,
+    ) -> ClientResult<()> {
+        if server_id.starts_with('!') {
+            self.http.invite_to_room(server_id, user_id).await
+        } else {
+            Err(ClientError::NotSupported(
+                "invite_user_to_server: server_id is not a Matrix room ID; \
+                 Matrix has no invite-link concept — pass the Space room ID instead"
+                    .to_string(),
+            ))
+        }
     }
 }
 
