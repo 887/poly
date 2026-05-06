@@ -313,6 +313,36 @@ launch_app → poll get_last_build_status → connect_cdp → take_screenshot / 
 All `launch_app` and `rebuild_app` calls are **non-blocking** — poll `get_last_build_status`
 every 5-10s until `state != "Running"`.
 
+### NEVER `hard_kill` for routine smoke-tests / checkpoints
+
+⚠️ **Stop and re-read this before reaching for `hard_kill`.**
+
+When the user asks for a "checkpoint smoke-test", "verify the app still works",
+or "make sure my change didn't break anything" mid-session, the **default
+path is hot-reload, not kill-and-restart**:
+
+- dx serve is already running and watches the source tree. Save your file
+  edits → dx auto-rebuilds wasm → Chrome reloads automatically with the new
+  bundle while keeping the user's session, route, scroll position, and
+  agent-panel state intact.
+- Use `mcp__poly-web__list_console_messages` and `take_screenshot` against
+  the **already-running** Chrome to verify. No restart needed.
+- If you need an explicit recompile signal (e.g. lint-gate baseline regen
+  outside the watched tree), call **`mcp__poly-web__rebuild_app`** —
+  triggers a recompile WITHOUT killing chromium.
+
+**`hard_kill` is for stuck processes only.** Specifically:
+- `connect_cdp` / `evaluate_script` / `list_console_messages` time out
+  because the WASM main thread is wedged (CLAUDE.md hang classes #1-#8),
+  AND
+- you've already tried `rebuild_app` and the page is still unresponsive.
+
+`hard_kill` SIGKILLs both the dx static-file server AND Chromium. The user
+loses every browser tab/state and pays a 60+ second cold rebuild. Doing it
+reflexively as a "fresh start" pattern for routine verification is **a real
+incident** — has happened twice in this session and both times the user
+called it out as a mistake. **Do not repeat.**
+
 ### MCP Identity — DO NOT CONFUSE
 
 The **poly-electron**, **poly-web**, and **poly-desktop** MCP servers are custom Rust
