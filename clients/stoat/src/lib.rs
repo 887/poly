@@ -1856,7 +1856,8 @@ fn parse_bonfire_event(json: &serde_json::Value) -> Option<ClientEvent> {
 
 // ── H.4.a — MessagingBackend ─────────────────────────────────────────────────
 
-#[async_trait]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl poly_client::MessagingBackend for StoatClient {
     async fn send_typing(&self, channel_id: &str) -> ClientResult<()> {
         // Stub: Stoat has a typing-indicator WebSocket event but the HTTP
