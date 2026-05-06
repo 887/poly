@@ -364,8 +364,11 @@ pub(crate) async fn toggle_demo(
                         continue;
                     }
                 };
-                let dms = guard.get_dm_channels().await.ok();
-                let groups = guard.get_groups().await.ok();
+                let (dms, groups) = if let Some(dg) = guard.as_dms_and_groups() {
+                    (dg.get_dm_channels().await.ok(), dg.get_groups().await.ok())
+                } else {
+                    (None, None)
+                };
                 let is_forum = {
                     let slug = account_sessions.peek().account_sessions.get(aid)
                         .map(|s| s.backend.slug().to_string());

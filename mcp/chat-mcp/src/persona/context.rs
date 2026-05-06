@@ -252,9 +252,12 @@ impl PersonaBackendProvider for BackendPoolProvider<'_> {
             .map(|e| std::sync::Arc::clone(&e.backend))
             .with_context(|| format!("no backend for account {account_id}"))?;
 
-        let dms = timeout(BACKEND_TIMEOUT, backend.get_dm_channels())
-            .await
-            .with_context(|| format!("timeout listing DMs for {account_id}"))??;
+        let dms = match backend.as_dms_and_groups() {
+            Some(dg) => timeout(BACKEND_TIMEOUT, dg.get_dm_channels())
+                .await
+                .with_context(|| format!("timeout listing DMs for {account_id}"))??,
+            None => vec![],
+        };
 
         Ok(dms
             .into_iter()

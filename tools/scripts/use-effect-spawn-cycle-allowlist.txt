@@ -68,3 +68,5 @@ crates/core/src/ui/code_explorer.rs:67
 # effect run hits the early return. Explicit guard, no cycle.
 crates/core/src/ui/mod.rs:1515
 crates/core/src/ui.rs:1840
+# Startup-overlay dismiss timer — shifted +4 from H.3.c get_dm_channels if-let expansion
+crates/core/src/ui.rs:1844

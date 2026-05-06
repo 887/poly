@@ -8,6 +8,7 @@
 
 pub mod code_repo;
 pub mod content_policy;
+pub mod dms_and_groups;
 pub mod events;
 pub mod forum;
 pub mod moderation;
@@ -18,6 +19,7 @@ pub mod ui_surface;
 
 pub use code_repo::CodeRepoBackend;
 pub use content_policy::ContentPolicyBackend;
+pub use dms_and_groups::DmsAndGroupsBackend;
 pub use events::*;
 pub use forum::ForumBackend;
 pub use moderation::ModerationBackend;
@@ -223,46 +225,7 @@ pub trait ClientBackend: Send + Sync {
 
     // --- Groups (multi-user DMs) ---
 
-    /// Get all group chats.
-    async fn get_groups(&self) -> ClientResult<Vec<Group>>;
-
-    /// Remove a user from a group DM.
-    ///
-    /// Backends that do not support removing members should return the
-    /// default `Err(ClientError::NotSupported(...))` provided below.
-    async fn remove_group_member(&self, group_id: &str, user_id: &str) -> ClientResult<()> {
-        let _ = (group_id, user_id);
-        Err(ClientError::NotSupported("remove_group_member".to_string()))
-    }
-
-    /// Add a user to a group DM.
-    ///
-    /// Backends that do not support adding members should return the
-    /// default `Err(ClientError::NotSupported(...))` provided below.
-    async fn add_group_member(&self, group_id: &str, user_id: &str) -> ClientResult<()> {
-        let _ = (group_id, user_id);
-        Err(ClientError::NotSupported("add_group_member".to_string()))
-    }
-
-    // --- Direct Messages ---
-
-    /// Get all DM channels.
-    async fn get_dm_channels(&self) -> ClientResult<Vec<DmChannel>>;
-
-    /// Open or create a DM channel with the target user.
-    async fn open_direct_message_channel(&self, user_id: &str) -> ClientResult<DmChannel> {
-        let _ = user_id;
-        Err(ClientError::NotSupported(
-            "open_direct_message_channel".to_string(),
-        ))
-    }
-
-    /// Open the authenticated user's Saved Messages / self-DM channel.
-    async fn open_saved_messages_channel(&self) -> ClientResult<DmChannel> {
-        Err(ClientError::NotSupported(
-            "open_saved_messages_channel".to_string(),
-        ))
-    }
+    // --- Groups and DMs (H.3.c — moved to DmsAndGroupsBackend) ---
 
     // --- Notifications ---
 
@@ -295,58 +258,7 @@ pub trait ClientBackend: Send + Sync {
         Err(ClientError::NotSupported("mark_channel_read".to_string()))
     }
 
-    // --- Conversation lifecycle ---
-
-    /// Hide a DM (1-on-1 or group) from the conversation list. The
-    /// channel itself is not deleted; receiving a new message reopens it.
-    async fn close_dm_channel(&self, channel_id: &str) -> ClientResult<()> {
-        let _ = channel_id;
-        Err(ClientError::NotSupported("close_dm_channel".to_string()))
-    }
-
-    /// Mute notifications for a conversation (channel or DM) until the
-    /// given timestamp; pass `None` to mute indefinitely.
-    async fn mute_conversation(
-        &self,
-        channel_id: &str,
-        until: Option<chrono::DateTime<chrono::Utc>>,
-    ) -> ClientResult<()> {
-        let _ = (channel_id, until);
-        Err(ClientError::NotSupported("mute_conversation".to_string()))
-    }
-
-    /// Reverse a previous `mute_conversation`.
-    async fn unmute_conversation(&self, channel_id: &str) -> ClientResult<()> {
-        let _ = channel_id;
-        Err(ClientError::NotSupported("unmute_conversation".to_string()))
-    }
-
-    /// Leave a group DM. The remaining members continue without the caller.
-    async fn leave_group_dm(&self, channel_id: &str) -> ClientResult<()> {
-        let _ = channel_id;
-        Err(ClientError::NotSupported("leave_group_dm".to_string()))
-    }
-
-    /// Update a group DM's name and/or avatar (`None` leaves field unchanged).
-    async fn edit_group_dm(
-        &self,
-        channel_id: &str,
-        name: Option<&str>,
-        avatar_url: Option<&str>,
-    ) -> ClientResult<()> {
-        let _ = (channel_id, name, avatar_url);
-        Err(ClientError::NotSupported("edit_group_dm".to_string()))
-    }
-
-    /// Add one or more users to a group DM.
-    async fn add_users_to_group_dm(
-        &self,
-        channel_id: &str,
-        user_ids: &[String],
-    ) -> ClientResult<()> {
-        let _ = (channel_id, user_ids);
-        Err(ClientError::NotSupported("add_users_to_group_dm".to_string()))
-    }
+    // --- Conversation lifecycle (H.3.c — moved to DmsAndGroupsBackend) ---
 
     /// Send a server invite to a specific user (DM-style invite).
     async fn invite_user_to_server(
@@ -597,6 +509,16 @@ pub trait ClientBackend: Send + Sync {
         None
     }
 
+    // --- DMs and groups (H.3.c — DmsAndGroupsBackend) ---
+
+    /// Returns `Some(self)` if this backend implements [`DmsAndGroupsBackend`].
+    ///
+    /// Override to `Some(self)` in backends that expose direct messaging
+    /// and group DM operations.  Default: `None`.
+    fn as_dms_and_groups(&self) -> Option<&dyn DmsAndGroupsBackend> {
+        None
+    }
+
     // --- Client-provided UI surface (WP 1 / plan-client-ui-surface) ----
     //
     // Per D9 these methods have **no default implementation** — every
@@ -802,6 +724,7 @@ pub trait ClientBackend: Send + Sync {
 /// | `as_threads` | [`ThreadsBackend`] | H.2.c |
 /// | `as_moderation` | [`ModerationBackend`] | H.3.a |
 /// | `as_social_graph` | [`SocialGraphBackend`] | H.3.b |
+/// | `as_dms_and_groups` | [`DmsAndGroupsBackend`] | H.3.c |
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 pub trait IsBackend: Send + Sync {
@@ -884,6 +807,14 @@ pub trait IsBackend: Send + Sync {
     fn as_social_graph(&self) -> Option<&dyn SocialGraphBackend> {
         None
     }
+
+    /// Returns `Some(self)` if this backend implements [`DmsAndGroupsBackend`].
+    ///
+    /// Default: `None`.  Override in backends that expose DM channels and
+    /// group DM operations.
+    fn as_dms_and_groups(&self) -> Option<&dyn DmsAndGroupsBackend> {
+        None
+    }
 }
 
 // Blanket implementation: every `ClientBackend` automatically is an `IsBackend`.
@@ -941,6 +872,11 @@ impl<T: ClientBackend + ?Sized> IsBackend for T {
     #[inline]
     fn as_social_graph(&self) -> Option<&dyn SocialGraphBackend> {
         ClientBackend::as_social_graph(self)
+    }
+
+    #[inline]
+    fn as_dms_and_groups(&self) -> Option<&dyn DmsAndGroupsBackend> {
+        ClientBackend::as_dms_and_groups(self)
     }
 }
 

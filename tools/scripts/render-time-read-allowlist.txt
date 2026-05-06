@@ -1535,3 +1535,74 @@ crates/core/src/ui/signup.rs:825 # MEDIUM — render-time read; subscription or 
 crates/core/src/ui/signup.rs:867 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
 crates/core/src/ui/signup.rs:873 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
 crates/core/src/ui/signup.rs:878 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
+# ── H.3.c line-shift entries (direct_call.rs +5, channel_list.rs +5, demo.rs +3, signup.rs +3, ui.rs +4) ──
+crates/core/src/ui/account/common/direct_call.rs:194 # MEDIUM — shifted +1 from H.3.c open_direct_message_channel call site expansion
+crates/core/src/ui/account/common/direct_call.rs:228 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/account/common/direct_call.rs:240 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/account/common/direct_call.rs:249 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/account/common/direct_call.rs:359 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/account/common/direct_call.rs:370 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/account/common/direct_call.rs:377 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/account/common/direct_call.rs:446 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/account/common/channel_list.rs:413 # MEDIUM — shifted +5 from H.3.c open_direct_message_channel expansion
+crates/core/src/ui/account/common/channel_list.rs:482 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/account/common/channel_list.rs:500 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/account/common/channel_list.rs:527 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/account/common/channel_list.rs:531 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/account/common/channel_list.rs:542 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/account/common/channel_list.rs:572 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/account/common/channel_list.rs:583 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/account/common/channel_list.rs:628 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/account/common/channel_list.rs:652 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/account/common/channel_list.rs:655 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/account/common/channel_list.rs:663 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/account/common/channel_list.rs:673 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/account/common/channel_list.rs:679 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/account/common/channel_list.rs:715 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/account/common/channel_list.rs:755 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/account/common/channel_list.rs:823 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/account/common/channel_list.rs:824 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/account/common/channel_list.rs:875 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/account/common/channel_list.rs:904 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/account/common/channel_list.rs:983 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/account/common/channel_list.rs:1065 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/account/common/channel_list.rs:1066 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/account/common/channel_list.rs:1075 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/account/common/channel_list.rs:1078 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/account/common/channel_list.rs:1217 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/account/common/channel_list.rs:1378 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/account/common/channel_list.rs:1485 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/account/common/channel_list.rs:1528 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/account/common/channel_list.rs:1541 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/account/common/channel_list.rs:1544 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/account/common/channel_list.rs:1565 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/account/common/channel_list.rs:1633 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/account/common/channel_list.rs:1643 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/account/common/channel_list.rs:1668 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/account/common/channel_list.rs:1670 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/demo.rs:475 # MEDIUM — shifted +3 from H.3.c get_dm_channels/get_groups if-let expansion
+crates/core/src/ui/demo.rs:588 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/demo.rs:604 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/signup.rs:532 # MEDIUM — shifted +3 from H.3.c get_dm_channels/get_groups if-let expansion
+crates/core/src/ui/signup.rs:534 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/signup.rs:603 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/signup.rs:627 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/signup.rs:721 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/signup.rs:735 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/signup.rs:764 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/signup.rs:828 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/signup.rs:870 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/signup.rs:876 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/signup.rs:881 # MEDIUM — shifted from H.3.c
+crates/core/src/ui.rs:1477 # MEDIUM — shifted +4 from H.3.c get_dm_channels if-let expansion
+crates/core/src/ui.rs:1483 # MEDIUM — shifted from H.3.c
+crates/core/src/ui.rs:1486 # MEDIUM — shifted from H.3.c
+crates/core/src/ui.rs:1835 # MEDIUM — shifted from H.3.c
+crates/core/src/ui.rs:1836 # MEDIUM — shifted from H.3.c
+crates/core/src/ui.rs:1841 # MEDIUM — shifted from H.3.c
+crates/core/src/ui.rs:1842 # MEDIUM — shifted from H.3.c
+crates/core/src/ui.rs:1852 # MEDIUM — shifted from H.3.c
+crates/core/src/ui.rs:1857 # MEDIUM — shifted from H.3.c
+crates/core/src/ui.rs:1866 # MEDIUM — shifted from H.3.c
+crates/core/src/ui.rs:1915 # MEDIUM — shifted from H.3.c
+crates/core/src/ui.rs:1936 # MEDIUM — shifted from H.3.c

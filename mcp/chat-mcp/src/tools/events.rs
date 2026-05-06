@@ -254,7 +254,11 @@ pub(super) async fn handle_get_unread_summary(args: &Value, pool: &BackendPool) 
     }
 
     // DMs with unread messages.
-    let dms = entry.backend.get_dm_channels().await.unwrap_or_default();
+    let dms = if let Some(dg) = entry.backend.as_dms_and_groups() {
+        dg.get_dm_channels().await.unwrap_or_default()
+    } else {
+        vec![]
+    };
     for dm in dms {
         if dm.unread_count == 0 {
             continue;

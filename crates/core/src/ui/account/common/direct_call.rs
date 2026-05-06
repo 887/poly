@@ -83,7 +83,12 @@ async fn resolve_direct_message_for_active_account(
     }
 
     let opened_dm = client_manager.peek().with_backend(&account_id, async |b| {
-        b.open_direct_message_channel(&user_id).await
+        match b.as_dms_and_groups() {
+            Some(dg) => dg.open_direct_message_channel(&user_id).await,
+            None => Err(poly_client::ClientError::NotSupported(
+                "open_direct_message_channel: backend has no DMs capability".to_string(),
+            )),
+        }
     }).await.ok()?;
 
     {

@@ -490,117 +490,10 @@ impl ClientBackend for PolyServerBackend {
         Ok(users)
     }
 
-    // ── Groups ───────────────────────────────────────────────────────────────
+    // ── DMs and groups (H.3.c — moved to DmsAndGroupsBackend) ──────────────
 
-    async fn get_groups(&self) -> ClientResult<Vec<Group>> {
-        // Group DMs are DM-like channels (no server_id) with a user-specified name.
-        // We identify them by fetching all DM-kind channels and checking participant count:
-        // >2 participants (including self) indicates a group DM.
-        let channels = self
-            .http
-            .get_dm_channels()
-            .await
-            .map_err(|e| ClientError::Network(e.to_string()))?;
-
-        let account_id = self.account_id.clone().unwrap_or_default();
-        let mut groups = Vec::new();
-
-        for ch in channels.iter().filter(|c| c.server_id.is_none()) {
-            let participants = self
-                .http
-                .get_participants(&ch.id)
-                .await
-                .map_err(|e| ClientError::Network(e.to_string()))?;
-
-            // A group DM has more than 2 participants (or has a name not matching a user).
-            // We use participant count > 2 as the primary signal.
-            if participants.len() > 2 {
-                let mut members = Vec::with_capacity(participants.len());
-                for p in &participants {
-                    if let Ok(user) = self.http.get_user(&p.user).await {
-                        members.push(Self::map_user(&user));
-                    }
-                }
-                groups.push(Group {
-                    id: ch.id.clone(),
-                    name: Some(ch.name.clone()),
-                    members,
-                    last_message: None,
-                    backend: BackendType::from(crate::SLUG),
-                    account_id: account_id.clone(),
-                });
-            }
-        }
-        Ok(groups)
-    }
-
-    async fn add_group_member(&self, group_id: &str, user_id: &str) -> ClientResult<()> {
-        self.http
-            .add_group_member(group_id, user_id)
-            .await
-            .map_err(|e| ClientError::Network(e.to_string()))
-    }
-
-    // ── DMs ──────────────────────────────────────────────────────────────────
-
-    async fn get_dm_channels(&self) -> ClientResult<Vec<DmChannel>> {
-        let channels = self
-            .http
-            .get_dm_channels()
-            .await
-            .map_err(|e| ClientError::Network(e.to_string()))?;
-
-        let account_id = self.account_id.clone().unwrap_or_default();
-        // Only keep single-participant DMs (no group DMs — those go through get_groups).
-        let dm_channels: Vec<_> = channels
-            .iter()
-            .filter(|ch| ch.server_id.is_none())
-            .collect();
-
-        let mut result = Vec::with_capacity(dm_channels.len());
-        for ch in dm_channels {
-            // Resolve the other participant's profile.
-            let participants = self
-                .http
-                .get_participants(&ch.id)
-                .await
-                .map_err(|e| ClientError::Network(e.to_string()))?;
-
-            // The other participant is the one who isn't us.
-            let other = participants.iter().find(|p| p.user != account_id);
-
-            let user = if let Some(p) = other {
-                match self.http.get_user(&p.user).await {
-                    Ok(profile) => Self::map_user(&profile),
-                    Err(_) => User {
-                        id: p.user.clone(),
-                        display_name: ch.name.clone(),
-                        avatar_url: None,
-                        presence: PresenceStatus::Offline,
-                        backend: BackendType::from(crate::SLUG),
-                    },
-                }
-            } else {
-                // Fallback: use the channel name as display name.
-                User {
-                    id: String::new(),
-                    display_name: ch.name.clone(),
-                    avatar_url: None,
-                    presence: PresenceStatus::Offline,
-                    backend: BackendType::from(crate::SLUG),
-                }
-            };
-
-            result.push(DmChannel {
-                id: ch.id.clone(),
-                user,
-                last_message: None,
-                unread_count: 0,
-                backend: BackendType::from(crate::SLUG),
-                account_id: account_id.clone(),
-            });
-        }
-        Ok(result)
+    fn as_dms_and_groups(&self) -> Option<&dyn poly_client::DmsAndGroupsBackend> {
+        Some(self)
     }
 
     // ── Notifications ────────────────────────────────────────────────────────
@@ -667,63 +560,7 @@ impl ClientBackend for PolyServerBackend {
         Some(self)
     }
 
-    // ── Conversation lifecycle ────────────────────────────────────────────────
-
-    async fn close_dm_channel(&self, channel_id: &str) -> ClientResult<()> {
-        self.http
-            .close_dm_channel(channel_id)
-            .await
-            .map_err(|e| ClientError::Network(e.to_string()))
-    }
-
-    async fn mute_conversation(
-        &self,
-        channel_id: &str,
-        until: Option<chrono::DateTime<chrono::Utc>>,
-    ) -> ClientResult<()> {
-        let until_str = until.map(|u| u.to_rfc3339());
-        self.http
-            .mute_conversation(channel_id, until_str.as_deref())
-            .await
-            .map_err(|e| ClientError::Network(e.to_string()))
-    }
-
-    async fn unmute_conversation(&self, channel_id: &str) -> ClientResult<()> {
-        self.http
-            .unmute_conversation(channel_id)
-            .await
-            .map_err(|e| ClientError::Network(e.to_string()))
-    }
-
-    async fn leave_group_dm(&self, channel_id: &str) -> ClientResult<()> {
-        self.http
-            .leave_group_dm(channel_id)
-            .await
-            .map_err(|e| ClientError::Network(e.to_string()))
-    }
-
-    async fn edit_group_dm(
-        &self,
-        channel_id: &str,
-        name: Option<&str>,
-        avatar_url: Option<&str>,
-    ) -> ClientResult<()> {
-        self.http
-            .edit_group_dm(channel_id, name, avatar_url)
-            .await
-            .map_err(|e| ClientError::Network(e.to_string()))
-    }
-
-    async fn add_users_to_group_dm(
-        &self,
-        channel_id: &str,
-        user_ids: &[String],
-    ) -> ClientResult<()> {
-        self.http
-            .add_users_to_group_dm(channel_id, user_ids)
-            .await
-            .map_err(|e| ClientError::Network(e.to_string()))
-    }
+    // ── Conversation lifecycle (moved to DmsAndGroupsBackend H.3.c) ──────────
 
     async fn invite_user_to_server(
         &self,
@@ -1374,6 +1211,185 @@ impl poly_client::SocialGraphBackend for PolyServerBackend {
 
     async fn set_presence(&self, _status: PresenceStatus) -> ClientResult<()> {
         Ok(())
+    }
+}
+
+// poly-server supports full DM/group DM lifecycle via REST API.
+
+#[async_trait::async_trait]
+impl poly_client::DmsAndGroupsBackend for PolyServerBackend {
+    async fn get_groups(&self) -> ClientResult<Vec<Group>> {
+        let channels = self
+            .http
+            .get_dm_channels()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+
+        let account_id = self.account_id.clone().unwrap_or_default();
+        let mut groups = Vec::new();
+
+        for ch in channels.iter().filter(|c| c.server_id.is_none()) {
+            let participants = self
+                .http
+                .get_participants(&ch.id)
+                .await
+                .map_err(|e| ClientError::Network(e.to_string()))?;
+
+            if participants.len() > 2 {
+                let mut members = Vec::with_capacity(participants.len());
+                for p in &participants {
+                    if let Ok(user) = self.http.get_user(&p.user).await {
+                        members.push(Self::map_user(&user));
+                    }
+                }
+                groups.push(Group {
+                    id: ch.id.clone(),
+                    name: Some(ch.name.clone()),
+                    members,
+                    last_message: None,
+                    backend: BackendType::from(crate::SLUG),
+                    account_id: account_id.clone(),
+                });
+            }
+        }
+        Ok(groups)
+    }
+
+    async fn get_dm_channels(&self) -> ClientResult<Vec<DmChannel>> {
+        let channels = self
+            .http
+            .get_dm_channels()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+
+        let account_id = self.account_id.clone().unwrap_or_default();
+        let dm_channels: Vec<_> = channels
+            .iter()
+            .filter(|ch| ch.server_id.is_none())
+            .collect();
+
+        let mut result = Vec::with_capacity(dm_channels.len());
+        for ch in dm_channels {
+            let participants = self
+                .http
+                .get_participants(&ch.id)
+                .await
+                .map_err(|e| ClientError::Network(e.to_string()))?;
+
+            let other = participants.iter().find(|p| p.user != account_id);
+
+            let user = if let Some(p) = other {
+                match self.http.get_user(&p.user).await {
+                    Ok(profile) => Self::map_user(&profile),
+                    Err(_) => User {
+                        id: p.user.clone(),
+                        display_name: ch.name.clone(),
+                        avatar_url: None,
+                        presence: PresenceStatus::Offline,
+                        backend: BackendType::from(crate::SLUG),
+                    },
+                }
+            } else {
+                User {
+                    id: String::new(),
+                    display_name: ch.name.clone(),
+                    avatar_url: None,
+                    presence: PresenceStatus::Offline,
+                    backend: BackendType::from(crate::SLUG),
+                }
+            };
+
+            result.push(DmChannel {
+                id: ch.id.clone(),
+                user,
+                last_message: None,
+                unread_count: 0,
+                backend: BackendType::from(crate::SLUG),
+                account_id: account_id.clone(),
+            });
+        }
+        Ok(result)
+    }
+
+    async fn open_direct_message_channel(&self, _user_id: &str) -> ClientResult<DmChannel> {
+        Err(ClientError::NotSupported(
+            "open_direct_message_channel: not yet implemented for poly-server".to_string(),
+        ))
+    }
+
+    async fn open_saved_messages_channel(&self) -> ClientResult<DmChannel> {
+        Err(ClientError::NotSupported(
+            "open_saved_messages_channel: poly-server has no saved-messages concept".to_string(),
+        ))
+    }
+
+    async fn add_group_member(&self, group_id: &str, user_id: &str) -> ClientResult<()> {
+        self.http
+            .add_group_member(group_id, user_id)
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))
+    }
+
+    async fn remove_group_member(&self, _group_id: &str, _user_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported(
+            "remove_group_member: not yet implemented for poly-server".to_string(),
+        ))
+    }
+
+    async fn add_users_to_group_dm(
+        &self,
+        channel_id: &str,
+        user_ids: &[String],
+    ) -> ClientResult<()> {
+        self.http
+            .add_users_to_group_dm(channel_id, user_ids)
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))
+    }
+
+    async fn close_dm_channel(&self, channel_id: &str) -> ClientResult<()> {
+        self.http
+            .close_dm_channel(channel_id)
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))
+    }
+
+    async fn mute_conversation(
+        &self,
+        channel_id: &str,
+        until: Option<chrono::DateTime<chrono::Utc>>,
+    ) -> ClientResult<()> {
+        let until_str = until.map(|u| u.to_rfc3339());
+        self.http
+            .mute_conversation(channel_id, until_str.as_deref())
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))
+    }
+
+    async fn unmute_conversation(&self, channel_id: &str) -> ClientResult<()> {
+        self.http
+            .unmute_conversation(channel_id)
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))
+    }
+
+    async fn leave_group_dm(&self, channel_id: &str) -> ClientResult<()> {
+        self.http
+            .leave_group_dm(channel_id)
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))
+    }
+
+    async fn edit_group_dm(
+        &self,
+        channel_id: &str,
+        name: Option<&str>,
+        avatar_url: Option<&str>,
+    ) -> ClientResult<()> {
+        self.http
+            .edit_group_dm(channel_id, name, avatar_url)
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))
     }
 }
 

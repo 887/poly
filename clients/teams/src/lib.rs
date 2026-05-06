@@ -479,37 +479,10 @@ impl ClientBackend for TeamsClient {
         Ok(vec![])
     }
 
-    async fn get_groups(&self) -> ClientResult<Vec<Group>> {
-        Ok(vec![])
-    }
+    // ── DMs and groups (H.3.c — moved to DmsAndGroupsBackend) ──────────────
 
-    async fn get_dm_channels(&self) -> ClientResult<Vec<DmChannel>> {
-        let account_id = self.account_id();
-        Ok(self.http.get_chats().await?.into_iter().map(|chat| {
-            // Resolve the contact user from the inline member list.
-            // For 1:1 chats, pick the member whose userId != our own account_id.
-            // For group chats, fall back to the topic or a generated label.
-            let contact = chat.members.iter()
-                .find(|m| m.user_id.as_deref() != Some(account_id.as_str()))
-                .and_then(|m| {
-                    m.display_name.as_ref().map(|name| User {
-                        id: m.user_id.clone().unwrap_or_default(),
-                        display_name: name.clone(),
-                        avatar_url: None,
-                        presence: PresenceStatus::Offline,
-                        backend: BackendType::from(crate::SLUG),
-                    })
-                })
-                .unwrap_or_else(|| self.unknown_user());
-            DmChannel {
-                id: chat.id,
-                user: contact,
-                last_message: None,
-                unread_count: 0,
-                backend: BackendType::from(crate::SLUG),
-                account_id: account_id.clone(),
-            }
-        }).collect())
+    fn as_dms_and_groups(&self) -> Option<&dyn poly_client::DmsAndGroupsBackend> {
+        Some(self)
     }
 
     async fn get_notifications(&self) -> ClientResult<Vec<Notification>> {
@@ -1291,5 +1264,112 @@ impl poly_client::SocialGraphBackend for TeamsClient {
             | PresenceStatus::Unknown => "Offline",
         };
         self.http.set_presence(availability).await
+    }
+}
+
+// ── H.3.c — DmsAndGroupsBackend ───────────────────────────────────────────────
+// Teams supports chat channels as DMs. No group-DM management API exposed.
+
+#[cfg(feature = "native")]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::DmsAndGroupsBackend for TeamsClient {
+    async fn get_groups(&self) -> ClientResult<Vec<Group>> {
+        Ok(vec![])
+    }
+
+    async fn get_dm_channels(&self) -> ClientResult<Vec<DmChannel>> {
+        let account_id = self.account_id();
+        Ok(self.http.get_chats().await?.into_iter().map(|chat| {
+            let contact = chat.members.iter()
+                .find(|m| m.user_id.as_deref() != Some(account_id.as_str()))
+                .and_then(|m| {
+                    m.display_name.as_ref().map(|name| User {
+                        id: m.user_id.clone().unwrap_or_default(),
+                        display_name: name.clone(),
+                        avatar_url: None,
+                        presence: PresenceStatus::Offline,
+                        backend: BackendType::from(crate::SLUG),
+                    })
+                })
+                .unwrap_or_else(|| self.unknown_user());
+            DmChannel {
+                id: chat.id,
+                user: contact,
+                last_message: None,
+                unread_count: 0,
+                backend: BackendType::from(crate::SLUG),
+                account_id: account_id.clone(),
+            }
+        }).collect())
+    }
+
+    async fn open_direct_message_channel(&self, _user_id: &str) -> ClientResult<DmChannel> {
+        Err(ClientError::NotSupported(
+            "open_direct_message_channel: not yet implemented for Teams".to_string(),
+        ))
+    }
+
+    async fn open_saved_messages_channel(&self) -> ClientResult<DmChannel> {
+        Err(ClientError::NotSupported(
+            "open_saved_messages_channel: Teams has no saved-messages concept".to_string(),
+        ))
+    }
+
+    async fn add_group_member(&self, _group_id: &str, _user_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported(
+            "add_group_member: not yet implemented for Teams".to_string(),
+        ))
+    }
+
+    async fn remove_group_member(&self, _group_id: &str, _user_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported(
+            "remove_group_member: not yet implemented for Teams".to_string(),
+        ))
+    }
+
+    async fn add_users_to_group_dm(&self, _channel_id: &str, _user_ids: &[String]) -> ClientResult<()> {
+        Err(ClientError::NotSupported(
+            "add_users_to_group_dm: not yet implemented for Teams".to_string(),
+        ))
+    }
+
+    async fn close_dm_channel(&self, _channel_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported(
+            "close_dm_channel: not yet implemented for Teams".to_string(),
+        ))
+    }
+
+    async fn mute_conversation(
+        &self,
+        _channel_id: &str,
+        _until: Option<chrono::DateTime<chrono::Utc>>,
+    ) -> ClientResult<()> {
+        Err(ClientError::NotSupported(
+            "mute_conversation: not yet implemented for Teams".to_string(),
+        ))
+    }
+
+    async fn unmute_conversation(&self, _channel_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported(
+            "unmute_conversation: not yet implemented for Teams".to_string(),
+        ))
+    }
+
+    async fn leave_group_dm(&self, _channel_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported(
+            "leave_group_dm: not yet implemented for Teams".to_string(),
+        ))
+    }
+
+    async fn edit_group_dm(
+        &self,
+        _channel_id: &str,
+        _name: Option<&str>,
+        _avatar_url: Option<&str>,
+    ) -> ClientResult<()> {
+        Err(ClientError::NotSupported(
+            "edit_group_dm: not yet implemented for Teams".to_string(),
+        ))
     }
 }

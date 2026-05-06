@@ -243,37 +243,10 @@ impl<F: DemoFlavour> ClientBackend for DemoClientGeneric<F> {
         Ok(F::channel_members(channel_id))
     }
 
-    async fn get_groups(&self) -> ClientResult<Vec<Group>> {
-        Ok(F::groups())
-    }
+    // ── DMs and groups (H.3.c — moved to DmsAndGroupsBackend) ──────────────
 
-    async fn remove_group_member(&self, _group_id: &str, _user_id: &str) -> ClientResult<()> {
-        // Demo client: UI updates local state; no real backend call needed.
-        Ok(())
-    }
-
-    async fn add_group_member(&self, _group_id: &str, _user_id: &str) -> ClientResult<()> {
-        Ok(())
-    }
-
-    async fn get_dm_channels(&self) -> ClientResult<Vec<DmChannel>> {
-        Ok(F::dm_channels())
-    }
-
-    async fn open_direct_message_channel(&self, user_id: &str) -> ClientResult<DmChannel> {
-        F::open_dm_channel(user_id)
-    }
-
-    async fn open_saved_messages_channel(&self) -> ClientResult<DmChannel> {
-        let session = self.session.clone().unwrap_or_else(F::session);
-        Ok(DmChannel {
-            id: F::saved_messages_dm_id().to_string(),
-            user: session.user,
-            last_message: None,
-            unread_count: 0,
-            backend: BackendType::from(F::backend_slug()),
-            account_id: F::account_id().to_string(),
-        })
+    fn as_dms_and_groups(&self) -> Option<&dyn poly_client::DmsAndGroupsBackend> {
+        Some(self)
     }
 
     async fn get_notifications(&self) -> ClientResult<Vec<Notification>> {
@@ -518,6 +491,78 @@ impl<F: DemoFlavour> poly_client::SocialGraphBackend for DemoClientGeneric<F> {
     }
 
     async fn set_presence(&self, _status: PresenceStatus) -> ClientResult<()> {
+        Ok(())
+    }
+}
+
+// ── H.3.c — DmsAndGroupsBackend ───────────────────────────────────────────────
+
+#[cfg(feature = "native")]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
+impl<F: DemoFlavour> poly_client::DmsAndGroupsBackend for DemoClientGeneric<F> {
+    async fn get_groups(&self) -> ClientResult<Vec<Group>> {
+        Ok(F::groups())
+    }
+
+    async fn get_dm_channels(&self) -> ClientResult<Vec<DmChannel>> {
+        Ok(F::dm_channels())
+    }
+
+    async fn open_direct_message_channel(&self, user_id: &str) -> ClientResult<DmChannel> {
+        F::open_dm_channel(user_id)
+    }
+
+    async fn open_saved_messages_channel(&self) -> ClientResult<DmChannel> {
+        let session = self.session.clone().unwrap_or_else(F::session);
+        Ok(DmChannel {
+            id: F::saved_messages_dm_id().to_string(),
+            user: session.user,
+            last_message: None,
+            unread_count: 0,
+            backend: BackendType::from(F::backend_slug()),
+            account_id: F::account_id().to_string(),
+        })
+    }
+
+    async fn add_group_member(&self, _group_id: &str, _user_id: &str) -> ClientResult<()> {
+        Ok(())
+    }
+
+    async fn remove_group_member(&self, _group_id: &str, _user_id: &str) -> ClientResult<()> {
+        Ok(())
+    }
+
+    async fn add_users_to_group_dm(&self, _channel_id: &str, _user_ids: &[String]) -> ClientResult<()> {
+        Ok(())
+    }
+
+    async fn close_dm_channel(&self, _channel_id: &str) -> ClientResult<()> {
+        Ok(())
+    }
+
+    async fn mute_conversation(
+        &self,
+        _channel_id: &str,
+        _until: Option<chrono::DateTime<chrono::Utc>>,
+    ) -> ClientResult<()> {
+        Ok(())
+    }
+
+    async fn unmute_conversation(&self, _channel_id: &str) -> ClientResult<()> {
+        Ok(())
+    }
+
+    async fn leave_group_dm(&self, _channel_id: &str) -> ClientResult<()> {
+        Ok(())
+    }
+
+    async fn edit_group_dm(
+        &self,
+        _channel_id: &str,
+        _name: Option<&str>,
+        _avatar_url: Option<&str>,
+    ) -> ClientResult<()> {
         Ok(())
     }
 }

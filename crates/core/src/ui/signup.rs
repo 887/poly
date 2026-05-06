@@ -246,8 +246,11 @@ fn build_on_complete_inner(
             }
             {
                 let guard = backend_handle.read().await;
-                let dms = guard.get_dm_channels().await.ok();
-                let groups = guard.get_groups().await.ok();
+                let (dms, groups) = if let Some(dg) = guard.as_dms_and_groups() {
+                    (dg.get_dm_channels().await.ok(), dg.get_groups().await.ok())
+                } else {
+                    (None, None)
+                };
                 let notifs = guard.get_notifications().await.ok();
                 let friends = if let Some(sg) = guard.as_social_graph() {
                     sg.get_friends().await.ok()

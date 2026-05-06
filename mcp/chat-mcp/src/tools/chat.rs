@@ -150,9 +150,12 @@ pub(super) async fn handle_list_dms(args: &Value, pool: &BackendPool) -> Value {
         Ok(e) => e,
         Err(v) => return v,
     };
-    match entry.backend.get_dm_channels().await {
-        Ok(dms) => ok_result(serde_json::to_string_pretty(&dms).unwrap_or_default()),
-        Err(e) => err_result(format!("get_dm_channels failed: {e}")),
+    match entry.backend.as_dms_and_groups() {
+        Some(dg) => match dg.get_dm_channels().await {
+            Ok(dms) => ok_result(serde_json::to_string_pretty(&dms).unwrap_or_default()),
+            Err(e) => err_result(format!("get_dm_channels failed: {e}")),
+        },
+        None => err_result("backend has no DMs capability".to_string()),
     }
 }
 

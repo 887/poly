@@ -107,10 +107,13 @@ pub fn GroupDmContextMenuInner(menu: GroupDmContextMenuState, close: EventHandle
                             muted.toggle();
                             spawn(async move {
                                 drop(client_manager.peek().with_backend(&aid, async |b| {
-                                    if was_muted {
-                                        b.unmute_conversation(&cid).await
-                                    } else {
-                                        b.mute_conversation(&cid, None).await
+                                    match b.as_dms_and_groups() {
+                                        Some(dg) => if was_muted {
+                                            dg.unmute_conversation(&cid).await
+                                        } else {
+                                            dg.mute_conversation(&cid, None).await
+                                        },
+                                        None => Ok(()),
                                     }
                                 }).await);
                             });
@@ -132,7 +135,10 @@ pub fn GroupDmContextMenuInner(menu: GroupDmContextMenuState, close: EventHandle
                             let aid = aid.clone();
                             spawn(async move {
                                 drop(client_manager.peek().with_backend(&aid, async |b| {
-                                    b.leave_group_dm(&cid).await
+                                    match b.as_dms_and_groups() {
+                                        Some(dg) => dg.leave_group_dm(&cid).await,
+                                        None => Ok(()),
+                                    }
                                 }).await);
                             });
                             close.call(());

@@ -1140,7 +1140,11 @@ async fn restore_poly_accounts(
                 // Fetch DMs and friends in background.
                 {
                     let guard = backend_handle.read().await;
-                    let dms = guard.get_dm_channels().await.ok();
+                    let dms = if let Some(dg) = guard.as_dms_and_groups() {
+                        dg.get_dm_channels().await.ok()
+                    } else {
+                        None
+                    };
                     let friends = if let Some(sg) = guard.as_social_graph() {
                         sg.get_friends().await.ok()
                     } else {

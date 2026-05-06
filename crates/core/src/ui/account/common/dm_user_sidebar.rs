@@ -168,7 +168,12 @@ async fn remove_member(
     chat_view_state: BatchedSignal<crate::state::ChatViewState>,
 ) {
     let result = client_manager.peek().with_backend(&account_id, async |b| {
-        b.remove_group_member(&group_id, &user_id).await
+        match b.as_dms_and_groups() {
+            Some(dg) => dg.remove_group_member(&group_id, &user_id).await,
+            None => Err(poly_client::ClientError::NotSupported(
+                "remove_group_member: backend has no DMs capability".to_string(),
+            )),
+        }
     }).await;
     if result.is_ok() {
         // Remove the member from local state immediately for instant feedback.

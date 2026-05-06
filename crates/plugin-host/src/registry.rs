@@ -621,86 +621,10 @@ impl ClientBackend for PluginBackend {
         }
     }
 
-    async fn get_groups(&self) -> ClientResult<Vec<Group>> {
-        refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_messenger_client()
-            .call_get_groups(&mut *store)
-            .await;
-        match result {
-            Ok(Ok(groups)) => Ok(groups.into_iter().map(bridge::from_wit_group).collect()),
-            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
-            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
-        }
-    }
+    // ── DMs and groups (H.3.c — moved to DmsAndGroupsBackend) ──────────────
 
-    async fn remove_group_member(&self, group_id: &str, user_id: &str) -> ClientResult<()> {
-        refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_messenger_client()
-            .call_remove_group_member(&mut *store, group_id, user_id)
-            .await;
-        convert_result_unit(result)
-    }
-
-    async fn add_group_member(&self, group_id: &str, user_id: &str) -> ClientResult<()> {
-        refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_messenger_client()
-            .call_add_group_member(&mut *store, group_id, user_id)
-            .await;
-        convert_result_unit(result)
-    }
-
-    async fn get_dm_channels(&self) -> ClientResult<Vec<DmChannel>> {
-        refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_messenger_client()
-            .call_get_dm_channels(&mut *store)
-            .await;
-        match result {
-            Ok(Ok(dms)) => Ok(dms.into_iter().map(bridge::from_wit_dm_channel).collect()),
-            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
-            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
-        }
-    }
-
-    async fn open_direct_message_channel(&self, user_id: &str) -> ClientResult<DmChannel> {
-        refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_messenger_client()
-            .call_open_direct_message_channel(&mut *store, user_id)
-            .await;
-        match result {
-            Ok(Ok(dm)) => Ok(bridge::from_wit_dm_channel(dm)),
-            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
-            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
-        }
-    }
-
-    async fn open_saved_messages_channel(&self) -> ClientResult<DmChannel> {
-        refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_messenger_client()
-            .call_open_saved_messages_channel(&mut *store)
-            .await;
-        match result {
-            Ok(Ok(dm)) => Ok(bridge::from_wit_dm_channel(dm)),
-            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
-            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
-        }
+    fn as_dms_and_groups(&self) -> Option<&dyn poly_client::DmsAndGroupsBackend> {
+        Some(self)
     }
 
     async fn get_notifications(&self) -> ClientResult<Vec<Notification>> {
@@ -1317,5 +1241,143 @@ impl poly_client::SocialGraphBackend for PluginBackend {
             .call_set_presence(&mut *store, wit_status)
             .await;
         convert_result_unit(result)
+    }
+}
+
+// DmsAndGroupsBackend: WIT exposes get_dm_channels, get_groups, open_direct_message_channel,
+// open_saved_messages_channel, add_group_member, remove_group_member.
+// Lifecycle methods (close, mute, leave, edit, add_users) not yet in WIT → NotSupported.
+
+#[async_trait]
+impl poly_client::DmsAndGroupsBackend for PluginBackend {
+    async fn get_groups(&self) -> ClientResult<Vec<Group>> {
+        refuel(&self.store).await;
+        let mut store = self.store.lock().await;
+        let result = self
+            .instance
+            .poly_messenger_messenger_client()
+            .call_get_groups(&mut *store)
+            .await;
+        match result {
+            Ok(Ok(groups)) => Ok(groups.into_iter().map(bridge::from_wit_group).collect()),
+            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
+            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
+        }
+    }
+
+    async fn get_dm_channels(&self) -> ClientResult<Vec<DmChannel>> {
+        refuel(&self.store).await;
+        let mut store = self.store.lock().await;
+        let result = self
+            .instance
+            .poly_messenger_messenger_client()
+            .call_get_dm_channels(&mut *store)
+            .await;
+        match result {
+            Ok(Ok(dms)) => Ok(dms.into_iter().map(bridge::from_wit_dm_channel).collect()),
+            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
+            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
+        }
+    }
+
+    async fn open_direct_message_channel(&self, user_id: &str) -> ClientResult<DmChannel> {
+        refuel(&self.store).await;
+        let mut store = self.store.lock().await;
+        let result = self
+            .instance
+            .poly_messenger_messenger_client()
+            .call_open_direct_message_channel(&mut *store, user_id)
+            .await;
+        match result {
+            Ok(Ok(dm)) => Ok(bridge::from_wit_dm_channel(dm)),
+            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
+            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
+        }
+    }
+
+    async fn open_saved_messages_channel(&self) -> ClientResult<DmChannel> {
+        refuel(&self.store).await;
+        let mut store = self.store.lock().await;
+        let result = self
+            .instance
+            .poly_messenger_messenger_client()
+            .call_open_saved_messages_channel(&mut *store)
+            .await;
+        match result {
+            Ok(Ok(dm)) => Ok(bridge::from_wit_dm_channel(dm)),
+            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
+            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
+        }
+    }
+
+    async fn add_group_member(&self, group_id: &str, user_id: &str) -> ClientResult<()> {
+        refuel(&self.store).await;
+        let mut store = self.store.lock().await;
+        let result = self
+            .instance
+            .poly_messenger_messenger_client()
+            .call_add_group_member(&mut *store, group_id, user_id)
+            .await;
+        convert_result_unit(result)
+    }
+
+    async fn remove_group_member(&self, group_id: &str, user_id: &str) -> ClientResult<()> {
+        refuel(&self.store).await;
+        let mut store = self.store.lock().await;
+        let result = self
+            .instance
+            .poly_messenger_messenger_client()
+            .call_remove_group_member(&mut *store, group_id, user_id)
+            .await;
+        convert_result_unit(result)
+    }
+
+    async fn add_users_to_group_dm(
+        &self,
+        _channel_id: &str,
+        _user_ids: &[String],
+    ) -> ClientResult<()> {
+        Err(ClientError::NotSupported(
+            "add_users_to_group_dm: not exposed in WIT interface".to_string(),
+        ))
+    }
+
+    async fn close_dm_channel(&self, _channel_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported(
+            "close_dm_channel: not exposed in WIT interface".to_string(),
+        ))
+    }
+
+    async fn mute_conversation(
+        &self,
+        _channel_id: &str,
+        _until: Option<chrono::DateTime<chrono::Utc>>,
+    ) -> ClientResult<()> {
+        Err(ClientError::NotSupported(
+            "mute_conversation: not exposed in WIT interface".to_string(),
+        ))
+    }
+
+    async fn unmute_conversation(&self, _channel_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported(
+            "unmute_conversation: not exposed in WIT interface".to_string(),
+        ))
+    }
+
+    async fn leave_group_dm(&self, _channel_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported(
+            "leave_group_dm: not exposed in WIT interface".to_string(),
+        ))
+    }
+
+    async fn edit_group_dm(
+        &self,
+        _channel_id: &str,
+        _name: Option<&str>,
+        _avatar_url: Option<&str>,
+    ) -> ClientResult<()> {
+        Err(ClientError::NotSupported(
+            "edit_group_dm: not exposed in WIT interface".to_string(),
+        ))
     }
 }

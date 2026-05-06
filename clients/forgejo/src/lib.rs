@@ -271,14 +271,10 @@ impl ClientBackend for ForgejoClient {
         Ok(Vec::new())
     }
 
-    // --- Groups / DMs ---
+    // ── DMs and groups (H.3.c — moved to DmsAndGroupsBackend) ──────────────
 
-    async fn get_groups(&self) -> ClientResult<Vec<Group>> {
-        Ok(Vec::new())
-    }
-
-    async fn get_dm_channels(&self) -> ClientResult<Vec<DmChannel>> {
-        Ok(Vec::new())
+    fn as_dms_and_groups(&self) -> Option<&dyn poly_client::DmsAndGroupsBackend> {
+        Some(self)
     }
 
     // --- Notifications ---
@@ -969,6 +965,71 @@ impl poly_client::SocialGraphBackend for ForgejoClient {
 
     async fn set_presence(&self, _status: PresenceStatus) -> ClientResult<()> {
         Err(ClientError::NotSupported("forgejo has no presence model".to_string()))
+    }
+}
+
+// ── H.3.c — DmsAndGroupsBackend ───────────────────────────────────────────────
+// Forgejo has no DM or group DM concept.
+
+#[cfg(feature = "native")]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::DmsAndGroupsBackend for ForgejoClient {
+    async fn get_groups(&self) -> ClientResult<Vec<Group>> {
+        Ok(Vec::new())
+    }
+
+    async fn get_dm_channels(&self) -> ClientResult<Vec<DmChannel>> {
+        Ok(Vec::new())
+    }
+
+    async fn open_direct_message_channel(&self, _user_id: &str) -> ClientResult<DmChannel> {
+        Err(ClientError::NotSupported("Forgejo has no DM concept".to_string()))
+    }
+
+    async fn open_saved_messages_channel(&self) -> ClientResult<DmChannel> {
+        Err(ClientError::NotSupported("Forgejo has no saved-messages concept".to_string()))
+    }
+
+    async fn add_group_member(&self, _group_id: &str, _user_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported("Forgejo has no group DMs".to_string()))
+    }
+
+    async fn remove_group_member(&self, _group_id: &str, _user_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported("Forgejo has no group DMs".to_string()))
+    }
+
+    async fn add_users_to_group_dm(&self, _channel_id: &str, _user_ids: &[String]) -> ClientResult<()> {
+        Err(ClientError::NotSupported("Forgejo has no group DMs".to_string()))
+    }
+
+    async fn close_dm_channel(&self, _channel_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported("Forgejo has no DM concept".to_string()))
+    }
+
+    async fn mute_conversation(
+        &self,
+        _channel_id: &str,
+        _until: Option<chrono::DateTime<chrono::Utc>>,
+    ) -> ClientResult<()> {
+        Err(ClientError::NotSupported("Forgejo has no conversation mute".to_string()))
+    }
+
+    async fn unmute_conversation(&self, _channel_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported("Forgejo has no conversation mute".to_string()))
+    }
+
+    async fn leave_group_dm(&self, _channel_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported("Forgejo has no group DMs".to_string()))
+    }
+
+    async fn edit_group_dm(
+        &self,
+        _channel_id: &str,
+        _name: Option<&str>,
+        _avatar_url: Option<&str>,
+    ) -> ClientResult<()> {
+        Err(ClientError::NotSupported("Forgejo has no group DMs".to_string()))
     }
 }
 

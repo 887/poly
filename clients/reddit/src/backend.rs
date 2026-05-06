@@ -731,22 +731,10 @@ impl ClientBackend for RedditBackend {
         Ok(Vec::new())
     }
 
-    // ── Groups ───────────────────────────────────────────────────────────────
+    // ── DMs and groups (H.3.c — moved to DmsAndGroupsBackend) ──────────────
 
-    async fn get_groups(&self) -> ClientResult<Vec<Group>> {
-        Ok(Vec::new())
-    }
-
-    // ── DMs ──────────────────────────────────────────────────────────────────
-
-    async fn get_dm_channels(&self) -> ClientResult<Vec<DmChannel>> {
-        let dms = self.client.inbox().await.map_err(ClientError::from)?;
-        let account_id = self.account_id();
-        let bt = Self::backend_type();
-        Ok(dms
-            .iter()
-            .map(|dm| raw_dm_to_dm_channel(dm, account_id, &bt))
-            .collect())
+    fn as_dms_and_groups(&self) -> Option<&dyn poly_client::DmsAndGroupsBackend> {
+        Some(self)
     }
 
     // ── Notifications ─────────────────────────────────────────────────────────
@@ -1359,5 +1347,81 @@ impl poly_client::SocialGraphBackend for RedditBackend {
 
     async fn set_presence(&self, _status: PresenceStatus) -> ClientResult<()> {
         Err(ClientError::NotSupported("Reddit has no presence system".to_string()))
+    }
+}
+
+// ── H.3.c — DmsAndGroupsBackend ───────────────────────────────────────────────
+// Reddit supports inbox messages as DMs. No group DMs.
+
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::DmsAndGroupsBackend for RedditBackend {
+    async fn get_groups(&self) -> ClientResult<Vec<Group>> {
+        Ok(Vec::new())
+    }
+
+    async fn get_dm_channels(&self) -> ClientResult<Vec<DmChannel>> {
+        let dms = self.client.inbox().await.map_err(ClientError::from)?;
+        let account_id = self.account_id();
+        let bt = Self::backend_type();
+        Ok(dms
+            .iter()
+            .map(|dm| raw_dm_to_dm_channel(dm, account_id, &bt))
+            .collect())
+    }
+
+    async fn open_direct_message_channel(&self, _user_id: &str) -> ClientResult<DmChannel> {
+        Err(ClientError::NotSupported(
+            "open_direct_message_channel: not yet implemented for Reddit".to_string(),
+        ))
+    }
+
+    async fn open_saved_messages_channel(&self) -> ClientResult<DmChannel> {
+        Err(ClientError::NotSupported(
+            "open_saved_messages_channel: Reddit has no saved-messages concept".to_string(),
+        ))
+    }
+
+    async fn add_group_member(&self, _group_id: &str, _user_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported("Reddit has no group DMs".to_string()))
+    }
+
+    async fn remove_group_member(&self, _group_id: &str, _user_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported("Reddit has no group DMs".to_string()))
+    }
+
+    async fn add_users_to_group_dm(&self, _channel_id: &str, _user_ids: &[String]) -> ClientResult<()> {
+        Err(ClientError::NotSupported("Reddit has no group DMs".to_string()))
+    }
+
+    async fn close_dm_channel(&self, _channel_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported(
+            "close_dm_channel: not yet implemented for Reddit".to_string(),
+        ))
+    }
+
+    async fn mute_conversation(
+        &self,
+        _channel_id: &str,
+        _until: Option<chrono::DateTime<chrono::Utc>>,
+    ) -> ClientResult<()> {
+        Err(ClientError::NotSupported("Reddit has no conversation mute API".to_string()))
+    }
+
+    async fn unmute_conversation(&self, _channel_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported("Reddit has no conversation mute API".to_string()))
+    }
+
+    async fn leave_group_dm(&self, _channel_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported("Reddit has no group DMs".to_string()))
+    }
+
+    async fn edit_group_dm(
+        &self,
+        _channel_id: &str,
+        _name: Option<&str>,
+        _avatar_url: Option<&str>,
+    ) -> ClientResult<()> {
+        Err(ClientError::NotSupported("Reddit has no group DMs".to_string()))
     }
 }
