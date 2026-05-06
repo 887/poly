@@ -376,7 +376,11 @@ pub(crate) async fn toggle_demo(
                 } else {
                     None
                 };
-                let friends = guard.get_friends().await.ok();
+                let friends = if let Some(sg) = guard.as_social_graph() {
+                    sg.get_friends().await.ok()
+                } else {
+                    None
+                };
                 // Split writes by sub-signal.
                 let aid_c = aid.clone();
                 let aid_as = aid.clone();

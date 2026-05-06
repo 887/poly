@@ -261,20 +261,10 @@ impl ClientBackend for ForgejoClient {
         Ok(Vec::new())
     }
 
-    // --- Users ---
+    // ── Social graph (H.3.b — moved to SocialGraphBackend) ──────────────────
 
-    async fn get_user(&self, id: &str) -> ClientResult<User> {
-        Ok(User {
-            id: id.to_string(),
-            display_name: id.to_string(),
-            avatar_url: None,
-            presence: PresenceStatus::Offline,
-            backend: BackendType::from(BACKEND_SLUG),
-        })
-    }
-
-    async fn get_friends(&self) -> ClientResult<Vec<User>> {
-        Ok(Vec::new())
+    fn as_social_graph(&self) -> Option<&dyn poly_client::SocialGraphBackend> {
+        Some(self)
     }
 
     async fn get_channel_members(&self, _channel_id: &str) -> ClientResult<Vec<User>> {
@@ -304,18 +294,6 @@ impl ClientBackend for ForgejoClient {
         _channel_id: &str,
     ) -> ClientResult<Vec<VoiceParticipant>> {
         Ok(Vec::new())
-    }
-
-    // --- Presence ---
-
-    async fn get_presence(&self, _user_id: &str) -> ClientResult<PresenceStatus> {
-        Ok(PresenceStatus::Offline)
-    }
-
-    async fn set_presence(&self, _status: PresenceStatus) -> ClientResult<()> {
-        Err(ClientError::NotSupported(
-            "forgejo has no presence model".to_string(),
-        ))
     }
 
     // --- Moderation methods moved to ModerationBackend (H.3.a) ---
@@ -922,6 +900,75 @@ impl poly_client::ModerationBackend for ForgejoClient {
         Err(ClientError::NotSupported(
             "Forgejo: no role concept".to_string(),
         ))
+    }
+}
+
+// ── H.3.b — SocialGraphBackend ────────────────────────────────────────────────
+
+#[cfg(feature = "native")]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::SocialGraphBackend for ForgejoClient {
+    async fn get_user(&self, id: &str) -> ClientResult<User> {
+        Ok(User {
+            id: id.to_string(),
+            display_name: id.to_string(),
+            avatar_url: None,
+            presence: PresenceStatus::Offline,
+            backend: BackendType::from(BACKEND_SLUG),
+        })
+    }
+
+    async fn get_friends(&self) -> ClientResult<Vec<User>> {
+        Ok(Vec::new())
+    }
+
+    async fn add_friend(&self, _user_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported("Forgejo has no friend system".to_string()))
+    }
+
+    async fn remove_friend(&self, _user_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported("Forgejo has no friend system".to_string()))
+    }
+
+    async fn respond_to_friend_request(&self, _user_id: &str, _accept: bool) -> ClientResult<()> {
+        Err(ClientError::NotSupported("Forgejo has no friend system".to_string()))
+    }
+
+    async fn set_friend_nickname(
+        &self,
+        _user_id: &str,
+        _nickname: Option<&str>,
+    ) -> ClientResult<()> {
+        Err(ClientError::NotSupported("Forgejo has no friend system".to_string()))
+    }
+
+    async fn set_user_note(&self, _user_id: &str, _note: Option<&str>) -> ClientResult<()> {
+        Err(ClientError::NotSupported("Forgejo has no user note system".to_string()))
+    }
+
+    async fn block_user(&self, _user_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported("Forgejo: block not supported via this interface".to_string()))
+    }
+
+    async fn unblock_user(&self, _user_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported("Forgejo: unblock not supported via this interface".to_string()))
+    }
+
+    async fn ignore_user(&self, _user_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported("Forgejo has no ignore concept".to_string()))
+    }
+
+    async fn unignore_user(&self, _user_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported("Forgejo has no ignore concept".to_string()))
+    }
+
+    async fn get_presence(&self, _user_id: &str) -> ClientResult<PresenceStatus> {
+        Ok(PresenceStatus::Offline)
+    }
+
+    async fn set_presence(&self, _status: PresenceStatus) -> ClientResult<()> {
+        Err(ClientError::NotSupported("forgejo has no presence model".to_string()))
     }
 }
 

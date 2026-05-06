@@ -721,24 +721,10 @@ impl ClientBackend for RedditBackend {
         Err(ClientError::NotFound(format!("channel not found: {channel_id}")))
     }
 
-    // ── Users ─────────────────────────────────────────────────────────────────
+    // ── Social graph (H.3.b — moved to SocialGraphBackend) ──────────────────
 
-    async fn get_user(&self, id: &str) -> ClientResult<User> {
-        let name = id
-            .strip_prefix("u_")
-            .ok_or_else(|| ClientError::NotFound(format!("user not found: {id}")))?;
-
-        let profile = self
-            .client
-            .get_user(name)
-            .await
-            .map_err(ClientError::from)?;
-
-        Ok(user_profile_to_user(&profile, &Self::backend_type()))
-    }
-
-    async fn get_friends(&self) -> ClientResult<Vec<User>> {
-        Ok(Vec::new())
+    fn as_social_graph(&self) -> Option<&dyn poly_client::SocialGraphBackend> {
+        Some(self)
     }
 
     async fn get_channel_members(&self, _channel_id: &str) -> ClientResult<Vec<User>> {
@@ -776,18 +762,6 @@ impl ClientBackend for RedditBackend {
         _channel_id: &str,
     ) -> ClientResult<Vec<VoiceParticipant>> {
         Ok(Vec::new())
-    }
-
-    // ── Presence ─────────────────────────────────────────────────────────────
-
-    async fn get_presence(&self, _user_id: &str) -> ClientResult<PresenceStatus> {
-        Ok(PresenceStatus::Offline)
-    }
-
-    async fn set_presence(&self, _status: PresenceStatus) -> ClientResult<()> {
-        Err(ClientError::NotSupported(
-            "Reddit has no presence system".to_string(),
-        ))
     }
 
     // ── Real-time events ─────────────────────────────────────────────────────
@@ -1313,5 +1287,77 @@ impl ClientBackend for RedditBackend {
             items,
             next_cursor: next_after,
         })
+    }
+}
+
+// ── H.3.b — SocialGraphBackend ────────────────────────────────────────────────
+
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::SocialGraphBackend for RedditBackend {
+    async fn get_user(&self, id: &str) -> ClientResult<User> {
+        let name = id
+            .strip_prefix("u_")
+            .ok_or_else(|| ClientError::NotFound(format!("user not found: {id}")))?;
+
+        let profile = self
+            .client
+            .get_user(name)
+            .await
+            .map_err(ClientError::from)?;
+
+        Ok(user_profile_to_user(&profile, &Self::backend_type()))
+    }
+
+    async fn get_friends(&self) -> ClientResult<Vec<User>> {
+        Ok(Vec::new())
+    }
+
+    async fn add_friend(&self, _user_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported("Reddit has no friend system".to_string()))
+    }
+
+    async fn remove_friend(&self, _user_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported("Reddit has no friend system".to_string()))
+    }
+
+    async fn respond_to_friend_request(&self, _user_id: &str, _accept: bool) -> ClientResult<()> {
+        Err(ClientError::NotSupported("Reddit has no friend system".to_string()))
+    }
+
+    async fn set_friend_nickname(
+        &self,
+        _user_id: &str,
+        _nickname: Option<&str>,
+    ) -> ClientResult<()> {
+        Err(ClientError::NotSupported("Reddit has no friend system".to_string()))
+    }
+
+    async fn set_user_note(&self, _user_id: &str, _note: Option<&str>) -> ClientResult<()> {
+        Err(ClientError::NotSupported("Reddit has no user note system".to_string()))
+    }
+
+    async fn block_user(&self, _user_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported("Reddit: block not supported via this interface".to_string()))
+    }
+
+    async fn unblock_user(&self, _user_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported("Reddit: unblock not supported via this interface".to_string()))
+    }
+
+    async fn ignore_user(&self, _user_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported("Reddit has no ignore concept".to_string()))
+    }
+
+    async fn unignore_user(&self, _user_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported("Reddit has no ignore concept".to_string()))
+    }
+
+    async fn get_presence(&self, _user_id: &str) -> ClientResult<PresenceStatus> {
+        Ok(PresenceStatus::Offline)
+    }
+
+    async fn set_presence(&self, _status: PresenceStatus) -> ClientResult<()> {
+        Err(ClientError::NotSupported("Reddit has no presence system".to_string()))
     }
 }

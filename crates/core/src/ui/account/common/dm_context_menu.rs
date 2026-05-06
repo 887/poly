@@ -212,7 +212,11 @@ pub fn DmContextMenuInner(menu: DmContextMenuState, close: EventHandler<()>) -> 
                             let aid = aid.clone();
                             spawn(async move {
                                 drop(client_manager.peek().with_backend(&aid, async |b| {
-                                    b.remove_friend(&uid).await
+                                    if let Some(sg) = b.as_social_graph() {
+                                        sg.remove_friend(&uid).await
+                                    } else {
+                                        Ok(())
+                                    }
                                 }).await);
                             });
                             close.call(());
@@ -233,7 +237,11 @@ pub fn DmContextMenuInner(menu: DmContextMenuState, close: EventHandler<()>) -> 
                             let aid = aid.clone();
                             spawn(async move {
                                 drop(client_manager.peek().with_backend(&aid, async |b| {
-                                    b.ignore_user(&uid).await
+                                    if let Some(sg) = b.as_social_graph() {
+                                        sg.ignore_user(&uid).await
+                                    } else {
+                                        Ok(())
+                                    }
                                 }).await);
                             });
                             close.call(());
@@ -255,7 +263,11 @@ pub fn DmContextMenuInner(menu: DmContextMenuState, close: EventHandler<()>) -> 
                             let aid = aid.clone();
                             spawn(async move {
                                 drop(client_manager.peek().with_backend(&aid, async |b| {
-                                    b.block_user(&uid).await
+                                    if let Some(sg) = b.as_social_graph() {
+                                        sg.block_user(&uid).await
+                                    } else {
+                                        Ok(())
+                                    }
                                 }).await);
                             });
                             close.call(());

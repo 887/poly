@@ -472,26 +472,7 @@ impl ClientBackend for PolyServerBackend {
             .collect())
     }
 
-    // ── Users ────────────────────────────────────────────────────────────────
-
-    async fn get_user(&self, id: &str) -> ClientResult<User> {
-        let profile = self
-            .http
-            .get_user(id)
-            .await
-            .map_err(|e| ClientError::Network(e.to_string()))?;
-        Ok(Self::map_user(&profile))
-    }
-
-    async fn get_friends(&self) -> ClientResult<Vec<User>> {
-        let profiles = self
-            .http
-            .get_friends()
-            .await
-            .map_err(|e| ClientError::Network(e.to_string()))?;
-
-        Ok(profiles.iter().map(Self::map_user).collect())
-    }
+    // ── Users (social graph methods moved to SocialGraphBackend H.3.b) ──────
 
     async fn get_channel_members(&self, channel_id: &str) -> ClientResult<Vec<User>> {
         let participants = self
@@ -680,66 +661,10 @@ impl ClientBackend for PolyServerBackend {
         Some(self)
     }
 
-    // ── Social policy ────────────────────────────────────────────────────────
+    // ── Social graph methods moved to SocialGraphBackend (H.3.b) ─────────────
 
-    async fn block_user(&self, user_id: &str) -> ClientResult<()> {
-        self.http
-            .block_user(user_id)
-            .await
-            .map_err(|e| ClientError::Network(e.to_string()))
-    }
-
-    async fn unblock_user(&self, user_id: &str) -> ClientResult<()> {
-        self.http
-            .unblock_user(user_id)
-            .await
-            .map_err(|e| ClientError::Network(e.to_string()))
-    }
-
-    async fn ignore_user(&self, user_id: &str) -> ClientResult<()> {
-        self.http
-            .ignore_user(user_id)
-            .await
-            .map_err(|e| ClientError::Network(e.to_string()))
-    }
-
-    async fn unignore_user(&self, user_id: &str) -> ClientResult<()> {
-        self.http
-            .unignore_user(user_id)
-            .await
-            .map_err(|e| ClientError::Network(e.to_string()))
-    }
-
-    async fn add_friend(&self, user_id: &str) -> ClientResult<()> {
-        self.http
-            .add_friend_by_id(user_id)
-            .await
-            .map_err(|e| ClientError::Network(e.to_string()))
-    }
-
-    async fn remove_friend(&self, user_id: &str) -> ClientResult<()> {
-        self.http
-            .remove_friend_by_id(user_id)
-            .await
-            .map_err(|e| ClientError::Network(e.to_string()))
-    }
-
-    async fn set_friend_nickname(
-        &self,
-        user_id: &str,
-        nickname: Option<&str>,
-    ) -> ClientResult<()> {
-        self.http
-            .set_relationship_nickname(user_id, nickname)
-            .await
-            .map_err(|e| ClientError::Network(e.to_string()))
-    }
-
-    async fn set_user_note(&self, user_id: &str, note: Option<&str>) -> ClientResult<()> {
-        self.http
-            .set_user_note(user_id, note)
-            .await
-            .map_err(|e| ClientError::Network(e.to_string()))
+    fn as_social_graph(&self) -> Option<&dyn poly_client::SocialGraphBackend> {
+        Some(self)
     }
 
     // ── Conversation lifecycle ────────────────────────────────────────────────
@@ -818,16 +743,6 @@ impl ClientBackend for PolyServerBackend {
         _channel_id: &str,
     ) -> ClientResult<Vec<VoiceParticipant>> {
         Ok(Vec::new())
-    }
-
-    // ── Presence ─────────────────────────────────────────────────────────────
-
-    async fn get_presence(&self, _user_id: &str) -> ClientResult<PresenceStatus> {
-        Ok(PresenceStatus::Offline)
-    }
-
-    async fn set_presence(&self, _status: PresenceStatus) -> ClientResult<()> {
-        Ok(())
     }
 
     // ── Events ───────────────────────────────────────────────────────────────
@@ -1358,6 +1273,107 @@ impl poly_client::ModerationBackend for PolyServerBackend {
         Err(ClientError::NotSupported(
             "poly-server: get_server_roles not yet implemented".to_string(),
         ))
+    }
+}
+
+// ── H.3.b — SocialGraphBackend ────────────────────────────────────────────────
+//
+// Poly-server has a full social graph: user lookup, friends list, block/ignore,
+// friend requests, per-friend nicknames, and user notes.
+
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::SocialGraphBackend for PolyServerBackend {
+    async fn get_user(&self, id: &str) -> ClientResult<User> {
+        let profile = self
+            .http
+            .get_user(id)
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+        Ok(Self::map_user(&profile))
+    }
+
+    async fn get_friends(&self) -> ClientResult<Vec<User>> {
+        let profiles = self
+            .http
+            .get_friends()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+        Ok(profiles.iter().map(Self::map_user).collect())
+    }
+
+    async fn add_friend(&self, user_id: &str) -> ClientResult<()> {
+        self.http
+            .add_friend_by_id(user_id)
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))
+    }
+
+    async fn remove_friend(&self, user_id: &str) -> ClientResult<()> {
+        self.http
+            .remove_friend_by_id(user_id)
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))
+    }
+
+    async fn respond_to_friend_request(&self, _user_id: &str, _accept: bool) -> ClientResult<()> {
+        Err(ClientError::NotSupported(
+            "poly-server: respond_to_friend_request not yet implemented".to_string(),
+        ))
+    }
+
+    async fn set_friend_nickname(
+        &self,
+        user_id: &str,
+        nickname: Option<&str>,
+    ) -> ClientResult<()> {
+        self.http
+            .set_relationship_nickname(user_id, nickname)
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))
+    }
+
+    async fn set_user_note(&self, user_id: &str, note: Option<&str>) -> ClientResult<()> {
+        self.http
+            .set_user_note(user_id, note)
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))
+    }
+
+    async fn block_user(&self, user_id: &str) -> ClientResult<()> {
+        self.http
+            .block_user(user_id)
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))
+    }
+
+    async fn unblock_user(&self, user_id: &str) -> ClientResult<()> {
+        self.http
+            .unblock_user(user_id)
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))
+    }
+
+    async fn ignore_user(&self, user_id: &str) -> ClientResult<()> {
+        self.http
+            .ignore_user(user_id)
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))
+    }
+
+    async fn unignore_user(&self, user_id: &str) -> ClientResult<()> {
+        self.http
+            .unignore_user(user_id)
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))
+    }
+
+    async fn get_presence(&self, _user_id: &str) -> ClientResult<PresenceStatus> {
+        Ok(PresenceStatus::Offline)
+    }
+
+    async fn set_presence(&self, _status: PresenceStatus) -> ClientResult<()> {
+        Ok(())
     }
 }
 

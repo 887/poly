@@ -67,3 +67,4 @@ crates/core/src/ui/code_explorer.rs:67
 # `startup_overlay_finished.set(true)` BEFORE the spawn, so the next
 # effect run hits the early return. Explicit guard, no cycle.
 crates/core/src/ui/mod.rs:1515
+crates/core/src/ui.rs:1840

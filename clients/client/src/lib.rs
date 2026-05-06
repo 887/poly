@@ -11,6 +11,7 @@ pub mod content_policy;
 pub mod events;
 pub mod forum;
 pub mod moderation;
+pub mod social_graph;
 pub mod threads;
 pub mod types;
 pub mod ui_surface;
@@ -20,6 +21,7 @@ pub use content_policy::ContentPolicyBackend;
 pub use events::*;
 pub use forum::ForumBackend;
 pub use moderation::ModerationBackend;
+pub use social_graph::SocialGraphBackend;
 pub use threads::ThreadsBackend;
 pub use types::*;
 pub use ui_surface::*;
@@ -214,13 +216,7 @@ pub trait ClientBackend: Send + Sync {
         Err(ClientError::NotSupported("set_message_pinned".to_string()))
     }
 
-    // --- Users ---
-
-    /// Get a user by ID.
-    async fn get_user(&self, id: &str) -> ClientResult<User>;
-
-    /// Get the authenticated user's friend list.
-    async fn get_friends(&self) -> ClientResult<Vec<User>>;
+    // --- Users (get_user + get_friends moved to SocialGraphBackend — H.3.b) ---
 
     /// Get members of a channel.
     async fn get_channel_members(&self, channel_id: &str) -> ClientResult<Vec<User>>;
@@ -273,18 +269,10 @@ pub trait ClientBackend: Send + Sync {
     /// Get the user's notifications.
     async fn get_notifications(&self) -> ClientResult<Vec<Notification>>;
 
-    /// Accept or reject a pending friend request.
-    ///
-    /// `user_id` is the ID of the user who sent the request.
-    /// `accept` is `true` to accept, `false` to reject.
-    ///
-    /// Backends that do not support this action return `NotSupported`.
-    async fn respond_to_friend_request(&self, user_id: &str, accept: bool) -> ClientResult<()> {
-        let _ = (user_id, accept);
-        Err(ClientError::NotSupported(
-            "respond_to_friend_request".to_string(),
-        ))
-    }
+    // --- Social graph methods moved to SocialGraphBackend (H.3.b) ---
+    // (respond_to_friend_request, unblock_user, block_user, ignore_user,
+    //  unignore_user, add_friend, remove_friend, set_friend_nickname,
+    //  set_user_note — all 9 moved to SocialGraphBackend)
 
     /// Accept or decline a pending server invite.
     ///
@@ -296,14 +284,6 @@ pub trait ClientBackend: Send + Sync {
         ))
     }
 
-    /// Unblock a previously blocked user.
-    ///
-    /// Backends that do not support unblocking return `NotSupported`.
-    async fn unblock_user(&self, user_id: &str) -> ClientResult<()> {
-        let _ = user_id;
-        Err(ClientError::NotSupported("unblock_user".to_string()))
-    }
-
     /// Mark a channel (server channel or DM) as read on the backend.
     ///
     /// Hosts call this alongside the local `mark_channel_as_read` so that
@@ -313,55 +293,6 @@ pub trait ClientBackend: Send + Sync {
     async fn mark_channel_read(&self, channel_id: &str) -> ClientResult<()> {
         let _ = channel_id;
         Err(ClientError::NotSupported("mark_channel_read".to_string()))
-    }
-
-    /// Block a user. Future messages from them are hidden and they
-    /// cannot DM the calling user.
-    async fn block_user(&self, user_id: &str) -> ClientResult<()> {
-        let _ = user_id;
-        Err(ClientError::NotSupported("block_user".to_string()))
-    }
-
-    /// Ignore a user — quieter than block. Their messages are kept
-    /// but notifications are suppressed and DMs hidden from the list.
-    async fn ignore_user(&self, user_id: &str) -> ClientResult<()> {
-        let _ = user_id;
-        Err(ClientError::NotSupported("ignore_user".to_string()))
-    }
-
-    /// Reverse a previous `ignore_user`.
-    async fn unignore_user(&self, user_id: &str) -> ClientResult<()> {
-        let _ = user_id;
-        Err(ClientError::NotSupported("unignore_user".to_string()))
-    }
-
-    /// Send a friend request to another user.
-    async fn add_friend(&self, user_id: &str) -> ClientResult<()> {
-        let _ = user_id;
-        Err(ClientError::NotSupported("add_friend".to_string()))
-    }
-
-    /// Remove a friend (or cancel an outgoing/incoming request).
-    async fn remove_friend(&self, user_id: &str) -> ClientResult<()> {
-        let _ = user_id;
-        Err(ClientError::NotSupported("remove_friend".to_string()))
-    }
-
-    /// Set or clear a per-friend nickname (`None` clears).
-    async fn set_friend_nickname(
-        &self,
-        user_id: &str,
-        nickname: Option<&str>,
-    ) -> ClientResult<()> {
-        let _ = (user_id, nickname);
-        Err(ClientError::NotSupported("set_friend_nickname".to_string()))
-    }
-
-    /// Set or clear a private note about a user (`None` clears).
-    /// Notes are visible only to the calling user.
-    async fn set_user_note(&self, user_id: &str, note: Option<&str>) -> ClientResult<()> {
-        let _ = (user_id, note);
-        Err(ClientError::NotSupported("set_user_note".to_string()))
     }
 
     // --- Conversation lifecycle ---
@@ -439,13 +370,7 @@ pub trait ClientBackend: Send + Sync {
     async fn get_voice_participants(&self, channel_id: &str)
     -> ClientResult<Vec<VoiceParticipant>>;
 
-    // --- Presence ---
-
-    /// Get a user's online presence status.
-    async fn get_presence(&self, user_id: &str) -> ClientResult<PresenceStatus>;
-
-    /// Set the authenticated user's presence status.
-    async fn set_presence(&self, status: PresenceStatus) -> ClientResult<()>;
+    // --- Presence (get_presence + set_presence moved to SocialGraphBackend — H.3.b) ---
 
     // --- Server management (optional capability) ---
 
@@ -662,6 +587,16 @@ pub trait ClientBackend: Send + Sync {
         None
     }
 
+    // --- Social graph (H.3.b — SocialGraphBackend) ---
+
+    /// Returns `Some(self)` if this backend implements [`SocialGraphBackend`].
+    ///
+    /// Override to `Some(self)` in backends that expose friend lists, presence,
+    /// block/ignore, and user lookups.  Default: `None`.
+    fn as_social_graph(&self) -> Option<&dyn SocialGraphBackend> {
+        None
+    }
+
     // --- Client-provided UI surface (WP 1 / plan-client-ui-surface) ----
     //
     // Per D9 these methods have **no default implementation** — every
@@ -866,6 +801,7 @@ pub trait ClientBackend: Send + Sync {
 /// | `as_forum` | [`ForumBackend`] | H.2.b |
 /// | `as_threads` | [`ThreadsBackend`] | H.2.c |
 /// | `as_moderation` | [`ModerationBackend`] | H.3.a |
+/// | `as_social_graph` | [`SocialGraphBackend`] | H.3.b |
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 pub trait IsBackend: Send + Sync {
@@ -939,6 +875,15 @@ pub trait IsBackend: Send + Sync {
     fn as_threads(&self) -> Option<&dyn ThreadsBackend> {
         None
     }
+
+    /// Returns `Some(self)` if this backend implements [`SocialGraphBackend`].
+    ///
+    /// Default: `None`.  Override in backends that expose friend lists, presence,
+    /// block/ignore, and user lookups — currently `poly-demo`, `poly-discord`,
+    /// `poly-matrix`, `poly-server-client`, `poly-stoat`.
+    fn as_social_graph(&self) -> Option<&dyn SocialGraphBackend> {
+        None
+    }
 }
 
 // Blanket implementation: every `ClientBackend` automatically is an `IsBackend`.
@@ -991,6 +936,11 @@ impl<T: ClientBackend + ?Sized> IsBackend for T {
     #[inline]
     fn as_threads(&self) -> Option<&dyn ThreadsBackend> {
         ClientBackend::as_threads(self)
+    }
+
+    #[inline]
+    fn as_social_graph(&self) -> Option<&dyn SocialGraphBackend> {
+        ClientBackend::as_social_graph(self)
     }
 }
 

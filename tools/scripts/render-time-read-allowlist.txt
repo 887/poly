@@ -921,8 +921,11 @@ crates/core/src/ui/demo.rs:353 # MEDIUM — render-time read drives output or ch
 crates/core/src/ui/demo.rs:389 # MEDIUM — render-time read drives output or child prop, subscription is intent
 crates/core/src/ui/demo.rs:419 # MEDIUM — render-time read drives output or child prop, subscription is intent
 crates/core/src/ui/demo.rs:446 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/demo.rs:472 # MEDIUM — async spawn body; not a render-time subscription, lint over-trigger
 crates/core/src/ui/demo.rs:549 # MEDIUM — render-time read drives output or child prop, subscription is intent
 crates/core/src/ui/demo.rs:561 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/demo.rs:585 # MEDIUM — async spawn body; not a render-time subscription, lint over-trigger
+crates/core/src/ui/demo.rs:601 # MEDIUM — async spawn body; not a render-time subscription, lint over-trigger
 crates/core/src/ui/create_server.rs:84 # MEDIUM — render-time read drives output or child prop, subscription is intent
 crates/core/src/ui/create_server.rs:85 # MEDIUM — render-time read drives output or child prop, subscription is intent
 crates/core/src/ui/create_server.rs:99 # MEDIUM — render-time read drives output or child prop, subscription is intent
@@ -1436,6 +1439,18 @@ crates/core/src/ui/mod.rs:1565 # MEDIUM — render-time read; subscription or as
 crates/core/src/ui/mod.rs:1574 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
 crates/core/src/ui/mod.rs:1616 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
 crates/core/src/ui/mod.rs:1637 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
+crates/core/src/ui.rs:1473 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
+crates/core/src/ui.rs:1479 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
+crates/core/src/ui.rs:1482 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
+crates/core/src/ui.rs:1831 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
+crates/core/src/ui.rs:1832 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
+crates/core/src/ui.rs:1837 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
+crates/core/src/ui.rs:1838 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
+crates/core/src/ui.rs:1848 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
+crates/core/src/ui.rs:1853 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
+crates/core/src/ui.rs:1862 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
+crates/core/src/ui.rs:1911 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
+crates/core/src/ui.rs:1932 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
 crates/core/src/ui/routes.rs:1049 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
 crates/core/src/ui/routes.rs:1188 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
 crates/core/src/ui/routes.rs:1627 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
@@ -1508,3 +1523,15 @@ crates/core/src/ui/signup/mod.rs:782 # MEDIUM — render-time read; subscription
 crates/core/src/ui/signup/mod.rs:824 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
 crates/core/src/ui/signup/mod.rs:830 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
 crates/core/src/ui/signup/mod.rs:837 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
+crates/core/src/ui/signup.rs:529 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
+crates/core/src/ui/signup.rs:531 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
+crates/core/src/ui/signup.rs:600 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
+crates/core/src/ui/signup.rs:624 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
+crates/core/src/ui/signup.rs:718 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
+crates/core/src/ui/signup.rs:732 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
+crates/core/src/ui/signup.rs:761 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
+crates/core/src/ui/signup.rs:822 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
+crates/core/src/ui/signup.rs:825 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
+crates/core/src/ui/signup.rs:867 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
+crates/core/src/ui/signup.rs:873 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
+crates/core/src/ui/signup.rs:878 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger

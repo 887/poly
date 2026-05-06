@@ -249,7 +249,11 @@ fn build_on_complete_inner(
                 let dms = guard.get_dm_channels().await.ok();
                 let groups = guard.get_groups().await.ok();
                 let notifs = guard.get_notifications().await.ok();
-                let friends = guard.get_friends().await.ok();
+                let friends = if let Some(sg) = guard.as_social_graph() {
+                    sg.get_friends().await.ok()
+                } else {
+                    None
+                };
                 // Use capability accessor (H.1 — ContentPolicyBackend).
                 // Returns None for all current backends; preserved for future opt-ins.
                 let (blocked, policy) = if let Some(cp) = guard.as_content_policy() {

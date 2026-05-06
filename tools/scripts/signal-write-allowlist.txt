@@ -42,6 +42,7 @@ crates/core/src/ui/actions.rs:state  # dispatch_action! macro body; unused today
 
 # ── Signal<Locale> — settings-only, not a cascade vector. ──────────────────
 crates/core/src/ui/mod.rs:locale_sig  # locale swap on boot
+crates/core/src/ui.rs:locale_sig  # locale swap on boot
 crates/core/src/ui/settings/language.rs:locale_sig  # language picker
 
 # ── Component-scoped `use_signal` locals — subscriber count 1; no cascade. ─
@@ -77,3 +78,4 @@ crates/core/src/ui/settings/plugins.rs:disabled  # plugin enable/disable toggle
 crates/core/src/ui/settings/plugins.rs:wasm_plugins  # plugin list state
 crates/core/src/ui/settings/plugins.rs:removed_bundled  # local tombstone list for removed bundled plugins; use_signal, single subscriber
 crates/core/src/ui/signup/mod.rs:statuses2  # local signup progress statuses
+crates/core/src/ui/signup.rs:statuses2  # local signup progress statuses

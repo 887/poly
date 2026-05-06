@@ -233,15 +233,10 @@ impl<F: DemoFlavour> ClientBackend for DemoClientGeneric<F> {
         Ok(data::demo_available_stickers(channel_id))
     }
 
-    async fn get_user(&self, id: &str) -> ClientResult<User> {
-        F::users()
-            .into_iter()
-            .find(|u| u.id == id)
-            .ok_or_else(|| ClientError::NotFound(format!("User {id}")))
-    }
+    // ── Social graph (H.3.b — moved to SocialGraphBackend) ──────────────────
 
-    async fn get_friends(&self) -> ClientResult<Vec<User>> {
-        Ok(F::friends())
+    fn as_social_graph(&self) -> Option<&dyn poly_client::SocialGraphBackend> {
+        Some(self)
     }
 
     async fn get_channel_members(&self, channel_id: &str) -> ClientResult<Vec<User>> {
@@ -283,20 +278,6 @@ impl<F: DemoFlavour> ClientBackend for DemoClientGeneric<F> {
 
     async fn get_notifications(&self) -> ClientResult<Vec<Notification>> {
         Ok(F::notifications())
-    }
-
-    async fn respond_to_friend_request(&self, _user_id: &str, _accept: bool) -> ClientResult<()> {
-        // Demo client: accept/deny is handled by host-side state updates after a successful
-        // backend response. Return success so the notifications UI can exercise that flow.
-        Ok(())
-    }
-
-    async fn get_presence(&self, _user_id: &str) -> ClientResult<PresenceStatus> {
-        Ok(PresenceStatus::Online)
-    }
-
-    async fn set_presence(&self, _status: PresenceStatus) -> ClientResult<()> {
-        Ok(())
     }
 
     async fn get_voice_participants(
@@ -466,6 +447,78 @@ impl<F: DemoFlavour> ClientBackend for DemoClientGeneric<F> {
     ) -> ClientResult<CommunityPage> {
         F::search_communities(query, scope, cursor)
             .unwrap_or_else(|| Err(ClientError::NotSupported("community search not supported".into())))
+    }
+}
+
+// ── H.3.b — SocialGraphBackend ────────────────────────────────────────────────
+//
+// Demo provides stub implementations for social graph methods: `get_user` and
+// `get_friends` return fixture data; `respond_to_friend_request` returns success
+// so the notifications UI can exercise that flow.
+
+#[cfg(feature = "native")]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl<F: DemoFlavour> poly_client::SocialGraphBackend for DemoClientGeneric<F> {
+    async fn get_user(&self, id: &str) -> ClientResult<User> {
+        F::users()
+            .into_iter()
+            .find(|u| u.id == id)
+            .ok_or_else(|| ClientError::NotFound(format!("User {id}")))
+    }
+
+    async fn get_friends(&self) -> ClientResult<Vec<User>> {
+        Ok(F::friends())
+    }
+
+    async fn add_friend(&self, _user_id: &str) -> ClientResult<()> {
+        Ok(())
+    }
+
+    async fn remove_friend(&self, _user_id: &str) -> ClientResult<()> {
+        Ok(())
+    }
+
+    async fn respond_to_friend_request(&self, _user_id: &str, _accept: bool) -> ClientResult<()> {
+        // Demo client: accept/deny is handled by host-side state updates after a successful
+        // backend response. Return success so the notifications UI can exercise that flow.
+        Ok(())
+    }
+
+    async fn set_friend_nickname(
+        &self,
+        _user_id: &str,
+        _nickname: Option<&str>,
+    ) -> ClientResult<()> {
+        Ok(())
+    }
+
+    async fn set_user_note(&self, _user_id: &str, _note: Option<&str>) -> ClientResult<()> {
+        Ok(())
+    }
+
+    async fn block_user(&self, _user_id: &str) -> ClientResult<()> {
+        Ok(())
+    }
+
+    async fn unblock_user(&self, _user_id: &str) -> ClientResult<()> {
+        Ok(())
+    }
+
+    async fn ignore_user(&self, _user_id: &str) -> ClientResult<()> {
+        Ok(())
+    }
+
+    async fn unignore_user(&self, _user_id: &str) -> ClientResult<()> {
+        Ok(())
+    }
+
+    async fn get_presence(&self, _user_id: &str) -> ClientResult<PresenceStatus> {
+        Ok(PresenceStatus::Online)
+    }
+
+    async fn set_presence(&self, _status: PresenceStatus) -> ClientResult<()> {
+        Ok(())
     }
 }
 

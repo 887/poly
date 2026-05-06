@@ -51,6 +51,7 @@ crates/core/src/ui/main_layout.rs:251 # Phase 2 migration pending — review cap
 crates/core/src/ui/main_layout.rs:262 # Phase 2 migration pending — review capture shape
 crates/core/src/ui/main_layout.rs:292 # Phase 2 migration pending — review capture shape
 crates/core/src/ui/mod.rs:1521 # Phase 2 migration pending — review capture shape
+crates/core/src/ui.rs:1840 # Phase 2 migration pending — review capture shape
 crates/core/src/ui/routes.rs:1188 # Phase 2 migration pending — review capture shape
 crates/core/src/ui/routes.rs:1255 # Phase 2 migration pending — review capture shape
 crates/core/src/ui/routes.rs:1394 # Phase 2 migration pending — review capture shape

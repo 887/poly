@@ -172,9 +172,12 @@ pub(super) async fn handle_list_friends(args: &Value, pool: &BackendPool) -> Val
         Ok(e) => e,
         Err(v) => return v,
     };
-    match entry.backend.get_friends().await {
-        Ok(friends) => ok_result(serde_json::to_string_pretty(&friends).unwrap_or_default()),
-        Err(e) => err_result(format!("get_friends failed: {e}")),
+    match entry.backend.as_social_graph() {
+        Some(sg) => match sg.get_friends().await {
+            Ok(friends) => ok_result(serde_json::to_string_pretty(&friends).unwrap_or_default()),
+            Err(e) => err_result(format!("get_friends failed: {e}")),
+        },
+        None => err_result("get_friends: backend has no social graph capability"),
     }
 }
 
@@ -187,9 +190,12 @@ pub(super) async fn handle_get_user(args: &Value, pool: &BackendPool) -> Value {
         Some(u) => u,
         None => return err_result("missing 'user_id'"),
     };
-    match entry.backend.get_user(user_id).await {
-        Ok(user) => ok_result(serde_json::to_string_pretty(&user).unwrap_or_default()),
-        Err(e) => err_result(format!("get_user failed: {e}")),
+    match entry.backend.as_social_graph() {
+        Some(sg) => match sg.get_user(user_id).await {
+            Ok(user) => ok_result(serde_json::to_string_pretty(&user).unwrap_or_default()),
+            Err(e) => err_result(format!("get_user failed: {e}")),
+        },
+        None => err_result("get_user: backend has no social graph capability"),
     }
 }
 

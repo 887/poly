@@ -147,9 +147,12 @@ pub(super) async fn handle_get_reply_context(args: &Value, pool: &BackendPool, m
 
     // Section: contact info + facts (null if no contact_id supplied or lookup fails).
     let contact_section: Value = if let Some(cid) = contact_id {
-        let user_info: Option<Value> = match entry.backend.get_user(cid).await {
-            Ok(u) => serde_json::to_value(&u).ok(),
-            Err(_) => None,
+        let user_info: Option<Value> = match entry.backend.as_social_graph() {
+            Some(sg) => match sg.get_user(cid).await {
+                Ok(u) => serde_json::to_value(&u).ok(),
+                Err(_) => None,
+            },
+            None => None,
         };
         let facts = mem.recall_facts(account_id, cid, None).unwrap_or_default();
         let mut obj = serde_json::Map::new();

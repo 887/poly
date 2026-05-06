@@ -600,34 +600,10 @@ impl ClientBackend for PluginBackend {
         }
     }
 
-    async fn get_user(&self, id: &str) -> ClientResult<User> {
-        refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_messenger_client()
-            .call_get_user(&mut *store, id)
-            .await;
-        match result {
-            Ok(Ok(user)) => Ok(bridge::from_wit_user(user)),
-            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
-            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
-        }
-    }
+    // ── Social graph (H.3.b — moved to SocialGraphBackend) ──────────────────
 
-    async fn get_friends(&self) -> ClientResult<Vec<User>> {
-        refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_messenger_client()
-            .call_get_friends(&mut *store)
-            .await;
-        match result {
-            Ok(Ok(users)) => Ok(users.into_iter().map(bridge::from_wit_user).collect()),
-            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
-            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
-        }
+    fn as_social_graph(&self) -> Option<&dyn poly_client::SocialGraphBackend> {
+        Some(self)
     }
 
     async fn get_channel_members(&self, channel_id: &str) -> ClientResult<Vec<User>> {
@@ -764,33 +740,6 @@ impl ClientBackend for PluginBackend {
             Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
             Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
         }
-    }
-
-    async fn get_presence(&self, user_id: &str) -> ClientResult<PresenceStatus> {
-        refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_messenger_client()
-            .call_get_presence(&mut *store, user_id)
-            .await;
-        match result {
-            Ok(Ok(status)) => Ok(bridge::from_wit_presence(status)),
-            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
-            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
-        }
-    }
-
-    async fn set_presence(&self, status: PresenceStatus) -> ClientResult<()> {
-        refuel(&self.store).await;
-        let wit_status = bridge::to_wit_presence(status);
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_messenger_client()
-            .call_set_presence(&mut *store, wit_status)
-            .await;
-        convert_result_unit(result)
     }
 
     fn event_stream(&self) -> std::pin::Pin<Box<dyn Stream<Item = ClientEvent> + Send>> {
@@ -1260,5 +1209,113 @@ impl ThreadsBackend for PluginBackend {
             Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
             Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
         }
+    }
+}
+
+// ── H.3.b — SocialGraphBackend ────────────────────────────────────────────────
+//
+// The WIT `messenger-client` interface exposes `get-user`, `get-friends`,
+// `get-presence`, and `set-presence`. The remaining social-graph methods
+// (block/ignore/friend management) are not in the WIT interface yet — they
+// return `NotSupported` until the WIT surface is extended.
+
+#[async_trait]
+impl poly_client::SocialGraphBackend for PluginBackend {
+    async fn get_user(&self, id: &str) -> ClientResult<User> {
+        refuel(&self.store).await;
+        let mut store = self.store.lock().await;
+        let result = self
+            .instance
+            .poly_messenger_messenger_client()
+            .call_get_user(&mut *store, id)
+            .await;
+        match result {
+            Ok(Ok(user)) => Ok(bridge::from_wit_user(user)),
+            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
+            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
+        }
+    }
+
+    async fn get_friends(&self) -> ClientResult<Vec<User>> {
+        refuel(&self.store).await;
+        let mut store = self.store.lock().await;
+        let result = self
+            .instance
+            .poly_messenger_messenger_client()
+            .call_get_friends(&mut *store)
+            .await;
+        match result {
+            Ok(Ok(users)) => Ok(users.into_iter().map(bridge::from_wit_user).collect()),
+            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
+            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
+        }
+    }
+
+    async fn add_friend(&self, _user_id: &str) -> ClientResult<()> {
+        // WIT does not expose add-friend yet.
+        Err(ClientError::NotSupported("plugin: add_friend not in WIT interface".to_string()))
+    }
+
+    async fn remove_friend(&self, _user_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported("plugin: remove_friend not in WIT interface".to_string()))
+    }
+
+    async fn respond_to_friend_request(&self, _user_id: &str, _accept: bool) -> ClientResult<()> {
+        Err(ClientError::NotSupported("plugin: respond_to_friend_request not in WIT interface".to_string()))
+    }
+
+    async fn set_friend_nickname(
+        &self,
+        _user_id: &str,
+        _nickname: Option<&str>,
+    ) -> ClientResult<()> {
+        Err(ClientError::NotSupported("plugin: set_friend_nickname not in WIT interface".to_string()))
+    }
+
+    async fn set_user_note(&self, _user_id: &str, _note: Option<&str>) -> ClientResult<()> {
+        Err(ClientError::NotSupported("plugin: set_user_note not in WIT interface".to_string()))
+    }
+
+    async fn block_user(&self, _user_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported("plugin: block_user not in WIT interface".to_string()))
+    }
+
+    async fn unblock_user(&self, _user_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported("plugin: unblock_user not in WIT interface".to_string()))
+    }
+
+    async fn ignore_user(&self, _user_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported("plugin: ignore_user not in WIT interface".to_string()))
+    }
+
+    async fn unignore_user(&self, _user_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported("plugin: unignore_user not in WIT interface".to_string()))
+    }
+
+    async fn get_presence(&self, user_id: &str) -> ClientResult<PresenceStatus> {
+        refuel(&self.store).await;
+        let mut store = self.store.lock().await;
+        let result = self
+            .instance
+            .poly_messenger_messenger_client()
+            .call_get_presence(&mut *store, user_id)
+            .await;
+        match result {
+            Ok(Ok(status)) => Ok(bridge::from_wit_presence(status)),
+            Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
+            Err(e) => Err(ClientError::Internal(format!("WASM runtime error: {e}"))),
+        }
+    }
+
+    async fn set_presence(&self, status: PresenceStatus) -> ClientResult<()> {
+        refuel(&self.store).await;
+        let wit_status = bridge::to_wit_presence(status);
+        let mut store = self.store.lock().await;
+        let result = self
+            .instance
+            .poly_messenger_messenger_client()
+            .call_set_presence(&mut *store, wit_status)
+            .await;
+        convert_result_unit(result)
     }
 }

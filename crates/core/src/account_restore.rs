@@ -312,7 +312,11 @@ pub async fn restore_native_accounts(
                     {
                         Ok(guard) => {
                             let dms = guard.get_dm_channels().await.ok();
-                            let friends = guard.get_friends().await.ok();
+                            let friends = if let Some(sg) = guard.as_social_graph() {
+                                sg.get_friends().await.ok()
+                            } else {
+                                None
+                            };
                             let aid = account_id.clone();
                             chat_lists.batch(move |cl| {
                                 if let Some(dms) = dms {

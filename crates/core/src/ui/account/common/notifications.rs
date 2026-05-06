@@ -23,7 +23,7 @@ use crate::ui::routes::Route;
 use crate::ui::split_shell::SplitMenuShell;
 use dioxus::prelude::*;
 use poly_client::{
-    BackendCapabilities, BackendType, ConnectionStatus, FriendModel, NotificationKind,
+    BackendCapabilities, BackendType, ClientError, ConnectionStatus, FriendModel, NotificationKind,
     NotificationSupport, VoiceSupport, slug_supports_creating_server,
 };
 use poly_ui_macros::{context_menu, ui_action};
@@ -688,23 +688,30 @@ async fn handle_friend_request_action(
     accept: bool,
 ) {
     let refreshed_friends = match client_manager.peek().with_backend(&account_id, async |b| {
-        b.respond_to_friend_request(&user_id, accept).await?;
-        let friends = if accept {
-            match b.get_friends().await {
-                Ok(friends) => Some(friends),
-                Err(err) => {
-                    tracing::warn!(
-                        "get_friends failed after accepting friend request for account {}: {}",
-                        account_id,
-                        err
-                    );
+        match b.as_social_graph() {
+            Some(sg) => {
+                sg.respond_to_friend_request(&user_id, accept).await?;
+                let friends = if accept {
+                    match sg.get_friends().await {
+                        Ok(friends) => Some(friends),
+                        Err(err) => {
+                            tracing::warn!(
+                                "get_friends failed after accepting friend request for account {}: {}",
+                                account_id,
+                                err
+                            );
+                            None
+                        }
+                    }
+                } else {
                     None
-                }
+                };
+                Ok(friends)
             }
-        } else {
-            None
-        };
-        Ok(friends)
+            None => Err(ClientError::NotSupported(
+                "respond_to_friend_request: backend has no social graph".to_string(),
+            )),
+        }
     }).await {
         Ok(friends) => friends,
         Err(err) => {
