@@ -439,7 +439,7 @@ caveat).
       one-trait-at-a-time. Effort L per trait. Source: C.2.3.
       Shipped in changes `3abb6289` (H.3.a ModerationBackend) +
       `3569129e` (H.3.b SocialGraphBackend) + `91923aca` (H.3.c DmsAndGroupsBackend).
-- [ ] **H.4** Delete `ClientBackend` trait — all method moved out by H.1-H.3. Migrate all `Box<dyn ClientBackend>` storage sites to `Box<dyn IsBackend>`. Migrate all `~58` `with_backend` UI call sites to capability-gate via accessors. Final cleanup; ratchets the pattern.
+- [x] **H.4** Delete `ClientBackend` trait — all method moved out by H.1-H.3. Migrate all `Box<dyn ClientBackend>` storage sites to `Box<dyn IsBackend>`. Migrate all `~58` `with_backend` UI call sites to capability-gate via accessors. Final cleanup; ratchets the pattern. Shipped in changes `zuoruovy` (H.4.a) + `xxqtynuy` (H.4.b+c) + `rkspuvqmupwz` (H.4.d) + `ozyzuvvtswws` (H.4.e) + `wtosyoxqnxzx` (H.4.f-i).
   - [x] **H.4.a** Carve `MessagingBackend` (8 methods: send_typing, send_reply_message, search_messages, get_pinned_messages, set_message_pinned, get_channel_commands, get_available_emojis, get_available_stickers). All backends + 6 UI call sites migrated. Shipped in `zuoruovy`.
   - [x] **H.4.b** Carve `ServerAdminBackend` (6 methods: create_server, create_channel, update_server_banner, mark_channel_read, respond_to_server_invite, invite_user_to_server). All backends + 4 UI call sites migrated. Shipped in `xxqtynuy`.
   - [x] **H.4.c** Carve `DiscoverBackend` (1 method: search_communities). All backends + 1 UI call site migrated. Shipped in `xxqtynuy`.
@@ -596,9 +596,9 @@ immediate PR-friction relief.
 
 ---
 
-## Status: 🧭 SURVEY — ready for prioritisation
+## Status: ✅ DONE — all phases A-J shipped
 
-Pick which phases to greenlight. Recommend starting with Phase A as a
-pure cost-free win, then Phase B for the LSP fixes (silent data-loss
-bug fix in `send_reply_message` is genuinely user-visible), then
-Phase C as the warm-up to the larger structural moves.
+Phases A-F shipped pre-2026-05; Phase G fully closed (G.1–G.6l);
+Phase H fully closed (H.0–H.4.i); Phase I fully closed (I.1+I.2);
+Phase J fully closed (J.1+J.2). No engineering work remaining;
+"Don't bother" list (above) catalogues surveyed-and-rejected items.
