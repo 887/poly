@@ -8,6 +8,7 @@
 //! | `linked` | ≥1 `Link { to: Route::X }` / `nav!(Route::X)` callsite targets this variant |
 //! | `entry_point` | BFS root — exactly one variant in the workspace may carry this |
 //! | `programmatic<Tag>` | reachable via the `ProgrammaticProducer` impl for ZST `Tag` |
+//! | `skip_account_id` | variant has an `account_id` field but `route_account_id` must return `None` (e.g. `ReauthAccount`) |
 //!
 //! Multiple edges may be comma-separated:
 //! `#[connected(linked, programmatic<SignupLanding>, programmatic<PnOpener>)]`.
@@ -32,6 +33,11 @@ enum Edge {
     Linked,
     EntryPoint,
     Programmatic(Path),
+    /// Instructs `#[derive(Connected)]` to emit `None` from `route_account_id`
+    /// even though the variant has an `account_id` field.  Used on
+    /// `ReauthAccount` so that `route_targets_unknown_account` never treats a
+    /// reauth URL as targeting a known active account.
+    SkipAccountId,
 }
 
 impl Parse for Edge {
@@ -41,6 +47,7 @@ impl Parse for Edge {
         match s.as_str() {
             "linked" => Ok(Edge::Linked),
             "entry_point" => Ok(Edge::EntryPoint),
+            "skip_account_id" => Ok(Edge::SkipAccountId),
             "programmatic" => {
                 input.parse::<Token![<]>().map_err(|_orig| {
                     Error::new(
@@ -57,7 +64,7 @@ impl Parse for Edge {
                 ident.span(),
                 format!(
                     "unknown edge kind `{other}` — expected `linked`, \
-                     `entry_point`, or `programmatic<Tag>`"
+                     `entry_point`, `skip_account_id`, or `programmatic<Tag>`"
                 ),
             )),
         }

@@ -21,6 +21,7 @@ use proc_macro::TokenStream;
 
 mod connected;
 mod context_menu;
+mod route_introspect;
 mod rsx_size;
 mod ui_action;
 
@@ -67,16 +68,25 @@ pub fn connected(attr: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 /// `#[derive(Connected)]` — enables `#[connected(...)]` helper attributes on
-/// enum variants. Phase A: expands to nothing. Phase B / C: will emit a
-/// `linkme` distributed slice carrying each variant's declared edges so the
-/// `crates/lint-gate/build/route_graph.rs` BFS can read them at build time.
+/// enum variants and emits two route-introspection helpers on the enum:
+///
+/// - `pub fn route_account_id(&self) -> Option<&str>` — returns the
+///   `account_id` field of account-scoped variants; `None` for app-level
+///   routes and for any variant annotated `#[connected(skip_account_id)]`.
+///
+/// - `#[cfg(debug_assertions)] fn route_variant_name(&self) -> &'static str`
+///   — short discriminant name used by the dev-mode route-coverage counter.
+///
+/// Phase B / C: will additionally emit a `linkme` distributed slice carrying
+/// each variant's declared edges so the `crates/lint-gate/build/route_graph.rs`
+/// BFS can read them at build time.
 ///
 /// This derive is the companion that makes `#[connected(...)]` legal on a
 /// variant — Rust requires helper attributes to be declared by a derive on
 /// the enclosing enum.
 #[proc_macro_derive(Connected, attributes(connected))]
-pub fn derive_connected(_input: TokenStream) -> TokenStream {
-    TokenStream::new()
+pub fn derive_connected(input: TokenStream) -> TokenStream {
+    route_introspect::expand(input)
 }
 
 /// `#[ui_action(...)]` — semantic action contract for a `#[component]`.

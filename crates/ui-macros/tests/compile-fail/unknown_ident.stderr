@@ -1,4 +1,4 @@
-error: unknown edge kind `banana` — expected `linked`, `entry_point`, or `programmatic<Tag>`
+error: unknown edge kind `banana` — expected `linked`, `entry_point`, `skip_account_id`, or `programmatic<Tag>`
  --> tests/compile-fail/unknown_ident.rs:3:13
   |
 3 | #[connected(banana)]
