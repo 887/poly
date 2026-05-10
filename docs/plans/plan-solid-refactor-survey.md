@@ -450,16 +450,18 @@ caveat).
   - [x] **H.4.h** Each backend implements `IsBackend` directly (no more `ClientBackend`). Add universal methods to `IsBackend`. Shipped in git commit `2204cbe1` (worktree-agent-a257a82a7c3efaf57).
   - [x] **H.4.i** Migrate remaining `with_backend` UI call sites to capability-gate pattern; final cleanup. All 58 UI call sites already use `&dyn IsBackend` — workspace compiles cleanly. Shipped in git commit `2204cbe1` (worktree-agent-a257a82a7c3efaf57).
 
-### Phase I — Routes.rs decomposition (~1 week, after Phase H starts)
+### Phase I — Routes.rs decomposition (~1 week, after Phase H starts) — shipped in changes `tkkkwssqxqrv` (I.1) + `nortslwxwxtn` (I.2)
 
-- [ ] **I.1** Macro-derive `route_account_id` + `route_variant_name`
+- [x] **I.1** Macro-derive `route_account_id` + `route_variant_name`
       from `#[connected(...)]` metadata already on each Route variant.
       `sync_route_to_app_state` stays hand-written (intentionally
       divergent bodies — see B.1.4 caveats). Effort L. Source: B.1.4.
-- [ ] **I.2** Split `routes.rs` (2515 lines) per-domain — DM routes,
+      Shipped in change `tkkkwssqxqrv`.
+- [x] **I.2** Split `routes.rs` (2515 lines) per-domain — DM routes,
       server routes, forum routes, settings routes, agent routes,
-      moderation routes — each module taking only the capability traits
+      account/signup routes — each module taking only the capability traits
       it needs (DIP win). Effort L. Source: C.3.3.
+      Shipped in change `nortslwxwxtn`.
 
 ### Phase J — `mcp/chat-mcp/src/{tools,memory}.rs` split (~3 days) — shipped in commits `rpnypolk` (J.1) + `slqplxlt` (J.2)
 
