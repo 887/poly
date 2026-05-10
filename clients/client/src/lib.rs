@@ -573,13 +573,14 @@ pub trait ClientBackend: Send + Sync {
 /// | `as_social_graph` | [`SocialGraphBackend`] | H.3.b |
 /// | `as_dms_and_groups` | [`DmsAndGroupsBackend`] | H.3.c |
 /// | `as_messaging` | [`MessagingBackend`] | H.4.a |
+/// | `as_server_admin` | [`ServerAdminBackend`] | H.4.b |
+/// | `as_discover` | [`DiscoverBackend`] | H.4.c |
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 pub trait IsBackend: Send + Sync {
     /// The type identifier (slug) for this backend.
     ///
-    /// Returns the same value as [`ClientBackend::backend_type`].  Use
-    /// `.slug()` on the returned `BackendType` to get the string slug
+    /// Use `.slug()` on the returned `BackendType` to get the string slug
     /// (e.g. `"discord"`, `"matrix"`).
     fn backend_type(&self) -> BackendType;
 
@@ -587,10 +588,84 @@ pub trait IsBackend: Send + Sync {
     ///
     /// The UI uses these flags to hide controls that don't apply (e.g. mic /
     /// speaker buttons for read-only news feeds).
-    fn backend_capabilities(&self) -> BackendCapabilities;
+    /// Default: [`BackendCapabilities::READ_ONLY_FEED`].
+    fn backend_capabilities(&self) -> BackendCapabilities {
+        BackendCapabilities::READ_ONLY_FEED
+    }
+
+    /// Human-readable display name for this backend instance.
+    ///
+    /// Shown in account headings, settings, and debug logs.
+    fn backend_name(&self) -> &str;
 
     /// The version string the plugin advertises on outbound requests.
-    fn client_version(&self) -> String;
+    ///
+    /// Default: `"poly/0.0.0"`.
+    fn client_version(&self) -> String {
+        "poly/0.0.0".to_string()
+    }
+
+    /// Check if the client currently holds a valid authenticated session.
+    ///
+    /// Default: `false`.
+    fn is_authenticated(&self) -> bool {
+        false
+    }
+
+    /// How this backend exposes account signup to users.
+    ///
+    /// `server_url` is passed for custom-server backends (Matrix, Stoat,
+    /// Lemmy, Forgejo, GitHub Enterprise) so the signup URL can be
+    /// parameterised. Hardcoded backends (Discord, Teams, …) ignore it.
+    ///
+    /// Default: [`SignupMethod::NotSupported`].
+    fn get_signup_method(&self, _server_url: Option<&str>) -> SignupMethod {
+        SignupMethod::NotSupported
+    }
+
+    /// Set or clear the version override. `None` clears.
+    ///
+    /// Default: `Err(NotSupported)`.
+    async fn set_client_version_override(
+        &self,
+        _override: Option<String>,
+    ) -> ClientResult<()> {
+        Err(ClientError::NotSupported(
+            "set_client_version_override".to_string(),
+        ))
+    }
+
+    /// Return the full mechanism inventory for this backend.
+    ///
+    /// Empty list is legal (most backends have no mechanisms).
+    /// Default: `Ok(vec![])`.
+    async fn client_mechanisms(&self) -> ClientResult<Vec<Mechanism>> {
+        Ok(vec![])
+    }
+
+    /// Toggle one mechanism on or off by ID.
+    ///
+    /// Default: `Err(NotSupported)`.
+    async fn set_client_mechanism(
+        &self,
+        _id: &str,
+        _enabled: bool,
+    ) -> ClientResult<()> {
+        Err(ClientError::NotSupported(
+            "set_client_mechanism".to_string(),
+        ))
+    }
+
+    /// Self-declared plugin manifest. Purely informational.
+    ///
+    /// Native (in-tree) backends return [`PluginManifest::default`]. WASM
+    /// plugins override this with the manifest exported via the WIT
+    /// `get-plugin-manifest` function.
+    ///
+    /// Default: [`PluginManifest::default()`].
+    fn plugin_manifest(&self) -> PluginManifest {
+        PluginManifest::default()
+    }
 
     /// Authenticate with the backend using the provided credentials.
     ///
@@ -709,8 +784,50 @@ impl<T: ClientBackend + ?Sized> IsBackend for T {
     }
 
     #[inline]
+    fn backend_name(&self) -> &str {
+        ClientBackend::backend_name(self)
+    }
+
+    #[inline]
     fn client_version(&self) -> String {
         ClientBackend::client_version(self)
+    }
+
+    #[inline]
+    fn is_authenticated(&self) -> bool {
+        ClientBackend::is_authenticated(self)
+    }
+
+    #[inline]
+    fn get_signup_method(&self, server_url: Option<&str>) -> SignupMethod {
+        ClientBackend::get_signup_method(self, server_url)
+    }
+
+    #[inline]
+    async fn set_client_version_override(
+        &self,
+        override_: Option<String>,
+    ) -> ClientResult<()> {
+        ClientBackend::set_client_version_override(self, override_).await
+    }
+
+    #[inline]
+    async fn client_mechanisms(&self) -> ClientResult<Vec<Mechanism>> {
+        ClientBackend::client_mechanisms(self).await
+    }
+
+    #[inline]
+    async fn set_client_mechanism(
+        &self,
+        id: &str,
+        enabled: bool,
+    ) -> ClientResult<()> {
+        ClientBackend::set_client_mechanism(self, id, enabled).await
+    }
+
+    #[inline]
+    fn plugin_manifest(&self) -> PluginManifest {
+        ClientBackend::plugin_manifest(self)
     }
 
     #[inline]
