@@ -1901,6 +1901,35 @@ pub fn App() -> Element {
                         .await;
                     }
                 }
+
+                // Wait for storage_ready + setup_complete before revealing
+                // the shell — otherwise the overlay vanishes onto a still-
+                // unpainted Router subtree and the user sees a solid-blank
+                // window for a few hundred ms. Capped at 8 s so a stuck
+                // path doesn't trap the user behind the overlay.
+                let ready_deadline_ms = js_sys::Date::now() + 8_000.0_f64;
+                while js_sys::Date::now() < ready_deadline_ms {
+                    if *storage_ready.read() && app_state.read().is_setup_complete {
+                        break;
+                    }
+                    // lint-allow-unused: fire-and-forget JS timer; recv() ignored.
+                    #[allow(clippy::let_underscore_must_use)]
+                    let _ = document::eval(
+                        "setTimeout(() => dioxus.send(true), 50);",
+                    )
+                    .recv::<bool>()
+                    .await;
+                }
+                // Extra double-rAF so the shell's first real paint lands
+                // before the overlay drops — without this the stage
+                // becomes display:flex but the inner Router subtree
+                // hasn't yet been painted in the same frame.
+                #[allow(clippy::let_underscore_must_use)]
+                let _ = document::eval(
+                    "requestAnimationFrame(() => requestAnimationFrame(() => dioxus.send(true)));",
+                )
+                .recv::<bool>()
+                .await;
             }
             startup_overlay_visible.set(false);
             startup_overlay_finished.set(true);
