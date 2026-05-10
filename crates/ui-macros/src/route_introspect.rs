@@ -18,7 +18,7 @@
 use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::quote;
-use syn::{Data, DeriveInput, Fields, Ident, Variant};
+use syn::{Data, DeriveInput, Fields, Variant};
 
 /// Walk the variants of the annotated enum and emit the two introspection fns.
 pub fn expand(input: TokenStream) -> TokenStream {

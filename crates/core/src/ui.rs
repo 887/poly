@@ -72,6 +72,10 @@ pub(crate) mod demo;
 mod electron_titlebar;
 pub(crate) mod favorites_sidebar;
 pub(crate) mod main_layout;
+// The module source lives in ui/routes/mod.rs (domain-split structure).
+// The legacy ui/routes.rs is kept as a non-compiled artefact for reference
+// until a future cleanup removes it; #[path] overrides the default search.
+#[path = "ui/routes/mod.rs"]
 pub mod routes;
 pub(crate) mod search;
 mod settings;
