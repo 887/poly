@@ -767,6 +767,298 @@ pub trait IsBackend: Send + Sync {
     fn as_discover(&self) -> Option<&dyn DiscoverBackend> {
         None
     }
+
+    // --- Servers / Communities (H.4.e) ---
+
+    /// Get all servers/communities the user has joined.
+    ///
+    /// Default: `Ok(vec![])` — backends with no server concept return empty.
+    async fn get_servers(&self) -> ClientResult<Vec<Server>> {
+        Ok(vec![])
+    }
+
+    /// Get a specific server by ID.
+    ///
+    /// Default: `Err(NotFound)`.
+    async fn get_server(&self, id: &str) -> ClientResult<Server> {
+        Err(ClientError::NotFound(format!("server: {id}")))
+    }
+
+    // --- Channels (H.4.e) ---
+
+    /// Get all channels in a server.
+    ///
+    /// Default: `Ok(vec![])`.
+    async fn get_channels(&self, _server_id: &str) -> ClientResult<Vec<Channel>> {
+        Ok(vec![])
+    }
+
+    /// Get a specific channel by ID.
+    ///
+    /// Default: `Err(NotFound)`.
+    async fn get_channel(&self, id: &str) -> ClientResult<Channel> {
+        Err(ClientError::NotFound(format!("channel: {id}")))
+    }
+
+    // --- Messages (H.4.e) ---
+
+    /// Send a message to a channel.
+    ///
+    /// Default: `Err(NotSupported)`.
+    async fn send_message(
+        &self,
+        _channel_id: &str,
+        _content: MessageContent,
+    ) -> ClientResult<Message> {
+        Err(ClientError::NotSupported("send_message".to_string()))
+    }
+
+    /// Get messages from a channel with query options.
+    ///
+    /// Default: `Ok(vec![])`.
+    async fn get_messages(
+        &self,
+        _channel_id: &str,
+        _query: MessageQuery,
+    ) -> ClientResult<Vec<Message>> {
+        Ok(vec![])
+    }
+
+    // --- Users / Members (H.4.e) ---
+
+    /// Get members of a channel.
+    ///
+    /// Default: `Ok(vec![])`.
+    async fn get_channel_members(&self, _channel_id: &str) -> ClientResult<Vec<User>> {
+        Ok(vec![])
+    }
+
+    // --- Notifications (H.4.e) ---
+
+    /// Get the user's notifications.
+    ///
+    /// Default: `Ok(vec![])`.
+    async fn get_notifications(&self) -> ClientResult<Vec<Notification>> {
+        Ok(vec![])
+    }
+
+    // --- Voice / Video (H.4.e) ---
+
+    /// Get the current voice participants in a voice or video channel.
+    ///
+    /// Default: `Ok(vec![])`.
+    async fn get_voice_participants(
+        &self,
+        _channel_id: &str,
+    ) -> ClientResult<Vec<VoiceParticipant>> {
+        Ok(vec![])
+    }
+
+    // --- Real-time events (H.4.e) ---
+
+    /// Get a stream of real-time events from the backend.
+    ///
+    /// Default: an empty stream that never yields.
+    fn event_stream(&self) -> Pin<Box<dyn Stream<Item = ClientEvent> + Send>> {
+        Box::pin(futures::stream::empty())
+    }
+
+    // --- D9 UI surface methods (H.4.e) ---
+
+    /// D11 — return plugin-declared context menu items for `target`.
+    ///
+    /// Default: `Ok(vec![])` — backend contributes no context menu items.
+    async fn get_context_menu_items(
+        &self,
+        _target: MenuTargetKind,
+        _target_id: &str,
+    ) -> ClientResult<Vec<MenuItem>> {
+        Ok(vec![])
+    }
+
+    /// D14 / D22 — dispatch a plugin action.
+    ///
+    /// Default: `Err(NotFound(action_id))`.
+    async fn invoke_context_action(
+        &self,
+        action_id: &str,
+        _target: MenuTargetKind,
+        _target_id: &str,
+    ) -> ClientResult<ActionOutcome> {
+        Err(ClientError::NotFound(action_id.to_string()))
+    }
+
+    /// D16 — poll a pending async action for its final outcome.
+    ///
+    /// Default: `Err(NotSupported)`.
+    async fn poll_action(&self, _handle: PendingHandle) -> ClientResult<ActionOutcome> {
+        Err(ClientError::NotSupported("poll_action".to_string()))
+    }
+
+    /// D11 / D18 — every settings section this plugin contributes.
+    ///
+    /// Default: `Ok(vec![])`.
+    async fn get_settings_sections(&self) -> ClientResult<Vec<SettingsSection>> {
+        Ok(vec![])
+    }
+
+    /// Storage cell for backend-local settings.
+    ///
+    /// Default: a static empty cell.
+    fn settings_storage(&self) -> &SettingsStorageCell {
+        static EMPTY: std::sync::OnceLock<SettingsStorageCell> = std::sync::OnceLock::new();
+        EMPTY.get_or_init(SettingsStorageCell::new)
+    }
+
+    /// D15 — read a JSON-encoded setting value.
+    ///
+    /// Default: reads from `self.settings_storage()`.
+    async fn get_setting_value(
+        &self,
+        scope: SettingsScope,
+        scope_id: &str,
+        key: &str,
+    ) -> ClientResult<String> {
+        if let Some(v) = self.settings_storage().get(scope, scope_id, key) {
+            return Ok(v);
+        }
+        for section in self.get_settings_sections().await? {
+            for field in section.fields {
+                if field.key == key {
+                    return Ok(field.default_value);
+                }
+            }
+        }
+        Err(ClientError::NotFound(format!("setting: {key}")))
+    }
+
+    /// D15 — write a JSON-encoded setting value.
+    ///
+    /// Default: writes to `self.settings_storage()`.
+    async fn set_setting_value(
+        &self,
+        scope: SettingsScope,
+        scope_id: &str,
+        key: &str,
+        value: &str,
+    ) -> ClientResult<()> {
+        self.settings_storage().set(scope, scope_id, key, value)
+    }
+
+    /// D5 / D19 — plugin's current sidebar declaration.
+    ///
+    /// Default: Custom layout with no sections.
+    async fn get_sidebar_declaration(&self) -> ClientResult<SidebarDeclaration> {
+        Ok(SidebarDeclaration {
+            layout: SidebarLayoutKind::Custom,
+            sections: vec![],
+            header_block: None,
+        })
+    }
+
+    /// D14 / D25 — dispatch a sidebar-item click.
+    ///
+    /// Default: `Err(NotFound(action_id))`.
+    async fn invoke_sidebar_action(&self, action_id: &str) -> ClientResult<ActionOutcome> {
+        Err(ClientError::NotFound(action_id.to_string()))
+    }
+
+    /// Fetch the account-level overview view descriptor.
+    ///
+    /// Default: generic CardGrid descriptor.
+    async fn get_account_overview_view(&self) -> ClientResult<ViewDescriptor> {
+        Ok(ViewDescriptor {
+            kind: ViewKind::CardGrid,
+            header: Some(ViewHeader {
+                title_key: Some("overview-default-title".to_string()),
+                subtitle_key: Some("overview-default-subtitle".to_string()),
+                info_block: None,
+            }),
+            toolbar: None,
+            body: ViewBody::CardBody(CardSpec {
+                primary_field: "name".to_string(),
+            }),
+        })
+    }
+
+    /// D5 — fetch a channel's non-chat view descriptor.
+    ///
+    /// Default: `Err(NotSupported)`.
+    async fn get_channel_view(&self, _channel_id: &str) -> ClientResult<ViewDescriptor> {
+        Err(ClientError::NotSupported("get_channel_view".to_string()))
+    }
+
+    /// D23 — paged data feed.
+    ///
+    /// Default: empty page.
+    async fn get_view_rows(
+        &self,
+        _channel_id: &str,
+        _cursor: Option<Cursor>,
+        _sort_id: Option<&str>,
+        _filter_id: Option<&str>,
+        _tab_id: Option<&str>,
+    ) -> ClientResult<ViewRowsPage> {
+        Ok(ViewRowsPage {
+            rows: vec![],
+            next_cursor: None,
+        })
+    }
+
+    /// D5 — detail payload for `split` views.
+    ///
+    /// Default: `Err(NotSupported)`.
+    async fn get_view_detail(
+        &self,
+        _channel_id: &str,
+        _row_id: &str,
+    ) -> ClientResult<ViewDetail> {
+        Err(ClientError::NotSupported("get_view_detail".to_string()))
+    }
+
+    /// D8 — composer-toolbar buttons for the given channel.
+    ///
+    /// Default: `Ok(vec![])`.
+    async fn get_composer_buttons(
+        &self,
+        _channel_id: &str,
+    ) -> ClientResult<Vec<ComposerButton>> {
+        Ok(vec![])
+    }
+
+    /// D8 — per-message actions, merged into the message hover/overflow menu.
+    ///
+    /// Default: `Ok(vec![])`.
+    async fn get_message_actions(
+        &self,
+        _channel_id: &str,
+        _message_id: &str,
+    ) -> ClientResult<Vec<MenuItem>> {
+        Ok(vec![])
+    }
+
+    /// D14 / D25 — dispatch a composer button action.
+    ///
+    /// Default: `Err(NotFound(action_id))`.
+    async fn invoke_composer_action(
+        &self,
+        action_id: &str,
+        _channel_id: &str,
+    ) -> ClientResult<ActionOutcome> {
+        Err(ClientError::NotFound(action_id.to_string()))
+    }
+
+    /// D14 / D25 — dispatch a per-message action.
+    ///
+    /// Default: `Err(NotFound(action_id))`.
+    async fn invoke_message_action(
+        &self,
+        action_id: &str,
+        _channel_id: &str,
+        _message_id: &str,
+    ) -> ClientResult<ActionOutcome> {
+        Err(ClientError::NotFound(action_id.to_string()))
+    }
 }
 
 // Blanket implementation: every `ClientBackend` automatically is an `IsBackend`.
@@ -886,6 +1178,203 @@ impl<T: ClientBackend + ?Sized> IsBackend for T {
     #[inline]
     fn as_discover(&self) -> Option<&dyn DiscoverBackend> {
         ClientBackend::as_discover(self)
+    }
+
+    // --- Core universals forwarded from ClientBackend (H.4.e) ---
+
+    #[inline]
+    async fn get_servers(&self) -> ClientResult<Vec<Server>> {
+        ClientBackend::get_servers(self).await
+    }
+
+    #[inline]
+    async fn get_server(&self, id: &str) -> ClientResult<Server> {
+        ClientBackend::get_server(self, id).await
+    }
+
+    #[inline]
+    async fn get_channels(&self, server_id: &str) -> ClientResult<Vec<Channel>> {
+        ClientBackend::get_channels(self, server_id).await
+    }
+
+    #[inline]
+    async fn get_channel(&self, id: &str) -> ClientResult<Channel> {
+        ClientBackend::get_channel(self, id).await
+    }
+
+    #[inline]
+    async fn send_message(
+        &self,
+        channel_id: &str,
+        content: MessageContent,
+    ) -> ClientResult<Message> {
+        ClientBackend::send_message(self, channel_id, content).await
+    }
+
+    #[inline]
+    async fn get_messages(
+        &self,
+        channel_id: &str,
+        query: MessageQuery,
+    ) -> ClientResult<Vec<Message>> {
+        ClientBackend::get_messages(self, channel_id, query).await
+    }
+
+    #[inline]
+    async fn get_channel_members(&self, channel_id: &str) -> ClientResult<Vec<User>> {
+        ClientBackend::get_channel_members(self, channel_id).await
+    }
+
+    #[inline]
+    async fn get_notifications(&self) -> ClientResult<Vec<Notification>> {
+        ClientBackend::get_notifications(self).await
+    }
+
+    #[inline]
+    async fn get_voice_participants(
+        &self,
+        channel_id: &str,
+    ) -> ClientResult<Vec<VoiceParticipant>> {
+        ClientBackend::get_voice_participants(self, channel_id).await
+    }
+
+    #[inline]
+    fn event_stream(&self) -> Pin<Box<dyn Stream<Item = ClientEvent> + Send>> {
+        ClientBackend::event_stream(self)
+    }
+
+    // --- D9 UI surface forwarded from ClientBackend (H.4.e) ---
+
+    #[inline]
+    async fn get_context_menu_items(
+        &self,
+        target: MenuTargetKind,
+        target_id: &str,
+    ) -> ClientResult<Vec<MenuItem>> {
+        ClientBackend::get_context_menu_items(self, target, target_id).await
+    }
+
+    #[inline]
+    async fn invoke_context_action(
+        &self,
+        action_id: &str,
+        target: MenuTargetKind,
+        target_id: &str,
+    ) -> ClientResult<ActionOutcome> {
+        ClientBackend::invoke_context_action(self, action_id, target, target_id).await
+    }
+
+    #[inline]
+    async fn poll_action(&self, handle: PendingHandle) -> ClientResult<ActionOutcome> {
+        ClientBackend::poll_action(self, handle).await
+    }
+
+    #[inline]
+    async fn get_settings_sections(&self) -> ClientResult<Vec<SettingsSection>> {
+        ClientBackend::get_settings_sections(self).await
+    }
+
+    #[inline]
+    fn settings_storage(&self) -> &SettingsStorageCell {
+        ClientBackend::settings_storage(self)
+    }
+
+    #[inline]
+    async fn get_setting_value(
+        &self,
+        scope: SettingsScope,
+        scope_id: &str,
+        key: &str,
+    ) -> ClientResult<String> {
+        ClientBackend::get_setting_value(self, scope, scope_id, key).await
+    }
+
+    #[inline]
+    async fn set_setting_value(
+        &self,
+        scope: SettingsScope,
+        scope_id: &str,
+        key: &str,
+        value: &str,
+    ) -> ClientResult<()> {
+        ClientBackend::set_setting_value(self, scope, scope_id, key, value).await
+    }
+
+    #[inline]
+    async fn get_sidebar_declaration(&self) -> ClientResult<SidebarDeclaration> {
+        ClientBackend::get_sidebar_declaration(self).await
+    }
+
+    #[inline]
+    async fn invoke_sidebar_action(&self, action_id: &str) -> ClientResult<ActionOutcome> {
+        ClientBackend::invoke_sidebar_action(self, action_id).await
+    }
+
+    #[inline]
+    async fn get_account_overview_view(&self) -> ClientResult<ViewDescriptor> {
+        ClientBackend::get_account_overview_view(self).await
+    }
+
+    #[inline]
+    async fn get_channel_view(&self, channel_id: &str) -> ClientResult<ViewDescriptor> {
+        ClientBackend::get_channel_view(self, channel_id).await
+    }
+
+    #[inline]
+    async fn get_view_rows(
+        &self,
+        channel_id: &str,
+        cursor: Option<Cursor>,
+        sort_id: Option<&str>,
+        filter_id: Option<&str>,
+        tab_id: Option<&str>,
+    ) -> ClientResult<ViewRowsPage> {
+        ClientBackend::get_view_rows(self, channel_id, cursor, sort_id, filter_id, tab_id).await
+    }
+
+    #[inline]
+    async fn get_view_detail(
+        &self,
+        channel_id: &str,
+        row_id: &str,
+    ) -> ClientResult<ViewDetail> {
+        ClientBackend::get_view_detail(self, channel_id, row_id).await
+    }
+
+    #[inline]
+    async fn get_composer_buttons(
+        &self,
+        channel_id: &str,
+    ) -> ClientResult<Vec<ComposerButton>> {
+        ClientBackend::get_composer_buttons(self, channel_id).await
+    }
+
+    #[inline]
+    async fn get_message_actions(
+        &self,
+        channel_id: &str,
+        message_id: &str,
+    ) -> ClientResult<Vec<MenuItem>> {
+        ClientBackend::get_message_actions(self, channel_id, message_id).await
+    }
+
+    #[inline]
+    async fn invoke_composer_action(
+        &self,
+        action_id: &str,
+        channel_id: &str,
+    ) -> ClientResult<ActionOutcome> {
+        ClientBackend::invoke_composer_action(self, action_id, channel_id).await
+    }
+
+    #[inline]
+    async fn invoke_message_action(
+        &self,
+        action_id: &str,
+        channel_id: &str,
+        message_id: &str,
+    ) -> ClientResult<ActionOutcome> {
+        ClientBackend::invoke_message_action(self, action_id, channel_id, message_id).await
     }
 }
 
