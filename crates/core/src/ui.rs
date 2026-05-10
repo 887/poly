@@ -1015,7 +1015,7 @@ async fn restore_poly_accounts(
     account_sessions: BatchedSignal<AccountSessions>,
 ) {
     use crate::client_manager::BackendHandle;
-    use poly_client::ClientBackend as _;
+    use poly_client::IsBackend as _;
     use std::collections::HashMap;
     use std::sync::Arc;
 
@@ -1066,7 +1066,7 @@ async fn restore_poly_accounts(
                 let backend_handle: BackendHandle = Arc::new(tokio::sync::RwLock::new(Box::new(
                     backend,
                 )
-                    as Box<dyn poly_client::ClientBackend + Send + Sync>));
+                    as Box<dyn poly_client::IsBackend>));
 
                 // Build server→account map.
                 let mut server_map = HashMap::new();

@@ -5,7 +5,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
-use poly_client::{AuthCredentials, ClientBackend, MessageQuery};
+
 use poly_github::GitHubClient;
 use tokio::net::TcpListener;
 
@@ -733,7 +733,7 @@ async fn test_get_servers_repo_card_fields() {
 /// `get_account_overview_view` returns a CardGrid with correct header keys.
 #[tokio::test]
 async fn test_get_account_overview_view_descriptor() {
-    use poly_client::{ClientBackend, ViewBody, ViewKind};
+    
     let base_url = start_test_server().await;
     let token = get_test_token(&base_url, "penguin").await;
     let mut client = GitHubClient::with_http(&base_url);
@@ -769,7 +769,7 @@ async fn test_get_account_overview_view_descriptor() {
 /// `get_view_rows` with empty channel_id returns one card per cached repo.
 #[tokio::test]
 async fn test_get_view_rows_overview_returns_repo_cards() {
-    use poly_client::ClientBackend;
+    use poly_client::IsBackend;
     let base_url = start_test_server().await;
     let token = get_test_token(&base_url, "penguin").await;
     let mut client = GitHubClient::with_http(&base_url);
@@ -825,7 +825,7 @@ async fn test_get_view_rows_overview_returns_repo_cards() {
 /// `get_view_rows` overview with no cached repos returns an empty page (not an error).
 #[tokio::test]
 async fn test_get_view_rows_overview_empty_cache() {
-    use poly_client::ClientBackend;
+    use poly_client::IsBackend;
     let base_url = start_test_server().await;
     // Create client but do NOT call get_servers — cache stays empty.
     let client = GitHubClient::with_http(&base_url);

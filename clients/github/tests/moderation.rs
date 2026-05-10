@@ -5,7 +5,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
-use poly_client::{AuthCredentials, ClientBackend, ClientError};
+
 use poly_github::GitHubClient;
 use tokio::net::TcpListener;
 

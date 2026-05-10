@@ -3,7 +3,7 @@
 //! Phase G.1 / Phase B Fix-up of `docs/plans/plan-client-version-override-and-sandbox.md`.
 //!
 //! `MatrixHttpClient::request()` injects `User-Agent` on every outbound call.
-//! `set_client_version_override` in `impl ClientBackend for MatrixClient` calls
+//! `set_client_version_override` in `impl IsBackend for MatrixClient` calls
 //! `self.http.set_user_agent(ua)` which updates the RwLock-backed field.
 //! All subsequent `request()` / `authenticated_request()` calls pick it up.
 
@@ -11,7 +11,7 @@
 
 use std::sync::Arc;
 
-use poly_client::{AuthCredentials, ClientBackend};
+
 use poly_matrix::MatrixClient;
 use poly_test_matrix::{MatrixState, router};
 use tokio::net::TcpListener;

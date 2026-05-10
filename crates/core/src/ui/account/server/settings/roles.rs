@@ -7,7 +7,8 @@ use crate::state::BatchedSignal;
 use crate::i18n::t;
 use crate::ui::client_ui::use_view_resource::{use_view_resource, ViewQuery};
 use dioxus::prelude::*;
-use poly_client::{ClientBackend, ClientError, ClientResult, Role};
+use poly_client::{ClientError, ClientResult, IsBackend, Role};
+
 use poly_ui_macros::{context_menu, ui_action};
 
 // ── ViewQuery impl ────────────────────────────────────────────────────────────
@@ -21,7 +22,7 @@ struct ServerRolesQuery {
 impl ViewQuery for ServerRolesQuery {
     type Output = Vec<Role>;
     fn account_id(&self) -> &str { &self.account_id }
-    async fn fetch(&self, b: &dyn ClientBackend) -> ClientResult<Self::Output> {
+    async fn fetch(&self, b: &dyn IsBackend) -> ClientResult<Self::Output> {
         match b.as_moderation() {
             Some(m) => m.get_server_roles(&self.server_id).await,
             None => Err(ClientError::NotSupported("get_server_roles".to_string())),

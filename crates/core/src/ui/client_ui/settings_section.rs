@@ -9,7 +9,7 @@
 //! ## Prop shape (WP 3.A)
 //!
 //! - `section: SettingsSection` — the declared section (scope/key/icon/fields).
-//! - `account_id: String` — selects the [`ClientBackend`] via
+//! - `account_id: String` — selects the [`IsBackend`] via
 //!   [`crate::client_manager::ClientManager::get_backend`].
 //! - `scope_id: String` — `""` for `AccountGlobal`; server-id / channel-id /
 //!   user-id for the other scopes.
@@ -34,7 +34,7 @@ use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::client_ui::toast::{push_toast, ToastMessage};
 use dioxus::prelude::*;
 use poly_client::{
-    ClientBackend, ClientError, SettingDescriptor, SettingKind, SettingsScope, SettingsSection,
+    IsBackend, ClientError, SettingDescriptor, SettingKind, SettingsScope, SettingsSection,
     ToastTone,
 };
 use poly_ui_macros::{context_menu, ui_action};
@@ -45,7 +45,7 @@ use tokio::sync::RwLock;
 ///
 /// Carries everything the async save needs (scope / scope-id / key / account).
 /// Applied via the standard `UiAction::apply` pipeline; the actual plugin
-/// round-trip happens via `spawn` because the host `ClientBackend` is async.
+/// round-trip happens via `spawn` because the host `IsBackend` is async.
 #[derive(Debug, Clone)]
 pub enum PluginSettingFieldAction {
     /// Persist a new JSON-encoded value for a plugin setting.
@@ -540,7 +540,7 @@ async fn save_value(
 fn resolve_backend(
     client_manager: &BatchedSignal<ClientManager>,
     account_id: &str,
-) -> Result<Arc<RwLock<Box<dyn ClientBackend>>>, ClientError> {
+) -> Result<Arc<RwLock<Box<dyn IsBackend>>>, ClientError> {
     client_manager
         .read()
         .get_backend(account_id)

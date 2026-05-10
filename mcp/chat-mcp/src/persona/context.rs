@@ -190,7 +190,7 @@ pub trait PersonaBackendProvider: Send + Sync {
 /// Wraps a shared reference to `BackendPool` with a 5-second per-call timeout.
 ///
 /// Because `BackendPool` uses a plain `std::sync::Mutex` (not an async RwLock),
-/// we take the approach of cloning the `Arc<dyn ClientBackend>` under the lock,
+/// we take the approach of cloning the `Arc<dyn IsBackend>` under the lock,
 /// releasing the lock, then calling the async backend method outside the lock.
 /// This matches the pattern already used in `main.rs:run_autosend_engine`.
 pub struct BackendPoolProvider<'a> {

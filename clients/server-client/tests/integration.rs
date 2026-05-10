@@ -924,7 +924,7 @@ async fn test_remove_friend() {
 
 #[tokio::test]
 async fn test_settings_storage_round_trip() {
-    use poly_client::{ClientBackend, SettingsScope};
+    
     let client = poly_server_client::PolyServerBackend::new("http://localhost:9333", [0u8; 32]);
     client
         .set_setting_value(SettingsScope::PerServer, "srv1", "nickname", "poly-nick")

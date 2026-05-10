@@ -10,7 +10,8 @@
 //!   one `HackerNewsClient` per account.
 
 use dioxus::prelude::*;
-use poly_client::{AuthCredentials, ClientBackend, SignupCompleted, SignupContext};
+use poly_client::{AuthCredentials, IsBackend as _, SignupCompleted, SignupContext};
+
 
 use crate::HackerNewsClient;
 use poly_ui_macros::{context_menu, ui_action};

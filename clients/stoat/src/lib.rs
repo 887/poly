@@ -11,7 +11,7 @@
 //!
 //! Stoat (formerly Revolt) messenger client for Poly.
 //!
-//! Implements [`poly_client::ClientBackend`] using the Stoat REST and
+//! Implements [`poly_client::IsBackend`] using the Stoat REST and
 //! WebSocket APIs from `developers.stoat.chat`.
 //!
 //! ## Build Modes
@@ -504,7 +504,7 @@ impl Default for StoatClient {
 #[cfg(feature = "native")]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-impl ClientBackend for StoatClient {
+impl IsBackend for StoatClient {
     async fn authenticate(&mut self, credentials: AuthCredentials) -> ClientResult<Session> {
         let authenticated = match StoatAuthInput::try_from(credentials)? {
             StoatAuthInput::SessionToken(token) => self.http.authenticate_with_token(token).await?,
@@ -1921,7 +1921,7 @@ mod tests {
         response::IntoResponse,
         routing::{get, post},
     };
-    use poly_client::{BackendType, ClientBackend, PresenceStatus};
+    
     use reqwest::Method;
     use serde_json::json;
     use std::sync::{Arc, Mutex};
@@ -2227,7 +2227,7 @@ mod tests {
             user_display_name: Some("Stoaty".to_string()),
         })?;
 
-        let sent = poly_client::ClientBackend::send_reply_message(
+        let sent = poly_client::IsBackend::send_reply_message(
             &client,
             "channel_1",
             "01HYYYYYYYYYYYYYYYYYYYYYYY",

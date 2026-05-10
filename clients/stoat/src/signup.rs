@@ -3,7 +3,8 @@
 //! This is the host-facing login UI for the native Stoat backend.
 
 use dioxus::prelude::*;
-use poly_client::{AuthCredentials, ClientBackend as _, SignupCompleted, SignupContext};
+use poly_client::{AuthCredentials, IsBackend as _, SignupCompleted, SignupContext};
+
 
 use crate::{OFFICIAL_STOAT_BASE_URL, StoatClient};
 use poly_ui_macros::{context_menu, ui_action};

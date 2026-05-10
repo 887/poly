@@ -1,6 +1,6 @@
 //! Client manager — manages active messenger backend connections.
 //!
-//! `ClientManager` holds `Arc<dyn ClientBackend>` instances keyed by account ID.
+//! `ClientManager` holds `Arc<dyn IsBackend>` instances keyed by account ID.
 //! It provides methods to activate/deactivate the demo client and to look up
 //! which backend owns a given server.
 //!
@@ -9,7 +9,7 @@
 
 use dioxus::prelude::{Callback, Element};
 use poly_client::{
-    AccountPresence, AuthCredentials, BackendCapabilities, BackendType, ClientBackend,
+    AccountPresence, AuthCredentials, BackendCapabilities, BackendType, IsBackend,
     ConnectionStatus, Server, Session, SignupCompleted, SignupContext, SignupMethod,
     TestAccountEntry,
 };
@@ -83,7 +83,7 @@ pub struct SignupEntry {
 }
 
 /// A shared, thread-safe handle to a messenger backend.
-pub type BackendHandle = Arc<RwLock<Box<dyn ClientBackend>>>;
+pub type BackendHandle = Arc<RwLock<Box<dyn IsBackend>>>;
 
 // Hang #4 prevention helper — see `crate::client_manager_timeout` module
 // docs and `docs/plans/plan-backend-read-timeout.md`. Re-exported here so
@@ -1010,7 +1010,7 @@ impl ClientManager {
     ///   `read_with_timeout(BACKEND_TIMEOUT)` rather than raw `backend.read().await`.
     pub async fn with_backend<F, R>(&self, account_id: &str, f: F) -> poly_client::ClientResult<R>
     where
-        F: AsyncFnOnce(&dyn poly_client::ClientBackend) -> poly_client::ClientResult<R>,
+        F: AsyncFnOnce(&dyn poly_client::IsBackend) -> poly_client::ClientResult<R>,
     {
         self.with_backend_timeout(account_id, Self::BACKEND_TIMEOUT, f).await
     }
@@ -1026,7 +1026,7 @@ impl ClientManager {
         f: F,
     ) -> poly_client::ClientResult<R>
     where
-        F: AsyncFnOnce(&dyn poly_client::ClientBackend) -> poly_client::ClientResult<R>,
+        F: AsyncFnOnce(&dyn poly_client::IsBackend) -> poly_client::ClientResult<R>,
     {
         let handle = self
             .get_backend(account_id)
@@ -1051,7 +1051,7 @@ impl ClientManager {
         f: F,
     ) -> poly_client::ClientResult<R>
     where
-        F: AsyncFnOnce(&str, &dyn poly_client::ClientBackend) -> poly_client::ClientResult<R>,
+        F: AsyncFnOnce(&str, &dyn poly_client::IsBackend) -> poly_client::ClientResult<R>,
     {
         let (account_id, handle) = self
             .get_backend_for_server(server_id)

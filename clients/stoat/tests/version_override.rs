@@ -3,7 +3,7 @@
 //! Phase G.1 / Phase B Fix-up of `docs/plans/plan-client-version-override-and-sandbox.md`.
 //!
 //! `StoatHttpClient::request()` injects `User-Agent` on every outbound call.
-//! `set_client_version_override` in `impl ClientBackend for StoatClient` calls
+//! `set_client_version_override` in `impl IsBackend for StoatClient` calls
 //! `self.http.set_user_agent(ua)` which updates the RwLock-backed field.
 //! All subsequent `request()` / `authenticated_request()` calls pick it up.
 
@@ -11,7 +11,7 @@
 
 use std::sync::Arc;
 
-use poly_client::{AuthCredentials, ClientBackend};
+
 use poly_stoat::StoatClient;
 use poly_test_common::TestServerBase;
 use poly_test_stoat::{StoatState, router};

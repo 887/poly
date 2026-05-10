@@ -26,7 +26,7 @@ use std::fmt;
 use std::panic::Location;
 use std::time::Duration;
 
-use poly_client::ClientBackend;
+use poly_client::IsBackend;
 use tokio::sync::RwLockReadGuard;
 
 use crate::client_manager::BackendHandle;
@@ -86,7 +86,7 @@ pub trait BackendHandleExt {
         &self,
         duration: Duration,
     ) -> impl std::future::Future<
-        Output = Result<RwLockReadGuard<'_, Box<dyn ClientBackend>>, BackendReadTimeout>,
+        Output = Result<RwLockReadGuard<'_, Box<dyn IsBackend>>, BackendReadTimeout>,
     >;
 }
 
@@ -96,7 +96,7 @@ impl BackendHandleExt for BackendHandle {
         &self,
         duration: Duration,
     ) -> impl std::future::Future<
-        Output = Result<RwLockReadGuard<'_, Box<dyn ClientBackend>>, BackendReadTimeout>,
+        Output = Result<RwLockReadGuard<'_, Box<dyn IsBackend>>, BackendReadTimeout>,
     > {
         let location = Location::caller();
         read_with_timeout_impl(self, duration, location)
@@ -108,7 +108,7 @@ async fn read_with_timeout_impl<'a>(
     handle: &'a BackendHandle,
     duration: Duration,
     location: &'static Location<'static>,
-) -> Result<RwLockReadGuard<'a, Box<dyn ClientBackend>>, BackendReadTimeout> {
+) -> Result<RwLockReadGuard<'a, Box<dyn IsBackend>>, BackendReadTimeout> {
     match tokio::time::timeout(duration, handle.read()).await {
         Ok(guard) => Ok(guard),
         Err(_) => {
@@ -129,7 +129,7 @@ async fn read_with_timeout_impl<'a>(
     handle: &'a BackendHandle,
     duration: Duration,
     location: &'static Location<'static>,
-) -> Result<RwLockReadGuard<'a, Box<dyn ClientBackend>>, BackendReadTimeout> {
+) -> Result<RwLockReadGuard<'a, Box<dyn IsBackend>>, BackendReadTimeout> {
     use futures::future::{select, Either};
 
     // `gloo_timers` takes a u32 milliseconds budget. Saturate on overflow —
@@ -164,7 +164,7 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
 
-    use poly_client::ClientBackend;
+    use poly_client::IsBackend;
     use tokio::sync::RwLock;
 
     use super::{BackendHandleExt, BackendReadTimeout};
@@ -178,7 +178,7 @@ mod tests {
     /// plugin — the `poly-core` crate's `demo` feature is on by default.
     fn make_handle() -> BackendHandle {
         use poly_demo::DemoClient;
-        let demo: Box<dyn ClientBackend> = Box::new(DemoClient::new());
+        let demo: Box<dyn IsBackend> = Box::new(DemoClient::new());
         Arc::new(RwLock::new(demo))
     }
 
@@ -199,7 +199,7 @@ mod tests {
         // Take the write lock and hold it — readers can never acquire.
         let write_guard = handle.write().await;
 
-        // `Ok` branch carries `dyn ClientBackend` which isn't Debug, so
+        // `Ok` branch carries `dyn IsBackend` which isn't Debug, so
         // we can't use `.expect_err` — match instead.
         let err: BackendReadTimeout = match handle
             .read_with_timeout(Duration::from_millis(50))

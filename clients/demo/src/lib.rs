@@ -8,7 +8,7 @@
 //!
 //! ## Build Modes
 //!
-//! - **Native** (`--features native`): Implements [`poly_client::ClientBackend`]
+//! - **Native** (`--features native`): Implements [`poly_client::IsBackend`]
 //!   for direct linking into `poly-core`. This is the traditional path.
 //! - **WASM plugin** (`--no-default-features`, target `wasm32-wasip2`): Exports
 //!   the WIT `messenger-client` interface via `wit-bindgen`. Loaded at runtime
@@ -132,7 +132,7 @@ impl<F: DemoFlavour> Default for DemoClientGeneric<F> {
 #[cfg(feature = "native")]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-impl<F: DemoFlavour> ClientBackend for DemoClientGeneric<F> {
+impl<F: DemoFlavour> IsBackend for DemoClientGeneric<F> {
     async fn authenticate(&mut self, _credentials: AuthCredentials) -> ClientResult<Session> {
         let session = F::session();
         self.session = Some(session.clone());

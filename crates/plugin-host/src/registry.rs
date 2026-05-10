@@ -2,7 +2,7 @@
 //!
 //! The [`PluginRegistry`] is the main entry point for the WASM plugin system.
 //! It loads plugin `.wasm` components, instantiates them with the host API,
-//! and provides a [`PluginBackend`] wrapper that implements `ClientBackend`.
+//! and provides a [`PluginBackend`] wrapper that implements `IsBackend`.
 //!
 //! ## Usage
 //!
@@ -24,7 +24,7 @@ use wasmtime::component::{Component, HasSelf, Linker};
 use wasmtime::{Engine, Store};
 
 use poly_client::{
-    ActionOutcome, AuthCredentials, BackendType, Channel, ClientBackend, ClientError, ClientEvent,
+    ActionOutcome, AuthCredentials, BackendType, Channel, IsBackend, ClientError, ClientEvent,
     ClientResult, ComposerButton, Cursor, DmChannel, ForumBackend, ForumPost,
     ForumSortOrder, Group, MenuItem, MenuTargetKind, Message, MessageContent, MessageQuery,
     Notification, PendingHandle, PresenceStatus, Server,
@@ -123,7 +123,7 @@ impl PluginRegistry {
 
     /// Instantiate a loaded plugin and return a [`PluginBackend`] wrapper.
     ///
-    /// The wrapper implements `ClientBackend` so it can be used in the
+    /// The wrapper implements `IsBackend` so it can be used in the
     /// existing `ClientManager` infrastructure.
     pub async fn instantiate(&self, plugin_id: &str) -> Result<PluginBackend, String> {
         self.instantiate_with_host_state(
@@ -204,7 +204,7 @@ impl PluginRegistry {
         //
         // D18 — `plugin-metadata.get-settings-schema` has been removed.
         // The equivalent lives in `client-settings.get-settings-sections`,
-        // which will be surfaced through `ClientBackend` in WP 1.C. For
+        // which will be surfaced through `IsBackend` in WP 1.C. For
         // now, start with an empty schema so the host compiles. Plugin
         // settings UI will be re-wired as part of that work package.
         //
@@ -286,7 +286,7 @@ pub struct SettingDescriptor {
     pub extra: String,
 }
 
-/// A WASM plugin wrapped as a [`ClientBackend`].
+/// A WASM plugin wrapped as a [`IsBackend`].
 ///
 /// This bridges the WIT Component Model interface back to the poly-client
 /// trait, allowing plugins to be used interchangeably with native backends.
@@ -351,7 +351,7 @@ fn convert_result_unit(
 }
 
 #[async_trait]
-impl ClientBackend for PluginBackend {
+impl IsBackend for PluginBackend {
     async fn authenticate(&mut self, credentials: AuthCredentials) -> ClientResult<Session> {
         refuel(&self.store).await;
         let wit_creds = bridge::to_wit_auth_credentials(credentials);

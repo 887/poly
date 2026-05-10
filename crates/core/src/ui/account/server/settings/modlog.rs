@@ -6,7 +6,8 @@
 use crate::i18n::t;
 use crate::ui::client_ui::use_view_resource::{use_view_resource, ViewQuery};
 use dioxus::prelude::*;
-use poly_client::{ClientBackend, ClientError, ClientResult, ModerationAction, ModerationLogEntry};
+use poly_client::{ClientError, ClientResult, IsBackend, ModerationAction, ModerationLogEntry};
+
 use poly_ui_macros::{context_menu, ui_action};
 
 // ── ViewQuery impl ────────────────────────────────────────────────────────────
@@ -21,7 +22,7 @@ struct ServerModLogQuery {
 impl ViewQuery for ServerModLogQuery {
     type Output = Vec<ModerationLogEntry>;
     fn account_id(&self) -> &str { &self.account_id }
-    async fn fetch(&self, b: &dyn ClientBackend) -> ClientResult<Self::Output> {
+    async fn fetch(&self, b: &dyn IsBackend) -> ClientResult<Self::Output> {
         match b.as_moderation() {
             Some(m) => m.get_moderation_log(&self.server_id, self.limit).await,
             None => Err(ClientError::NotSupported("get_moderation_log".to_string())),

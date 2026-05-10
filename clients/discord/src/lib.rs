@@ -2,7 +2,7 @@
 //!
 //! Discord messenger client for Poly.
 //!
-//! Implements [`poly_client::ClientBackend`] against the Discord REST API v10.
+//! Implements [`poly_client::IsBackend`] against the Discord REST API v10.
 //! Uses user tokens for direct API access.
 //!
 //! **NOTE:** Discord's ToS prohibits unofficial client automation; this
@@ -672,7 +672,7 @@ impl Default for DiscordClient {
 #[cfg(feature = "native")]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-impl ClientBackend for DiscordClient {
+impl IsBackend for DiscordClient {
     async fn authenticate(&mut self, credentials: AuthCredentials) -> ClientResult<Session> {
         let token = match credentials {
             AuthCredentials::Token(t) => t,

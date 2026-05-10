@@ -2,7 +2,7 @@
 //!
 //! Forgejo / Gitea / Codeberg client for Poly.
 //!
-//! Implements [`poly_client::ClientBackend`] using the Forgejo REST API v1
+//! Implements [`poly_client::IsBackend`] using the Forgejo REST API v1
 //! via direct HTTP through `poly_host_bridge::http::HttpClient`.
 //!
 //! Repos appear as Poly servers. Each repo exposes:
@@ -108,7 +108,7 @@ impl Default for ForgejoClient {
 #[cfg(feature = "native")]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-impl ClientBackend for ForgejoClient {
+impl IsBackend for ForgejoClient {
     // --- Authentication ---
 
     async fn authenticate(&mut self, credentials: AuthCredentials) -> ClientResult<Session> {

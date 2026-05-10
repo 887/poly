@@ -8,7 +8,8 @@ use crate::state::BatchedSignal;
 use crate::i18n::t;
 use crate::ui::client_ui::use_view_resource::{use_view_resource, ViewQuery};
 use dioxus::prelude::*;
-use poly_client::{BannedMember, ClientBackend, ClientError, ClientResult};
+use poly_client::{BannedMember, ClientError, ClientResult, IsBackend};
+
 use poly_ui_macros::{context_menu, ui_action};
 
 // ── ViewQuery impl ────────────────────────────────────────────────────────────
@@ -22,7 +23,7 @@ struct ServerBansQuery {
 impl ViewQuery for ServerBansQuery {
     type Output = Vec<BannedMember>;
     fn account_id(&self) -> &str { &self.account_id }
-    async fn fetch(&self, b: &dyn ClientBackend) -> ClientResult<Self::Output> {
+    async fn fetch(&self, b: &dyn IsBackend) -> ClientResult<Self::Output> {
         match b.as_moderation() {
             Some(m) => m.get_bans(&self.server_id).await,
             None => Err(ClientError::NotSupported("get_bans".to_string())),
@@ -98,7 +99,7 @@ fn render_ban_row(
                 span { class: "ban-row-reason", "{reason_display}" }
             }
             div { class: "ban-row-actions",
-                if !unban_error.read().is_empty() {
+                if !unban_error.read().is_empty() { // poly-lint: allow render-time-read — conditional rendering; Signal<String> local to this component
                     span { class: "ban-row-error", "{unban_error}" }
                 }
                 button {

@@ -6,7 +6,7 @@
 //!
 //! Enable with: `--features test-demo` (enabled by default).
 
-use poly_client::{BackendType, ClientBackend, PresenceStatus};
+
 
 use super::harness;
 use super::harness_build_route;

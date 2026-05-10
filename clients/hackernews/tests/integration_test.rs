@@ -5,7 +5,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
-use poly_client::{AuthCredentials, ClientBackend, MessageQuery};
+
 use poly_hackernews::HackerNewsClient;
 use poly_test_hackernews::TestHnServer;
 
@@ -430,7 +430,7 @@ async fn test_base_url() {
 /// `get_view_rows("hn-top", ...)` returns non-empty rows with correct fields.
 #[tokio::test]
 async fn test_get_view_rows_top() {
-    use poly_client::ClientBackend;
+    use poly_client::IsBackend;
 
     let server = TestHnServer::start().await;
     let client = client_connected_to(&server).await;
@@ -456,7 +456,7 @@ async fn test_get_view_rows_top() {
 /// All 6 feed channels produce non-empty ViewRow pages.
 #[tokio::test]
 async fn test_get_view_rows_all_feeds() {
-    use poly_client::ClientBackend;
+    use poly_client::IsBackend;
 
     let server = TestHnServer::start().await;
     let client = client_connected_to(&server).await;
@@ -474,7 +474,7 @@ async fn test_get_view_rows_all_feeds() {
 /// Cursor pagination: second page starts where first page ended.
 #[tokio::test]
 async fn test_get_view_rows_cursor_pagination() {
-    use poly_client::{ClientBackend, Cursor, CursorKind};
+    
 
     let server = TestHnServer::start().await;
     let client = client_connected_to(&server).await;
@@ -509,7 +509,7 @@ async fn test_get_view_rows_cursor_pagination() {
 /// Unknown channel ID returns a NotFound error.
 #[tokio::test]
 async fn test_get_view_rows_unknown_channel() {
-    use poly_client::ClientBackend;
+    use poly_client::IsBackend;
 
     let server = TestHnServer::start().await;
     let client = client_connected_to(&server).await;
@@ -527,7 +527,7 @@ async fn test_get_view_rows_unknown_channel() {
 /// `get_view_detail` for a story with a URL returns a body block with the link.
 #[tokio::test]
 async fn test_get_view_detail_url_story() {
-    use poly_client::ClientBackend;
+    use poly_client::IsBackend;
 
     let server = TestHnServer::start().await;
     let client = client_connected_to(&server).await;
@@ -556,7 +556,7 @@ async fn test_get_view_detail_url_story() {
 /// `get_view_detail` for an Ask HN story returns its text body.
 #[tokio::test]
 async fn test_get_view_detail_text_story() {
-    use poly_client::ClientBackend;
+    use poly_client::IsBackend;
 
     let server = TestHnServer::start().await;
     let client = client_connected_to(&server).await;
@@ -580,7 +580,7 @@ async fn test_get_view_detail_text_story() {
 /// `get_view_detail` for a story with no kids returns None for comments_section.
 #[tokio::test]
 async fn test_get_view_detail_no_kids() {
-    use poly_client::ClientBackend;
+    use poly_client::IsBackend;
 
     let server = TestHnServer::start().await;
     let client = client_connected_to(&server).await;
@@ -600,7 +600,7 @@ async fn test_get_view_detail_no_kids() {
 /// `get_view_detail` with an invalid row id returns an error.
 #[tokio::test]
 async fn test_get_view_detail_invalid_id() {
-    use poly_client::ClientBackend;
+    use poly_client::IsBackend;
 
     let server = TestHnServer::start().await;
     let client = client_connected_to(&server).await;
@@ -616,7 +616,7 @@ async fn test_get_view_detail_invalid_id() {
 /// `get_account_overview_view` returns a FlatList ListBody descriptor.
 #[tokio::test]
 async fn test_get_account_overview_view_returns_list_body() {
-    use poly_client::{ClientBackend, ViewBody, ViewKind};
+    
 
     let server = TestHnServer::start().await;
     let client = client_connected_to(&server).await;
@@ -643,7 +643,7 @@ async fn test_get_account_overview_view_returns_list_body() {
 /// `get_view_rows("")` (overview) returns non-empty rows with the overview row format.
 #[tokio::test]
 async fn test_get_view_rows_overview_empty_channel_id() {
-    use poly_client::ClientBackend;
+    use poly_client::IsBackend;
 
     let server = TestHnServer::start().await;
     let client = client_connected_to(&server).await;
@@ -673,7 +673,7 @@ async fn test_get_view_rows_overview_empty_channel_id() {
 /// Overview secondary_text includes domain when story has a URL.
 #[tokio::test]
 async fn test_overview_row_secondary_includes_domain() {
-    use poly_client::ClientBackend;
+    use poly_client::IsBackend;
 
     let server = TestHnServer::start().await;
     let client = client_connected_to(&server).await;

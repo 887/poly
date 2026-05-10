@@ -2,7 +2,7 @@
 //!
 //! Hacker News client for Poly — read-only forum backend.
 //!
-//! Implements [`poly_client::ClientBackend`] using the public HN Firebase API
+//! Implements [`poly_client::IsBackend`] using the public HN Firebase API
 //! at `https://hacker-news.firebaseio.com/v0/`.
 //!
 //! HN requires no authentication for reading. The backend always provides a
@@ -140,7 +140,7 @@ impl Default for HackerNewsClient {
 #[cfg(feature = "native")]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-impl ClientBackend for HackerNewsClient {
+impl IsBackend for HackerNewsClient {
     // --- Authentication ---
 
     /// HN supports two modes:

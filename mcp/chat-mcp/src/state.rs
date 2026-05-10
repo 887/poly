@@ -2,7 +2,8 @@
 
 use crate::events::{SharedEventStore, new_event_store, spawn_fan_out};
 use crate::typing_simulation::{SharedSimRegistry, new_shared_registry};
-use poly_client::{AuthCredentials, BackendType, ClientBackend, Session};
+
+use poly_client::{AuthCredentials, BackendType, IsBackend, Session};
 use poly_host_bridge::client_config::ClientConfigStore;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -14,7 +15,7 @@ use tokio::task::JoinHandle;
 /// tasks can clone the handle and hold it for the lifetime of the pulse
 /// loop without blocking the main dispatch path.
 pub struct BackendEntry {
-    pub backend: Arc<dyn ClientBackend + Send + Sync>,
+    pub backend: Arc<dyn IsBackend>,
     pub session: Session,
 }
 
@@ -72,11 +73,11 @@ impl BackendPool {
     ///
     /// After inserting, a Phase-C fan-out task is spawned for this backend so
     /// its real-time events flow into the shared `EventStore`.
-    pub fn insert(&mut self, session: Session, backend: Box<dyn ClientBackend + Send + Sync>) {
+    pub fn insert(&mut self, session: Session, backend: Box<dyn IsBackend>) {
         let key = Self::key(&session.backend, &session.user.id);
 
         // Box → Arc so Phase D workers can clone-and-hold the backend.
-        let backend: Arc<dyn ClientBackend + Send + Sync> = Arc::from(backend);
+        let backend: Arc<dyn IsBackend> = Arc::from(backend);
 
         // Start event fan-out for this backend.
         let stream = backend.event_stream();
@@ -164,7 +165,7 @@ impl BackendPool {
 fn create_backend(
     backend_type: &str,
     url: &str,
-) -> anyhow::Result<(Box<dyn ClientBackend + Send + Sync>, BackendType)> {
+) -> anyhow::Result<(Box<dyn IsBackend>, BackendType)> {
     match backend_type {
         "stoat" => {
             let client = poly_stoat::StoatClient::with_base_url(url)

@@ -27,7 +27,7 @@
 //! impl ViewQuery for ChannelViewQuery {
 //!     type Output = ViewDescriptor;
 //!     fn account_id(&self) -> &str { &self.account_id }
-//!     async fn fetch(&self, b: &dyn ClientBackend) -> ClientResult<Self::Output> {
+//!     async fn fetch(&self, b: &dyn IsBackend) -> ClientResult<Self::Output> {
 //!         b.get_channel_view(&self.channel_id).await
 //!     }
 //! }
@@ -52,7 +52,8 @@
 use crate::client_manager::ClientManager;
 use crate::state::BatchedSignal;
 use dioxus::prelude::*;
-use poly_client::{ClientBackend, ClientResult};
+use poly_client::{ClientResult, IsBackend};
+
 use std::future::Future;
 
 /// A typed backend query keyed by per-component dependencies.
@@ -84,11 +85,11 @@ pub trait ViewQuery: Clone + PartialEq + 'static {
     ///
     /// The explicit `'a` lifetime ties the returned future's lifetime to both
     /// the query reference (`&'a self`) and the backend reference
-    /// (`b: &'a dyn ClientBackend`). This is required by the RPITIT lowering in
+    /// (`b: &'a dyn IsBackend`). This is required by the RPITIT lowering in
     /// Rust 2024 when the async fn body borrows from either argument.
     fn fetch<'a>(
         &'a self,
-        backend: &'a dyn ClientBackend,
+        backend: &'a dyn IsBackend,
     ) -> impl Future<Output = ClientResult<Self::Output>> + 'a;
 }
 

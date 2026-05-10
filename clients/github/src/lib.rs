@@ -187,7 +187,7 @@ impl Default for GitHubClient {
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-impl ClientBackend for GitHubClient {
+impl IsBackend for GitHubClient {
     // --- Authentication ---
 
     async fn authenticate(&mut self, credentials: AuthCredentials) -> ClientResult<Session> {

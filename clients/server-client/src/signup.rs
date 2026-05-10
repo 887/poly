@@ -42,7 +42,8 @@
 //! Each `#[component]` fn body MUST stay under 150 lines.
 
 use dioxus::prelude::*;
-use poly_client::{AuthCredentials, ClientBackend as _, SignupCompleted, SignupContext};
+use poly_client::{AuthCredentials, IsBackend as _, SignupCompleted, SignupContext};
+
 use poly_ui_macros::{context_menu, ui_action};
 
 use crate::{PolyServerBackend, models::IdentityAccount};
@@ -474,7 +475,7 @@ async fn do_signin(
 ) -> Result<
     (
         poly_client::Session,
-        Box<dyn poly_client::ClientBackend + Send + Sync>,
+        Box<dyn poly_client::IsBackend + Send + Sync>,
     ),
     String,
 > {
@@ -512,7 +513,7 @@ async fn do_signup(
 ) -> Result<
     (
         poly_client::Session,
-        Box<dyn poly_client::ClientBackend + Send + Sync>,
+        Box<dyn poly_client::IsBackend + Send + Sync>,
     ),
     String,
 > {

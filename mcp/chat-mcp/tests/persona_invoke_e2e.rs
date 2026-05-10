@@ -18,7 +18,7 @@ use poly_chat_mcp::state::BackendPool;
 use poly_chat_mcp::tools;
 use poly_test_discord::{DiscordState, router as discord_router};
 use poly_discord::DiscordClient;
-use poly_client::{ClientBackend, AuthCredentials};
+
 use serde_json::{Value, json};
 use tokio::net::TcpListener;
 

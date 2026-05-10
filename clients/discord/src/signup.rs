@@ -1,7 +1,8 @@
 //! Discord signup/account-add UI form.
 
 use dioxus::prelude::*;
-use poly_client::{AuthCredentials, ClientBackend as _, SignupCompleted, SignupContext};
+use poly_client::{AuthCredentials, IsBackend as _, SignupCompleted, SignupContext};
+
 
 use crate::DiscordClient;
 use poly_ui_macros::{context_menu, ui_action};

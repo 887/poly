@@ -19,7 +19,7 @@
 
 use std::sync::Arc;
 
-use poly_client::{AuthCredentials, ClientBackend, MessageContent, MessageQuery};
+
 use poly_discord::DiscordClient;
 use poly_test_discord::{DiscordState, router};
 use tokio::net::TcpListener;

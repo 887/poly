@@ -14,7 +14,7 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 
 use futures::StreamExt;
-use poly_client::{AuthCredentials, BackendType, ClientBackend, ClientEvent, MessageContent, MessageQuery};
+
 use poly_matrix::MatrixClient;
 use poly_test_matrix::{MatrixState, router};
 
@@ -733,7 +733,7 @@ async fn test_event_stream_receives_sent_message() {
 
 #[tokio::test]
 async fn test_settings_storage_round_trip() {
-    use poly_client::{ClientBackend, SettingsScope};
+    
     let client = poly_matrix::MatrixClient::new();
     client
         .set_setting_value(SettingsScope::PerServer, "room1", "display-name", "matrix-nick")

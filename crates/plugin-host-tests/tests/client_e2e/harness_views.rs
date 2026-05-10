@@ -2,7 +2,7 @@
 //!
 //! Skeletons only — bodies are stubs. Filled in WP 5.
 
-use poly_client::{ClientBackend, ClientError, ViewBody};
+
 use poly_plugin_host::PluginBackend;
 
 use super::harness::HarnessResult;

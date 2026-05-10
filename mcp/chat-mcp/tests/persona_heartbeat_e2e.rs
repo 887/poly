@@ -16,7 +16,7 @@ use poly_chat_mcp::persona::heartbeat::HeartbeatRegistry;
 use poly_chat_mcp::state::BackendPool;
 use poly_chat_mcp::tools;
 use poly_discord::DiscordClient;
-use poly_client::{ClientBackend, AuthCredentials};
+
 use poly_test_discord::{DiscordState, router as discord_router};
 use serde_json::{Value, json};
 use tokio::net::TcpListener;
@@ -194,7 +194,7 @@ async fn persona_heartbeat_e2e_creates_audit_and_draft() {
     }
 
     // Rebuild pool as owned (pool.insert uses &mut self and we can't clone the
-    // Box<dyn ClientBackend>, so we make a fresh DiscordClient for the provider).
+    // Box<dyn IsBackend>, so we make a fresh DiscordClient for the provider).
     let http_client2 = reqwest::Client::new();
     let token_resp2 = http_client2
         .post(format!("{}/test/auth/token", srv.base_url))

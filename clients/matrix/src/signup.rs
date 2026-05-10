@@ -1,6 +1,7 @@
 //! Matrix signup and test account helpers.
 
-use poly_client::{AuthCredentials, ClientBackend as _, SignupCompleted};
+
+use poly_client::{AuthCredentials, IsBackend as _, SignupCompleted};
 use crate::MatrixClient;
 
 /// Authenticate against a Matrix homeserver. Public so test panels can call it.

@@ -291,7 +291,7 @@ pub fn poly_settings_render_fn() -> Element {
 #[ui_action(None)]
 #[component]
 pub fn HackerNewsPluginSettings() -> Element {
-    use poly_client::ClientBackend as _;
+    use poly_client::IsBackend as _;
     let client = poly_hackernews::HackerNewsClient::new();
     let manifest = client.plugin_manifest();
     rsx! {
@@ -324,7 +324,7 @@ pub fn hackernews_settings_render_fn() -> Element {
 #[ui_action(None)]
 #[component]
 pub fn MatrixPluginSettings() -> Element {
-    use poly_client::ClientBackend as _;
+    use poly_client::IsBackend as _;
     let client = poly_matrix::MatrixClient::new();
     let manifest = client.plugin_manifest();
     rsx! {
@@ -360,7 +360,7 @@ pub fn matrix_settings_render_fn() -> Element {
 #[ui_action(None)]
 #[component]
 pub fn LemmyPluginSettings() -> Element {
-    use poly_client::ClientBackend as _;
+    use poly_client::IsBackend as _;
     let client = poly_lemmy::LemmyClient::new("https://lemmy.world");
     let manifest = client.plugin_manifest();
     rsx! {
@@ -399,7 +399,7 @@ pub fn lemmy_settings_render_fn() -> Element {
 #[ui_action(None)]
 #[component]
 pub fn DiscordPluginSettings() -> Element {
-    use poly_client::ClientBackend as _;
+    use poly_client::IsBackend as _;
     let client = poly_discord::DiscordClient::new();
     let manifest = client.plugin_manifest();
     rsx! {
@@ -439,7 +439,7 @@ pub fn discord_settings_render_fn() -> Element {
 #[ui_action(None)]
 #[component]
 pub fn TeamsPluginSettings() -> Element {
-    use poly_client::ClientBackend as _;
+    use poly_client::IsBackend as _;
     let client = poly_teams::TeamsClient::new();
     let manifest = client.plugin_manifest();
     rsx! {
@@ -475,7 +475,7 @@ pub fn teams_settings_render_fn() -> Element {
 #[ui_action(None)]
 #[component]
 pub fn GitHubPluginSettings() -> Element {
-    use poly_client::ClientBackend as _;
+    use poly_client::IsBackend as _;
     let client = poly_github::GitHubClient::dotcom();
     let manifest = client.plugin_manifest();
     rsx! {
@@ -514,7 +514,7 @@ pub fn github_settings_render_fn() -> Element {
 #[ui_action(None)]
 #[component]
 pub fn ForgejoPluginSettings() -> Element {
-    use poly_client::ClientBackend as _;
+    use poly_client::IsBackend as _;
     let client = poly_forgejo::ForgejoClient::codeberg();
     let manifest = client.plugin_manifest();
     let t = crate::i18n::t;

@@ -7,7 +7,7 @@
 
 use std::sync::Arc;
 
-use poly_client::{AuthCredentials, BackendType, ChannelType, ClientBackend, MessageContent, MessageQuery, PresenceStatus};
+
 use poly_teams::TeamsClient;
 use poly_test_teams::{TeamsState, router};
 use tokio::net::TcpListener;
@@ -343,7 +343,7 @@ async fn test_get_view_rows_non_overview_returns_not_supported() {
 
 #[tokio::test]
 async fn test_settings_storage_round_trip() {
-    use poly_client::{ClientBackend, SettingsScope};
+    
     let client = poly_teams::TeamsClient::new();
     client
         .set_setting_value(SettingsScope::PerServer, "team1", "display-name", "teams-nick")
@@ -367,7 +367,7 @@ async fn test_settings_storage_round_trip() {
 /// `/search/query` path is wired up, the trait default (NotSupported) applies.
 #[tokio::test]
 async fn test_search_messages_returns_not_supported() {
-    use poly_client::{ClientBackend, ClientError, MessageSearchQuery};
+    
     let srv = TestServer::start().await;
     let client = srv.authenticated_client("Sheep").await;
 
@@ -389,7 +389,7 @@ async fn test_search_messages_returns_not_supported() {
 /// `timeout_member` returns NotSupported — Teams has no per-user timeout concept.
 #[tokio::test]
 async fn test_timeout_member_returns_not_supported() {
-    use poly_client::{ClientBackend, ClientError};
+    
     let srv = TestServer::start().await;
     let client = srv.authenticated_client("Sheep").await;
 
@@ -405,7 +405,7 @@ async fn test_timeout_member_returns_not_supported() {
 /// `untimeout_member` returns NotSupported — Teams has no timeout concept.
 #[tokio::test]
 async fn test_untimeout_member_returns_not_supported() {
-    use poly_client::{ClientBackend, ClientError};
+    
     let srv = TestServer::start().await;
     let client = srv.authenticated_client("Sheep").await;
 
@@ -423,7 +423,7 @@ async fn test_untimeout_member_returns_not_supported() {
 /// ban/timeout menu items. Regression guard.
 #[test]
 fn test_backend_capabilities_no_ban_no_timeout() {
-    use poly_client::ClientBackend;
+    use poly_client::IsBackend;
     let client = poly_teams::TeamsClient::new();
     let caps = client.backend_capabilities();
     assert!(!caps.has_ban, "Teams must not claim has_ban");

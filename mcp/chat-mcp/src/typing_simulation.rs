@@ -35,7 +35,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use poly_client::ClientBackend;
+use poly_client::IsBackend;
 use rand::SeedableRng;
 use rand::rngs::StdRng;
 use serde_json::{Value, json};
@@ -296,7 +296,7 @@ impl GlobalSimRegistry {
 /// Unit tests for D.4 use `abort_rx` directly with a hand-driven
 /// `Sender` to exercise abort logic without spinning up the bridge.
 pub fn spawn_worker(
-    backend: Arc<dyn ClientBackend + Send + Sync>,
+    backend: Arc<dyn IsBackend>,
     chat_id: String,
     params: SimParams,
     seed: u64,

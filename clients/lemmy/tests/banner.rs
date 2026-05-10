@@ -11,7 +11,7 @@
     clippy::indexing_slicing
 )]
 
-use poly_client::{AuthCredentials, ClientBackend};
+
 use poly_lemmy::LemmyClient;
 use tokio::net::TcpListener;
 

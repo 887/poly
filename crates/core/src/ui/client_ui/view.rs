@@ -79,7 +79,8 @@ use crate::state::{BatchedSignal, use_reactive_effect};
 use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::client_ui::use_view_resource::{use_view_resource, ViewQuery};
 use dioxus::prelude::*;
-use poly_client::{ClientBackend, ClientError, ClientResult, ViewBody, ViewDescriptor};
+use poly_client::{ClientResult, IsBackend, ViewBody, ViewDescriptor};
+
 use poly_ui_macros::{context_menu, ui_action};
 
 // ── ViewQuery impls for this module ──────────────────────────────────────────
@@ -94,7 +95,7 @@ struct ChannelViewQuery {
 impl ViewQuery for ChannelViewQuery {
     type Output = ViewDescriptor;
     fn account_id(&self) -> &str { &self.account_id }
-    async fn fetch(&self, b: &dyn ClientBackend) -> ClientResult<Self::Output> {
+    async fn fetch(&self, b: &dyn IsBackend) -> ClientResult<Self::Output> {
         b.get_channel_view(&self.channel_id).await
     }
 }
@@ -108,7 +109,7 @@ struct AccountOverviewViewQuery {
 impl ViewQuery for AccountOverviewViewQuery {
     type Output = ViewDescriptor;
     fn account_id(&self) -> &str { &self.account_id }
-    async fn fetch(&self, b: &dyn ClientBackend) -> ClientResult<Self::Output> {
+    async fn fetch(&self, b: &dyn IsBackend) -> ClientResult<Self::Output> {
         b.get_account_overview_view().await
     }
 }
@@ -250,12 +251,12 @@ pub fn AccountOverviewView(account_id: String) -> Element {
                 account_id.clone(),
                 desc,
                 None,
-                search_query.read().clone(),
+                search_query.read().clone(), // poly-lint: allow render-time-read — local Signal; subscription re-renders filtered overview on query change
             )
         }
     };
 
-    let q = search_query.read().clone();
+    let q = search_query.read().clone(); // poly-lint: allow render-time-read — local Signal; subscription re-renders search input on change
     let search_placeholder = t("overview-search-placeholder");
     rsx! {
         div { class: "overview-page overview-general-page",
@@ -348,7 +349,7 @@ fn render_descriptor_inner(
             t.set(new_tab);
         });
     }
-    let filter_str = filter.read().clone();
+    let filter_str = filter.read().clone(); // poly-lint: allow render-time-read — local Signal; subscription re-renders on filter change
     rsx! {
         div { class: "client-view",
             if let Some(h) = header {
@@ -382,14 +383,14 @@ fn render_descriptor_inner(
                     // stale Strings and the click does nothing visible.
                     let app_state_for_tick: BatchedSignal<crate::state::AppState>
                         = use_context();
-                    let sidebar_tick = app_state_for_tick.read().sidebar_invalidated_tick;
+                    let sidebar_tick = app_state_for_tick.read().sidebar_invalidated_tick; // poly-lint: allow render-time-read — scoped snapshot for body_key composition; subscription ensures key updates on sidebar invalidation
                     let body_key = format!(
                         "{}:{}:{:?}:{:?}:{:?}:{}",
                         channel_id,
                         account_id,
-                        selected_sort.read(),
-                        selected_filter.read(),
-                        selected_tab.read(),
+                        selected_sort.read(), // poly-lint: allow render-time-read — local Signal; body_key composition triggers re-mount on sort change
+                        selected_filter.read(), // poly-lint: allow render-time-read — local Signal; body_key composition triggers re-mount on filter change
+                        selected_tab.read(), // poly-lint: allow render-time-read — local Signal; body_key composition triggers re-mount on tab change
                         sidebar_tick,
                     );
                     // Phase D: when an external filter is provided (ForumView

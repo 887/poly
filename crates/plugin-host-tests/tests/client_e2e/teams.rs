@@ -9,7 +9,7 @@
 
 use std::sync::Arc;
 
-use poly_client::{AuthCredentials, BackendType, ClientBackend, MessageContent, MessageQuery};
+
 use poly_plugin_host::{
     InMemoryPluginStorage, PluginStorageBackend,
     host_impl::PluginHostState,

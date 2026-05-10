@@ -3,13 +3,13 @@
 //! Phase G.1 / Phase B Fix-up of `docs/plans/plan-client-version-override-and-sandbox.md`.
 //!
 //! `client_version`, `set_client_version_override`, and `get_signup_method`
-//! are now in `impl ClientBackend for HackerNewsClient`. The UA field is
+//! are now in `impl IsBackend for HackerNewsClient`. The UA field is
 //! stored on `HnApiClient` behind an `Arc<Mutex<String>>`; every outbound
 //! request adds `header("User-Agent", self.ua())`.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
-use poly_client::{AuthCredentials, ClientBackend, MessageQuery};
+
 use poly_hackernews::HackerNewsClient;
 use poly_test_hackernews::TestHnServer;
 

@@ -2,7 +2,7 @@
 //!
 //! Microsoft Teams messenger client for Poly.
 //!
-//! Implements [`poly_client::ClientBackend`] using Microsoft Graph API.
+//! Implements [`poly_client::IsBackend`] using Microsoft Graph API.
 //! Uses Bearer token auth against `/v1.0/` endpoints.
 //!
 //! ## Build Modes
@@ -283,7 +283,7 @@ fn poly_event_message_from_json(m: &serde_json::Value) -> Option<Message> {
 #[cfg(feature = "native")]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-impl ClientBackend for TeamsClient {
+impl IsBackend for TeamsClient {
     async fn authenticate(&mut self, credentials: AuthCredentials) -> ClientResult<Session> {
         let token = match credentials {
             AuthCredentials::Token(t) => t,

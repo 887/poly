@@ -28,7 +28,8 @@ use crate::ui::client_ui::use_view_resource::{use_view_resource, ViewQuery};
 use crate::ui::context_menu::menus::{forum_post_entry, ForumPostCtx};
 use crate::ui::errors::{is_session_expired, SessionExpiredCard};
 use dioxus::prelude::*;
-use poly_client::{ClientBackend, ClientError, ClientResult, Cursor, ListSpec, ViewDetail, ViewRow, ViewRowsPage};
+use poly_client::{ClientError, ClientResult, Cursor, IsBackend, ListSpec, ViewDetail, ViewRow, ViewRowsPage};
+
 use poly_ui_macros::{context_menu, ui_action};
 
 // ── ViewQuery impls for this module ──────────────────────────────────────────
@@ -44,7 +45,7 @@ struct ViewRowDetailQuery {
 impl ViewQuery for ViewRowDetailQuery {
     type Output = ViewDetail;
     fn account_id(&self) -> &str { &self.account_id }
-    async fn fetch(&self, b: &dyn ClientBackend) -> ClientResult<Self::Output> {
+    async fn fetch(&self, b: &dyn IsBackend) -> ClientResult<Self::Output> {
         b.get_view_detail(&self.channel_id, &self.row_id).await
     }
 }
@@ -66,7 +67,7 @@ struct FirstPageQuery {
 impl ViewQuery for FirstPageQuery {
     type Output = ViewRowsPage;
     fn account_id(&self) -> &str { &self.account_id }
-    async fn fetch(&self, b: &dyn ClientBackend) -> ClientResult<Self::Output> {
+    async fn fetch(&self, b: &dyn IsBackend) -> ClientResult<Self::Output> {
         b.get_view_rows(
             &self.channel_id,
             None,
@@ -126,9 +127,9 @@ pub fn ListBody(
     let _ = spec; // page_size honored implicitly by the plugin.
     // P4 — read the toolbar selection signals inside the closure so the
     // resource re-runs when they change.
-    let sort_id = selected_sort.read().clone();
-    let filter_id = selected_filter.read().clone();
-    let tab_id = selected_tab.read().clone();
+    let sort_id = selected_sort.read().clone(); // poly-lint: allow render-time-read — toolbar selection; subscription is intentional (resource re-runs on change)
+    let filter_id = selected_filter.read().clone(); // poly-lint: allow render-time-read — toolbar selection; subscription is intentional (resource re-runs on change)
+    let tab_id = selected_tab.read().clone(); // poly-lint: allow render-time-read — toolbar selection; subscription is intentional (resource re-runs on change)
     let rows_res = fetch_first_page(
         channel_id.clone(),
         account_id.clone(),
@@ -167,7 +168,7 @@ pub fn ListBody(
             if is_session_expired(err) {
                 let nav_sig: BatchedSignal<crate::state::NavState> = use_context();
                 let (nav_backend, nav_instance_id, nav_account_id) = {
-                    let s = nav_sig.read();
+                    let s = nav_sig.read(); // poly-lint: allow render-time-read — scoped snapshot for session-expired redirect, not subscribed to render updates
                     let b = s.active_backend.cloned().map(|b| b.slug().to_string()).unwrap_or_default();
                     let i = s.active_instance_id.cloned().unwrap_or_default();
                     let a = s.active_account_id.cloned().unwrap_or_else(|| account_id.clone());
@@ -194,13 +195,13 @@ pub fn ListBody(
         Some(Ok(page)) => {
             // P5 — whenever the first-page-key changes (new sort/filter),
             // reset the accumulator to this page's rows.
-            if *loaded_first_page_key.read() != first_page_key {
+            if *loaded_first_page_key.read() != first_page_key { // poly-lint: allow render-time-read — conditional; local Signal drives rsx! state machine
                 loaded_first_page_key.set(first_page_key.clone());
                 loaded_rows.set(page.rows.clone());
                 next_cursor.set(page.next_cursor.clone());
             }
-            let rows_all = loaded_rows.read().clone();
-            let has_more = next_cursor.read().is_some();
+            let rows_all = loaded_rows.read().clone(); // poly-lint: allow render-time-read — local Signal; renders rows list from accumulated state
+            let has_more = next_cursor.read().is_some(); // poly-lint: allow render-time-read — local Signal; conditional rendering of load-more button
             let filter_lc = filter.trim().to_lowercase();
             let rows: Vec<ViewRow> = if filter_lc.is_empty() {
                 rows_all
@@ -226,11 +227,11 @@ pub fn ListBody(
                 // `selected_row_id` still exists on the component but is
                 // unused now that we route-push to ForumPostRoute. Kept so
                 // future inline-preview modes can flip back without a refactor.
-                let _unused_selected = selected_row_id.read().clone();
+                let _unused_selected = selected_row_id.read().clone(); // poly-lint: allow render-time-read — local Signal; subscription drives row re-render on selection change
                 // Pull the route params once — forum post click routes to
                 // a full-page ForumPostView like the old LemmyForumView did.
                 let nav_sig: BatchedSignal<crate::state::NavState> = use_context();
-                let snap = nav_sig.read();
+                let snap = nav_sig.read(); // poly-lint: allow render-time-read — scoped snapshot for nav params used in click handler closures
                 let backend_slug_for_click = snap
                     .active_backend
                     .cloned()
@@ -261,7 +262,7 @@ pub fn ListBody(
                 let sort_id_for_more = sort_id.clone();
                 let filter_id_for_more = filter_id.clone();
                 let tab_id_for_more = tab_id.clone();
-                let is_loading_more = *loading_more.read();
+                let is_loading_more = *loading_more.read(); // poly-lint: allow render-time-read — local Signal; conditional rendering of spinner
                 rsx! {
                     div { class: "client-view-list forum-post-list", role: "feed",
                         for row in rows {
@@ -284,7 +285,7 @@ pub fn ListBody(
                                     let sort_id = sort_id_for_more.clone();
                                     let filter_id = filter_id_for_more.clone();
                                     let tab_id = tab_id_for_more.clone();
-                                    let cursor = next_cursor.read().clone();
+                                    let cursor = next_cursor.read().clone(); // poly-lint: allow render-time-read — local Signal; used inside onclick closure to get current cursor
                                     loading_more.set(true);
                                     spawn(async move {
                                         let client_manager: BatchedSignal<ClientManager> = match try_consume_context() {

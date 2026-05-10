@@ -19,7 +19,7 @@
 
 use std::sync::Arc;
 
-use poly_client::{AuthCredentials, ClientBackend, MessageContent, MessageQuery};
+
 use poly_stoat::StoatClient;
 use poly_test_common::TestServerBase;
 use poly_test_stoat::{StoatState, router};

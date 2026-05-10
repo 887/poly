@@ -1,7 +1,8 @@
 //! Microsoft Teams signup/account-add UI form.
 
 use dioxus::prelude::*;
-use poly_client::{AuthCredentials, ClientBackend as _, SignupCompleted, SignupContext};
+use poly_client::{AuthCredentials, IsBackend as _, SignupCompleted, SignupContext};
+
 
 use crate::TeamsClient;
 use crate::auth::{self, DeviceCodeResponse, TokenResponse};

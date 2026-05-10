@@ -2,7 +2,7 @@
 //!
 //! Enable with: `--features test-discord`
 
-use poly_client::{BackendType, ClientBackend};
+
 
 use super::harness;
 

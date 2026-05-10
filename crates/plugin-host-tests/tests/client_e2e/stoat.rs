@@ -6,7 +6,7 @@
 //!
 //! Enable with: `--features test-stoat`
 
-use poly_client::{BackendType, ClientBackend};
+
 use poly_plugin_host::host_impl::{MockHttpResponse, PluginHostState};
 
 use super::harness;

@@ -24,9 +24,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use dioxus::prelude::ReadableExt as _;
-use poly_client::{AuthCredentials, BackendType, ClientBackend, PresenceStatus, Session, User};
+
 use tokio::sync::RwLock;
 
+use poly_client::{AuthCredentials, BackendType, IsBackend, PresenceStatus, Session, User};
 use crate::client_manager::{BackendHandle, BackendHandleExt};
 use crate::state::{AccountSessions, BatchedSignal, ChatLists};
 use crate::storage::{OfflineServerRecord, Storage};
@@ -41,7 +42,7 @@ use crate::client_manager::ClientManager;
 fn build_backend_for_slug(
     slug: &str,
     instance_id: Option<&str>,
-) -> Option<Box<dyn ClientBackend + Send + Sync>> {
+) -> Option<Box<dyn IsBackend>> {
     // `instance_id` is only consumed by url-bound backends (matrix, lemmy,
     // forgejo). When none of those features are compiled in, the binding
     // appears unused — silence the warning rather than introducing a
@@ -50,7 +51,7 @@ fn build_backend_for_slug(
     match slug {
         #[cfg(feature = "matrix")]
         "matrix" => {
-            let client: Box<dyn ClientBackend + Send + Sync> =
+            let client: Box<dyn IsBackend> =
                 match instance_id {
                     Some(url) => match poly_matrix::MatrixClient::with_homeserver(url) {
                         Ok(c) => Box::new(c),
@@ -229,7 +230,7 @@ pub async fn restore_native_accounts(
                 // additional auto-trait bounds; safe because backend is `Send + Sync`.
                 #[allow(clippy::as_conversions)]
                 let backend_handle: BackendHandle =
-                    Arc::new(RwLock::new(backend as Box<dyn ClientBackend + Send + Sync>));
+                    Arc::new(RwLock::new(backend as Box<dyn IsBackend>));
 
                 // Build server → account map.
                 let mut server_map = HashMap::new();

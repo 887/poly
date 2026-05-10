@@ -8,7 +8,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
-use poly_client::{AuthCredentials, ClientBackend};
+
 use poly_lemmy::LemmyClient;
 use tokio::net::TcpListener;
 

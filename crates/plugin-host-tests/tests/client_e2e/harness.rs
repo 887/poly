@@ -1,7 +1,7 @@
-//! Shared test harness for ClientBackend interface contract testing.
+//! Shared test harness for IsBackend interface contract testing.
 //!
 //! Provides reusable async test functions that exercise each part of the
-//! `ClientBackend` trait through the WASM plugin host. Each client's test
+//! `IsBackend` trait through the WASM plugin host. Each client's test
 //! module calls these functions after instantiating its plugin.
 //!
 //! ## Categories
@@ -13,7 +13,7 @@
 //! - **Events** — `event_stream()` returns a valid stream
 
 use poly_client::{
-    AuthCredentials, BackendType, ClientBackend, ClientError, MessageContent, MessageQuery,
+    AuthCredentials, BackendType, IsBackend, ClientError, MessageContent, MessageQuery,
     PresenceStatus,
 };
 use poly_plugin_host::PluginBackend;

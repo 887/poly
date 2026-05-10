@@ -5,7 +5,8 @@
 //! `gh auth status` succeeds for the chosen instance.
 
 use dioxus::prelude::*;
-use poly_client::{AuthCredentials, ClientBackend as _, SignupCompleted, SignupContext};
+use poly_client::{AuthCredentials, IsBackend as _, SignupCompleted, SignupContext};
+
 use poly_ui_macros::{context_menu, ui_action};
 
 use crate::GitHubClient;

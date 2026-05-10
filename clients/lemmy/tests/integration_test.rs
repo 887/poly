@@ -5,7 +5,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
-use poly_client::{AuthCredentials, ClientBackend, MessageQuery};
+
 use poly_lemmy::LemmyClient;
 use tokio::net::TcpListener;
 
@@ -691,7 +691,7 @@ async fn test_delete_message_bad_id() {
 /// `lemmy-overview` synthetic channel.
 #[tokio::test]
 async fn test_get_account_overview_view_descriptor() {
-    use poly_client::{ClientBackend, ViewBody, ViewKind};
+    
     let base_url = start_test_server().await;
     let client = auth_client(&base_url).await;
 
@@ -719,7 +719,7 @@ async fn test_get_account_overview_view_descriptor() {
 /// primary_text = community title, meta_text containing "subscribers" and "active".
 #[tokio::test]
 async fn test_get_view_rows_overview_communities() {
-    use poly_client::{ClientBackend, MenuTargetKind};
+    
     let base_url = start_test_server().await;
     let client = auth_client(&base_url).await;
 

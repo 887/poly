@@ -3,7 +3,7 @@
 //! Pack B.2 P28 — `sidebar_invalidated_event_refetches` body filled. Other
 //! skeletons remain deferred.
 
-use poly_client::ClientBackend;
+use poly_client::IsBackend;
 use poly_plugin_host::PluginBackend;
 
 use super::harness::HarnessResult;

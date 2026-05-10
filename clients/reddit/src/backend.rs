@@ -487,7 +487,7 @@ impl RedditBackend {
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-impl ClientBackend for RedditBackend {
+impl IsBackend for RedditBackend {
     // ── Authentication ───────────────────────────────────────────────────────
 
     async fn authenticate(&mut self, credentials: AuthCredentials) -> ClientResult<Session> {

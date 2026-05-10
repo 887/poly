@@ -18,7 +18,7 @@ use axum::{
     routing::{get, post, put},
 };
 use poly_client::{
-    AuthCredentials, BackendType, ChannelType, ClientBackend, ClientError, MessageContent,
+    AuthCredentials, BackendType, ChannelType, IsBackend, ClientError, MessageContent,
     MessageQuery, PresenceStatus,
 };
 use poly_stoat::StoatClient;

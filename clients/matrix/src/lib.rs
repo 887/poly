@@ -2,7 +2,7 @@
 //!
 //! Matrix messenger client for Poly.
 //!
-//! Implements [`poly_client::ClientBackend`] using the Matrix client-server
+//! Implements [`poly_client::IsBackend`] using the Matrix client-server
 //! HTTP API directly (no matrix-sdk). Maps Matrix Spaces to Poly servers,
 //! Matrix rooms to channels.
 //!
@@ -625,7 +625,7 @@ impl MatrixClient {
 #[cfg(feature = "native")]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-impl ClientBackend for MatrixClient {
+impl IsBackend for MatrixClient {
     async fn authenticate(&mut self, credentials: AuthCredentials) -> ClientResult<Session> {
         let auth_input = MatrixAuthInput::try_from(credentials)?;
 

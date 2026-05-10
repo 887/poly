@@ -1,13 +1,13 @@
 //! # poly-server-client
 //!
-//! [`ClientBackend`](poly_client::ClientBackend) implementation for poly-server.
+//! [`ClientBackend`](poly_client::IsBackend) implementation for poly-server.
 //!
 //! This crate provides the complete client for connecting to poly-server
 //! instances:
 //!
 //! - **[`PolyServerHttpClient`]** — Typed HTTP client for all REST API endpoints
 //! - **[`PolyServerWsClient`]** — WebSocket client for real-time events
-//! - **[`PolyServerBackend`]** — [`ClientBackend`](poly_client::ClientBackend) implementation
+//! - **[`PolyServerBackend`]** — [`ClientBackend`](poly_client::IsBackend) implementation
 //! - **[`models`]** — Wire-format types matching the server's JSON payloads
 //!
 //! ## Build Modes
@@ -38,7 +38,7 @@ mod wit_bindings;
 #[cfg(target_os = "wasi")]
 mod guest;
 
-/// [`ClientBackend`](poly_client::ClientBackend) implementation (native + wasm-http, non-WASI).
+/// [`ClientBackend`](poly_client::IsBackend) implementation (native + wasm-http, non-WASI).
 #[cfg(all(feature = "wasm-http", not(target_os = "wasi")))]
 pub mod backend;
 /// Error types (native + wasm-http, non-WASI).

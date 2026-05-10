@@ -4,7 +4,7 @@
 //! instantiate them through `PluginRegistry`, and verify
 //! they correctly report backend types and names.
 
-use poly_client::{BackendType, ClientBackend};
+
 use poly_plugin_host::PluginRegistry;
 use poly_plugin_loader_tests::wasm_dir;
 

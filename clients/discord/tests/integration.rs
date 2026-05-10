@@ -2,7 +2,7 @@
 //!
 //! Each test spins up a `poly_test_discord` router on a random port, seeds
 //! demo data, authenticates via `/test/auth/token`, then exercises the full
-//! `ClientBackend` API surface.
+//! `IsBackend` API surface.
 
 #![allow(
     clippy::unwrap_used,
@@ -16,7 +16,7 @@
 use std::sync::Arc;
 
 use poly_client::{
-    AuthCredentials, BackendType, ChannelType, ClientBackend, ClientEvent, ForumSortOrder,
+    AuthCredentials, BackendType, ChannelType, IsBackend, ClientEvent, ForumSortOrder,
     MenuTargetKind, MessageContent, MessageQuery, PresenceStatus, ViewBody, ViewKind,
 };
 use poly_discord::DiscordClient;

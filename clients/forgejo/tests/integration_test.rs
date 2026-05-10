@@ -5,7 +5,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
-use poly_client::{AuthCredentials, ClientBackend, ClientError, MessageQuery};
+
 use poly_forgejo::ForgejoClient;
 use tokio::net::TcpListener;
 
@@ -387,7 +387,7 @@ async fn test_settings_storage_round_trip() {
 /// `get_view_rows` on the issues channel returns non-empty ViewRows.
 #[tokio::test]
 async fn test_get_view_rows_issues() {
-    use poly_client::ClientBackend;
+    use poly_client::IsBackend;
     let base_url = start_test_server().await;
     let token = get_test_token(&base_url, "otter").await;
     let mut client = ForgejoClient::new(&base_url);
@@ -426,7 +426,7 @@ async fn test_get_view_rows_issues() {
 /// `get_view_rows` on the pulls channel returns only PRs.
 #[tokio::test]
 async fn test_get_view_rows_pulls() {
-    use poly_client::ClientBackend;
+    use poly_client::IsBackend;
     let base_url = start_test_server().await;
     let token = get_test_token(&base_url, "otter").await;
     let mut client = ForgejoClient::new(&base_url);
@@ -450,7 +450,7 @@ async fn test_get_view_rows_pulls() {
 /// `get_view_rows` for discussions tab returns empty (Forgejo has no discussions API).
 #[tokio::test]
 async fn test_get_view_rows_discussions_empty() {
-    use poly_client::ClientBackend;
+    use poly_client::IsBackend;
     let base_url = start_test_server().await;
     let token = get_test_token(&base_url, "otter").await;
     let mut client = ForgejoClient::new(&base_url);
@@ -468,7 +468,7 @@ async fn test_get_view_rows_discussions_empty() {
 /// `get_view_detail` returns a ViewDetail with a non-empty body block.
 #[tokio::test]
 async fn test_get_view_detail() {
-    use poly_client::ClientBackend;
+    use poly_client::IsBackend;
     let base_url = start_test_server().await;
     let token = get_test_token(&base_url, "otter").await;
     let mut client = ForgejoClient::new(&base_url);
@@ -503,7 +503,7 @@ async fn test_get_view_detail() {
 /// `get_view_detail` with an invalid row_id returns an error.
 #[tokio::test]
 async fn test_get_view_detail_not_found() {
-    use poly_client::ClientBackend;
+    use poly_client::IsBackend;
     let base_url = start_test_server().await;
     let token = get_test_token(&base_url, "otter").await;
     let mut client = ForgejoClient::new(&base_url);
@@ -551,7 +551,7 @@ fn test_map_issue_to_viewrow_unit() {
 /// State-aware menu: unstarred repo shows "star-repo" label key.
 #[tokio::test]
 async fn test_context_menu_unstarred() {
-    use poly_client::{ClientBackend, MenuTargetKind};
+    
     let base_url = start_test_server().await;
     let token = get_test_token(&base_url, "otter").await;
     let mut client = ForgejoClient::new(&base_url);
@@ -580,7 +580,7 @@ async fn test_context_menu_unstarred() {
 /// `get_my_permissions` for a repo owner returns `manage_messages = true`.
 #[tokio::test]
 async fn test_get_my_permissions_admin() {
-    use poly_client::ClientBackend;
+    use poly_client::IsBackend;
     let base_url = start_test_server().await;
     let token = get_test_token(&base_url, "otter").await;
     let mut client = ForgejoClient::new(&base_url);
@@ -606,7 +606,7 @@ async fn test_get_my_permissions_admin() {
 /// `delete_message` with a `fj-comment-{id}` message ID calls the API correctly.
 #[tokio::test]
 async fn test_delete_comment_via_message_id_prefix() {
-    use poly_client::ClientBackend;
+    use poly_client::IsBackend;
     let base_url = start_test_server().await;
     let token = get_test_token(&base_url, "otter").await;
     let mut client = ForgejoClient::new(&base_url);
@@ -632,7 +632,7 @@ async fn test_delete_comment_via_message_id_prefix() {
 /// `kick_member` returns NotSupported.
 #[tokio::test]
 async fn test_kick_member_returns_not_supported() {
-    use poly_client::ClientBackend;
+    use poly_client::IsBackend;
     let base_url = start_test_server().await;
     let token = get_test_token(&base_url, "otter").await;
     let mut client = ForgejoClient::new(&base_url);
@@ -651,7 +651,7 @@ async fn test_kick_member_returns_not_supported() {
 /// `get_account_overview_view` returns a CardGrid descriptor.
 #[tokio::test]
 async fn test_get_account_overview_view() {
-    use poly_client::{ClientBackend, ViewBody};
+    
     let base_url = start_test_server().await;
     let token = get_test_token(&base_url, "otter").await;
     let mut client = ForgejoClient::new(&base_url);
@@ -679,7 +679,7 @@ async fn test_get_account_overview_view() {
 /// with stars/forks/open-issues in meta_text.
 #[tokio::test]
 async fn test_get_view_rows_overview() {
-    use poly_client::ClientBackend;
+    use poly_client::IsBackend;
     let base_url = start_test_server().await;
     let token = get_test_token(&base_url, "otter").await;
     let mut client = ForgejoClient::new(&base_url);
@@ -707,7 +707,7 @@ async fn test_get_view_rows_overview() {
 /// State-aware menu: starred repo shows "unstar-repo" label key.
 #[tokio::test]
 async fn test_context_menu_starred() {
-    use poly_client::{ClientBackend, MenuTargetKind};
+    
     let base_url = start_test_server().await;
     let token = get_test_token(&base_url, "otter").await;
     let mut client = ForgejoClient::new(&base_url);
@@ -739,7 +739,7 @@ async fn test_context_menu_starred() {
 /// routes `fj-pulls-*` through the same `get_issue` call, so PR detail works.
 #[tokio::test]
 async fn test_get_view_detail_pull_request() {
-    use poly_client::ClientBackend;
+    use poly_client::IsBackend;
     let base_url = start_test_server().await;
     let token = get_test_token(&base_url, "otter").await;
     let mut client = ForgejoClient::new(&base_url);
@@ -771,7 +771,7 @@ async fn test_get_view_detail_pull_request() {
 /// than an error so the UI shows an empty state instead of "Failed to load".
 #[tokio::test]
 async fn test_get_view_rows_discussions_channel_empty() {
-    use poly_client::ClientBackend;
+    use poly_client::IsBackend;
     let base_url = start_test_server().await;
     let token = get_test_token(&base_url, "otter").await;
     let mut client = ForgejoClient::new(&base_url);

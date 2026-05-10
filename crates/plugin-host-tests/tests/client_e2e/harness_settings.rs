@@ -2,7 +2,7 @@
 //!
 //! Pack A.3 — bodies filled.
 
-use poly_client::{ClientBackend, SettingsScope};
+
 use poly_plugin_host::PluginBackend;
 
 use super::harness::HarnessResult;

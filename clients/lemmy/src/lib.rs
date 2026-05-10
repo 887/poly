@@ -2,7 +2,7 @@
 //!
 //! Lemmy federated forum client for Poly.
 //!
-//! Implements [`poly_client::ClientBackend`] using the Lemmy REST API v3.
+//! Implements [`poly_client::IsBackend`] using the Lemmy REST API v3.
 //!
 //! ## Build Modes
 //!
@@ -179,7 +179,7 @@ impl LemmyClient {
 #[cfg(feature = "native")]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-impl ClientBackend for LemmyClient {
+impl IsBackend for LemmyClient {
     // ── Authentication ──────────────────────────────────────────────────────
 
     async fn authenticate(&mut self, credentials: AuthCredentials) -> ClientResult<Session> {

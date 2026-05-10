@@ -10,7 +10,7 @@
 
 use std::sync::Arc;
 
-use poly_client::{AuthCredentials, ClientBackend};
+
 use poly_teams::TeamsClient;
 use poly_test_teams::{TeamsState, router};
 use tokio::net::TcpListener;

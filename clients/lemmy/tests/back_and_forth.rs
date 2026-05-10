@@ -27,7 +27,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use poly_client::{AuthCredentials, ClientBackend, MessageContent, MessageQuery};
+
 use poly_lemmy::LemmyClient;
 use tokio::net::TcpListener;
 

@@ -7,7 +7,7 @@
 
 use std::sync::Arc;
 
-use poly_client::{AuthCredentials, ClientBackend, MessageContent, MessageQuery, ViewBody, ViewKind};
+
 use poly_stoat::StoatClient;
 use poly_test_common::TestServerBase;
 use poly_test_stoat::{StoatState, router};
@@ -642,7 +642,7 @@ async fn test_get_dms_with_unreads() {
 
 #[tokio::test]
 async fn test_settings_storage_round_trip() {
-    use poly_client::{ClientBackend, SettingsScope};
+    
     let client = poly_stoat::StoatClient::new();
     client
         .set_setting_value(SettingsScope::PerServer, "server1", "nickname", "stoat-nick")

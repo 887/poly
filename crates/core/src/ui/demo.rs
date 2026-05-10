@@ -22,7 +22,7 @@ use dioxus::prelude::*;
 // ClientBackend trait must be in scope for `.authenticate()` to be callable on
 // DemoClient / DemoClient2 inside the #[cfg(feature = "demo")] activation path.
 #[cfg(feature = "demo")]
-use poly_client::ClientBackend as _;
+use poly_client::IsBackend as _;
 
 /// Scroll threshold: if the user is within this many pixels of the bottom, treat
 /// them as "at the bottom" and auto-scroll when a new message arrives.
@@ -182,7 +182,7 @@ pub(crate) async fn toggle_demo(
                 // lint-allow-unused: trait-object up-cast for type erasure into BackendHandle
                 #[allow(clippy::as_conversions)]
                 let handle: BackendHandle = std::sync::Arc::new(tokio::sync::RwLock::new(
-                    Box::new(client) as Box<dyn poly_client::ClientBackend>,
+                    Box::new(client) as Box<dyn poly_client::IsBackend>,
                 ));
                 Ok((session, handle))
             }
@@ -200,7 +200,7 @@ pub(crate) async fn toggle_demo(
                 // lint-allow-unused: trait-object up-cast for type erasure into BackendHandle
                 #[allow(clippy::as_conversions)]
                 let handle: BackendHandle = std::sync::Arc::new(tokio::sync::RwLock::new(
-                    Box::new(client) as Box<dyn poly_client::ClientBackend>,
+                    Box::new(client) as Box<dyn poly_client::IsBackend>,
                 ));
                 Ok((session, handle))
             }
@@ -218,7 +218,7 @@ pub(crate) async fn toggle_demo(
                 // lint-allow-unused: trait-object up-cast for type erasure into BackendHandle
                 #[allow(clippy::as_conversions)]
                 let handle: BackendHandle = std::sync::Arc::new(tokio::sync::RwLock::new(
-                    Box::new(client) as Box<dyn poly_client::ClientBackend>,
+                    Box::new(client) as Box<dyn poly_client::IsBackend>,
                 ));
                 Ok((session, handle))
             }
@@ -488,7 +488,7 @@ pub(crate) async fn toggle_demo_forum_on(
         // lint-allow-unused: trait-object up-cast for type erasure into BackendHandle
         #[allow(clippy::as_conversions)]
         let handle: BackendHandle = std::sync::Arc::new(tokio::sync::RwLock::new(
-            Box::new(client) as Box<dyn poly_client::ClientBackend>,
+            Box::new(client) as Box<dyn poly_client::IsBackend>,
         ));
         Ok((session, handle))
     }
@@ -545,7 +545,7 @@ pub(crate) async fn toggle_demo_forum_on(
 /// Start a background event-stream listener for a single backend account.
 ///
 /// Spawns a Dioxus task that polls the backend's
-/// [`poly_client::ClientBackend::event_stream`] and processes each incoming
+/// [`poly_client::IsBackend::event_stream`] and processes each incoming
 /// [`poly_client::ClientEvent`]:
 ///
 /// - [`poly_client::ClientEvent::MessageReceived`] — appends the message to

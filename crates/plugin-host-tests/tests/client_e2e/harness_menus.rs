@@ -4,7 +4,7 @@
 //! WP 1 will replace `&str` placeholders with typed enums once
 //! `MenuTargetKind` exists in the WIT-generated bindings.
 
-use poly_client::{ActionOutcome, ClientBackend, MenuTargetKind};
+
 use poly_plugin_host::PluginBackend;
 
 use super::harness::HarnessResult;

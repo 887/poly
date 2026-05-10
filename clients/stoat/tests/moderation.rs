@@ -8,7 +8,7 @@
 
 use std::sync::Arc;
 
-use poly_client::{ClientBackend, UpdateChannelParams};
+
 use poly_stoat::StoatClient;
 use poly_test_stoat::StoatState;
 use tokio::net::TcpListener;

@@ -329,7 +329,7 @@ fn plugin_entry(id: &str, name: &str, manifest: PluginManifest) -> Value {
 /// `plugin_manifest()` and `backend_name()`. The instances are dropped before
 /// the function returns — no network or filesystem access happens.
 pub(super) fn handle_list_plugins() -> Value {
-    use poly_client::ClientBackend;
+    use poly_client::IsBackend;
     let plugins: Vec<Value> = vec![
         {
             let c = poly_stoat::StoatClient::with_base_url("http://localhost").ok();

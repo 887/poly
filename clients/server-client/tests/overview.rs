@@ -17,7 +17,7 @@ use tokio::net::TcpListener as TokioListener;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 
-use poly_client::{AuthCredentials, ClientBackend, ViewBody, ViewKind};
+
 use poly_server::{AppState, Config, api, auth, db, ws};
 use poly_server_client::PolyServerBackend;
 

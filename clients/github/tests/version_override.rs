@@ -16,7 +16,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use poly_client::ClientBackend;
+use poly_client::IsBackend;
 use poly_github::GitHubClient;
 
 // ---------------------------------------------------------------------------

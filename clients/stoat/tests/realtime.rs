@@ -9,7 +9,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use futures::StreamExt;
-use poly_client::{AuthCredentials, ClientBackend};
+
 use poly_stoat::StoatClient;
 use poly_test_common::TestServerBase;
 use poly_test_stoat::{StoatState, router};

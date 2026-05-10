@@ -1,6 +1,6 @@
 //! Poly Server [`ClientBackend`] implementation.
 //!
-//! Bridges the poly-server HTTP + WS clients into the [`ClientBackend`](poly_client::ClientBackend)
+//! Bridges the poly-server HTTP + WS clients into the [`ClientBackend`](poly_client::IsBackend)
 //! trait so poly-server instances appear as first-class accounts in the UI.
 //!
 //! ## Architecture
@@ -199,7 +199,7 @@ impl PolyServerBackend {
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-impl ClientBackend for PolyServerBackend {
+impl IsBackend for PolyServerBackend {
     // ── Authentication ───────────────────────────────────────────────────────
 
     async fn authenticate(&mut self, credentials: AuthCredentials) -> ClientResult<Session> {

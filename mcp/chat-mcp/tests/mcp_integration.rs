@@ -1372,7 +1372,7 @@ async fn phase_c_discord_message_received_via_poll_events() {
     use tokio::net::TcpListener;
     use poly_test_discord::{DiscordState, router as discord_router};
     use poly_discord::DiscordClient;
-    use poly_client::{ClientBackend, AuthCredentials};
+    
 
     // Spin up the test discord server (gateway WebSocket included).
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");

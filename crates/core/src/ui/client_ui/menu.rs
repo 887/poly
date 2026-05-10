@@ -7,7 +7,7 @@
 //! ## Prop shape (WP 2.A)
 //!
 //! - `target: MenuTargetKind`, `target_id: String`, `account_id: String` —
-//!   target description. `account_id` selects the `ClientBackend` via
+//!   target description. `account_id` selects the `IsBackend` via
 //!   [`crate::client_manager::ClientManager::get_backend`].
 //! - Items are fetched internally on each render via `use_resource` — D24
 //!   says fresh fetch on every menu open, so caller should remount us.
@@ -46,7 +46,7 @@ use crate::ui::client_ui::toast::ToastMessage;
 use crate::ui::client_ui::use_view_resource::{use_view_resource, ViewQuery};
 use dioxus::prelude::*;
 use poly_client::{
-    ClientBackend, ClientError, ClientResult, CustomBlock as CustomBlockData, IconSource, MenuItem,
+    IsBackend, ClientError, ClientResult, CustomBlock as CustomBlockData, IconSource, MenuItem,
     MenuItemVariant, MenuSlot, MenuTargetKind,
 };
 use poly_ui_macros::{context_menu, ui_action};
@@ -65,7 +65,7 @@ struct ContextMenuItemsQuery {
 impl ViewQuery for ContextMenuItemsQuery {
     type Output = Vec<MenuItem>;
     fn account_id(&self) -> &str { &self.account_id }
-    async fn fetch(&self, b: &dyn ClientBackend) -> ClientResult<Self::Output> {
+    async fn fetch(&self, b: &dyn IsBackend) -> ClientResult<Self::Output> {
         b.get_context_menu_items(self.target, &self.target_id).await
     }
 }
@@ -115,7 +115,7 @@ impl UiAction for ClientMenuAction {
 
 /// Plugin-declared context menu items, rendered inside a parent context menu.
 ///
-/// This component fetches its own data from the `ClientBackend` for
+/// This component fetches its own data from the `IsBackend` for
 /// `account_id` every time it renders (D24 — no caching). The caller is
 /// expected to mount it only while the surrounding menu is open.
 #[ui_action(ClientMenuAction)]

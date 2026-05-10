@@ -8,7 +8,8 @@ use crate::ui::client_ui::CustomBlock;
 use crate::ui::client_ui::use_view_resource::{use_view_resource, ViewQuery};
 use crate::ui::errors::{is_session_expired, SessionExpiredCard};
 use dioxus::prelude::*;
-use poly_client::{ClientBackend, ClientError, ClientResult, SplitSpec, ViewDetail, ViewRowsPage};
+use poly_client::{ClientError, ClientResult, IsBackend, SplitSpec, ViewDetail, ViewRowsPage};
+
 use poly_ui_macros::{context_menu, ui_action};
 
 // ── ViewQuery impls for this module ──────────────────────────────────────────
@@ -23,7 +24,7 @@ struct SplitBodyRowsQuery {
 impl ViewQuery for SplitBodyRowsQuery {
     type Output = ViewRowsPage;
     fn account_id(&self) -> &str { &self.account_id }
-    async fn fetch(&self, b: &dyn ClientBackend) -> ClientResult<Self::Output> {
+    async fn fetch(&self, b: &dyn IsBackend) -> ClientResult<Self::Output> {
         b.get_view_rows(&self.channel_id, None, None, None, None).await
     }
 }
@@ -52,7 +53,7 @@ pub fn SplitBody(channel_id: String, account_id: String, spec: SplitSpec) -> Ele
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let nav_sig: BatchedSignal<crate::state::NavState> = use_context();
     let (nav_backend, nav_instance_id) = {
-        let s = nav_sig.read();
+        let s = nav_sig.read(); // poly-lint: allow render-time-read — scoped snapshot for nav params used in click handler closures
         let b = s.active_backend.cloned().map(|b| b.slug().to_string()).unwrap_or_default();
         let i = s.active_instance_id.cloned().unwrap_or_default();
         (b, i)
@@ -71,7 +72,7 @@ pub fn SplitBody(channel_id: String, account_id: String, spec: SplitSpec) -> Ele
         use_resource(move || {
             let account_id = account_id.clone();
             let channel_id = channel_id.clone();
-            let sel = selected_id.read().clone();
+            let sel = selected_id.read().clone(); // poly-lint: allow render-time-read — local Signal; subscription re-runs detail resource when selection changes
             async move {
                 let Some(row_id) = sel else {
                     return Err(ClientError::NotFound("no row selected".into()));
@@ -83,7 +84,7 @@ pub fn SplitBody(channel_id: String, account_id: String, spec: SplitSpec) -> Ele
         })
     };
 
-    let selected = selected_id.read().clone();
+    let selected = selected_id.read().clone(); // poly-lint: allow render-time-read — local Signal; conditional rendering of detail pane
 
     rsx! {
         div { class: "client-view-split",
@@ -151,7 +152,7 @@ pub fn SplitBody(channel_id: String, account_id: String, spec: SplitSpec) -> Ele
                 }
             }
             div { class: "client-view-split-detail",
-                if selected_id.read().is_none() {
+                if selected_id.read().is_none() { // poly-lint: allow render-time-read — conditional rendering; local Signal
                     div { class: "client-view-split-placeholder", "Select an item" }
                 } else {
                     match &*detail_res.read_unchecked() {
