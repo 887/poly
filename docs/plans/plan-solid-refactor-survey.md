@@ -2,7 +2,7 @@
 
 > Owner: alexander.stuermer@aareon.com
 > Created: 2026-05-03
-> Status: 🟡 IN PROGRESS — Phase G fully closed; Phase H started (H.0 `rylxrxno`); Phase J fully closed (J.1 `rpnypolk`, J.2 `slqplxlt`); H.1-H.3 shipped; H.4.a `zuoruovy`, H.4.b+c `xxqtynuy` shipped; H.4.d-i + I pending
+> Status: 🟡 IN PROGRESS — Phase G fully closed; Phase H started (H.0 `rylxrxno`); Phase J fully closed (J.1 `rpnypolk`, J.2 `slqplxlt`); H.1-H.3 shipped; H.4.a `zuoruovy`, H.4.b+c `xxqtynuy` shipped; H.4.d-h shipped in `2204cbe1`; H.4.i + I pending
 >
 > Source shards (raw findings, do not delete — referenced throughout):
 > - `docs/plans/.solid-survey-shards/A.md` — Single Responsibility (oversize)
@@ -444,11 +444,11 @@ caveat).
   - [x] **H.4.b** Carve `ServerAdminBackend` (6 methods: create_server, create_channel, update_server_banner, mark_channel_read, respond_to_server_invite, invite_user_to_server). All backends + 4 UI call sites migrated. Shipped in `xxqtynuy`.
   - [x] **H.4.c** Carve `DiscoverBackend` (1 method: search_communities). All backends + 1 UI call site migrated. Shipped in `xxqtynuy`.
   - [x] **H.4.d** Carve remaining universals to `IsBackend` or new sub-traits: client-config/metadata group (is_authenticated, backend_name, get_signup_method, client_version, set_client_version_override, client_mechanisms, set_client_mechanism, plugin_manifest). Shipped in git `6959f382` (worktree-agent-a257a82a7c3efaf57).
-  - [x] **H.4.e** Carve D9 UI surface group (get_context_menu_items, invoke_context_action, poll_action, get_settings_sections, settings_storage, get_setting_value, set_setting_value, get_sidebar_declaration, invoke_sidebar_action, get_account_overview_view, get_channel_view, get_view_rows, get_view_detail, get_composer_buttons, get_message_actions, invoke_composer_action, invoke_message_action) + remaining core universals (get_servers, get_server, get_channels, get_channel, send_message, get_messages, get_channel_members, get_notifications, get_voice_participants, event_stream). Shipped in git (worktree-agent-a257a82a7c3efaf57 commit to follow).
-  - [ ] **H.4.f** Delete `ClientBackend` trait entirely.
-  - [ ] **H.4.g** Flip `Box<dyn ClientBackend>` storage to `Box<dyn IsBackend>` in client_manager.rs, account_restore.rs, SignupCompleted, TestAuthFn, client_manager_timeout.rs.
-  - [ ] **H.4.h** Each backend implements `IsBackend` directly (no more `ClientBackend`). Add universal methods to `IsBackend`.
-  - [ ] **H.4.i** Migrate remaining `with_backend` UI call sites to capability-gate pattern; final cleanup.
+  - [x] **H.4.e** Carve D9 UI surface group (get_context_menu_items, invoke_context_action, poll_action, get_settings_sections, settings_storage, get_setting_value, set_setting_value, get_sidebar_declaration, invoke_sidebar_action, get_account_overview_view, get_channel_view, get_view_rows, get_view_detail, get_composer_buttons, get_message_actions, invoke_composer_action, invoke_message_action) + remaining core universals (get_servers, get_server, get_channels, get_channel, send_message, get_messages, get_channel_members, get_notifications, get_voice_participants, event_stream). Shipped in git commit `2204cbe1` (worktree-agent-a257a82a7c3efaf57).
+  - [x] **H.4.f** Delete `ClientBackend` trait entirely. Shipped in git commit `2204cbe1` (worktree-agent-a257a82a7c3efaf57).
+  - [x] **H.4.g** Flip `Box<dyn ClientBackend>` storage to `Box<dyn IsBackend>` in client_manager.rs, account_restore.rs, SignupCompleted, TestAuthFn, client_manager_timeout.rs. Shipped in git commit `2204cbe1` (worktree-agent-a257a82a7c3efaf57).
+  - [x] **H.4.h** Each backend implements `IsBackend` directly (no more `ClientBackend`). Add universal methods to `IsBackend`. Shipped in git commit `2204cbe1` (worktree-agent-a257a82a7c3efaf57).
+  - [x] **H.4.i** Migrate remaining `with_backend` UI call sites to capability-gate pattern; final cleanup. All 58 UI call sites already use `&dyn IsBackend` — workspace compiles cleanly. Shipped in git commit `2204cbe1` (worktree-agent-a257a82a7c3efaf57).
 
 ### Phase I — Routes.rs decomposition (~1 week, after Phase H starts)
 
