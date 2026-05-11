@@ -4,6 +4,12 @@ version.workspace = true
 edition.workspace = true
 publish = false
 
+# `web` feature: enables the web shell's host-cap advertisement.
+# Enabled by `apps/web` so `advertised_host_caps()` returns `[SandboxBrowser]`
+# for the browser popup flow (Phase C of plan-host-sandbox-impl.md).
+[features]
+web = []
+
 [dependencies]
 async-trait = { workspace = true }
 thiserror = { workspace = true }

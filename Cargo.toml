@@ -218,6 +218,7 @@ wry = "0.53"
 poly-core = { path = "crates/core" }
 poly-host-bridge = { path = "crates/host-bridge" }
 poly-host = { path = "apps/poly-host" }
+poly-host-sandbox = { path = "crates/host-sandbox" }
 poly-plugin-host = { path = "crates/plugin-host" }
 poly-client = { path = "clients/client" }
 poly-demo = { path = "clients/demo" }

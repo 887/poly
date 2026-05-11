@@ -13,6 +13,15 @@
 //! `fullstack` feature activation via `dioxus/fullstack` and builds both
 //! sides.
 
+// WebSandbox — browser popup + postMessage capture (Phase C of plan-host-sandbox-impl.md).
+// Only compiled for the WASM target; the server half is handled by the
+// `/sandbox/<id>` route in apps/poly-host (C.1).
+#[cfg(target_arch = "wasm32")]
+mod sandbox;
+// Re-export so the type is reachable for future host-cap registry wiring.
+#[cfg(target_arch = "wasm32")]
+pub use sandbox::WebSandbox;
+
 #[cfg(any(target_arch = "wasm32", feature = "server"))]
 use poly_core::ui::App;
 

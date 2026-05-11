@@ -80,6 +80,24 @@ web-sys = { workspace = true }
 # Enabling `web-direct` makes HttpClient::new() fall back to browser fetch
 # instead of trying to proxy through the unreachable bridge endpoint.
 poly-host-bridge = { workspace = true, features = ["web-direct"] }
+# WebSandbox WASM impl (apps/web/src/sandbox.rs — Phase C of plan-host-sandbox-impl.md).
+# The `web` feature makes advertised_host_caps() return [SandboxBrowser] (C.5).
+poly-host-sandbox = { workspace = true, features = ["web"] }
+wasm-bindgen = { workspace = true }
+wasm-bindgen-futures = { workspace = true }
+js-sys = { workspace = true }
+async-trait = { workspace = true }
+
+# Integration-test deps (native only — tests run on the host, not in WASM).
+# These are only needed when running `cargo test -p poly-web --test sandbox_capture_web`.
+[dev-dependencies]
+poly-host = { workspace = true }
+poly-host-sandbox = { workspace = true, features = ["web"] }
+poly-client = { workspace = true }
+tower = { workspace = true, features = ["util"] }
+tempfile = { workspace = true }
+axum = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 
 [lints]
 workspace = true

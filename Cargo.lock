@@ -7310,17 +7310,25 @@ name = "poly-web"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "axum",
  "dioxus",
  "dioxus-cli-config",
  "getrandom 0.3.4",
  "getrandom 0.4.2",
+ "js-sys",
+ "poly-client",
  "poly-core",
  "poly-host",
  "poly-host-bridge",
+ "poly-host-sandbox",
+ "tempfile",
  "tokio",
+ "tower 0.4.13",
  "tracing",
  "tracing-subscriber",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
  "web-sys",
 ]
 

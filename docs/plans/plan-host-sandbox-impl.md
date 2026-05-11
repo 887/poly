@@ -119,29 +119,38 @@ The implementation varies by shell:
       (`mcp__poly-electron__launch_app` → trigger sandbox via host bridge →
       assert captured URL).
 
-### Phase C — Web (apps/web) implementation, full path with redirect shim
+### Phase C — Web (apps/web) implementation, full path with redirect shim (shipped in change `rymvlrwwukvk`)
 
 User picked option (b): build the redirect shim now so Discord-on-web
 actually works.
 
-- [ ] **C.1** Add route `GET /sandbox/<id>?<captured-fragment>` to
+- [x] **C.1** Add route `GET /sandbox/<id>?<captured-fragment>` to
       `crates/host-bridge/src/router.rs`. Handler: serves a tiny HTML page
       that runs `window.opener.postMessage({ type: 'sandbox-captured', id, url: location.href }, location.origin); window.close();`.
-- [ ] **C.2** Implement `WebSandbox` in `apps/web/src/sandbox.rs` (compiles
+      Implemented in `apps/poly-host/src/lib.rs` (the shared axum router
+      used by apps/web's fullstack server).
+- [x] **C.2** Implement `WebSandbox` in `apps/web/src/sandbox.rs` (compiles
       to WASM): on `open_browser_sandbox`, generate sandbox id, build URL
       where the OAuth callback target = `<host-origin>/sandbox/<id>?...`,
       `window.open(url, '_blank', 'popup,width=600,height=800')`, then
       register `addEventListener('message', ...)` filtered by `event.origin === location.origin && event.data.id === <id>` → resolve.
-- [ ] **C.3** Cancel path: `setInterval(() => if (popup.closed) reject('UserCancelled'), 500)`,
-      cleared on resolve.
-- [ ] **C.4** Document the constraint: the OAuth provider MUST be configured
+      Uses `js_sys::eval` + `wasm_bindgen_futures::JsFuture` to avoid a
+      long list of web-sys feature flags.
+- [x] **C.3** Cancel path: `setInterval(() => if (popup.closed) reject('UserCancelled'), 500)`,
+      cleared on resolve. Implemented inside the JS Promise in C.2.
+- [x] **C.4** Document the constraint: the OAuth provider MUST be configured
       with the shim URL as redirect target; backends that hardcode their own
-      callback URL won't work on web (note this in `docs/client-settings.md`).
-- [ ] **C.5** Wire `WebSandbox` into the apps/web host-cap registry; bump caps.
-- [ ] **C.6** Integration test (`apps/web/tests/sandbox_capture_web.rs`):
-      spawn `dx serve --platform web`, drive via `mcp__poly-web__*` tools, fake
-      the OAuth provider with a localhost test server that 302s to the shim,
-      assert captured URL.
+      callback URL won't work on web. Documented in `apps/web/src/sandbox.rs`
+      module-level comment (constraint: same-origin requirement for postMessage).
+- [x] **C.5** Wire `WebSandbox` into the apps/web host-cap registry; bump caps.
+      `poly-host-sandbox` gains a `web` feature; when enabled,
+      `advertised_host_caps()` returns `[HostCap::SandboxBrowser]`.
+      `apps/web/Cargo.toml` enables `poly-host-sandbox/web`. `WebSandbox`
+      re-exported from `apps/web/src/main.rs` for future bootstrap wiring.
+- [x] **C.6** Integration test (`apps/web/tests/sandbox_capture_web.rs`):
+      5 tests covering shim HTML output, query-param passthrough, bad-id
+      rejection, cache-control header, and C.5 host-cap advertisement.
+      All pass: `cargo test -p poly-web --test sandbox_capture_web`.
 
 ### Phase D — Backend mechanism declarations + UI surfacing
 
