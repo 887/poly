@@ -51,6 +51,7 @@ members = [
     "apps/desktop-web",
     "apps/poly-host",            # Host-bridge daemon for apps/web (serves /host/* on 9333)
     "tools/poly-cli",
+    "tools/discord-voice-smoke",
     "mcp/chat-mcp",
     "crates/host-sandbox",
 ]
@@ -206,6 +207,15 @@ nnnoiseless = "0.5"
 # CoreAudio on macOS, WASAPI on Windows). Native only; never compiled for wasm32.
 # Used by crates/audio-backend (feature = "native") for Phase A of plan-voice-video-calls.
 cpal = "0.16"
+# audiopus — safe Opus codec FFI via libopus. Native only (FFI, not WASM-safe).
+# Used by clients/discord (feature = "voice") for Phase B of plan-voice-video-calls.
+audiopus = "0.3.0-rc.0"
+# discortp — Discord RTP packet framing. Native only.
+# Used by clients/discord (feature = "voice") for Phase B RTP encode/decode.
+# Features: "rtp" for RTP packet parsing, "discord" for Discord SSRC/nonce helpers.
+discortp = { version = "0.6", features = ["rtp", "discord"] }
+# byteorder — byte-order helpers for the UDP IP-discovery 70-byte packet.
+byteorder = "1"
 
 # WASM plugin runtime (native-only — wasmtime cannot target wasm32)
 wasmtime = { version = "42", features = ["component-model", "cranelift"] }

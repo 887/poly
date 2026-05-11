@@ -32,6 +32,19 @@ native = [
 # bundle stays WASM-clean; the gateway path is only relevant on native /
 # test targets where `poly-chat-mcp` or integration tests live.
 gateway = ["native", "dep:tokio-tungstenite", "dep:tokio-stream"]
+# Voice transport — Discord voice gateway + RTP + Opus encode/decode.
+# NATIVE ONLY. WASM builds MUST NOT enable this feature — audiopus links
+# against libopus FFI which is not available on wasm32-unknown-unknown.
+# Requires `gateway` for the main WS (used to send op 4 Voice State Update
+# and receive VOICE_SERVER_UPDATE). Phase B of plan-voice-video-calls.
+voice = [
+    "gateway",
+    "dep:audiopus",
+    "dep:discortp",
+    "dep:byteorder",
+    "dep:chacha20poly1305",
+    "dep:poly-audio-backend",
+]
 
 [dependencies]
 poly-ui-macros = { workspace = true }
@@ -53,6 +66,13 @@ async-trait = { workspace = true, optional = true }
 twilight-model = { workspace = true, optional = true }
 tokio-tungstenite = { workspace = true, optional = true }
 tokio-stream = { workspace = true, optional = true }
+
+# Voice transport — native only (feature = "voice"). B.1.
+audiopus = { workspace = true, optional = true }
+discortp = { workspace = true, optional = true }
+chacha20poly1305 = { workspace = true, optional = true }
+byteorder = { workspace = true, optional = true }
+poly-audio-backend = { workspace = true, optional = true }
 
 # WASM plugin guest bindings (WASI targets only)
 [target.'cfg(target_os = "wasi")'.dependencies]

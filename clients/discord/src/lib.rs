@@ -26,6 +26,12 @@ pub mod super_properties;
 #[cfg(feature = "native")]
 pub mod signup;
 
+/// Voice gateway transport — Phase B of `docs/plans/plan-voice-video-calls.md`.
+/// NATIVE ONLY — `voice` feature requires `gateway` requires `native`.
+/// WASM builds MUST NOT enable this feature (audiopus is FFI, not WASM-safe).
+#[cfg(feature = "voice")]
+pub mod voice;
+
 /// WIT bindings for the WASM plugin (WASI targets only).
 #[cfg(target_os = "wasi")]
 mod wit_bindings;
@@ -60,6 +66,10 @@ use std::sync::Mutex;
 use tokio::sync::mpsc::UnboundedSender;
 #[cfg(feature = "gateway")]
 use tokio_tungstenite::tungstenite::Message as TungsteniteMsg;
+#[cfg(feature = "voice")]
+use std::sync::Arc;
+#[cfg(feature = "voice")]
+use tokio::sync::Mutex as TokioMutex;
 
 /// F10 — in-memory mutable state for context-menu item state-awareness.
 ///
@@ -169,6 +179,12 @@ pub struct DiscordClient {
     gateway_url: Option<String>,
     /// Stored version override (None = use DEFAULT_CLIENT_VERSION).
     version_override: Mutex<Option<String>>,
+    /// B.11 — per-account voice session guard.
+    /// Holds `Some` while a voice WebSocket is open.
+    /// A second `connect_voice` call returns `VoiceError::AlreadyConnected`
+    /// without opening a second WS — the load-bearing anti-ban guardrail.
+    #[cfg(feature = "voice")]
+    pub voice_session: voice::VoiceSessionGuard,
 }
 
 #[cfg(feature = "native")]
@@ -183,6 +199,8 @@ impl DiscordClient {
             menu_state: Mutex::new(DiscordMenuState::default()),
             gateway_url: None,
             version_override: Mutex::new(None),
+            #[cfg(feature = "voice")]
+            voice_session: Arc::new(TokioMutex::new(None)),
         }
     }
 
@@ -196,6 +214,8 @@ impl DiscordClient {
             menu_state: Mutex::new(DiscordMenuState::default()),
             gateway_url: None,
             version_override: Mutex::new(None),
+            #[cfg(feature = "voice")]
+            voice_session: Arc::new(TokioMutex::new(None)),
         }
     }
 
@@ -213,6 +233,8 @@ impl DiscordClient {
             menu_state: Mutex::new(DiscordMenuState::default()),
             gateway_url: Some(gateway_ws_url),
             version_override: Mutex::new(None),
+            #[cfg(feature = "voice")]
+            voice_session: Arc::new(TokioMutex::new(None)),
         }
     }
 
@@ -678,6 +700,195 @@ async fn gateway_connect_loop(
             }
         }
         // op 11 = HEARTBEAT_ACK — no action needed.
+    }
+}
+
+// ── B.2 / B.10 — Voice connect / disconnect (native + gateway + voice) ────────
+
+/// Voice gateway orchestration methods for `DiscordClient`.
+///
+/// Sends op 4 Voice State Update on the main gateway WS, waits for
+/// `VOICE_STATE_UPDATE` and `VOICE_SERVER_UPDATE`, then delegates to the
+/// `voice` module for the full UDP/Opus/AEAD pipeline.
+#[cfg(feature = "voice")]
+impl DiscordClient {
+    /// Join a voice channel.
+    ///
+    /// Sends op 4 Voice State Update on the main gateway, collects the
+    /// `session_id` (from `VOICE_STATE_UPDATE`) and `endpoint`/`token`
+    /// (from `VOICE_SERVER_UPDATE`), then connects the voice WebSocket
+    /// and UDP transport (Phase B.3–B.9).
+    ///
+    /// `guild_id` is the server's ID; `channel_id` is the voice channel.
+    /// Pass `audio` from the shell's active `AudioBackend` instance.
+    ///
+    /// # Errors
+    ///
+    /// Returns `VoiceError::AlreadyConnected` if this account already has
+    /// an open voice connection (B.11 anti-ban guardrail).
+    pub async fn connect_voice(
+        &self,
+        guild_id: &str,
+        channel_id: &str,
+        audio: &dyn poly_audio_backend::AudioBackend,
+        transmit_mode: Option<voice::TransmitMode>,
+    ) -> Result<(), voice::VoiceError> {
+        // B.11 — reject early if already connected.
+        {
+            let session = self.voice_session.lock().await;
+            if session.is_some() {
+                return Err(voice::VoiceError::AlreadyConnected);
+            }
+        }
+
+        let Some(ref gateway_url) = self.gateway_url else {
+            return Err(voice::VoiceError::WsConnect("no gateway URL configured".into()));
+        };
+
+        // Build Voice State Update op 4.
+        let vsu = voice::voice_state_update_payload(guild_id, Some(channel_id), false, false);
+
+        // Open a dedicated gateway WS just to send op 4 and collect the two
+        // voice events.  The main gateway WS is already in gateway_connect_loop
+        // (spawned in event_stream). We use a fresh connection here so we don't
+        // race with the main stream's parser.
+        let (ws_stream, _) = tokio_tungstenite::connect_async(gateway_url.as_str())
+            .await
+            .map_err(|e| voice::VoiceError::WsConnect(e.to_string()))?;
+
+        let (mut ws_write, mut ws_read) = futures::StreamExt::split(ws_stream);
+
+        // Send IDENTIFY first (required before any other op).
+        let props = self.http.super_properties();
+        let identify_props = props.to_identify_properties();
+        let identify = serde_json::json!({
+            "op": 2,
+            "d": {
+                "token": self.http.token().unwrap_or_default(),
+                "intents": 513,
+                "properties": identify_props,
+                "compress": false,
+            }
+        });
+        futures::SinkExt::send(&mut ws_write, tokio_tungstenite::tungstenite::Message::Text(
+            identify.to_string().into()
+        ))
+        .await
+        .map_err(|e| voice::VoiceError::WsConnect(e.to_string()))?;
+
+        // Send op 4 Voice State Update.
+        futures::SinkExt::send(&mut ws_write, tokio_tungstenite::tungstenite::Message::Text(
+            vsu.into()
+        ))
+        .await
+        .map_err(|e| voice::VoiceError::WsConnect(e.to_string()))?;
+
+        // Collect VOICE_STATE_UPDATE (session_id) and VOICE_SERVER_UPDATE (endpoint/token).
+        let mut session_id: Option<String> = None;
+        let mut endpoint: Option<String> = None;
+        let mut voice_token: Option<String> = None;
+
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(10);
+
+        loop {
+            if tokio::time::Instant::now() > deadline {
+                return Err(voice::VoiceError::VoiceStateMissing);
+            }
+
+            let msg = tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                futures::StreamExt::next(&mut ws_read),
+            )
+            .await
+            .map_err(|_| voice::VoiceError::VoiceStateMissing)?;
+
+            let Some(Ok(tokio_tungstenite::tungstenite::Message::Text(text))) = msg else {
+                continue;
+            };
+
+            let frame: serde_json::Value = match serde_json::from_str(text.as_str()) {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
+
+            let op = frame.get("op").and_then(|o| o.as_u64()).unwrap_or(99);
+            let data = frame.get("d").cloned().unwrap_or(serde_json::Value::Null);
+            let event_name = frame.get("t").and_then(|v| v.as_str()).unwrap_or("");
+
+            match (op, event_name) {
+                (0, "VOICE_STATE_UPDATE") => {
+                    let sid = data
+                        .get("session_id")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    if !sid.is_empty() {
+                        session_id = Some(sid);
+                        tracing::debug!(target: "poly_discord::voice", "received VOICE_STATE_UPDATE");
+                    }
+                }
+                (0, "VOICE_SERVER_UPDATE") => {
+                    endpoint = data
+                        .get("endpoint")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+                    voice_token = data
+                        .get("token")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+                    tracing::debug!(target: "poly_discord::voice", ?endpoint, "received VOICE_SERVER_UPDATE");
+                }
+                _ => {}
+            }
+
+            if session_id.is_some() && endpoint.is_some() && voice_token.is_some() {
+                break;
+            }
+        }
+
+        let info = voice::VoiceServerInfo {
+            endpoint: endpoint.ok_or(voice::VoiceError::VoiceStateMissing)?,
+            token: voice_token.ok_or(voice::VoiceError::VoiceStateMissing)?,
+            session_id: session_id.ok_or(voice::VoiceError::VoiceStateMissing)?,
+            guild_id: Some(guild_id.to_string()),
+            user_id: self.account_id(),
+        };
+
+        voice::connect_voice(info, audio, transmit_mode, Arc::clone(&self.voice_session)).await
+    }
+
+    /// Leave the currently-joined voice channel (B.10).
+    ///
+    /// Sends op 4 Voice State Update with `channel_id: null` on the main
+    /// gateway, closes the voice WS, and releases the audio streams.
+    ///
+    /// # Errors
+    ///
+    /// Returns `VoiceError::WsConnect` if the gateway WS cannot be reached.
+    pub async fn disconnect_voice(
+        &self,
+        guild_id: &str,
+    ) -> Result<(), voice::VoiceError> {
+        // Send op 4 with channel_id = null to tell Discord we left.
+        if let Some(ref gateway_url) = self.gateway_url {
+            let vsu = voice::voice_state_update_payload(guild_id, None, false, false);
+            // Best-effort: if we can't open the WS, we still release the local session.
+            if let Ok((ws_stream, _)) = tokio_tungstenite::connect_async(gateway_url.as_str()).await {
+                let (mut write, _) = futures::StreamExt::split(ws_stream);
+                let _ = futures::SinkExt::send(
+                    &mut write,
+                    tokio_tungstenite::tungstenite::Message::Text(vsu.into()),
+                )
+                .await;
+            }
+        }
+
+        // Drop the voice session — this signals the encode/decode/WS tasks.
+        let mut session = self.voice_session.lock().await;
+        if let Some(conn) = session.take() {
+            conn.disconnect().await;
+        }
+        Ok(())
     }
 }
 

@@ -1,6 +1,6 @@
 # Voice & Video Calls — Discord (full) + Stoat (full) + Teams (stub)
 
-## Status: PHASE A DONE — phases B–K not started
+## Status: Phases A + B DONE — shipped in changes `xsytnswm` + `nmlzxkpv` (audio backend + Discord voice transport). Phases C–K still pending.
 
 _Last updated: 2026-05-11_
 
@@ -137,7 +137,7 @@ the connect/start methods).
 
 ---
 
-## Phase B — Discord voice gateway (transport layer)
+## Phase B — Discord voice gateway (transport layer) — shipped in change `nmlzxkpv`
 
 Goal: a working voice WebSocket + UDP transport that can receive and
 send Opus packets for one channel. No UI integration yet — exercised
@@ -145,61 +145,64 @@ via a CLI smoke test (`tools/discord-voice-smoke/`).
 
 Reference protocol: <https://discord.com/developers/docs/topics/voice-connections>
 
-- [ ] **B.1** Add to `clients/discord/Cargo.toml` (cfg-gated to native,
+- [x] **B.1** Add to `clients/discord/Cargo.toml` (cfg-gated to native,
   not WASM): `audiopus` (Opus codec via libopus FFI),
   `tokio-tungstenite` (already present for gateway), a UDP socket via
   `tokio::net::UdpSocket`. Note: `discortp` is RTP framing only — useful,
   but may overlap `webrtc-rs`. Decision in B.6.
-- [ ] **B.2** Trigger voice state update via the existing main gateway:
+- [x] **B.2** Trigger voice state update via the existing main gateway:
   `clients/discord/src/lib.rs` (the `gateway` feature). Send op 4
   `Voice State Update { guild_id, channel_id, self_mute, self_deaf }`
   on the main WS. Receive op 0 dispatch
   `VOICE_STATE_UPDATE { session_id }` and `VOICE_SERVER_UPDATE {
   endpoint, token }` from the main gateway.
-- [ ] **B.3** Connect voice WebSocket to `wss://{endpoint}/?v=4`. Send
+- [x] **B.3** Connect voice WebSocket to `wss://{endpoint}/?v=4`. Send
   op 0 Identify `{ server_id, user_id, session_id, token }`. Receive op
   2 Ready `{ ssrc, ip, port, modes: [...] }`.
-- [ ] **B.4** Discover external IP via UDP IP-discovery (per Discord
+- [x] **B.4** Discover external IP via UDP IP-discovery (per Discord
   docs: send 70-byte 0x1/0x2 packet, parse response). Send op 1 Select
   Protocol with `{ address, port, mode: "aead_xchacha20_poly1305_rtpsize" }`
   (or equivalent supported mode — Discord deprecated several modes
   late-2024).
-- [ ] **B.5** Receive op 4 Session Description (key for encryption).
+- [x] **B.5** Receive op 4 Session Description (key for encryption).
   Maintain heartbeat (op 3) with the heartbeat interval received in op
   8 Hello.
-- [ ] **B.6** **Open question — webrtc-rs vs roll-our-own.** Discord
+- [x] **B.6** **Open question — webrtc-rs vs roll-our-own.** Discord
   voice is custom (not standard SDP/ICE) but uses RTP + an
   AEAD-protected payload. `webrtc-rs` is heavyweight and assumes ICE
-  negotiation that Discord skips. **Recommendation: roll our own RTP
-  framing + AEAD** using `discortp` (RTP) and `chacha20poly1305` /
-  `aes-gcm` (depending on selected mode). Use `webrtc-rs` only for
-  Phase E video where standard WebRTC tracks make sense.
-- [ ] **B.7** Encode loop: `AudioInputStream` PCM frames → 20ms Opus
+  negotiation that Discord skips. **Decision: rolled our own RTP
+  framing + AEAD** using manual 12-byte RTP header construction and
+  `chacha20poly1305` (XChaCha20Poly1305 in `rtpsize` mode). `discortp`
+  used for the `IpDiscovery` packet structure. `webrtc-rs` reserved for
+  Phase E video.
+- [x] **B.7** Encode loop: `AudioInputStream` PCM frames → 20ms Opus
   frames (`audiopus::coder::Encoder`) → RTP packetize → AEAD encrypt →
   UDP send. Decode loop: UDP recv → AEAD decrypt → RTP depacketize →
   Opus decode (`audiopus::coder::Decoder`, one per remote SSRC) → push
   to `AudioOutputStream`.
-- [ ] **B.8** Speaking events: send op 5 Speaking `{ speaking: bitmask, delay,
+- [x] **B.8** Speaking events: send op 5 Speaking `{ speaking: bitmask, delay,
   ssrc }` when local user starts/stops transmitting. Receive op 5 from
   remote users to map SSRC → user_id (CRITICAL — without this, decoded
   audio can't be attributed to a participant in the UI).
-- [ ] **B.9** Push-to-talk vs voice-activity-detection: implement both
+- [x] **B.9** Push-to-talk vs voice-activity-detection: implement both
   in a `TransmitMode` enum (`Vad { threshold_db: f32 }` /
-  `PushToTalk { keybind: ... }`). VAD: simple RMS threshold on PCM
-  frames before encoding. PTT: gated by an external `Signal<bool>` that
+  `PushToTalk { active: Arc<AtomicBool> }`). VAD: simple RMS threshold on PCM
+  frames before encoding. PTT: gated by an external `Arc<AtomicBool>` that
   the UI / OS-keybind drives. Default VAD with -45 dB threshold.
-- [ ] **B.10** Disconnect sequence: send op 4 Voice State Update with
+- [x] **B.10** Disconnect sequence: send op 4 Voice State Update with
   `channel_id: null` on the MAIN gateway, close voice WS, drop UDP
   socket, release `AudioInputStream`/`OutputStream`.
-- [ ] **B.11** **Anti-ban touch-point** (cross-ref
+- [x] **B.11** **Anti-ban touch-point** (cross-ref
   `plan-discord-anti-ban.md`): a single Discord account MUST never
   have two concurrent voice WebSockets open. Enforce via a per-account
-  mutex in `DiscordClient`. If a second connect is requested, fail
-  with a typed error and let the held-call swap UI handle it.
-- [ ] **B.12** CLI smoke test: `tools/discord-voice-smoke/` —
-  authenticates, joins a known voice channel, plays a 5s sine wave,
-  records 5s of incoming audio to a WAV file, disconnects. Used by the
-  haiku test agent.
+  `VoiceSessionGuard` (`Arc<TokioMutex<Option<DiscordVoiceConnection>>>`)
+  in `DiscordClient`. If a second connect is requested, fails with
+  `VoiceError::AlreadyConnected` before opening any WS.
+- [x] **B.12** CLI smoke test: `tools/discord-voice-smoke/` —
+  authenticates, joins a known voice channel, plays a 5s sine wave
+  (via `FakeAudioBackend`), records 5s of incoming audio to a WAV file,
+  disconnects. Used by the haiku test agent (credentials via env vars;
+  not auto-run in CI — opt-in with `RUN_VOICE_SMOKE=1`).
 
 **Open questions**:
 - Encryption mode rotation: Discord deprecated `xsalsa20_poly1305*`

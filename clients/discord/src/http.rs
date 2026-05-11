@@ -184,6 +184,11 @@ impl DiscordHttpClient {
             .header("X-Super-Properties", x_super)
     }
 
+    /// Return the current auth token, if any.
+    pub fn token(&self) -> Option<String> {
+        self.token.lock().ok().and_then(|lock| lock.clone())
+    }
+
     fn token_header(&self) -> String {
         // User tokens are sent raw (no "Bot " prefix). The "Bot " prefix is
         // only correct for bot tokens; using it with a user token is itself a

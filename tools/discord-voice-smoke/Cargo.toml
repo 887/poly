@@ -1,0 +1,24 @@
+[package]
+name = "discord-voice-smoke"
+description = "CLI smoke test for Discord voice transport (Phase B.12)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+# This binary is not included in automated CI — it requires real Discord
+# credentials. Run with env vars set; see tools/discord-voice-smoke/README.md.
+
+[[bin]]
+name = "discord-voice-smoke"
+path = "src/main.rs"
+
+[dependencies]
+poly-discord = { path = "../../clients/discord", features = ["voice"] }
+poly-audio-backend = { workspace = true, features = ["native"] }
+poly-client = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time", "fs"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+
+[lints]
+workspace = true
