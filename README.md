@@ -225,20 +225,30 @@ cargo test --workspace
 cd apps/web && dx build --platform web
 ```
 
-### Dev-only Backends — Discord & Microsoft Teams
+### Dev-only Backends — Discord, Microsoft Teams, Reddit
 
-Discord and Teams are gated behind `dev-plugins` — on by default for development, excluded in production builds:
+Discord, Teams, and Reddit are gated behind `dev-plugins` — on by default for development, excluded in production builds:
 
 ```bash
-# Dev (default — discord + teams visible in Settings → Plugins as WASM plugins)
+# Dev (default — discord + teams + reddit visible in Settings → Plugins)
 cd apps/web && dx serve --platform web --fullstack ...
 
-# Production (no discord, no teams)
+# Production (no discord, no teams, no reddit)
 cd apps/web && dx build --platform web --release \
     --no-default-features --features production
 ```
 
-**Why?** Both Discord's and Microsoft's terms of service prohibit third-party clients in ways that would block app store approval. The source is MIT-licensed and open, but release artifacts should not contain these backends.
+> **⚠️ NOT BAKED IN — USE AT YOUR OWN RISK.**
+>
+> These three backends are present **strictly for API and feature-completeness exploration** of forum-/chat-shaped backends. They are **not** included in any release artifact, are **not** supported, and were never built as a path to commercial use.
+>
+> - **Discord** and **Microsoft Teams** TOS explicitly prohibit third-party clients. Using these backends with a real account can get the account terminated. The `docs/plans/plan-discord-anti-ban.md` work hardens fingerprinting + rate-limit guardrails to *minimise* that risk, not eliminate it.
+> - **Reddit**'s TOS similarly restricts scraping clients. The plugin scrapes `old.reddit.com` HTML — same risk shape.
+> - The source is MIT-licensed and open so anyone studying the architecture can read it. **Don't ship it. Don't run it against an account you care about.** If you do anyway, that's on you.
+
+### Project scope
+
+**Poly is a research and friends-only project.** No commercial interest, no monetisation path, no enterprise support, no SLA. The author and contributors will not provide support — open issues exist for tracking, not for help. If something doesn't work, read the source.
 
 ---
 
