@@ -4,7 +4,7 @@ A cross-platform messenger that unifies all your chat accounts — Discord, Matr
 
 ![Poly — unified chat UI (Electron shell)](assets/screenshots/poly-app.png)
 
-**Status (2026-04-15):** All 3 platform shells working with SSR hydration + host-bridge unification. 11 client backends (demo, stoat, matrix, discord, teams, poly-server, hackernews, lemmy, github, forgejo, poly-cli). Plugin capability system live. Phase 5 (Social Agent) in progress.
+**Status (2026-05-11):** All 3 platform shells working with SSR hydration + host-bridge unification. 12 client backends (demo, stoat, matrix, discord, teams, poly-server, hackernews, lemmy, github, forgejo, reddit, poly-cli). Plugin capability system live. **Host sandbox shipped end-to-end** across Wry / Electron / Web — Discord captcha + Teams OAuth popups now work natively without leaving the app. Phase 5 (Social Agent) in progress. Next up: **Discord anti-ban hardening** + **voice/video calls (Discord + Stoat)** — design plans landed in `docs/plans/plan-discord-anti-ban.md` and `docs/plans/plan-voice-video-calls.md`.
 
 ---
 
@@ -60,6 +60,7 @@ All messenger backend implementations are compiled to **WebAssembly Component Mo
 | **Lemmy** | Forum | Lemmy REST API v3 — federated forum |
 | **GitHub** | Forge | GitHub Issues/PRs/notifications + source explorer |
 | **Forgejo** | Forge | Forgejo/Gitea/Codeberg repos, issues, PRs + source explorer |
+| **Reddit** | Forum | old.reddit.com HTML scraper — full read/write incl. submit, comment, vote, edit, delete, DM |
 | **poly-cli** | Chat | Dynamic CLI client for the chat MCP |
 
 ### Plugin System
@@ -124,7 +125,8 @@ poly/
 │   ├── hackernews/       # HN Firebase API (forum)
 │   ├── lemmy/            # Lemmy REST API v3 (forum)
 │   ├── github/           # Git forge: GitHub/GHE via gh CLI
-│   └── forgejo/          # Git forge: Forgejo/Gitea/Codeberg via REST API
+│   ├── forgejo/          # Git forge: Forgejo/Gitea/Codeberg via REST API
+│   └── reddit/           # old.reddit.com HTML-scrape backend (forum)
 │
 ├── apps/                 # Platform entry points
 │   ├── web/              # Browser (Dioxus fullstack + Axum, port 3000)
@@ -142,6 +144,7 @@ poly/
 │   ├── plugin-host/      # WASM plugin host (wasmtime, dynamic linking)
 │   ├── plugin-host-tests/# Integration + E2E tests
 │   ├── host-bridge/      # HTTP client abstraction (native reqwest / WASM bridge)
+│   ├── host-sandbox/     # Per-shell browser-popup sandbox for OAuth/captcha (Wry, Electron, Web)
 │   └── social-agent/     # AI agent (Phase 5)
 │
 ├── servers/
@@ -338,5 +341,5 @@ Dual licensed under **MIT** or **Apache-2.0**.
 
 ---
 
-**Last Updated:** 2026-04-12
-**Roadmap:** Phase 3 (remaining backends) → Phase 4 (test servers) → Phase 5 (social agent)
+**Last Updated:** 2026-05-11
+**Roadmap:** ✅ Phase 3 (12 backends shipped, latest: Reddit) → ✅ Host sandbox (Wry/Electron/Web) → 🚧 Discord anti-ban hardening + voice/video calls (Discord + Stoat) → Phase 5 (social agent, in progress)
