@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/core",
     "crates/host-bridge",
+    "crates/audio-backend",
     "crates/lint-gate",
     "crates/lint-gate-rules",
     "crates/plugin-host",
@@ -201,6 +202,10 @@ webbrowser = "1.0"
 # Compiles to wasm32; Phase 3 wires it to a WebAudio AudioWorklet.
 # See docs/phase-voice-plan.md DECISION(V-4).
 nnnoiseless = "0.5"
+# cpal 0.16 — cross-platform native audio I/O (ALSA/PulseAudio/PipeWire on Linux,
+# CoreAudio on macOS, WASAPI on Windows). Native only; never compiled for wasm32.
+# Used by crates/audio-backend (feature = "native") for Phase A of plan-voice-video-calls.
+cpal = "0.16"
 
 # WASM plugin runtime (native-only — wasmtime cannot target wasm32)
 wasmtime = { version = "42", features = ["component-model", "cranelift"] }
@@ -244,6 +249,7 @@ poly-web-devtools-mcp = { path = "mcp/web-devtools-mcp" }
 poly-electron-devtools-mcp = { path = "mcp/electron-devtools-mcp" }
 poly-devtools-protocol = { path = "mcp/devtools-protocol" }
 poly-lint-gate = { path = "crates/lint-gate" }
+poly-audio-backend = { path = "crates/audio-backend" }
 poly-ui-macros = { path = "crates/ui-macros" }
 poly-ui-types = { path = "crates/ui-types" }
 

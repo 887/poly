@@ -1,6 +1,6 @@
 # Voice & Video Calls — Discord (full) + Stoat (full) + Teams (stub)
 
-## Status: PLANNED — not started
+## Status: PHASE A DONE — phases B–K not started
 
 _Last updated: 2026-05-11_
 
@@ -60,7 +60,7 @@ and the held-call rules in `ChatData.held_voice_connections`. It does
 
 ---
 
-## Phase A — `AudioBackend` trait + per-shell impls
+## Phase A — `AudioBackend` trait + per-shell impls (shipped in change `xsytnswm`)
 
 Goal: a single audio I/O abstraction so the same Discord / Stoat voice
 code paths work in Wry-native, Electron-native, and the browser. Mic
@@ -72,7 +72,7 @@ in `clients/discord` and `clients/stoat` depends on
 `poly_audio_backend::AudioBackend` (a `&dyn AudioBackend` parameter on
 the connect/start methods).
 
-- [ ] **A.1** Define `AudioBackend` trait in `crates/audio-backend/src/lib.rs`:
+- [x] **A.1** Define `AudioBackend` trait in `crates/audio-backend/src/lib.rs`:
   - `async fn list_input_devices(&self) -> Result<Vec<AudioDevice>, AudioError>`
   - `async fn list_output_devices(&self) -> Result<Vec<AudioDevice>, AudioError>`
   - `async fn open_input(&self, device_id: &str, format: AudioFormat) -> Result<Box<dyn AudioInputStream>, AudioError>`
@@ -82,35 +82,50 @@ the connect/start methods).
   - `async fn switch_input(&self, device_id: &str) -> Result<(), AudioError>` (mid-call swap, no drop)
   - `async fn switch_output(&self, device_id: &str) -> Result<(), AudioError>`
   - Streams: `AudioInputStream` yields PCM frames (`Stream<Item = Vec<i16>>`); `AudioOutputStream` accepts PCM frames via `push(&self, frame: &[i16])`.
-- [ ] **A.2** `AudioFormat`: 48 kHz, mono or stereo, signed-16. Discord
+- [x] **A.2** `AudioFormat`: 48 kHz, mono or stereo, signed-16. Discord
   voice uses 48 kHz stereo Opus; Stoat is TBD but 48 kHz mono is the
   safe default and resampler lives in the backend impl.
-- [ ] **A.3** `AudioDevice` newtype: `{ id: String, label: String, is_default: bool, kind: AudioDeviceKind { Input, Output } }`. ID stability across enumerations is REQUIRED (used as KV key for "remember last device").
-- [ ] **A.4** Native impl: `crates/audio-backend/src/cpal_backend.rs`
-  using `cpal`. Used by both Wry (`apps/desktop`) and Electron's main
+  Constants: `AudioFormat::DISCORD_VOICE` (48 kHz stereo) and `AudioFormat::STOAT_VOICE` (48 kHz mono). `frame_samples(duration_ms)` helper for downstream Opus encoders.
+- [x] **A.3** `AudioDevice` newtype: `{ id: String, label: String, is_default: bool, kind: AudioDeviceKind { Input, Output } }`. ID stability across enumerations is REQUIRED (used as KV key for "remember last device").
+- [x] **A.4** Native impl: `crates/audio-backend/src/cpal_backend.rs`
+  using `cpal` (v0.16). Used by both Wry (`apps/desktop`) and Electron's main
   process (when we expose audio there — but see A.7 first; Electron may
   use the renderer's WebAudio path instead).
-- [ ] **A.5** Web impl: `crates/audio-backend/src/web_backend.rs` cfg-gated
-  to `wasm32-unknown-unknown`. Uses `web-sys` `MediaDevices.getUserMedia`,
-  `AudioContext`, `AudioWorkletNode`. Mic input via
-  `MediaStreamAudioSourceNode` → `AudioWorkletProcessor` posting PCM
-  frames over `MessagePort`. Output via `AudioBufferSourceNode` /
-  custom worklet.
-- [ ] **A.6** Per-call device persistence: store last-used input/output
-  device IDs in `poly_kv` under `voice.last_input_device.<account_id>`
-  and `voice.last_output_device.<account_id>`. Restore on next call
-  open.
-- [ ] **A.7** **Open question — Electron audio path.** Electron has both
-  a native main process (could use cpal via NAPI) and a renderer with
-  WebAudio. Recommended: renderer-side WebAudio, same impl as
-  `apps/web`. Justification: simpler permission story (browser already
-  prompts mic permission), no NAPI binding needed. Document the choice
-  in `apps/desktop-electron-web/electron/main.js` boot path.
-- [ ] **A.8** Echo cancellation / noise suppression: rely on
-  `getUserMedia` constraints (`echoCancellation: true,
-  noiseSuppression: true`) on web; on native cpal there is no built-in
-  AEC — defer to Phase J (acceptable to ship without on native v1, but
-  document loudly).
+  cpal input callback → `tokio::sync::mpsc` channel → `futures::Stream` bridge.
+  Device enumeration via `cpal::Host::{input,output}_devices()`.
+  I16/F32/U8 sample format normalisation to i16.
+- [x] **A.5** Web impl: `crates/audio-backend/src/web_backend.rs` cfg-gated
+  to `target_arch = "wasm32"` + feature `web`. Uses `web-sys` `MediaDevices.getUserMedia`,
+  `AudioContext`, `AudioWorkletNode`. Mic input via `getUserMedia` (triggers
+  browser permission dialog + AEC/NS constraints). Output via
+  `AudioBufferSourceNode`. Full worklet PCM pipeline deferred to Phase B
+  (see vague-note below).
+- [x] **A.6** Per-call device persistence: KV key helpers in
+  `crates/audio-backend/src/kv_keys.rs`:
+  `last_input_device_key(account_id)` → `"voice.last_input_device.<account_id>"`,
+  `last_output_device_key(account_id)` → `"voice.last_output_device.<account_id>"`.
+  Actual `poly_kv` read/write is the responsibility of the Phase B/F/D call sites.
+- [x] **A.7** **Electron audio path decided.** Renderer-side WebAudio (same
+  `web` feature impl as `apps/web`). Decision documented in
+  `crates/audio-backend/src/web_backend.rs` module doc. No NAPI cpal binding.
+  Justification: simpler permission story (Chromium mic dialog), one impl.
+  The choice should also be referenced in `apps/desktop-electron-web/electron/main.js`
+  when Phase B wires the voice connect path.
+- [x] **A.8** Echo cancellation / noise suppression: `getUserMedia` constraints
+  (`echoCancellation: true, noiseSuppression: true, autoGainControl: true`)
+  set in `WebAudioBackend::open_input`. On native cpal: NO built-in AEC —
+  documented loudly in `cpal_backend.rs` module doc; deferred to Phase J.
+
+> **Vague-note for follow-up agent:** A.5 web input is partially implemented —
+> `getUserMedia` is called (triggers mic permission and validates access) but
+> the returned `BoxInputStream` is an empty stream (`futures::stream::empty()`).
+> The full PCM pipeline (`MediaStreamAudioSourceNode` → `AudioWorkletNode` →
+> `MessagePort` → Rust callback → mpsc channel → Stream) requires:
+> 1. A `poly-pcm-capture-worklet.js` AudioWorklet processor bundled with the app.
+> 2. The `AudioWorkletNode` Rust bindings (web-sys `AudioWorkletNode` feature).
+> This worklet wiring belongs in Phase B when Discord voice needs real mic frames.
+> The Phase A trait surface and permission flow are complete; Phase B should
+> complete the worklet pipeline before hooking up the Opus encoder.
 
 **Open questions**:
 - cpal's blocking input callback model vs the trait's `Stream`-based

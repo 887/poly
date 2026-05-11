@@ -1,0 +1,77 @@
+[package]
+name = "poly-audio-backend"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+# Feature flags
+#
+# `native` — enables the cpal-based native backend (Wry desktop).
+#   Do NOT enable on wasm32; cpal is a native-only crate.
+#
+# `web` — enables the Web Audio API backend for wasm32 targets
+#   (apps/web, apps/desktop-electron renderer side).
+#   Electron uses the renderer-side WebAudio path (same as apps/web):
+#   simpler permission story (browser mic prompt), no NAPI binding needed.
+#   See plan-voice-video-calls.md Phase A.7 for the decision record.
+[features]
+native = ["dep:cpal", "dep:tokio"]
+web = ["dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:js-sys"]
+
+[dependencies]
+# Core traits / error handling — always compiled
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+futures = { workspace = true }
+
+# Native-only audio I/O
+# cpal 0.16 — cross-platform audio I/O (ALSA/PulseAudio/PipeWire on Linux,
+# CoreAudio on macOS, WASAPI on Windows). Native builds only.
+# NOTE: cpal's input callback model is blocking/synchronous (called on a
+# real-time audio thread). We bridge to async via a tokio MPSC channel +
+# SPSC ring buffer; see cpal_backend.rs for the approach.
+cpal = { version = "0.16", optional = true }
+
+# Async runtime for native channel bridges (non-wasm only)
+tokio = { workspace = true, optional = true, features = [
+    "rt",
+    "sync",
+    "macros",
+] }
+
+# WASM-only: Web Audio API bindings
+# web-sys features needed for getUserMedia + AudioContext + AudioWorkletNode.
+# Additional features declared here rather than relying on the workspace
+# web-sys entry (which only enables UI-related features).
+web-sys = { version = "0.3", optional = true, features = [
+    "AudioBuffer",
+    "AudioBufferSourceNode",
+    "AudioContext",
+    "AudioContextOptions",
+    "AudioDestinationNode",
+    "AudioNode",
+    "AudioWorkletNode",
+    "AudioWorkletNodeOptions",
+    "ConstrainBooleanParameters",
+    "ConstrainDomStringParameters",
+    "MediaDeviceInfo",
+    "MediaDeviceKind",
+    "MediaDevices",
+    "MediaStream",
+    "MediaStreamAudioSourceNode",
+    "MediaStreamConstraints",
+    "MediaTrackConstraints",
+    "Navigator",
+    "Window",
+] }
+wasm-bindgen = { workspace = true, optional = true }
+wasm-bindgen-futures = { workspace = true, optional = true }
+js-sys = { workspace = true, optional = true }
+
+[dev-dependencies]
+# Test helpers — allowed in tests only
+tokio = { workspace = true, features = ["rt", "macros"] }
+
+[lints]
+workspace = true
