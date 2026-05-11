@@ -608,10 +608,12 @@ impl IsBackend for RedditBackend {
             MessageContent::WithAttachments { text, .. } => text.clone(),
         };
 
-        // Two channel-id shapes accepted (mirrors get_messages):
-        //   c_posts_<sub>  — top-level submit to the subreddit (kind=self,
-        //                    title = first non-empty line, body = remainder)
-        //   hn-post-<id>   — top-level comment on that post (parent t3_<id>)
+        // Three channel-id shapes (mirrors get_messages):
+        //   c_posts_<sub> — top-level submit (kind=self, title = first
+        //                   non-empty line, body = remainder)
+        //   hn-post-<id>  — top-level comment on the post (parent t3_<id>)
+        //   dm_<dm_id>    — reply within an existing DM thread (Reddit
+        //                   uses /api/comment with parent t4_<id>)
         let (placeholder_id, placeholder_prefix) =
             if let Some(sub) = sub_from_channel_id(channel_id) {
                 let (title, body) = split_title_body(&text);
@@ -636,6 +638,16 @@ impl IsBackend for RedditBackend {
                 (
                     format!("t1_pending-{}", chrono::Utc::now().timestamp_millis()),
                     "t1",
+                )
+            } else if let Some(dm_id) = channel_id.strip_prefix("dm_") {
+                let parent = format!("t4_{dm_id}");
+                self.client
+                    .reply_comment(&parent, &text)
+                    .await
+                    .map_err(ClientError::from)?;
+                (
+                    format!("t4_pending-{}", chrono::Utc::now().timestamp_millis()),
+                    "t4",
                 )
             } else {
                 return Err(ClientError::NotSupported(format!(
@@ -744,6 +756,36 @@ impl IsBackend for RedditBackend {
             messages.push(op_msg);
             flatten_comments_into_messages(&comments, &bt, &mut messages);
             return Ok(messages);
+        }
+
+        // 3. `dm_<dm_id>` — single-message DM "thread" (Reddit DMs are
+        //    not multi-message conversations server-side; the unified UI
+        //    treats each DM as a one-message channel for now).
+        if let Some(dm_id) = channel_id.strip_prefix("dm_") {
+            let inbox = self.client.inbox().await.map_err(ClientError::from)?;
+            let dm = inbox
+                .into_iter()
+                .find(|d| d.id == dm_id)
+                .ok_or_else(|| ClientError::NotFound(format!("dm: {dm_id}")))?;
+            let account_id = self
+                .session
+                .as_ref()
+                .map_or("u_me", |s| s.user.id.as_str());
+            let dm_chan = raw_dm_to_dm_channel(&dm, account_id, &bt);
+            let body_plain = html_to_plain_text(&dm.body_html);
+            let msg = Message {
+                id: message_id_for_dm(&dm.id),
+                author: dm_chan.user.clone(),
+                content: MessageContent::Text(body_plain),
+                timestamp: dm.timestamp,
+                attachments: Vec::new(),
+                reactions: Vec::new(),
+                reply_to: None,
+                edited: false,
+                thread: None,
+                preview_image_url: None,
+            };
+            return Ok(vec![msg]);
         }
 
         Err(ClientError::NotFound(format!("channel not found: {channel_id}")))
@@ -1445,11 +1487,13 @@ impl poly_client::MessagingBackend for RedditBackend {
             MessageContent::WithAttachments { text, .. } => text.clone(),
         };
 
-        // reply_to_message_id is t3_<id> for posts or t1_<id> for comments.
-        let is_post = reply_to_message_id.starts_with("t3_");
-        let is_comment = reply_to_message_id.starts_with("t1_");
+        // reply_to_message_id is t3_<id> for posts, t1_<id> for comments,
+        // or t4_<id> for DMs (Reddit's inbox-reply pattern).
+        let accepted = reply_to_message_id.starts_with("t3_")
+            || reply_to_message_id.starts_with("t1_")
+            || reply_to_message_id.starts_with("t4_");
 
-        if is_post || is_comment {
+        if accepted {
             self.client
                 .reply_comment(reply_to_message_id, &text)
                 .await

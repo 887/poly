@@ -36,6 +36,34 @@ pub(crate) fn parse_listing_from_doc(doc: &Html) -> Result<Vec<RawPost>, ParseEr
     Ok(posts)
 }
 
+/// Pull the `after=<t3_id>` token out of old.reddit's
+/// `<span class="next-button"><a href="...?count=25&after=t3_xxx">next</a></span>`
+/// if present. Returns `None` when there is no next-button (final page).
+#[must_use]
+pub fn extract_next_after(html: &str) -> Option<String> {
+    // Locate the next-button span and the first href= within ~512 chars.
+    let span_idx = html.find("\"next-button\"")?;
+    let window_end = (span_idx + 512).min(html.len());
+    let window = &html[span_idx..window_end];
+    let href_idx = window.find("href=\"")?;
+    let after_href = &window[href_idx + 6..];
+    let close = after_href.find('"')?;
+    let href = &after_href[..close];
+    // href may include the literal `&amp;` from HTML escaping; both
+    // shapes can carry an after=... query param.
+    let after_marker = href.find("after=")?;
+    let raw = &href[after_marker + "after=".len()..];
+    let end = raw
+        .find(|c: char| c == '&' || c == '#')
+        .unwrap_or(raw.len());
+    let token = &raw[..end];
+    if token.is_empty() {
+        None
+    } else {
+        Some(token.to_string())
+    }
+}
+
 pub(crate) fn post_selector() -> Selector {
     // Lints: parser-internal selector strings are static and known-good.
     #[allow(clippy::unwrap_used)] // lint-allow-unused: static selector literal infallible

@@ -54,6 +54,9 @@ pub fn routes_only(_state: Arc<RedditState>) -> Router<Arc<RedditState>> {
         .route("/api/compose", post(routes::compose))
         .route("/api/comment", post(routes::comment))
         .route("/api/submit", post(routes::submit))
+        .route("/api/del", post(routes::del))
+        .route("/api/editusertext", post(routes::editusertext))
+        .route("/api/read_message", post(routes::read_message))
         .route("/api/vote", post(routes::vote))
         // Avatars.
         .route("/avatars/{animal}", get(routes::avatar))

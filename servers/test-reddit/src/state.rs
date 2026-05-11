@@ -234,6 +234,16 @@ impl RedditState {
         self.votes.insert((post_id.to_string(), user.to_string()), dir);
     }
 
+    /// Record a delete request. Stored as a no-op sentinel — callers
+    /// just need the 200-with-empty-errors-array response.
+    pub fn record_delete(&self, _id: &str, _author: &str) {}
+
+    /// Record an edit. Stored as a no-op sentinel.
+    pub fn record_edit(&self, _id: &str, _author: &str, _new_text: &str) {}
+
+    /// Mark a DM read. Stored as a no-op sentinel.
+    pub fn mark_read(&self, _id: &str, _user: &str) {}
+
     /// Record a top-level submission. Returns the synthesised t3_ id
     /// (without prefix).
     pub fn record_submission(

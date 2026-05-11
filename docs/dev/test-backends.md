@@ -359,3 +359,57 @@ curl -s http://127.0.0.1:9107/user/repos \
 ```
 
 GitHub does NOT expose `/seed`, `/reset`, `/reseed` — state is seeded at startup.
+
+---
+
+## test-reddit — Port 9108
+
+old.reddit.com HTML-scrape mock. Implements cookie-based login + modhash, subreddit
+listings (Hot/New/Top/Controversial), post + comment tree, inbox / DMs, subscriptions,
+votes, top-level submit, comment reply, edit / delete, mark-read. Real-shape HTML
+fixtures captured from `old.reddit.com` live under `clients/reddit/tests/fixtures/`.
+
+**Health:** uses the shared `poly-test-common` lifecycle helper; the canonical probe
+is the front-page HTML:
+```bash
+curl -s http://127.0.0.1:9108/ | grep -c '<html'   # → 1
+```
+
+**Seeded users:** `cat` (avatar: cat), `dog` (avatar: dog). Password for both:
+`testpass123`. Sessions are issued as `mock_session_<user>_<n>` cookies named
+`reddit_session`.
+
+**Avatar curl:**
+```bash
+# Pattern: /avatars/{animal} — bare name, no extension.
+curl -v http://127.0.0.1:9108/avatars/cat -o /tmp/cat.png && file /tmp/cat.png
+```
+
+**Login + post-list:**
+```bash
+# 1. Login (mock — accepts the seeded password).
+COOKIE=$(curl -s -i -X POST http://127.0.0.1:9108/api/login/cat \
+  --data 'passwd=testpass123' | awk '/^set-cookie:/ {print $2}' | tr -d '\r;')
+
+# 2. Fetch r/rust hot listing (HTML page).
+curl -s -H "Cookie: $COOKIE" http://127.0.0.1:9108/r/rust/hot/ | head -c 200
+```
+
+**Write-side endpoints (POST, form-encoded, requires session cookie):**
+| Path                  | Form fields                            | Effect                     |
+|-----------------------|----------------------------------------|----------------------------|
+| `/api/submit`         | `sr`, `kind=self`, `title`, `text`     | Top-level self-post        |
+| `/api/comment`        | `thing_id` (t1_/t3_/t4_), `text`       | Reply / inbox-reply        |
+| `/api/del`            | `id` (t1_/t3_)                         | Delete own thing           |
+| `/api/editusertext`   | `thing_id` (t1_/t3_), `text`           | Edit own body              |
+| `/api/read_message`   | `id` (t4_)                             | Mark DM read               |
+| `/api/vote`           | `id`, `dir` (1/0/-1)                   | Vote                       |
+| `/api/compose`        | `to`, `subject`, `text`                | Send DM                    |
+| `/api/subscribe`      | `sr` (t5_), `action` (sub/unsub)       | Subscribe / unsubscribe    |
+
+Anonymous calls to any write endpoint return `401 logged out`.
+
+**Reset:**
+```bash
+curl -X POST http://127.0.0.1:9108/test/reset    # wipes sessions, DMs, votes, etc.
+```

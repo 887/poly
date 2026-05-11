@@ -153,6 +153,45 @@ async fn submit_self_post_round_trips() {
 }
 
 #[tokio::test]
+async fn delete_edit_and_mark_read_round_trip() {
+    let server = TestServer::start().await;
+    let cat = RedditClient::with_base_url(server.base_url.clone()).expect("cat client");
+    cat.login_with_password("cat", "testpass123").await.expect("login");
+
+    cat.delete_thing("t1_abc").await.expect("delete authed");
+    cat.edit_user_text("t1_abc", "edited body").await.expect("edit authed");
+    cat.mark_message_read("t4_dm0").await.expect("mark-read authed");
+
+    // Same calls anonymously → 401.
+    let anon = RedditClient::with_base_url(server.base_url.clone()).expect("anon client");
+    for err in [
+        anon.delete_thing("t1_abc").await.unwrap_err(),
+        anon.edit_user_text("t1_abc", "x").await.unwrap_err(),
+        anon.mark_message_read("t4_dm0").await.unwrap_err(),
+    ] {
+        assert!(
+            matches!(err, poly_reddit::RedditError::Status(401)),
+            "expected 401, got {err:?}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn list_subreddit_page_returns_cursor_when_present() {
+    let server = TestServer::start().await;
+    let client = RedditClient::with_base_url(server.base_url.clone()).expect("client");
+
+    // r/rust hot fixture has a next-button → cursor must be parsed.
+    let (posts, cursor) = client
+        .list_subreddit_page("rust", SortKind::Hot, None)
+        .await
+        .expect("first page");
+    assert!(!posts.is_empty(), "first page non-empty");
+    assert!(cursor.is_some(), "fixture carries a next-button → cursor expected");
+    assert!(cursor.as_deref().unwrap().starts_with("t3_"), "cursor is t3_-prefixed: {cursor:?}");
+}
+
+#[tokio::test]
 async fn anonymous_browse_works_without_login() {
     let server = TestServer::start().await;
     let client = RedditClient::with_base_url(server.base_url.clone()).expect("client");

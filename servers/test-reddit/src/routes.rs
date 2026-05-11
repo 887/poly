@@ -650,6 +650,64 @@ pub async fn submit(
 }
 
 #[derive(Debug, Deserialize)]
+pub struct IdForm {
+    pub id: String,
+    #[serde(default)]
+    pub uh: Option<String>,
+}
+
+/// `POST /api/del` — delete an own thing (t1_/t3_).
+pub async fn del(
+    State(state): State<Arc<RedditState>>,
+    headers: HeaderMap,
+    axum::Form(form): axum::Form<IdForm>,
+) -> Response {
+    let Some(user) = current_user(&state, &headers) else {
+        return (StatusCode::UNAUTHORIZED, "logged out").into_response();
+    };
+    state.record_delete(&form.id, &user);
+    json_resp(json!({ "json": { "errors": [] } }))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct EditForm {
+    pub thing_id: String,
+    pub text: String,
+    #[serde(default)]
+    pub uh: Option<String>,
+    #[serde(default)]
+    pub api_type: Option<String>,
+}
+
+/// `POST /api/editusertext` — edit body of an own comment or self-post.
+pub async fn editusertext(
+    State(state): State<Arc<RedditState>>,
+    headers: HeaderMap,
+    axum::Form(form): axum::Form<EditForm>,
+) -> Response {
+    let Some(user) = current_user(&state, &headers) else {
+        return (StatusCode::UNAUTHORIZED, "logged out").into_response();
+    };
+    state.record_edit(&form.thing_id, &user, &form.text);
+    json_resp(json!({
+        "json": { "errors": [], "data": { "things": [] } }
+    }))
+}
+
+/// `POST /api/read_message` — mark a DM read.
+pub async fn read_message(
+    State(state): State<Arc<RedditState>>,
+    headers: HeaderMap,
+    axum::Form(form): axum::Form<IdForm>,
+) -> Response {
+    let Some(user) = current_user(&state, &headers) else {
+        return (StatusCode::UNAUTHORIZED, "logged out").into_response();
+    };
+    state.mark_read(&form.id, &user);
+    json_resp(json!({ "json": { "errors": [] } }))
+}
+
+#[derive(Debug, Deserialize)]
 pub struct VoteForm {
     pub id: String,
     pub dir: i8,

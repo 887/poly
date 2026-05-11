@@ -730,6 +730,104 @@ impl RedditClient {
         Ok(())
     }
 
+    /// Delete an own thing (`t1_<id>` comment or `t3_<id>` post).
+    ///
+    /// # Errors
+    ///
+    /// `RedditError::Status` for HTTP non-2xx.
+    pub async fn delete_thing(&self, fullname: &str) -> Result<(), RedditError> {
+        let url = self.resolve_url("/api/del");
+        let resp = self.post_form(&url, &[("id", fullname)]).await?;
+        if !resp.status().is_success() {
+            return Err(RedditError::Status(resp.status().as_u16()));
+        }
+        Ok(())
+    }
+
+    /// Edit the body text of an own comment or self-post.
+    ///
+    /// # Errors
+    ///
+    /// `RedditError::Status` for HTTP non-2xx, `RedditError::LoggedOut`
+    /// when Reddit's `errors` array is non-empty.
+    pub async fn edit_user_text(
+        &self,
+        fullname: &str,
+        new_text: &str,
+    ) -> Result<(), RedditError> {
+        let url = self.resolve_url("/api/editusertext");
+        let resp = self
+            .post_form(
+                &url,
+                &[
+                    ("thing_id", fullname),
+                    ("text", new_text),
+                    ("api_type", "json"),
+                ],
+            )
+            .await?;
+        if !resp.status().is_success() {
+            return Err(RedditError::Status(resp.status().as_u16()));
+        }
+        let body: serde_json::Value = resp.json().await?;
+        if let Some(errs) = body
+            .get("json")
+            .and_then(|j| j.get("errors"))
+            .and_then(|e| e.as_array())
+            && !errs.is_empty()
+        {
+            return Err(RedditError::LoggedOut);
+        }
+        Ok(())
+    }
+
+    /// Mark a DM (`t4_<id>`) or inbox item read.
+    ///
+    /// # Errors
+    ///
+    /// `RedditError::Status` for HTTP non-2xx.
+    pub async fn mark_message_read(&self, fullname: &str) -> Result<(), RedditError> {
+        let url = self.resolve_url("/api/read_message");
+        let resp = self.post_form(&url, &[("id", fullname)]).await?;
+        if !resp.status().is_success() {
+            return Err(RedditError::Status(resp.status().as_u16()));
+        }
+        Ok(())
+    }
+
+    /// Fetch one page of subreddit posts plus the `after` cursor for
+    /// the next page (parsed from old.reddit's `<span class="next-button">`).
+    /// Pass `None` for the first page; pass the returned cursor for the
+    /// next.
+    ///
+    /// # Errors
+    ///
+    /// Same as [`Self::list_subreddit`].
+    pub async fn list_subreddit_page(
+        &self,
+        subreddit: &str,
+        sort: SortKind,
+        after: Option<&str>,
+    ) -> Result<(Vec<RawPost>, Option<String>), RedditError> {
+        let mut path = format!("/r/{subreddit}/{}/", sort.as_path());
+        let mut params = Vec::<String>::new();
+        if let Some(t) = sort.time_filter() {
+            params.push(format!("t={t}"));
+        }
+        if let Some(cursor) = after {
+            params.push(format!("count=25&after={}", urlencoding_simple(cursor)));
+        }
+        if !params.is_empty() {
+            path.push('?');
+            path.push_str(&params.join("&"));
+        }
+        let url = self.resolve_url(&path);
+        let html = self.fetch_text(&url).await?;
+        let posts = parser::subreddit::parse_listing(&html)?;
+        let next_after = parser::subreddit::extract_next_after(&html);
+        Ok((posts, next_after))
+    }
+
     // ── Phase E: community search ───────────────────────────────────────
 
     /// Search subreddits by keyword.
