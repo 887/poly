@@ -21,6 +21,10 @@ function exposePolyElectronBridge({ contextBridge, ipcRenderer, packageJsonPath 
     toggleMaximize: () => ipcRenderer.send('poly-window-toggle-maximize'),
     closeWindow: () => ipcRenderer.send('poly-window-close'),
     windowState: () => ipcRenderer.invoke('poly-window-state'),
+    // Opens a sandboxed browser window and resolves with { capturedUrl } when
+    // a navigation matches capturePattern, or rejects with 'UserCancelled'.
+    // opts: { id: string, url: string, capturePattern: string }
+    openSandbox: (opts) => ipcRenderer.invoke('open-sandbox', opts),
   });
 }
 

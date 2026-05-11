@@ -103,23 +103,27 @@ The implementation varies by shell:
       `POLY_SANDBOX_RUN_DISPLAY_TEST=1` (avoids GTK fatal abort in
       headless/broken-Wayland CI). Host-cap assertion always runs.
 
-### Phase B — Electron (apps/desktop-electron) implementation
+### Phase B — Electron (apps/desktop-electron) implementation — shipped in change `pnqyuryxoszp`
 
-- [ ] **B.1** Add `ipcMain.handle('open-sandbox', async (_, opts) => {...})` in
+- [x] **B.1** Add `ipcMain.handle('open-sandbox', async (_, opts) => {...})` in
       `apps/desktop-electron-web/electron/main.js`: create a
       `new BrowserWindow({ webPreferences: { partition: 'sandbox-' + opts.id, contextIsolation: true } })`,
       load `opts.url`, register `webContents.on('will-navigate', ...)` and
       `webContents.on('did-redirect-navigation', ...)` to detect the capture
       pattern.
-- [ ] **B.2** Tear down on capture or cancel: `win.close()` then resolve the
+- [x] **B.2** Tear down on capture or cancel: `win.close()` then resolve the
       IPC promise. Also wire `win.on('closed', () => reject('UserCancelled'))`.
-- [ ] **B.3** Native side: `ElectronSandbox` struct in
+- [x] **B.3** Native side: `ElectronSandbox` struct in
       `apps/desktop-electron/src/sandbox.rs` that uses the existing eval-bridge
       (HTTP on 9224) to invoke the IPC handler and await its JSON response.
-- [ ] **B.4** Wire `ElectronSandbox` into the host-cap registry; bump caps.
-- [ ] **B.5** Integration test mirroring A.6 but driving the Electron MCP
+- [x] **B.4** Wire `ElectronSandbox` into the host-cap registry; bump caps.
+      Adds `/host/caps` (returns `["SandboxBrowser"]`) and `/host/sandbox/open`
+      (POST → `ElectronSandbox`) routes to the fullstack server.
+- [x] **B.5** Integration test mirroring A.6 but driving the Electron MCP
       (`mcp__poly-electron__launch_app` → trigger sandbox via host bridge →
-      assert captured URL).
+      assert captured URL). `tests/sandbox_capture_electron.rs`: two unit tests
+      run unconditionally; the full CDP round-trip test is `#[ignore]`-gated
+      (requires live Electron on port 9224).
 
 ### Phase C — Web (apps/web) implementation, full path with redirect shim (shipped in change `vslkuxvrymmr`)
 

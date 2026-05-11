@@ -18,7 +18,7 @@
 //! - `advertised_host_caps()` — returns `[SandboxBrowser]` when either
 //!   `wry-sandbox` or `web` feature is active, `[]` otherwise.
 
-use poly_client::HostCap;
+pub use poly_client::HostCap;
 
 #[derive(Debug, thiserror::Error)]
 pub enum SandboxError {
@@ -30,6 +30,9 @@ pub enum SandboxError {
     UserCancelled,
     #[error("sandbox internal error: {0}")]
     Internal(String),
+    /// Shell-specific IPC / DevTools Protocol error.
+    #[error("sandbox IPC error: {0}")]
+    CdpError(String),
 }
 
 #[derive(Debug, Clone)]

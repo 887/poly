@@ -6606,16 +6606,24 @@ name = "poly-desktop-electron"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "axum",
  "dioxus",
  "dioxus-cli-config",
+ "futures-util",
  "getrandom 0.4.2",
  "poly-core",
  "poly-host",
  "poly-host-bridge",
+ "poly-host-sandbox",
+ "reqwest 0.13.2",
+ "serde",
+ "serde_json",
  "tokio",
+ "tokio-tungstenite 0.26.2",
  "tracing",
  "tracing-subscriber",
+ "uuid",
  "web-sys",
 ]
 

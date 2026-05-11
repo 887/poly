@@ -23,6 +23,10 @@ function exposePolyElectronBridge({ contextBridge, ipcRenderer, packageJsonPath 
     windowState: () => ipcRenderer.invoke('poly-window-state'),
     mcpStatus: () => ipcRenderer.invoke('poly-mcp-status'),
     mcpRestart: () => ipcRenderer.invoke('poly-mcp-restart'),
+    // Opens a sandboxed browser window and resolves with { capturedUrl } when
+    // a navigation matches capturePattern, or rejects with 'UserCancelled'.
+    // opts: { id: string, url: string, capturePattern: string }
+    openSandbox: (opts) => ipcRenderer.invoke('open-sandbox', opts),
   });
 }
 

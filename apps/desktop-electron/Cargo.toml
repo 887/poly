@@ -24,7 +24,7 @@ production = []
 # writeup. Client renders fresh into the empty `#poly-app-shell` from
 # the server's App() cfg(not(wasm32)) branch.
 web = ["dioxus/web"]
-server = ["dioxus/fullstack", "dioxus/server", "dep:axum", "dep:tokio", "dep:poly-host", "dep:dioxus-cli-config", "dep:anyhow"]
+server = ["dioxus/fullstack", "dioxus/server", "dep:axum", "dep:tokio", "dep:poly-host", "dep:dioxus-cli-config", "dep:anyhow", "dep:poly-host-sandbox", "dep:async-trait", "dep:serde", "dep:serde_json", "dep:uuid", "dep:reqwest", "dep:tokio-tungstenite", "dep:futures-util"]
 
 [dependencies]
 poly-core = { workspace = true, features = [
@@ -47,8 +47,28 @@ tracing-subscriber = { workspace = true }
 axum = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true, features = ["rt-multi-thread", "macros", "signal", "net"] }
 poly-host = { workspace = true, optional = true }
+poly-host-sandbox = { workspace = true, optional = true }
 dioxus-cli-config = { workspace = true, optional = true }
 anyhow = { workspace = true, optional = true }
+async-trait = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+uuid = { workspace = true, optional = true }
+reqwest = { workspace = true, optional = true }
+tokio-tungstenite = { workspace = true, optional = true }
+futures-util = { workspace = true, optional = true }
+
+# Dev/test dependencies — only compiled for tests on native targets.
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+poly-host-sandbox = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }
+tokio-tungstenite = { workspace = true }
+futures-util = { workspace = true }
+reqwest = { workspace = true }
+uuid = { workspace = true }
+serde_json = { workspace = true }
+axum = { workspace = true }
+async-trait = { workspace = true }
 
 # getrandom 0.4 (pulled by rand 0.10 → poly-demo) needs wasm_js on WASM targets
 [target.'cfg(target_arch = "wasm32")'.dependencies]

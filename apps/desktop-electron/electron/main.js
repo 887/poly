@@ -12,6 +12,7 @@
 
 const { app, BrowserWindow, Menu, ipcMain, shell } = require('electron');
 const path = require('node:path');
+const { randomUUID } = require('node:crypto');
 const {
   attachWindowStateListeners,
   registerWindowControlsIpc,
@@ -101,6 +102,71 @@ async function createWindow() {
 }
 
 registerWindowControlsIpc(ipcMain, BrowserWindow);
+
+// ── Sandbox browser IPC (host-cap::sandbox-browser) ──────────────────────────
+//
+// Opens a transient BrowserWindow in an isolated partition, monitors navigation
+// events, resolves once the URL matches `opts.capturePattern` (a JS regex
+// string), or rejects if the user closes the window early.
+//
+// opts: { id: string, url: string, capturePattern: string }
+// Resolves: { capturedUrl: string }
+// Rejects:  'UserCancelled' | error string
+ipcMain.handle('open-sandbox', async (_event, opts) => {
+  const { id, url, capturePattern } = opts;
+  const partition = 'sandbox-' + (id || randomUUID());
+  const pattern = new RegExp(capturePattern);
+
+  return new Promise((resolve, reject) => {
+    const win = new BrowserWindow({
+      width: 800,
+      height: 700,
+      title: 'Poly — Browser Sandbox',
+      webPreferences: {
+        partition,
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+      },
+    });
+
+    let settled = false;
+
+    function settle(result) {
+      if (settled) return;
+      settled = true;
+      setImmediate(() => {
+        if (!win.isDestroyed()) win.close();
+      });
+      if (result instanceof Error || typeof result === 'string') {
+        reject(result);
+      } else {
+        resolve(result);
+      }
+    }
+
+    function checkUrl(navigatedUrl) {
+      if (pattern.test(navigatedUrl)) {
+        settle({ capturedUrl: navigatedUrl });
+      }
+    }
+
+    win.webContents.on('did-navigate', (_e, navUrl) => checkUrl(navUrl));
+    win.webContents.on('did-redirect-navigation', (_e, navUrl) => checkUrl(navUrl));
+    win.webContents.on('will-navigate', (_e, navUrl) => checkUrl(navUrl));
+
+    win.on('closed', () => {
+      if (!settled) {
+        settled = true;
+        reject('UserCancelled');
+      }
+    });
+
+    win.loadURL(url).catch((err) => {
+      settle(new Error('Failed to load sandbox URL: ' + err.message));
+    });
+  });
+});
 
 // ── App lifecycle ─────────────────────────────────────────────────────────────
 
