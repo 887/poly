@@ -1,4 +1,4 @@
-## Status: Phase A + C DONE — shipped in changes `pnqyuryxoszp` (Wry) + `vslkuxvrymmr` (Web). Phase B (Electron) and Phase D (backend wiring) still pending.
+## Status: Phases A + B + C DONE — shipped in changes `pnqyuryxoszp` (Wry) + `qxxzzkkruywk` (Electron) + `vslkuxvrymmr` (Web). Phase D (backend mechanism declarations + UI) still pending.
 
 # Plan: Host Sandbox Implementation
 
@@ -103,7 +103,7 @@ The implementation varies by shell:
       `POLY_SANDBOX_RUN_DISPLAY_TEST=1` (avoids GTK fatal abort in
       headless/broken-Wayland CI). Host-cap assertion always runs.
 
-### Phase B — Electron (apps/desktop-electron) implementation — shipped in change `pnqyuryxoszp`
+### Phase B — Electron (apps/desktop-electron) implementation — shipped in change `qxxzzkkruywk`
 
 - [x] **B.1** Add `ipcMain.handle('open-sandbox', async (_, opts) => {...})` in
       `apps/desktop-electron-web/electron/main.js`: create a
