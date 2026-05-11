@@ -1,4 +1,4 @@
-## Status: ✅ MAJOR MILESTONE — Phases A (a459cea2) + B (a6e2f5c3) + D-anon (a55b75a3) + F.2 fixtures (a2c95418) + F+C+E+back_and_forth (21851b5a) + G ClientBackend impl + test-account signup (13739e13) all shipped. Reddit backend is wired into the Poly UI surface. Cat ↔ dog DM flow verified end-to-end. Remaining: top-level submit (E.1 send_message), in-UI sort dropdown polish, full UI smoke against test server.
+## Status: ✅ MAJOR MILESTONE — Phases A (a459cea2) + B (a6e2f5c3) + D-anon (a55b75a3) + F.2 fixtures (a2c95418) + F+C+E+back_and_forth (21851b5a) + G ClientBackend impl + test-account signup (13739e13) all shipped. Reddit backend is wired into the Poly UI surface. Cat ↔ dog DM flow verified end-to-end. Remaining: in-UI sort dropdown polish, full UI smoke against test server.
 
 ## Real-world findings from F.2 fixture capture (2026-05-02)
 
@@ -333,12 +333,14 @@ inbox) stay in the unticked Phase D list below for when Phase C lands.
 
 ### Phase E — Write flows (post, comment, DM, vote)
 
-- [ ] **E.1** `send_message(server_id, channel_id, content)` → if
-      `channel_id == "c_posts"` POST to
-      `https://oauth.reddit.com/api/submit` form-encoded `sr=<sub>,
-      kind=self, title=<first-line-of-content>, text=<rest>, uh=<modhash>`.
-      (Or scrape the submit form from `/r/<sub>/submit` and POST to its
-      action URL — pick whichever is more stable; document the call site.)
+- [x] **E.1** `send_message(server_id, channel_id, content)` — shipped.
+      `c_posts_<sub>` channel-id branch posts to `/api/submit` (`kind=self`,
+      title = first non-empty line of content, body = remainder).
+      `hn-post-<id>` channel-id branch posts to `/api/comment` with
+      `thing_id=t3_<id>` for top-level comment-on-post. `RedditClient::submit_self_post`
+      added; `servers/test-reddit` gained `/api/submit` route + `record_submission`
+      state. Round-trip integration test `submit_self_post_round_trips` (auth +
+      anon 401) added in `back_and_forth.rs`.
 - [ ] **E.2** `send_message_reply(parent_message_id, content)` → POST to
       `https://old.reddit.com/api/comment` with `thing_id=<t1_or_t3>,
       text=<content>, uh=<modhash>`.

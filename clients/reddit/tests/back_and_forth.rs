@@ -129,6 +129,30 @@ async fn cat_dms_dog_full_flow() {
 }
 
 #[tokio::test]
+async fn submit_self_post_round_trips() {
+    let server = TestServer::start().await;
+    let cat = RedditClient::with_base_url(server.base_url.clone()).expect("cat client");
+    cat.login_with_password("cat", "testpass123").await.expect("login");
+
+    let name = cat
+        .submit_self_post("rust", "Hello /r/rust", "First-time poster, long-time lurker.")
+        .await
+        .expect("submit succeeds");
+    assert!(name.starts_with("t3_"), "name returned with t3_ prefix: {name}");
+
+    // Anonymous client: same call is rejected because no session cookie.
+    let anon = RedditClient::with_base_url(server.base_url.clone()).expect("anon client");
+    let err = anon
+        .submit_self_post("rust", "should fail", "")
+        .await
+        .expect_err("anon submit rejected");
+    assert!(
+        matches!(err, poly_reddit::RedditError::Status(401)),
+        "expected 401, got {err:?}"
+    );
+}
+
+#[tokio::test]
 async fn anonymous_browse_works_without_login() {
     let server = TestServer::start().await;
     let client = RedditClient::with_base_url(server.base_url.clone()).expect("client");

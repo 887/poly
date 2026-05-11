@@ -635,6 +635,55 @@ impl RedditClient {
         Ok(())
     }
 
+    /// Submit a top-level self-post to a subreddit. Returns the new
+    /// post's `t3_<id>` fullname (with the `t3_` prefix) when the API
+    /// surfaces it; otherwise an empty string.
+    ///
+    /// # Errors
+    ///
+    /// `RedditError::Status` for HTTP non-2xx, `RedditError::LoggedOut`
+    /// when the response carries a Reddit API errors array.
+    pub async fn submit_self_post(
+        &self,
+        sub: &str,
+        title: &str,
+        text: &str,
+    ) -> Result<String, RedditError> {
+        let url = self.resolve_url("/api/submit");
+        let resp = self
+            .post_form(
+                &url,
+                &[
+                    ("sr", sub),
+                    ("kind", "self"),
+                    ("title", title),
+                    ("text", text),
+                    ("api_type", "json"),
+                ],
+            )
+            .await?;
+        if !resp.status().is_success() {
+            return Err(RedditError::Status(resp.status().as_u16()));
+        }
+        let body: serde_json::Value = resp.json().await?;
+        if let Some(errs) = body
+            .get("json")
+            .and_then(|j| j.get("errors"))
+            .and_then(|e| e.as_array())
+            && !errs.is_empty()
+        {
+            return Err(RedditError::LoggedOut);
+        }
+        let name = body
+            .get("json")
+            .and_then(|j| j.get("data"))
+            .and_then(|d| d.get("name"))
+            .and_then(|n| n.as_str())
+            .map(ToString::to_string)
+            .unwrap_or_default();
+        Ok(name)
+    }
+
     /// Reply with a comment under a parent (`t1_` for comment-on-comment,
     /// `t3_` for comment-on-post).
     ///

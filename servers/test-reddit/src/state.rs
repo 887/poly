@@ -30,10 +30,14 @@ pub struct RedditState {
     pub votes: Arc<DashMap<(String, String), i8>>,
     /// New comments POSTed to /api/comment. Keyed by parent thing id.
     pub comments: Arc<DashMap<String, Vec<MockComment>>>,
+    /// New top-level posts POSTed to /api/submit. Keyed by subreddit slug.
+    pub submissions: Arc<DashMap<String, Vec<MockSubmission>>>,
     /// Auto-incremented base for synthesised DM ids.
     pub dm_seq: Arc<AtomicU64>,
     /// Auto-incremented base for synthesised comment ids.
     pub comment_seq: Arc<AtomicU64>,
+    /// Auto-incremented base for synthesised submission ids.
+    pub submission_seq: Arc<AtomicU64>,
     /// Header-inspect ring buffer used by the shared `BackendHarness`
     /// middleware to expose `/test/inspect/last-headers`.
     pub inspect: Arc<HeaderInspectBuffer>,
@@ -49,8 +53,10 @@ impl Default for RedditState {
             sent: Arc::default(),
             votes: Arc::default(),
             comments: Arc::default(),
+            submissions: Arc::default(),
             dm_seq: Arc::default(),
             comment_seq: Arc::default(),
+            submission_seq: Arc::default(),
             inspect: Arc::new(HeaderInspectBuffer::new()),
         }
     }
@@ -95,6 +101,16 @@ pub struct MockDm {
     pub to: String,
     pub subject: String,
     pub body: String,
+    pub when: DateTime<Utc>,
+}
+
+#[derive(Clone, Debug)]
+pub struct MockSubmission {
+    pub id: String,
+    pub sub: String,
+    pub author: String,
+    pub title: String,
+    pub text: String,
     pub when: DateTime<Utc>,
 }
 
@@ -160,8 +176,10 @@ impl RedditState {
         self.sent.clear();
         self.votes.clear();
         self.comments.clear();
+        self.submissions.clear();
         self.dm_seq.store(0, Ordering::SeqCst);
         self.comment_seq.store(0, Ordering::SeqCst);
+        self.submission_seq.store(0, Ordering::SeqCst);
     }
 
     /// Construct + seed in one call. Kept for callers that don't go
@@ -214,6 +232,31 @@ impl RedditState {
     /// Record a vote.
     pub fn record_vote(&self, post_id: &str, user: &str, dir: i8) {
         self.votes.insert((post_id.to_string(), user.to_string()), dir);
+    }
+
+    /// Record a top-level submission. Returns the synthesised t3_ id
+    /// (without prefix).
+    pub fn record_submission(
+        &self,
+        sub: &str,
+        author: &str,
+        title: &str,
+        text: &str,
+    ) -> String {
+        let id = format!("p{}", self.submission_seq.fetch_add(1, Ordering::SeqCst));
+        let s = MockSubmission {
+            id: id.clone(),
+            sub: sub.to_string(),
+            author: author.to_string(),
+            title: title.to_string(),
+            text: text.to_string(),
+            when: Utc::now(),
+        };
+        self.submissions
+            .entry(sub.to_string())
+            .or_default()
+            .insert(0, s);
+        id
     }
 
     /// Record a comment under a parent (`t1_` or `t3_`). Returns the

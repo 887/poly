@@ -138,6 +138,20 @@ fn render_comments_to_html(out: &mut String, comments: &[RawComment], depth: u32
 
 // ─── ID helpers ─────────────────────────────────────────────────────────────
 
+/// Split a free-form composer string into `(title, body)` for
+/// `/api/submit`. The first non-empty line becomes the title; everything
+/// after the first newline is the body (verbatim — leading blank lines
+/// trimmed).
+fn split_title_body(text: &str) -> (String, &str) {
+    let trimmed = text.trim_start_matches('\n');
+    if let Some(idx) = trimmed.find('\n') {
+        let (title, rest) = trimmed.split_at(idx);
+        (title.trim().to_string(), rest.trim_start_matches('\n'))
+    } else {
+        (trimmed.trim().to_string(), "")
+    }
+}
+
 fn server_id_for_sub(sub: &str) -> String {
     format!("r_{sub}")
 }
@@ -586,12 +600,74 @@ impl IsBackend for RedditBackend {
 
     async fn send_message(
         &self,
-        _channel_id: &str,
-        _content: MessageContent,
+        channel_id: &str,
+        content: MessageContent,
     ) -> ClientResult<Message> {
-        Err(ClientError::NotSupported(
-            "reddit submit (top-level post) not yet implemented".to_string(),
-        ))
+        let text = match &content {
+            MessageContent::Text(s) => s.clone(),
+            MessageContent::WithAttachments { text, .. } => text.clone(),
+        };
+
+        // Two channel-id shapes accepted (mirrors get_messages):
+        //   c_posts_<sub>  — top-level submit to the subreddit (kind=self,
+        //                    title = first non-empty line, body = remainder)
+        //   hn-post-<id>   — top-level comment on that post (parent t3_<id>)
+        let (placeholder_id, placeholder_prefix) =
+            if let Some(sub) = sub_from_channel_id(channel_id) {
+                let (title, body) = split_title_body(&text);
+                let name = self
+                    .client
+                    .submit_self_post(sub, &title, body)
+                    .await
+                    .map_err(ClientError::from)?;
+                let id = if name.is_empty() {
+                    format!("t3_pending-{}", chrono::Utc::now().timestamp_millis())
+                } else {
+                    name
+                };
+                (id, "t3")
+            } else if let Some(post_id) = channel_id.strip_prefix("hn-post-") {
+                let bare = post_id.strip_prefix("t3_").unwrap_or(post_id);
+                let parent = format!("t3_{bare}");
+                self.client
+                    .reply_comment(&parent, &text)
+                    .await
+                    .map_err(ClientError::from)?;
+                (
+                    format!("t1_pending-{}", chrono::Utc::now().timestamp_millis()),
+                    "t1",
+                )
+            } else {
+                return Err(ClientError::NotSupported(format!(
+                    "send_message: unrecognised channel id `{channel_id}`"
+                )));
+            };
+        let _ = placeholder_prefix; // documentation only
+
+        let now = chrono::Utc::now();
+        let account_display = self.account_display_name().to_string();
+        let bt = Self::backend_type();
+        Ok(Message {
+            id: placeholder_id,
+            author: User {
+                id: self
+                    .session
+                    .as_ref()
+                    .map_or("u_me".to_string(), |s| s.user.id.clone()),
+                display_name: account_display,
+                avatar_url: None,
+                presence: PresenceStatus::Offline,
+                backend: bt,
+            },
+            content,
+            timestamp: now,
+            attachments: Vec::new(),
+            reactions: Vec::new(),
+            reply_to: None,
+            edited: false,
+            thread: None,
+            preview_image_url: None,
+        })
     }
 
     // ── Messaging extras (H.4.a — moved to MessagingBackend) ────────────────

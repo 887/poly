@@ -609,6 +609,47 @@ pub async fn comment(
 }
 
 #[derive(Debug, Deserialize)]
+pub struct SubmitForm {
+    pub sr: String,
+    pub title: String,
+    #[serde(default)]
+    pub kind: Option<String>,
+    #[serde(default)]
+    pub text: Option<String>,
+    #[serde(default)]
+    pub uh: Option<String>,
+    #[serde(default)]
+    pub api_type: Option<String>,
+}
+
+/// `POST /api/submit` — top-level self-post submission.
+pub async fn submit(
+    State(state): State<Arc<RedditState>>,
+    headers: HeaderMap,
+    axum::Form(form): axum::Form<SubmitForm>,
+) -> Response {
+    let Some(user) = current_user(&state, &headers) else {
+        return (StatusCode::UNAUTHORIZED, "logged out").into_response();
+    };
+    let id = state.record_submission(
+        &form.sr,
+        &user,
+        &form.title,
+        form.text.as_deref().unwrap_or(""),
+    );
+    json_resp(json!({
+        "json": {
+            "errors": [],
+            "data": {
+                "id": id,
+                "name": format!("t3_{id}"),
+                "url": format!("https://old.reddit.com/r/{}/comments/{}/", form.sr, id),
+            }
+        }
+    }))
+}
+
+#[derive(Debug, Deserialize)]
 pub struct VoteForm {
     pub id: String,
     pub dir: i8,
