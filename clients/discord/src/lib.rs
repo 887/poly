@@ -1298,6 +1298,64 @@ impl IsBackend for DiscordClient {
         &self.settings_storage
     }
 
+    /// Discord declares two mechanisms:
+    ///
+    /// - `super-properties` — include `X-Super-Properties` header on every
+    ///   request. Default ON. Disabling it breaks Discord login.
+    /// - `captcha-sandbox` — route CAPTCHA / hCaptcha login challenges through
+    ///   a sandboxed host-managed browser window. Requires
+    ///   `HostCap::SandboxBrowser`. Toggle renders as DISABLED-with-tooltip on
+    ///   shells that don't advertise the cap.
+    async fn client_mechanisms(&self) -> ClientResult<Vec<Mechanism>> {
+        let super_props_enabled = self
+            .settings_storage
+            .get(SettingsScope::AccountGlobal, "", "super-properties")
+            .is_none_or(|v| v != "false");
+        let captcha_sandbox_enabled = self
+            .settings_storage
+            .get(SettingsScope::AccountGlobal, "", "captcha-sandbox")
+            .map(|v| v == "true")
+            .unwrap_or(false);
+        Ok(vec![
+            Mechanism {
+                id: "super-properties".to_string(),
+                name_key: "plugin-discord-mechanism-super-properties-label".to_string(),
+                enabled: super_props_enabled,
+                requires_host_cap: None,
+                description_key: Some(
+                    "plugin-discord-mechanism-super-properties-desc".to_string(),
+                ),
+            },
+            Mechanism {
+                id: "captcha-sandbox".to_string(),
+                name_key: "plugin-discord-mechanism-captcha-sandbox-label".to_string(),
+                enabled: captcha_sandbox_enabled,
+                requires_host_cap: Some(HostCap::SandboxBrowser),
+                description_key: Some(
+                    "plugin-discord-mechanism-captcha-sandbox-desc".to_string(),
+                ),
+            },
+        ])
+    }
+
+    async fn set_client_mechanism(&self, id: &str, enabled: bool) -> ClientResult<()> {
+        match id {
+            "super-properties" => self.settings_storage.set(
+                SettingsScope::AccountGlobal,
+                "",
+                "super-properties",
+                if enabled { "true" } else { "false" },
+            ),
+            "captcha-sandbox" => self.settings_storage.set(
+                SettingsScope::AccountGlobal,
+                "",
+                "captcha-sandbox",
+                if enabled { "true" } else { "false" },
+            ),
+            _ => Err(ClientError::NotFound(format!("unknown mechanism: {id}"))),
+        }
+    }
+
     async fn get_sidebar_declaration(&self) -> ClientResult<SidebarDeclaration> {
         Ok(SidebarDeclaration {
             layout: SidebarLayoutKind::ChannelList,
@@ -2261,5 +2319,77 @@ impl poly_client::ServerAdminBackend for DiscordClient {
         let dm_channel_id = self.http.open_dm(user_id).await?;
         self.http.send_message(&dm_channel_id, &invite_url).await?;
         Ok(())
+    }
+}
+
+// ── D.5 — Discord mechanism declaration unit tests ────────────────────────────
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod mechanism_tests {
+    use super::*;
+    use poly_client::HostCap;
+
+    /// Verify that Discord declares a `captcha-sandbox` mechanism that
+    /// requires `HostCap::SandboxBrowser`. This is the Phase D.1 contract:
+    /// the mechanism must exist in the list so the `MechanismToggle` UI
+    /// renders it (disabled on shells that don't advertise the cap).
+    #[tokio::test]
+    async fn discord_declares_captcha_sandbox_mechanism() {
+        let client = DiscordClient::new();
+        let mechs = client.client_mechanisms().await.unwrap();
+
+        let captcha = mechs
+            .iter()
+            .find(|m| m.id == "captcha-sandbox")
+            .expect("captcha-sandbox mechanism must be declared");
+
+        assert_eq!(
+            captcha.requires_host_cap,
+            Some(HostCap::SandboxBrowser),
+            "captcha-sandbox must require SandboxBrowser host cap"
+        );
+        // Default state: disabled (user must opt in to sandbox mode).
+        assert!(!captcha.enabled, "captcha-sandbox should default to disabled");
+        assert!(
+            !captcha.name_key.is_empty(),
+            "name_key must be non-empty FTL key"
+        );
+        assert!(
+            captcha.description_key.is_some(),
+            "captcha-sandbox should have a description key"
+        );
+    }
+
+    /// Verify that Discord also declares `super-properties` with no host cap
+    /// requirement (it must always be toggleable).
+    #[tokio::test]
+    async fn discord_declares_super_properties_mechanism() {
+        let client = DiscordClient::new();
+        let mechs = client.client_mechanisms().await.unwrap();
+
+        let sp = mechs
+            .iter()
+            .find(|m| m.id == "super-properties")
+            .expect("super-properties mechanism must be declared");
+
+        assert_eq!(
+            sp.requires_host_cap, None,
+            "super-properties must not require a host cap"
+        );
+        // Default: enabled (disabling it breaks Discord login).
+        assert!(sp.enabled, "super-properties should default to enabled");
+    }
+
+    /// Verify that `set_client_mechanism` accepts valid mechanism IDs and
+    /// rejects unknown ones.
+    #[tokio::test]
+    async fn discord_set_mechanism_rejects_unknown_ids() {
+        let client = DiscordClient::new();
+        let result = client.set_client_mechanism("not-a-real-mechanism", true).await;
+        assert!(
+            result.is_err(),
+            "set_client_mechanism should return Err for unknown mechanism IDs"
+        );
     }
 }

@@ -597,6 +597,14 @@ client-settings-override-clear = Clear
 client-settings-mechanisms-heading = Mechanisms
 client-settings-mechanism-disabled-host-cap = Requires host capability not available in this build
 
+# Sandbox status row (plan-host-sandbox-impl.md Phase D.4)
+client-settings-sandbox-status-available = Sandbox available
+client-settings-sandbox-status-unavailable = Sandbox unavailable on this shell
+client-settings-sandbox-status-test-button = Test sandbox
+client-settings-sandbox-status-test-running = Testing…
+client-settings-sandbox-status-test-success = Sandbox test passed
+client-settings-sandbox-status-test-failure = Sandbox test failed
+
 # Content & Social settings
 content-social-title = Content & Social
 content-social-sensitive-media = Sensitive Media

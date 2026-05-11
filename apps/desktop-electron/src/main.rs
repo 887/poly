@@ -47,7 +47,20 @@ async fn main() -> anyhow::Result<()> {
 
     let data_dir = poly_host::resolve_data_dir();
     let db_path = data_dir.join("storage.sqlite3");
-    let state = poly_host::HostState::open(&db_path)?;
+    // D.3: propagate caps to the shared /host/caps handler too.
+    // The Electron-specific sandbox_router also adds /host/caps (takes
+    // precedence in the merge order), but having it in HostState ensures
+    // consistency if the merge order ever changes.
+    let caps: Vec<String> = sandbox::advertised_host_caps()
+        .iter()
+        .map(|c| match c {
+            poly_host_sandbox::HostCap::SandboxBrowser => "SandboxBrowser",
+            poly_host_sandbox::HostCap::SystemTray => "SystemTray",
+            poly_host_sandbox::HostCap::OsNotifications => "OsNotifications",
+        })
+        .map(str::to_string)
+        .collect();
+    let state = poly_host::HostState::open(&db_path)?.with_caps(caps);
     tracing::info!("poly-desktop-electron storage: {}", db_path.display());
 
     let dioxus_router: Router<()> =

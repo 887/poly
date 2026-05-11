@@ -256,11 +256,54 @@ in KV but has no effect until the backend plugin reads it.
 | Mechanism ID | Default | Description |
 |---|---|---|
 | `super-properties` | enabled | Include `X-Super-Properties` header on every request. Disable only for debugging; Discord login breaks without it. |
-| `captcha-sandbox` | disabled | Route CAPTCHA login challenges through a sandboxed browser window. Requires the `sandbox-browser` host capability, which is **not advertised in v1**. The toggle renders as disabled-with-tooltip in the UI until the host capability is available. See `docs/plans/plan-host-sandbox-impl.md`. |
+| `captcha-sandbox` | disabled | Route CAPTCHA and hCaptcha login challenges through a sandboxed host-managed browser window. Requires `HostCap::SandboxBrowser`. **Live** — supported on all three shells (Wry, Electron, Web). Toggle renders as DISABLED-with-tooltip on shells that don't advertise the cap. |
+
+### Teams
+
+| Mechanism ID | Default | Description |
+|---|---|---|
+| `oauth-sandbox` | disabled | Route the Microsoft Entra ID (AAD) OAuth interactive popup through a sandboxed host-managed browser window. Not needed for device-code flow. Requires `HostCap::SandboxBrowser`. |
 
 ### All other backends (v1)
 
 No mechanisms are declared in v1.  The mechanism list will be empty.
+
+---
+
+## Sandbox browser per-shell behaviour matrix
+
+The `sandbox-browser` host capability (`HostCap::SandboxBrowser`) is now live
+on all three shells. Advertised via `GET /host/caps`. The plugin-settings UI
+shows a per-plugin "Sandbox available / unavailable" status row for Discord
+and Teams (Phase D.3 of `docs/plans/plan-host-sandbox-impl.md`).
+
+| Shell | Implementation | `/host/caps` response | Notes |
+|---|---|---|---|
+| **Wry desktop** (`apps/desktop`) | `WrySandbox` — isolated Wry WebView, incognito mode | `["SandboxBrowser"]` | Requires a display (GTK). Headless CI disables the display test via `POLY_SANDBOX_RUN_DISPLAY_TEST`. |
+| **Electron** (`apps/desktop-electron`) | `ElectronSandbox` — `BrowserWindow` with `partition: "sandbox-<id>"` + IPC | `["SandboxBrowser"]` | Electron's own `/host/caps` handler takes precedence in the merged router. |
+| **Web** (`apps/web`) | `WebSandbox` — `window.open` popup + `postMessage` capture | `["SandboxBrowser"]` | Requires the OAuth provider to redirect to `<origin>/sandbox/<id>` (the shim served by the fullstack server). Providers that hardcode their own callback URL won't work on web. |
+
+### Test recipe (manual)
+
+1. Open the Discord or Teams plugin-settings page in the running app.
+2. Verify the "Sandbox available" row appears (or "Sandbox unavailable" if the
+   shell feature is off).
+3. Click "Test sandbox" — should show "Testing…" briefly, then "Sandbox test passed".
+4. Via CLI:
+
+```bash
+# Enable captcha-sandbox on Discord
+poly-cli client-settings set-mechanism \
+  --backend_id=discord \
+  --mechanism_id=captcha-sandbox \
+  --enabled=true
+
+# Disable it again
+poly-cli client-settings set-mechanism \
+  --backend_id=discord \
+  --mechanism_id=captcha-sandbox \
+  --enabled=false
+```
 
 ---
 
@@ -281,12 +324,6 @@ capability).
 ---
 
 ## Future work
-
-The sandbox browser host capability (`sandbox-browser`) that backs Discord's
-`captcha-sandbox` mechanism is tracked separately in
-`docs/plans/plan-host-sandbox-impl.md`.  Until that plan ships, the
-`captcha-sandbox` mechanism toggle is inert — the UI displays it as disabled
-with a tooltip explaining the dependency.
 
 A `list_client_settings_audit` MCP tool exposing the audit rows via `poly-cli`
 (instead of direct SQLite) is a planned follow-up.

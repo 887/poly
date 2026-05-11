@@ -47,6 +47,12 @@ plugin-discord-setting-allow-dms-from-server-members-desc = When enabled, other 
 plugin-discord-overview-title = Your Servers
 plugin-discord-overview-subtitle = All Discord servers you have joined.
 
+# Mechanisms (plan-host-sandbox-impl.md Phase D.1)
+plugin-discord-mechanism-super-properties-label = Include Super-Properties Header
+plugin-discord-mechanism-super-properties-desc = Include the X-Super-Properties header on every request. Required for Discord login — disable only for debugging.
+plugin-discord-mechanism-captcha-sandbox-label = Captcha Sandbox
+plugin-discord-mechanism-captcha-sandbox-desc = Route CAPTCHA and hCaptcha login challenges through a sandboxed host-managed browser window. Requires the Sandbox Browser host capability.
+
 # Composer buttons
 # Message actions
 plugin-discord-message-action-pin-message-label = Pin Message

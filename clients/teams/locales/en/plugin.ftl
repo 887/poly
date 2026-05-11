@@ -51,5 +51,9 @@ plugin-teams-setting-display-name-desc = The name shown to other members in this
 plugin-teams-setting-description-label = Description
 plugin-teams-setting-description-desc = A brief summary of the team's purpose, visible in the team directory.
 
+# Mechanisms (plan-host-sandbox-impl.md Phase D.2)
+plugin-teams-mechanism-oauth-sandbox-label = OAuth Popup Sandbox
+plugin-teams-mechanism-oauth-sandbox-desc = Route the Microsoft Entra ID (AAD) OAuth interactive popup through a sandboxed host-managed browser window. Not needed for device-code flow. Requires the Sandbox Browser host capability.
+
 # Composer buttons
 plugin-teams-composer-mention-label = Mention someone

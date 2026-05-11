@@ -844,6 +844,44 @@ impl IsBackend for TeamsClient {
         &self.settings_storage
     }
 
+    /// Teams declares one mechanism:
+    ///
+    /// - `oauth-sandbox` — route the Microsoft Entra ID (AAD) OAuth popup
+    ///   through a sandboxed host-managed browser window. The AAD device-code
+    ///   flow works without a sandbox; the interactive OAuth popup flow does
+    ///   not, because the WASM UI cannot open a full-featured browser window
+    ///   itself. Requires `HostCap::SandboxBrowser`.
+    ///
+    /// Teams does NOT use hCaptcha at the login wall (unlike Discord), so there
+    /// is no separate `captcha-sandbox` mechanism — `oauth-sandbox` covers the
+    /// only browser-popup scenario in the Teams login flow.
+    async fn client_mechanisms(&self) -> ClientResult<Vec<Mechanism>> {
+        let oauth_sandbox_enabled = self
+            .settings_storage
+            .get(SettingsScope::AccountGlobal, "", "oauth-sandbox")
+            .map(|v| v == "true")
+            .unwrap_or(false);
+        Ok(vec![Mechanism {
+            id: "oauth-sandbox".to_string(),
+            name_key: "plugin-teams-mechanism-oauth-sandbox-label".to_string(),
+            enabled: oauth_sandbox_enabled,
+            requires_host_cap: Some(HostCap::SandboxBrowser),
+            description_key: Some("plugin-teams-mechanism-oauth-sandbox-desc".to_string()),
+        }])
+    }
+
+    async fn set_client_mechanism(&self, id: &str, enabled: bool) -> ClientResult<()> {
+        match id {
+            "oauth-sandbox" => self.settings_storage.set(
+                SettingsScope::AccountGlobal,
+                "",
+                "oauth-sandbox",
+                if enabled { "true" } else { "false" },
+            ),
+            _ => Err(ClientError::NotFound(format!("unknown mechanism: {id}"))),
+        }
+    }
+
     async fn get_sidebar_declaration(&self) -> ClientResult<SidebarDeclaration> {
         Ok(SidebarDeclaration {
             layout: SidebarLayoutKind::ChannelList,

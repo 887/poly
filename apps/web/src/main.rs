@@ -67,7 +67,18 @@ async fn main() -> anyhow::Result<()> {
     // negotiation, no sidecar: the server binary talks to SQLite directly.
     let data_dir = poly_host::resolve_data_dir();
     let db_path = data_dir.join("storage.sqlite3");
-    let state = poly_host::HostState::open(&db_path)?;
+    // D.3: advertise SandboxBrowser so the WASM settings UI can show the
+    // sandbox-status row as "available" on the web shell (WebSandbox / postMessage).
+    let caps: Vec<String> = poly_host_sandbox::advertised_host_caps()
+        .iter()
+        .map(|c| match c {
+            poly_host_sandbox::HostCap::SandboxBrowser => "SandboxBrowser",
+            poly_host_sandbox::HostCap::SystemTray => "SystemTray",
+            poly_host_sandbox::HostCap::OsNotifications => "OsNotifications",
+        })
+        .map(str::to_string)
+        .collect();
+    let state = poly_host::HostState::open(&db_path)?.with_caps(caps);
     tracing::info!("poly-web storage: {}", db_path.display());
 
     // Build the merged router. `serve_dioxus_application` returns a

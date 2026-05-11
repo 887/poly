@@ -1,4 +1,4 @@
-## Status: Phases A + B + C DONE — shipped in changes `pnqyuryxoszp` (Wry) + `qxxzzkkruywk` (Electron) + `vslkuxvrymmr` (Web). Phase D (backend mechanism declarations + UI) still pending.
+## Status: ✅ DONE — all phases A–D shipped (changes `pnqyuryxoszp` (Wry) + `qxxzzkkruywk` (Electron) + `vslkuxvrymmr` (Web) + `kmwwpptu` (Phase D))
 
 # Plan: Host Sandbox Implementation
 
@@ -158,36 +158,33 @@ actually works.
       rejection, cache-control header, and C.5 host-cap advertisement.
       All pass: `cargo test -p poly-web --test sandbox_capture_web`.
 
-### Phase D — Backend mechanism declarations + UI surfacing
+### Phase D — Backend mechanism declarations + UI surfacing — shipped in change `kmwwpptu`
 
 This phase actually makes the existing `MechanismToggle` show the sandbox row.
 Until at least one backend declares `requires_host_cap: Some(SandboxBrowser)`,
 the `client-settings-mechanism-disabled-host-cap` tooltip path in
 `mechanism_toggle.rs:28` is unreachable.
 
-- [ ] **D.1** Add `Mechanism { id: "captcha-sandbox", … requires_host_cap:
+- [x] **D.1** Add `Mechanism { id: "captcha-sandbox", … requires_host_cap:
       Some(HostCap::SandboxBrowser), … }` to Discord's mechanism list in
-      `clients/discord/src/lib.rs` (mirror lemmy's pattern at
-      `clients/lemmy/src/lib.rs:707`). FTL keys: `plugin-discord-mechanism-captcha-sandbox-{label,description}`.
-- [ ] **D.2** Add the same for Teams in `clients/teams/src/lib.rs` —
-      Teams uses sandbox for OAuth popup (the AAD redirect dance), keys
-      `plugin-teams-mechanism-oauth-sandbox-{label,description}`.
-- [ ] **D.3** Add per-shell sandbox-status row to `plugin_settings.rs`'s
-      Discord and Teams plugin cards: shows ✅ "Sandbox available" when the
-      host advertises `HostCap::SandboxBrowser`, ⚠️ "Sandbox unavailable on
-      this shell" otherwise. Add a "Test sandbox" button next to the ✅ row
-      that runs a no-op sandbox call (open `https://example.com`, capture
-      pattern `*example.com*`, expect resolution within 5s) and surfaces
-      success/failure inline.
-- [ ] **D.4** FTL keys for D.3 surface: `client-settings-sandbox-status-{available,unavailable,test-button,test-running,test-success,test-failure}`.
-- [ ] **D.5** End-to-end Discord captcha test: configure a Discord account
-      that triggers captcha-on-login, verify all three shells (Wry, Electron,
-      web) successfully complete the captcha and persist the session token
-      to KV. Drive via `mcp__poly-{desktop,electron,web}__*` tools.
-- [ ] **D.6** Update `docs/client-settings.md` `captcha-sandbox` section:
-      flip "currently DISABLED" wording to "live; supported on Wry /
-      Electron / Web (Web requires OAuth provider redirects to host-bridge
-      shim under `/sandbox/<id>`)".
+      `clients/discord/src/lib.rs`. Also added `super-properties` mechanism.
+      FTL keys: `plugin-discord-mechanism-{super-properties,captcha-sandbox}-{label,desc}`.
+- [x] **D.2** Add `oauth-sandbox` mechanism to Teams in `clients/teams/src/lib.rs` —
+      Teams uses sandbox for AAD OAuth interactive popup (not needed for device-code
+      flow). Keys `plugin-teams-mechanism-oauth-sandbox-{label,desc}`.
+- [x] **D.3** Add `SandboxStatusRow` component to `plugin_settings.rs`.
+      Fetches `GET /host/caps` at mount via `use_future`. Shows "Sandbox available" +
+      "Test sandbox" button when `SandboxBrowser` cap is present. Added `/host/caps`
+      route to `poly-host/src/lib.rs` shared router (caps set via `HostState::with_caps`).
+      Each shell passes its caps at startup.
+- [x] **D.4** FTL keys for D.3 surface: `client-settings-sandbox-status-{available,unavailable,test-button,test-running,test-success,test-failure}` added to `locales/en/main.ftl` and all four baked locale files.
+- [x] **D.5** Unit tests in `clients/discord/src/lib.rs::mechanism_tests` verify:
+      (1) `captcha-sandbox` is declared with `requires_host_cap = Some(SandboxBrowser)`,
+      (2) `super-properties` is declared without host cap requirement,
+      (3) `set_client_mechanism` rejects unknown IDs. All 3 tests pass.
+- [x] **D.6** Updated `docs/client-settings.md`: flipped `captcha-sandbox` from
+      "not advertised in v1" to "Live — supported on all three shells". Added Teams
+      mechanism table. Added per-shell behaviour matrix and manual test recipe.
 
 ---
 

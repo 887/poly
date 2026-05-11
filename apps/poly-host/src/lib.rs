@@ -50,10 +50,17 @@ use tower_http::cors::{Any, CorsLayer};
 
 /// Shared daemon state — a SQLite handle plus the path we opened it from
 /// (kept around so `GET /host/status` can report where storage lives).
+///
+/// Optionally holds the list of host capability strings advertised to the
+/// WASM client via `GET /host/caps`. Call [`HostState::with_caps`] after
+/// [`HostState::open`] to set them; defaults to an empty list.
 #[derive(Clone)]
 pub struct HostState {
     db: Arc<Mutex<ConnectionThreadSafe>>,
     db_path: PathBuf,
+    /// Capability strings returned by `GET /host/caps`.
+    /// Each entry is a `HostCap` variant name (`"SandboxBrowser"` etc.).
+    caps: Arc<Vec<String>>,
 }
 
 impl HostState {
@@ -79,7 +86,25 @@ impl HostState {
         Ok(Self {
             db: Arc::new(Mutex::new(db)),
             db_path,
+            caps: Arc::new(Vec::new()),
         })
+    }
+
+    /// Set the host capabilities advertised by `GET /host/caps`.
+    ///
+    /// Call this after [`open`] with the caps from `poly_host_sandbox::advertised_host_caps()`.
+    /// Each cap is a string variant name such as `"SandboxBrowser"`. Returns `self`
+    /// for chaining.
+    ///
+    /// ```no_run
+    /// # use poly_host::HostState;
+    /// let state = HostState::open("/tmp/test.sqlite3").unwrap()
+    ///     .with_caps(vec!["SandboxBrowser".to_string()]);
+    /// ```
+    #[must_use]
+    pub fn with_caps(mut self, caps: Vec<String>) -> Self {
+        self.caps = Arc::new(caps);
+        self
     }
 
     /// Path to the SQLite file backing this handle. Useful for log output.
@@ -104,6 +129,9 @@ pub fn router(state: HostState) -> Router {
 
     Router::new()
         .route("/host/status", get(status))
+        // D.3: Host capabilities — lets the WASM UI ask which sandbox/host-cap
+        // features the running shell supports. Response: `{ "caps": [...] }`.
+        .route("/host/caps", get(host_caps))
         .route("/host/kv/get", post(kv_get))
         .route("/host/kv/set", post(kv_set))
         .route("/host/kv/delete", post(kv_delete))
@@ -257,6 +285,22 @@ async fn status(State(state): State<HostState>) -> Json<serde_json::Value> {
         "ok": true,
         "service": "poly-host",
         "db": state.db_path.to_string_lossy(),
+    }))
+}
+
+/// `GET /host/caps` — return the list of host capabilities advertised by this shell.
+///
+/// Response: `{ "caps": ["SandboxBrowser"] }` or `{ "caps": [] }`.
+///
+/// The capability strings are set at startup by the shell via
+/// [`HostState::with_caps`]. Each string is a `HostCap` variant name.
+///
+/// All shells (Wry desktop, Electron, web fullstack) expose this endpoint
+/// so the WASM UI can check at runtime whether `SandboxBrowser` is available
+/// before rendering the sandbox-status row in plugin settings (Phase D.3).
+async fn host_caps(State(state): State<HostState>) -> Json<serde_json::Value> {
+    Json(serde_json::json!({
+        "caps": *state.caps,
     }))
 }
 
