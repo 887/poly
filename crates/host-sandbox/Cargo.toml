@@ -7,13 +7,29 @@ publish = false
 # `web` feature: enables the web shell's host-cap advertisement.
 # Enabled by `apps/web` so `advertised_host_caps()` returns `[SandboxBrowser]`
 # for the browser popup flow (Phase C of plan-host-sandbox-impl.md).
+#
+# `wry-sandbox` feature: enables the real Wry-based desktop sandbox impl
+# and advertises `HostCap::SandboxBrowser`. Used by apps/desktop (Phase A).
 [features]
 web = []
+wry-sandbox = ["dep:wry", "dep:tao", "dep:tempfile", "dep:tokio"]
 
 [dependencies]
 async-trait = { workspace = true }
 thiserror = { workspace = true }
 poly-client = { workspace = true }    # for HostCap
+tracing = { workspace = true }
+
+# Optional: pulled in only when `wry-sandbox` feature is active.
+# These are native-only (never compiled to wasm32).
+wry = { workspace = true, optional = true }
+tao = { workspace = true, optional = true }
+tempfile = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true, features = [
+    "rt-multi-thread",
+    "sync",
+    "macros",
+] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt", "macros"] }

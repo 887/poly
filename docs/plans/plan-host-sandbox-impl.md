@@ -1,4 +1,4 @@
-## Status: PLANNED — not started
+## Status: Phase A + C DONE — shipped in changes `pnqyuryxoszp` (Wry) + `vslkuxvrymmr` (Web). Phase B (Electron) and Phase D (backend wiring) still pending.
 
 # Plan: Host Sandbox Implementation
 
@@ -78,28 +78,30 @@ The implementation varies by shell:
 
 ## Phases
 
-### Phase A — Wry (apps/desktop) implementation
+### Phase A — Wry (apps/desktop) implementation — shipped in change `pnqyuryxoszp`
 
-- [ ] **A.1** Create `WrySandbox` struct in `apps/desktop/src/sandbox.rs`,
-      implementing `poly_host_sandbox::Sandbox` trait. Holds a handle to the
-      Wry event loop proxy + a `Mutex<HashMap<SandboxId, oneshot::Sender<Result<String, SandboxError>>>>`.
-- [ ] **A.2** Implement `open_browser_sandbox(url, capture_pattern, cancel_label)`:
-      send `EventLoopMessage::OpenSandbox` to the main thread → main thread
-      builds a new `Window` + child `WebViewBuilder` with
-      `with_navigation_handler(move |req| { if matches(req.url, pat) { resolve; close; return false; } true })`
-      and `with_new_window_req_handler` to keep popup chains inside the sandbox.
-- [ ] **A.3** Cookie isolation: pass `with_data_directory(temp_per_sandbox_dir)`
-      so the sandbox `WebView` writes cookies to a tmpdir that gets purged on
-      window close.
-- [ ] **A.4** Cancel path: render a small native overlay (or just rely on
-      window-close X) — `WindowEvent::CloseRequested` resolves the oneshot
-      with `Err(SandboxError::UserCancelled)`.
-- [ ] **A.5** Wire `WrySandbox` into `apps/desktop`'s host-cap registry; bump
-      the host's advertised caps to include `HostCap::SandboxBrowser`.
-- [ ] **A.6** Integration test (`apps/desktop/tests/sandbox_capture.rs`): spawn
-      the Wry shell with a localhost test page that 302-redirects to
-      `http://127.0.0.1:<port>/captured?token=abc`, capture pattern
-      `*//captured*`, assert the resolved URL contains `token=abc` within 5s.
+- [x] **A.1** `WrySandbox` struct in `crates/host-sandbox/src/wry_sandbox.rs`
+      implementing `HostSandbox`. Spawns a dedicated OS thread with its own
+      tao `EventLoop` (`any_thread = true` on Linux/Unix) per sandbox call.
+- [x] **A.2** `open_browser_sandbox(url, capture_pattern, cancel_label)`:
+      OS thread builds a `tao::Window` + `wry::WebViewBuilder` with
+      `with_navigation_handler` that calls `glob_matches(pattern, url)` —
+      resolves via `std::sync::mpsc` channel when matched, returns `false`
+      to block navigation.
+- [x] **A.3** Cookie isolation via `with_incognito(true)` — each sandbox
+      call gets a fresh non-persistent data store.
+- [x] **A.4** Cancel path: `WindowEvent::CloseRequested` in `run_return`
+      sends `Err(SandboxError::UserCancelled)` through the channel.
+- [x] **A.5** `crates/host-sandbox` adds `wry-sandbox` feature;
+      `apps/desktop/Cargo.toml` enables it for native builds;
+      `advertised_host_caps()` returns `[HostCap::SandboxBrowser]` when
+      active. Re-exported via `apps/desktop/src/sandbox.rs`; logged at
+      startup in `main.rs`.
+- [x] **A.6** Integration test `apps/desktop/tests/sandbox_capture.rs`:
+      spawns axum mock that 302s to `/captured?token=abc`, drives
+      `WrySandbox`, asserts capture. Display-requiring test is opt-in via
+      `POLY_SANDBOX_RUN_DISPLAY_TEST=1` (avoids GTK fatal abort in
+      headless/broken-Wayland CI). Host-cap assertion always runs.
 
 ### Phase B — Electron (apps/desktop-electron) implementation
 

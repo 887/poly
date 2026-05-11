@@ -1,17 +1,22 @@
-// FUTURE: docs/plans/plan-host-sandbox-impl.md
-//! Host-side sandbox host-cap stub.
+// FUTURE: docs/plans/plan-host-sandbox-impl.md — Phase A (Wry) + Phase C (Web) shipped.
+//! Host-side sandbox host-cap.
 //!
-//! v1: every method returns `Err(SandboxError::NotImplemented)`. The real
-//! sandbox plumbing — opening a sub-browser to handle Discord captcha
-//! challenges and similar flows — lives in `plan-host-sandbox-impl.md`
-//! (future).
+//! `StubSandbox` returns `Err(SandboxError::NotImplemented)` for every call.
 //!
-//! What we ship today:
-//! - The `HostSandbox` trait — defines the host-side contract.
-//! - `StubSandbox` — a no-op impl returning `NotImplemented`.
-//! - `advertised_host_caps()` — returns the empty list in v1, so any
-//!   plugin's `requires-host-cap` declaration causes the mechanism to
-//!   render as DISABLED in the UI (Phase F).
+//! Phase A (feature `wry-sandbox`): real `WrySandbox` that opens an isolated
+//! Wry/WebKit2GTK window, intercepts navigation events, and resolves with the
+//! captured URL when the pattern matches. Cookie isolation via incognito mode.
+//!
+//! Phase C (feature `web`): the apps/web fullstack server hosts a
+//! `/sandbox/<id>` redirect shim and `WebSandbox` (in `apps/web/src/sandbox.rs`)
+//! drives the popup-window flow via `window.open` + `postMessage`.
+//!
+//! What we ship:
+//! - The `HostSandbox` trait — host-side contract.
+//! - `StubSandbox` — no-op, returns `NotImplemented` (default build).
+//! - `WrySandbox` — real Wry impl, gated on `wry-sandbox` (Phase A).
+//! - `advertised_host_caps()` — returns `[SandboxBrowser]` when either
+//!   `wry-sandbox` or `web` feature is active, `[]` otherwise.
 
 use poly_client::HostCap;
 
@@ -23,6 +28,8 @@ pub enum SandboxError {
     InvalidUrl(String),
     #[error("user cancelled")]
     UserCancelled,
+    #[error("sandbox internal error: {0}")]
+    Internal(String),
 }
 
 #[derive(Debug, Clone)]
@@ -38,8 +45,8 @@ pub struct SandboxResult {
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 pub trait HostSandbox {
     /// Open a sub-browser at `url` and resolve when navigation matches
-    /// `capture_url_pattern` (a glob or regex — see impl). Returns the
-    /// captured URL fragment so the caller can extract OAuth tokens etc.
+    /// `capture_url_pattern` (a glob — `*` matches any sequence of chars).
+    /// Returns the captured URL so the caller can extract OAuth tokens etc.
     async fn open_browser_sandbox(
         &self,
         url: String,
@@ -47,8 +54,7 @@ pub trait HostSandbox {
     ) -> Result<SandboxResult, SandboxError>;
 }
 
-/// V1 stub. Every call returns `Err(NotImplemented)` — the real impl
-/// lives in `plan-host-sandbox-impl.md`.
+/// V1 stub. Every call returns `Err(NotImplemented)`.
 pub struct StubSandbox;
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
@@ -63,24 +69,65 @@ impl HostSandbox for StubSandbox {
     }
 }
 
-/// Returns the list of host-cap variants this build advertises as
-/// SUPPORTED. The UI reads this to render mechanism toggles as DISABLED
-/// when their `requires-host-cap` isn't in this list.
+// ── Wry implementation (Phase A) ────────────────────────────────────────────
+
+#[cfg(feature = "wry-sandbox")]
+pub mod wry_sandbox;
+
+#[cfg(feature = "wry-sandbox")]
+pub use wry_sandbox::WrySandbox;
+
+// ── Host-cap advertisement ──────────────────────────────────────────────────
+
+/// Returns the list of host-cap variants this build advertises as SUPPORTED.
 ///
-/// - `web` feature enabled (apps/web): advertises `SandboxBrowser` because
-///   the browser popup + `/sandbox/<id>` redirect shim is live (Phase C of
-///   plan-host-sandbox-impl.md).
-/// - No feature: returns empty (stub — Wry/Electron phases not yet complete).
+/// - `wry-sandbox` (apps/desktop, Phase A): advertises `SandboxBrowser`.
+/// - `web` (apps/web, Phase C): advertises `SandboxBrowser`.
+/// - Default: empty (stub).
+///
+/// The UI reads this list to render mechanism toggles as DISABLED when their
+/// `requires-host-cap` isn't present here.
 #[must_use]
 pub fn advertised_host_caps() -> &'static [HostCap] {
-    #[cfg(feature = "web")]
+    #[cfg(any(feature = "wry-sandbox", feature = "web"))]
     {
         &[HostCap::SandboxBrowser]
     }
-    #[cfg(not(feature = "web"))]
+    #[cfg(not(any(feature = "wry-sandbox", feature = "web")))]
     {
         &[]
     }
+}
+
+/// Match a URL against a glob pattern.
+/// `*` in the pattern matches any sequence of characters.
+/// This is intentionally simple: no `?` or `[...]` support.
+#[must_use]
+pub fn glob_matches(pattern: &str, url: &str) -> bool {
+    if !pattern.contains('*') {
+        return pattern == url;
+    }
+    let parts: Vec<&str> = pattern.split('*').collect();
+    let mut rest = url;
+    for (i, part) in parts.iter().enumerate() {
+        if part.is_empty() {
+            continue;
+        }
+        if i == 0 {
+            if let Some(tail) = rest.strip_prefix(part) {
+                rest = tail;
+            } else {
+                return false;
+            }
+        } else if i == parts.len() - 1 {
+            return rest.ends_with(part);
+        } else if let Some(pos) = rest.find(part) {
+            rest = &rest[pos + part.len()..];
+        } else {
+            return false;
+        }
+    }
+    true
 }
 
 #[cfg(test)]
@@ -101,15 +148,24 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(feature = "web"))]
+    #[cfg(not(any(feature = "wry-sandbox", feature = "web")))]
     fn stub_advertises_empty_host_caps() {
         assert!(advertised_host_caps().is_empty());
     }
 
     #[test]
-    #[cfg(feature = "web")]
-    fn web_advertises_sandbox_browser_cap() {
-        use poly_client::HostCap;
+    #[cfg(any(feature = "wry-sandbox", feature = "web"))]
+    fn feature_advertises_sandbox_browser_cap() {
         assert!(advertised_host_caps().contains(&HostCap::SandboxBrowser));
+    }
+
+    #[test]
+    fn glob_matches_works() {
+        assert!(glob_matches("*example.com*", "http://example.com/foo"));
+        assert!(glob_matches("*//captured*", "http://127.0.0.1/captured?token=abc"));
+        assert!(!glob_matches("*//captured*", "http://example.com/other"));
+        assert!(glob_matches("exact", "exact"));
+        assert!(!glob_matches("exact", "notexact"));
+        assert!(glob_matches("http*token=abc", "http://localhost/captured?token=abc"));
     }
 }

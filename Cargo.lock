@@ -6546,9 +6546,11 @@ dependencies = [
  "dioxus",
  "dioxus-cli-config",
  "getrandom 0.4.2",
+ "poly-client",
  "poly-core",
  "poly-host",
  "poly-host-bridge",
+ "poly-host-sandbox",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -6799,8 +6801,12 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "poly-client",
+ "tao",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
+ "tracing",
+ "wry",
 ]
 
 [[package]]

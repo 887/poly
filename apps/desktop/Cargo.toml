@@ -65,11 +65,20 @@ axum = { workspace = true, optional = true }
 poly-host = { workspace = true, optional = true }
 dioxus-cli-config = { workspace = true, optional = true }
 anyhow = { workspace = true, optional = true }
+# WrySandbox: available on native builds (never compiled to wasm32).
+poly-host-sandbox = { workspace = true, features = ["wry-sandbox"] }
 
 # WASM build (used by poly-desktop-web shell via `dx serve --platform web`)
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom04-wasm = { workspace = true }
 poly-host-bridge = { workspace = true, features = ["web-direct"] }
+
+# Integration test dependencies (native only — sandbox_capture.rs).
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "time"] }
+axum = { workspace = true }
+poly-client = { workspace = true }
+poly-host-sandbox = { workspace = true, features = ["wry-sandbox"] }
 
 [lints]
 workspace = true

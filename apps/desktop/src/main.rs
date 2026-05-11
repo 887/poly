@@ -13,6 +13,10 @@
 //!   --fullstack @server --features server` to serve the WASM bundle
 //!   AND mount `/host/*` on port 3002 in dev mode.
 
+// ─── Sandbox module (native only — A.1/A.5) ──────────────────────────────────
+#[cfg(not(target_arch = "wasm32"))]
+mod sandbox;
+
 // ─── WASM client entry ──────────────────────────────────────────────────────
 
 #[cfg(target_arch = "wasm32")]
@@ -68,6 +72,11 @@ fn main() {
         .init();
 
     tracing::info!("Starting Poly Desktop (Wry)");
+    // A.5: log advertised host caps at startup.
+    tracing::info!(
+        "poly-desktop host caps: {:?}",
+        sandbox::advertised_host_caps()
+    );
 
     poly_core::i18n::init();
     poly_core::theme::init();
