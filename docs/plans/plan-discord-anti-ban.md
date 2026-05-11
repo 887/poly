@@ -138,7 +138,7 @@ core scraper, persistence, and wiring sub-steps are complete.
 
 ---
 
-## Phase B — `X-Super-Properties` + `User-Agent` consistency — shipped in change `yuvzoprz`
+## Phase B — `X-Super-Properties` + `User-Agent` consistency — shipped in change `yuvzoprz` — shipped in change `yuvzoprz`
 
 The Phase A `BuildInfo` is consumed here to produce one
 self-consistent fingerprint that's reused across HTTP and WS.
@@ -232,7 +232,7 @@ Sub-steps:
 
 ---
 
-## Phase C — Gateway IDENTIFY consistency — shipped in change `yuvzoprz`
+## Phase C — Gateway IDENTIFY consistency — shipped in change `yuvzoprz` — shipped in change `yuvzoprz`
 
 The gateway IDENTIFY (op 2) `properties` field uses **the same shape**
 as `X-Super-Properties` (without the base64 wrapping — sent as inline
