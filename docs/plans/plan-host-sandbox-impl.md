@@ -119,7 +119,7 @@ The implementation varies by shell:
       (`mcp__poly-electron__launch_app` → trigger sandbox via host bridge →
       assert captured URL).
 
-### Phase C — Web (apps/web) implementation, full path with redirect shim (shipped in change `rymvlrwwukvk`)
+### Phase C — Web (apps/web) implementation, full path with redirect shim (shipped in change `vslkuxvrymmr`)
 
 User picked option (b): build the redirect shim now so Discord-on-web
 actually works.
