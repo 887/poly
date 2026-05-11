@@ -1,7 +1,7 @@
 # Plan — Discord Forum Channels & Thread Support
 
 > **Created:** 2026-04-05
-> **Status:** Phase 1–6 Done (2026-04-19); Phase 6.5 Done (2026-04-19)
+> **Status:** ✅ DONE — Phases 1–6 + 6.5 all shipped (2026-04-19).
 > **Crate:** `poly-discord` (`clients/discord/`)
 > **Depends on:** Phase 3.3 (Discord client base implementation)
 > **Goal:** Support Discord forum channels and threads in the Poly unified chat UI.
