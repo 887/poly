@@ -2,8 +2,6 @@
 
 use std::sync::{Arc, Mutex};
 
-#[cfg(feature = "native")]
-use base64::Engine as _;
 use poly_client::ClientError;
 use poly_host_bridge::http::HttpClient;
 
@@ -12,25 +10,63 @@ use crate::api::{
     DiscordBan, DiscordChannel, DiscordGuild, DiscordGuildMember, DiscordMessage, DiscordRole,
     DiscordUser,
 };
+use crate::super_properties::SuperProperties;
 
-/// Default User-Agent / client version for Discord API requests.
+/// Default User-Agent — the browser-style UA that the Linux Discord desktop
+/// client sends.  This is NOT a bot UA; it must never contain "DiscordBot".
+///
+/// Phase B replaces the old `poly-discord/0.0.0 (DiscordBot ...)` constant.
+/// The value here is the fallback used before `SuperProperties` is constructed
+/// (e.g. in the `test_version_override_clear_restores_default` test which
+/// hard-codes this string).
 pub const DEFAULT_CLIENT_VERSION: &str =
-    "poly-discord/0.0.0 (DiscordBot https://github.com/poly-app; 10)";
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 \
+     (KHTML, like Gecko) discord/0.0.354133 Chrome/130.0.0.0 Electron/32.2.7 Safari/537.36";
 
 pub struct DiscordHttpClient {
     base_url: String,
     token: Mutex<Option<String>>,
     http: HttpClient,
-    user_agent: Arc<Mutex<String>>,
+    /// Shared, hot-swappable super-properties.  The UA and X-Super-Properties
+    /// are both derived from this — one source of truth (Phase B.4 + B.6).
+    super_props: Arc<Mutex<SuperProperties>>,
+    /// Optional UA override set via `set_user_agent`.  When `Some`, it is
+    /// propagated into `super_props.browser_user_agent` (Phase B.5).
+    ua_override: Arc<Mutex<Option<String>>>,
 }
 
 impl DiscordHttpClient {
     pub fn new(base_url: String) -> Self {
+        let props = SuperProperties::for_platform(
+            &crate::build_info::BuildInfo::default(),
+            "en-US",
+        );
         Self {
             base_url,
             token: Mutex::new(None),
             http: HttpClient::new(),
-            user_agent: Arc::new(Mutex::new(DEFAULT_CLIENT_VERSION.to_string())),
+            super_props: Arc::new(Mutex::new(props)),
+            ua_override: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    /// Construct with a pre-scraped `BuildInfo` (Phase A.5).
+    #[must_use]
+    pub fn with_build_info(
+        base_url: String,
+        build_info: &crate::build_info::BuildInfo,
+        version_override: Option<String>,
+    ) -> Self {
+        let mut props = SuperProperties::for_platform(build_info, "en-US");
+        if let Some(ref ua) = version_override {
+            props.apply_ua_override(ua);
+        }
+        Self {
+            base_url,
+            token: Mutex::new(None),
+            http: HttpClient::new(),
+            super_props: Arc::new(Mutex::new(props)),
+            ua_override: Arc::new(Mutex::new(version_override)),
         }
     }
 
@@ -55,56 +91,107 @@ impl DiscordHttpClient {
         }
     }
 
-
     /// Update the User-Agent string sent with every request.
+    ///
+    /// The override is also propagated into `super_props.browser_user_agent`
+    /// so HTTP and gateway IDENTIFY stay consistent (Phase B.5).
     pub fn set_user_agent(&self, ua: String) {
-        if let Ok(mut lock) = self.user_agent.lock() {
-            *lock = ua;
+        if let Ok(mut lock) = self.ua_override.lock() {
+            *lock = Some(ua.clone());
+        }
+        if let Ok(mut props) = self.super_props.lock() {
+            props.apply_ua_override(&ua);
         }
     }
 
-    fn ua(&self) -> String {
-        self.user_agent
+    /// Clear the UA override and reset `browser_user_agent` to the default
+    /// derived from the current `super_props` build number.
+    pub fn clear_user_agent_override(&self) {
+        if let Ok(mut lock) = self.ua_override.lock() {
+            *lock = None;
+        }
+        // Rebuild props from the current build_number so the UA is consistent.
+        if let Ok(mut props) = self.super_props.lock() {
+            let rebuild = SuperProperties::linux_chrome_desktop_template(
+                props.client_build_number,
+                crate::build_info::STABLE_CHROMIUM_VERSION,
+                crate::build_info::STABLE_ELECTRON_VERSION,
+                &props.system_locale.clone(),
+            );
+            *props = rebuild;
+        }
+    }
+
+    /// Return the current effective User-Agent string.
+    pub fn ua(&self) -> String {
+        // If there's an explicit override, return it directly.
+        if let Ok(lock) = self.ua_override.lock() {
+            if let Some(ref ua) = *lock {
+                return ua.clone();
+            }
+        }
+        // Otherwise derive from super_props.browser_user_agent.
+        self.super_props
             .lock()
             .ok()
-            .map_or_else(
-                || DEFAULT_CLIENT_VERSION.to_string(),
-                |g| g.clone(),
-            )
+            .map(|p| p.browser_user_agent.clone())
+            .unwrap_or_else(|| DEFAULT_CLIENT_VERSION.to_string())
+    }
+
+    /// Get a snapshot of the current `SuperProperties` (for gateway IDENTIFY).
+    pub fn super_properties(&self) -> SuperProperties {
+        self.super_props
+            .lock()
+            .ok()
+            .map(|p| p.clone())
+            .unwrap_or_else(|| SuperProperties::for_platform(
+                &crate::build_info::BuildInfo::default(),
+                "en-US",
+            ))
+    }
+
+    /// Hot-swap the `SuperProperties` (e.g. after a background build refresh).
+    pub fn update_super_properties(&self, new_props: SuperProperties) {
+        if let Ok(mut lock) = self.super_props.lock() {
+            *lock = new_props;
+        }
     }
 
     /// Apply version headers (User-Agent + X-Super-Properties) to a request.
+    ///
+    /// Both values are derived from `super_props` — single source of truth
+    /// (Phase B.4). The `#[cfg(feature = "native")]` gate on base64 is gone:
+    /// `SuperProperties::to_header_value()` works on native and WASM (Phase B.3).
     fn apply_version_headers(
         &self,
         req: poly_host_bridge::http::RequestBuilder,
     ) -> poly_host_bridge::http::RequestBuilder {
-        let ua = self.ua();
-        // X-Super-Properties is a base64-encoded JSON fingerprint Discord uses
-        // for client identification.  We send minimal safe values.
-        #[cfg(feature = "native")]
-        let x_super = {
-            let json = serde_json::json!({
-                "os": "Linux",
-                "browser": "Discord Client",
-                "release_channel": "stable",
-                "client_version": "0.0.0",
-                "system_locale": "en-US"
-            });
-            base64::engine::general_purpose::STANDARD
-                .encode(json.to_string().as_bytes())
+        let (ua, x_super) = self
+            .super_props
+            .lock()
+            .ok()
+            .map(|props| (props.browser_user_agent.clone(), props.to_header_value()))
+            .unwrap_or_else(|| (DEFAULT_CLIENT_VERSION.to_string(), String::new()));
+
+        // Respect explicit UA override.
+        let ua = if let Ok(lock) = self.ua_override.lock() {
+            lock.clone().unwrap_or(ua)
+        } else {
+            ua
         };
-        #[cfg(not(feature = "native"))]
-        let x_super = String::new();
+
         req.header("User-Agent", ua)
             .header("X-Super-Properties", x_super)
     }
 
     fn token_header(&self) -> String {
+        // User tokens are sent raw (no "Bot " prefix). The "Bot " prefix is
+        // only correct for bot tokens; using it with a user token is itself a
+        // ban-bait signal (Discord can detect the mismatch at auth time).
         self.token
             .lock()
             .ok()
             .and_then(|lock| lock.clone())
-            .map(|t| format!("Bot {t}"))
             .unwrap_or_default()
     }
 

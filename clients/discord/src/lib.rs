@@ -20,6 +20,10 @@ mod api;
 #[cfg(feature = "native")]
 mod http;
 #[cfg(feature = "native")]
+pub mod build_info;
+#[cfg(feature = "native")]
+pub mod super_properties;
+#[cfg(feature = "native")]
 pub mod signup;
 
 /// WIT bindings for the WASM plugin (WASI targets only).
@@ -572,13 +576,16 @@ impl DiscordClient {
 /// on each dispatched event (op 0), and sends the resulting `ClientEvent`s on
 /// `tx`.  Exits when the WS closes or `tx` is dropped.
 ///
-/// Protocol decisions (Phase 6.5):
-/// - Sends a minimal IDENTIFY on connect so servers can log the connection.
+/// Protocol decisions (Phase 6.5 + Phase C):
+/// - Sends an op-2 IDENTIFY using the same `SuperProperties` as HTTP so the
+///   gateway fingerprint is consistent with the `X-Super-Properties` header
+///   (Phase C.2 — eliminates the HTTP/WS mismatch ban signal).
 /// - Responds to HEARTBEAT_ACK (op 11) silently.
 /// - Does NOT implement reconnect logic — stream simply ends on disconnect.
 #[cfg(feature = "gateway")]
 async fn gateway_connect_loop(
     gateway_url: String,
+    super_props: crate::super_properties::SuperProperties,
     tx: UnboundedSender<ClientEvent>,
 ) {
     use futures::StreamExt;
@@ -594,15 +601,25 @@ async fn gateway_connect_loop(
 
     let (mut write, mut read) = futures::StreamExt::split(ws_stream);
 
-    // Send a minimal IDENTIFY frame so the server knows we connected.
+    // Send IDENTIFY (op 2) using the same SuperProperties as HTTP (Phase C.2).
+    // The `properties` field is the raw JSON object — no base64 wrapping on WS.
+    let identify_properties = super_props.to_identify_properties();
     let identify = serde_json::json!({
         "op": 2_i32,
         "d": {
             "token": "",
             "intents": 513_i32,
-            "properties": { "os": "linux", "browser": "poly", "device": "poly" }
+            "properties": identify_properties,
+            "compress": false,
+            "large_threshold": 250
         }
     });
+    tracing::debug!(
+        target: "poly_discord::gateway",
+        build_number = super_props.client_build_number,
+        os = %super_props.os,
+        "sending gateway IDENTIFY"
+    );
     use futures::SinkExt;
     if let Err(e) = write.send(TungsteniteMsg::Text(identify.to_string().into())).await {
         tracing::warn!(target: "poly_discord::gateway", error = %e, "failed to send IDENTIFY");
@@ -878,9 +895,12 @@ impl IsBackend for DiscordClient {
         {
             if let Some(url) = &self.gateway_url {
                 let url = url.clone();
+                // Pass a snapshot of the current SuperProperties so the IDENTIFY
+                // frame uses the same fingerprint as the HTTP headers (Phase C.2).
+                let props = self.http.super_properties();
                 // Spawn a task that connects to the gateway WS and streams events.
                 let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<ClientEvent>();
-                tokio::spawn(gateway_connect_loop(url, tx));
+                tokio::spawn(gateway_connect_loop(url, props, tx));
                 return Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(rx));
             }
         }
@@ -1539,24 +1559,22 @@ impl IsBackend for DiscordClient {
     }
 
     fn client_version(&self) -> String {
-        self.version_override
-            .lock()
-            .ok()
-            .and_then(|g| g.clone())
-            .unwrap_or_else(|| http::DEFAULT_CLIENT_VERSION.to_string())
+        // Phase B.4: UA comes from SuperProperties — one source of truth.
+        self.http.ua()
     }
 
     async fn set_client_version_override(
         &self,
         version_override: Option<String>,
     ) -> ClientResult<()> {
-        let new_ua = version_override
-            .clone()
-            .unwrap_or_else(|| http::DEFAULT_CLIENT_VERSION.to_string());
+        // Phase B.5: UA override propagates into super_props.browser_user_agent.
         if let Ok(mut lock) = self.version_override.lock() {
-            *lock = version_override;
+            *lock = version_override.clone();
         }
-        self.http.set_user_agent(new_ua);
+        match version_override {
+            Some(ua) => self.http.set_user_agent(ua),
+            None => self.http.clear_user_agent_override(),
+        }
         Ok(())
     }
 }

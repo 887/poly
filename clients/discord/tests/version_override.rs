@@ -127,7 +127,10 @@ async fn test_version_override_reaches_wire() {
 /// After clearing, `client_version()` returns the default User-Agent.
 #[tokio::test]
 async fn test_version_override_clear_restores_default() {
-    const DEFAULT_UA: &str = "poly-discord/0.0.0 (DiscordBot https://github.com/poly-app; 10)";
+    // Phase B: DEFAULT_CLIENT_VERSION is now the browser-style UA (no DiscordBot).
+    const DEFAULT_UA: &str =
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 \
+         (KHTML, like Gecko) discord/0.0.354133 Chrome/130.0.0.0 Electron/32.2.7 Safari/537.36";
 
     let srv = TestServer::start().await;
     let token = srv.token_for("koala").await;

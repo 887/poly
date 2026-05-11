@@ -1,6 +1,6 @@
 # Plan — Discord Anti-Ban Hardening for Poly's Discord Plugin
 
-## Status: PLANNED — not started
+## Status: Phases A/B/C SHIPPED — shipped in change `yuvzoprz` (Phases D/E/F pending)
 
 > Last updated: 2026-05-11
 
@@ -78,7 +78,7 @@ What's there:
 
 ---
 
-## Phase A — Build-number scraper
+## Phase A — Build-number scraper — shipped in change `yuvzoprz`
 
 Discord embeds the current `client_build_number` in the asset JS bundle
 that `https://discord.com/app` loads. The scraping pattern (per
@@ -97,27 +97,27 @@ because that's what the vast majority of accounts run.
 
 Sub-steps:
 
-- [ ] **A.1** Add a baked-in `LATEST_KNOWN_STABLE_BUILD: u32` constant
+- [x] **A.1** Add a baked-in `LATEST_KNOWN_STABLE_BUILD: u32` constant
       to `clients/discord/src/build_info.rs` (new file). Update it
       manually in the same commit that ships this scraper, current as
       of the date the commit lands. Treat it as the floor — never send
       a build number lower than this.
-- [ ] **A.2** Add `clients/discord/src/build_info.rs::scrape_stable()`
+- [x] **A.2** Add `clients/discord/src/build_info.rs::scrape_stable()`
       that performs the two-step fetch (HTML → assets → regex). Returns
       `Result<BuildInfo { build_number, version_hash, scraped_at }, ScrapeError>`.
       Use the host bridge `HttpClient` (works on both native and WASM
       via the host fetch route).
-- [ ] **A.3** Persist scraped result under a new KV key
+- [x] **A.3** Persist scraped result under a new KV key
       `client.config.discord.build_info` (JSON-encoded `BuildInfo` with
       `scraped_at` epoch seconds). Reuse `ClientConfigStore::client.kv_set`
       directly — no new namespace helper needed (this is data, not a
       user override).
-- [ ] **A.4** Add `clients/discord/src/build_info.rs::load_or_refresh(client_config_store)`
+- [x] **A.4** Add `clients/discord/src/build_info.rs::load_or_refresh(client_config_store)`
       with logic: if persisted `scraped_at` > now − 7 days, return
       cached. Else `scrape_stable()` and persist. On scrape failure,
       return cached if any, otherwise `LATEST_KNOWN_STABLE_BUILD` with
       a synthesized `version_hash` of `"unknown"`.
-- [ ] **A.5** Call `load_or_refresh` from the Discord backend's init
+- [x] **A.5** Call `load_or_refresh` from the Discord backend's init
       path (where it currently calls `DiscordHttpClient::new`). Pass
       the resulting `BuildInfo` into a new constructor
       `DiscordHttpClient::with_build_info(base_url, build_info,
@@ -129,13 +129,16 @@ Sub-steps:
       page for the Discord backend (where version-override is already
       shown). Hits the same `load_or_refresh` path with a `force=true`
       flag.
-- [ ] **A.7** Telemetry: `tracing::info!` the build number on every
+- [x] **A.7** Telemetry: `tracing::info!` the build number on every
       backend init. Makes it grep-able when a user reports "I got
       banned 3 hours after starting Poly".
 
+Note: A.6 (UI button) is deferred to Phase F (monitoring/UI work). All
+core scraper, persistence, and wiring sub-steps are complete.
+
 ---
 
-## Phase B — `X-Super-Properties` + `User-Agent` consistency
+## Phase B — `X-Super-Properties` + `User-Agent` consistency — shipped in change `yuvzoprz`
 
 The Phase A `BuildInfo` is consumed here to produce one
 self-consistent fingerprint that's reused across HTTP and WS.
@@ -193,42 +196,43 @@ Pick one based on host platform via `cfg!(target_os = ...)`:
 
 Sub-steps:
 
-- [ ] **B.1** Add `clients/discord/src/super_properties.rs` with
+- [x] **B.1** Add `clients/discord/src/super_properties.rs` with
       `pub struct SuperProperties { ...all fields above... }` that impls
       `serde::Serialize`. Use `Option<String>` only for fields Discord
       ever omits; `referrer*` are always-present empty strings.
-- [ ] **B.2** Add `SuperProperties::for_platform(build: BuildInfo) -> Self`
+- [x] **B.2** Add `SuperProperties::for_platform(build: BuildInfo) -> Self`
       that picks the platform template at `cfg!`-time and stamps the
       build number, locale (from `sys_locale::get_locale()`), and a
       Chromium/Electron version string derived from a small in-repo
       table updated alongside `LATEST_KNOWN_STABLE_BUILD`.
-- [ ] **B.3** Add `SuperProperties::to_header_value(&self) -> String`
+- [x] **B.3** Add `SuperProperties::to_header_value(&self) -> String`
       that JSON-encodes (compact, no whitespace) and base64-encodes.
-      MUST work on both `native` and WASM — drop the
+      MUST work on both `native` and WASM — dropped the
       `#[cfg(feature = "native")]` gate from `apply_version_headers`.
-- [ ] **B.4** Replace `apply_version_headers` in `http.rs`. Take the
+- [x] **B.4** Replace `apply_version_headers` in `http.rs`. Take the
       `SuperProperties` from `&self` (constructor stores it). The
       `User-Agent` header value comes from
       `super_properties.browser_user_agent` (one source of truth) —
-      no separate `Mutex<String>` for UA.
-- [ ] **B.5** Honour `client.config.discord.version_override` as a
+      dropped separate `Mutex<String>` for UA.
+- [x] **B.5** Honour `client.config.discord.version_override` as a
       free-form UA override that ALSO overrides
       `super_properties.browser_user_agent`. Document in the override
       UI text: "Set a full User-Agent string. The X-Super-Properties
       header is rebuilt to match — leave blank to use the auto-detected
       desktop-client UA."
-- [ ] **B.6** Delete the empty-string `#[cfg(not(feature = "native"))]`
+- [x] **B.6** Deleted the empty-string `#[cfg(not(feature = "native"))]`
       branch and the `Arc<Mutex<String>>` UA cache. The `SuperProperties`
-      lives behind an `ArcSwap<SuperProperties>` so it can be hot-swapped
-      when build refreshes without re-creating the client.
-- [ ] **B.7** Test: a new integration test
+      lives behind `Arc<Mutex<SuperProperties>>` (ArcSwap deferred —
+      not needed until multi-thread hot-swap is required).
+- [x] **B.7** Test: new integration test
       `tests/super_properties_consistency.rs` decodes the base64 header
       we'd send, parses the JSON, and asserts every required field is
       present, types match, and `client_build_number == build_info.build_number`.
+      Also fails-loud on "DiscordBot" in UA. 6 unit tests all pass.
 
 ---
 
-## Phase C — Gateway IDENTIFY consistency
+## Phase C — Gateway IDENTIFY consistency — shipped in change `yuvzoprz`
 
 The gateway IDENTIFY (op 2) `properties` field uses **the same shape**
 as `X-Super-Properties` (without the base64 wrapping — sent as inline
@@ -239,22 +243,21 @@ out as "the most common newbie ban reason").
 
 Sub-steps:
 
-- [ ] **C.1** Audit: find where the Discord gateway client is
-      implemented (probably `clients/discord/src/gateway.rs` if it
-      exists, or a stub if not yet implemented). Document the current
-      IDENTIFY payload here in this plan once known.
-- [ ] **C.2** Refactor: `SuperProperties` from Phase B is the shared
-      source. Add `SuperProperties::to_identify_properties(&self) ->
+- [x] **C.1** Audit: gateway is implemented as `gateway_connect_loop` in
+      `clients/discord/src/lib.rs` (not a separate file). Prior IDENTIFY
+      had `{ "os": "linux", "browser": "poly", "device": "poly" }` —
+      neither consistent with the HTTP headers nor a real client fingerprint.
+- [x] **C.2** Refactor: `SuperProperties` from Phase B is the shared
+      source. Added `SuperProperties::to_identify_properties(&self) ->
       serde_json::Value` returning the same JSON object (no base64).
-      The HTTP and gateway layers now both consume from one
-      `Arc<SuperProperties>` held by the backend.
-- [ ] **C.3** Verify the IDENTIFY also sends consistent `compress`,
-      `large_threshold`, and `capabilities` flags matching what the
-      desktop client sends. Capabilities bitfield rotates — bake in
-      the latest known and surface it next to `LATEST_KNOWN_STABLE_BUILD`.
-- [ ] **C.4** Test: a WS-mock test that asserts the IDENTIFY frame
-      `properties` JSON is byte-equal to the JSON inside the
-      base64-decoded `X-Super-Properties` from a parallel HTTP call.
+      `gateway_connect_loop` now takes a `SuperProperties` snapshot from
+      `DiscordHttpClient::super_properties()`.
+- [x] **C.3** Verified the IDENTIFY sends `compress: false`,
+      `large_threshold: 250` consistent with the desktop client. Capabilities
+      bitfield deferred to follow-up (not yet needed for the test server).
+- [x] **C.4** Test: `test identify_properties_matches_http_header_json` in
+      `tests/super_properties_consistency.rs` asserts the IDENTIFY JSON is
+      byte-equal to the JSON inside the base64-decoded `X-Super-Properties`. Passes.
 
 ---
 

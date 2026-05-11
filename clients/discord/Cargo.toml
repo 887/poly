@@ -64,6 +64,7 @@ serde_json = { workspace = true }
 poly-test-discord = { path = "../../servers/test-discord" }
 axum = { workspace = true }
 serde_json = { workspace = true }
+base64 = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net"] }
 # Integration tests talk to the test server directly (native), so they keep
 # using reqwest as a dev-dependency.
@@ -76,6 +77,10 @@ path = "tests/back_and_forth.rs"
 [[test]]
 name = "version_override"
 path = "tests/version_override.rs"
+
+[[test]]
+name = "super_properties_consistency"
+path = "tests/super_properties_consistency.rs"
 
 [lints]
 workspace = true
