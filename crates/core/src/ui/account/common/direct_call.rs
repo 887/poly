@@ -8,9 +8,10 @@ use crate::state::BatchedSignal;
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::state::{AccountSessions, AppState, ChatLists, NavState, PendingDirectCallRequest, UiOverlays, VoiceState};
+use crate::ui::client_ui::toast::{push_toast, ToastMessage};
 use crate::ui::routes::Route;
 use dioxus::prelude::*;
-use poly_client::{DmChannel, User, VoiceConnection, VoiceConnectionKind, VoiceParticipant};
+use poly_client::{DmChannel, ToastTone, User, VoiceConnection, VoiceConnectionKind, VoiceParticipant};
 
 #[derive(Clone)]
 pub(crate) struct DirectCallRequest {
@@ -49,13 +50,13 @@ fn active_account_context(
     nav: BatchedSignal<NavState>,
     account_sessions: BatchedSignal<AccountSessions>,
 ) -> Option<(String, String)> {
-    let account_id = nav.read().active_account_id.cloned()?;
+    let account_id = nav.read().active_account_id.cloned()?; // poly-lint: allow render-time-read — plain fn called from spawn(), not a render fn
     let instance_id = account_sessions
-        .read()
+        .read() // poly-lint: allow render-time-read — plain fn called from spawn(), not a render fn
         .account_sessions
         .get(&account_id)
         .map(|session| session.instance_id.clone())
-        .or_else(|| nav.read().active_instance_id.cloned())
+        .or_else(|| nav.read().active_instance_id.cloned()) // poly-lint: allow render-time-read — plain fn called from spawn(), not a render fn
         .unwrap_or_default();
     Some((account_id, instance_id))
 }
@@ -70,7 +71,7 @@ async fn resolve_direct_message_for_active_account(
     let (account_id, instance_id) = active_account_context(nav, account_sessions)?;
 
     let existing_dm = {
-        let chat_data_read = chat_lists.read();
+        let chat_data_read = chat_lists.read(); // poly-lint: allow render-time-read — async fn called from spawn(), not a render fn
         chat_data_read
             .dm_channels
             .iter()
@@ -191,7 +192,7 @@ fn direct_call_bucket_label(remote_count: usize) -> String {
 }
 
 fn hold_active_call_if_needed(new_channel_id: &str, voice_state: BatchedSignal<VoiceState>) {
-    let current = voice_state.read().voice_connection.clone();
+    let current = voice_state.read().voice_connection.clone(); // poly-lint: allow render-time-read — plain fn called from spawn(), not a render fn
     let Some(current) = current else {
         return;
     };
@@ -225,7 +226,7 @@ fn activate_existing_or_new_call(
     voice_state: BatchedSignal<VoiceState>,
 ) {
     let self_session = account_sessions
-        .read()
+        .read() // poly-lint: allow render-time-read — plain fn called from spawn(), not a render fn
         .account_sessions
         .get(&spec.account_id)
         .cloned();
@@ -237,7 +238,7 @@ fn activate_existing_or_new_call(
     let self_user = self_session.user.clone();
 
     let existing_held = {
-        let reader = voice_state.read();
+        let reader = voice_state.read(); // poly-lint: allow render-time-read — plain fn called from spawn(), not a render fn
         reader
             .held_voice_connections
             .iter()
@@ -246,7 +247,7 @@ fn activate_existing_or_new_call(
     };
 
     let mut participants = voice_state
-        .read()
+        .read() // poly-lint: allow render-time-read — plain fn called from spawn(), not a render fn
         .voice_channel_participants
         .get(&spec.channel_id)
         .cloned()
@@ -356,7 +357,7 @@ pub(crate) fn start_direct_call_from_active_account(
             return;
         };
 
-        let active_connection = voice_state.read().voice_connection.clone();
+        let active_connection = voice_state.read().voice_connection.clone(); // poly-lint: allow render-time-read — inside spawn(async move {}), not a render fn
         if request.allow_add_to_active_temporary
             && let Some(active) = active_connection.clone()
             && active.kind == VoiceConnectionKind::TemporaryCall
@@ -367,14 +368,14 @@ pub(crate) fn start_direct_call_from_active_account(
                 .any(|id| id == &request.target_user.id)
         {
             let self_user_id = account_sessions
-                .read()
+                .read() // poly-lint: allow render-time-read — inside spawn(async move {}), not a render fn
                 .account_sessions
                 .get(&account_id)
                 .map(|session| session.user.id.clone())
                 .unwrap_or_default();
             let channel_id = active.channel_id.clone();
             let mut participants = voice_state
-                .read()
+                .read() // poly-lint: allow render-time-read — inside spawn(async move {}), not a render fn
                 .voice_channel_participants
                 .get(&channel_id)
                 .cloned()
@@ -499,18 +500,29 @@ pub(crate) fn start_direct_call_from_active_account(
                 #[cfg(not(target_arch = "wasm32"))]
                 tokio::time::sleep(std::time::Duration::from_secs(30)).await;
 
-                let still_ringing = voice_state
+                let still_ringing_info = voice_state
                     .peek()
                     .voice_connection
                     .as_ref()
                     .map(|vc| {
-                        vc.channel_id == ring_channel_id
-                            && vc.kind == VoiceConnectionKind::TemporaryCall
-                    })
-                    .unwrap_or(false);
+                        let ringing = vc.channel_id == ring_channel_id
+                            && vc.kind == VoiceConnectionKind::TemporaryCall;
+                        (ringing, vc.backend.slug().to_string())
+                    });
+                let still_ringing = still_ringing_info.as_ref().map_or(false, |(r, _)| *r);
+                let ringing_backend_slug = still_ringing_info.map(|(_, slug)| slug).unwrap_or_default();
                 if still_ringing {
                     tracing::info!("D.7 ring timeout — auto-disconnecting unanswered call");
                     disconnect_active_call(voice_state);
+                    // I.3 — Teams-specific "coming soon" toast after ring timeout.
+                    // Teams DM calls fall through to the pseudo-backend path (Phase D.5
+                    // returns NotSupported which is silently accepted). Show a friendly
+                    // message so the user understands why the call didn't connect.
+                    if ringing_backend_slug == "teams" {
+                        if let Some(toast_queue) = try_consume_context::<Signal<Vec<ToastMessage>>>() {
+                            push_toast(toast_queue, ToastMessage::new("voice-teams-coming-soon", ToastTone::Info));
+                        }
+                    }
                     // Best-effort cancel on the backend transport (op 4 to channel null).
                     if let Some(dm_ch) = dm_channel_id_for_cancel {
                         let result = client_manager

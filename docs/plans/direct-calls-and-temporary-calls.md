@@ -172,6 +172,29 @@ Missing future pieces include:
 - temporary call history / notifications,
 - real temporary-call routes/view instead of banner/bar-first UX.
 
+### Known Limits — Teams Calling
+
+Teams DM and channel calls are **not yet implemented**. Teams calling requires
+the [Azure Communication Services (ACS) SDK](https://learn.microsoft.com/en-us/azure/communication-services/)
+and/or the Microsoft Graph Calling API — neither of which is yet wired into
+`poly-teams`.
+
+**Current behaviour** (Phase I of `docs/plans/plan-voice-video-calls.md`):
+
+- Clicking a Teams DM call button navigates to the pending-call overlay as
+  normal.
+- The pseudo-backend `TemporaryCall` path runs (Phase D.5 — `start_dm_call_transport`
+  returns `ClientError::NotSupported`, which is silently accepted).
+- After the 30-second ring timeout the call is auto-disconnected and a
+  "Teams calls are coming soon" toast appears (`voice-teams-coming-soon` FTL key).
+- `TeamsClient::get_voice_participants` returns `Ok(vec![])` (the trait default).
+- `clients/teams/src/voice.rs` — `TeamsVoiceClient` — exposes the full voice
+  method surface but every method returns `ClientError::NotSupported`.
+
+**Follow-up plan**: `plan-teams-calling.md` (not yet written). That plan will
+cover ACS SDK integration, Microsoft Graph `/communications/calls`, and the
+full calling UI lifecycle.
+
 ## Future Backend Contract Direction
 
 When promoted from pseudo-backend to real backend support, likely client-trait additions will include concepts such as:

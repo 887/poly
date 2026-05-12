@@ -543,6 +543,16 @@ voice-noise-cancel-off = Noise Cancellation: Off
 voice-server-location = Server Location
 voice-testing-mic = Testing... (3s)
 voice-test-mic = Test Microphone (3 sec)
+voice-teams-coming-soon = Teams calls are coming soon — real calling requires the ACS / Graph Calling SDK.
+voice-device-picker-title = Audio Device Settings
+voice-device-picker-input = Microphone
+voice-device-picker-output = Speaker
+voice-device-picker-select = Select
+voice-device-picker-current = Current
+voice-device-picker-test-mic = Test Mic (2s)
+voice-device-picker-recording = Recording…
+voice-device-picker-playing = Playing back…
+voice-device-disconnected = { $device } disconnected — switched to built-in speakers.
 
 # Emoji / GIF / Reactions
 emoji-picker = Emoji

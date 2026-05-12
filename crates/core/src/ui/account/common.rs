@@ -70,6 +70,7 @@ pub mod overview_subpages;
 pub mod unsupported_placeholder;
 pub mod user_profile_modal;
 pub mod user_sidebar;
+pub mod device_picker;
 pub mod voice_account_footer;
 pub mod voice_bar;
 pub mod voice_view;

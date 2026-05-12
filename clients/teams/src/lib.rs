@@ -20,6 +20,9 @@ mod http;
 pub mod signup;
 #[cfg(feature = "native")]
 pub mod types;
+/// Teams voice stub — see [`voice::TeamsVoiceClient`] and Phase I of
+/// `docs/plans/plan-voice-video-calls.md`.
+pub mod voice;
 
 /// WIT bindings for the WASM plugin (WASI targets only).
 #[cfg(target_os = "wasi")]

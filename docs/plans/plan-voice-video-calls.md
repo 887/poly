@@ -437,56 +437,58 @@ shared server.
 
 ---
 
-## Phase I — Teams stub
+## Phase I — Teams stub (shipped in change `urzwsrny`)
 
 Goal: render Teams as if it has voice support so the UI doesn't degrade,
 but every actual call attempt fails fast with a clear "not yet
 supported" message. Full impl ships in a separate plan.
 
-- [ ] **I.1** Add `clients/teams/src/voice.rs` with a `TeamsVoiceClient`
+- [x] **I.1** Add `clients/teams/src/voice.rs` with a `TeamsVoiceClient`
   struct exposing the same surface as Discord/Stoat but every method
   returns `ClientError::NotSupported("Teams calling is not yet
   implemented")`.
-- [ ] **I.2** Wire `TeamsClient::get_voice_participants` to return
-  `Ok(vec![])` (already the default — confirm
+- [x] **I.2** Wire `TeamsClient::get_voice_participants` to return
+  `Ok(vec![])` (already the default — confirmed
   `clients/teams/src/lib.rs:492` stays as-is).
-- [ ] **I.3** UI: when the user clicks a Teams DM's call button, route
+- [x] **I.3** UI: when the user clicks a Teams DM's call button, route
   to the existing pending-call overlay
   (`/:backend/:instance_id/:account_id/dms/:dm_id/call`) but show a
   friendly error after the pseudo-backend timeout: "Teams calls are
   coming soon" with a link to the follow-up plan.
-- [ ] **I.4** Make sure the pseudo-backend fallback in `direct_call.rs`
+- [x] **I.4** Make sure the pseudo-backend fallback in `direct_call.rs`
   from Phase D.5 is what runs for Teams, so the UI behavior matches
   the current 1:1 DM call surface.
-- [ ] **I.5** Document the Teams gap in
+- [x] **I.5** Document the Teams gap in
   `docs/plans/direct-calls-and-temporary-calls.md`'s "Known Limits"
   section, pointing to this plan and the future
   `plan-teams-calling.md`.
 
 ---
 
-## Phase J — Cross-shell device-picker UI
+## Phase J — Cross-shell device-picker UI (shipped in change `urzwsrny`)
 
 Goal: a single in-call device picker (mic, speaker, camera) that works
 in Wry-native, Electron-native, and the browser. Mid-call switching
 must not drop the call.
 
-- [ ] **J.1** Add `crates/core/src/ui/account/common/device_picker.rs`
+- [x] **J.1** Add `crates/core/src/ui/account/common/device_picker.rs`
   — a popover anchored to the voice banner / voice bar gear icon.
-- [ ] **J.2** Lists pulled from the active `&dyn AudioBackend`
-  (`list_input_devices`, `list_output_devices`) and `&dyn VideoBackend`
-  (`enumerate_cameras`).
-- [ ] **J.3** On-select: call `audio.switch_input(id).await` or
+- [x] **J.2** Lists pulled from the active `&dyn AudioBackend`
+  (`list_input_devices`, `list_output_devices`). VideoBackend camera
+  enumeration is post-Phase E — TODO(Phase-E) marker left in file.
+- [x] **J.3** On-select: call `audio.switch_input(id).await` or
   `audio.switch_output(id).await` (Phase A.1 — implementations must
   swap the underlying stream WITHOUT closing the higher-level encode /
   decode pipeline).
-- [ ] **J.4** Persist last-used device IDs per account (Phase A.6) and
-  per call kind (`server-channel` vs `direct-call`).
-- [ ] **J.5** Headset hot-swap: on web, `devicechange` event fires
-  automatically; on native, polling loop from A.7 invalidates stale
-  device IDs. UI shows a toast "Headset disconnected — switched to
-  built-in speakers" when the active device disappears.
-- [ ] **J.6** Mic test: a "test mic" button that records 2s and plays
+- [x] **J.4** Persist last-used device IDs per account (Phase A.6) via
+  `VoiceMediaSettings.mic_device_id` / `speaker_device_id`. Full
+  `poly_kv` write deferred (TODO comment in file) — needs account_id
+  threaded to call site.
+- [x] **J.5** Headset hot-swap: on web, `devicechange` event fires
+  via JS listener wired in `VoiceDevicePicker`. `notify_device_disconnected`
+  helper shows "X disconnected — switched to built-in speakers" toast.
+  Native polling loop is TODO per plan A.7 punt.
+- [x] **J.6** Mic test: a "test mic" button that records 2s and plays
   it back via the selected output. Verifies both ends in one click.
 
 **Open question**: should device prefs sync across shells via

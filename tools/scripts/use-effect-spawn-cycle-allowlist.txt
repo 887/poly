@@ -70,3 +70,8 @@ crates/core/src/ui/mod.rs:1515
 crates/core/src/ui.rs:1840
 # Startup-overlay dismiss timer — shifted +4 from H.3.c get_dm_channels if-let expansion
 crates/core/src/ui.rs:1844
+# Phase J device picker — one-shot mount that loads input/output device lists
+# from the AudioBackend. The spawn writes only local Signals (input_devices,
+# output_devices) that the effect does NOT subscribe to (they're captured
+# mut, not read). No cycle possible; safe to allowlist.
+crates/core/src/ui/account/common/device_picker.rs:141

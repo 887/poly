@@ -430,6 +430,16 @@ voice-noise-cancel-off = Réduction du bruit : Désactivée
 voice-server-location = Emplacement du serveur
 voice-testing-mic = Test en cours... (3s)
 voice-test-mic = Tester le microphone (3 sec)
+voice-teams-coming-soon = Les appels Teams arrivent bientôt — l'implémentation complète nécessite le SDK ACS/Graph Calling.
+voice-device-picker-title = Paramètres des périphériques audio
+voice-device-picker-input = Microphone
+voice-device-picker-output = Haut-parleur
+voice-device-picker-select = Sélectionner
+voice-device-picker-current = Actuel
+voice-device-picker-test-mic = Tester le micro (2s)
+voice-device-picker-recording = Enregistrement…
+voice-device-picker-playing = Lecture…
+voice-device-disconnected = { $device } déconnecté — basculé sur les haut-parleurs intégrés.
 
 # Emoji / GIF / Réactions
 emoji-picker = Emoji

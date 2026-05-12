@@ -430,6 +430,16 @@ voice-noise-cancel-off = Geräuschunterdrückung: Aus
 voice-server-location = Serverstandort
 voice-testing-mic = Testen... (3s)
 voice-test-mic = Mikrofon testen (3 Sek.)
+voice-teams-coming-soon = Teams-Anrufe kommen bald — die vollständige Implementierung erfordert das ACS-/Graph-Calling-SDK.
+voice-device-picker-title = Audiogeräte-Einstellungen
+voice-device-picker-input = Mikrofon
+voice-device-picker-output = Lautsprecher
+voice-device-picker-select = Auswählen
+voice-device-picker-current = Aktuell
+voice-device-picker-test-mic = Mikrofon testen (2s)
+voice-device-picker-recording = Aufnahme…
+voice-device-picker-playing = Wiedergabe…
+voice-device-disconnected = { $device } getrennt — auf integrierte Lautsprecher umgeschaltet.
 
 # Emoji / GIF / Reaktionen
 emoji-picker = Emoji

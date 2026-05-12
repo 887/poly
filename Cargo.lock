@@ -6690,6 +6690,7 @@ dependencies = [
  "indexed_db_futures",
  "js-sys",
  "nnnoiseless",
+ "poly-audio-backend",
  "poly-client",
  "poly-demo",
  "poly-discord",

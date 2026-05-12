@@ -108,6 +108,10 @@ ammonia = { workspace = true }
 # See docs/phase-voice-plan.md DECISION(V-4).
 nnnoiseless = { workspace = true }
 
+# Audio device abstraction — Phase A of plan-voice-video-calls.md.
+# Used by the Phase J device-picker UI to enumerate and switch I/O devices.
+poly-audio-backend = { workspace = true }
+
 [dev-dependencies]
 tempfile = { workspace = true }
 
