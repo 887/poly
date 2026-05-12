@@ -87,8 +87,9 @@ use account::{
 };
 use agent::{AgentRoute, AgentSectionRoute, PersonasRoute, SearchRoute};
 use dm::{
-    ConversationSearchRoute, DmChat, DmMediaViewerRoute, DmPendingAddCall, DmPendingAddVideoCall,
-    DmPendingCall, DmPendingVideoCall, DmsHome, DmsLayout, NewConversationRoute,
+    ConversationSearchRoute, DmChat, DmIncomingCall, DmMediaViewerRoute, DmPendingAddCall,
+    DmPendingAddVideoCall, DmPendingCall, DmPendingVideoCall, DmsHome, DmsLayout,
+    NewConversationRoute,
 };
 use forum::{CreateForumPostRoute, ForumCommentsRoute, ForumPostRoute, ForumSearchRoute};
 use server::{
@@ -214,6 +215,13 @@ pub enum Route {
             #[connected(linked)]
             #[route("/:backend/:instance_id/:account_id/dms/:dm_id/video-call/add")]
             DmPendingAddVideoCall { backend: String, instance_id: String, account_id: String, dm_id: String },
+
+            /// D.3 — shown when a Discord DM call is ringing for the local user.
+            /// Navigated to from the gateway CALL_CREATE handler.
+            /// Shows accept / decline UI.
+            #[connected(linked)]
+            #[route("/:backend/:instance_id/:account_id/dms/:dm_id/incoming-call")]
+            DmIncomingCall { backend: String, instance_id: String, account_id: String, dm_id: String },
 
             #[connected(linked)]
             #[route("/:backend/:instance_id/:account_id/dms/:dm_id/media/:message_id/:attachment_index")]
@@ -552,6 +560,13 @@ pub fn sync_route_to_app_state(route: &Route, app_state: BatchedSignal<AppState>
             dm_id,
         }
         | Route::DmPendingAddVideoCall {
+            backend,
+            instance_id,
+            account_id,
+            dm_id,
+        }
+        // D.3 — incoming call route; same nav-state semantics as outgoing pending call.
+        | Route::DmIncomingCall {
             backend,
             instance_id,
             account_id,

@@ -186,7 +186,8 @@ async fn join_voice_channel(
         .as_ref()
         .map_or(poly_client::BackendType::from("demo"), |s| s.backend.clone());
 
-    // Fetch current participants from backend
+    // Fetch current participants from backend, then signal the join transport.
+    let server_id_for_join = current_server.as_ref().map(|s| s.id.clone()).unwrap_or_default();
     let mut participants = {
         let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
             Ok(g) => g,
@@ -195,15 +196,25 @@ async fn join_voice_channel(
                 return;
             }
         };
-        guard
+        let parts = guard
             .get_voice_participants(&channel_id)
             .await
-            .unwrap_or_default()
+            .unwrap_or_default();
+        // C.1 — signal the backend transport (e.g. Discord op 4 VSU) that the
+        // local user is joining. Best-effort: log on failure, don't abort join.
+        if let Err(e) = guard.join_voice_channel_transport(&server_id_for_join, &channel_id).await {
+            tracing::warn!(
+                channel_id = %channel_id,
+                error = %e,
+                "voice_view: join_voice_channel_transport failed (continuing)"
+            );
+        }
+        parts
     };
 
     // Add local (self) user if not already in the list
     let self_session = account_sessions
-        .read()
+        .read() // poly-lint: allow render-time-read — inside async fn, not a render fn
         .account_sessions
         .get(&voice_account_id)
         .cloned();
@@ -229,7 +240,7 @@ async fn join_voice_channel(
     }
 
     let voice_instance_id = account_sessions
-        .read()
+        .read() // poly-lint: allow render-time-read — inside async fn, not a render fn
         .account_sessions
         .get(&voice_account_id)
         .map(|s| s.instance_id.clone())
@@ -262,7 +273,7 @@ async fn join_voice_channel(
     };
     voice_state.batch(move |v| v.voice_connection = Some(voice_conn));
 
-    if let Some(previous_channel_id) = nav_state.read().selected_channel.cloned() {
+    if let Some(previous_channel_id) = nav_state.read().selected_channel.cloned() { // poly-lint: allow render-time-read — inside async fn, not a render fn
         remember_message_list_scroll_position(&previous_channel_id);
     }
     nav_state.batch(|n| {
@@ -292,22 +303,22 @@ pub fn VoiceChannelView() -> Element {
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let nav_state: BatchedSignal<NavState> = use_context();
 
-    let current_channel = chat_view_state.read().current_channel.clone();
-    let current_server = chat_view_state.read().current_server.clone();
-    let channel_id = nav_state.read().selected_channel.cloned();
+    let current_channel = chat_view_state.read().current_channel.clone(); // poly-lint: allow render-time-read — drives conditional render; subscription IS the intent
+    let current_server = chat_view_state.read().current_server.clone(); // poly-lint: allow render-time-read — drives channel/server name display; subscription IS the intent
+    let channel_id = nav_state.read().selected_channel.cloned(); // poly-lint: allow render-time-read — drives participant lookup; subscription IS the intent
 
     let participants = channel_id
         .as_deref()
         .and_then(|cid| {
             voice_state
-                .read()
+                .read() // poly-lint: allow render-time-read — drives participant grid; subscription IS the intent
                 .voice_channel_participants
                 .get(cid)
                 .cloned()
         })
         .unwrap_or_default();
 
-    let voice_conn = voice_state.read().voice_connection.clone();
+    let voice_conn = voice_state.read().voice_connection.clone(); // poly-lint: allow render-time-read — drives is_connected / is_streaming; subscription IS the intent
     let is_connected = voice_conn
         .as_ref()
         .is_some_and(|vc| vc.channel_id == channel_id.clone().unwrap_or_default());
@@ -603,8 +614,8 @@ fn VoiceJoinButton(
                 onclick: move |_| {
                     let Some(ref cid) = channel_id else { return };
                     let cid = cid.clone();
-                    let ch = chat_view_state.read().current_channel.clone();
-                    let srv = chat_view_state.read().current_server.clone();
+                    let ch = chat_view_state.read().current_channel.clone(); // poly-lint: allow render-time-read — inside onclick handler, not a render fn
+                    let srv = chat_view_state.read().current_server.clone(); // poly-lint: allow render-time-read — inside onclick handler, not a render fn
                     spawn(async move {
                         join_voice_channel(cid, ch, srv, client_manager, account_sessions, voice_state, nav_state)
                             .await;
@@ -632,7 +643,7 @@ fn VoiceJoinButton(
 #[ui_action(inherit)]
 #[component]
 fn VoiceChatBar(mut voice_state: BatchedSignal<VoiceState>) -> Element {
-    let voice_conn = voice_state.read().voice_connection.clone();
+    let voice_conn = voice_state.read().voice_connection.clone(); // poly-lint: allow render-time-read — drives mute/deafen/stream state rendering; subscription IS the intent
     let Some(ref conn) = voice_conn else {
         return rsx! {};
     };
@@ -641,7 +652,7 @@ fn VoiceChatBar(mut voice_state: BatchedSignal<VoiceState>) -> Element {
     let is_deafened = conn.is_deafened;
     let is_video_on = conn.is_video_on;
     let is_streaming = conn.is_streaming;
-    let noise_cancel = voice_state.read().voice_media_settings.noise_cancel_enabled;
+    let noise_cancel = voice_state.read().voice_media_settings.noise_cancel_enabled; // poly-lint: allow render-time-read — drives noise-cancel button state; subscription IS the intent
 
     rsx! {
         div { class: "voice-chat-bar",

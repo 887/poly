@@ -427,9 +427,9 @@ pub(crate) fn start_direct_call_from_active_account(
         hold_active_call_if_needed(&channel_id, voice_state);
         activate_existing_or_new_call(
             TemporaryCallSpec {
-                channel_id,
-                dm_id,
-                account_id,
+                channel_id: channel_id.clone(),
+                dm_id: dm_id.clone(),
+                account_id: account_id.clone(),
                 instance_id,
             },
             vec![request.target_user],
@@ -437,13 +437,78 @@ pub(crate) fn start_direct_call_from_active_account(
             account_sessions,
             voice_state,
         );
+
+        // D.5 — dispatch real signaling transport for backends that support DM calls.
+        // Default impl returns NotSupported (pseudo-backend path); Discord overrides
+        // with gateway op 13 / op 4 Voice State Update.
+        if let Some(ref dm_channel_id) = dm_id {
+            let dm_channel_id = dm_channel_id.clone();
+            let account_id_transport = account_id.clone();
+            let result = client_manager
+                .peek()
+                .with_backend(&account_id_transport, async move |b| {
+                    b.start_dm_call_transport(&dm_channel_id).await
+                })
+                .await;
+            if let Err(e) = result {
+                if !matches!(e, poly_client::ClientError::NotSupported(_)) {
+                    tracing::warn!("D.5 start_dm_call_transport failed: {e:?}");
+                }
+            }
+        }
+
+        // D.7 — 30-second outgoing ring timeout (matches Discord client behaviour).
+        // If the call is still in TemporaryCall state with the same channel_id after
+        // 30s, assume the remote side didn't answer and auto-disconnect.
+        {
+            let ring_channel_id = channel_id.clone();
+            let dm_channel_id_for_cancel = dm_id.clone();
+            let account_id_cancel = account_id.clone();
+            spawn(async move {
+                // WASM: tokio::time::Instant panics, use gloo_timers.
+                // Native: tokio::time::sleep.
+                #[cfg(target_arch = "wasm32")]
+                gloo_timers::future::TimeoutFuture::new(30_000).await;
+                #[cfg(not(target_arch = "wasm32"))]
+                tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+
+                let still_ringing = voice_state
+                    .peek()
+                    .voice_connection
+                    .as_ref()
+                    .map(|vc| {
+                        vc.channel_id == ring_channel_id
+                            && vc.kind == VoiceConnectionKind::TemporaryCall
+                    })
+                    .unwrap_or(false);
+                if still_ringing {
+                    tracing::info!("D.7 ring timeout — auto-disconnecting unanswered call");
+                    disconnect_active_call(voice_state);
+                    // Best-effort cancel on the backend transport (op 4 to channel null).
+                    if let Some(dm_ch) = dm_channel_id_for_cancel {
+                        let result = client_manager
+                            .peek()
+                            .with_backend(&account_id_cancel, async move |b| {
+                                b.start_dm_call_transport(&format!("cancel:{dm_ch}")).await
+                            })
+                            .await;
+                        if let Err(e) = result {
+                            if !matches!(e, poly_client::ClientError::NotSupported(_)) {
+                                tracing::warn!("D.7 cancel transport failed: {e:?}");
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
         maybe_start_video_camera(request.start_video, voice_state).await;
     });
 }
 
 /// Swap the active call with the first held call, if any.
 pub(crate) fn swap_to_first_held_call(voice_state: BatchedSignal<VoiceState>) {
-    let current = voice_state.read().voice_connection.clone();
+    let current = voice_state.read().voice_connection.clone(); // poly-lint: allow render-time-read — inside event-handler fn, not a render fn; snapshot before batch is intentional
     let Some(current) = current else {
         return;
     };

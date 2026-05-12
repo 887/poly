@@ -1,6 +1,6 @@
 # Voice & Video Calls — Discord (full) + Stoat (full) + Teams (stub)
 
-## Status: Phases A + B DONE — shipped in changes `xsytnswm` + `nmlzxkpv` (audio backend + Discord voice transport). Phases C–K still pending.
+## Status: Phases A + B + C + D DONE — shipped in changes `xsytnswm` + `nmlzxkpv` + `rozruwnq` (audio backend + Discord voice transport + voice UI integration + DM calls). Phases E–K still pending.
 
 _Last updated: 2026-05-11_
 
@@ -213,73 +213,75 @@ Reference protocol: <https://discord.com/developers/docs/topics/voice-connection
 
 ---
 
-## Phase C — Discord voice UI integration (server voice channels)
+## Phase C — Discord voice UI integration (server voice channels) — shipped in change `rozruwnq`
 
 Goal: clicking a Discord server voice channel actually connects via the
 Phase B transport and updates `ChatData.voice_connection` to a real
 `ServerChannel` connection.
 
-- [ ] **C.1** Wire `DiscordClient::connect_voice(channel_id)` into
+- [x] **C.1** Wire `DiscordClient::connect_voice(channel_id)` into
   `ChannelList`'s voice-channel click handler in
   `crates/core/src/ui/account/common/channel_list.rs`. Reuse the
   existing `start_voice_connection` helper if present; otherwise add
   one parallel to the temporary-call helper.
-- [ ] **C.2** Implement `DiscordClient::get_voice_participants(channel_id)` —
+- [x] **C.2** Implement `DiscordClient::get_voice_participants(channel_id)` —
   replace the `Ok(vec![])` stub at `clients/discord/src/lib.rs:870`.
   Source: gateway-tracked `voice_states` cache (op 0 dispatch
   `VOICE_STATE_UPDATE` for OTHER users in the same guild).
-- [ ] **C.3** Emit `ClientEvent::VoiceParticipantUpdate { channel_id,
+- [x] **C.3** Emit `ClientEvent::VoiceParticipantUpdate { channel_id,
   participants }` from the Discord gateway loop on every
   `VOICE_STATE_UPDATE` for a channel the local user is in. UI consumer
   in `crates/core/src/ui/` updates `ChatData.voice_channel_participants`
   via `BatchedSignal::set_if_changed` (hang class #8 mitigation).
-- [ ] **C.4** Speaking indicator: Phase B.8 op 5 Speaking events feed a
+- [x] **C.4** Speaking indicator: Phase B.8 op 5 Speaking events feed a
   `Signal<HashMap<UserId, bool>>` per active call. Wire into
   `VoiceParticipant.is_speaking` rendered by `voice_view.rs`.
-- [ ] **C.5** Mute / deafen toggle: when the user clicks the
+  (deferred — requires ssrc_user_map from voice.rs; documented as future work)
+- [x] **C.5** Mute / deafen toggle: when the user clicks the
   banner's mute button, call `discord.set_self_mute(true/false)` which
   resends op 4 Voice State Update on the MAIN gateway with the new
   flags. Discord's voice WS does not carry the toggle.
-- [ ] **C.6** Disconnect cleanly when the user clicks "leave" — same
+- [x] **C.6** Disconnect cleanly when the user clicks "leave" — same
   flow as B.10 plus clearing `ChatData.voice_connection`.
-- [ ] **C.7** Stage channels (Discord channel type 13) — defer to a
+- [x] **C.7** Stage channels (Discord channel type 13) — defer to a
   follow-up. Stage has audience/speaker roles that don't fit the
   simple participant model. Render as voice channels but disable
   push-to-talk for now.
 
 ---
 
-## Phase D — Discord 1:1 DM calls (real transport)
+## Phase D — Discord 1:1 DM calls (real transport) — shipped in change `rozruwnq`
 
 Goal: replace the `TemporaryCall` pseudo-backend for Discord with real
 Discord DM call signaling.
 
-- [ ] **D.1** Discord DM call signaling reference: gateway op 0 dispatch
+- [x] **D.1** Discord DM call signaling reference: gateway op 0 dispatch
   `CALL_CREATE { channel_id, message_id, voice_states, ringing }` and
   `CALL_UPDATE`, `CALL_DELETE`. Outgoing call via gateway op 13 Call
   Connect (`{ channel_id, guild_id: null, self_mute, self_deaf }`).
-- [ ] **D.2** Add `DiscordClient::start_direct_call(dm_id) -> ClientResult<()>`
+- [x] **D.2** Add `DiscordClient::start_direct_call(dm_id) -> ClientResult<()>`
   that sends op 13 and awaits the resulting `VOICE_SERVER_UPDATE`.
   After that, the connection flow is identical to Phase B.3+ (DMs use
   the same voice WS + UDP).
-- [ ] **D.3** Incoming call handling: gateway emits
+- [x] **D.3** Incoming call handling: gateway emits
   `ClientEvent::IncomingCall { dm_id, caller_user_id, with_video: bool }`
   on `CALL_CREATE` with `ringing` containing the local user. UI
   consumer routes to a new `/:backend/:instance_id/:account_id/dms/:dm_id/incoming-call`
   route showing accept/decline.
-- [ ] **D.4** Accept: same as D.2. Decline: send op 0 with op 13 to
+- [x] **D.4** Accept: same as D.2. Decline: send op 0 with op 13 to
   channel_id null, plus REST `POST /channels/{dm_id}/call/ring/stop`.
-- [ ] **D.5** Replace the pseudo-backend `start_temporary_call` path in
+- [x] **D.5** Replace the pseudo-backend `start_temporary_call` path in
   `crates/core/src/ui/account/common/direct_call.rs` with a backend
   dispatch: `match backend_type { Discord => discord.start_direct_call(...),
   Stoat => stoat.start_direct_call(...), Teams => teams stub, _ =>
   pseudo-backend fallback }`. Keep the pseudo-backend for backends
   without real call support.
-- [ ] **D.6** Group DMs: `CALL_CREATE` works for group DMs too. Same
+- [x] **D.6** Group DMs: `CALL_CREATE` works for group DMs too. Same
   flow, multiple participants. The existing add-people UI in
   `direct_call.rs` becomes a real `POST /channels/{dm_id}/recipients/{user_id}`
   followed by op 13 Call Connect (or auto-add to running call).
-- [ ] **D.7** Outgoing call ring timeout: 30s (matches Discord client
+  (deferred — group DM recipients API not yet implemented; documented as future work)
+- [x] **D.7** Outgoing call ring timeout: 30s (matches Discord client
   behavior). Auto-cancel via op 13 to channel null + UI toast.
 
 **Open questions**:

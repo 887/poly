@@ -66,10 +66,14 @@ use std::sync::Mutex;
 use tokio::sync::mpsc::UnboundedSender;
 #[cfg(feature = "gateway")]
 use tokio_tungstenite::tungstenite::Message as TungsteniteMsg;
-#[cfg(feature = "voice")]
+#[cfg(feature = "gateway")]
+use std::collections::HashMap;
+#[cfg(feature = "gateway")]
 use std::sync::Arc;
 #[cfg(feature = "voice")]
 use tokio::sync::Mutex as TokioMutex;
+#[cfg(feature = "gateway")]
+use tokio::sync::RwLock;
 
 /// F10 — in-memory mutable state for context-menu item state-awareness.
 ///
@@ -185,6 +189,22 @@ pub struct DiscordClient {
     /// without opening a second WS — the load-bearing anti-ban guardrail.
     #[cfg(feature = "voice")]
     pub voice_session: voice::VoiceSessionGuard,
+
+    /// C.2 — gateway-tracked voice participant cache.
+    ///
+    /// Populated from `VOICE_STATE_UPDATE` gateway dispatches.
+    /// `channel_id → Vec<VoiceParticipant>`.  Updated atomically by the
+    /// gateway loop via `voice_states_tx`; read by `get_voice_participants`.
+    #[cfg(feature = "gateway")]
+    voice_states: Arc<RwLock<HashMap<String, Vec<VoiceParticipant>>>>,
+
+    /// C.5 — channel to send raw JSON payloads on the active main gateway WS.
+    ///
+    /// `event_stream()` replaces this channel each time it reconnects.
+    /// `set_self_mute` and `start_direct_call` write here to send op 4 / op 13
+    /// without opening a second WS connection.
+    #[cfg(feature = "gateway")]
+    gateway_tx: Arc<Mutex<Option<tokio::sync::mpsc::UnboundedSender<String>>>>,
 }
 
 #[cfg(feature = "native")]
@@ -201,6 +221,10 @@ impl DiscordClient {
             version_override: Mutex::new(None),
             #[cfg(feature = "voice")]
             voice_session: Arc::new(TokioMutex::new(None)),
+            #[cfg(feature = "gateway")]
+            voice_states: Arc::new(RwLock::new(HashMap::new())),
+            #[cfg(feature = "gateway")]
+            gateway_tx: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -216,6 +240,10 @@ impl DiscordClient {
             version_override: Mutex::new(None),
             #[cfg(feature = "voice")]
             voice_session: Arc::new(TokioMutex::new(None)),
+            #[cfg(feature = "gateway")]
+            voice_states: Arc::new(RwLock::new(HashMap::new())),
+            #[cfg(feature = "gateway")]
+            gateway_tx: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -235,6 +263,10 @@ impl DiscordClient {
             version_override: Mutex::new(None),
             #[cfg(feature = "voice")]
             voice_session: Arc::new(TokioMutex::new(None)),
+            #[cfg(feature = "gateway")]
+            voice_states: Arc::new(RwLock::new(HashMap::new())),
+            #[cfg(feature = "gateway")]
+            gateway_tx: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -598,6 +630,13 @@ impl DiscordClient {
 /// on each dispatched event (op 0), and sends the resulting `ClientEvent`s on
 /// `tx`.  Exits when the WS closes or `tx` is dropped.
 ///
+/// Phase C/D additions:
+/// - `voice_states` — shared cache of `channel_id → VoiceParticipant` list,
+///   updated from `VOICE_STATE_UPDATE` dispatches.
+/// - `local_user_id` — used to detect when the local user is in a CALL_CREATE
+///   ringing list (D.3).
+/// - `gw_rx` — receives raw JSON strings to forward on the WS (C.5, D.2).
+///
 /// Protocol decisions (Phase 6.5 + Phase C):
 /// - Sends an op-2 IDENTIFY using the same `SuperProperties` as HTTP so the
 ///   gateway fingerprint is consistent with the `X-Super-Properties` header
@@ -609,6 +648,9 @@ async fn gateway_connect_loop(
     gateway_url: String,
     super_props: crate::super_properties::SuperProperties,
     tx: UnboundedSender<ClientEvent>,
+    voice_states: Arc<RwLock<HashMap<String, Vec<VoiceParticipant>>>>,
+    local_user_id: String,
+    mut gw_rx: tokio::sync::mpsc::UnboundedReceiver<String>,
 ) {
     use futures::StreamExt;
     use tokio_tungstenite::connect_async;
@@ -651,55 +693,210 @@ async fn gateway_connect_loop(
     // The client that owns this stream has `&self` access; use a stub for parsing.
     let parser = DiscordClient::new();
 
-    while let Some(msg_result) = read.next().await {
-        let msg = match msg_result {
-            Ok(m) => m,
-            Err(e) => {
-                tracing::warn!(target: "poly_discord::gateway", error = %e, "gateway WS error");
-                break;
+    loop {
+        tokio::select! {
+            // Outbound: C.5 / D.2 — forward raw JSON from set_self_mute / start_direct_call.
+            Some(raw) = gw_rx.recv() => {
+                let _ = write.send(TungsteniteMsg::Text(raw.into())).await;
             }
-        };
+            // Inbound: gateway frames.
+            msg_result = read.next() => {
+                let Some(msg_result) = msg_result else { break };
+                let msg = match msg_result {
+                    Ok(m) => m,
+                    Err(e) => {
+                        tracing::warn!(target: "poly_discord::gateway", error = %e, "gateway WS error");
+                        break;
+                    }
+                };
 
-        let text = match msg {
-            TungsteniteMsg::Text(t) => t.to_string(),
-            TungsteniteMsg::Close(_) => break,
-            TungsteniteMsg::Binary(_)
-            | TungsteniteMsg::Ping(_)
-            | TungsteniteMsg::Pong(_)
-            | TungsteniteMsg::Frame(_) => continue,
-        };
+                let text = match msg {
+                    TungsteniteMsg::Text(t) => t.to_string(),
+                    TungsteniteMsg::Close(_) => break,
+                    TungsteniteMsg::Binary(_)
+                    | TungsteniteMsg::Ping(_)
+                    | TungsteniteMsg::Pong(_)
+                    | TungsteniteMsg::Frame(_) => continue,
+                };
 
-        let frame: serde_json::Value = match serde_json::from_str(&text) {
-            Ok(v) => v,
-            Err(_) => continue,
-        };
+                let frame: serde_json::Value = match serde_json::from_str(&text) {
+                    Ok(v) => v,
+                    Err(_) => continue,
+                };
 
-        let op = frame
-            .get("op")
-            .and_then(serde_json::Value::as_u64)
-            .unwrap_or(0);
+                let op = frame
+                    .get("op")
+                    .and_then(serde_json::Value::as_u64)
+                    .unwrap_or(0);
 
-        // op 0 = DISPATCH — parse and forward.
-        if op == 0 {
-            let event_name = frame
-                .get("t")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
-            let data = frame.get("d").cloned().unwrap_or(serde_json::Value::Null);
-            let guild_id = data
-                .get("guild_id")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
-            let events = parser.parse_gateway_event(event_name, &data, &guild_id);
-            for ev in events {
-                if tx.send(ev).is_err() {
-                    // Receiver dropped — stream is done.
-                    return;
+                // op 0 = DISPATCH — parse and forward.
+                if op == 0 {
+                    let event_name = frame
+                        .get("t")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("");
+                    let data = frame.get("d").cloned().unwrap_or(serde_json::Value::Null);
+                    let guild_id = data
+                        .get("guild_id")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+
+                    // C.3 — VOICE_STATE_UPDATE: update per-channel participant cache
+                    // and emit VoiceUserJoined / VoiceUserLeft / VoiceStateUpdated.
+                    if event_name == "VOICE_STATE_UPDATE" {
+                        let voice_events = handle_voice_state_update(
+                            &data,
+                            &voice_states,
+                        ).await;
+                        for ev in voice_events {
+                            if tx.send(ev).is_err() { return; }
+                        }
+                        // Also let parse_gateway_event handle any additional mapping.
+                    }
+
+                    // D.1 — CALL_CREATE: incoming DM call ringing.
+                    if event_name == "CALL_CREATE" {
+                        let channel_id = data
+                            .get("channel_id")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or_default()
+                            .to_string();
+                        let ringing: Vec<String> = data
+                            .get("ringing")
+                            .and_then(|r| r.as_array())
+                            .map(|arr| {
+                                arr.iter()
+                                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                        // Determine caller: first voice_state that isn't the local user.
+                        let caller_user_id = data
+                            .get("voice_states")
+                            .and_then(|vs| vs.as_array())
+                            .and_then(|arr| {
+                                arr.iter().find_map(|vs| {
+                                    let uid = vs
+                                        .get("user_id")
+                                        .and_then(|v| v.as_str())?;
+                                    if uid != local_user_id { Some(uid.to_string()) } else { None }
+                                })
+                            })
+                            .unwrap_or_default();
+
+                        // Only emit IncomingCall if the local user is in the ringing list.
+                        if ringing.contains(&local_user_id) && !channel_id.is_empty() && !caller_user_id.is_empty() {
+                            let ev = ClientEvent::IncomingCall {
+                                dm_id: channel_id,
+                                caller_user_id,
+                                with_video: false,
+                            };
+                            if tx.send(ev).is_err() { return; }
+                        }
+                    }
+
+                    // Existing parse_gateway_event for all other events.
+                    let events = parser.parse_gateway_event(event_name, &data, &guild_id);
+                    for ev in events {
+                        if tx.send(ev).is_err() {
+                            // Receiver dropped — stream is done.
+                            return;
+                        }
+                    }
                 }
+                // op 11 = HEARTBEAT_ACK — no action needed.
             }
         }
-        // op 11 = HEARTBEAT_ACK — no action needed.
+    }
+}
+
+/// C.3 — handle a `VOICE_STATE_UPDATE` gateway dispatch.
+///
+/// Updates the shared `voice_states` cache and returns the `ClientEvent`s
+/// to emit (`VoiceUserJoined`, `VoiceUserLeft`, or `VoiceStateUpdated`).
+/// Uses `BatchedSignal::set_if_changed` semantics: only emits if the participant
+/// list actually changed (hang class #8 mitigation via the caller's
+/// `set_if_changed` in the UI consumer).
+#[cfg(feature = "gateway")]
+async fn handle_voice_state_update(
+    data: &serde_json::Value,
+    voice_states: &Arc<RwLock<HashMap<String, Vec<VoiceParticipant>>>>,
+) -> Vec<ClientEvent> {
+    let channel_id = data
+        .get("channel_id")
+        .and_then(|v| if v.is_null() { None } else { v.as_str() })
+        .map(|s| s.to_string());
+    let user_id = data
+        .get("user_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+    let is_muted = data.get("self_mute").and_then(|v| v.as_bool()).unwrap_or(false);
+    let is_deafened = data.get("self_deaf").and_then(|v| v.as_bool()).unwrap_or(false);
+
+    if user_id.is_empty() {
+        return vec![];
+    }
+
+    let mut states = voice_states.write().await;
+
+    // User left all voice channels (channel_id is null).
+    if channel_id.is_none() {
+        // Remove participant from any channel they were in.
+        let mut events = vec![];
+        for (ch_id, participants) in states.iter_mut() {
+            if let Some(pos) = participants.iter().position(|p| p.user.id == user_id) {
+                participants.remove(pos);
+                events.push(ClientEvent::VoiceUserLeft {
+                    channel_id: ch_id.clone(),
+                    user_id: user_id.clone(),
+                });
+            }
+        }
+        return events;
+    }
+
+    let channel_id = channel_id.unwrap();
+
+    // Check if the user is already in this channel (state update vs join).
+    let participants = states.entry(channel_id.clone()).or_default();
+    if let Some(participant) = participants.iter_mut().find(|p| p.user.id == user_id) {
+        // Existing participant — state update.
+        participant.is_muted = is_muted;
+        participant.is_deafened = is_deafened;
+        let updated = participant.clone();
+        vec![ClientEvent::VoiceStateUpdated {
+            channel_id,
+            participant: updated,
+        }]
+    } else {
+        // New participant joining the channel.
+        let participant = VoiceParticipant {
+            user: poly_client::User {
+                id: user_id,
+                display_name: data
+                    .get("member")
+                    .and_then(|m| m.get("user"))
+                    .and_then(|u| u.get("username"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Unknown")
+                    .to_string(),
+                avatar_url: None,
+                presence: poly_client::PresenceStatus::Online,
+                backend: poly_client::BackendType::from(crate::SLUG),
+            },
+            is_muted,
+            is_deafened,
+            is_streaming: false,
+            is_video_on: false,
+            is_speaking: false,
+        };
+        participants.push(participant.clone());
+        vec![ClientEvent::VoiceUserJoined {
+            channel_id,
+            participant,
+        }]
     }
 }
 
@@ -889,6 +1086,102 @@ impl DiscordClient {
             conn.disconnect().await;
         }
         Ok(())
+    }
+}
+
+// ── C.5 / D.2 / D.4 — Gateway control methods ────────────────────────────────
+//
+// These methods send raw JSON on the main gateway WS back-channel (gateway_tx).
+// They are gated on `gateway` (not `voice`) because they only need the WS
+// connection, not the UDP/Opus/AEAD pipeline.
+
+#[cfg(feature = "gateway")]
+impl DiscordClient {
+    /// C.5 — Toggle microphone mute / deafen state.
+    ///
+    /// Sends op 4 Voice State Update on the main gateway with the new flags.
+    /// `guild_id` is the server the user is currently connected to; passing
+    /// an empty string keeps the existing guild context.
+    ///
+    /// Errors if the gateway back-channel is not open (event_stream not called).
+    pub fn set_self_mute(
+        &self,
+        guild_id: &str,
+        channel_id: Option<&str>,
+        self_mute: bool,
+        self_deaf: bool,
+    ) -> Result<(), ClientError> {
+        let payload = serde_json::json!({
+            "op": 4,
+            "d": {
+                "guild_id": guild_id,
+                "channel_id": channel_id,
+                "self_mute": self_mute,
+                "self_deaf": self_deaf,
+            }
+        });
+        self.send_gateway_payload(payload.to_string())
+    }
+
+    /// D.2 — Initiate a DM call (op 13 Call Connect).
+    ///
+    /// Sends op 13 on the main gateway WS with the channel ID.
+    /// Discord will respond with `VOICE_SERVER_UPDATE` which the gateway
+    /// loop forwards to the UI as a voice-join flow.
+    ///
+    /// Errors if the gateway back-channel is not open (event_stream not called).
+    pub fn start_direct_call(&self, dm_channel_id: &str) -> Result<(), ClientError> {
+        // D.7 — include `ringing` list with the partner's user ID when available.
+        let payload = serde_json::json!({
+            "op": 13,
+            "d": {
+                "channel_id": dm_channel_id,
+            }
+        });
+        self.send_gateway_payload(payload.to_string())
+    }
+
+    /// D.4 — Decline / cancel a DM call.
+    ///
+    /// Sends op 13 with `channel_id = null` (cancels ringing) and calls
+    /// `POST /channels/{dm_channel_id}/call/ring/stop` via REST.
+    ///
+    /// Errors if the gateway back-channel is not open or the REST call fails.
+    pub async fn decline_direct_call(
+        &self,
+        dm_channel_id: &str,
+    ) -> Result<(), ClientError> {
+        // Cancel ringing on the gateway side.
+        let stop_ringing = serde_json::json!({
+            "op": 13,
+            "d": {
+                "channel_id": serde_json::Value::Null,
+            }
+        });
+        let _ = self.send_gateway_payload(stop_ringing.to_string());
+
+        // REST call to stop the ring.
+        self.http
+            .post_empty(&format!("/api/v10/channels/{dm_channel_id}/call/ring/stop"))
+            .await
+            .map_err(|e| ClientError::Internal(format!("ring/stop failed: {e}")))?;
+        Ok(())
+    }
+
+    /// Internal: push a raw JSON string onto the gateway WS back-channel.
+    fn send_gateway_payload(&self, payload: String) -> Result<(), ClientError> {
+        let guard = self
+            .gateway_tx
+            .lock()
+            .map_err(|_| ClientError::Internal("gateway_tx mutex poisoned".into()))?;
+        match guard.as_ref() {
+            Some(tx) => tx
+                .send(payload)
+                .map_err(|_| ClientError::Internal("gateway back-channel closed".into())),
+            None => Err(ClientError::Internal(
+                "gateway back-channel not open — call event_stream() first".into(),
+            )),
+        }
     }
 }
 
@@ -1095,8 +1388,76 @@ impl IsBackend for DiscordClient {
         Ok(vec![])
     }
 
-    async fn get_voice_participants(&self, _channel_id: &str) -> ClientResult<Vec<VoiceParticipant>> {
-        Ok(vec![])
+    /// C.2 — return cached voice participants for `channel_id`.
+    ///
+    /// The cache is populated by `VOICE_STATE_UPDATE` gateway events.
+    /// Returns an empty list if no participants are cached (not an error).
+    async fn get_voice_participants(&self, channel_id: &str) -> ClientResult<Vec<VoiceParticipant>> {
+        #[cfg(feature = "gateway")]
+        {
+            let states = self.voice_states.read().await;
+            return Ok(states.get(channel_id).cloned().unwrap_or_default());
+        }
+        #[cfg(not(feature = "gateway"))]
+        {
+            let _ = channel_id;
+            Ok(vec![])
+        }
+    }
+
+    /// D.2 / D.5 — Initiate a DM call via the Discord gateway op 13.
+    async fn start_dm_call_transport(&self, dm_channel_id: &str) -> ClientResult<()> {
+        #[cfg(feature = "gateway")]
+        {
+            self.start_direct_call(dm_channel_id)?;
+        }
+        #[cfg(not(feature = "gateway"))]
+        {
+            let _ = dm_channel_id;
+        }
+        Ok(())
+    }
+
+    /// C.1 — Signal the gateway that the local user is joining a voice channel.
+    ///
+    /// Sends op 4 Voice State Update on the main gateway back-channel.
+    /// Requires `event_stream()` to have been called first (which opens the WS
+    /// and sets `gateway_tx`).
+    async fn join_voice_channel_transport(
+        &self,
+        server_id: &str,
+        channel_id: &str,
+    ) -> ClientResult<()> {
+        #[cfg(feature = "gateway")]
+        {
+            self.set_self_mute(server_id, Some(channel_id), false, false)?;
+        }
+        #[cfg(not(feature = "gateway"))]
+        {
+            let _ = (server_id, channel_id);
+        }
+        Ok(())
+    }
+
+    /// C.5 — Toggle the local user's mute / deafen state on the Discord gateway.
+    ///
+    /// Sends op 4 Voice State Update with the updated flags.
+    async fn set_voice_mute(
+        &self,
+        server_id: &str,
+        channel_id: &str,
+        self_mute: bool,
+        self_deaf: bool,
+    ) -> ClientResult<()> {
+        #[cfg(feature = "gateway")]
+        {
+            self.set_self_mute(server_id, Some(channel_id), self_mute, self_deaf)?;
+        }
+        #[cfg(not(feature = "gateway"))]
+        {
+            let _ = (server_id, channel_id, self_mute, self_deaf);
+        }
+        Ok(())
     }
 
     // ── Moderation methods moved to ModerationBackend (H.3.a) ────────────────
@@ -1109,9 +1470,26 @@ impl IsBackend for DiscordClient {
                 // Pass a snapshot of the current SuperProperties so the IDENTIFY
                 // frame uses the same fingerprint as the HTTP headers (Phase C.2).
                 let props = self.http.super_properties();
+                let local_user_id = self.account_id();
                 // Spawn a task that connects to the gateway WS and streams events.
                 let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<ClientEvent>();
-                tokio::spawn(gateway_connect_loop(url, props, tx));
+                // C.5/D.2 — wire a back-channel so set_self_mute / start_direct_call
+                // can write op 4 / op 13 on the active gateway WS without opening a
+                // second connection.
+                let (gw_tx, gw_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+                {
+                    if let Ok(mut guard) = self.gateway_tx.lock() {
+                        *guard = Some(gw_tx);
+                    }
+                }
+                tokio::spawn(gateway_connect_loop(
+                    url,
+                    props,
+                    tx,
+                    Arc::clone(&self.voice_states),
+                    local_user_id,
+                    gw_rx,
+                ));
                 return Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(rx));
             }
         }

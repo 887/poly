@@ -445,6 +445,123 @@ fn DmPendingCallInner(
     }
 }
 
+/// D.3 — incoming DM call from a remote user (e.g. Discord CALL_CREATE).
+///
+/// Shown when `ClientEvent::IncomingCall` navigates here. Renders the
+/// existing chat view in the background plus an accept / decline overlay
+/// so the user can respond without losing conversation context.
+#[context_menu(None)]
+#[rustfmt::skip]
+#[ui_action(inherit)]
+#[component]
+pub(super) fn DmIncomingCall(
+    backend: String,
+    instance_id: String,
+    account_id: String,
+    dm_id: String,
+) -> Element {
+    let client_manager: BatchedSignal<ClientManager> = use_context();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
+    let chat_view_state: BatchedSignal<ChatViewState> = use_context();
+    let account_sessions: BatchedSignal<AccountSessions> = use_context();
+    let voice_state: BatchedSignal<VoiceState> = use_context();
+    let nav = navigator();
+
+    let dm_id_for_effect = dm_id.clone();
+    let account_id_for_effect = account_id.clone();
+
+    // poly-lint: allow stale-effect-capture — one-shot mount effect; dm_id_for_effect
+    // and account_id_for_effect are URL props that are stable for this component's
+    // lifetime. Route re-navigation creates a new component scope.
+    use_effect(move || {
+        restore_dm_chat(
+            dm_id_for_effect.clone(),
+            account_id_for_effect.clone(),
+            client_manager,
+            chat_lists,
+            chat_view_state,
+        );
+    });
+
+    // Look up the caller's display name from the DM list.
+    let caller_name = chat_lists
+        .peek() // poly-lint: allow render-time-read — prop snapshot, subscription not needed
+        .dm_channels
+        .iter()
+        .find(|dm| dm.account_id == account_id && dm.id == dm_id)
+        .map(|dm| dm.user.display_name.clone())
+        .unwrap_or_else(|| t("call-unknown-caller"));
+
+    let backend_c = backend.clone();
+    let instance_id_c = instance_id.clone();
+    let account_id_c = account_id.clone();
+    let dm_id_accept = dm_id.clone();
+    let dm_id_decline = dm_id.clone();
+
+    rsx! {
+        // Background chat view (blurred/dimmed by CSS when overlay is active).
+        ChatView {}
+
+        // Incoming call overlay.
+        div { class: "incoming-call-overlay",
+            div { class: "incoming-call-card",
+                div { class: "incoming-call-avatar",
+                    span { "📞" }
+                }
+                div { class: "incoming-call-info",
+                    p { class: "incoming-call-label", {t("call-incoming-label")} }
+                    p { class: "incoming-call-caller", "{caller_name}" }
+                }
+                div { class: "incoming-call-actions",
+                    // D.4 — Accept: start direct call (pseudo-backend or real transport).
+                    button {
+                        class: "btn btn-accept-call",
+                        title: t("call-accept"),
+                        onclick: move |_| {
+                            let target_user = chat_lists
+                                .peek()
+                                .dm_channels
+                                .iter()
+                                .find(|dm| dm.account_id == account_id_c && dm.id == dm_id_accept)
+                                .map(|dm| dm.user.clone());
+                            let Some(target_user) = target_user else { return; };
+                            let nav_state: BatchedSignal<crate::state::NavState> =
+                                dioxus::prelude::consume_context();
+                            start_direct_call_from_active_account(
+                                DirectCallRequest {
+                                    target_user,
+                                    start_video: false,
+                                    allow_add_to_active_temporary: false,
+                                },
+                                nav_state,
+                                chat_lists,
+                                account_sessions,
+                                voice_state,
+                                client_manager,
+                            );
+                        },
+                        {t("call-accept")}
+                    }
+                    // D.4 — Decline: navigate back to the DM chat.
+                    button {
+                        class: "btn btn-decline-call",
+                        title: t("call-decline"),
+                        onclick: move |_| {
+                            nav.push(Route::DmChat {
+                                backend: backend_c.clone(),
+                                instance_id: instance_id_c.clone(),
+                                account_id: account_id.clone(),
+                                dm_id: dm_id_decline.clone(),
+                            });
+                        },
+                        {t("call-decline")}
+                    }
+                }
+            }
+        }
+    }
+}
+
 #[context_menu(None)]
 #[rustfmt::skip]
 #[ui_action(inherit)]
@@ -465,6 +582,8 @@ pub(super) fn DmMediaViewerRoute(
     let dm_id_for_effect = dm_id.clone();
     let account_id_for_effect = account_id.clone();
 
+    // poly-lint: allow stale-effect-capture — one-shot mount effect; dm_id_for_effect
+    // and account_id_for_effect are URL props stable for this component's lifetime.
     use_effect(move || {
         restore_dm_chat(
             dm_id_for_effect.clone(),

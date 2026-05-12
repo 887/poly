@@ -1,6 +1,54 @@
 {
   "violations": [
     {
+      "detail": "banned #[allow(clippy::indexing_slicing)]",
+      "line": 36,
+      "path": "clients/discord/src/voice.rs",
+      "rule": "allow_ban"
+    },
+    {
+      "detail": "banned #[allow(clippy::expect_used)]",
+      "line": 37,
+      "path": "clients/discord/src/voice.rs",
+      "rule": "allow_ban"
+    },
+    {
+      "detail": "banned #[allow(clippy::panic)]",
+      "line": 37,
+      "path": "clients/discord/src/voice.rs",
+      "rule": "allow_ban"
+    },
+    {
+      "detail": "banned #[allow(clippy::unwrap_used)]",
+      "line": 37,
+      "path": "clients/discord/src/voice.rs",
+      "rule": "allow_ban"
+    },
+    {
+      "detail": "banned #[allow(dead_code)]",
+      "line": 180,
+      "path": "crates/audio-backend/src/web_backend.rs",
+      "rule": "allow_ban"
+    },
+    {
+      "detail": "banned #[allow(clippy::expect_used)]",
+      "line": 43,
+      "path": "tools/discord-voice-smoke/src/main.rs",
+      "rule": "allow_ban"
+    },
+    {
+      "detail": "banned #[allow(clippy::panic)]",
+      "line": 43,
+      "path": "tools/discord-voice-smoke/src/main.rs",
+      "rule": "allow_ban"
+    },
+    {
+      "detail": "banned #[allow(clippy::unwrap_used)]",
+      "line": 43,
+      "path": "tools/discord-voice-smoke/src/main.rs",
+      "rule": "allow_ban"
+    },
+    {
       "detail": "use_effect body reads AND writes `history_state` via `.batch()` without `_if_changed` — CLAUDE.md hang class #8. Use BatchedSignal::set_if_changed() or batch_if_changed(). See: docs/plans/plan-batched-signal.md",
       "line": 20,
       "path": "crates/core/src/ui/account/common/chat_view/effects/auto_dismiss_divider.rs",
@@ -2138,54 +2186,6 @@
     },
     {
       "detail": "render-time .read() silently subscribes the parent component — CLAUDE.md hang class #7. Use .peek() for key computation / snapshots. See docs/dev/reactive-state.md. Inline-allowlist: // poly-lint: allow render-time-read — <reason>",
-      "line": 296,
-      "path": "crates/core/src/ui/account/common/voice_view.rs",
-      "rule": "forbid_render_time_read"
-    },
-    {
-      "detail": "render-time .read() silently subscribes the parent component — CLAUDE.md hang class #7. Use .peek() for key computation / snapshots. See docs/dev/reactive-state.md. Inline-allowlist: // poly-lint: allow render-time-read — <reason>",
-      "line": 297,
-      "path": "crates/core/src/ui/account/common/voice_view.rs",
-      "rule": "forbid_render_time_read"
-    },
-    {
-      "detail": "render-time .read() silently subscribes the parent component — CLAUDE.md hang class #7. Use .peek() for key computation / snapshots. See docs/dev/reactive-state.md. Inline-allowlist: // poly-lint: allow render-time-read — <reason>",
-      "line": 303,
-      "path": "crates/core/src/ui/account/common/voice_view.rs",
-      "rule": "forbid_render_time_read"
-    },
-    {
-      "detail": "render-time .read() silently subscribes the parent component — CLAUDE.md hang class #7. Use .peek() for key computation / snapshots. See docs/dev/reactive-state.md. Inline-allowlist: // poly-lint: allow render-time-read — <reason>",
-      "line": 310,
-      "path": "crates/core/src/ui/account/common/voice_view.rs",
-      "rule": "forbid_render_time_read"
-    },
-    {
-      "detail": "render-time .read() silently subscribes the parent component — CLAUDE.md hang class #7. Use .peek() for key computation / snapshots. See docs/dev/reactive-state.md. Inline-allowlist: // poly-lint: allow render-time-read — <reason>",
-      "line": 606,
-      "path": "crates/core/src/ui/account/common/voice_view.rs",
-      "rule": "forbid_render_time_read"
-    },
-    {
-      "detail": "render-time .read() silently subscribes the parent component — CLAUDE.md hang class #7. Use .peek() for key computation / snapshots. See docs/dev/reactive-state.md. Inline-allowlist: // poly-lint: allow render-time-read — <reason>",
-      "line": 607,
-      "path": "crates/core/src/ui/account/common/voice_view.rs",
-      "rule": "forbid_render_time_read"
-    },
-    {
-      "detail": "render-time .read() silently subscribes the parent component — CLAUDE.md hang class #7. Use .peek() for key computation / snapshots. See docs/dev/reactive-state.md. Inline-allowlist: // poly-lint: allow render-time-read — <reason>",
-      "line": 635,
-      "path": "crates/core/src/ui/account/common/voice_view.rs",
-      "rule": "forbid_render_time_read"
-    },
-    {
-      "detail": "render-time .read() silently subscribes the parent component — CLAUDE.md hang class #7. Use .peek() for key computation / snapshots. See docs/dev/reactive-state.md. Inline-allowlist: // poly-lint: allow render-time-read — <reason>",
-      "line": 644,
-      "path": "crates/core/src/ui/account/common/voice_view.rs",
-      "rule": "forbid_render_time_read"
-    },
-    {
-      "detail": "render-time .read() silently subscribes the parent component — CLAUDE.md hang class #7. Use .peek() for key computation / snapshots. See docs/dev/reactive-state.md. Inline-allowlist: // poly-lint: allow render-time-read — <reason>",
       "line": 56,
       "path": "crates/core/src/ui/account/server/context_menu.rs",
       "rule": "forbid_render_time_read"
@@ -3464,31 +3464,55 @@
     },
     {
       "detail": "render-time .read() silently subscribes the parent component — CLAUDE.md hang class #7. Use .peek() for key computation / snapshots. See docs/dev/reactive-state.md. Inline-allowlist: // poly-lint: allow render-time-read — <reason>",
-      "line": 68,
+      "line": 69,
       "path": "crates/core/src/ui/demo.rs",
       "rule": "forbid_render_time_read"
     },
     {
       "detail": "render-time .read() silently subscribes the parent component — CLAUDE.md hang class #7. Use .peek() for key computation / snapshots. See docs/dev/reactive-state.md. Inline-allowlist: // poly-lint: allow render-time-read — <reason>",
-      "line": 84,
+      "line": 85,
       "path": "crates/core/src/ui/demo.rs",
       "rule": "forbid_render_time_read"
     },
     {
       "detail": "render-time .read() silently subscribes the parent component — CLAUDE.md hang class #7. Use .peek() for key computation / snapshots. See docs/dev/reactive-state.md. Inline-allowlist: // poly-lint: allow render-time-read — <reason>",
-      "line": 169,
+      "line": 170,
       "path": "crates/core/src/ui/demo.rs",
       "rule": "forbid_render_time_read"
     },
     {
       "detail": "render-time .read() silently subscribes the parent component — CLAUDE.md hang class #7. Use .peek() for key computation / snapshots. See docs/dev/reactive-state.md. Inline-allowlist: // poly-lint: allow render-time-read — <reason>",
-      "line": 302,
+      "line": 303,
       "path": "crates/core/src/ui/demo.rs",
       "rule": "forbid_render_time_read"
     },
     {
       "detail": "render-time .read() silently subscribes the parent component — CLAUDE.md hang class #7. Use .peek() for key computation / snapshots. See docs/dev/reactive-state.md. Inline-allowlist: // poly-lint: allow render-time-read — <reason>",
-      "line": 321,
+      "line": 308,
+      "path": "crates/core/src/ui/demo.rs",
+      "rule": "forbid_render_time_read"
+    },
+    {
+      "detail": "render-time .read() silently subscribes the parent component — CLAUDE.md hang class #7. Use .peek() for key computation / snapshots. See docs/dev/reactive-state.md. Inline-allowlist: // poly-lint: allow render-time-read — <reason>",
+      "line": 322,
+      "path": "crates/core/src/ui/demo.rs",
+      "rule": "forbid_render_time_read"
+    },
+    {
+      "detail": "render-time .read() silently subscribes the parent component — CLAUDE.md hang class #7. Use .peek() for key computation / snapshots. See docs/dev/reactive-state.md. Inline-allowlist: // poly-lint: allow render-time-read — <reason>",
+      "line": 476,
+      "path": "crates/core/src/ui/demo.rs",
+      "rule": "forbid_render_time_read"
+    },
+    {
+      "detail": "render-time .read() silently subscribes the parent component — CLAUDE.md hang class #7. Use .peek() for key computation / snapshots. See docs/dev/reactive-state.md. Inline-allowlist: // poly-lint: allow render-time-read — <reason>",
+      "line": 590,
+      "path": "crates/core/src/ui/demo.rs",
+      "rule": "forbid_render_time_read"
+    },
+    {
+      "detail": "render-time .read() silently subscribes the parent component — CLAUDE.md hang class #7. Use .peek() for key computation / snapshots. See docs/dev/reactive-state.md. Inline-allowlist: // poly-lint: allow render-time-read — <reason>",
+      "line": 606,
       "path": "crates/core/src/ui/demo.rs",
       "rule": "forbid_render_time_read"
     },
@@ -4141,24 +4165,6 @@
       "rule": "forbid_render_time_read"
     },
     {
-      "detail": "render-time .read() silently subscribes the parent component — CLAUDE.md hang class #7. Use .peek() for key computation / snapshots. See docs/dev/reactive-state.md. Inline-allowlist: // poly-lint: allow render-time-read — <reason>",
-      "line": 252,
-      "path": "crates/core/src/ui/voice_banner.rs",
-      "rule": "forbid_render_time_read"
-    },
-    {
-      "detail": "render-time .read() silently subscribes the parent component — CLAUDE.md hang class #7. Use .peek() for key computation / snapshots. See docs/dev/reactive-state.md. Inline-allowlist: // poly-lint: allow render-time-read — <reason>",
-      "line": 259,
-      "path": "crates/core/src/ui/voice_banner.rs",
-      "rule": "forbid_render_time_read"
-    },
-    {
-      "detail": "render-time .read() silently subscribes the parent component — CLAUDE.md hang class #7. Use .peek() for key computation / snapshots. See docs/dev/reactive-state.md. Inline-allowlist: // poly-lint: allow render-time-read — <reason>",
-      "line": 269,
-      "path": "crates/core/src/ui/voice_banner.rs",
-      "rule": "forbid_render_time_read"
-    },
-    {
       "detail": "forbidden Signal::write() — use BatchedSignal::batch(|v| ...) or PendingUpdate instead. Receiver: `pending_attachments`. See: crates/core/src/state/batched_signal.rs",
       "line": 2055,
       "path": "crates/core/src/ui/account/common/chat_view/mod.rs",
@@ -4316,7 +4322,13 @@
     },
     {
       "detail": "raw use_effect(move ||) — potential hang class #6 (stale non-Signal closure capture). Use use_reactive_effect<Deps>(deps, body) or use_spawn_once<K>(key, async_fn) instead. Inline-allowlist: // poly-lint: allow stale-effect-capture — <reason>",
-      "line": 468,
+      "line": 476,
+      "path": "crates/core/src/ui/routes/dm.rs",
+      "rule": "forbid_stale_effect_capture"
+    },
+    {
+      "detail": "raw use_effect(move ||) — potential hang class #6 (stale non-Signal closure capture). Use use_reactive_effect<Deps>(deps, body) or use_spawn_once<K>(key, async_fn) instead. Inline-allowlist: // poly-lint: allow stale-effect-capture — <reason>",
+      "line": 587,
       "path": "crates/core/src/ui/routes/dm.rs",
       "rule": "forbid_stale_effect_capture"
     },

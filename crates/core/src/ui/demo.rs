@@ -14,7 +14,8 @@
 
 use crate::state::BatchedSignal;
 use crate::client_manager::{BackendHandle, BackendHandleExt, ClientManager, PluginSettingsEntry};
-use crate::state::{AppState, ChatAction, DragState, NavState, UiLayout, UiOverlays, UserPrefs, VoiceState};
+use crate::state::{AccountSessions, AppState, ChatAction, DragState, NavState, UiLayout, UiOverlays, UserPrefs, VoiceState};
+use crate::ui::routes::Route;
 use crate::ui::account::common::chat_history::{
     read_message_list_scroll_metrics, request_scroll_to_bottom,
 };
@@ -453,7 +454,7 @@ pub(crate) async fn toggle_demo(
             // Start real-time event stream listeners for each demo account.
             // Re-use the already-cloned handles — no extra Signal read needed.
             for (aid, backend) in backend_handles {
-                spawn_event_stream_listener(aid, backend, app_state, nav, client_manager, chat_view_state);
+                spawn_event_stream_listener(aid, backend, app_state, nav, client_manager, chat_view_state, account_sessions);
             }
         }
     }
@@ -562,6 +563,7 @@ pub(crate) fn spawn_event_stream_listener(
     nav: BatchedSignal<NavState>,
     client_manager: BatchedSignal<ClientManager>,
     chat_view_state: BatchedSignal<crate::state::ChatViewState>,
+    account_sessions: BatchedSignal<AccountSessions>,
 ) {
     use futures::StreamExt as _;
     use poly_client::ClientEvent;
@@ -657,6 +659,28 @@ pub(crate) fn spawn_event_stream_listener(
                         s.sidebar_invalidated_tick =
                             s.sidebar_invalidated_tick.wrapping_add(1);
                     });
+                }
+                // D.3 — route to the incoming-call screen when a DM call rings.
+                ClientEvent::IncomingCall { ref dm_id, .. } => {
+                    let session = account_sessions
+                        .peek()
+                        .account_sessions
+                        .get(&account_id)
+                        .cloned();
+                    if let Some(session) = session {
+                        let backend_slug = session.backend.slug().to_string();
+                        let instance_id = session.instance_id.clone();
+                        let account_id_c = account_id.clone();
+                        let dm_id_c = dm_id.clone();
+                        // crate::nav! is safe inside spawn — spawned tasks run in
+                        // the same component scope (caller's scope, not yet dropped).
+                        crate::nav!(Route::DmIncomingCall {
+                            backend: backend_slug,
+                            instance_id,
+                            account_id: account_id_c,
+                            dm_id: dm_id_c,
+                        });
+                    }
                 }
                 // lint-allow-unused: ClientEvent has dozens of variants;
                 // the demo handler only wires the explicitly handled ones.

@@ -386,6 +386,48 @@ pub trait IsBackend: Send + Sync {
         Ok(vec![])
     }
 
+    /// C.1 — Signal the backend that the local user is joining a voice channel.
+    ///
+    /// For backends with gateway-based signaling (e.g. Discord), this sends the
+    /// op 4 Voice State Update so the server knows the user has joined. UI state
+    /// (`VoiceConnection`) is updated separately by the caller.
+    ///
+    /// Default: `Ok(())` — no transport action required (pseudo-backend fallback).
+    async fn join_voice_channel_transport(
+        &self,
+        _server_id: &str,
+        _channel_id: &str,
+    ) -> ClientResult<()> {
+        Ok(())
+    }
+
+    /// D.2 / D.5 — Initiate a DM call via backend transport (real signaling).
+    ///
+    /// For Discord, sends op 13 Call Connect on the main gateway. The caller is
+    /// responsible for routing to the pending-call route and managing UI state.
+    ///
+    /// Default: `Err(NotSupported)` — caller should fall back to pseudo-backend.
+    async fn start_dm_call_transport(&self, _dm_channel_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported("start_dm_call_transport".into()))
+    }
+
+    /// C.5 — Toggle the local user's mute / deafen state on the backend.
+    ///
+    /// For backends with gateway-based signaling (e.g. Discord), this resends
+    /// op 4 Voice State Update with the updated flags. UI state is updated
+    /// separately by the caller.
+    ///
+    /// Default: `Ok(())` — no transport action required (pseudo-backend fallback).
+    async fn set_voice_mute(
+        &self,
+        _server_id: &str,
+        _channel_id: &str,
+        _self_mute: bool,
+        _self_deaf: bool,
+    ) -> ClientResult<()> {
+        Ok(())
+    }
+
     // --- Real-time events (H.4.e) ---
 
     /// Get a stream of real-time events from the backend.

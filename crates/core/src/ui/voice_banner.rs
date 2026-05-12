@@ -15,6 +15,7 @@
 
 use crate::state::BatchedSignal;
 use super::routes::Route;
+use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::state::chat_data::user_color;
 use crate::state::{AppState, NavState, VoiceState};
@@ -48,18 +49,72 @@ impl UiAction for VoiceBannerAction {
         };
         match self {
             Self::ToggleMute => {
-                voice_state.batch(|v| {
-                    if let Some(ref mut vc) = v.voice_connection {
-                        vc.is_muted = !vc.is_muted;
-                    }
-                });
+                // C.5 — update local state then signal the backend gateway.
+                let conn_snapshot = {
+                    let mut new_muted = false;
+                    voice_state.batch(|v| {
+                        if let Some(ref mut vc) = v.voice_connection {
+                            vc.is_muted = !vc.is_muted;
+                            new_muted = vc.is_muted;
+                        }
+                    });
+                    voice_state.peek().voice_connection.as_ref().map(|vc| {
+                        (vc.server_id.clone(), vc.channel_id.clone(), new_muted, vc.is_deafened)
+                    })
+                };
+                if let (Some((server_id, channel_id, self_mute, self_deaf)), Some(cm)) = (
+                    conn_snapshot,
+                    dioxus::prelude::try_consume_context::<BatchedSignal<ClientManager>>(),
+                ) {
+                    spawn(async move {
+                        if let Some((_account_id, backend)) =
+                            cm.peek().get_backend_for_server(&server_id)
+                        {
+                            if let Ok(guard) = backend
+                                .read_with_timeout(std::time::Duration::from_secs(5))
+                                .await
+                            {
+                                let _ = guard
+                                    .set_voice_mute(&server_id, &channel_id, self_mute, self_deaf)
+                                    .await;
+                            }
+                        }
+                    });
+                }
             }
             Self::ToggleDeafen => {
-                voice_state.batch(|v| {
-                    if let Some(ref mut vc) = v.voice_connection {
-                        vc.is_deafened = !vc.is_deafened;
-                    }
-                });
+                // C.5 — update local state then signal the backend gateway.
+                let conn_snapshot = {
+                    let mut new_deaf = false;
+                    voice_state.batch(|v| {
+                        if let Some(ref mut vc) = v.voice_connection {
+                            vc.is_deafened = !vc.is_deafened;
+                            new_deaf = vc.is_deafened;
+                        }
+                    });
+                    voice_state.peek().voice_connection.as_ref().map(|vc| {
+                        (vc.server_id.clone(), vc.channel_id.clone(), vc.is_muted, new_deaf)
+                    })
+                };
+                if let (Some((server_id, channel_id, self_mute, self_deaf)), Some(cm)) = (
+                    conn_snapshot,
+                    dioxus::prelude::try_consume_context::<BatchedSignal<ClientManager>>(),
+                ) {
+                    spawn(async move {
+                        if let Some((_account_id, backend)) =
+                            cm.peek().get_backend_for_server(&server_id)
+                        {
+                            if let Ok(guard) = backend
+                                .read_with_timeout(std::time::Duration::from_secs(5))
+                                .await
+                            {
+                                let _ = guard
+                                    .set_voice_mute(&server_id, &channel_id, self_mute, self_deaf)
+                                    .await;
+                            }
+                        }
+                    });
+                }
             }
             Self::Disconnect => {
                 disconnect_active_call(voice_state);
@@ -249,14 +304,14 @@ fn VoiceBannerControls(
 pub fn VoiceBanner() -> Element {
     let voice_state: BatchedSignal<VoiceState> = use_context();
 
-    let voice_conn = voice_state.read().voice_connection.clone();
+    let voice_conn = voice_state.read().voice_connection.clone(); // poly-lint: allow render-time-read — drives conditional render; subscription IS the intent
 
     let Some(conn) = voice_conn else {
         return rsx! {};
     };
 
     let participants = voice_state
-        .read()
+        .read() // poly-lint: allow render-time-read — drives participant avatar list; subscription IS the intent
         .voice_channel_participants
         .get(&conn.channel_id)
         .cloned()
@@ -266,7 +321,7 @@ pub fn VoiceBanner() -> Element {
     let server_name = conn.server_name.clone();
     let is_muted = conn.is_muted;
     let is_deafened = conn.is_deafened;
-    let held_count = voice_state.read().held_voice_connections.len();
+    let held_count = voice_state.read().held_voice_connections.len(); // poly-lint: allow render-time-read — drives held-call swap button visibility; subscription IS the intent
     let connection_kind = conn.kind;
 
     let banner_class = if conn.kind == VoiceConnectionKind::TemporaryCall {

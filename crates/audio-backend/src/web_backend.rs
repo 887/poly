@@ -177,8 +177,6 @@ impl Default for WebAudioBackend {
 /// proper ring buffer + `AudioWorkletNode` to avoid the per-frame allocation.
 struct WebOutputStream {
     ctx: AudioContext,
-    #[allow(dead_code)]
-    format: AudioFormat,
 }
 
 #[async_trait::async_trait(?Send)]
@@ -335,7 +333,8 @@ impl AudioBackend for WebAudioBackend {
         let ctx = AudioContext::new_with_context_options(&opts)
             .map_err(|e| AudioError::Backend(format!("AudioContext creation failed: {e:?}")))?;
 
-        Ok(Box::new(WebOutputStream { ctx, format }))
+        let _ = format;
+        Ok(Box::new(WebOutputStream { ctx }))
     }
 
     async fn switch_input(&self, device_id: &str) -> Result<(), AudioError> {

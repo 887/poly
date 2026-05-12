@@ -75,4 +75,18 @@ pub enum ClientEvent {
     /// should re-fetch via
     /// [`ClientBackend::get_sidebar_declaration`](crate::ClientBackend::get_sidebar_declaration).
     SidebarInvalidated,
+
+    /// Phase D.3 — an incoming DM call is ringing for the local user.
+    ///
+    /// Emitted from the Discord gateway on `CALL_CREATE` when the local user's
+    /// ID appears in the `ringing` list. Stoat Phase H will emit the same event.
+    /// UI consumer routes to `DmIncomingCall` route showing accept / decline.
+    IncomingCall {
+        /// DM or group channel where the call originated.
+        dm_id: String,
+        /// User ID of the person placing the call.
+        caller_user_id: String,
+        /// Whether the call includes a video stream.
+        with_video: bool,
+    },
 }

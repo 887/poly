@@ -831,4 +831,23 @@ impl DiscordHttpClient {
             .map(str::to_string)
             .ok_or_else(|| ClientError::Internal("open_dm: missing 'id' field".into()))
     }
+
+    /// POST to `path` (full path including `/api/v10/…`) with an empty body.
+    ///
+    /// Used for one-shot REST calls that carry no request body, e.g.
+    /// `POST /api/v10/channels/{id}/call/ring/stop` (D.4).
+    pub async fn post_empty(&self, path: &str) -> Result<(), ClientError> {
+        let resp = self
+            .apply_version_headers(self.http.post(self.api_url(path)))
+            .header("Authorization", self.token_header())
+            .send()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+        let status = resp.status().as_u16();
+        if status == 204 || resp.status().is_success() {
+            Ok(())
+        } else {
+            Err(ClientError::Network(format!("post_empty {path} returned HTTP {status}")))
+        }
+    }
 }

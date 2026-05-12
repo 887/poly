@@ -61,7 +61,7 @@ pub fn DemoPluginSettings() -> Element {
     let chat_lists: BatchedSignal<crate::state::ChatLists> = use_context();
     let account_sessions: BatchedSignal<crate::state::AccountSessions> = use_context();
     let chat_view_state: BatchedSignal<crate::state::ChatViewState> = use_context();
-    let demo_active = client_manager.read().demo_active;
+    let demo_active = client_manager.read().demo_active; // poly-lint: allow render-time-read — drives checkbox `checked:` binding, reactive on toggle
 
     rsx! {
         div { class: "settings-section plugin-section",
@@ -95,7 +95,7 @@ pub fn DemoPluginSettings() -> Element {
                             // `spawn` would tie the task to this component's scope; if
                             // Dioxus ever reorders scopes during the demo transition,
                             // the "RefCell already borrowed" panic could reappear.
-                            let was_active = client_manager.read().demo_active;
+                            let was_active = client_manager.read().demo_active; // poly-lint: allow render-time-read — inside onchange closure (multi-line, lint heuristic doesn't see opener)
                             dioxus::core::spawn_forever(async move {
                                 crate::ui::demo::toggle_demo(
                                     client_manager, voice_state, drag_state, app_state, nav, ui_layout, ui_overlays, user_prefs, chat_lists, account_sessions, chat_view_state,
@@ -216,7 +216,7 @@ pub fn PolyServerPluginSettings() -> Element {
         }
     });
 
-    let ws_checked = *use_ws.read();
+    let ws_checked = *use_ws.read(); // poly-lint: allow render-time-read — drives checkbox `checked:` binding, reactive on toggle
 
     rsx! {
         div { class: "settings-section plugin-section",
@@ -244,7 +244,7 @@ pub fn PolyServerPluginSettings() -> Element {
                         r#type: "checkbox",
                         checked: ws_checked,
                         onchange: move |_| {
-                            let new_val = !*use_ws_sig.read();
+                            let new_val = !*use_ws_sig.read(); // poly-lint: allow render-time-read — inside onchange closure (multi-line, lint heuristic doesn't see opener)
                             use_ws_sig.set(new_val);
                             dioxus::core::spawn_forever(async move {
                                 if let Some(s) = crate::STORAGE.get() {
@@ -634,9 +634,7 @@ pub fn SandboxStatusRow() -> Element {
         });
     });
 
-    // poly-lint: allow render-time-read — local component signal; subscription
-    // to own state is intentional so the row re-renders on every state change.
-    let current_state = row_state.read().clone();
+    let current_state = row_state.read().clone(); // poly-lint: allow render-time-read — local component signal; subscription is intentional so row re-renders on state change
     let label = match current_state {
         SandboxRowState::Loading => t("client-settings-sandbox-status-unavailable"),
         SandboxRowState::Available => t("client-settings-sandbox-status-available"),
