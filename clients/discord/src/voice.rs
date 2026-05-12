@@ -36,6 +36,8 @@
 #![allow(clippy::indexing_slicing)] // RTP header byte-slicing is local + length-checked
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // Voice code: these are gated behind Option returns or explicit early-returns
 
+use poly_client::ClientEvent;
+
 use std::{
     collections::HashMap,
     net::SocketAddr,
@@ -250,6 +252,9 @@ pub struct VoiceServerInfo {
 ///
 /// `audio` is used to open the mic input and speaker output streams.
 /// `transmit_mode` defaults to VAD at -45 dB if `None`.
+/// `speaking_tx` is an optional event sender for C.4 speaking indicator events.
+///   When provided, op 5 SPEAKING events from remote participants are forwarded
+///   as `ClientEvent::VoiceSpeakingUpdate` so the UI can update the speaking ring.
 ///
 /// # Errors
 ///
@@ -259,6 +264,7 @@ pub async fn connect_voice(
     audio: &dyn AudioBackend,
     transmit_mode: Option<TransmitMode>,
     guard: VoiceSessionGuard,
+    speaking_tx: Option<(String, tokio::sync::mpsc::UnboundedSender<ClientEvent>)>,
 ) -> Result<(), VoiceError> {
     // B.11 — anti-ban: reject if already connected.
     {
@@ -352,6 +358,7 @@ pub async fn connect_voice(
             heartbeat_interval_ms,
             ssrc_map,
             speaking_flag,
+            speaking_tx,
         ));
     }
 
@@ -612,6 +619,7 @@ async fn ip_discovery(udp: &UdpSocket, ssrc: u32) -> Result<(String, u16), Voice
 /// - Sends heartbeat (op 3) on `heartbeat_interval_ms` timer.
 /// - Receives op 5 SPEAKING → updates `ssrc_user_map` (B.8).
 /// - Sends op 5 SPEAKING when `speaking_flag` transitions (B.8).
+/// - C.4: emits `ClientEvent::VoiceSpeakingUpdate` via `speaking_tx` when present.
 async fn voice_ws_loop(
     mut write: WsWrite,
     mut read: WsRead,
@@ -619,6 +627,7 @@ async fn voice_ws_loop(
     heartbeat_interval_ms: u64,
     ssrc_user_map: SsrcUserMap,
     speaking_flag: Arc<AtomicBool>,
+    speaking_tx: Option<(String, tokio::sync::mpsc::UnboundedSender<ClientEvent>)>,
 ) {
     let interval = Duration::from_millis(heartbeat_interval_ms);
     let mut heartbeat_tick = time::interval(interval);
@@ -649,6 +658,7 @@ async fn voice_ws_loop(
                     // op 6 = HEARTBEAT_ACK — no action.
                     6 => {}
                     // op 5 = SPEAKING — update SSRC → user_id map (B.8).
+                    // C.4: also emit VoiceSpeakingUpdate so UI speaking rings update.
                     5 => {
                         if let Some(d) = v.get("d") {
                             let ssrc = d.get("ssrc")
@@ -658,8 +668,21 @@ async fn voice_ws_loop(
                                 .and_then(|u| u.as_str())
                                 .unwrap_or("")
                                 .to_string();
+                            // speaking bitmask: 0 = not speaking, non-zero = speaking.
+                            let speaking_bitmask = d.get("speaking")
+                                .and_then(|s| s.as_u64())
+                                .unwrap_or(0);
                             if ssrc != 0 && !user_id.is_empty() {
-                                ssrc_user_map.write().await.insert(ssrc, user_id);
+                                ssrc_user_map.write().await.insert(ssrc, user_id.clone());
+                                // C.4 — emit speaking indicator event if wired.
+                                if let Some((ref channel_id, ref tx)) = speaking_tx {
+                                    let ev = ClientEvent::VoiceSpeakingUpdate {
+                                        channel_id: channel_id.clone(),
+                                        user_id,
+                                        is_speaking: speaking_bitmask != 0,
+                                    };
+                                    let _ = tx.send(ev);
+                                }
                             }
                         }
                     }

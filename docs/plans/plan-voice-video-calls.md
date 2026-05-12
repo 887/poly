@@ -236,7 +236,8 @@ Phase B transport and updates `ChatData.voice_connection` to a real
 - [x] **C.4** Speaking indicator: Phase B.8 op 5 Speaking events feed a
   `Signal<HashMap<UserId, bool>>` per active call. Wire into
   `VoiceParticipant.is_speaking` rendered by `voice_view.rs`.
-  (deferred — requires ssrc_user_map from voice.rs; documented as future work)
+  (shipped in change `yolnyvry` — voice_ws_loop emits VoiceSpeakingUpdate via gateway_event_tx;
+  VoiceState.voice_speaking_map overlaid at render time in VoiceChannelView)
 - [x] **C.5** Mute / deafen toggle: when the user clicks the
   banner's mute button, call `discord.set_self_mute(true/false)` which
   resends op 4 Voice State Update on the MAIN gateway with the new
@@ -278,9 +279,10 @@ Discord DM call signaling.
   without real call support.
 - [x] **D.6** Group DMs: `CALL_CREATE` works for group DMs too. Same
   flow, multiple participants. The existing add-people UI in
-  `direct_call.rs` becomes a real `POST /channels/{dm_id}/recipients/{user_id}`
+  `direct_call.rs` becomes a real `PUT /channels/{dm_id}/recipients/{user_id}`
   followed by op 13 Call Connect (or auto-add to running call).
-  (deferred — group DM recipients API not yet implemented; documented as future work)
+  (shipped in change `yolnyvry` — add-people path in direct_call.rs dispatches
+  DmsAndGroupsBackend::add_users_to_group_dm for backends that support it)
 - [x] **D.7** Outgoing call ring timeout: 30s (matches Discord client
   behavior). Auto-cancel via op 13 to channel null + UI toast.
 

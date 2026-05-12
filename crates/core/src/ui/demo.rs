@@ -454,7 +454,7 @@ pub(crate) async fn toggle_demo(
             // Start real-time event stream listeners for each demo account.
             // Re-use the already-cloned handles — no extra Signal read needed.
             for (aid, backend) in backend_handles {
-                spawn_event_stream_listener(aid, backend, app_state, nav, client_manager, chat_view_state, account_sessions);
+                spawn_event_stream_listener(aid, backend, app_state, nav, client_manager, chat_view_state, account_sessions, voice_state);
             }
         }
     }
@@ -564,6 +564,7 @@ pub(crate) fn spawn_event_stream_listener(
     client_manager: BatchedSignal<ClientManager>,
     chat_view_state: BatchedSignal<crate::state::ChatViewState>,
     account_sessions: BatchedSignal<AccountSessions>,
+    voice_state: BatchedSignal<VoiceState>,
 ) {
     use futures::StreamExt as _;
     use poly_client::ClientEvent;
@@ -681,6 +682,27 @@ pub(crate) fn spawn_event_stream_listener(
                             dm_id: dm_id_c,
                         });
                     }
+                }
+                // C.4 — update the per-channel speaking map when a remote participant
+                // starts or stops speaking. Uses set_if_changed to avoid hang class #8
+                // (self-firing effects on the speaking signal).
+                ClientEvent::VoiceSpeakingUpdate {
+                    ref channel_id,
+                    ref user_id,
+                    is_speaking,
+                } => {
+                    let channel_id_c = channel_id.clone();
+                    let user_id_c = user_id.clone();
+                    voice_state.batch(move |v| {
+                        let entry = v.voice_speaking_map
+                            .entry(channel_id_c)
+                            .or_default();
+                        let current = entry.get(&user_id_c).copied().unwrap_or(false);
+                        // set_if_changed equivalent: only update when value actually changes.
+                        if current != is_speaking {
+                            entry.insert(user_id_c, is_speaking);
+                        }
+                    });
                 }
                 // lint-allow-unused: ClientEvent has dozens of variants;
                 // the demo handler only wires the explicitly handled ones.

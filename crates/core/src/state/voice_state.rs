@@ -34,4 +34,13 @@ pub struct VoiceState {
     pub held_voice_connections: Vec<VoiceConnection>,
     /// Voice and audio device settings (noise cancel, mic/speaker selection).
     pub voice_media_settings: VoiceMediaSettings,
+    /// C.4 — per-channel speaking indicator map.
+    ///
+    /// Outer key: channel_id. Inner key: user_id. Value: `true` when the
+    /// participant is currently speaking (op 5 bitmask non-zero).
+    ///
+    /// Updated via `BatchedSignal::set_if_changed` to avoid hang class #8
+    /// (self-firing effect when the speaking map update re-notifies the
+    /// subscriber that triggered the update).
+    pub voice_speaking_map: HashMap<String, HashMap<String, bool>>,
 }

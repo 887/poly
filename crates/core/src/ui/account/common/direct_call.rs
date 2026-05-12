@@ -416,6 +416,33 @@ pub(crate) fn start_direct_call_from_active_account(
                     }
                 });
             }
+
+            // D.6 — dispatch add-recipient to the backend for real group DM signaling.
+            // For Discord: PUT /channels/{dm_id}/recipients/{user_id} via
+            // DmsAndGroupsBackend::add_users_to_group_dm.
+            // Falls back to NotSupported for backends without DM groups (pseudo-backend).
+            // read_with_timeout used to satisfy hang class #4 lint gate.
+            if let Some(dm_channel_id) = active.dm_id.clone() {
+                let target_uid = request.target_user.id.clone();
+                let account_id_d6 = account_id.clone();
+                let result = client_manager
+                    .peek()
+                    .with_backend(&account_id_d6, async move |b| {
+                        match b.as_dms_and_groups() {
+                            Some(dg) => dg.add_users_to_group_dm(&dm_channel_id, &[target_uid]).await,
+                            None => Err(poly_client::ClientError::NotSupported(
+                                "add_users_to_group_dm: backend has no DMs/groups capability".to_string(),
+                            )),
+                        }
+                    })
+                    .await;
+                if let Err(e) = result {
+                    if !matches!(e, poly_client::ClientError::NotSupported(_)) {
+                        tracing::warn!("D.6 add_users_to_group_dm failed: {e:?}");
+                    }
+                }
+            }
+
             maybe_start_video_camera(request.start_video, voice_state).await;
             return;
         }

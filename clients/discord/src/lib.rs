@@ -205,6 +205,14 @@ pub struct DiscordClient {
     /// without opening a second WS connection.
     #[cfg(feature = "gateway")]
     gateway_tx: Arc<Mutex<Option<tokio::sync::mpsc::UnboundedSender<String>>>>,
+
+    /// C.4 — clone of the active event_stream sender so voice speaking events
+    /// can be injected from the voice WS loop without a second WS connection.
+    ///
+    /// Set by `event_stream()` when the gateway stream is opened. `None` when
+    /// the gateway feature is disabled or before the first event_stream call.
+    #[cfg(feature = "gateway")]
+    gateway_event_tx: Arc<Mutex<Option<tokio::sync::mpsc::UnboundedSender<ClientEvent>>>>,
 }
 
 #[cfg(feature = "native")]
@@ -225,6 +233,8 @@ impl DiscordClient {
             voice_states: Arc::new(RwLock::new(HashMap::new())),
             #[cfg(feature = "gateway")]
             gateway_tx: Arc::new(Mutex::new(None)),
+            #[cfg(feature = "gateway")]
+            gateway_event_tx: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -244,6 +254,8 @@ impl DiscordClient {
             voice_states: Arc::new(RwLock::new(HashMap::new())),
             #[cfg(feature = "gateway")]
             gateway_tx: Arc::new(Mutex::new(None)),
+            #[cfg(feature = "gateway")]
+            gateway_event_tx: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -267,6 +279,8 @@ impl DiscordClient {
             voice_states: Arc::new(RwLock::new(HashMap::new())),
             #[cfg(feature = "gateway")]
             gateway_tx: Arc::new(Mutex::new(None)),
+            #[cfg(feature = "gateway")]
+            gateway_event_tx: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -1051,7 +1065,16 @@ impl DiscordClient {
             user_id: self.account_id(),
         };
 
-        voice::connect_voice(info, audio, transmit_mode, Arc::clone(&self.voice_session)).await
+        // C.4 — wire speaking events through the existing gateway event sender if available.
+        #[cfg(feature = "gateway")]
+        let speaking_tx = self.gateway_event_tx
+            .lock()
+            .ok()
+            .and_then(|guard| guard.clone())
+            .map(|tx| (channel_id.to_string(), tx));
+        #[cfg(not(feature = "gateway"))]
+        let speaking_tx: Option<(String, tokio::sync::mpsc::UnboundedSender<ClientEvent>)> = None;
+        voice::connect_voice(info, audio, transmit_mode, Arc::clone(&self.voice_session), speaking_tx).await
     }
 
     /// Leave the currently-joined voice channel (B.10).
@@ -1481,6 +1504,11 @@ impl IsBackend for DiscordClient {
                     if let Ok(mut guard) = self.gateway_tx.lock() {
                         *guard = Some(gw_tx);
                     }
+                }
+                // C.4 — store a clone of the event sender so voice speaking events
+                // can be injected from the voice WS loop into the main event stream.
+                if let Ok(mut guard) = self.gateway_event_tx.lock() {
+                    *guard = Some(tx.clone());
                 }
                 tokio::spawn(gateway_connect_loop(
                     url,

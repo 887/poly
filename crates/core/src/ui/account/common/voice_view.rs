@@ -307,16 +307,24 @@ pub fn VoiceChannelView() -> Element {
     let current_server = chat_view_state.read().current_server.clone(); // poly-lint: allow render-time-read — drives channel/server name display; subscription IS the intent
     let channel_id = nav_state.read().selected_channel.cloned(); // poly-lint: allow render-time-read — drives participant lookup; subscription IS the intent
 
-    let participants = channel_id
-        .as_deref()
-        .and_then(|cid| {
-            voice_state
-                .read() // poly-lint: allow render-time-read — drives participant grid; subscription IS the intent
-                .voice_channel_participants
-                .get(cid)
-                .cloned()
-        })
-        .unwrap_or_default();
+    // C.4 — read the speaking map for the current channel and overlay is_speaking
+    // on participants. The speaking_map is updated by VoiceSpeakingUpdate events
+    // from the voice WS op 5 SPEAKING dispatches.
+    let participants = {
+        let vs = voice_state.read(); // poly-lint: allow render-time-read — drives participant grid; subscription IS the intent
+        let mut parts = channel_id
+            .as_deref()
+            .and_then(|cid| vs.voice_channel_participants.get(cid).cloned())
+            .unwrap_or_default();
+        if let Some(cid) = channel_id.as_deref() {
+            if let Some(speaking) = vs.voice_speaking_map.get(cid) {
+                for p in &mut parts {
+                    p.is_speaking = speaking.get(&p.user.id).copied().unwrap_or(false);
+                }
+            }
+        }
+        parts
+    };
 
     let voice_conn = voice_state.read().voice_connection.clone(); // poly-lint: allow render-time-read — drives is_connected / is_streaming; subscription IS the intent
     let is_connected = voice_conn

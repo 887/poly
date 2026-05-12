@@ -89,4 +89,18 @@ pub enum ClientEvent {
         /// Whether the call includes a video stream.
         with_video: bool,
     },
+
+    /// C.4 — a remote participant started or stopped speaking.
+    ///
+    /// Emitted from the Discord voice WS op 5 SPEAKING events.
+    /// The UI consumer updates a per-channel `Signal<HashMap<String, bool>>`
+    /// and overlays `VoiceParticipant.is_speaking` at render time.
+    VoiceSpeakingUpdate {
+        /// Voice channel ID where the speaking state changed.
+        channel_id: String,
+        /// The remote participant's user ID.
+        user_id: String,
+        /// `true` if the participant is now speaking, `false` if they stopped.
+        is_speaking: bool,
+    },
 }
