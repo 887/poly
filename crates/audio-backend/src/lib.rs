@@ -77,6 +77,10 @@ pub mod web_backend;
 /// and lets unit tests exercise the trait surface without real hardware.
 pub mod fake_backend;
 
+/// `MockAudioBackend` — an instrumented test double with event-log and
+/// configurable device lists. Used by `tests/contract.rs` (Phase K.1).
+pub mod test_support;
+
 // ── Tests ────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]

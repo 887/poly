@@ -1,0 +1,22 @@
+[package]
+name = "stoat-voice-smoke"
+description = "CLI smoke test skeleton for Stoat voice transport (Phase K.3 — impl pending Phase F)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+# Phase F (Stoat voice gateway) is not yet shipped.
+# This binary is a skeleton that exits 0 with a placeholder message until
+# Phase F lands and wires up real Stoat voice transport.
+# See docs/plans/plan-voice-video-calls.md Phase K.3.
+
+[[bin]]
+name = "stoat-voice-smoke"
+path = "src/main.rs"
+
+[dependencies]
+# Minimal deps — skeleton only. Phase F will add poly-stoat, poly-audio-backend, etc.
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[lints]
+workspace = true

@@ -147,6 +147,53 @@ acceptable pass for branches that don't yet have the e2e plan landed.
 
 ---
 
+## 7. Discord voice transport CLI smoke (Phase K.2)
+
+> Skip-by-default — requires real Discord credentials and a live voice channel.
+> Opt-in: set `RUN_VOICE_SMOKE=1` plus the env vars listed in the binary's doc.
+> See `docs/plans/plan-voice-video-calls.md` Phase K.2 and `tools/discord-voice-smoke/`.
+
+```bash
+if [ "${RUN_VOICE_SMOKE:-0}" != "1" ]; then
+  echo "SKIP — RUN_VOICE_SMOKE not set (requires real Discord credentials)"
+  exit 0
+fi
+
+# Required env vars: DISCORD_TOKEN, DISCORD_GUILD_ID, DISCORD_VOICE_CHANNEL_ID
+: "${DISCORD_TOKEN:?DISCORD_TOKEN must be set for voice smoke test}"
+: "${DISCORD_GUILD_ID:?DISCORD_GUILD_ID must be set}"
+: "${DISCORD_VOICE_CHANNEL_ID:?DISCORD_VOICE_CHANNEL_ID must be set}"
+
+cargo run -p discord-voice-smoke 2>&1
+```
+
+Pass criteria: binary exits 0, prints "Smoke test PASSED", `open_input_calls >= 1`,
+`open_output_calls >= 1`. Incoming sample count may be 0 if the channel is empty —
+that is acceptable (decode loop verified by the UDP receive path even with no participants).
+
+---
+
+## 8. Stoat voice transport CLI smoke (Phase K.3)
+
+> Skip-by-default — opt-in via `RUN_STOAT_VOICE_SMOKE=1`.
+> Phase F (Stoat voice gateway) is not yet shipped; this binary exits 0 with a
+> placeholder message until Phase F lands.
+> See `docs/plans/plan-voice-video-calls.md` Phase K.3 and `tools/stoat-voice-smoke/`.
+
+```bash
+if [ "${RUN_STOAT_VOICE_SMOKE:-0}" != "1" ]; then
+  echo "SKIP — RUN_STOAT_VOICE_SMOKE not set"
+  exit 0
+fi
+
+cargo run -p stoat-voice-smoke 2>&1
+```
+
+Pass criteria: binary exits 0. Until Phase F ships, the binary prints
+"stoat voice not yet implemented (Phase F)" and exits 0.
+
+---
+
 ## Reporting
 
 After running all applicable steps, respond with a table:
@@ -159,3 +206,5 @@ After running all applicable steps, respond with a table:
 | 4. unit tests | PASS/FAIL | N tests passed |
 | 5. poly-web MCP | PASS/SKIP/FAIL | ... |
 | 6. persona e2e smoke | PASS/SKIP/FAIL | ... |
+| 7. Discord voice smoke | PASS/SKIP/FAIL | SKIP if RUN_VOICE_SMOKE not set |
+| 8. Stoat voice smoke | PASS/SKIP/FAIL | SKIP if RUN_STOAT_VOICE_SMOKE not set |

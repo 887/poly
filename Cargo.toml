@@ -52,6 +52,7 @@ members = [
     "apps/poly-host",            # Host-bridge daemon for apps/web (serves /host/* on 9333)
     "tools/poly-cli",
     "tools/discord-voice-smoke",
+    "tools/stoat-voice-smoke",
     "mcp/chat-mcp",
     "crates/host-sandbox",
 ]
