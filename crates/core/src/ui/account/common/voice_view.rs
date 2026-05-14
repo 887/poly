@@ -24,8 +24,9 @@ use crate::state::{AccountSessions, AppState, ChatViewState, NavState, UiOverlay
 use crate::ui::account::common::chat_history::remember_message_list_scroll_position;
 use crate::ui::account::common::user_profile_modal::open_user_profile;
 use crate::ui::actions::{ActionCx, UiAction};
+use crate::ui::client_ui::toast::{push_toast, ToastMessage};
 use dioxus::prelude::*;
-use poly_client::{ChannelType, VoiceConnectionKind, VoiceParticipant};
+use poly_client::{ChannelType, ToastTone, VoiceConnectionKind, VoiceParticipant};
 use poly_ui_macros::{context_menu, ui_action};
 
 /// Actions for the voice/video channel view.
@@ -169,12 +170,12 @@ async fn join_voice_channel(
     drop(perm_eval.recv::<String>().await); // proceed regardless of grant/deny
 
     // Step 2: Disconnect from any active voice channel before joining a new one.
-    if voice_state.read().voice_connection.is_some() {
+    if voice_state.read().voice_connection.is_some() { // poly-lint: allow render-time-read — inside async fn, not a render fn
         let _ = document::eval(JS_STOP_ALL_STREAMS);
         voice_state.batch(|v| v.voice_connection = None);
     }
 
-    let server_id = nav_state.read().selected_server.cloned();
+    let server_id = nav_state.read().selected_server.cloned(); // poly-lint: allow render-time-read — inside async fn, not a render fn
     let Some(server_id) = server_id else { return };
 
     let backend_info = client_manager.peek().get_backend_for_server(&server_id);
@@ -202,12 +203,20 @@ async fn join_voice_channel(
             .unwrap_or_default();
         // C.1 — signal the backend transport (e.g. Discord op 4 VSU) that the
         // local user is joining. Best-effort: log on failure, don't abort join.
+        // Show a user-visible toast on error (e.g. AlreadyConnected from anti-ban
+        // guard B.11) so the failure is not silent.
         if let Err(e) = guard.join_voice_channel_transport(&server_id_for_join, &channel_id).await {
             tracing::warn!(
                 channel_id = %channel_id,
                 error = %e,
                 "voice_view: join_voice_channel_transport failed (continuing)"
             );
+            if let Some(toast_queue) = try_consume_context::<Signal<Vec<ToastMessage>>>() {
+                push_toast(
+                    toast_queue,
+                    ToastMessage::new("voice-join-transport-failed", ToastTone::Warning),
+                );
+            }
         }
         parts
     };

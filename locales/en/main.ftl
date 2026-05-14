@@ -544,6 +544,7 @@ voice-server-location = Server Location
 voice-testing-mic = Testing... (3s)
 voice-test-mic = Test Microphone (3 sec)
 voice-teams-coming-soon = Teams calls are coming soon — real calling requires the ACS / Graph Calling SDK.
+voice-join-transport-failed = Could not connect to the voice channel — check your connection and try again.
 voice-video-coming-soon = Video support coming soon — real encoding requires webrtc-rs (pending approval).
 voice-video-coming-soon-camera = 📹 Camera
 voice-video-coming-soon-screen = 🖥 Screen

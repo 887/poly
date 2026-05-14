@@ -93,6 +93,8 @@ impl EventKind {
             | ClientEvent::VoiceUserJoined { .. }
             | ClientEvent::VoiceUserLeft { .. }
             | ClientEvent::VoiceStateUpdated { .. }
+            | ClientEvent::IncomingCall { .. }
+            | ClientEvent::VoiceSpeakingUpdate { .. }
             | ClientEvent::SidebarInvalidated => Self::Other,
         }
     }
@@ -156,12 +158,14 @@ fn channel_id_of(ev: &ClientEvent) -> Option<String> {
         | ClientEvent::VoiceUserJoined { channel_id, .. }
         | ClientEvent::VoiceUserLeft { channel_id, .. }
         | ClientEvent::VoiceStateUpdated { channel_id, .. } => Some(channel_id.clone()),
+        ClientEvent::VoiceSpeakingUpdate { channel_id, .. } => Some(channel_id.clone()),
         ClientEvent::PresenceChanged { .. }
         | ClientEvent::NotificationReceived(_)
         | ClientEvent::ChannelUpdated(_)
         | ClientEvent::ServerUpdated(_)
         | ClientEvent::FriendRequestReceived { .. }
         | ClientEvent::ConnectionStateChanged { .. }
+        | ClientEvent::IncomingCall { .. }
         | ClientEvent::SidebarInvalidated => None,
     }
 }

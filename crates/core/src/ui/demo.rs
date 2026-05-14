@@ -683,6 +683,66 @@ pub(crate) fn spawn_event_stream_listener(
                         });
                     }
                 }
+                // C.3 — a remote user joined a voice channel the local user is in.
+                // Update the participant list so the grid renders the new tile.
+                ClientEvent::VoiceUserJoined {
+                    ref channel_id,
+                    ref participant,
+                } => {
+                    let cid = channel_id.clone();
+                    let p = participant.clone();
+                    voice_state.batch(move |v| {
+                        let list = v.voice_channel_participants.entry(cid).or_default();
+                        if !list.iter().any(|existing| existing.user.id == p.user.id) {
+                            list.push(p);
+                        }
+                    });
+                }
+                // C.3 — a remote user left a voice channel.
+                ClientEvent::VoiceUserLeft {
+                    ref channel_id,
+                    ref user_id,
+                } => {
+                    let cid = channel_id.clone();
+                    let uid = user_id.clone();
+                    voice_state.batch(move |v| {
+                        if let Some(list) = v.voice_channel_participants.get_mut(&cid) {
+                            list.retain(|p| p.user.id != uid);
+                        }
+                        // Also remove from speaking map so indicator clears.
+                        if let Some(speaking) = v.voice_speaking_map.get_mut(&cid) {
+                            speaking.remove(&uid);
+                        }
+                    });
+                }
+                // C.3 — a voice participant's state changed (muted, deafened, stream, etc.).
+                // Uses set_if_changed-equivalent logic to avoid hang class #8
+                // (self-firing effects when participant state notifies subscribers).
+                ClientEvent::VoiceStateUpdated {
+                    ref channel_id,
+                    ref participant,
+                } => {
+                    let cid = channel_id.clone();
+                    let p = participant.clone();
+                    voice_state.batch(move |v| {
+                        if let Some(list) = v.voice_channel_participants.get_mut(&cid) {
+                            for existing in list.iter_mut() {
+                                if existing.user.id == p.user.id {
+                                    // Only write when something actually changed (hang class #8).
+                                    let changed = existing.is_muted != p.is_muted
+                                        || existing.is_deafened != p.is_deafened
+                                        || existing.is_streaming != p.is_streaming
+                                        || existing.is_video_on != p.is_video_on
+                                        || existing.is_speaking != p.is_speaking;
+                                    if changed {
+                                        *existing = p;
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                    });
+                }
                 // C.4 — update the per-channel speaking map when a remote participant
                 // starts or stops speaking. Uses set_if_changed to avoid hang class #8
                 // (self-firing effects on the speaking signal).

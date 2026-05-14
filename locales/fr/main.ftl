@@ -431,6 +431,7 @@ voice-server-location = Emplacement du serveur
 voice-testing-mic = Test en cours... (3s)
 voice-test-mic = Tester le microphone (3 sec)
 voice-teams-coming-soon = Les appels Teams arrivent bientôt — l'implémentation complète nécessite le SDK ACS/Graph Calling.
+voice-join-transport-failed = Impossible de se connecter au canal vocal — vérifiez votre connexion et réessayez.
 voice-video-coming-soon = Prise en charge vidéo bientôt disponible — l'encodage réel nécessite webrtc-rs (approbation en attente).
 voice-video-coming-soon-camera = 📹 Caméra
 voice-video-coming-soon-screen = 🖥 Écran
