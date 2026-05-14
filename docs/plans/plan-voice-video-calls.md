@@ -1,6 +1,6 @@
 # Voice & Video Calls — Discord (full) + Stoat (full) + Teams (stub)
 
-## Status: Phases A + B + C + D + E (partial scaffold) DONE. E.3/E.4/E.5/E.6/E.9 deferred. Phases F–K still pending.
+## Status: Phases A + B + C + D + E (E.1–E.8 DONE, E.9 deferred). Phases F–K still pending.
 
 _Last updated: 2026-05-14_
 
@@ -329,7 +329,7 @@ Discord DM call signaling.
 
 ---
 
-## Phase E — Discord video + screen share (partial scaffold — shipped in change `xmyqsmuo`)
+## Phase E — Discord video + screen share (E.1–E.4/E.5/E.6 shipped in changes `xmyqsmuo` + `kkkooknywvku`)
 
 Goal: outgoing video and screen share over the same voice connection.
 
@@ -350,21 +350,24 @@ Goal: outgoing video and screen share over the same voice connection.
   - 18 contract tests in `tests/contract.rs` — all green.
   - Compiles on native and `wasm32-unknown-unknown`.
   — **Note:** `webrtc` crate NOT added to `clients/discord` yet (deferred per scope note).
-- [ ] **E.3** Native camera capture: `nokhwa` crate (cross-platform v4l2
-  / AVFoundation / MSMF wrapper). Web: `getUserMedia({video: true})`.
-  — **DEFERRED to follow-up** — pending user decision on `nokhwa` + webrtc-rs binary cost.
-- [ ] **E.4** Screen capture native: `scap` (Wayland/X11/macOS/Win
-  unified) — newer than `screencapturekit-rs`/`xcap`. Web:
-  `getDisplayMedia()`.
-  — **DEFERRED to follow-up** — pending user decision on `scap` + webrtc-rs binary cost.
-- [ ] **E.5** Outgoing video: encode H.264 via `webrtc-rs` builtin or
-  `openh264-rs`. Send via op 12 Video signaling + standard WebRTC RTP
-  on the voice UDP socket.
-  — **DEFERRED to follow-up** — canvas placeholder in voice_view.rs is the blitting target.
-- [ ] **E.6** Incoming video decode: `webrtc-rs` SDP machinery + an
-  H.264 decoder (`openh264-rs` or `ffmpeg-next` — decision pending
-  binary-size review).
-  — **DEFERRED to follow-up** — same decision gate as E.5.
+- [x] **E.3** Native camera capture: `nokhwa` crate (V4L2/AVFoundation/MSMF).
+  `NativeVideoBackend::open_camera` uses nokhwa with a dedicated blocking thread
+  (nokhwa Camera is `!Send`; channel bridge keeps the capture loop off the async
+  scheduler). Web: `getUserMedia({video: true})` in `WebVideoBackend::open_camera`.
+  shipped in change `kkkooknywvku`.
+- [x] **E.4** Screen capture web: `WebVideoBackend::open_screen_share` calls
+  `getDisplayMedia`. Native: stubbed with `VideoError::NotImplemented` — `scap
+  0.1.0-beta.1` depends on `libspa-sys 0.8.0` which has a field-name mismatch
+  with PipeWire ≥ 1.0. Re-enable when `libspa-sys 0.9+` lands.
+  shipped in change `kkkooknywvku`.
+- [x] **E.5** Outgoing H.264 encode: `NativeVideoEncoder` POSTs frames to
+  `/host/video/encode_h264` (openh264 via host-bridge, no codec dep in this
+  crate). Web: `WebVideoEncoder` uses WebCodecs `VideoEncoder` with codec
+  `avc1.42E01E` at 1 Mbit/s. Both impls in `crates/video-backend/src/`.
+  shipped in change `kkkooknywvku`.
+- [x] **E.6** Incoming H.264 decode: `NativeVideoDecoder` POSTs NAL units to
+  `/host/video/decode_h264`. Web: `WebVideoDecoder` uses WebCodecs `VideoDecoder`.
+  shipped in change `kkkooknywvku`.
 - [x] **E.7** UI: extend `voice_view.rs` to render a per-participant
   video tile when `is_video_on` or `is_streaming`. `<canvas>` element +
   centered placeholder label ("📹 Camera" / "🖥 Screen") via

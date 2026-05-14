@@ -14,6 +14,20 @@ crate-type = ["rlib"]
 # — required for apps/web which runs in a real browser with no native shell.
 web-direct = []
 
+# video: enables the /host/video/* H.264 encode/decode endpoints and the
+# VideoBridgeClient typed wrapper. Default OFF — openh264-rs compiles Cisco's
+# reference encoder from C source (~30s extra build time) and is only needed
+# when the native video-backend is in use.
+#
+# PATENT NOTE: the "source" feature of openh264 builds from Cisco's BSD-licensed
+# C source but does NOT carry Cisco's MPEG-LA patent grant. For production
+# distribution you must either:
+#   (a) switch to openh264 features = ["libloading"] and ship the Cisco binary
+#       (grants their patent license), or
+#   (b) use a royalty-free codec (AV1 via rav1e/dav1d).
+# See docs/dev/video-codec-strategy.md for the full tradeoff analysis.
+video = ["dep:openh264", "dep:axum"]
+
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -31,6 +45,18 @@ serde_urlencoded = "0.7"
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { workspace = true, features = ["process", "rt-multi-thread"] }
 
+# openh264 — H.264 encode/decode via Cisco's reference implementation.
+# Only compiled when the `video` feature is enabled and target is non-wasm.
+# Uses the `source` feature: builds from C source (BSD-2-Clause license,
+# NO Cisco patent grant — see feature flag comment above for migration path).
+openh264 = { version = "0.9", features = ["source"], optional = true }
+
+# axum is needed by video.rs handlers (State extractor, StatusCode, IntoResponse).
+# It is already a dep of poly-host/apps/desktop-web but not of this crate itself.
+# We add it here gated to non-wasm + video so the router can be constructed
+# without requiring callers to pull in axum separately.
+axum = { workspace = true, optional = true }
+
 # WASM: read `window.location.origin` so the default bridge URL points at the
 # same origin that served the WASM bundle (fullstack apps/web / apps/desktop /
 # apps/desktop-electron all host `/host/*` on their own port). Without this the
@@ -38,6 +64,12 @@ tokio = { workspace = true, features = ["process", "rt-multi-thread"] }
 # cross-origin and breaks F5 persistence in the browser.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-sys = { workspace = true, features = ["Window", "Location"] }
+
+[dev-dependencies]
+# Used in tests/video.rs for the `oneshot` request helper.
+tower = { workspace = true, features = ["util"] }
+# axum body utilities needed in tests.
+axum = { workspace = true }
 
 [lints]
 workspace = true

@@ -42,6 +42,16 @@
 pub mod client_config;
 pub mod http;
 
+// Video H.264 encode/decode service — server-side handlers (non-wasm, feature-gated).
+// WASM targets call the endpoint via HTTP; openh264-rs never links into the WASM bundle.
+#[cfg(all(not(target_arch = "wasm32"), feature = "video"))]
+pub mod video;
+
+// Typed client for /host/video/* — usable from native callers (NativeVideoBackend, etc.).
+// Not available on wasm32 (WASM callers use their HTTP stack directly against the endpoint).
+#[cfg(all(not(target_arch = "wasm32"), feature = "video"))]
+pub mod video_client;
+
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 

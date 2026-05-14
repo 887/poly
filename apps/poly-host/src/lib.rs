@@ -45,6 +45,8 @@ use poly_host_bridge::{
     PluginListResponse, PluginRemoveRequest, PluginRemoveResponse, PluginSetEnabledRequest,
     PluginSetEnabledResponse, dispatch,
 };
+#[cfg(feature = "video")]
+use poly_host_bridge::video::{VideoState, close_session, decode_h264, encode_h264};
 use sqlite::{Connection, ConnectionThreadSafe, State as SqlState};
 use tower_http::cors::{Any, CorsLayer};
 
@@ -127,7 +129,7 @@ pub fn router(state: HostState) -> Router {
         .allow_methods(Any)
         .allow_headers(Any);
 
-    Router::new()
+    let base = Router::new()
         .route("/host/status", get(status))
         // D.3: Host capabilities — lets the WASM UI ask which sandbox/host-cap
         // features the running shell supports. Response: `{ "caps": [...] }`.
@@ -157,7 +159,23 @@ pub fn router(state: HostState) -> Router {
         .route("/sandbox/{id}", get(sandbox_shim))
         .route("/poly-service-worker.js", get(poly_service_worker))
         .with_state(state)
-        .layer(cors)
+        .layer(cors.clone());
+
+    // Mount video H.264 encode/decode routes when the `video` feature is enabled.
+    // Video state is separate from HostState (no SQLite needed — it's all in-memory
+    // encoder/decoder maps) so we use .merge() with its own with_state call.
+    #[cfg(feature = "video")]
+    let base = {
+        let video_router = Router::new()
+            .route("/host/video/encode_h264", post(encode_h264))
+            .route("/host/video/decode_h264", post(decode_h264))
+            .route("/host/video/close_session", post(close_session))
+            .with_state(VideoState::new())
+            .layer(cors);
+        base.merge(video_router)
+    };
+
+    base
 }
 
 /// ServiceWorker script — main-thread hang detector + auto-reload.

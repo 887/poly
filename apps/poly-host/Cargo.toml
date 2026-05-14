@@ -42,5 +42,12 @@ webbrowser = { workspace = true }
 tempfile = { workspace = true }
 tower = { workspace = true, features = ["util"] }
 
+[features]
+# Enable the H.264 encode/decode endpoints via openh264-rs.
+# Requires the `video` feature on poly-host-bridge (pulls in openh264).
+# See docs/dev/video-codec-strategy.md and crates/host-bridge/Cargo.toml for
+# the Cisco patent licensing tradeoff before enabling this in a distribution build.
+video = ["poly-host-bridge/video"]
+
 [lints]
 workspace = true

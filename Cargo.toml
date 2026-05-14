@@ -224,9 +224,14 @@ byteorder = "1"
 # `input-native` enables the platform-appropriate OS backend.
 nokhwa = { version = "0.10", features = ["input-native"] }
 # scap — cross-platform screen capture (Wayland/X11/macOS/Win). Native only.
-# On Linux requires xdg-desktop-portal (PipeWire) at runtime — document this.
-# Used by crates/video-backend (feature = "native") for Phase E.4.
-scap = "0.1"
+# On Linux requires xdg-desktop-portal (PipeWire) at runtime.
+# KNOWN ISSUE (2026-05-15): scap 0.1.0-beta.1 depends on libspa-sys 0.8.0
+# which has a field-name mismatch with PipeWire ≥ 1.0. Compilation fails on
+# systems with PipeWire 1.x. Pending upstream fix in libspa-sys 0.9+.
+# Screen capture is currently stubbed in native_backend.rs — nokhwa camera
+# capture is unaffected and works correctly.
+# Re-enable scap by also adding `scap` to the native feature in Cargo.toml.
+# scap = { version = "0.1.0-beta.1" }  # disabled until libspa-sys compat fix
 
 # WASM plugin runtime (native-only — wasmtime cannot target wasm32)
 wasmtime = { version = "42", features = ["component-model", "cranelift"] }
