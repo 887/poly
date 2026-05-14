@@ -25,6 +25,27 @@ web-direct = []
 # See docs/dev/video-codec-strategy.md for the full tradeoff analysis.
 video = ["dep:openh264", "dep:axum"]
 
+# voice: enables the /host/voice/* Discord voice transport bridge endpoints.
+#
+# WASM safety: the handler module (voice.rs) is cfg-gated to
+# not(target_arch = "wasm32") + this feature. The wire types (voice_wire.rs)
+# and typed client (voice_client.rs) compile on all targets including wasm32 —
+# WASM callers drive voice entirely over HTTP.
+#
+# Dependency on `video`: the voice receive path decodes incoming H.264 video
+# using the openh264 codec sessions managed by video.rs. `voice` therefore
+# enables `video` transitively. Both features must be enabled together.
+#
+# Native deps pulled in by this feature (not on WASM):
+#   audiopus         — Opus encode/decode (libopus FFI, native only)
+#   chacha20poly1305 — AEAD encryption for Discord RTP
+#   tokio-tungstenite — voice WebSocket client
+#   uuid             — session ID generation
+#
+# Note: `futures` and `async-stream` are non-optional regular deps used by
+# the always-compiled `voice_client.rs` module.
+voice = ["dep:audiopus", "dep:chacha20poly1305", "dep:tokio-tungstenite", "dep:uuid", "video"]
+
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -37,10 +58,15 @@ reqwest = { workspace = true }
 bytes = "1"
 # Used by RequestBuilder::form/query for x-www-form-urlencoded encoding.
 serde_urlencoded = "0.7"
+# Used by voice_client.rs (SSE stream) and voice.rs handlers — works on WASM.
+futures = { workspace = true }
+async-stream = { workspace = true }
+# Used by voice_client.rs for warn! logging on SSE parse failures.
+tracing = { workspace = true }
 
 # Native: subprocess + HTTP server-side dispatch needs tokio process / fs.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-tokio = { workspace = true, features = ["process", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["process", "rt-multi-thread", "net"] }
 
 # openh264 — H.264 encode/decode via Cisco's reference implementation.
 # Only compiled when the `video` feature is enabled and target is non-wasm.
@@ -48,11 +74,20 @@ tokio = { workspace = true, features = ["process", "rt-multi-thread"] }
 # which carries Cisco's MPEG-LA patent grant for redistribution.
 openh264 = { version = "0.9", features = ["libloading"], optional = true }
 
-# axum is needed by video.rs handlers (State extractor, StatusCode, IntoResponse).
+# axum is needed by video.rs and voice.rs handlers.
 # It is already a dep of poly-host/apps/desktop-web but not of this crate itself.
-# We add it here gated to non-wasm + video so the router can be constructed
+# We add it here gated to non-wasm + video/voice so the routers can be constructed
 # without requiring callers to pull in axum separately.
 axum = { workspace = true, optional = true }
+
+# Voice bridge native deps — gated by the `voice` feature.
+# These are heavy native-only libraries that must never reach wasm32 targets.
+# cfg-gated to not(target_arch = "wasm32") in voice.rs via the feature flag —
+# voice.rs is #[cfg(all(not(target_arch = "wasm32"), feature = "voice"))].
+audiopus = { workspace = true, optional = true }
+chacha20poly1305 = { workspace = true, optional = true }
+tokio-tungstenite = { workspace = true, optional = true }
+uuid = { workspace = true, optional = true, features = ["v4"] }
 
 # WASM: read `window.location.origin` so the default bridge URL points at the
 # same origin that served the WASM bundle (fullstack apps/web / apps/desktop /
@@ -62,11 +97,18 @@ axum = { workspace = true, optional = true }
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-sys = { workspace = true, features = ["Window", "Location"] }
 
+[[test]]
+name = "voice"
+path = "tests/voice.rs"
+required-features = ["voice"]
+
 [dev-dependencies]
 # Used in tests/video.rs for the `oneshot` request helper.
 tower = { workspace = true, features = ["util"] }
 # axum body utilities needed in tests.
 axum = { workspace = true }
+# tokio runtime for voice integration test.
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [lints]
 workspace = true

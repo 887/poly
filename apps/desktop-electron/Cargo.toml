@@ -24,7 +24,7 @@ production = []
 # writeup. Client renders fresh into the empty `#poly-app-shell` from
 # the server's App() cfg(not(wasm32)) branch.
 web = ["dioxus/web"]
-server = ["dioxus/fullstack", "dioxus/server", "dep:axum", "dep:tokio", "dep:poly-host", "dep:dioxus-cli-config", "dep:anyhow", "dep:poly-host-sandbox", "dep:async-trait", "dep:serde", "dep:serde_json", "dep:uuid", "dep:reqwest", "dep:tokio-tungstenite", "dep:futures-util"]
+server = ["dioxus/fullstack", "dioxus/server", "dep:axum", "dep:tokio", "dep:poly-host", "dep:dioxus-cli-config", "dep:anyhow", "dep:poly-host-sandbox", "dep:async-trait", "dep:serde", "dep:serde_json", "dep:uuid", "dep:reqwest", "dep:tokio-tungstenite", "dep:futures-util", "poly-host/voice"]
 
 [dependencies]
 poly-core = { workspace = true, features = [

@@ -47,6 +47,8 @@ use poly_host_bridge::{
 };
 #[cfg(feature = "video")]
 use poly_host_bridge::video::{VideoState, close_session, decode_h264, encode_h264};
+#[cfg(feature = "voice")]
+use poly_host_bridge::voice::{VoiceState, router as voice_router};
 use sqlite::{Connection, ConnectionThreadSafe, State as SqlState};
 use tower_http::cors::{Any, CorsLayer};
 
@@ -171,8 +173,18 @@ pub fn router(state: HostState) -> Router {
             .route("/host/video/decode_h264", post(decode_h264))
             .route("/host/video/close_session", post(close_session))
             .with_state(VideoState::new())
-            .layer(cors);
+            .layer(cors.clone());
         base.merge(video_router)
+    };
+
+    // Mount voice bridge routes when the `voice` feature is enabled.
+    // Voice state holds an in-memory map of live sessions (UDP sockets, Opus
+    // encoders, broadcast channels). The `voice` feature requires `video` so
+    // openh264 is already in scope for the receive-path video decoder.
+    #[cfg(feature = "voice")]
+    let base = {
+        let voice_r = voice_router(VoiceState::new()).layer(cors);
+        base.merge(voice_r)
     };
 
     base

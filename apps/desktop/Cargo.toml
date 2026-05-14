@@ -33,7 +33,7 @@ web = ["dioxus/web"]
 # Stripped in production builds via `--no-default-features --features production`.
 dev-plugins = ["poly-core/discord", "poly-core/teams"]
 production = []
-server = ["dioxus/fullstack", "dioxus/server", "dep:axum", "dep:poly-host", "dep:dioxus-cli-config", "dep:anyhow"]
+server = ["dioxus/fullstack", "dioxus/server", "dep:axum", "dep:poly-host", "dep:dioxus-cli-config", "dep:anyhow", "poly-host/voice"]
 
 [dependencies]
 # `github` is enabled on both targets:

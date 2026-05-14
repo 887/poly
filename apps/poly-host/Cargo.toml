@@ -49,5 +49,11 @@ tower = { workspace = true, features = ["util"] }
 # the Cisco patent licensing tradeoff before enabling this in a distribution build.
 video = ["poly-host-bridge/video"]
 
+# Enable the /host/voice/* Discord voice transport bridge.
+# Requires `video` (receive path uses openh264 for H.264 decoding).
+# Adds: audiopus (libopus FFI), chacha20poly1305, tokio-tungstenite.
+# See docs/dev/voice-bridge-architecture.md for the design rationale.
+voice = ["poly-host-bridge/voice"]
+
 [lints]
 workspace = true

@@ -52,6 +52,23 @@ pub mod video;
 #[cfg(all(not(target_arch = "wasm32"), feature = "video"))]
 pub mod video_client;
 
+// Voice bridge wire types — request/response structs and SSE event enum.
+// Available on ALL targets including wasm32 (no native deps). The browser WASM
+// client imports VoiceConnectRequest etc. from here via voice_client.
+pub mod voice_wire;
+
+// Voice bridge server-side handlers — non-wasm + voice feature only.
+// Requires audiopus (libopus FFI), chacha20poly1305, tokio-tungstenite, and
+// the `video` feature (decode path uses openh264 via video.rs session map).
+// WASM callers use VoiceBridgeClient in voice_client instead.
+#[cfg(all(not(target_arch = "wasm32"), feature = "voice"))]
+pub mod voice;
+
+// Typed client for /host/voice/* — available on all targets including wasm32.
+// On WASM: use VoiceBridgeClient::from_origin() so requests go same-origin.
+// On native: use VoiceBridgeClient::default_local() for the 9333 daemon.
+pub mod voice_client;
+
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 

@@ -134,6 +134,7 @@ reqwest = { version = "0.13.2", default-features = false, features = [
     "charset",
     "http2",
     "system-proxy",
+    "stream",
 ] }
 axum = "0.8"
 http-body-util = "0.1"
@@ -147,6 +148,7 @@ twilight-model = "0.17"
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 futures = "0.3"
+async-stream = "0.3"
 thiserror = "2"
 anyhow = "1"
 tracing = "0.1"

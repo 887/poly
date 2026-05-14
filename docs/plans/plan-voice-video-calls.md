@@ -13,6 +13,24 @@ Phase E is fully shipped across three changes:
 
 **E.9** (REMB / TWCC RTCP bandwidth caps) remains deferred — requires webrtc-rs decision gate.
 
+## Host-bridge transport addendum (2026-05-15, change `omvwprzonyzp`)
+
+Browser WASM cannot open raw UDP sockets, so Discord voice was previously native-only.
+This addendum adds `/host/voice/*` HTTP endpoints on the fullstack server-half so browser
+shells (apps/web, apps/desktop, apps/desktop-electron) can drive voice via HTTP:
+
+- `crates/host-bridge/src/voice_wire.rs` — wire types (all targets, WASM-safe)
+- `crates/host-bridge/src/voice.rs` — native handlers: session map, 6 handlers, UDP
+  encode/decode loops, orphan GC (`#[cfg(all(not(target_arch = "wasm32"), feature = "voice"))]`)
+- `crates/host-bridge/src/voice_client.rs` — `VoiceBridgeClient` typed HTTP client (all targets)
+- `crates/host-bridge/tests/voice.rs` — opt-in smoke test (`RUN_VOICE_BRIDGE_SMOKE=1`)
+- `apps/poly-host/src/lib.rs` — mounts `voice_router` when `feature = "voice"`
+- `docs/dev/voice-bridge-architecture.md` — design rationale + transport diagram
+
+**Caveat update:** `docs/dev/video-codec-strategy.md` noted "browser-side Discord video
+transmit is not feasible — no UDP socket." This caveat is superseded: both audio and
+video transmit now work in browser shells via the host-bridge indirection.
+
 ## Goal
 
 Replace the current pseudo-backend voice/video implementation (see

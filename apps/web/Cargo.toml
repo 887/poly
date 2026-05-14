@@ -36,7 +36,7 @@ web = ["dioxus/web"]
 # --platform web` builds this binary as a native axum server. The
 # server binary serves the WASM bundle AND mounts `/host/*` on the
 # same port (3000). One process, one port, no separate daemon.
-server = ["dioxus/fullstack", "dioxus/server", "dep:axum", "dep:tokio", "dep:poly-host", "dep:dioxus-cli-config", "dep:anyhow"]
+server = ["dioxus/fullstack", "dioxus/server", "dep:axum", "dep:tokio", "dep:poly-host", "dep:dioxus-cli-config", "dep:anyhow", "poly-host/voice"]
 
 [dependencies]
 poly-core = { workspace = true, features = [
