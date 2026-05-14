@@ -7240,10 +7240,12 @@ name = "poly-stoat"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "audiopus",
  "axum",
  "chrono",
  "dioxus",
  "futures",
+ "poly-audio-backend",
  "poly-client",
  "poly-host-bridge",
  "poly-test-common",
@@ -7259,6 +7261,23 @@ dependencies = [
  "tracing",
  "uuid",
  "wit-bindgen 0.53.1",
+]
+
+[[package]]
+name = "poly-stoat-voice-smoke"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "poly-audio-backend",
+ "poly-client",
+ "poly-stoat",
+ "poly-test-common",
+ "poly-test-stoat",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -7528,6 +7547,17 @@ name = "poly-ui-types"
 version = "0.1.0"
 dependencies = [
  "trybuild",
+]
+
+[[package]]
+name = "poly-video-backend"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "futures",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -9364,14 +9394,6 @@ name = "stable_deref_trait"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
-
-[[package]]
-name = "stoat-voice-smoke"
-version = "0.1.0"
-dependencies = [
- "tracing",
- "tracing-subscriber",
-]
 
 [[package]]
 name = "storekey"

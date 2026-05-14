@@ -34,6 +34,16 @@ pub enum VoiceBannerAction {
     ToggleMute,
     /// Toggle deafen.
     ToggleDeafen,
+    /// Toggle camera on/off.
+    ///
+    /// Wires to local Signal state only in Phase E scaffolding.
+    /// TODO(Phase-E.5): wire to real video transport when webrtc-rs lands.
+    ToggleCamera,
+    /// Toggle screen share on/off.
+    ///
+    /// Wires to local Signal state only in Phase E scaffolding.
+    /// TODO(Phase-E.5): wire to real video transport when webrtc-rs lands.
+    ToggleScreenShare,
     /// Disconnect from voice.
     Disconnect,
     /// Navigate to the voice channel.
@@ -116,6 +126,27 @@ impl UiAction for VoiceBannerAction {
                         }
                     });
                 }
+            }
+            Self::ToggleCamera => {
+                // TODO(Phase-E.5): wire to real video transport when webrtc-rs lands.
+                // For now, toggle local signal state only so the UI reflects intent.
+                voice_state.batch(|v| {
+                    if let Some(ref mut vc) = v.voice_connection {
+                        let next = !vc.is_video_on;
+                        // BatchedSignal::set_if_changed not available on inner field;
+                        // guard against no-op by checking before write.
+                        vc.is_video_on = next;
+                    }
+                });
+            }
+            Self::ToggleScreenShare => {
+                // TODO(Phase-E.5): wire to real video transport when webrtc-rs lands.
+                voice_state.batch(|v| {
+                    if let Some(ref mut vc) = v.voice_connection {
+                        let next = !vc.is_streaming;
+                        vc.is_streaming = next;
+                    }
+                });
             }
             Self::Disconnect => {
                 disconnect_active_call(voice_state);
@@ -239,6 +270,16 @@ fn VoiceBannerChannelLink(
 fn VoiceBannerControls(
     is_muted: bool,
     is_deafened: bool,
+    /// Whether our camera is currently on.
+    ///
+    /// Phase E scaffolding: reflects local signal state only.
+    /// TODO(Phase-E.5): will reflect real webrtc video track state.
+    is_video_on: bool,
+    /// Whether we are currently screen sharing.
+    ///
+    /// Phase E scaffolding: reflects local signal state only.
+    /// TODO(Phase-E.5): will reflect real webrtc screen-share track state.
+    is_streaming: bool,
     held_count: usize,
 ) -> Element {
     let app_state: BatchedSignal<AppState> = use_context();
@@ -253,6 +294,12 @@ fn VoiceBannerControls(
     } else {
         t("voice-deafen")
     };
+    let camera_title = if is_video_on {
+        t("voice-video-toggle-camera")
+    } else {
+        t("voice-video-toggle-camera")
+    };
+    let screen_title = t("voice-video-toggle-screen");
 
     rsx! {
         div { class: "voice-banner-controls",
@@ -283,6 +330,22 @@ fn VoiceBannerControls(
                 } else {
                     "🔔"
                 }
+            }
+            // Phase E scaffolding: camera toggle.
+            // TODO(Phase-E.5): wire to real video transport when webrtc-rs lands.
+            button {
+                class: if is_video_on { "voice-ctrl-btn active" } else { "voice-ctrl-btn" },
+                title: "{camera_title}",
+                onclick: move |_| crate::dispatch_action!(VoiceBannerAction::ToggleCamera, app_state, nav_state, navigator()),
+                "📹"
+            }
+            // Phase E scaffolding: screen-share toggle.
+            // TODO(Phase-E.5): wire to real video transport when webrtc-rs lands.
+            button {
+                class: if is_streaming { "voice-ctrl-btn active" } else { "voice-ctrl-btn" },
+                title: "{screen_title}",
+                onclick: move |_| crate::dispatch_action!(VoiceBannerAction::ToggleScreenShare, app_state, nav_state, navigator()),
+                "🖥"
             }
             // J.1 — device picker gear icon (Phase J of plan-voice-video-calls.md)
             DevicePickerToggle {}
@@ -324,6 +387,8 @@ pub fn VoiceBanner() -> Element {
     let server_name = conn.server_name.clone();
     let is_muted = conn.is_muted;
     let is_deafened = conn.is_deafened;
+    let is_video_on = conn.is_video_on;
+    let is_streaming = conn.is_streaming;
     let held_count = voice_state.read().held_voice_connections.len(); // poly-lint: allow render-time-read — drives held-call swap button visibility; subscription IS the intent
     let connection_kind = conn.kind;
 
@@ -337,7 +402,7 @@ pub fn VoiceBanner() -> Element {
         div { class: "{banner_class}",
             VoiceBannerParticipants { participants, connection_kind }
             VoiceBannerChannelLink { channel_name, server_name, connection_kind }
-            VoiceBannerControls { is_muted, is_deafened, held_count }
+            VoiceBannerControls { is_muted, is_deafened, is_video_on, is_streaming, held_count }
         }
     }
 }
@@ -353,6 +418,8 @@ mod tests {
         assert_ui_action::<VoiceBannerAction>();
         let _ = VoiceBannerAction::ToggleMute;
         let _ = VoiceBannerAction::ToggleDeafen;
+        let _ = VoiceBannerAction::ToggleCamera;
+        let _ = VoiceBannerAction::ToggleScreenShare;
         let _ = VoiceBannerAction::Disconnect;
         let _ = VoiceBannerAction::GoToChannel;
         let _ = VoiceBannerAction::SwapHeldCall;

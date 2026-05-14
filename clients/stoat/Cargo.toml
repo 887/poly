@@ -25,6 +25,16 @@ native = [
     "dep:tokio-tungstenite",
     "dep:tokio-stream",
 ]
+# Voice transport — Stoat/Vortex WebSocket signaling + Opus encode/decode.
+# NATIVE ONLY. WASM builds MUST NOT enable this feature — audiopus links
+# against libopus FFI which is unavailable on wasm32-unknown-unknown.
+# Requires `native` for the HTTP + WS transport already in that feature set.
+# Phase F of plan-voice-video-calls.md.
+voice = [
+    "native",
+    "dep:audiopus",
+    "dep:poly-audio-backend",
+]
 
 [dependencies]
 poly-ui-macros = { workspace = true }
@@ -46,6 +56,12 @@ async-trait = { workspace = true, optional = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio-tungstenite = { workspace = true, optional = true }
 tokio-stream = { workspace = true, optional = true }
+
+# Voice transport — native only (feature = "voice"). F.1.
+# audiopus provides safe Opus FFI via libopus.
+# poly-audio-backend provides the AudioBackend trait for mic/speaker I/O.
+audiopus = { workspace = true, optional = true }
+poly-audio-backend = { workspace = true, optional = true }
 
 # WASM plugin guest bindings (WASI targets only)
 [target.'cfg(target_os = "wasi")'.dependencies]

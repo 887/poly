@@ -39,6 +39,25 @@ pub enum StoatEvent {
         user_id: String,
         data: serde_json::Value,
     },
+    /// Phase F.6 — a user joined a voice channel.
+    VoiceUserJoined {
+        channel_id: String,
+        user_id: String,
+        display_name: String,
+        avatar_url: Option<String>,
+        is_muted: bool,
+    },
+    /// Phase F.6 — a user left a voice channel.
+    VoiceUserLeft {
+        channel_id: String,
+        user_id: String,
+    },
+    /// Phase F.6 — speaking state changed.
+    VoiceSpeakingUpdate {
+        channel_id: String,
+        user_id: String,
+        speaking: bool,
+    },
 }
 
 /// A server ban record.
@@ -54,6 +73,13 @@ pub struct BanRecord {
 pub struct MemberModState {
     /// RFC3339 timeout expiry when the member is timed out.
     pub timeout: Option<String>,
+}
+
+/// Voice session state tracked by the mock.
+#[derive(Clone, Debug, Default)]
+pub struct VoiceSession {
+    /// User IDs currently in this voice channel.
+    pub participants: Vec<String>,
 }
 
 /// All mock Stoat state: users, servers, channels, messages, tokens, broadcast bus.
@@ -79,6 +105,10 @@ pub struct StoatState {
     pub member_mod: DashMap<String, MemberModState>,
     /// Ring buffer of recent inbound request headers (Phase E inspection endpoint).
     pub inspect: StdArc<HeaderInspectBuffer>,
+    /// Phase F — active voice sessions: channel_id → VoiceSession.
+    pub voice_sessions: DashMap<String, VoiceSession>,
+    /// Phase F — counter for Vortex tokens (each join_call generates a unique token).
+    vortex_token_counter: std::sync::Arc<AtomicU64>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -194,7 +224,16 @@ impl StoatState {
             bans: DashMap::new(),
             member_mod: DashMap::new(),
             inspect: StdArc::new(HeaderInspectBuffer::new()),
+            voice_sessions: DashMap::new(),
+            vortex_token_counter: std::sync::Arc::new(AtomicU64::new(1)),
         }
+    }
+
+    /// Generate a unique Vortex voice token for join_call responses.
+    #[must_use]
+    pub fn next_vortex_token(&self) -> String {
+        let n = self.vortex_token_counter.fetch_add(1, Ordering::Relaxed);
+        format!("vortex-token-{n:08}")
     }
 
     /// Composite key for ban/member-mod maps.
@@ -278,10 +317,13 @@ impl StoatState {
         let gen1_id = "CH001".to_string();
         let random1_id = "CH002".to_string();
         let memes1_id = "CH003".to_string();
+        // G.2 — voice channel in seed data for smoke-test path.
+        let voice1_id = "CHVOICE001".to_string();
 
         self.create_channel(&gen1_id, "general", Some("General discussion"), Some(&srv1_id), "TextChannel");
         self.create_channel(&random1_id, "random", Some("Off-topic"), Some(&srv1_id), "TextChannel");
         self.create_channel(&memes1_id, "memes", Some("Funny stuff"), Some(&srv1_id), "TextChannel");
+        self.create_channel(&voice1_id, "burrow-voice", Some("Voice chat for The Burrow"), Some(&srv1_id), "VoiceChannel");
 
         self.servers.insert(
             srv1_id.clone(),
@@ -290,12 +332,19 @@ impl StoatState {
                 name: "The Burrow".into(),
                 owner: stoat_id.clone(),
                 icon_url: None,
-                channels: vec![gen1_id.clone(), random1_id.clone(), memes1_id.clone()],
-                categories: vec![Category {
-                    id: "CAT001".into(),
-                    title: "Text Channels".into(),
-                    channels: vec![gen1_id.clone(), random1_id.clone(), memes1_id.clone()],
-                }],
+                channels: vec![gen1_id.clone(), random1_id.clone(), memes1_id.clone(), voice1_id.clone()],
+                categories: vec![
+                    Category {
+                        id: "CAT001".into(),
+                        title: "Text Channels".into(),
+                        channels: vec![gen1_id.clone(), random1_id.clone(), memes1_id.clone()],
+                    },
+                    Category {
+                        id: "CATVOICE001".into(),
+                        title: "Voice Channels".into(),
+                        channels: vec![voice1_id.clone()],
+                    },
+                ],
                 members: vec![stoat_id.clone(), raccoon_id.clone(), lemming_id.clone()],
             },
         );
@@ -440,6 +489,7 @@ impl StoatState {
         self.bans.clear();
         self.member_mod.clear();
         self.inspect.clear();
+        self.voice_sessions.clear();
         tracing::info!("reset Stoat state to empty");
     }
 

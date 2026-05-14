@@ -1,22 +1,29 @@
 [package]
-name = "stoat-voice-smoke"
-description = "CLI smoke test skeleton for Stoat voice transport (Phase K.3 — impl pending Phase F)"
+name = "poly-stoat-voice-smoke"
+description = "CLI smoke test for Stoat voice transport (Phase F / K.3)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-# Phase F (Stoat voice gateway) is not yet shipped.
-# This binary is a skeleton that exits 0 with a placeholder message until
-# Phase F lands and wires up real Stoat voice transport.
-# See docs/plans/plan-voice-video-calls.md Phase K.3.
+# This binary is always-on (runs against the local test-stoat mock, no external credentials).
+# Gate the actual run with RUN_STOAT_VOICE_SMOKE=1 env var.
+# See tools/stoat-voice-smoke/README.md and TEST_HARNESS.md step 8 (K.3).
 
 [[bin]]
 name = "stoat-voice-smoke"
 path = "src/main.rs"
 
 [dependencies]
-# Minimal deps — skeleton only. Phase F will add poly-stoat, poly-audio-backend, etc.
+poly-stoat = { path = "../../clients/stoat", features = ["voice"] }
+poly-audio-backend = { workspace = true }
+poly-client = { workspace = true }
+poly-test-stoat = { path = "../../servers/test-stoat" }
+poly-test-common = { path = "../../servers/test-common" }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time", "net"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+axum = { workspace = true }
+serde_json = { workspace = true }
 
 [lints]
 workspace = true

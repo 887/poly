@@ -595,6 +595,62 @@ fn VoiceTile(participant: VoiceParticipant) -> Element {
             if participant.is_streaming {
                 div { class: "voice-stream-label", "{t(\"voice-watching-screen\")}" }
             }
+            // Phase E.7 scaffolding: video tile placeholder.
+            // Shows a <canvas> with centered label text when the participant
+            // has camera or screen-share on. Real frame blitting deferred to
+            // Phase E.5/E.6 when webrtc-rs / openh264 are approved.
+            // TODO(Phase-E.5): replace canvas placeholder with actual frame blitting.
+            if participant.is_video_on || participant.is_streaming {
+                VideoTilePlaceholder {
+                    is_streaming: participant.is_streaming,
+                    participant_id: user.id.clone(),
+                }
+            }
+        }
+    }
+}
+
+/// Placeholder video tile rendered when a participant has camera or screen-share on.
+///
+/// Phase E.7 scaffolding — shows a `<canvas>` with centered label text.
+/// When Phase E.5/E.6 land, this component will receive real decoded frames
+/// and blit them via `CanvasRenderingContext2D.drawImage` (or `putImageData`
+/// for the native Wry/Electron path where frames are blitted the same way).
+///
+/// # Why `<canvas>` instead of `<video>`
+///
+/// Discord delivers decoded frames as raw pixel buffers (post-Phase E.6
+/// `openh264` decode). Those must be uploaded via canvas `putImageData`.
+/// A `<video>` element requires a `MediaStream` which we don't have until
+/// the full WebRTC pipeline is wired; canvas is the correct long-term target.
+///
+/// # E.8 tile distinction
+///
+/// `is_streaming = true` shows "🖥 Screen" label; `is_video_on` (camera)
+/// without streaming shows "📹 Camera" label — distinct per Phase E.8.
+// DECISION(E-tile-canvas): <canvas> chosen over <video> for the pixel-buffer
+// path required by openh264-rs decoded frames (no MediaStream available).
+#[context_menu(inherit)]
+#[rustfmt::skip]
+#[ui_action(inherit)]
+#[component]
+fn VideoTilePlaceholder(is_streaming: bool, participant_id: String) -> Element {
+    // Unique canvas id per participant so multiple tiles don't collide.
+    let canvas_id = format!("poly-video-tile-{participant_id}");
+    let (label, label_class) = if is_streaming {
+        (t("voice-video-coming-soon-screen"), "voice-video-tile-label voice-video-tile-label--screen")
+    } else {
+        (t("voice-video-coming-soon-camera"), "voice-video-tile-label voice-video-tile-label--camera")
+    };
+    rsx! {
+        div { class: "voice-video-tile",
+            canvas {
+                id: "{canvas_id}",
+                class: "voice-video-tile-canvas",
+                width: "480",
+                height: "360",
+            }
+            div { class: "{label_class}", "{label}" }
         }
     }
 }

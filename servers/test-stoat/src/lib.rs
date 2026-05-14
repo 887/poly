@@ -56,6 +56,10 @@ pub fn routes_only(state: Arc<StoatState>) -> Router<Arc<StoatState>> {
         .route("/channels/{id}/messages", get(routes::get_messages).post(routes::send_message))
         .route("/channels/{id}/messages/{message_id}", get(routes::get_message).delete(routes::delete_message))
         .route("/channels/{id}/typing", post(routes::channel_start_typing))
+        // Phase F — voice (Vortex mock)
+        .route("/channels/{id}/join_call", post(routes::join_call))
+        .route("/channels/{id}/voice_state", axum::routing::patch(routes::patch_voice_state))
+        .route("/vortex/ws", get(routes::vortex_ws))
         // Bonfire WebSocket
         .route("/bonfire", get(routes::bonfire_ws))
         // Sync

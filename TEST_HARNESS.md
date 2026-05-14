@@ -176,8 +176,9 @@ that is acceptable (decode loop verified by the UDP receive path even with no pa
 ## 8. Stoat voice transport CLI smoke (Phase K.3)
 
 > Skip-by-default — opt-in via `RUN_STOAT_VOICE_SMOKE=1`.
-> Phase F (Stoat voice gateway) is not yet shipped; this binary exits 0 with a
-> placeholder message until Phase F lands.
+> Spins up the local `test-stoat` mock server on a random port, authenticates,
+> connects voice, waits 2s for the mock raccoon participant to arrive, then asserts
+> and disconnects. No external credentials or real audio hardware required.
 > See `docs/plans/plan-voice-video-calls.md` Phase K.3 and `tools/stoat-voice-smoke/`.
 
 ```bash
@@ -186,11 +187,13 @@ if [ "${RUN_STOAT_VOICE_SMOKE:-0}" != "1" ]; then
   exit 0
 fi
 
-cargo run -p stoat-voice-smoke 2>&1
+RUN_STOAT_VOICE_SMOKE=1 cargo run -p poly-stoat-voice-smoke 2>&1
 ```
 
-Pass criteria: binary exits 0. Until Phase F ships, the binary prints
-"stoat voice not yet implemented (Phase F)" and exits 0.
+Pass criteria: binary exits 0 and prints "Smoke test PASSED". Assertions:
+- `open_input_calls >= 1` (encode loop started — mic backend opened)
+- `open_output_calls >= 1` (decode loop started — speaker backend opened)
+- `participant_join_events >= 1` (VoiceUserJoined received for synthetic raccoon participant)
 
 ---
 

@@ -4,6 +4,7 @@ members = [
     "crates/core",
     "crates/host-bridge",
     "crates/audio-backend",
+    "crates/video-backend",
     "crates/lint-gate",
     "crates/lint-gate-rules",
     "crates/plugin-host",
@@ -261,6 +262,7 @@ poly-electron-devtools-mcp = { path = "mcp/electron-devtools-mcp" }
 poly-devtools-protocol = { path = "mcp/devtools-protocol" }
 poly-lint-gate = { path = "crates/lint-gate" }
 poly-audio-backend = { path = "crates/audio-backend" }
+poly-video-backend = { path = "crates/video-backend" }
 poly-ui-macros = { path = "crates/ui-macros" }
 poly-ui-types = { path = "crates/ui-types" }
 

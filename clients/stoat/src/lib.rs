@@ -38,6 +38,12 @@ mod http;
 #[cfg(feature = "native")]
 pub mod signup;
 
+/// Stoat voice transport (Vortex WS + Opus encode/decode).
+/// NATIVE ONLY — WASM builds MUST NOT enable the `voice` feature.
+/// Phase F of plan-voice-video-calls.md.
+#[cfg(feature = "voice")]
+pub mod voice;
+
 /// WIT bindings for the WASM plugin (WASI targets only).
 /// This module isolates the `wit-bindgen` macros for FFI.
 #[cfg(target_os = "wasi")]
@@ -115,8 +121,17 @@ pub struct StoatClient {
     /// `host-api.kv_set` once exposed to plugins for true persistence.
     settings_storage: SettingsStorageCell,
     /// F10 — in-memory state for context-menu toggle actions.
-    menu_state: Mutex<StoatMenuState>,    /// Stored version override (None = use http::DEFAULT_CLIENT_VERSION).
+    menu_state: Mutex<StoatMenuState>,
+    /// Stored version override (None = use http::DEFAULT_CLIENT_VERSION).
     version_override: std::sync::Mutex<Option<String>>,
+    /// F.8 — per-account voice connection lock. Only one active voice session
+    /// per StoatClient at a time; second connect returns AlreadyConnected.
+    #[cfg(feature = "voice")]
+    voice_guard: voice::VoiceSessionGuard,
+    /// F.6/F.7 — voice participant cache populated by Vortex WS events.
+    /// channel_id → Vec<VoiceParticipant>
+    #[cfg(feature = "voice")]
+    voice_participants: std::sync::Arc<tokio::sync::RwLock<std::collections::HashMap<String, Vec<VoiceParticipant>>>>,
 }
 
 #[cfg(feature = "native")]
@@ -140,6 +155,10 @@ impl StoatClient {
             settings_storage: SettingsStorageCell::new(),
             menu_state: Mutex::new(StoatMenuState::default()),
             version_override: std::sync::Mutex::new(None),
+            #[cfg(feature = "voice")]
+            voice_guard: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
+            #[cfg(feature = "voice")]
+            voice_participants: std::sync::Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new())),
         }
     }
 
@@ -184,6 +203,76 @@ impl StoatClient {
         path: &str,
     ) -> ClientResult<RequestBuilder> {
         self.http.authenticated_request(method, path)
+    }
+
+    /// F.3 / K.3 — Connect to a Stoat voice channel using the given audio backend.
+    ///
+    /// 1. Calls `POST /channels/{channel_id}/join_call` to obtain Vortex credentials.
+    /// 2. Connects the Vortex WebSocket and starts Opus encode/decode loops.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoatVoiceError::AlreadyConnected`] if a voice session is already active.
+    /// Call [`disconnect_voice`] first.
+    #[cfg(feature = "voice")]
+    pub async fn connect_voice(
+        &self,
+        channel_id: &str,
+        audio: &dyn poly_audio_backend::AudioBackend,
+        transmit_mode: Option<voice::TransmitMode>,
+        event_tx: tokio::sync::mpsc::Sender<poly_client::ClientEvent>,
+    ) -> Result<(), voice::StoatVoiceError> {
+        // Step 1: obtain Vortex token + WS URL.
+        let response = self
+            .http
+            .authenticated_request(Method::POST, &format!("/channels/{channel_id}/join_call"))
+            .map_err(|e| voice::StoatVoiceError::JoinCallFailed(e.to_string()))?
+            .json(&serde_json::json!({}))
+            .send()
+            .await
+            .map_err(|e| voice::StoatVoiceError::JoinCallFailed(e.to_string()))?;
+
+        let resp: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| voice::StoatVoiceError::JoinCallFailed(e.to_string()))?;
+
+        let token = resp.get("token")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| voice::StoatVoiceError::JoinCallFailed("missing token".into()))?
+            .to_string();
+        let ws_url = resp.get("url")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| voice::StoatVoiceError::JoinCallFailed("missing url".into()))?
+            .to_string();
+
+        let server_info = voice::VortexServerInfo {
+            token,
+            ws_url,
+            channel_id: channel_id.to_string(),
+        };
+
+        // Step 2: open voice connection.
+        voice::connect_voice(
+            std::sync::Arc::clone(&self.voice_guard),
+            server_info,
+            audio,
+            transmit_mode,
+            event_tx,
+        )
+        .await
+    }
+
+    /// F.8 — Disconnect from the active Stoat voice channel.
+    #[cfg(feature = "voice")]
+    pub async fn disconnect_voice(&self) {
+        voice::disconnect_voice(std::sync::Arc::clone(&self.voice_guard)).await;
+    }
+
+    /// F.7 — Get cached voice participants for a channel.
+    #[cfg(feature = "voice")]
+    pub async fn voice_participants_for(&self, channel_id: &str) -> Vec<poly_client::VoiceParticipant> {
+        voice::get_voice_participants_cached(&self.voice_guard, channel_id).await
     }
 
     /// Fetch Stoat instance configuration from `GET /`.
@@ -790,10 +879,92 @@ impl IsBackend for StoatClient {
 
     async fn get_voice_participants(
         &self,
-        _channel_id: &str,
+        channel_id: &str,
     ) -> ClientResult<Vec<VoiceParticipant>> {
-        // TODO(phase-3): Implement voice participant fetching for Stoat
+        // F.7 — return participants from the voice cache populated by Vortex WS events.
+        // Falls back to empty vec when voice feature is not enabled or no active session.
+        #[cfg(feature = "voice")]
+        {
+            let guard = voice::get_voice_participants_cached(&self.voice_guard, channel_id).await;
+            if !guard.is_empty() {
+                return Ok(guard);
+            }
+            // Also check the RwLock cache (populated by event_stream).
+            if let Ok(cache) = self.voice_participants.try_read() {
+                if let Some(participants) = cache.get(channel_id) {
+                    return Ok(participants.clone());
+                }
+            }
+        }
         Ok(vec![])
+    }
+
+    /// G.1 — Signal the Stoat backend that the local user is joining a voice channel.
+    ///
+    /// Calls `POST /channels/{channel_id}/join_call` to obtain a Vortex token + WS URL.
+    /// The full voice transport (Vortex WS + Opus loops) is started separately via
+    /// `StoatClient::connect_voice` which takes a real `AudioBackend` reference.
+    /// This method only performs the REST signaling step so the voice banner updates.
+    async fn join_voice_channel_transport(
+        &self,
+        _server_id: &str,
+        channel_id: &str,
+    ) -> ClientResult<()> {
+        #[cfg(feature = "voice")]
+        {
+            // POST /channels/{channel_id}/join_call — tell the Vortex server we're joining.
+            let response = self
+                .http
+                .authenticated_request(Method::POST, &format!("/channels/{channel_id}/join_call"))?
+                .json(&serde_json::json!({}))
+                .send()
+                .await
+                .map_err(|e| ClientError::Network(e.to_string()))?;
+
+            if !response.status().is_success() {
+                return Err(ClientError::Network(format!(
+                    "join_call failed: HTTP {}",
+                    response.status()
+                )));
+            }
+
+            let resp: serde_json::Value = response
+                .json()
+                .await
+                .map_err(|e| ClientError::Network(e.to_string()))?;
+
+            let token = resp.get("token")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| ClientError::Internal("join_call: missing token".into()))?
+                .to_string();
+            let ws_url = resp.get("url")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| ClientError::Internal("join_call: missing url".into()))?
+                .to_string();
+
+            tracing::info!(channel_id, token = %token, ws_url = %ws_url, "Stoat join_call OK");
+            return Ok(());
+        }
+
+        #[cfg(not(feature = "voice"))]
+        Ok(())
+    }
+
+    /// H.4 — Stoat DM call via synthetic voice channel (Phase H.2).
+    ///
+    /// On "cancel:<dm_id>" prefix, disconnects the active call instead.
+    async fn start_dm_call_transport(&self, dm_channel_id: &str) -> ClientResult<()> {
+        // H.4 cancel path.
+        if let Some(real_dm_id) = dm_channel_id.strip_prefix("cancel:") {
+            tracing::info!("Stoat DM call cancel for dm_id={real_dm_id}");
+            #[cfg(feature = "voice")]
+            voice::disconnect_voice(std::sync::Arc::clone(&self.voice_guard)).await;
+            return Ok(());
+        }
+
+        // H.2 — delegate to join_voice_channel_transport using the DM channel id.
+        // Real implementation would create a transient voice channel first.
+        self.join_voice_channel_transport("", dm_channel_id).await
     }
 
     fn event_stream(&self) -> Pin<Box<dyn Stream<Item = ClientEvent> + Send>> {
@@ -872,6 +1043,11 @@ impl IsBackend for StoatClient {
 
     fn backend_capabilities(&self) -> BackendCapabilities {
         BackendCapabilities {
+            // G.1 — expose voice support when the voice feature is compiled in.
+            // The test-stoat mock provides the required join_call + Vortex WS endpoints.
+            #[cfg(feature = "voice")]
+            voice: VoiceSupport::Full,
+            #[cfg(not(feature = "voice"))]
             voice: VoiceSupport::None,
             landing: poly_client::LandingPage::DirectMessages,
             has_roles: true,
@@ -1850,6 +2026,51 @@ fn parse_bonfire_event(json: &serde_json::Value) -> Option<ClientEvent> {
                 timestamp: chrono::Utc::now(),
             })
         }
+
+        // F.6 — Bonfire WebSocket voice events (emitted by test-stoat mock).
+        // These mirror the same events the Vortex WS sends, but delivered
+        // via the existing Bonfire connection so the UI event_stream consumer
+        // gets voice updates without a separate WS subscription.
+        "VoiceUserJoined" => {
+            let channel_id = json.get("channel_id")?.as_str()?.to_string();
+            let user_id = json.get("user_id")?.as_str()?.to_string();
+            let display_name = json.get("display_name")
+                .and_then(|v| v.as_str())
+                .unwrap_or(&user_id)
+                .to_string();
+            let avatar_url = json.get("avatar_url")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            let participant = poly_client::VoiceParticipant {
+                user: poly_client::User {
+                    id: user_id,
+                    display_name,
+                    avatar_url,
+                    presence: poly_client::PresenceStatus::Online,
+                    backend: BackendType::from(crate::SLUG),
+                },
+                is_muted: json.get("is_muted").and_then(|v| v.as_bool()).unwrap_or(false),
+                is_deafened: false,
+                is_streaming: false,
+                is_video_on: false,
+                is_speaking: false,
+            };
+            Some(ClientEvent::VoiceUserJoined { channel_id, participant })
+        }
+
+        "VoiceUserLeft" => {
+            let channel_id = json.get("channel_id")?.as_str()?.to_string();
+            let user_id = json.get("user_id")?.as_str()?.to_string();
+            Some(ClientEvent::VoiceUserLeft { channel_id, user_id })
+        }
+
+        "VoiceSpeakingUpdate" => {
+            let channel_id = json.get("channel_id")?.as_str()?.to_string();
+            let user_id = json.get("user_id")?.as_str()?.to_string();
+            let is_speaking = json.get("speaking").and_then(|v| v.as_bool()).unwrap_or(false);
+            Some(ClientEvent::VoiceSpeakingUpdate { channel_id, user_id, is_speaking })
+        }
+
         _ => None,
     }
 }

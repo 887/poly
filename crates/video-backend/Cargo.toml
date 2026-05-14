@@ -1,0 +1,33 @@
+[package]
+name = "poly-video-backend"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+# Feature flags
+#
+# This crate intentionally has NO native-only or wasm-only feature gates at
+# this stage — the trait surface and MockVideoBackend are platform-neutral.
+#
+# When real camera/screen-capture impls land (Phase E.3 / E.4), they will be
+# gated behind:
+#   `native` — nokhwa (v4l2/AVFoundation/MSMF) + scap (Wayland/X11/macOS/Win)
+#   `web`    — getUserMedia({video}) + getDisplayMedia() via web-sys
+#
+# See docs/plans/plan-voice-video-calls.md Phase E scope note (2026-05-14)
+# for the deferral rationale (5+ MB binary cost of webrtc-rs / openh264).
+[features]
+default = []
+
+[dependencies]
+# Core traits / error handling — always compiled
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+futures = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "macros"] }
+
+[lints]
+workspace = true
