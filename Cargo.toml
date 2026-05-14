@@ -218,6 +218,15 @@ audiopus = "0.3.0-rc.0"
 discortp = { version = "0.6", features = ["rtp", "discord"] }
 # byteorder — byte-order helpers for the UDP IP-discovery 70-byte packet.
 byteorder = "1"
+# nokhwa — cross-platform native camera capture (V4L2 on Linux, AVFoundation
+# on macOS, MSMF on Windows). Native only; never compiled for wasm32.
+# Used by crates/video-backend (feature = "native") for Phase E.3.
+# `input-native` enables the platform-appropriate OS backend.
+nokhwa = { version = "0.10", features = ["input-native"] }
+# scap — cross-platform screen capture (Wayland/X11/macOS/Win). Native only.
+# On Linux requires xdg-desktop-portal (PipeWire) at runtime — document this.
+# Used by crates/video-backend (feature = "native") for Phase E.4.
+scap = "0.1"
 
 # WASM plugin runtime (native-only — wasmtime cannot target wasm32)
 wasmtime = { version = "42", features = ["component-model", "cranelift"] }
