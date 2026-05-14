@@ -34,4 +34,13 @@ pub enum VideoError {
     /// Camera / screen capture permission was denied by the user or OS policy.
     #[error("video capture permission denied")]
     PermissionDenied,
+
+    /// The operation is not yet implemented — a dependency or service is missing.
+    ///
+    /// Used by `NativeVideoEncoder` / `NativeVideoDecoder` when the
+    /// host-bridge video endpoint is not yet reachable, and by the screen-
+    /// capture stub pending the libspa-sys PipeWire 1.x compat fix.
+    /// Callers should surface a user-visible message rather than panicking.
+    #[error("not yet implemented: {0}")]
+    NotImplemented(String),
 }

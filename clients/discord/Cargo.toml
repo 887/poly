@@ -44,6 +44,8 @@ voice = [
     "dep:byteorder",
     "dep:chacha20poly1305",
     "dep:poly-audio-backend",
+    "dep:poly-video-backend",
+    "poly-host-bridge/video",
 ]
 
 [dependencies]
@@ -74,6 +76,9 @@ chacha20poly1305 = { workspace = true, optional = true }
 byteorder = { workspace = true, optional = true }
 poly-audio-backend = { workspace = true, optional = true }
 
+# Video transport — gated by voice feature (Phase E of plan-voice-video-calls.md).
+poly-video-backend = { workspace = true, optional = true }
+
 # WASM plugin guest bindings (WASI targets only)
 [target.'cfg(target_os = "wasi")'.dependencies]
 wit-bindgen = { workspace = true }
@@ -101,6 +106,11 @@ path = "tests/version_override.rs"
 [[test]]
 name = "super_properties_consistency"
 path = "tests/super_properties_consistency.rs"
+
+[[test]]
+name = "video_smoke"
+path = "tests/video_smoke.rs"
+required-features = ["voice"]
 
 [lints]
 workspace = true

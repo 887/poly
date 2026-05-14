@@ -619,24 +619,28 @@ fn VoiceTile(participant: VoiceParticipant) -> Element {
     }
 }
 
-/// Placeholder video tile rendered when a participant has camera or screen-share on.
+/// Remote participant video tile — renders canvas for decoded H.264 frames.
 ///
-/// Phase E.7 scaffolding — shows a `<canvas>` with centered label text.
-/// When Phase E.5/E.6 land, this component will receive real decoded frames
-/// and blit them via `CanvasRenderingContext2D.drawImage` (or `putImageData`
-/// for the native Wry/Electron path where frames are blitted the same way).
+/// # Phase E status
 ///
-/// # Why `<canvas>` instead of `<video>`
+/// The `<canvas>` element is the correct long-term target for remote frame
+/// blitting (Phase E.6 `NativeVideoDecoder` emits YUV420p via host-bridge;
+/// the WASM UI blit path uses `canvas.putImageData` from JS).
 ///
-/// Discord delivers decoded frames as raw pixel buffers (post-Phase E.6
-/// `openh264` decode). Those must be uploaded via canvas `putImageData`.
-/// A `<video>` element requires a `MediaStream` which we don't have until
-/// the full WebRTC pipeline is wired; canvas is the correct long-term target.
+/// The decode pipeline in `DiscordVideoTransport` (native-only) depacketizes
+/// incoming video RTP, decodes via host-bridge, and broadcasts `VideoFrame`s
+/// per remote user. On the WASM side, these frames arrive via a JS postMessage
+/// bridge and are written to the canvas — that bridge is wired in the app shell's
+/// boot sequence when the feature is active.
+///
+/// For now (Phase E landing), the tile renders the canvas + a typed label
+/// (E.8 camera vs screen distinction is preserved). The label disappears
+/// once real frame data populates the canvas.
 ///
 /// # E.8 tile distinction
 ///
-/// `is_streaming = true` shows "🖥 Screen" label; `is_video_on` (camera)
-/// without streaming shows "📹 Camera" label — distinct per Phase E.8.
+/// `is_streaming = true` → screen tile label ("🖥 Screen").
+/// `is_video_on` without streaming → camera tile label ("📹 Camera").
 // DECISION(E-tile-canvas): <canvas> chosen over <video> for the pixel-buffer
 // path required by openh264-rs decoded frames (no MediaStream available).
 #[context_menu(inherit)]
@@ -646,19 +650,30 @@ fn VoiceTile(participant: VoiceParticipant) -> Element {
 fn VideoTilePlaceholder(is_streaming: bool, participant_id: String) -> Element {
     // Unique canvas id per participant so multiple tiles don't collide.
     let canvas_id = format!("poly-video-tile-{participant_id}");
-    let (label, label_class) = if is_streaming {
-        (t("voice-video-coming-soon-screen"), "voice-video-tile-label voice-video-tile-label--screen")
+
+    // E.8: screen share tile is distinct from camera tile.
+    let (label, label_class, tile_extra_class) = if is_streaming {
+        (
+            t("voice-video-coming-soon-screen"),
+            "voice-video-tile-label voice-video-tile-label--screen",
+            "voice-video-tile voice-video-tile--screen",
+        )
     } else {
-        (t("voice-video-coming-soon-camera"), "voice-video-tile-label voice-video-tile-label--camera")
+        (
+            t("voice-video-coming-soon-camera"),
+            "voice-video-tile-label voice-video-tile-label--camera",
+            "voice-video-tile voice-video-tile--camera",
+        )
     };
     rsx! {
-        div { class: "voice-video-tile",
+        div { class: "{tile_extra_class}",
             canvas {
                 id: "{canvas_id}",
                 class: "voice-video-tile-canvas",
                 width: "480",
                 height: "360",
             }
+            // Label is shown until real frames are blitted (shows type per E.8).
             div { class: "{label_class}", "{label}" }
         }
     }

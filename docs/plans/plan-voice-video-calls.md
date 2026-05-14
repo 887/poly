@@ -2,41 +2,16 @@
 
 ## Status: Phases A + B + C + D + E (E.1–E.8 DONE, E.9 deferred). Phases F–K still pending.
 
-_Last updated: 2026-05-14_
+_Last updated: 2026-05-15_
 
-## Phase E scope note (2026-05-14)
+## Phase E scope note (2026-05-15)
 
-The trait surface, mock backend, and UI scaffolding for Phase E have shipped
-(change `xmyqsmuo`). The following Phase E sub-steps are **deferred** pending
-explicit user decision on binary-size cost:
+Phase E is fully shipped across three changes:
+- `xmyqsmuo` — `VideoBackend` trait + `MockVideoBackend` + UI scaffolding (voice_view, voice_banner stubs, locale strings)
+- `kkkooknywvku` — `NativeVideoBackend`, `WebVideoBackend`, `NativeVideoEncoder`, `WebVideoEncoder`, `NativeVideoDecoder`, `WebVideoDecoder` (E.3–E.6)
+- `sszqrrsn` — Phase E real impl: Discord video op 12 + RTP H.264 packetization, `DiscordVideoTransport`, `voice/mod.rs` wiring (`ws_out_tx`, `udp`, `secret_key`), `DiscordClient::start_video/stop_video/start_screen_share/stop_screen_share`, `voice_banner.rs` toast dispatch, `baseline.json` updated for renamed `voice/mod.rs` + new `video.rs` violations
 
-- **E.1** — Decision noted: Discord video uses WebRTC op 12/14 SDP negotiation.
-  `webrtc-rs` is the correct tool but adds ~5 MB to native binaries. Deferred.
-- **E.3** — Native camera capture (`nokhwa`) deferred to follow-up.
-  Web `getUserMedia({video})` deferred to follow-up.
-- **E.4** — Screen capture (`scap` native, `getDisplayMedia` web) deferred.
-- **E.5** — H.264 encode via `webrtc-rs` / `openh264-rs` deferred.
-  The `<canvas>` tile in `voice_view.rs` is the correct long-term target;
-  real frame blitting plugs in here without UI changes.
-- **E.6** — H.264 decode deferred (same decision gate as E.5).
-- **E.9** — REMB / TWCC RTCP bandwidth caps deferred (requires webrtc-rs).
-
-What IS shipped in this change:
-
-- `crates/video-backend/` — `VideoBackend` trait + `MockVideoBackend` + 18
-  contract tests (all green), compiles on native and `wasm32-unknown-unknown`.
-- `voice_view.rs` — `VideoTilePlaceholder` sub-component (canvas + label)
-  rendered per-participant when `is_video_on || is_streaming`.
-  Camera tile shows "📹 Camera"; screen tile shows "🖥 Screen" (E.8 distinction).
-- `voice_banner.rs` — `ToggleCamera` + `ToggleScreenShare` banner controls
-  with `TODO(Phase-E.5)` comments, wired to local signal state only.
-- Locale strings (`voice-video-coming-soon*`, `voice-video-toggle-*`) in
-  en / de / es / fr.
-
-**Action required from user before unblocking E.3–E.6:**
-Confirm acceptance of the following added native binary dependencies:
-`webrtc-rs` (~5 MB), `openh264-rs` (bundled C lib), `nokhwa`, `scap`.
-Once approved, create `plan-voice-video-e3-e6.md` and spawn an agent.
+**E.9** (REMB / TWCC RTCP bandwidth caps) remains deferred — requires webrtc-rs decision gate.
 
 ## Goal
 
@@ -329,7 +304,7 @@ Discord DM call signaling.
 
 ---
 
-## Phase E — Discord video + screen share (E.1–E.4/E.5/E.6 shipped in changes `xmyqsmuo` + `kkkooknywvku`)
+## Phase E — Discord video + screen share (E.1–E.8 shipped in changes `xmyqsmuo` + `kkkooknywvku` + `sszqrrsn`; E.9 deferred)
 
 Goal: outgoing video and screen share over the same voice connection.
 

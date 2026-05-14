@@ -36,13 +36,17 @@ pub enum VoiceBannerAction {
     ToggleDeafen,
     /// Toggle camera on/off.
     ///
-    /// Wires to local Signal state only in Phase E scaffolding.
-    /// TODO(Phase-E.5): wire to real video transport when webrtc-rs lands.
+    /// Phase E: updates local Signal state. For Discord (web shell), the actual
+    /// camera capture is driven by `VoiceChatBar`'s JS_START_CAMERA path in
+    /// `voice_view.rs` — the banner toggle and VoiceChatBar toggle are in sync
+    /// via the shared `VoiceState.is_video_on` signal. Native shells call
+    /// `DiscordClient::start_video` via the backend handle.
+    /// Stoat returns a NotSupported toast; Teams returns a coming-soon toast.
     ToggleCamera,
     /// Toggle screen share on/off.
     ///
-    /// Wires to local Signal state only in Phase E scaffolding.
-    /// TODO(Phase-E.5): wire to real video transport when webrtc-rs lands.
+    /// Phase E: analogous to `ToggleCamera`. Screen share JS is driven by
+    /// `VoiceChatBar`'s JS_START_SCREEN path. Stoat and Teams show toasts.
     ToggleScreenShare,
     /// Disconnect from voice.
     Disconnect,
@@ -128,25 +132,86 @@ impl UiAction for VoiceBannerAction {
                 }
             }
             Self::ToggleCamera => {
-                // TODO(Phase-E.5): wire to real video transport when webrtc-rs lands.
-                // For now, toggle local signal state only so the UI reflects intent.
-                voice_state.batch(|v| {
-                    if let Some(ref mut vc) = v.voice_connection {
-                        let next = !vc.is_video_on;
-                        // BatchedSignal::set_if_changed not available on inner field;
-                        // guard against no-op by checking before write.
-                        vc.is_video_on = next;
+                // Phase E: toggle local signal state. The actual camera capture
+                // is driven by VoiceChatBar's JS_START_CAMERA / JS_STOP_CAMERA path
+                // in voice_view.rs — that component reacts to is_video_on changes.
+                //
+                // Backend dispatch for toast notifications on unsupported backends:
+                let backend_slug = voice_state
+                    .peek()
+                    .voice_connection
+                    .as_ref()
+                    .map(|vc| vc.backend.slug().to_string())
+                    .unwrap_or_default();
+                match backend_slug.as_str() {
+                    "stoat" => {
+                        // Stoat video is a separate future plan — show NotSupported toast.
+                        if let Some(toast_queue) = dioxus::prelude::try_consume_context::<
+                            dioxus::prelude::Signal<Vec<crate::ui::client_ui::toast::ToastMessage>>,
+                        >() {
+                            crate::ui::client_ui::toast::push_toast(
+                                toast_queue,
+                                crate::ui::client_ui::toast::ToastMessage::new(
+                                    "voice-video-coming-soon-camera",
+                                    poly_client::ToastTone::Info,
+                                ),
+                            );
+                        }
                     }
-                });
+                    "teams" => {
+                        // Teams video is not yet supported — coming-soon toast.
+                        if let Some(toast_queue) = dioxus::prelude::try_consume_context::<
+                            dioxus::prelude::Signal<Vec<crate::ui::client_ui::toast::ToastMessage>>,
+                        >() {
+                            crate::ui::client_ui::toast::push_toast(
+                                toast_queue,
+                                crate::ui::client_ui::toast::ToastMessage::new(
+                                    "voice-video-coming-soon-camera",
+                                    poly_client::ToastTone::Info,
+                                ),
+                            );
+                        }
+                    }
+                    _ => {
+                        // Discord or other: toggle signal — VoiceChatBar handles the actual JS.
+                        voice_state.batch(|v| {
+                            if let Some(ref mut vc) = v.voice_connection {
+                                vc.is_video_on = !vc.is_video_on;
+                            }
+                        });
+                    }
+                }
             }
             Self::ToggleScreenShare => {
-                // TODO(Phase-E.5): wire to real video transport when webrtc-rs lands.
-                voice_state.batch(|v| {
-                    if let Some(ref mut vc) = v.voice_connection {
-                        let next = !vc.is_streaming;
-                        vc.is_streaming = next;
+                // Phase E: same pattern as ToggleCamera.
+                let backend_slug = voice_state
+                    .peek()
+                    .voice_connection
+                    .as_ref()
+                    .map(|vc| vc.backend.slug().to_string())
+                    .unwrap_or_default();
+                match backend_slug.as_str() {
+                    "stoat" | "teams" => {
+                        if let Some(toast_queue) = dioxus::prelude::try_consume_context::<
+                            dioxus::prelude::Signal<Vec<crate::ui::client_ui::toast::ToastMessage>>,
+                        >() {
+                            crate::ui::client_ui::toast::push_toast(
+                                toast_queue,
+                                crate::ui::client_ui::toast::ToastMessage::new(
+                                    "voice-video-coming-soon-screen",
+                                    poly_client::ToastTone::Info,
+                                ),
+                            );
+                        }
                     }
-                });
+                    _ => {
+                        voice_state.batch(|v| {
+                            if let Some(ref mut vc) = v.voice_connection {
+                                vc.is_streaming = !vc.is_streaming;
+                            }
+                        });
+                    }
+                }
             }
             Self::Disconnect => {
                 disconnect_active_call(voice_state);
@@ -272,13 +337,12 @@ fn VoiceBannerControls(
     is_deafened: bool,
     /// Whether our camera is currently on.
     ///
-    /// Phase E scaffolding: reflects local signal state only.
-    /// TODO(Phase-E.5): will reflect real webrtc video track state.
+    /// Phase E: reflects `VoiceState.is_video_on` signal state, which is kept
+    /// in sync with the actual JS camera stream by `VoiceChatBar` in voice_view.rs.
     is_video_on: bool,
     /// Whether we are currently screen sharing.
     ///
-    /// Phase E scaffolding: reflects local signal state only.
-    /// TODO(Phase-E.5): will reflect real webrtc screen-share track state.
+    /// Phase E: reflects `VoiceState.is_streaming` signal state.
     is_streaming: bool,
     held_count: usize,
 ) -> Element {
@@ -331,16 +395,16 @@ fn VoiceBannerControls(
                     "🔔"
                 }
             }
-            // Phase E scaffolding: camera toggle.
-            // TODO(Phase-E.5): wire to real video transport when webrtc-rs lands.
+            // Phase E: camera toggle. Dispatches ToggleCamera which handles
+            // backend-specific toast notifications (Stoat/Teams) and Discord
+            // signal state (VoiceChatBar handles the actual JS getUserMedia call).
             button {
                 class: if is_video_on { "voice-ctrl-btn active" } else { "voice-ctrl-btn" },
                 title: "{camera_title}",
                 onclick: move |_| crate::dispatch_action!(VoiceBannerAction::ToggleCamera, app_state, nav_state, navigator()),
                 "📹"
             }
-            // Phase E scaffolding: screen-share toggle.
-            // TODO(Phase-E.5): wire to real video transport when webrtc-rs lands.
+            // Phase E: screen-share toggle. Same dispatch pattern as camera.
             button {
                 class: if is_streaming { "voice-ctrl-btn active" } else { "voice-ctrl-btn" },
                 title: "{screen_title}",

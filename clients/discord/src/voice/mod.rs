@@ -36,6 +36,10 @@
 #![allow(clippy::indexing_slicing)] // RTP header byte-slicing is local + length-checked
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // Voice code: these are gated behind Option returns or explicit early-returns
 
+/// Discord video transport — Phase E of `docs/plans/plan-voice-video-calls.md`.
+/// op 12 Video signaling + H.264 RTP packetization over the same UDP socket.
+pub mod video;
+
 use poly_client::ClientEvent;
 
 use std::{
@@ -200,6 +204,16 @@ pub struct DiscordVoiceConnection {
     pub ssrc_user_map: SsrcUserMap,
     /// Signal: set `true` to tell the encode loop to stop.
     shutdown_tx: mpsc::Sender<()>,
+    /// Sender for auxiliary outbound WS messages (e.g. op 12 Video signaling).
+    pub ws_out_tx: mpsc::Sender<serde_json::Value>,
+    /// Shared UDP socket (same as audio — required for anti-ban compliance).
+    pub udp: Arc<tokio::net::UdpSocket>,
+    /// 32-byte AEAD key for RTP encryption/decryption.
+    pub secret_key: [u8; 32],
+    /// Selected AEAD encryption mode (e.g. `"aead_xchacha20_poly1305_rtpsize"`).
+    pub encryption_mode: String,
+    /// Active video transport (Phase E). `None` until `enable_video` is called.
+    pub video_transport: Option<video::DiscordVideoTransport>,
 }
 
 impl DiscordVoiceConnection {
@@ -342,12 +356,15 @@ pub async fn connect_voice(
     let ssrc_user_map: SsrcUserMap = Arc::new(RwLock::new(HashMap::new()));
     let (shutdown_tx, _shutdown_rx) = mpsc::channel::<()>(1);
 
+    // Channel for outbound WS messages from auxiliary loops (video op 12/14).
+    let (ws_out_tx, ws_out_rx) = mpsc::channel::<serde_json::Value>(16);
+
     let local_ssrc = ready.ssrc;
     let sequence = Arc::new(AtomicU16::new(0));
     let timestamp = Arc::new(AtomicU32::new(0));
     let is_speaking = Arc::new(AtomicBool::new(false));
 
-    // Voice WS loop (heartbeat + speaking events).
+    // Voice WS loop (heartbeat + speaking events + auxiliary outbound messages).
     {
         let ssrc_map = Arc::clone(&ssrc_user_map);
         let speaking_flag = Arc::clone(&is_speaking);
@@ -359,6 +376,7 @@ pub async fn connect_voice(
             ssrc_map,
             speaking_flag,
             speaking_tx,
+            ws_out_rx,
         ));
     }
 
@@ -390,12 +408,18 @@ pub async fn connect_voice(
     }
 
     // Store the connection in the guard.
+    // ws_out_tx + udp_arc + secret_key + mode are available for DiscordVideoTransport.
     let conn = DiscordVoiceConnection {
         channel_id: String::new(), // caller fills in
         guild_id: info.guild_id.clone(),
         local_ssrc,
         ssrc_user_map,
         shutdown_tx,
+        ws_out_tx,
+        udp: Arc::clone(&udp_arc),
+        secret_key,
+        encryption_mode: mode,
+        video_transport: None,
     };
     *guard.lock().await = Some(conn);
 
@@ -620,6 +644,7 @@ async fn ip_discovery(udp: &UdpSocket, ssrc: u32) -> Result<(String, u16), Voice
 /// - Receives op 5 SPEAKING → updates `ssrc_user_map` (B.8).
 /// - Sends op 5 SPEAKING when `speaking_flag` transitions (B.8).
 /// - C.4: emits `ClientEvent::VoiceSpeakingUpdate` via `speaking_tx` when present.
+/// - Drains `ws_out_rx` — auxiliary outbound messages from video transport (op 12/14).
 async fn voice_ws_loop(
     mut write: WsWrite,
     mut read: WsRead,
@@ -628,6 +653,7 @@ async fn voice_ws_loop(
     ssrc_user_map: SsrcUserMap,
     speaking_flag: Arc<AtomicBool>,
     speaking_tx: Option<(String, tokio::sync::mpsc::UnboundedSender<ClientEvent>)>,
+    mut ws_out_rx: mpsc::Receiver<serde_json::Value>,
 ) {
     let interval = Duration::from_millis(heartbeat_interval_ms);
     let mut heartbeat_tick = time::interval(interval);
@@ -640,6 +666,12 @@ async fn voice_ws_loop(
                 nonce = nonce.wrapping_add(1);
                 let hb = serde_json::json!({ "op": 3, "d": nonce });
                 if write.send(TMsg::Text(hb.to_string().into())).await.is_err() {
+                    break;
+                }
+            }
+            Some(outbound) = ws_out_rx.recv() => {
+                // Auxiliary outbound messages (op 12 Video, op 14 Client Connect, etc.)
+                if write.send(TMsg::Text(outbound.to_string().into())).await.is_err() {
                     break;
                 }
             }

@@ -49,10 +49,29 @@ pub mod mock_backend;
 pub mod test_support;
 pub mod types;
 
+// ── Platform-specific backends ────────────────────────────────────────────────
+
+/// Browser backend: getUserMedia / getDisplayMedia + WebCodecs H.264.
+/// Enabled when `target_arch = "wasm32"` AND feature `web`.
+#[cfg(all(target_arch = "wasm32", feature = "web"))]
+pub mod web_backend;
+
+/// Native (non-wasm) backend: nokhwa camera + host-bridge H.264.
+/// Enabled when `target_arch != "wasm32"` AND feature `native`.
+#[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+pub mod native_backend;
+
 // ── Re-exports ────────────────────────────────────────────────────────────────
 
 pub use error::VideoError;
 pub use types::{ScreenSource, VideoDevice, VideoFrame, VideoPixelFormat};
+
+// Re-export concrete backends for callers that want the real impls.
+#[cfg(all(target_arch = "wasm32", feature = "web"))]
+pub use web_backend::WebVideoBackend;
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+pub use native_backend::NativeVideoBackend;
 
 use futures::Stream;
 use std::pin::Pin;

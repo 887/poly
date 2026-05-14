@@ -1112,6 +1112,93 @@ impl DiscordClient {
     }
 }
 
+// ── Phase E — Video transport (start/stop camera + screen share) ─────────────
+
+#[cfg(feature = "voice")]
+impl DiscordClient {
+    /// Start sending local camera video on the active voice connection.
+    ///
+    /// Creates a `DiscordVideoTransport` and sends op 12 Video + op 14 Client
+    /// Connect on the voice WS. Frames from `frame_rx` are encoded via the
+    /// host-bridge H.264 encoder and sent on the shared UDP socket.
+    ///
+    /// `bridge_base_url` should be the host-bridge base URL, e.g. `"http://127.0.0.1:9333"`.
+    ///
+    /// # Errors
+    ///
+    /// Returns `VoiceError::AlreadyConnected`-equivalent if not in a voice call,
+    /// or `VideoTransportError` on transport failures.
+    pub async fn start_video(
+        &self,
+        frame_rx: tokio::sync::mpsc::Receiver<poly_video_backend::types::VideoFrame>,
+        bridge_base_url: String,
+    ) -> Result<(), voice::video::VideoTransportError> {
+        let mut session = self.voice_session.lock().await;
+        let conn = session.as_mut().ok_or(voice::video::VideoTransportError::WsChannelClosed)?;
+
+        let transport = voice::video::DiscordVideoTransport::start(
+            conn.local_ssrc,
+            false, // camera
+            std::sync::Arc::clone(&conn.udp),
+            conn.secret_key,
+            conn.encryption_mode.clone(),
+            conn.ws_out_tx.clone(),
+            bridge_base_url,
+            frame_rx,
+        )
+        .await?;
+
+        conn.video_transport = Some(transport);
+        Ok(())
+    }
+
+    /// Stop sending camera video. Sends op 12 with empty streams to Discord.
+    pub async fn stop_video(&self) {
+        let mut session = self.voice_session.lock().await;
+        if let Some(conn) = session.as_mut() {
+            if let Some(transport) = conn.video_transport.take() {
+                transport.stop(&conn.ws_out_tx).await;
+            }
+        }
+    }
+
+    /// Start sending local screen share on the active voice connection.
+    ///
+    /// Uses a separate SSRC (audio_ssrc + 2) for screen-share-as-second-stream.
+    /// Discord treats camera and screen share as separate video streams.
+    pub async fn start_screen_share(
+        &self,
+        frame_rx: tokio::sync::mpsc::Receiver<poly_video_backend::types::VideoFrame>,
+        bridge_base_url: String,
+    ) -> Result<(), voice::video::VideoTransportError> {
+        let mut session = self.voice_session.lock().await;
+        let conn = session.as_mut().ok_or(voice::video::VideoTransportError::WsChannelClosed)?;
+
+        // Screen share uses a different SSRC offset than camera.
+        // We temporarily adjust the audio_ssrc by +1 so video_ssrc = audio_ssrc + 2.
+        let screen_audio_ssrc = conn.local_ssrc + 1;
+        let transport = voice::video::DiscordVideoTransport::start(
+            screen_audio_ssrc,
+            true, // screen share
+            std::sync::Arc::clone(&conn.udp),
+            conn.secret_key,
+            conn.encryption_mode.clone(),
+            conn.ws_out_tx.clone(),
+            bridge_base_url,
+            frame_rx,
+        )
+        .await?;
+
+        conn.video_transport = Some(transport);
+        Ok(())
+    }
+
+    /// Stop sending screen share.
+    pub async fn stop_screen_share(&self) {
+        self.stop_video().await
+    }
+}
+
 // ── C.5 / D.2 / D.4 — Gateway control methods ────────────────────────────────
 //
 // These methods send raw JSON on the main gateway WS back-channel (gateway_tx).
