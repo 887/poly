@@ -5,6 +5,12 @@
 //! `MenuTargetKind` exists in the WIT-generated bindings.
 
 
+use poly_client::{
+    IsBackend, MessagingBackend, ModerationBackend, SocialGraphBackend, DmsAndGroupsBackend,
+    ServerAdminBackend, AuthCredentials, BackendType, ChannelType, ClientError, ClientEvent,
+    MessageContent, MessageQuery, PresenceStatus, SettingsScope, ViewBody, ViewKind,
+    UpdateChannelParams, MenuTargetKind, ActionOutcome, CursorKind,
+};
 use poly_plugin_host::PluginBackend;
 
 use super::harness::HarnessResult;

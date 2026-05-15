@@ -13,8 +13,10 @@
 //! - **Events** — `event_stream()` returns a valid stream
 
 use poly_client::{
-    AuthCredentials, BackendType, IsBackend, ClientError, MessageContent, MessageQuery,
-    PresenceStatus,
+    IsBackend, MessagingBackend, ModerationBackend, SocialGraphBackend, DmsAndGroupsBackend,
+    ServerAdminBackend, AuthCredentials, BackendType, ChannelType, ClientError, ClientEvent,
+    MessageContent, MessageQuery, PresenceStatus, SettingsScope, ViewBody, ViewKind,
+    UpdateChannelParams, MenuTargetKind, ActionOutcome, CursorKind,
 };
 use poly_plugin_host::PluginBackend;
 

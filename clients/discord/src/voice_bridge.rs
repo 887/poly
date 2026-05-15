@@ -184,9 +184,18 @@ impl DiscordVoiceBridgeClient {
             }
         }
 
+        #[cfg(target_arch = "wasm32")]
         let udp_client = Arc::new(UdpClient::from_origin());
+        #[cfg(not(target_arch = "wasm32"))]
+        let udp_client = Arc::new(UdpClient::default_local());
+        #[cfg(target_arch = "wasm32")]
         let opus_client = Arc::new(OpusClient::from_origin());
+        #[cfg(not(target_arch = "wasm32"))]
+        let opus_client = Arc::new(OpusClient::default_local());
+        #[cfg(target_arch = "wasm32")]
         let aead_client = Arc::new(AeadClient::from_origin());
+        #[cfg(not(target_arch = "wasm32"))]
+        let aead_client = Arc::new(AeadClient::default_local());
 
         // Step 1: run the Discord voice WS handshake using the browser WebSocket.
         let handshake = voice_protocol::run_handshake(

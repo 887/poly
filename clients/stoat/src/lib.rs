@@ -2133,6 +2133,11 @@ impl poly_client::MessagingBackend for StoatClient {
 
 #[cfg(all(test, feature = "native"))]
 mod tests {
+    use poly_client::{
+        IsBackend, MessagingBackend, ModerationBackend, SocialGraphBackend, DmsAndGroupsBackend,
+        AuthCredentials, BackendType, MessageContent, MessageQuery, PresenceStatus, ChannelType,
+        ClientError, ClientEvent, SettingsScope, ViewBody, ViewKind, UpdateChannelParams,
+    };
     use super::{OFFICIAL_STOAT_BASE_URL, StoatClient};
     use crate::http::StoatSessionState;
     use axum::{
@@ -2448,7 +2453,7 @@ mod tests {
             user_display_name: Some("Stoaty".to_string()),
         })?;
 
-        let sent = poly_client::IsBackend::send_reply_message(
+        let sent = poly_client::MessagingBackend::send_reply_message(
             &client,
             "channel_1",
             "01HYYYYYYYYYYYYYYYYYYYYYYY",

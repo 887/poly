@@ -11,6 +11,12 @@
 
 use std::sync::Arc;
 
+use poly_client::{
+    IsBackend, MessagingBackend, ModerationBackend, SocialGraphBackend, DmsAndGroupsBackend,
+    ServerAdminBackend, AuthCredentials, BackendType, ChannelType, ClientError, ClientEvent,
+    MessageContent, MessageQuery, PresenceStatus, SettingsScope, ViewBody, ViewKind,
+    UpdateChannelParams, MenuTargetKind, ActionOutcome, CursorKind, Cursor,
+};
 use poly_chat_mcp::memory::MemoryDb;
 use poly_chat_mcp::persona::heartbeat::HeartbeatRegistry;
 use poly_chat_mcp::state::BackendPool;
@@ -170,7 +176,11 @@ async fn persona_heartbeat_e2e_creates_audit_and_draft() {
                 .find_by_account(account_id)
                 .map(|e| std::sync::Arc::clone(&e.backend))
                 .ok_or_else(|| anyhow::anyhow!("no backend for {account_id}"))?;
-            let dms = backend.get_dm_channels().await?;
+            let dms = backend
+                .as_dms_and_groups()
+                .ok_or_else(|| anyhow::anyhow!("backend does not support DMs"))?
+                .get_dm_channels()
+                .await?;
             Ok(dms.into_iter().map(|d| (d.id.to_string(), d.user.display_name)).collect())
         }
 

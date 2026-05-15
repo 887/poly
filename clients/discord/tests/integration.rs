@@ -16,8 +16,11 @@
 use std::sync::Arc;
 
 use poly_client::{
-    AuthCredentials, BackendType, ChannelType, IsBackend, ClientEvent, ForumSortOrder,
-    MenuTargetKind, MessageContent, MessageQuery, PresenceStatus, ViewBody, ViewKind,
+    IsBackend, MessagingBackend, ModerationBackend, SocialGraphBackend, DmsAndGroupsBackend,
+    ServerAdminBackend, ThreadsBackend, ForumBackend,
+    AuthCredentials, BackendType, ChannelType, ClientError, ClientEvent, ForumSortOrder,
+    MenuTargetKind, MessageContent, MessageQuery, PresenceStatus, SettingsScope,
+    ViewBody, ViewKind, UpdateChannelParams,
 };
 use poly_discord::DiscordClient;
 use poly_test_discord::{DiscordState, router};

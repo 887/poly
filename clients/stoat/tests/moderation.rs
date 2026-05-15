@@ -9,6 +9,11 @@
 use std::sync::Arc;
 
 
+use poly_client::{
+    IsBackend, MessagingBackend, ModerationBackend, SocialGraphBackend, DmsAndGroupsBackend,
+    AuthCredentials, MessageContent, MessageQuery, PresenceStatus, ChannelType, ClientError,
+    ClientEvent, SettingsScope, ViewBody, ViewKind, UpdateChannelParams,
+};
 use poly_stoat::StoatClient;
 use poly_test_stoat::StoatState;
 use tokio::net::TcpListener;

@@ -8,6 +8,12 @@
 use std::sync::Arc;
 
 
+use poly_client::{
+    IsBackend, MessagingBackend, ModerationBackend, SocialGraphBackend, DmsAndGroupsBackend,
+    ServerAdminBackend, AuthCredentials, BackendType, ChannelType, ClientError, ClientEvent,
+    MessageContent, MessageQuery, MessageSearchQuery, PresenceStatus, SettingsScope, ViewBody,
+    ViewKind, UpdateChannelParams, MenuTargetKind, ActionOutcome, CursorKind, Cursor,
+};
 use poly_teams::TeamsClient;
 use poly_test_teams::{TeamsState, router};
 use tokio::net::TcpListener;
@@ -360,29 +366,21 @@ async fn test_settings_storage_round_trip() {
 // Follow-up gaps — visual-teams.md audit
 // ---------------------------------------------------------------------------
 
-/// `search_messages` returns NotSupported.
+/// `search_messages` is not supported by Teams.
 ///
 /// Teams Graph search requires a delegated `Mail.Read` / `ChannelMessage.Read`
 /// scope that the plugin intentionally does not request. Until a dedicated
-/// `/search/query` path is wired up, the trait default (NotSupported) applies.
+/// `/search/query` path is wired up, the backend does not implement
+/// `MessagingBackend` (which carries `search_messages`), so `as_messaging()`
+/// returns `None`.
 #[tokio::test]
 async fn test_search_messages_returns_not_supported() {
-    
     let srv = TestServer::start().await;
     let client = srv.authenticated_client("Sheep").await;
 
-    let result = client
-        .search_messages(MessageSearchQuery {
-            text: "hello".to_string(),
-            channel_id: None,
-            limit: Some(10),
-            ..Default::default()
-        })
-        .await;
-
     assert!(
-        matches!(result, Err(ClientError::NotSupported(_))),
-        "search_messages should return NotSupported; got: {result:?}"
+        IsBackend::as_messaging(&client).is_none(),
+        "TeamsClient should not implement MessagingBackend (no search_messages support)"
     );
 }
 

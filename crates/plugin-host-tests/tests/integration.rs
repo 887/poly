@@ -5,6 +5,12 @@
 //! they correctly report backend types and names.
 
 
+use poly_client::{
+    IsBackend, MessagingBackend, ModerationBackend, SocialGraphBackend, DmsAndGroupsBackend,
+    ServerAdminBackend, AuthCredentials, BackendType, ChannelType, ClientError, ClientEvent,
+    MessageContent, MessageQuery, PresenceStatus, SettingsScope, ViewBody, ViewKind,
+    UpdateChannelParams, MenuTargetKind, ActionOutcome, CursorKind,
+};
 use poly_plugin_host::PluginRegistry;
 use poly_plugin_loader_tests::wasm_dir;
 
