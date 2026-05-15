@@ -25,26 +25,40 @@ web-direct = []
 # See docs/dev/video-codec-strategy.md for the full tradeoff analysis.
 video = ["dep:openh264", "dep:axum"]
 
-# voice: enables the /host/voice/* Discord voice transport bridge endpoints.
+# udp: enables the /host/udp/* generic UDP socket service.
 #
-# WASM safety: the handler module (voice.rs) is cfg-gated to
-# not(target_arch = "wasm32") + this feature. The wire types (voice_wire.rs)
-# and typed client (voice_client.rs) compile on all targets including wasm32 —
-# WASM callers drive voice entirely over HTTP.
+# WASM safety: udp.rs is cfg-gated to not(target_arch = "wasm32") + this feature.
+# The typed client (udp_client.rs) compiles on all targets.
 #
-# Dependency on `video`: the voice receive path decodes incoming H.264 video
-# using the openh264 codec sessions managed by video.rs. `voice` therefore
-# enables `video` transitively. Both features must be enabled together.
+# Native deps: tokio/net (already a workspace dep), uuid for session IDs, axum.
+udp = ["dep:uuid", "dep:axum"]
+
+# codec-opus: enables the /host/codec/opus/* Opus encode/decode service.
 #
-# Native deps pulled in by this feature (not on WASM):
-#   audiopus         — Opus encode/decode (libopus FFI, native only)
-#   chacha20poly1305 — AEAD encryption for Discord RTP
-#   tokio-tungstenite — voice WebSocket client
-#   uuid             — session ID generation
+# WASM safety: codec_opus.rs is cfg-gated to not(target_arch = "wasm32") + this feature.
+# The typed client (codec_opus_client.rs) compiles on all targets.
 #
-# Note: `futures` and `async-stream` are non-optional regular deps used by
-# the always-compiled `voice_client.rs` module.
-voice = ["dep:audiopus", "dep:chacha20poly1305", "dep:tokio-tungstenite", "dep:uuid", "video"]
+# Native deps: audiopus (libopus FFI), uuid, axum.
+codec-opus = ["dep:audiopus", "dep:uuid", "dep:axum"]
+
+# aead: enables the /host/aead/* AEAD encrypt/decrypt service.
+#
+# WASM safety: aead.rs is cfg-gated to not(target_arch = "wasm32") + this feature.
+# The typed client (aead_client.rs) compiles on all targets.
+#
+# Native deps: chacha20poly1305, aes-gcm, uuid, axum.
+aead = ["dep:chacha20poly1305", "dep:aes-gcm", "dep:uuid", "dep:axum"]
+
+# voice-primitives: convenience feature that enables all three generic voice
+# transport primitives: udp + codec-opus + aead. Use this instead of listing
+# all three individually when building a shell that hosts all three services.
+voice-primitives = ["udp", "codec-opus", "aead"]
+
+# voice: kept for backwards-compat with apps/poly-host and apps/web server
+# feature that reference poly-host/voice → poly-host-bridge/voice.
+# Now maps to voice-primitives (no Discord WS or tungstenite dep needed here —
+# that protocol lives in the discord plugin).
+voice = ["voice-primitives"]
 
 [dependencies]
 serde = { workspace = true }
@@ -80,14 +94,17 @@ openh264 = { version = "0.9", features = ["libloading"], optional = true }
 # without requiring callers to pull in axum separately.
 axum = { workspace = true, optional = true }
 
-# Voice bridge native deps — gated by the `voice` feature.
-# These are heavy native-only libraries that must never reach wasm32 targets.
-# cfg-gated to not(target_arch = "wasm32") in voice.rs via the feature flag —
-# voice.rs is #[cfg(all(not(target_arch = "wasm32"), feature = "voice"))].
+# Generic voice primitive deps — gated by udp / codec-opus / aead features.
+# These are native-only libraries; the cfg-gated modules (udp.rs, codec_opus.rs,
+# aead.rs) ensure they never link into the WASM bundle.
 audiopus = { workspace = true, optional = true }
 chacha20poly1305 = { workspace = true, optional = true }
-tokio-tungstenite = { workspace = true, optional = true }
+aes-gcm = { workspace = true, optional = true }
 uuid = { workspace = true, optional = true, features = ["v4"] }
+
+# tokio-tungstenite was previously required by voice.rs for the Discord WS
+# handshake. That protocol now lives in clients/discord/src/voice_bridge.rs.
+# The dep is removed from host-bridge.
 
 # WASM: read `window.location.origin` so the default bridge URL points at the
 # same origin that served the WASM bundle (fullstack apps/web / apps/desktop /

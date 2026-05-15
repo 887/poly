@@ -47,6 +47,29 @@ voice = [
     "dep:poly-video-backend",
     "poly-host-bridge/video",
 ]
+# Voice bridge — WASM-safe transport via generic host-bridge primitives.
+# Compiles on wasm32-unknown-unknown. Implements the full Discord voice protocol
+# (WS handshake, RTP framing, AEAD) in this plugin; routes over:
+#   /host/udp/*         (UdpClient)
+#   /host/codec/opus/*  (OpusClient)
+#   /host/aead/*        (AeadClient)
+#
+# Mutually exclusive with `voice` by dep tree: `voice` pulls in audiopus/
+# tungstenite which do not compile on wasm32.
+#
+# poly-host-bridge itself (no feature flags) exposes the typed clients and
+# VoiceEvent SSE type on all targets.
+voice-bridge = [
+    "dep:poly-audio-backend",
+    "dep:poly-video-backend",
+    "dep:thiserror",
+    "dep:tokio",
+    "dep:futures",
+    "dep:base64",
+    "dep:serde_json",
+    "dep:gloo-net",
+    "dep:poly-host-bridge",
+]
 
 [dependencies]
 poly-ui-macros = { workspace = true }
@@ -78,6 +101,10 @@ poly-audio-backend = { workspace = true, optional = true }
 
 # Video transport — gated by voice feature (Phase E of plan-voice-video-calls.md).
 poly-video-backend = { workspace = true, optional = true }
+
+# Voice-bridge — WASM-safe deps (feature = "voice-bridge").
+# gloo-net provides browser WebSocket for the Discord voice WS handshake on wasm32.
+gloo-net = { workspace = true, optional = true, features = ["websocket"] }
 
 # WASM plugin guest bindings (WASI targets only)
 [target.'cfg(target_os = "wasi")'.dependencies]

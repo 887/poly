@@ -32,6 +32,13 @@ pub mod signup;
 #[cfg(feature = "voice")]
 pub mod voice;
 
+/// Discord voice protocol on WASM — compiles on wasm32.
+/// Implements the full Discord voice handshake + RTP path in the plugin,
+/// routing over generic host-bridge primitives (/host/udp/*, /host/codec/opus/*,
+/// /host/aead/*) instead of the old Discord-coupled /host/voice/* routes.
+#[cfg(feature = "voice-bridge")]
+pub mod voice_bridge;
+
 /// WIT bindings for the WASM plugin (WASI targets only).
 #[cfg(target_os = "wasi")]
 mod wit_bindings;
@@ -2285,6 +2292,7 @@ impl IsBackend for DiscordClient {
 
 // ── H.2.b — ForumBackend ─────────────────────────────────────────────────────
 
+#[cfg(feature = "native")]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl poly_client::ForumBackend for DiscordClient {
@@ -2384,6 +2392,7 @@ impl poly_client::ForumBackend for DiscordClient {
 
 // ── H.2.c — ThreadsBackend ───────────────────────────────────────────────────
 
+#[cfg(feature = "native")]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl poly_client::ThreadsBackend for DiscordClient {
@@ -2404,6 +2413,7 @@ impl poly_client::ThreadsBackend for DiscordClient {
 
 // ── H.3.a — ModerationBackend ────────────────────────────────────────────────
 
+#[cfg(feature = "native")]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl poly_client::ModerationBackend for DiscordClient {
@@ -2732,6 +2742,7 @@ impl poly_client::ModerationBackend for DiscordClient {
 }
 
 // ── H.3.b — SocialGraphBackend ───────────────────────────────────────────────
+#[cfg(feature = "native")]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl poly_client::SocialGraphBackend for DiscordClient {
@@ -2814,6 +2825,7 @@ impl poly_client::SocialGraphBackend for DiscordClient {
 // Discord supports DM channels, group DMs, and lifecycle management.
 // Mute/unmute require guild context and are not yet implemented.
 
+#[cfg(feature = "native")]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl poly_client::DmsAndGroupsBackend for DiscordClient {
@@ -2923,6 +2935,7 @@ impl poly_client::DmsAndGroupsBackend for DiscordClient {
 
 // ── H.4.a — MessagingBackend ─────────────────────────────────────────────────
 
+#[cfg(feature = "native")]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl poly_client::MessagingBackend for DiscordClient {
@@ -2981,6 +2994,7 @@ impl poly_client::MessagingBackend for DiscordClient {
 
 // ── H.4.b — ServerAdminBackend ───────────────────────────────────────────────
 
+#[cfg(feature = "native")]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl poly_client::ServerAdminBackend for DiscordClient {

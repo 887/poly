@@ -114,6 +114,8 @@ bip39 = "2.2"
 sha2 = "0.10"
 rand = "0.10"
 chacha20poly1305 = "0.10"
+aes-gcm = "0.10"
+gloo-net = "0.6"
 
 # i18n
 fluent-bundle = "0.16"

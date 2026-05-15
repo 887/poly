@@ -26,6 +26,17 @@ shells (apps/web, apps/desktop, apps/desktop-electron) can drive voice via HTTP:
 - `crates/host-bridge/tests/voice.rs` — opt-in smoke test (`RUN_VOICE_BRIDGE_SMOKE=1`)
 - `apps/poly-host/src/lib.rs` — mounts `voice_router` when `feature = "voice"`
 - `docs/dev/voice-bridge-architecture.md` — design rationale + transport diagram
+- **Generic host-bridge primitives refactor (change `wlswsonv`)**: `crates/host-bridge/src/voice.rs`
+  (1128 lines, Discord-coupled) replaced with three generic, plugin-agnostic route sets:
+  `udp.rs`/`udp_client.rs` (`/host/udp/{bind,connect,send,recv_stream/:id,close}`, SSE stream),
+  `codec_opus.rs`/`codec_opus_client.rs` (`/host/codec/opus/{encoder/create,encode,decoder/create,decode,close}`),
+  `aead.rs`/`aead_client.rs` (`/host/aead/{create,encrypt,decrypt,close}`, xchacha20poly1305 + aes256gcm).
+  Wire types always-compiled in `*_client.rs`; server modules cfg-gated + re-export. Features:
+  `voice-primitives = [udp, codec-opus, aead]`, `voice = [voice-primitives]`. `tokio-tungstenite`
+  removed from host-bridge. `clients/discord/src/voice_bridge.rs` rewritten: full Discord protocol
+  (HELLO/IDENTIFY/READY, IP discovery, RTP, xchacha20 nonce) via generic primitive clients; WASM uses
+  `gloo-net` WebSocket with `Rc<RefCell>`. `apps/poly-host` mounts `udp_router`/`opus_router`/`aead_router`.
+  All 7 cargo/build checks + 5 wire-type integration tests pass.
 
 **Caveat update:** `docs/dev/video-codec-strategy.md` noted "browser-side Discord video
 transmit is not feasible — no UDP socket." This caveat is superseded: both audio and

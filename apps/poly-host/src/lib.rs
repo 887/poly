@@ -48,7 +48,11 @@ use poly_host_bridge::{
 #[cfg(feature = "video")]
 use poly_host_bridge::video::{VideoState, close_session, decode_h264, encode_h264};
 #[cfg(feature = "voice")]
-use poly_host_bridge::voice::{VoiceState, router as voice_router};
+use poly_host_bridge::{
+    aead::{AeadState, router as aead_router},
+    codec_opus::{OpusState, router as opus_router},
+    udp::{UdpState, router as udp_router},
+};
 use sqlite::{Connection, ConnectionThreadSafe, State as SqlState};
 use tower_http::cors::{Any, CorsLayer};
 
@@ -177,14 +181,15 @@ pub fn router(state: HostState) -> Router {
         base.merge(video_router)
     };
 
-    // Mount voice bridge routes when the `voice` feature is enabled.
-    // Voice state holds an in-memory map of live sessions (UDP sockets, Opus
-    // encoders, broadcast channels). The `voice` feature requires `video` so
-    // openh264 is already in scope for the receive-path video decoder.
+    // Mount generic voice transport primitives when the `voice` feature is enabled.
+    // voice = voice-primitives = udp + codec-opus + aead. Discord-specific protocol
+    // (WS handshake, RTP framing) runs in the discord plugin, not here.
     #[cfg(feature = "voice")]
     let base = {
-        let voice_r = voice_router(VoiceState::new()).layer(cors);
-        base.merge(voice_r)
+        let udp_r = udp_router(UdpState::new()).layer(cors.clone());
+        let opus_r = opus_router(OpusState::new()).layer(cors.clone());
+        let aead_r = aead_router(AeadState::new()).layer(cors);
+        base.merge(udp_r).merge(opus_r).merge(aead_r)
     };
 
     base

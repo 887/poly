@@ -52,22 +52,35 @@ pub mod video;
 #[cfg(all(not(target_arch = "wasm32"), feature = "video"))]
 pub mod video_client;
 
-// Voice bridge wire types — request/response structs and SSE event enum.
-// Available on ALL targets including wasm32 (no native deps). The browser WASM
-// client imports VoiceConnectRequest etc. from here via voice_client.
+// Voice bridge wire types — SSE event enum shared by clients.
+// Available on ALL targets including wasm32 (no native deps).
 pub mod voice_wire;
 
-// Voice bridge server-side handlers — non-wasm + voice feature only.
-// Requires audiopus (libopus FFI), chacha20poly1305, tokio-tungstenite, and
-// the `video` feature (decode path uses openh264 via video.rs session map).
-// WASM callers use VoiceBridgeClient in voice_client instead.
-#[cfg(all(not(target_arch = "wasm32"), feature = "voice"))]
-pub mod voice;
+// ── Generic host primitives (udp, codec-opus, aead) ─────────────────────────
+//
+// These three route sets replace the old Discord-coupled voice.rs.
+// They are reusable by any plugin (Discord, Stoat, Matrix, etc.).
 
-// Typed client for /host/voice/* — available on all targets including wasm32.
-// On WASM: use VoiceBridgeClient::from_origin() so requests go same-origin.
-// On native: use VoiceBridgeClient::default_local() for the 9333 daemon.
-pub mod voice_client;
+// UDP socket service — server-side handlers. Non-wasm + "udp" feature only.
+#[cfg(all(not(target_arch = "wasm32"), feature = "udp"))]
+pub mod udp;
+
+// Typed client for /host/udp/* — all targets including wasm32.
+pub mod udp_client;
+
+// Opus encode/decode service — server-side handlers. Non-wasm + "codec-opus" feature only.
+#[cfg(all(not(target_arch = "wasm32"), feature = "codec-opus"))]
+pub mod codec_opus;
+
+// Typed client for /host/codec/opus/* — all targets including wasm32.
+pub mod codec_opus_client;
+
+// AEAD encrypt/decrypt service — server-side handlers. Non-wasm + "aead" feature only.
+#[cfg(all(not(target_arch = "wasm32"), feature = "aead"))]
+pub mod aead;
+
+// Typed client for /host/aead/* — all targets including wasm32.
+pub mod aead_client;
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;

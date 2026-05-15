@@ -10,6 +10,13 @@ default = ["demo", "server", "storage-sqlite"]
 stoat = ["dep:poly-stoat"]
 matrix = ["dep:poly-matrix"]
 discord = ["dep:poly-discord"]
+# WASM-safe voice transport for the Discord client.
+# Enables `voice_bridge::DiscordVoiceBridgeClient` — routes voice through
+# /host/voice/* HTTP endpoints instead of the native UDP/Opus pipeline.
+# Mutually exclusive with a hypothetical `discord-voice` (native gateway)
+# by dep tree: `discord-voice` would pull in audiopus/tungstenite which
+# don't compile on wasm32. Enable this in apps/web for the WASM bundle.
+discord-voice-bridge = ["discord", "poly-discord/voice-bridge"]
 teams = ["dep:poly-teams"]
 demo = ["dep:poly-demo"]
 server = ["dep:poly-server-client"]
