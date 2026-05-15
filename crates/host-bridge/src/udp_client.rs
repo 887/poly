@@ -31,7 +31,7 @@ use thiserror::Error;
 pub const ROUTE_UDP_BIND: &str = "/host/udp/bind";
 pub const ROUTE_UDP_CONNECT: &str = "/host/udp/connect";
 pub const ROUTE_UDP_SEND: &str = "/host/udp/send";
-pub const ROUTE_UDP_RECV_STREAM_PATTERN: &str = "/host/udp/recv_stream/:id";
+pub const ROUTE_UDP_RECV_STREAM_PATTERN: &str = "/host/udp/recv_stream/{id}";
 pub const ROUTE_UDP_CLOSE: &str = "/host/udp/close";
 
 // ── Wire types ─────────────────────────────────────────────────────────────────
