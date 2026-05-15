@@ -174,11 +174,11 @@ async fn handle_encrypt(
                 return err_encrypt("AES-256-GCM nonce must be 12 bytes".into());
             }
             let nonce = GcmNonce::from_slice(&nonce_bytes);
-            aes_gcm::aead::AeadInPlace::encrypt_in_place_detached(c, nonce, &aad, &mut plaintext.clone())
+            let mut buf = plaintext.clone();
+            aes_gcm::aead::AeadInPlace::encrypt_in_place_detached(c, nonce, &aad, &mut buf)
                 .map(|tag| {
-                    let mut out = plaintext.clone();
-                    out.extend_from_slice(&tag);
-                    out
+                    buf.extend_from_slice(&tag);
+                    buf
                 })
                 .map_err(|_| "AES-GCM encrypt failed".to_string())
         }

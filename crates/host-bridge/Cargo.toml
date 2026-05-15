@@ -119,6 +119,21 @@ name = "voice"
 path = "tests/voice.rs"
 required-features = ["voice"]
 
+[[test]]
+name = "udp"
+path = "tests/udp.rs"
+required-features = ["udp"]
+
+[[test]]
+name = "codec-opus"
+path = "tests/codec_opus.rs"
+required-features = ["codec-opus"]
+
+[[test]]
+name = "aead"
+path = "tests/aead.rs"
+required-features = ["aead"]
+
 [dev-dependencies]
 # Used in tests/video.rs for the `oneshot` request helper.
 tower = { workspace = true, features = ["util"] }
