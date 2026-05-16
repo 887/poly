@@ -12,10 +12,7 @@
 use std::sync::Arc;
 
 use poly_client::{
-    IsBackend, MessagingBackend, ModerationBackend, SocialGraphBackend, DmsAndGroupsBackend,
-    ServerAdminBackend, AuthCredentials, BackendType, ChannelType, ClientError, ClientEvent,
-    MessageContent, MessageQuery, PresenceStatus, SettingsScope, ViewBody, ViewKind,
-    UpdateChannelParams, MenuTargetKind, ActionOutcome, CursorKind, Cursor,
+    IsBackend, DmsAndGroupsBackend, AuthCredentials,
 };
 use poly_chat_mcp::memory::MemoryDb;
 use poly_chat_mcp::persona::heartbeat::HeartbeatRegistry;

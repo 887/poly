@@ -877,9 +877,10 @@ impl IsBackend for StoatClient {
         Some(self)
     }
 
+    #[cfg_attr(not(feature = "voice"), allow(unused_variables))]
     async fn get_voice_participants(
         &self,
-        _channel_id: &str,
+        channel_id: &str,
     ) -> ClientResult<Vec<VoiceParticipant>> {
         // F.7 — return participants from the voice cache populated by Vortex WS events.
         // Falls back to empty vec when voice feature is not enabled or no active session.
@@ -905,10 +906,11 @@ impl IsBackend for StoatClient {
     /// The full voice transport (Vortex WS + Opus loops) is started separately via
     /// `StoatClient::connect_voice` which takes a real `AudioBackend` reference.
     /// This method only performs the REST signaling step so the voice banner updates.
+    #[cfg_attr(not(feature = "voice"), allow(unused_variables))]
     async fn join_voice_channel_transport(
         &self,
         _server_id: &str,
-        _channel_id: &str,
+        channel_id: &str,
     ) -> ClientResult<()> {
         #[cfg(feature = "voice")]
         {

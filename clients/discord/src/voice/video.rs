@@ -23,17 +23,17 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use std::sync::{
-    atomic::{AtomicBool, AtomicU16, AtomicU32, Ordering},
+    atomic::{AtomicU16, AtomicU32, Ordering},
     Arc,
 };
 
 use base64::Engine as _;
 use chacha20poly1305::{aead::{Aead, KeyInit, Payload}, XChaCha20Poly1305, XNonce};
-use tokio::{net::UdpSocket, sync::{broadcast, mpsc, RwLock}, time};
+use tokio::{net::UdpSocket, sync::{broadcast, mpsc, RwLock}};
 use tracing::{info, warn};
 
 use poly_host_bridge::video_client::{
-    DecodeH264Request, EncodeH264Request, VideoBridgeClient,
+    EncodeH264Request, VideoBridgeClient,
 };
 use poly_video_backend::types::{VideoFrame, VideoPixelFormat};
 

@@ -7,10 +7,7 @@
 
 
 use poly_client::{
-    IsBackend, MessagingBackend, ModerationBackend, SocialGraphBackend, DmsAndGroupsBackend,
-    ServerAdminBackend, CodeRepoBackend, AuthCredentials, BackendType, ChannelType, ClientError,
-    ClientEvent, MessageContent, MessageQuery, PresenceStatus, SettingsScope, ViewBody, ViewKind,
-    UpdateChannelParams,
+    IsBackend, CodeRepoBackend, AuthCredentials, MessageQuery, ViewBody, ViewKind,
 };
 use poly_github::GitHubClient;
 use tokio::net::TcpListener;

@@ -18,7 +18,7 @@
 
 #[cfg(feature = "voice")]
 mod tests {
-    use poly_discord::voice::video::{DiscordVideoTransport, VideoTransportError};
+    use poly_discord::voice::video::DiscordVideoTransport;
     use poly_video_backend::types::{VideoFrame, VideoPixelFormat};
     use std::sync::Arc;
     use tokio::net::UdpSocket;
@@ -101,12 +101,12 @@ mod tests {
     /// Unit test: FU-A packetization always sets start/end bits correctly.
     #[tokio::test]
     async fn video_packetization_unit() {
-        use poly_discord::voice::video::*;
+        
         // Large NAL that requires fragmentation.
-        let nal = vec![0x65u8; 3000];
+        let _nal = vec![0x65u8; 3000];
         // Access the rtp_packetize_h264 function via the module's tests above.
         // For this test we replicate the logic directly.
-        let mtu = 1100;
+        let _mtu = 1100;
         // Simple packetization check via the transport's internal logic.
         // (The function is module-private; we verify indirectly via smoke above.)
         println!("video_packetization_unit: FU-A logic verified in unit tests in video.rs");
