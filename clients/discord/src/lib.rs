@@ -1404,7 +1404,22 @@ impl IsBackend for DiscordClient {
             token,
             backend: BackendType::from(crate::SLUG),
             icon_emoji: Some("💬".to_string()),
-            instance_id: self.http.base_url().to_string(),
+            // Session.instance_id flows into Route URL segments
+            // (e.g. /discord/{instance_id}/{account}/{guild}). If the
+            // scheme (http://) leaks through, the resulting path
+            // contains `://` and the Dioxus router emits PageNotFound,
+            // which the on_update handler then "recovers" from by
+            // bouncing to some other account's last route. Strip the
+            // scheme + trailing slash here, mirroring what matrix and
+            // stoat do via their `instance_id()` helpers. backend_url
+            // keeps the full URL with scheme — it's the actual HTTP target.
+            instance_id: self
+                .http
+                .base_url()
+                .trim_start_matches("https://")
+                .trim_start_matches("http://")
+                .trim_end_matches('/')
+                .to_string(),
             backend_url: Some(self.http.base_url().to_string()),
         })
     }
