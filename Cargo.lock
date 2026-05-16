@@ -7282,6 +7282,8 @@ dependencies = [
  "discortp",
  "futures",
  "gloo-net",
+ "gloo-timers",
+ "js-sys",
  "poly-audio-backend",
  "poly-client",
  "poly-host-bridge",
@@ -7298,6 +7300,7 @@ dependencies = [
  "tracing",
  "twilight-model",
  "uuid",
+ "wasm-bindgen-futures",
  "wit-bindgen 0.53.1",
 ]
 

@@ -17,6 +17,11 @@ discord = ["dep:poly-discord"]
 # by dep tree: `discord-voice` would pull in audiopus/tungstenite which
 # don't compile on wasm32. Enable this in apps/web for the WASM bundle.
 discord-voice-bridge = ["discord", "poly-discord/voice-bridge"]
+# WASM-safe Discord main gateway WebSocket transport.
+# Enables the browser-WS gateway loop (gloo-net) that stashes
+# VOICE_STATE_UPDATE / VOICE_SERVER_UPDATE credentials for
+# DiscordVoiceBridgeClient. Requires discord-voice-bridge.
+discord-gateway-bridge = ["discord-voice-bridge", "poly-discord/gateway-bridge"]
 teams = ["dep:poly-teams"]
 demo = ["dep:poly-demo"]
 server = ["dep:poly-server-client"]

@@ -20,7 +20,7 @@ path = "src/main.rs"
 # server half separately — see `Dioxus.toml [[features]]` for the
 # client/server feature split.
 default = ["dev-plugins", "web"]
-dev-plugins = ["poly-core/discord", "poly-core/teams", "poly-core/reddit", "poly-core/discord-voice-bridge"]
+dev-plugins = ["poly-core/discord", "poly-core/teams", "poly-core/reddit", "poly-core/discord-voice-bridge", "poly-core/discord-gateway-bridge"]
 production = []
 # `web` brings in the WASM renderer; compiled when targeting wasm32.
 # We DELIBERATELY do NOT enable `dioxus/fullstack` here — that would

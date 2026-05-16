@@ -70,6 +70,25 @@ voice-bridge = [
     "dep:gloo-net",
     "dep:poly-host-bridge",
 ]
+# Gateway bridge — WASM-safe Discord main gateway WebSocket.
+# Compiles on wasm32-unknown-unknown. Connects to wss://gateway.discord.gg,
+# sends op 2 IDENTIFY, receives VOICE_STATE_UPDATE + VOICE_SERVER_UPDATE, and
+# stashes voice credentials so that join_voice_channel_transport can pass real
+# endpoint/token/session_id to DiscordVoiceBridgeClient.
+#
+# Must NOT imply `native` or `gateway` — both require tokio-tungstenite/mio
+# which do not compile on wasm32-unknown-unknown.
+gateway-bridge = [
+    "dep:gloo-net",
+    "dep:gloo-timers",
+    "dep:wasm-bindgen-futures",
+    "dep:js-sys",
+    "dep:serde_json",
+    "dep:serde",
+    "dep:futures",
+    "dep:tokio",
+    "dep:tracing",
+]
 
 [dependencies]
 poly-ui-macros = { workspace = true }
@@ -102,9 +121,15 @@ poly-audio-backend = { workspace = true, optional = true }
 # Video transport — gated by voice feature (Phase E of plan-voice-video-calls.md).
 poly-video-backend = { workspace = true, optional = true }
 
-# Voice-bridge — WASM-safe deps (feature = "voice-bridge").
+# Voice-bridge / gateway-bridge — WASM-safe deps.
 # gloo-net provides browser WebSocket for the Discord voice WS handshake on wasm32.
 gloo-net = { workspace = true, optional = true, features = ["websocket"] }
+# gateway-bridge — gloo-timers provides browser setTimeout as a Rust Future on wasm32.
+gloo-timers = { version = "0.3", optional = true, features = ["futures"] }
+# gateway-bridge — needed to spawn async tasks on wasm32 (wasm_bindgen_futures::spawn_local).
+wasm-bindgen-futures = { workspace = true, optional = true }
+# gateway-bridge — js_sys::Promise for future interop.
+js-sys = { workspace = true, optional = true }
 
 # WASM plugin guest bindings (WASI targets only)
 [target.'cfg(target_os = "wasi")'.dependencies]

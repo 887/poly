@@ -39,6 +39,13 @@ pub mod voice;
 #[cfg(feature = "voice-bridge")]
 pub mod voice_bridge;
 
+/// Discord main gateway WebSocket transport for WASM — compiles on wasm32.
+/// Connects to wss://gateway.discord.gg, sends op 2 IDENTIFY, and stashes
+/// VOICE_STATE_UPDATE / VOICE_SERVER_UPDATE credentials so that
+/// join_voice_channel_transport can pass real creds to DiscordVoiceBridgeClient.
+#[cfg(feature = "gateway-bridge")]
+pub mod gateway_bridge;
+
 /// WIT bindings for the WASM plugin (WASI targets only).
 #[cfg(target_os = "wasi")]
 mod wit_bindings;
@@ -83,6 +90,10 @@ use tokio::sync::Mutex as TokioMutex;
 use tokio::sync::RwLock;
 #[cfg(all(feature = "native", feature = "voice-bridge", target_arch = "wasm32"))]
 use std::sync::Arc as VbArc;
+#[cfg(all(feature = "native", feature = "gateway-bridge", target_arch = "wasm32"))]
+use std::sync::Arc as GbArc;
+#[cfg(all(feature = "gateway-bridge", target_arch = "wasm32"))]
+use wasm_bindgen_futures;
 
 /// F10 — in-memory mutable state for context-menu item state-awareness.
 ///
@@ -234,6 +245,26 @@ pub struct DiscordClient {
     /// using the account_id present at call time.
     #[cfg(all(feature = "native", feature = "voice-bridge", target_arch = "wasm32"))]
     pub voice_bridge_client: VbArc<tokio::sync::Mutex<Option<voice_bridge::DiscordVoiceBridgeClient>>>,
+
+    /// WASM gateway-bridge outbound channel (wasm32 + gateway-bridge feature).
+    ///
+    /// Send half of a `tokio::sync::mpsc::unbounded_channel`. The background
+    /// `gateway_bridge::run_loop` selects on this receiver and forwards any
+    /// message over the browser WebSocket.  Used by `join_voice_channel_transport`
+    /// to send op 4 Voice State Update without holding an `Rc` (which is !Send).
+    ///
+    /// `UnboundedSender<String>` is `Send + Sync` — safe to store on `DiscordClient`.
+    #[cfg(all(feature = "native", feature = "gateway-bridge", target_arch = "wasm32"))]
+    pub gateway_bridge_tx: GbArc<std::sync::Mutex<Option<tokio::sync::mpsc::UnboundedSender<String>>>>,
+
+    /// Stashed voice credentials from the gateway-bridge loop.
+    ///
+    /// Populated asynchronously when the gateway receives `VOICE_STATE_UPDATE`
+    /// (session_id) and `VOICE_SERVER_UPDATE` (endpoint + token).
+    /// `join_voice_channel_transport` reads from here and passes real creds to
+    /// `DiscordVoiceBridgeClient::connect_voice`.
+    #[cfg(all(feature = "native", feature = "gateway-bridge", target_arch = "wasm32"))]
+    pub voice_server_creds: gateway_bridge::CredsGuard,
 }
 
 #[cfg(feature = "native")]
@@ -258,6 +289,10 @@ impl DiscordClient {
             gateway_event_tx: Arc::new(Mutex::new(None)),
             #[cfg(all(feature = "native", feature = "voice-bridge", target_arch = "wasm32"))]
             voice_bridge_client: VbArc::new(tokio::sync::Mutex::new(None)),
+            #[cfg(all(feature = "native", feature = "gateway-bridge", target_arch = "wasm32"))]
+            gateway_bridge_tx: GbArc::new(std::sync::Mutex::new(None)),
+            #[cfg(all(feature = "native", feature = "gateway-bridge", target_arch = "wasm32"))]
+            voice_server_creds: GbArc::new(tokio::sync::Mutex::new(gateway_bridge::VoiceServerCreds::default())),
         }
     }
 
@@ -281,6 +316,10 @@ impl DiscordClient {
             gateway_event_tx: Arc::new(Mutex::new(None)),
             #[cfg(all(feature = "native", feature = "voice-bridge", target_arch = "wasm32"))]
             voice_bridge_client: VbArc::new(tokio::sync::Mutex::new(None)),
+            #[cfg(all(feature = "native", feature = "gateway-bridge", target_arch = "wasm32"))]
+            gateway_bridge_tx: GbArc::new(std::sync::Mutex::new(None)),
+            #[cfg(all(feature = "native", feature = "gateway-bridge", target_arch = "wasm32"))]
+            voice_server_creds: GbArc::new(tokio::sync::Mutex::new(gateway_bridge::VoiceServerCreds::default())),
         }
     }
 
@@ -308,6 +347,10 @@ impl DiscordClient {
             gateway_event_tx: Arc::new(Mutex::new(None)),
             #[cfg(all(feature = "native", feature = "voice-bridge", target_arch = "wasm32"))]
             voice_bridge_client: VbArc::new(tokio::sync::Mutex::new(None)),
+            #[cfg(all(feature = "native", feature = "gateway-bridge", target_arch = "wasm32"))]
+            gateway_bridge_tx: GbArc::new(std::sync::Mutex::new(None)),
+            #[cfg(all(feature = "native", feature = "gateway-bridge", target_arch = "wasm32"))]
+            voice_server_creds: GbArc::new(tokio::sync::Mutex::new(gateway_bridge::VoiceServerCreds::default())),
         }
     }
 
@@ -1585,27 +1628,71 @@ impl IsBackend for DiscordClient {
                 channel_id,
                 "join_voice_channel_transport: dispatching via DiscordVoiceBridgeClient"
             );
+
+            // gateway-bridge: send op 4 Voice State Update so Discord dispatches
+            // VOICE_STATE_UPDATE + VOICE_SERVER_UPDATE back to us.
+            #[cfg(feature = "gateway-bridge")]
+            {
+                let op4 = serde_json::json!({
+                    "op": 4,
+                    "d": {
+                        "guild_id": server_id,
+                        "channel_id": channel_id,
+                        "self_mute": false,
+                        "self_deaf": false,
+                    }
+                });
+                if let Ok(guard) = self.gateway_bridge_tx.lock() {
+                    if let Some(tx) = guard.as_ref() {
+                        let _ = tx.send(op4.to_string());
+                        tracing::info!(
+                            target: "poly_discord::gateway_bridge",
+                            server_id,
+                            channel_id,
+                            "join_voice_channel_transport: sent op4 via gateway-bridge"
+                        );
+                    } else {
+                        tracing::warn!(
+                            target: "poly_discord::gateway_bridge",
+                            "join_voice_channel_transport: gateway-bridge not yet connected \
+                             (event_stream not called or connection pending)"
+                        );
+                    }
+                }
+            }
+
+            // Read voice credentials — populated by the gateway-bridge loop from
+            // VOICE_STATE_UPDATE + VOICE_SERVER_UPDATE once Discord processes op 4.
+            // When gateway-bridge is not enabled, fall back to empty strings (the
+            // finish_handshake stub in voice_bridge.rs surfaces a clear error).
+            #[cfg(feature = "gateway-bridge")]
+            let (ws_endpoint, ws_token, ws_session_id) = {
+                let creds = self.voice_server_creds.lock().await;
+                (
+                    creds.endpoint.clone().unwrap_or_default(),
+                    creds.token.clone().unwrap_or_default(),
+                    creds.session_id.clone().unwrap_or_default(),
+                )
+            };
+            #[cfg(not(feature = "gateway-bridge"))]
+            let (ws_endpoint, ws_token, ws_session_id) =
+                (String::new(), String::new(), String::new());
+
             let account_id = self.account_id();
             let mut guard = self.voice_bridge_client.lock().await;
             if guard.is_none() {
                 *guard = Some(voice_bridge::DiscordVoiceBridgeClient::new(account_id));
             }
             let client = guard.as_ref().expect("just initialised above");
-            // ws_endpoint / ws_token / ws_session_id come from VOICE_SERVER_UPDATE +
-            // VOICE_STATE_UPDATE.  Full credential plumbing to wasm32 is a follow-up
-            // plan item.  The call proceeds with empty strings here so the wiring
-            // compiles and is reachable; connect_voice returns WsConnect("…") from
-            // the finish_handshake stub in voice_bridge.rs until that lands.
             let dummy_audio = poly_audio_backend::fake_backend::FakeAudioBackend::new();
             if let Err(e) = client
-                .connect_voice("", "", "", Some(server_id), &dummy_audio, None)
+                .connect_voice(&ws_endpoint, &ws_token, &ws_session_id, Some(server_id), &dummy_audio, None)
                 .await
             {
                 tracing::warn!(
                     target: "poly_discord::voice_bridge",
                     error = %e,
-                    "join_voice_channel_transport: connect_voice returned error \
-                     (expected until VOICE_SERVER_UPDATE credential plumbing ships)"
+                    "join_voice_channel_transport: connect_voice returned error"
                 );
             }
         }
@@ -1709,6 +1796,42 @@ impl IsBackend for DiscordClient {
                 return Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(rx));
             }
         }
+        // gateway-bridge path: wasm32 + gateway-bridge feature.
+        // Opens a browser WebSocket to wss://gateway.discord.gg, stashes
+        // VOICE_STATE_UPDATE / VOICE_SERVER_UPDATE credentials for voice joining,
+        // and wires a Send+Sync outbound channel so join_voice_channel_transport
+        // can push op 4 Voice State Update without holding an Rc.
+        #[cfg(all(feature = "gateway-bridge", target_arch = "wasm32"))]
+        {
+            if let Some(url) = &self.gateway_url {
+                let url = url.clone();
+                let token = self.http.token().unwrap_or_default();
+                let local_user_id = self.account_id();
+                let creds = std::sync::Arc::clone(&self.voice_server_creds);
+                let gw_tx_arc = std::sync::Arc::clone(&self.gateway_bridge_tx);
+
+                // `start` is async but `event_stream` is sync. Spawn a local future
+                // that calls `start` (which opens the WS + spawns the receive loop)
+                // then stores the resulting UnboundedSender in `gw_tx_arc`.
+                wasm_bindgen_futures::spawn_local(async move {
+                    match gateway_bridge::start(url, token, creds, local_user_id).await {
+                        Ok(sender) => {
+                            if let Ok(mut guard) = gw_tx_arc.lock() {
+                                *guard = Some(sender);
+                            }
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                target: "poly_discord::gateway_bridge",
+                                error = %e,
+                                "gateway-bridge: start failed"
+                            );
+                        }
+                    }
+                });
+            }
+        }
+
         // When the `gateway` feature is disabled (WASM plugin target, plain
         // native core consumer), we can't open a WebSocket — return a pending
         // stream. Events arrive via other paths (WIT plugin host, REST poll).
