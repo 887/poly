@@ -139,25 +139,41 @@ wit-bindgen = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 
-# Phase X.3 — browser audio playback for the voice-bridge path.
-# Features used by `voice_bridge/audio_playback.rs` for per-SSRC AudioContext
-# playback. wasm32-only; merges with the X.2 capture-side getUserMedia
-# features (overlap is harmless — cargo unions feature sets).
+# Browser-only deps for the wasm audio capture (Phase X.2) + playback (Phase X.3)
+# loops. Gated behind `voice-bridge` via cfg(target_arch = "wasm32") inside
+# audio_capture.rs / audio_playback.rs. Adds web-sys features needed for
+# getUserMedia + MediaStreamTrackProcessor + AudioContext + AudioBufferSourceNode,
+# plus js-sys / wasm-bindgen-futures / wasm-bindgen.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-sys = { workspace = true, features = [
-  "AudioContext",
-  "AudioContextOptions",
-  "AudioContextState",
-  "AudioBuffer",
-  "AudioBufferOptions",
-  "AudioBufferSourceNode",
-  "AudioBufferSourceOptions",
-  "AudioNode",
-  "AudioDestinationNode",
-  "AudioScheduledSourceNode",
+    # X.2 — capture (getUserMedia → MSTP → AudioData)
+    "Navigator",
+    "MediaDevices",
+    "MediaStream",
+    "MediaStreamTrack",
+    "MediaStreamConstraints",
+    "MediaTrackConstraints",
+    "MediaStreamTrackProcessor",
+    "MediaStreamTrackProcessorInit",
+    "ReadableStream",
+    "ReadableStreamDefaultReader",
+    "AudioData",
+    "AudioDataCopyToOptions",
+    # X.3 — playback (per-SSRC AudioContext + scheduled AudioBufferSourceNode)
+    "AudioContext",
+    "AudioContextOptions",
+    "AudioContextState",
+    "AudioBuffer",
+    "AudioBufferOptions",
+    "AudioBufferSourceNode",
+    "AudioBufferSourceOptions",
+    "AudioNode",
+    "AudioDestinationNode",
+    "AudioScheduledSourceNode",
 ] }
+js-sys = { workspace = true }
 wasm-bindgen = { workspace = true }
-
+wasm-bindgen-futures = { workspace = true }
 [dev-dependencies]
 poly-test-discord = { path = "../../servers/test-discord" }
 poly-test-common = { workspace = true }

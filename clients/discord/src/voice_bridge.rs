@@ -46,6 +46,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+/// Audio capture loop (Phase X.2). Browser-facing capture pipeline is
+/// wasm32-only; pure DSP helpers + their unit tests compile on every
+/// target. See module doc.
+pub mod audio_capture;
+
 use poly_host_bridge::{
     aead_client::AeadClient,
     codec_opus_client::OpusClient,
@@ -88,6 +93,11 @@ pub enum VoiceError {
 
     #[error("voice state update not received")]
     VoiceStateMissing,
+
+    /// Audio capture init failed (getUserMedia denied, no track, etc.).
+    /// Surfaced from `start_audio_capture` on the WASM bridge path.
+    #[error("audio capture init failed: {0}")]
+    Capture(String),
 }
 
 // ── Transmit mode ─────────────────────────────────────────────────────────────
@@ -155,6 +165,18 @@ pub struct VoiceBridgeSession {
     /// field — and therefore `VoiceBridgeSession` itself — is single-thread
     /// only on wasm32. Native builds are fully `Send + Sync`.
     pub ws_handle: WsHandle,
+
+    /// RTP packet sequence number, monotonically incremented per outbound
+    /// frame and wrapped at u16::MAX. `Arc` so the spawned capture task can
+    /// hold a cheap clone without keeping the session mutex locked across
+    /// awaits. Phase X.2 — fixes the previous hardcoded sequence=0 / ts=0
+    /// in `send_audio_frame` which made decoded packets impossible to
+    /// re-order on the receive side.
+    pub rtp_sequence: Arc<std::sync::atomic::AtomicU16>,
+    /// RTP timestamp, incremented by `OPUS_FRAME_SAMPLES / 2` (stereo
+    /// samples-per-channel = 960) per outbound frame. `Arc` for the same
+    /// reason as `rtp_sequence`. Phase X.2.
+    pub rtp_timestamp: Arc<std::sync::atomic::AtomicU32>,
 }
 
 /// Shared session guard. `None` when not in a call.
@@ -377,6 +399,8 @@ impl DiscordVoiceBridgeClient {
             decoder_session,
             aead_session,
             ssrc_to_user,
+<<<<<<< conflict 1 of 1
++++++++ vxqmorwp 70bda07c "feat(voice_bridge): wasm audio playback loop — UDP → AEAD → Opus → per-SSRC AudioContext (Phase X.3)" (rebase destination)
             local_ssrc,
             on_remote_speaking,
         )
@@ -404,6 +428,11 @@ impl DiscordVoiceBridgeClient {
         if guard.is_none() {
             return Err(VoiceError::WsConnect("no active voice session".into()));
         }
+            ws_handle: handshake.ws_handle,
+            rtp_sequence: Arc::new(std::sync::atomic::AtomicU16::new(0)),
+            rtp_timestamp: Arc::new(std::sync::atomic::AtomicU32::new(0)),
+        });
+
         Ok(())
     }
 
@@ -458,13 +487,17 @@ impl DiscordVoiceBridgeClient {
         // Encode.
         let opus_packet = s.opus.encode(&s.encoder_session, pcm).await?;
 
-        // Build RTP header (sequence + timestamp are per-frame monotonic; we
-        // derive a simple counter from the packet index using a thread-local
-        // would require RefCell in WASM — for now we use a fixed sequence=0
-        // and timestamp=0 per frame which satisfies the nonce derivation
-        // requirement without cross-task state in this simplistic path.
-        // A production implementation would track these in VoiceBridgeSession.)
-        let rtp_header = build_rtp_header(0, 0, s.local_ssrc);
+        // Phase X.2 — bump RTP sequence (wraps at u16::MAX) and timestamp
+        // (incremented by samples-per-channel = 960 for a 20 ms@48 kHz
+        // stereo frame). Relaxed ordering is fine: the encode + send path
+        // is serialized through the session mutex above so there's no
+        // multi-task contention on these atomics.
+        use std::sync::atomic::Ordering;
+        let sequence = s.rtp_sequence.fetch_add(1, Ordering::Relaxed);
+        let timestamp = s
+            .rtp_timestamp
+            .fetch_add((OPUS_FRAME_SAMPLES / 2) as u32, Ordering::Relaxed);
+        let rtp_header = build_rtp_header(sequence, timestamp, s.local_ssrc);
         let nonce = xchacha_nonce_from_rtp(&rtp_header);
 
         // Encrypt.
@@ -481,6 +514,95 @@ impl DiscordVoiceBridgeClient {
         s.udp.send(&s.udp_session, &packet, None).await?;
 
         Ok(())
+    }
+
+    /// Start the audio capture loop (Phase X.2 — wasm-only).
+    ///
+    /// Browser path: `navigator.mediaDevices.getUserMedia({audio: true})` →
+    /// `MediaStreamTrackProcessor` → 48 kHz stereo i16 PCM frames →
+    /// `send_audio_frame` (Opus encode + AEAD encrypt + RTP wrap + UDP send).
+    ///
+    /// Stores the loop's shutdown sender on `VoiceBridgeSession.capture_shutdown`.
+    /// Dropping the session (via `disconnect_voice`) drops the sender, the
+    /// receiver wakes with `Canceled`, and the loop exits cleanly.
+    ///
+    /// # Errors
+    ///
+    /// Returns `VoiceError::WsConnect` when no voice session is active.
+    /// Returns `VoiceError::Capture` when getUserMedia fails (permission
+    /// denied, no audio device, browser not Chromium-based) or when the
+    /// browser does not expose `MediaStreamTrackProcessor`.
+    ///
+    /// On non-wasm32 builds this is a no-op success — native callers use the
+    /// `clients/discord/src/voice/mod.rs` cpal-based capture path instead.
+    #[allow(unused_variables)]
+    pub async fn start_audio_capture(&self) -> Result<(), VoiceError> {
+        #[cfg(target_arch = "wasm32")]
+        {
+            // Snapshot the fields the capture loop needs out of the session
+            // so we don't keep the session mutex locked while
+            // `audio_capture::start_audio_capture` awaits getUserMedia.
+            let (udp, opus, aead, udp_session, encoder_session, aead_session,
+                 local_ssrc, rtp_sequence, rtp_timestamp) = {
+                let guard = self.voice_session.lock().await;
+                let s = guard.as_ref().ok_or_else(|| {
+                    VoiceError::WsConnect("no active voice session".into())
+                })?;
+                (
+                    Arc::clone(&s.udp),
+                    Arc::clone(&s.opus),
+                    Arc::clone(&s.aead),
+                    s.udp_session.clone(),
+                    s.encoder_session.clone(),
+                    s.aead_session.clone(),
+                    s.local_ssrc,
+                    Arc::clone(&s.rtp_sequence),
+                    Arc::clone(&s.rtp_timestamp),
+                )
+            };
+
+            let shutdown_tx = audio_capture::start_audio_capture(
+                audio_capture::CaptureParams {
+                    udp,
+                    opus,
+                    aead,
+                    udp_session,
+                    encoder_session,
+                    aead_session,
+                    local_ssrc,
+                    rtp_sequence,
+                    rtp_timestamp,
+                },
+            )
+            .await
+            .map_err(VoiceError::Capture)?;
+
+            let mut guard = self.voice_session.lock().await;
+            if let Some(s) = guard.as_mut() {
+                // Drop the previous shutdown sender (if any) — stopping the
+                // old capture loop — before installing the new one.
+                s.capture_shutdown = Some(shutdown_tx);
+            } else {
+                // Session disappeared between the snapshot and reinstall —
+                // dropping shutdown_tx now cancels the freshly-spawned loop.
+                return Err(VoiceError::WsConnect(
+                    "voice session ended during start_audio_capture".into(),
+                ));
+            }
+            Ok(())
+        }
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            // Native bridge builds (test only) have no browser mic — return
+            // Ok so the foundation handshake test isn't disturbed. Real
+            // native capture lives on the `voice` feature path (cpal).
+            let guard = self.voice_session.lock().await;
+            if guard.is_none() {
+                return Err(VoiceError::WsConnect("no active voice session".into()));
+            }
+            Ok(())
+        }
     }
 
     /// Start sending camera video via the host-bridge.
