@@ -77,33 +77,19 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Build the Electron-specific axum router for sandbox and caps endpoints.
+/// Build the Electron-specific axum router for sandbox endpoints.
 ///
 /// Routes:
-/// - `GET  /host/caps`             — returns advertised host capabilities.
 /// - `POST /host/sandbox/open`     — open a sandboxed browser, resolve on capture.
+///
+/// `/host/caps` is served by `poly_host::router(state)` (state seeded via
+/// `with_caps(...)` above). Axum 0.7 panics on duplicate routes during merge,
+/// so the electron-side registration was removed.
 #[cfg(all(not(target_arch = "wasm32"), feature = "server"))]
 fn sandbox_router() -> axum::Router<()> {
-    use axum::routing::{get, post};
+    use axum::routing::post;
     axum::Router::new()
-        .route("/host/caps", get(host_caps_handler))
         .route("/host/sandbox/open", post(sandbox_open_handler))
-}
-
-/// `GET /host/caps` — returns the JSON list of advertised host capabilities.
-///
-/// Response: `{ "caps": ["SandboxBrowser"] }`
-#[cfg(all(not(target_arch = "wasm32"), feature = "server"))]
-async fn host_caps_handler() -> axum::Json<serde_json::Value> {
-    let caps: Vec<&str> = sandbox::advertised_host_caps()
-        .iter()
-        .map(|c| match c {
-            poly_host_sandbox::HostCap::SandboxBrowser => "SandboxBrowser",
-            poly_host_sandbox::HostCap::SystemTray => "SystemTray",
-            poly_host_sandbox::HostCap::OsNotifications => "OsNotifications",
-        })
-        .collect();
-    axum::Json(serde_json::json!({ "caps": caps }))
 }
 
 /// Request body for `POST /host/sandbox/open`.
