@@ -1514,6 +1514,11 @@ impl IsBackend for DiscordClient {
                     | DcChType::GuildAnnouncement
                     | DcChType::GuildForum
                     | DcChType::GuildMedia
+                    // Voice channels — needed so the sidebar can render them
+                    // and the user can click to invoke join_voice_channel_transport
+                    // through the gateway/voice-bridge transport added in phases C/D.
+                    | DcChType::GuildVoice
+                    | DcChType::GuildStageVoice
             ))
             .map(|c| self.discord_channel_to_poly(c, server_id))
             .collect())
