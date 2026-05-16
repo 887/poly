@@ -329,6 +329,8 @@ impl DiscordVoiceBridgeClient {
                 playback_shutdown: None,
                 ssrc_to_user,
                 ws_handle: handshake.ws_handle,
+                rtp_sequence: Arc::new(std::sync::atomic::AtomicU16::new(0)),
+                rtp_timestamp: Arc::new(std::sync::atomic::AtomicU32::new(0)),
             });
         }
 
@@ -399,8 +401,6 @@ impl DiscordVoiceBridgeClient {
             decoder_session,
             aead_session,
             ssrc_to_user,
-<<<<<<< conflict 1 of 1
-+++++++ vxqmorwp 70bda07c "feat(voice_bridge): wasm audio playback loop — UDP → AEAD → Opus → per-SSRC AudioContext (Phase X.3)" (rebase destination)
             local_ssrc,
             on_remote_speaking,
         )
@@ -428,11 +428,6 @@ impl DiscordVoiceBridgeClient {
         if guard.is_none() {
             return Err(VoiceError::WsConnect("no active voice session".into()));
         }
-            ws_handle: handshake.ws_handle,
-            rtp_sequence: Arc::new(std::sync::atomic::AtomicU16::new(0)),
-            rtp_timestamp: Arc::new(std::sync::atomic::AtomicU32::new(0)),
-        });
-
         Ok(())
     }
 
@@ -859,9 +854,7 @@ fn xchacha_nonce_from_rtp(rtp_header: &[u8]) -> Vec<u8> {
 
 pub mod voice_protocol {
     use super::*;
-    use futures::channel::mpsc::UnboundedReceiver;
-    #[cfg(target_arch = "wasm32")]
-    use futures::channel::mpsc::UnboundedSender;
+    use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
     use std::cell::RefCell;
     use std::time::Duration;
 
@@ -991,10 +984,7 @@ pub mod voice_protocol {
         }
     }
 
-    /// Build a sender pair used by the wasm pump task. Gated to wasm32
-    /// because the native bridge handshake currently returns `Err` before
-    /// allocating one (no native impl yet — Phase X.0 ships the WASM path).
-    #[cfg(target_arch = "wasm32")]
+    /// Build a sender pair used by the WS pump task (both WASM and native).
     pub(super) fn ws_recv_channel() -> (UnboundedSender<String>, UnboundedReceiver<String>) {
         futures::channel::mpsc::unbounded()
     }
@@ -1057,12 +1047,15 @@ pub mod voice_protocol {
         #[cfg(target_arch = "wasm32")]
         return run_handshake_wasm(ws_url, ws_token, ws_session_id, guild_id, user_id).await;
 
-        // On native (test builds) fall back to a stub that returns an error
-        // because this code path is only exercised from WASM.
-        #[cfg(not(target_arch = "wasm32"))]
+        // On native (test / chat-mcp builds) use tokio-tungstenite. Requires
+        // the `gateway` feature to pull in tokio-tungstenite.
+        #[cfg(all(not(target_arch = "wasm32"), feature = "gateway"))]
+        return run_handshake_native(ws_url, ws_token, ws_session_id, guild_id, user_id).await;
+
+        #[cfg(all(not(target_arch = "wasm32"), not(feature = "gateway")))]
         {
             let _ = (ws_url, ws_token, ws_session_id, guild_id, user_id);
-            Err("voice_bridge::run_handshake is WASM-only; use the native voice path".into())
+            Err("voice_bridge::run_handshake requires either wasm32 target or the `gateway` feature for tokio-tungstenite".into())
         }
     }
 
@@ -1284,6 +1277,155 @@ pub mod voice_protocol {
                         .await
                         .map_err(|e| format!("WS send: {e:?}"))
                 }) as futures::future::LocalBoxFuture<'static, Result<(), String>>
+            }),
+            recv: RefCell::new(Some(recv_rx)),
+        };
+
+        Ok(HandshakeResult {
+            server_ip,
+            server_port,
+            ssrc,
+            mode,
+            ws_handle,
+        })
+    }
+
+    // ── Native-only handshake (Phase X.0 follow-up) ───────────────────────────
+
+    /// Native counterpart to `run_handshake_wasm`. Drives the Discord voice
+    /// gateway v8 handshake via `tokio-tungstenite`, then spawns a tokio task
+    /// that pumps Text frames into the recv channel for the lifetime of the
+    /// WS. Mirrors the wasm path 1:1 — same op sequence, same channel shape,
+    /// same `WsHandle` contract.
+    ///
+    /// Used by:
+    ///   - `clients/discord/tests/voice_bridge_handshake.rs` integration test.
+    ///   - any chat-mcp native consumer of `DiscordVoiceBridgeClient`.
+    #[cfg(all(not(target_arch = "wasm32"), feature = "gateway"))]
+    async fn run_handshake_native(
+        ws_url: String,
+        ws_token: &str,
+        ws_session_id: &str,
+        guild_id: Option<&str>,
+        user_id: &str,
+    ) -> Result<HandshakeResult, String> {
+        use futures::{SinkExt, StreamExt};
+        use tokio_tungstenite::tungstenite::Message;
+
+        let (ws, _resp) = tokio_tungstenite::connect_async(&ws_url)
+            .await
+            .map_err(|e| format!("connect_async failed: {e}"))?;
+        let (mut ws_tx, mut ws_rx) = ws.split();
+
+        // Wait for op 8 HELLO.
+        let heartbeat_ms = loop {
+            match ws_rx.next().await {
+                Some(Ok(Message::Text(text))) => {
+                    let v: serde_json::Value = serde_json::from_str(&text)
+                        .map_err(|e| format!("HELLO parse: {e}"))?;
+                    if v.get("op").and_then(|o| o.as_u64()) == Some(8) {
+                        let ms = v
+                            .get("d")
+                            .and_then(|d| d.get("heartbeat_interval"))
+                            .and_then(|i| i.as_u64())
+                            .unwrap_or(5000);
+                        break ms;
+                    }
+                }
+                Some(Ok(_)) => continue,
+                Some(Err(e)) => return Err(format!("WS recv before HELLO: {e}")),
+                None => return Err("WS closed before op 8 HELLO".into()),
+            }
+        };
+        let _ = heartbeat_ms; // heartbeat loop is a follow-up
+
+        // Send op 0 IDENTIFY.
+        let identify = serde_json::json!({
+            "op": 0,
+            "d": {
+                "server_id": guild_id.unwrap_or(user_id),
+                "user_id": user_id,
+                "session_id": ws_session_id,
+                "token": ws_token,
+            }
+        });
+        ws_tx
+            .send(Message::Text(identify.to_string().into()))
+            .await
+            .map_err(|e| format!("send IDENTIFY: {e}"))?;
+
+        // Wait for op 2 READY.
+        let (ssrc, server_ip, server_port, modes) = loop {
+            match ws_rx.next().await {
+                Some(Ok(Message::Text(text))) => {
+                    let v: serde_json::Value = serde_json::from_str(&text)
+                        .map_err(|e| format!("READY parse: {e}"))?;
+                    if v.get("op").and_then(|o| o.as_u64()) == Some(2) {
+                        let d = v.get("d").cloned().unwrap_or(serde_json::Value::Null);
+                        let ssrc = d.get("ssrc").and_then(|s| s.as_u64()).unwrap_or(0) as u32;
+                        let ip = d
+                            .get("ip")
+                            .and_then(|s| s.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        let port = d.get("port").and_then(|p| p.as_u64()).unwrap_or(0) as u16;
+                        let modes: Vec<String> = d
+                            .get("modes")
+                            .and_then(|m| m.as_array())
+                            .map(|a| {
+                                a.iter()
+                                    .filter_map(|v| v.as_str().map(str::to_string))
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                        break (ssrc, ip, port, modes);
+                    }
+                }
+                Some(Ok(_)) => continue,
+                Some(Err(e)) => return Err(format!("WS recv before READY: {e}")),
+                None => return Err("WS closed before op 2 READY".into()),
+            }
+        };
+
+        // Select the preferred AEAD mode.
+        let mode = super::PREFERRED_AEAD_MODES
+            .iter()
+            .find(|&&m| modes.iter().any(|s| s == m))
+            .map(|&m| m.to_string())
+            .ok_or("no supported AEAD mode in op 2 READY")?;
+
+        // Wrap the sink in Arc<tokio::sync::Mutex<_>> so the send closure can
+        // be invoked from multiple sites (finish_handshake, heartbeat, etc.)
+        // without ownership headaches. The send closure returns a
+        // `LocalBoxFuture` to keep the API symmetric with the wasm path.
+        let tx_guard = std::sync::Arc::new(tokio::sync::Mutex::new(ws_tx));
+
+        // Pump the remainder of the WS stream into the recv channel. The
+        // task ends when ws_rx returns None (WS closed) or the receiver is
+        // dropped (caller no longer cares).
+        let (recv_tx, recv_rx) = ws_recv_channel();
+        tokio::spawn(async move {
+            let mut ws_rx = ws_rx;
+            while let Some(item) = ws_rx.next().await {
+                if let Ok(Message::Text(text)) = item {
+                    if recv_tx.unbounded_send(text.to_string()).is_err() {
+                        break;
+                    }
+                }
+                // Binary frames + Err items skipped on the bridge path.
+            }
+        });
+
+        let ws_handle = WsHandle {
+            send: Box::new(move |msg: String| {
+                let tx = std::sync::Arc::clone(&tx_guard);
+                Box::pin(async move {
+                    let mut sink = tx.lock().await;
+                    sink.send(Message::Text(msg.into()))
+                        .await
+                        .map_err(|e| format!("WS send: {e}"))
+                })
+                    as futures::future::LocalBoxFuture<'static, Result<(), String>>
             }),
             recv: RefCell::new(Some(recv_rx)),
         };

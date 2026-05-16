@@ -22,7 +22,9 @@ use std::time::Duration;
 
 use axum::serve;
 use futures::{SinkExt, StreamExt};
-use poly_discord::voice_bridge::voice_protocol::parse_session_description;
+use poly_discord::voice_bridge::voice_protocol::{
+    finish_handshake, parse_session_description, run_handshake,
+};
 use poly_test_discord::{router, DiscordState};
 use tokio::net::TcpListener;
 use tokio_tungstenite::tungstenite::Message;
@@ -138,6 +140,52 @@ async fn parse_session_description_skips_non_op4_frames() {
             "op {op} should yield Ok(None), got {result:?}"
         );
     }
+}
+
+/// Drive the public `run_handshake` dispatch on native through the mock and
+/// verify it returns a populated `HandshakeResult`. This proves the N.1+N.2
+/// native handshake path works end-to-end without needing a poly-host daemon
+/// (which is only required for the subsequent UDP/AEAD/Opus stages).
+#[tokio::test]
+async fn run_handshake_native_dispatch_returns_handshake_result() {
+    let (ws_url, _port, _shutdown) = start_mock().await;
+
+    // run_handshake expects a bare host:port (no scheme, no path). Strip
+    // the `ws://` prefix and the `/voice/ws` suffix that start_mock added.
+    let endpoint = ws_url
+        .trim_start_matches("ws://")
+        .trim_end_matches("/voice/ws")
+        .to_string();
+
+    let result = run_handshake(
+        &endpoint,
+        "tok_abc",
+        "sess_abc",
+        Some("G001"),
+        "U001",
+    )
+    .await
+    .expect("run_handshake (native) must succeed");
+
+    assert_eq!(result.ssrc, 1, "mock seeds ssrc=1 for first session");
+    assert_eq!(result.mode, "aead_xchacha20_poly1305_rtpsize");
+    assert!(!result.server_ip.is_empty(), "server_ip must be populated");
+    assert_ne!(result.server_port, 0, "server_port must be populated");
+
+    // Confirm the send-half of the WsHandle works by sending op 1
+    // SELECT_PROTOCOL and that the pump task delivers the resulting op 4
+    // SESSION_DESCRIPTION back through the recv channel. This exercises
+    // both the tokio-tungstenite write sink AND the recv-channel pump task
+    // spawned by run_handshake_native.
+    let secret_key = finish_handshake(
+        &result.ws_handle,
+        "127.0.0.1",
+        12345,
+        &result.mode,
+    )
+    .await
+    .expect("finish_handshake must succeed");
+    assert_eq!(secret_key.len(), 32, "secret_key must be 32 bytes");
 }
 
 async fn next_text<S>(
