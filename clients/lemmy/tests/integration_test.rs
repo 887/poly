@@ -7,10 +7,7 @@
 
 
 use poly_client::{
-    IsBackend, MessagingBackend, ModerationBackend, SocialGraphBackend, DmsAndGroupsBackend,
-    ServerAdminBackend, AuthCredentials, BackendType, ChannelType, ClientError, ClientEvent,
-    MessageContent, MessageQuery, PresenceStatus, SettingsScope, ViewBody, ViewKind,
-    UpdateChannelParams, MenuTargetKind, ActionOutcome, CursorKind, Cursor,
+    IsBackend, ModerationBackend, SocialGraphBackend, DmsAndGroupsBackend, AuthCredentials, MessageQuery, ViewBody, ViewKind, MenuTargetKind,
 };
 use poly_lemmy::LemmyClient;
 use tokio::net::TcpListener;

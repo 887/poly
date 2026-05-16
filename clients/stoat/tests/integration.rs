@@ -18,9 +18,9 @@ use axum::{
     routing::{get, post, put},
 };
 use poly_client::{
-    IsBackend, MessagingBackend, ModerationBackend, SocialGraphBackend, DmsAndGroupsBackend,
-    AuthCredentials, BackendType, ChannelType, ClientError, ClientEvent, MessageContent,
-    MessageQuery, PresenceStatus, SettingsScope, ViewBody, ViewKind, UpdateChannelParams,
+    IsBackend, SocialGraphBackend, DmsAndGroupsBackend,
+    AuthCredentials, BackendType, ChannelType, ClientError, MessageContent,
+    MessageQuery, PresenceStatus,
 };
 use poly_stoat::StoatClient;
 use serde_json::{Value, json};

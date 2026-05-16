@@ -12,10 +12,7 @@ use std::sync::Arc;
 
 
 use poly_client::{
-    IsBackend, MessagingBackend, ModerationBackend, SocialGraphBackend, DmsAndGroupsBackend,
-    ServerAdminBackend, AuthCredentials, BackendType, ChannelType, ClientError, ClientEvent,
-    MessageContent, MessageQuery, PresenceStatus, SettingsScope, ViewBody, ViewKind,
-    UpdateChannelParams,
+    IsBackend, AuthCredentials,
 };
 use poly_teams::TeamsClient;
 use poly_test_teams::{TeamsState, router};

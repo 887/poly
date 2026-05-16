@@ -11,9 +11,8 @@ use std::time::Duration;
 use futures::StreamExt;
 
 use poly_client::{
-    IsBackend, MessagingBackend, ModerationBackend, SocialGraphBackend, DmsAndGroupsBackend,
-    AuthCredentials, MessageContent, MessageQuery, PresenceStatus, ChannelType, ClientError,
-    ClientEvent, SettingsScope, ViewBody, ViewKind, UpdateChannelParams,
+    IsBackend,
+    AuthCredentials,
 };
 use poly_stoat::StoatClient;
 use poly_test_common::TestServerBase;

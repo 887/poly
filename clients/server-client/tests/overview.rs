@@ -19,10 +19,8 @@ use tower_http::trace::TraceLayer;
 
 
 use poly_client::{
-    IsBackend, MessagingBackend, ModerationBackend, SocialGraphBackend, DmsAndGroupsBackend,
-    ServerAdminBackend, AuthCredentials, BackendType, ChannelType, ClientError, ClientEvent,
-    MessageContent, MessageQuery, PresenceStatus, SettingsScope, ViewBody, ViewKind,
-    UpdateChannelParams,
+    IsBackend,
+    ServerAdminBackend, AuthCredentials, ViewBody, ViewKind,
 };
 use poly_server::{AppState, Config, api, auth, db, ws};
 use poly_server_client::PolyServerBackend;

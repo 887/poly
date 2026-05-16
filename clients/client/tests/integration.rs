@@ -21,10 +21,9 @@ use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
 
 use poly_client::{
-    IsBackend, MessagingBackend, ModerationBackend, SocialGraphBackend, DmsAndGroupsBackend,
-    ServerAdminBackend, AuthCredentials, BackendType, ChannelType, ClientError, ClientEvent,
-    MessageContent, MessageQuery, PresenceStatus, SettingsScope, ViewBody, ViewKind,
-    UpdateChannelParams,
+    IsBackend, ModerationBackend, SocialGraphBackend,
+    ServerAdminBackend, AuthCredentials, BackendType,
+    MessageContent, MessageQuery,
 };
 use poly_server::{AppState, Config, api, auth, db, ws};
 use poly_server_client::PolyServerBackend;

@@ -15,7 +15,7 @@
 
 use std::sync::Arc;
 
-use poly_client::{AuthCredentials, IsBackend};
+use poly_client::IsBackend;
 use poly_discord::build_info::{BuildInfo, LATEST_KNOWN_STABLE_BUILD};
 use poly_discord::super_properties::SuperProperties;
 use poly_test_discord::{DiscordState, router};

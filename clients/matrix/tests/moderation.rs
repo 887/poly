@@ -15,9 +15,7 @@ use tokio::net::TcpListener;
 
 
 use poly_client::{
-    IsBackend, MessagingBackend, ModerationBackend, SocialGraphBackend, DmsAndGroupsBackend,
-    ServerAdminBackend, AuthCredentials, BackendType, ChannelType, ClientError, ClientEvent,
-    MessageContent, MessageQuery, PresenceStatus, SettingsScope, ViewBody, ViewKind,
+    IsBackend, ModerationBackend, AuthCredentials,
     UpdateChannelParams,
 };
 use poly_matrix::MatrixClient;

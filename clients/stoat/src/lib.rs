@@ -879,7 +879,7 @@ impl IsBackend for StoatClient {
 
     async fn get_voice_participants(
         &self,
-        channel_id: &str,
+        _channel_id: &str,
     ) -> ClientResult<Vec<VoiceParticipant>> {
         // F.7 — return participants from the voice cache populated by Vortex WS events.
         // Falls back to empty vec when voice feature is not enabled or no active session.
@@ -908,7 +908,7 @@ impl IsBackend for StoatClient {
     async fn join_voice_channel_transport(
         &self,
         _server_id: &str,
-        channel_id: &str,
+        _channel_id: &str,
     ) -> ClientResult<()> {
         #[cfg(feature = "voice")]
         {
@@ -2134,9 +2134,7 @@ impl poly_client::MessagingBackend for StoatClient {
 #[cfg(all(test, feature = "native"))]
 mod tests {
     use poly_client::{
-        IsBackend, MessagingBackend, ModerationBackend, SocialGraphBackend, DmsAndGroupsBackend,
-        AuthCredentials, BackendType, MessageContent, MessageQuery, PresenceStatus, ChannelType,
-        ClientError, ClientEvent, SettingsScope, ViewBody, ViewKind, UpdateChannelParams,
+        IsBackend, BackendType, PresenceStatus,
     };
     use super::{OFFICIAL_STOAT_BASE_URL, StoatClient};
     use crate::http::StoatSessionState;
