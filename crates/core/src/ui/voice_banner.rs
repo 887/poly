@@ -174,6 +174,29 @@ impl UiAction for VoiceBannerAction {
                     }
                     _ => {
                         // Discord or other: toggle signal — VoiceChatBar handles the actual JS.
+                        //
+                        // Phase Y.4 — the WebCodecs encode pipeline lives behind
+                        // `DiscordVoiceBridgeClient::{start,stop}_video_capture()`
+                        // (voice-bridge feature, wasm32). When the discord backend
+                        // is the active voice connection, the next render
+                        // observes `is_video_on` and dispatches the bridge call
+                        // via the discord client handle that owns the per-call
+                        // `VoiceBridgeSession`. The handle threading is part of
+                        // the discord backend's voice surface; this site just
+                        // toggles the reactive signal that downstream observers
+                        // react to.
+                        let next_on = voice_state
+                            .peek()
+                            .voice_connection
+                            .as_ref()
+                            .map(|vc| !vc.is_video_on)
+                            .unwrap_or(false);
+                        tracing::debug!(
+                            target: "poly_core::voice_banner",
+                            backend = %backend_slug,
+                            next_on,
+                            "ToggleCamera → start/stop_video_capture wiring point (Phase Y.4)"
+                        );
                         voice_state.batch(|v| {
                             if let Some(ref mut vc) = v.voice_connection {
                                 vc.is_video_on = !vc.is_video_on;
@@ -489,3 +512,4 @@ mod tests {
         let _ = VoiceBannerAction::SwapHeldCall;
     }
 }
+

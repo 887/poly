@@ -27,6 +27,10 @@ pub struct VoiceSession {
     pub peer_addr: std::net::SocketAddr,
     /// The mock-issued voice WS session ID (for debugging / future use).
     pub ws_session_id: String,
+    /// Optional video SSRC negotiated via op 12 STREAM_CREATE. When `Some`,
+    /// packets bearing this SSRC are video — the fan-out loop preserves the
+    /// SSRC unchanged so receivers can demux audio vs video. (Phase Y.1)
+    pub video_ssrc: Option<u32>,
 }
 
 /// Events dispatched to Gateway WebSocket clients.
@@ -897,3 +901,4 @@ impl DiscordState {
         self.seed_moderation();
     }
 }
+

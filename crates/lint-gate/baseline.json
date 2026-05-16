@@ -80,7 +80,7 @@
     },
     {
       "detail": "slug-match found in UI — use plugin-declared items (see plan-client-ui-surface.md §4)",
-      "line": 193,
+      "line": 216,
       "path": "crates/core/src/ui/voice_banner.rs",
       "rule": "forbid_backend_slug_match_in_ui"
     },

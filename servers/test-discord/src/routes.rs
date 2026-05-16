@@ -1005,6 +1005,7 @@ async fn handle_voice_gateway_socket(
                                             channel_id: channel_id.clone(),
                                             peer_addr,
                                             ws_session_id: session_id.clone(),
+                                            video_ssrc: None,
                                         },
                                     );
                                     tracing::debug!(
@@ -1071,6 +1072,42 @@ async fn handle_voice_gateway_socket(
                     }
                     // op 5 = SPEAKING → silently accepted
                     5 => {}
+                    // op 12 = STREAM_CREATE (video) → allocate a video SSRC,
+                    // attach it to this session, and reply with op 21
+                    // Stream Subscription. (Phase Y.1)
+                    12 => {
+                        let d = v.get("d").cloned().unwrap_or(serde_json::Value::Null);
+                        let stream_type = d.get("type").and_then(|t| t.as_str()).unwrap_or("video");
+                        let rid = d.get("rid").and_then(|r| r.as_str()).unwrap_or("high").to_string();
+                        let quality = d.get("quality").and_then(serde_json::Value::as_u64).unwrap_or(100);
+                        if stream_type == "video" && session_ssrc != 0 {
+                            let new_video_ssrc = state.voice_next_ssrc.fetch_add(1, Ordering::Relaxed);
+                            // Attach the video SSRC to the session record so
+                            // the UDP fan-out loop can identify video-bearing
+                            // sessions and preserve the SSRC during routing.
+                            {
+                                let mut sessions = state.voice_sessions.write().await;
+                                if let Some(sess) = sessions.get_mut(&session_ssrc) {
+                                    sess.video_ssrc = Some(new_video_ssrc);
+                                }
+                            }
+                            let sub = serde_json::json!({
+                                "op": 21,
+                                "d": {
+                                    "type": "video",
+                                    "rid": rid,
+                                    "quality": quality,
+                                    "audio_ssrc": session_ssrc,
+                                    "video_ssrc": new_video_ssrc,
+                                }
+                            });
+                            if socket.send(WsMessage::Text(sub.to_string().into())).await.is_err() {
+                                break;
+                            }
+                        }
+                    }
+                    // op 14 = DAVE protocol — accepted silently for the mock.
+                    14 => {}
                     _ => {}
                 }
             }
@@ -1907,3 +1944,4 @@ fn is_thread_type(ct: ChannelType) -> bool {
             | ChannelType::AnnouncementThread
     )
 }
+

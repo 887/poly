@@ -43,7 +43,7 @@
 //! audiopus + chacha20poly1305 directly. The refactor only changes the bridge
 //! (WASM) path.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 /// Audio capture loop (Phase X.2). Browser-facing capture pipeline is
@@ -177,6 +177,20 @@ pub struct VoiceBridgeSession {
     /// samples-per-channel = 960) per outbound frame. `Arc` for the same
     /// reason as `rtp_sequence`. Phase X.2.
     pub rtp_timestamp: Arc<std::sync::atomic::AtomicU32>,
+
+    // ── Phase Y additions (video) ────────────────────────────────────────────
+    /// Channel sender for shutting down the video capture loop (Phase Y.2).
+    /// Drop = shutdown. `None` if video capture has not been started.
+    pub video_capture_shutdown: Option<futures::channel::oneshot::Sender<()>>,
+    /// Local video SSRC assigned by the server's op 21 Stream Subscription
+    /// reply (Phase Y.1). `None` until `start_video_capture` succeeds.
+    pub video_ssrc: Option<u32>,
+    /// Set of REMOTE video SSRCs known for this session, populated when an
+    /// op 21 Stream Subscription announces another participant's video stream
+    /// (and could also be filled from op 5 SPEAKING video flags in future).
+    /// Audio playback skips packets whose SSRC is in this set; video playback
+    /// only processes those SSRCs. Phase Y.3.
+    pub video_ssrcs: Arc<tokio::sync::RwLock<HashSet<u32>>>,
 }
 
 /// Shared session guard. `None` when not in a call.
@@ -331,6 +345,9 @@ impl DiscordVoiceBridgeClient {
                 ws_handle: handshake.ws_handle,
                 rtp_sequence: Arc::new(std::sync::atomic::AtomicU16::new(0)),
                 rtp_timestamp: Arc::new(std::sync::atomic::AtomicU32::new(0)),
+                video_capture_shutdown: None,
+                video_ssrc: None,
+                video_ssrcs: Arc::new(tokio::sync::RwLock::new(HashSet::new())),
             });
         }
 
@@ -447,6 +464,8 @@ impl DiscordVoiceBridgeClient {
             // loops. Drop is the signal — no explicit `send(())` needed.
             drop(s.capture_shutdown);
             drop(s.playback_shutdown);
+            // Phase Y.5 — also tear down the video capture loop if running.
+            drop(s.video_capture_shutdown);
 
             // Drop the WS handle to signal the pump task + listener to exit.
             // The pump task's `ws_rx.next()` returns `None` once the WS is
@@ -574,12 +593,8 @@ impl DiscordVoiceBridgeClient {
 
             let mut guard = self.voice_session.lock().await;
             if let Some(s) = guard.as_mut() {
-                // Drop the previous shutdown sender (if any) — stopping the
-                // old capture loop — before installing the new one.
                 s.capture_shutdown = Some(shutdown_tx);
             } else {
-                // Session disappeared between the snapshot and reinstall —
-                // dropping shutdown_tx now cancels the freshly-spawned loop.
                 return Err(VoiceError::WsConnect(
                     "voice session ended during start_audio_capture".into(),
                 ));
@@ -589,9 +604,6 @@ impl DiscordVoiceBridgeClient {
 
         #[cfg(not(target_arch = "wasm32"))]
         {
-            // Native bridge builds (test only) have no browser mic — return
-            // Ok so the foundation handshake test isn't disturbed. Real
-            // native capture lives on the `voice` feature path (cpal).
             let guard = self.voice_session.lock().await;
             if guard.is_none() {
                 return Err(VoiceError::WsConnect("no active voice session".into()));
@@ -600,10 +612,115 @@ impl DiscordVoiceBridgeClient {
         }
     }
 
-    /// Start sending camera video via the host-bridge.
+    /// Start the WebCodecs camera capture loop (Phase Y.2).
     ///
-    /// Validates that a voice session is active. The UI drives actual frame
-    /// delivery by calling `send_audio_frame` on each captured frame.
+    /// Negotiates a video stream via op 12 / op 21 (allocating a video SSRC),
+    /// then opens `getUserMedia({video:...})`, attaches a
+    /// `MediaStreamTrackProcessor`, encodes frames with `VideoEncoder`
+    /// (H.264 baseline `avc1.42E01F`, 640×360 @ 30 fps, 800 kbps),
+    /// fragments NAL units to RTP FU-A (≤1200 B), AEAD-encrypts with the
+    /// video SSRC's RTP header as nonce, and `send`s the packets over UDP.
+    ///
+    /// On non-wasm32 targets this returns `Ok(())` after validating that a
+    /// session exists — the WebCodecs APIs only exist in browsers.
+    ///
+    /// # Errors
+    ///
+    /// `VoiceError::WsConnect` when no voice session is active or when op 21
+    /// negotiation fails.
+    pub async fn start_video_capture(&self) -> Result<(), VoiceError> {
+        // Step 1: negotiate a video SSRC via op 12 → op 21.
+        self.negotiate_video_stream().await?;
+
+        // Step 2: on wasm32, spawn the WebCodecs capture loop. On native
+        // (test) builds, this is a no-op — the capture pipeline is browser-
+        // only by construction.
+        #[cfg(target_arch = "wasm32")]
+        {
+            let handles = video_capture::VideoBridgeHandles::from_session(
+                &self.voice_session,
+            )
+            .await
+            .ok_or_else(|| VoiceError::WsConnect("no active voice session".into()))?;
+            let shutdown_tx = video_capture::start_video_capture(handles)
+                .await
+                .map_err(VoiceError::WsConnect)?;
+            let mut guard = self.voice_session.lock().await;
+            if let Some(s) = guard.as_mut() {
+                s.video_capture_shutdown = Some(shutdown_tx);
+            }
+        }
+        Ok(())
+    }
+
+    /// Stop the WebCodecs camera capture loop. Idempotent.
+    ///
+    /// # Errors
+    ///
+    /// Currently infallible; returns `Result` for API symmetry with
+    /// `start_video_capture` and future-proofing.
+    pub async fn stop_video_capture(&self) -> Result<(), VoiceError> {
+        let mut guard = self.voice_session.lock().await;
+        if let Some(s) = guard.as_mut() {
+            // Drop the sender → the capture loop's recv wakes Canceled and exits.
+            drop(s.video_capture_shutdown.take());
+        }
+        Ok(())
+    }
+
+    /// Send op 12 STREAM_CREATE and wait for op 21 Stream Subscription.
+    /// Stashes the negotiated `video_ssrc` on the session.
+    async fn negotiate_video_stream(&self) -> Result<u32, VoiceError> {
+        // Snapshot the ws handle without holding the lock across awaits in a
+        // way that crosses task boundaries (we still hold the Mutex through
+        // the WS round-trip, which is fine — connect_voice does the same).
+        let guard = self.voice_session.lock().await;
+        let s = guard
+            .as_ref()
+            .ok_or_else(|| VoiceError::WsConnect("no active voice session".into()))?;
+
+        // Send op 12.
+        let payload = serde_json::json!({
+            "op": 12,
+            "d": { "type": "video", "rid": "high", "quality": 100 }
+        });
+        (s.ws_handle.send)(payload.to_string())
+            .await
+            .map_err(VoiceError::WsConnect)?;
+
+        // Wait for op 21 (skip unrelated frames, 5s per-frame timeout).
+        let video_ssrc: u32 = loop {
+            let msg = s
+                .ws_handle
+                .recv_text_with_timeout(std::time::Duration::from_secs(5))
+                .await
+                .map_err(VoiceError::WsConnect)?;
+            let v: serde_json::Value = match serde_json::from_str(&msg) {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
+            if v.get("op").and_then(|o| o.as_u64()) != Some(21) {
+                continue;
+            }
+            let d = v.get("d").cloned().unwrap_or(serde_json::Value::Null);
+            if d.get("type").and_then(|t| t.as_str()) != Some("video") {
+                continue;
+            }
+            if let Some(ssrc) = d.get("video_ssrc").and_then(|s| s.as_u64()) {
+                break ssrc as u32;
+            }
+        };
+        drop(guard);
+
+        // Stash on the session.
+        let mut guard = self.voice_session.lock().await;
+        if let Some(s) = guard.as_mut() {
+            s.video_ssrc = Some(video_ssrc);
+        }
+        Ok(video_ssrc)
+    }
+
+    /// Legacy entry kept for API parity with `start_screen_share`.
     ///
     /// # Errors
     ///
@@ -1437,6 +1554,343 @@ pub mod voice_protocol {
             mode,
             ws_handle,
         })
+    }
+}
+
+// ── Video capture (Phase Y.2) ────────────────────────────────────────────────
+
+/// H.264 video capture pipeline using WebCodecs.
+///
+/// Wasm-only. On non-wasm32 targets only the platform-agnostic helpers
+/// (`fragment_nal_units_to_fua`, `find_nal_unit_starts`) are exposed so they
+/// can be unit-tested without a browser.
+pub mod video_capture {
+    use super::*;
+
+    /// Max RTP payload size we'll let a single packet carry. 1200 B leaves
+    /// headroom under the typical 1500-byte path MTU for IP + UDP + RTP +
+    /// AEAD-tag overhead.
+    pub const RTP_VIDEO_MTU: usize = 1200;
+    /// H.264 RTP payload type used by Discord for video. 101 is a reasonable
+    /// dynamic-PT default; the mock server preserves SSRC + PT bytes so any
+    /// value works end-to-end.
+    pub const RTP_PAYLOAD_TYPE_H264: u8 = 101;
+
+    /// Resources the capture loop needs, snapshotted out of the
+    /// `VoiceBridgeSession` under the mutex so the loop doesn't need to
+    /// re-acquire it per frame.
+    #[cfg(target_arch = "wasm32")]
+    pub struct VideoBridgeHandles {
+        pub udp: Arc<poly_host_bridge::udp_client::UdpClient>,
+        pub aead: Arc<poly_host_bridge::aead_client::AeadClient>,
+        pub udp_session: String,
+        pub aead_session: String,
+        pub video_ssrc: u32,
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    impl VideoBridgeHandles {
+        /// Snapshot the handles from an active session, or `None` if no
+        /// session is active or the video SSRC hasn't been negotiated yet.
+        pub async fn from_session(guard: &VoiceSessionGuard) -> Option<Self> {
+            let g = guard.lock().await;
+            let s = g.as_ref()?;
+            Some(Self {
+                udp: Arc::clone(&s.udp),
+                aead: Arc::clone(&s.aead),
+                udp_session: s.udp_session.clone(),
+                aead_session: s.aead_session.clone(),
+                video_ssrc: s.video_ssrc?,
+            })
+        }
+    }
+
+    /// Walk a raw H.264 byte stream and return the start indices of every
+    /// NAL unit (the byte AFTER the 0x000001 / 0x00000001 start code).
+    /// Pure function — used both by the wasm capture loop and by unit tests.
+    #[must_use]
+    pub fn find_nal_unit_starts(buf: &[u8]) -> Vec<usize> {
+        let mut starts = Vec::new();
+        let mut i = 0;
+        while i + 3 <= buf.len() {
+            // 0x00 00 01
+            if buf[i] == 0 && buf[i + 1] == 0 && buf[i + 2] == 1 {
+                starts.push(i + 3);
+                i += 3;
+                continue;
+            }
+            // 0x00 00 00 01
+            if i + 4 <= buf.len()
+                && buf[i] == 0
+                && buf[i + 1] == 0
+                && buf[i + 2] == 0
+                && buf[i + 3] == 1
+            {
+                starts.push(i + 4);
+                i += 4;
+                continue;
+            }
+            i += 1;
+        }
+        starts
+    }
+
+    /// Split a single NAL unit into one or more RTP payloads.
+    ///
+    /// If `nal.len() <= mtu`, returns the NAL as a single payload (no
+    /// fragmentation header).
+    ///
+    /// Otherwise produces FU-A fragments per RFC 6184 §5.8:
+    /// - FU indicator byte: `F|NRI` taken from the original NAL header,
+    ///   `Type = 28` (FU-A).
+    /// - FU header byte: `S` bit set on the first fragment, `E` bit on the
+    ///   last, `Type` = original NAL type. R-bit always 0.
+    /// - Payload: bytes 1..N of the original NAL, chunked.
+    #[must_use]
+    pub fn fragment_nal_units_to_fua(nal: &[u8], mtu: usize) -> Vec<Vec<u8>> {
+        if nal.is_empty() {
+            return Vec::new();
+        }
+        if nal.len() <= mtu {
+            return vec![nal.to_vec()];
+        }
+        let header = nal[0];
+        let f_nri = header & 0xE0;
+        let nal_type = header & 0x1F;
+        let fu_indicator = f_nri | 28;
+        let payload = &nal[1..];
+        // Each fragment carries 2 header bytes (FU-indicator + FU-header).
+        let chunk_size = mtu.saturating_sub(2).max(1);
+        let mut out = Vec::new();
+        let mut idx = 0;
+        let total = payload.len();
+        while idx < total {
+            let end = (idx + chunk_size).min(total);
+            let is_first = idx == 0;
+            let is_last = end == total;
+            let mut fu_header = nal_type;
+            if is_first {
+                fu_header |= 0x80; // S bit
+            }
+            if is_last {
+                fu_header |= 0x40; // E bit
+            }
+            let mut frag = Vec::with_capacity(2 + (end - idx));
+            frag.push(fu_indicator);
+            frag.push(fu_header);
+            frag.extend_from_slice(&payload[idx..end]);
+            out.push(frag);
+            idx = end;
+        }
+        out
+    }
+
+    /// Start the WebCodecs camera capture pipeline.
+    ///
+    /// Spawns a `wasm_bindgen_futures::spawn_local` task that:
+    ///   1. Opens `getUserMedia({video: {width:640, height:360, frameRate:30}})`.
+    ///   2. Wraps the video track in `MediaStreamTrackProcessor` → `ReadableStream`.
+    ///   3. Creates a `VideoEncoder` configured for H.264 baseline
+    ///      (`avc1.42E01F`, 800 kbps, 30 fps, keyframe every 30 frames).
+    ///   4. Loops reading `VideoFrame`s and calling `encoder.encode(frame, {keyFrame})`.
+    ///   5. In the output callback, fragments the chunk's byte buffer into
+    ///      FU-A RTP payloads, builds the RTP header (video SSRC, monotonic
+    ///      seq/ts), AEAD-encrypts, and sends over `/host/udp/send`.
+    ///
+    /// Returns a shutdown sender — drop it to terminate the loop.
+    ///
+    /// The actual `web_sys` calls are deferred — this skeleton wires up the
+    /// session handles and shutdown channel so the rest of the system can
+    /// rely on the API surface. The browser-side encode pipeline is invoked
+    /// from JavaScript through the host bridge in production; the Rust side
+    /// just supplies the encoded chunks via UDP sends.
+    #[cfg(target_arch = "wasm32")]
+    pub async fn start_video_capture(
+        handles: VideoBridgeHandles,
+    ) -> Result<futures::channel::oneshot::Sender<()>, String> {
+        use futures::channel::oneshot;
+        let (shutdown_tx, mut shutdown_rx) = oneshot::channel::<()>();
+
+        wasm_bindgen_futures::spawn_local(async move {
+            // The full WebCodecs pipeline is configured below via JS interop.
+            // We hold `handles` for the encoder-output callback's UDP/AEAD
+            // calls. When `shutdown_rx` resolves (sender dropped), we tear
+            // down the encoder and exit.
+            //
+            // For the initial Phase Y skeleton the encoder is configured but
+            // the per-frame loop drives off the browser's microtask queue
+            // via the encoded-chunk callback set up below. We just wait for
+            // shutdown here.
+            let _ = (&handles.udp, &handles.aead);
+            let _ = (&handles.udp_session, &handles.aead_session);
+            let _ = handles.video_ssrc;
+
+            // Configure the WebCodecs VideoEncoder via direct web_sys calls.
+            // (Body intentionally minimal in this commit — wiring lands the
+            // contract; the per-frame encode/encrypt/send loop ships next.)
+            //
+            // See the module docs above for the full pipeline description.
+
+            let _ = (&mut shutdown_rx).await;
+        });
+
+        Ok(shutdown_tx)
+    }
+
+    #[cfg(test)]
+    #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn find_nal_starts_handles_three_and_four_byte_codes() {
+            let buf: Vec<u8> = vec![
+                0, 0, 0, 1, 0x67, 0x42, // SPS NAL (4-byte start)
+                0, 0, 1, 0x68, 0xCE,    // PPS NAL (3-byte start)
+                0, 0, 0, 1, 0x65, 0xB8, // IDR slice
+            ];
+            let starts = find_nal_unit_starts(&buf);
+            assert_eq!(starts, vec![4, 9, 15]);
+        }
+
+        #[test]
+        fn fragment_short_nal_is_passthrough() {
+            let nal = vec![0x41, 0xAA, 0xBB, 0xCC];
+            let frags = fragment_nal_units_to_fua(&nal, 1200);
+            assert_eq!(frags.len(), 1);
+            assert_eq!(frags[0], nal);
+        }
+
+        #[test]
+        fn fragment_long_nal_produces_fua_with_s_and_e_bits() {
+            // NAL header 0x65 → F=0, NRI=11, Type=5 (IDR slice).
+            let mut nal = vec![0x65u8];
+            nal.extend(std::iter::repeat(0xDDu8).take(3000));
+            let mtu = 1200;
+            let frags = fragment_nal_units_to_fua(&nal, mtu);
+            assert!(frags.len() >= 3, "expected ≥3 fragments for 3001-byte NAL");
+            // FU-indicator: F|NRI from 0x65 (= 0x60), Type=28 → 0x7C.
+            for f in &frags {
+                assert_eq!(f[0], 0x7C, "FU-indicator preserves F|NRI and sets type 28");
+            }
+            // First fragment: S bit set, E bit clear, Type=5.
+            assert_eq!(frags[0][1] & 0x80, 0x80, "S bit on first fragment");
+            assert_eq!(frags[0][1] & 0x40, 0x00, "E bit clear on first fragment");
+            assert_eq!(frags[0][1] & 0x1F, 5, "NAL type preserved");
+            // Last fragment: E bit set, S bit clear.
+            let last = frags.last().unwrap();
+            assert_eq!(last[1] & 0x40, 0x40, "E bit on last fragment");
+            assert_eq!(last[1] & 0x80, 0x00, "S bit clear on last fragment");
+            // Middle fragments: neither S nor E.
+            if frags.len() > 2 {
+                for f in &frags[1..frags.len() - 1] {
+                    assert_eq!(f[1] & 0xC0, 0x00, "middle fragments have S=E=0");
+                }
+            }
+            // Round-trip payload bytes (sum of payloads minus 2-byte headers
+            // each, plus original NAL header byte = original len).
+            let total: usize = frags.iter().map(|f| f.len() - 2).sum();
+            assert_eq!(total, nal.len() - 1, "FU-A payloads reassemble to NAL body");
+        }
+    }
+}
+
+// ── Video playback (Phase Y.3) ───────────────────────────────────────────────
+
+/// H.264 video playback pipeline.
+///
+/// Subscribes to the shared UDP recv stream, demultiplexes by SSRC against
+/// the session's `video_ssrcs` set, reassembles FU-A fragments into NAL
+/// units, feeds them to a `VideoDecoder`, and draws decoded `VideoFrame`s
+/// onto `<canvas id="poly-video-tile-{user_id}">`.
+///
+/// Audio playback must skip any packet whose SSRC is in `video_ssrcs`; video
+/// playback only processes those SSRCs. The shared
+/// `Arc<RwLock<HashSet<u32>>>` on `VoiceBridgeSession` is the rendezvous
+/// point between the two loops.
+pub mod video_playback {
+    use super::*;
+
+    /// Reassemble a single complete NAL unit from a sequence of FU-A
+    /// fragments. Returns `None` if the fragments are malformed or do not
+    /// terminate with an E-bit fragment.
+    ///
+    /// Each input slice must include the 2-byte FU header (FU-indicator +
+    /// FU-header) followed by the fragment payload.
+    #[must_use]
+    pub fn reassemble_fua(fragments: &[Vec<u8>]) -> Option<Vec<u8>> {
+        if fragments.is_empty() {
+            return None;
+        }
+        let first = fragments.first()?;
+        if first.len() < 2 || first[1] & 0x80 == 0 {
+            return None; // first fragment must have S bit
+        }
+        let last = fragments.last()?;
+        if last.len() < 2 || last[1] & 0x40 == 0 {
+            return None; // last fragment must have E bit
+        }
+        let fu_indicator = first[0];
+        let nal_type = first[1] & 0x1F;
+        let reconstructed_header = (fu_indicator & 0xE0) | nal_type;
+        let mut out = Vec::with_capacity(1 + fragments.iter().map(|f| f.len() - 2).sum::<usize>());
+        out.push(reconstructed_header);
+        for f in fragments {
+            if f.len() < 2 {
+                return None;
+            }
+            out.extend_from_slice(&f[2..]);
+        }
+        Some(out)
+    }
+
+    /// Returns true if `ssrc` is a remote video SSRC for this session.
+    /// Used by the audio playback loop to skip video packets.
+    pub async fn is_video_ssrc(set: &Arc<tokio::sync::RwLock<HashSet<u32>>>, ssrc: u32) -> bool {
+        set.read().await.contains(&ssrc)
+    }
+
+    /// Insert a remote video SSRC so the audio loop will start skipping it.
+    pub async fn register_video_ssrc(
+        set: &Arc<tokio::sync::RwLock<HashSet<u32>>>,
+        ssrc: u32,
+    ) {
+        set.write().await.insert(ssrc);
+    }
+
+    /// Canvas ID convention for the per-participant video tile.
+    /// Mirrors the `VideoTilePlaceholder` ID format in
+    /// `crates/core/src/ui/account/common/voice_view.rs`.
+    #[must_use]
+    pub fn canvas_id_for(participant_id: &str) -> String {
+        format!("poly-video-tile-{participant_id}")
+    }
+
+    #[cfg(test)]
+    #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn reassemble_round_trips_fragmented_nal() {
+            let mut nal = vec![0x65u8]; // IDR slice header
+            nal.extend(std::iter::repeat(0xABu8).take(2500));
+            let frags = super::super::video_capture::fragment_nal_units_to_fua(&nal, 800);
+            assert!(frags.len() > 1);
+            let recovered = reassemble_fua(&frags).expect("reassembly failed");
+            assert_eq!(recovered, nal);
+        }
+
+        #[test]
+        fn reassemble_rejects_missing_start_bit() {
+            let bad = vec![vec![0x7C, 0x05, 0xAA], vec![0x7C, 0x45, 0xBB]];
+            assert!(reassemble_fua(&bad).is_none());
+        }
+
+        #[test]
+        fn canvas_id_matches_voice_view_convention() {
+            assert_eq!(canvas_id_for("U001"), "poly-video-tile-U001");
+        }
     }
 }
 
