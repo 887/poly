@@ -23,15 +23,20 @@ channel as two different test users and verify they connect.
 - [x] **B.2** Read `servers/test-stoat/src/` — full Vortex mock shipped at `/vortex/ws` with auth + Opus echo + participants
 - [x] **B.3** Reported: protocol is Revolt/Vortex (WS-binary with 8-byte user_id prefix + Opus payload). Backend transport + mock are complete. **GAP:** `join_voice_channel_transport` calls `/join_call` and returns Ok without opening the Vortex WS — needs `AudioBackend` injection through the `IsBackend` trait method signature. Scope to reach discord-parity E2E: **medium, 3-5 days**. Explicitly de-scoped from this session.
 
-## Phase C — cross-shell discord voice E2E — BLOCKED at C.3
+## Phase C — cross-shell discord voice E2E — single-user voice END-TO-END VERIFIED
 
-- [x] **C.1** Started `poly-test-runner` — test-discord healthy on 9102, voice UDP echo on port 46752. Seed triggered via `POST /seed` (test-runner doesn't pass `--seed` by default).
-- [x] **C.2a** Both shells boot clean: poly-web (3000), poly-electron (3001). Electron needed two fixes en route:
-  - `target/debug/public` symlink → `target/dx/poly-desktop-electron/debug/web/public` (dioxus-server 0.7.3 path resolution)
-  - dropped duplicate `/host/caps` route from `apps/desktop-electron/src/main.rs` sandbox_router (axum 0.7 forbids merge collisions) — change `rnwrstqr` / `ac39762b`
-- [x] **C.2b** Both Discord tokens minted from test-discord (`POST /api/v10/auth/login`), injected into shared `account_tokens` KV: koala (`fc1050c2…`), kangaroo (`5f95d2fb…`). Verified both visible from poly-electron's `/host/kv/get`.
-- [ ] **C.3** BLOCKED: After reload, neither shell's sidebar shows the Discord accounts. The UI account-loader doesn't instantiate `DiscordClient` for the injected `discord-1`/`discord-2` entries. Root cause unknown — separate from voice plumbing; likely either (a) `dev-plugins` feature gate doesn't transitively enable the discord account-loader path, (b) the loader rejects `instance_id: http://localhost:9102` as non-canonical, or (c) account discovery is account-store-keyed in a way the raw KV inject bypasses.
-- [ ] **C.4–C.6** Cannot proceed until C.3 is unblocked.
+- [x] **C.1** Started `poly-test-runner` — test-discord healthy on 9102, voice UDP echo on port 46752. Seed triggered via `POST /seed`.
+- [x] **C.2a** Both shells boot clean. Electron needed two fixes:
+  - `target/debug/public` symlink → `target/dx/poly-desktop-electron/debug/web/public`
+  - dropped duplicate `/host/caps` route (`rnwrstqr`)
+- [x] **C.2b** Discord tokens minted from test-discord, injected into shared `account_tokens` KV as proper JSON array (NOT stringified — earlier double-encoding broke `Storage::get_account_tokens` deserialize and silently dropped ALL native accounts).
+- [x] **C.3a** Discord accounts now appear in sidebar — fixed by `rppzywpt` (`account_restore.rs:71` was calling `DiscordClient::new()` ignoring `instance_id`; now uses `with_base_url` when instance_id differs from `https://discord.com`).
+- [x] **C.3b** Guild navigation works — fixed by `loploqlp` (`Session.instance_id` was leaking `http://` scheme into Route URL segments, router emitted PageNotFound, `on_update` handler bounced to matrix's last-known route).
+- [x] **C.3c** Voice channel surfaces in sidebar — fixed by `tvrssqkt` (`get_channels` was filtering out `GuildVoice`/`GuildStageVoice`).
+- [x] **C.3d** Voice channel seeded in mock — shipped in `kmtqzzrk` (`#voice-general` in guild 100, also added to `guild.channels` vec).
+- [x] **C.4 SINGLE-USER VERIFIED**: clicked koala → Australiana → voice-general → Join Voice. Result: "Voice Connected" green state, "1 in channel", voice WS handshake completes against mock `/voice/ws` (HELLO/IDENTIFY/READY/SELECT_PROTOCOL/SESSION_DESCRIPTION), UDP echo socket responds. Same flow works in poly-electron.
+- [ ] **C.5 CROSS-USER BLOCKED**: With BOTH shells sharing the same `~/.local/share/poly/storage.sqlite3`, the guild server-icon for Australiana is bound to whichever account first claimed it (koala). When kangaroo clicks Australiana from the inner column, the URL rebuilds with account_id=1 (koala), not 2 (kangaroo). The `FavoriteServerIcon` doesn't multi-account a shared guild. To verify two-different-users-in-one-channel, would need either: (a) separate `POLY_DATA_DIR` per shell, (b) a per-account guild-icon variant when multiple accounts are members, (c) explicit "switch account, then join from this account's perspective" flow.
+- [ ] **C.6** Cross-shell mutual-presence screenshots — deferred behind C.5.
 
 ## Phase D — cross-shell stoat voice E2E — DEFERRED
 
