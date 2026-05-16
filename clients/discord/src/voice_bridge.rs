@@ -410,7 +410,7 @@ impl DiscordVoiceBridgeClient {
             )
         };
 
-        let shutdown_tx = audio_playback::start_audio_playback(
+        let shutdown_tx = audio_playback::start_audio_playback(audio_playback::PlaybackParams {
             udp,
             opus,
             aead,
@@ -420,7 +420,7 @@ impl DiscordVoiceBridgeClient {
             ssrc_to_user,
             local_ssrc,
             on_remote_speaking,
-        )
+        })
         .await
         .map_err(VoiceError::WsConnect)?;
 
@@ -549,7 +549,6 @@ impl DiscordVoiceBridgeClient {
     ///
     /// On non-wasm32 builds this is a no-op success — native callers use the
     /// `clients/discord/src/voice/mod.rs` cpal-based capture path instead.
-    #[allow(unused_variables)]
     pub async fn start_audio_capture(&self) -> Result<(), VoiceError> {
         #[cfg(target_arch = "wasm32")]
         {
@@ -1100,6 +1099,20 @@ pub mod voice_protocol {
             f.debug_struct("WsHandle").finish_non_exhaustive()
         }
     }
+
+    // SAFETY: wasm32 is single-threaded (no `std::thread::spawn`, no Send
+    // transfer between OS threads is possible). The `send` closure inside
+    // `WsHandle` returns `LocalBoxFuture` which is `!Send` in the type
+    // system; on a single-threaded runtime this is fine because there is no
+    // other thread to transfer to. The IsBackend trait requires Send + Sync,
+    // and we satisfy that on wasm32 only via these unsafe impls. On native,
+    // the closure is `Send + Sync` naturally and no unsafe impl is needed.
+    #[cfg(target_arch = "wasm32")]
+    #[allow(unsafe_code)]
+    unsafe impl Send for WsHandle {}
+    #[cfg(target_arch = "wasm32")]
+    #[allow(unsafe_code)]
+    unsafe impl Sync for WsHandle {}
 
     /// Build a sender pair used by the WS pump task (both WASM and native).
     pub(super) fn ws_recv_channel() -> (UnboundedSender<String>, UnboundedReceiver<String>) {

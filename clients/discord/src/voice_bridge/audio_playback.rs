@@ -183,23 +183,40 @@ pub fn rms_db_i16(pcm: &[i16]) -> f32 {
 /// of any `dioxus` / `crates/core` UI dependency — the consumer (e.g. the
 /// core voice-event router) maps it to `ClientEvent::VoiceSpeakingUpdate`.
 ///
+/// Parameters bundle for `start_audio_playback`. Bundled into a struct so
+/// the call site stays compatible with the lint-gate's ban on
+/// `#[allow(clippy::too_many_arguments)]`.
+pub struct PlaybackParams {
+    pub udp: Arc<poly_host_bridge::udp_client::UdpClient>,
+    pub opus: Arc<poly_host_bridge::codec_opus_client::OpusClient>,
+    pub aead: Arc<poly_host_bridge::aead_client::AeadClient>,
+    pub udp_session: String,
+    pub decoder_session: String,
+    pub aead_session: String,
+    pub ssrc_to_user: Arc<tokio::sync::RwLock<HashMap<u32, String>>>,
+    pub local_ssrc: u32,
+    pub on_remote_speaking: futures::channel::mpsc::UnboundedSender<RemoteSpeakingEvent>,
+}
+
 /// `_aead_mode` is currently unused — nonce derivation defaults to
 /// `xchacha20_poly1305_rtpsize` which is the mode the bridge handshake
 /// negotiates today. The parameter is reserved so callers can pass the
 /// negotiated mode through once `aes256_gcm_rtpsize` ships end-to-end.
 #[cfg(target_arch = "wasm32")]
-#[allow(clippy::too_many_arguments)]
 pub async fn start_audio_playback(
-    udp: Arc<UdpClient>,
-    opus: Arc<OpusClient>,
-    aead: Arc<AeadClient>,
-    udp_session: String,
-    decoder_session: String,
-    aead_session: String,
-    ssrc_to_user: Arc<tokio::sync::RwLock<HashMap<u32, String>>>,
-    local_ssrc: u32,
-    on_remote_speaking: futures::channel::mpsc::UnboundedSender<RemoteSpeakingEvent>,
+    params: PlaybackParams,
 ) -> Result<futures::channel::oneshot::Sender<()>, String> {
+    let PlaybackParams {
+        udp,
+        opus,
+        aead,
+        udp_session,
+        decoder_session,
+        aead_session,
+        ssrc_to_user,
+        local_ssrc,
+        on_remote_speaking,
+    } = params;
     use futures::StreamExt;
 
     let (shutdown_tx, mut shutdown_rx) = futures::channel::oneshot::channel::<()>();
@@ -219,17 +236,17 @@ pub async fn start_audio_playback(
                 Either::Left(_) => break, // shutdown signalled
                 Either::Right((None, _)) => break, // SSE stream ended
                 Either::Right((Some(dgram), _)) => {
-                    if let Err(e) = handle_datagram(
-                        &dgram,
-                        &aead,
-                        &opus,
-                        &aead_session,
-                        &decoder_session,
+                    if let Err(e) = handle_datagram(HandleDatagramCtx {
+                        dgram: &dgram,
+                        aead: &aead,
+                        opus: &opus,
+                        aead_session: &aead_session,
+                        decoder_session: &decoder_session,
                         local_ssrc,
-                        &ssrc_to_user,
-                        &mut per_ssrc,
-                        &on_remote_speaking,
-                    )
+                        ssrc_to_user: &ssrc_to_user,
+                        per_ssrc: &mut per_ssrc,
+                        on_remote_speaking: &on_remote_speaking,
+                    })
                     .await
                     {
                         tracing::trace!(
@@ -257,17 +274,8 @@ pub async fn start_audio_playback(
 /// CPAL directly without the host-bridge primitives, so this entry point
 /// is unused on native and returns an error to make accidental calls loud.
 #[cfg(not(target_arch = "wasm32"))]
-#[allow(clippy::too_many_arguments)]
 pub async fn start_audio_playback(
-    _udp: Arc<poly_host_bridge::udp_client::UdpClient>,
-    _opus: Arc<poly_host_bridge::codec_opus_client::OpusClient>,
-    _aead: Arc<poly_host_bridge::aead_client::AeadClient>,
-    _udp_session: String,
-    _decoder_session: String,
-    _aead_session: String,
-    _ssrc_to_user: Arc<tokio::sync::RwLock<HashMap<u32, String>>>,
-    _local_ssrc: u32,
-    _on_remote_speaking: futures::channel::mpsc::UnboundedSender<RemoteSpeakingEvent>,
+    _params: PlaybackParams,
 ) -> Result<futures::channel::oneshot::Sender<()>, String> {
     Err("audio_playback::start_audio_playback is WASM-only; native uses CPAL".into())
 }
@@ -353,19 +361,34 @@ impl SsrcPlayback {
 
 // ── Datagram handler ─────────────────────────────────────────────────────────
 
+/// Borrow-bundle for `handle_datagram`. Replaces a long argument list so the
+/// call site doesn't need `#[allow(clippy::too_many_arguments)]` (banned).
 #[cfg(target_arch = "wasm32")]
-#[allow(clippy::too_many_arguments)]
-async fn handle_datagram(
-    dgram: &poly_host_bridge::udp_client::UdpDatagram,
-    aead: &Arc<AeadClient>,
-    opus: &Arc<OpusClient>,
-    aead_session: &str,
-    decoder_session: &str,
+struct HandleDatagramCtx<'a> {
+    dgram: &'a poly_host_bridge::udp_client::UdpDatagram,
+    aead: &'a Arc<AeadClient>,
+    opus: &'a Arc<OpusClient>,
+    aead_session: &'a str,
+    decoder_session: &'a str,
     local_ssrc: u32,
-    ssrc_to_user: &Arc<tokio::sync::RwLock<HashMap<u32, String>>>,
-    per_ssrc: &mut HashMap<u32, SsrcPlayback>,
-    on_remote_speaking: &futures::channel::mpsc::UnboundedSender<RemoteSpeakingEvent>,
-) -> Result<(), String> {
+    ssrc_to_user: &'a Arc<tokio::sync::RwLock<HashMap<u32, String>>>,
+    per_ssrc: &'a mut HashMap<u32, SsrcPlayback>,
+    on_remote_speaking: &'a futures::channel::mpsc::UnboundedSender<RemoteSpeakingEvent>,
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn handle_datagram(ctx: HandleDatagramCtx<'_>) -> Result<(), String> {
+    let HandleDatagramCtx {
+        dgram,
+        aead,
+        opus,
+        aead_session,
+        decoder_session,
+        local_ssrc,
+        ssrc_to_user,
+        per_ssrc,
+        on_remote_speaking,
+    } = ctx;
     use base64::Engine as _;
     let packet = base64::engine::general_purpose::STANDARD
         .decode(dgram.data.as_bytes())
