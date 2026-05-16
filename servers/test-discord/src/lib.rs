@@ -98,6 +98,8 @@ pub fn routes_only(_state: Arc<DiscordState>) -> Router<Arc<DiscordState>> {
         .route("/avatars/{user_id}/{file}", get(routes::serve_avatar))
         // Gateway WebSocket (Phase 6.5)
         .route("/gateway/ws", get(routes::gateway_ws))
+        // Voice gateway WebSocket (Phase A.2)
+        .route("/voice/ws", get(routes::voice_gateway_ws))
         // Test-only: inject gateway events
         .route("/testhook/emit_thread_event", post(routes::emit_thread_event))
         // NOTE: no .with_state() here — build_router() provides it via the outer chain

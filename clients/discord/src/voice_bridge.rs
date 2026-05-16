@@ -569,9 +569,17 @@ mod voice_protocol {
         guild_id: Option<&str>,
         user_id: &str,
     ) -> Result<HandshakeResult, String> {
+        // Use plain `ws://` for loopback endpoints (local dev / mock server),
+        // `wss://` for all other hosts. Matches POLY_DISCORD_VOICE_WS_INSECURE
+        // semantics without requiring an env-var import in WASM.
+        let host = ws_endpoint.trim_end_matches(':').trim_end_matches('/');
+        let scheme = if host.starts_with("127.0.0.1") || host.starts_with("localhost") {
+            "ws"
+        } else {
+            "wss"
+        };
         let ws_url = format!(
-            "wss://{}/?v={}",
-            ws_endpoint.trim_end_matches(':').trim_end_matches('/'),
+            "{scheme}://{host}/voice/ws?v={}",
             super::VOICE_WS_VERSION
         );
 

@@ -12,6 +12,8 @@ use axum::response::IntoResponse;
 use axum::Json;
 use serde::Deserialize;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
+use tokio::net::UdpSocket;
 use tokio::sync::broadcast;
 use twilight_model::channel::ChannelType;
 use twilight_model::id::marker::{ChannelMarker, GuildMarker, UserMarker};
@@ -629,14 +631,84 @@ async fn handle_gateway_socket(mut socket: WebSocket, state: Arc<DiscordState>) 
                     Some(Ok(WsMessage::Text(txt))) => {
                         if let Ok(v) = serde_json::from_str::<serde_json::Value>(&txt) {
                             let op = v.get("op").and_then(serde_json::Value::as_u64).unwrap_or(0);
-                            // op 1 = HEARTBEAT → reply with HEARTBEAT_ACK (op 11)
-                            if op == 1 {
-                                let ack = serde_json::json!({ "op": 11 });
-                                if socket.send(WsMessage::Text(ack.to_string().into())).await.is_err() {
-                                    break;
+                            match op {
+                                // op 1 = HEARTBEAT → reply with HEARTBEAT_ACK (op 11)
+                                1 => {
+                                    let ack = serde_json::json!({ "op": 11 });
+                                    if socket.send(WsMessage::Text(ack.to_string().into())).await.is_err() {
+                                        break;
+                                    }
                                 }
+                                // op 2 = IDENTIFY → extract user_id from token for later use
+                                2 => {
+                                    // Best-effort: try d.token first, fall back to "mock-user-1".
+                                    if let Some(d) = v.get("d") {
+                                        let uid = d
+                                            .get("token")
+                                            .and_then(|t| t.as_str())
+                                            .map(|t| {
+                                                // Auth token format: user_id is what the state's
+                                                // auth.validate() returns. Try to look it up; on
+                                                // failure keep the token string as a stand-in.
+                                                state.auth.validate(t)
+                                                    .unwrap_or_else(|| t.to_string())
+                                            })
+                                            .unwrap_or_else(|| "mock-user-1".to_string());
+                                        *state.gateway_user_id.write().await = uid;
+                                    }
+                                }
+                                // op 4 = VOICE_STATE_UPDATE — client joining a voice channel
+                                4 => {
+                                    if let Some(d) = v.get("d") {
+                                        let guild_id = d
+                                            .get("guild_id")
+                                            .and_then(|g| g.as_str())
+                                            .unwrap_or("0")
+                                            .to_string();
+                                        let channel_id = d
+                                            .get("channel_id")
+                                            .and_then(|c| c.as_str())
+                                            .unwrap_or("0")
+                                            .to_string();
+                                        let user_id = state.gateway_user_id.read().await.clone();
+                                        let session_id = format!("mock-voice-session-{}", uuid::Uuid::new_v4().as_simple());
+                                        // endpoint is host:port of the HTTP server (voice WS lives at /voice/ws on the same server)
+                                        let endpoint = state.server_addr.read().await.clone();
+
+                                        // 1. VOICE_STATE_UPDATE dispatch
+                                        let vsu = serde_json::json!({
+                                            "op": 0,
+                                            "t": "VOICE_STATE_UPDATE",
+                                            "s": null,
+                                            "d": {
+                                                "guild_id": guild_id,
+                                                "channel_id": channel_id,
+                                                "user_id": user_id,
+                                                "session_id": session_id
+                                            }
+                                        });
+                                        if socket.send(WsMessage::Text(vsu.to_string().into())).await.is_err() {
+                                            break;
+                                        }
+
+                                        // 2. VOICE_SERVER_UPDATE dispatch
+                                        let vsup = serde_json::json!({
+                                            "op": 0,
+                                            "t": "VOICE_SERVER_UPDATE",
+                                            "s": null,
+                                            "d": {
+                                                "guild_id": guild_id,
+                                                "endpoint": endpoint,
+                                                "token": "mock-voice-token"
+                                            }
+                                        });
+                                        if socket.send(WsMessage::Text(vsup.to_string().into())).await.is_err() {
+                                            break;
+                                        }
+                                    }
+                                }
+                                _ => {}
                             }
-                            // op 2 = IDENTIFY → accepted silently
                         }
                     }
                     Some(Ok(WsMessage::Close(_)) | Err(_)) | None => break,
@@ -691,6 +763,189 @@ fn discord_event_to_ws_frame(event: &DiscordEvent) -> Option<String> {
         "d": data
     });
     Some(frame.to_string())
+}
+
+// ---------------------------------------------------------------------------
+// Phase A.3 — UDP echo socket (voice mock IP discovery + audio loopback)
+// ---------------------------------------------------------------------------
+
+/// Bind a UDP socket on a random free port, stash the port in `state.voice_udp_port`,
+/// and spawn a long-lived task that echoes every datagram back to its sender.
+///
+/// Called from `BackendHarness::post_bind` so the port is ready before any
+/// voice handshake. Safe to call multiple times — subsequent calls are no-ops
+/// if the port is already set (> 0).
+pub async fn bind_and_spawn_udp_echo(state: &Arc<crate::state::DiscordState>) {
+    // Idempotent: already bound.
+    if state.voice_udp_port.load(Ordering::Relaxed) != 0 {
+        return;
+    }
+    let sock = match UdpSocket::bind("127.0.0.1:0").await {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::error!(target: "poly_test_discord::voice", "UDP echo bind failed: {e}");
+            return;
+        }
+    };
+    let port = sock.local_addr().map(|a| a.port()).unwrap_or(0);
+    state.voice_udp_port.store(port, Ordering::Relaxed);
+    tracing::info!(target: "poly_test_discord::voice", udp_port = port, "UDP echo socket bound");
+    tokio::spawn(udp_echo_loop(sock));
+}
+
+async fn udp_echo_loop(sock: UdpSocket) {
+    let mut buf = vec![0u8; 4096];
+    loop {
+        match sock.recv_from(&mut buf).await {
+            Ok((n, peer)) => {
+                let _ = sock.send_to(&buf[..n], peer).await;
+            }
+            Err(e) => {
+                tracing::warn!(target: "poly_test_discord::voice", "UDP echo recv error: {e}");
+                break;
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Phase A.2 — Mock voice gateway WS at GET /voice/ws
+// ---------------------------------------------------------------------------
+
+/// GET /voice/ws — upgrade to WebSocket, speak the Discord Voice Gateway v8 protocol.
+pub async fn voice_gateway_ws(
+    ws: WebSocketUpgrade,
+    State(state): State<Arc<crate::state::DiscordState>>,
+) -> impl IntoResponse {
+    ws.on_upgrade(move |socket| handle_voice_gateway_socket(socket, state))
+}
+
+// lint-allow-unused: Discord Voice Gateway WS opcodes are bare integer literals in serde_json::json! payloads
+#[allow(clippy::default_numeric_fallback)]
+async fn handle_voice_gateway_socket(mut socket: WebSocket, state: Arc<crate::state::DiscordState>) {
+    // 1. Send op 8 HELLO.
+    let hello = serde_json::json!({
+        "op": 8,
+        "d": { "heartbeat_interval": 13750 }
+    });
+    if socket.send(WsMessage::Text(hello.to_string().into())).await.is_err() {
+        return;
+    }
+
+    // Wait for op 0 IDENTIFY, then drive the rest of the handshake.
+    loop {
+        match socket.recv().await {
+            Some(Ok(WsMessage::Text(txt))) => {
+                let v: serde_json::Value = match serde_json::from_str(&txt) {
+                    Ok(v) => v,
+                    Err(_) => continue,
+                };
+                let op = v.get("op").and_then(serde_json::Value::as_u64).unwrap_or(99);
+                match op {
+                    // op 0 = IDENTIFY → send op 2 READY
+                    0 => {
+                        let udp_port = state.voice_udp_port.load(Ordering::Relaxed);
+                        let ready = serde_json::json!({
+                            "op": 2,
+                            "d": {
+                                "ssrc": 1,
+                                "ip": "127.0.0.1",
+                                "port": udp_port,
+                                "modes": ["aead_xchacha20_poly1305_rtpsize"]
+                            }
+                        });
+                        if socket.send(WsMessage::Text(ready.to_string().into())).await.is_err() {
+                            return;
+                        }
+                        break; // move to SELECT_PROTOCOL phase
+                    }
+                    // op 3 = HEARTBEAT → reply op 6 HEARTBEAT_ACK
+                    3 => {
+                        let nonce = v.get("d").cloned().unwrap_or(serde_json::Value::Null);
+                        let ack = serde_json::json!({ "op": 6, "d": nonce });
+                        if socket.send(WsMessage::Text(ack.to_string().into())).await.is_err() {
+                            return;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            Some(Ok(WsMessage::Close(_)) | Err(_)) | None => return,
+            #[allow(clippy::wildcard_enum_match_arm)]
+            _ => {}
+        }
+    }
+
+    // Wait for op 1 SELECT_PROTOCOL → send op 4 SESSION_DESCRIPTION
+    loop {
+        match socket.recv().await {
+            Some(Ok(WsMessage::Text(txt))) => {
+                let v: serde_json::Value = match serde_json::from_str(&txt) {
+                    Ok(v) => v,
+                    Err(_) => continue,
+                };
+                let op = v.get("op").and_then(serde_json::Value::as_u64).unwrap_or(99);
+                match op {
+                    // op 1 = SELECT_PROTOCOL → send op 4 SESSION_DESCRIPTION
+                    1 => {
+                        let secret_key: Vec<u8> = vec![0u8; 32];
+                        let session_desc = serde_json::json!({
+                            "op": 4,
+                            "d": {
+                                "mode": "aead_xchacha20_poly1305_rtpsize",
+                                "secret_key": secret_key
+                            }
+                        });
+                        if socket.send(WsMessage::Text(session_desc.to_string().into())).await.is_err() {
+                            return;
+                        }
+                        break; // handshake complete — stay alive for heartbeats + speaking
+                    }
+                    // op 3 = HEARTBEAT → reply op 6 HEARTBEAT_ACK
+                    3 => {
+                        let nonce = v.get("d").cloned().unwrap_or(serde_json::Value::Null);
+                        let ack = serde_json::json!({ "op": 6, "d": nonce });
+                        if socket.send(WsMessage::Text(ack.to_string().into())).await.is_err() {
+                            return;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            Some(Ok(WsMessage::Close(_)) | Err(_)) | None => return,
+            #[allow(clippy::wildcard_enum_match_arm)]
+            _ => {}
+        }
+    }
+
+    // Post-handshake: accept HEARTBEAT + SPEAKING frames.
+    loop {
+        match socket.recv().await {
+            Some(Ok(WsMessage::Text(txt))) => {
+                let v: serde_json::Value = match serde_json::from_str(&txt) {
+                    Ok(v) => v,
+                    Err(_) => continue,
+                };
+                let op = v.get("op").and_then(serde_json::Value::as_u64).unwrap_or(99);
+                match op {
+                    // op 3 = HEARTBEAT → op 6 HEARTBEAT_ACK
+                    3 => {
+                        let nonce = v.get("d").cloned().unwrap_or(serde_json::Value::Null);
+                        let ack = serde_json::json!({ "op": 6, "d": nonce });
+                        if socket.send(WsMessage::Text(ack.to_string().into())).await.is_err() {
+                            break;
+                        }
+                    }
+                    // op 5 = SPEAKING → silently accepted
+                    5 => {}
+                    _ => {}
+                }
+            }
+            Some(Ok(WsMessage::Close(_)) | Err(_)) | None => break,
+            #[allow(clippy::wildcard_enum_match_arm)]
+            _ => {}
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

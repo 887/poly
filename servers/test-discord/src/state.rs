@@ -11,6 +11,7 @@ use tokio::sync::RwLock;
 use twilight_model::channel::ChannelType;
 use twilight_model::id::marker::{ChannelMarker, GuildMarker, MessageMarker, RoleMarker, UserMarker};
 use twilight_model::id::Id;
+use std::sync::atomic::AtomicU16;
 
 /// Events dispatched to Gateway WebSocket clients.
 #[derive(Clone, Debug)]
@@ -136,6 +137,15 @@ pub struct DiscordState {
     pub next_audit_id: Arc<std::sync::atomic::AtomicU64>,
     /// Ring buffer of recent inbound request headers (Phase E inspection endpoint).
     pub inspect: Arc<HeaderInspectBuffer>,
+    /// UDP echo socket port bound at startup (Phase A.3 — voice mock).
+    /// Zero means not yet bound.
+    pub voice_udp_port: Arc<AtomicU16>,
+    /// HTTP server bind address (set in post_bind). Used by op-4 handler to
+    /// construct the voice WS endpoint returned in VOICE_SERVER_UPDATE.
+    pub server_addr: Arc<RwLock<String>>,
+    /// Last gateway-identified user_id extracted from op 2 IDENTIFY.
+    /// Stored as a string for flexibility; defaults to "mock-user-1".
+    pub gateway_user_id: Arc<RwLock<String>>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -226,6 +236,10 @@ impl poly_test_common::BackendHarness for DiscordState {
         Box::pin(async move {
             *state.gateway_url.write().await =
                 format!("ws://{}/gateway/ws", addr);
+            // Stash the HTTP server address for voice endpoint construction.
+            *state.server_addr.write().await = addr.to_string();
+            // Bind the UDP echo socket and spawn the echo loop.
+            crate::routes::bind_and_spawn_udp_echo(&state).await;
         })
     }
 }
@@ -253,6 +267,9 @@ impl DiscordState {
             audit_log: DashMap::new(),
             next_audit_id: Arc::new(std::sync::atomic::AtomicU64::new(1)),
             inspect: Arc::new(HeaderInspectBuffer::new()),
+            voice_udp_port: Arc::new(AtomicU16::new(0)),
+            server_addr: Arc::new(RwLock::new("127.0.0.1:9102".to_string())),
+            gateway_user_id: Arc::new(RwLock::new("mock-user-1".to_string())),
         }
     }
 
@@ -820,6 +837,8 @@ impl DiscordState {
         self.audit_log.clear();
         self.next_audit_id.store(1, std::sync::atomic::Ordering::Relaxed);
         self.inspect.clear();
+        // gateway_user_id resets lazily — each IDENTIFY overwrites it.
+        // voice_udp_port is bound once at startup and not reset.
         tracing::info!("reset Discord state to empty");
     }
 
