@@ -17,27 +17,28 @@ channel as two different test users and verify they connect.
 - [x] **A.4** Wire the `endpoint` in VOICE_SERVER_UPDATE to point at the mock's own `/voice/ws` (e.g. `ws://127.0.0.1:9102/voice/ws` — strip the `wss://` scheme since this is local + plaintext). Fixed in `clients/discord/src/voice_bridge.rs`: loopback endpoints now use `ws://` and append `/voice/ws`.
 - [x] **A.5** Add an integration test in `servers/test-discord/tests/voice.rs` that drives the full handshake from a tokio client and asserts each step lands. 5 tests all pass.
 
-## Phase B — stoat voice investigation
+## Phase B — stoat voice investigation — DONE (report only, no code; agent a2b7227)
 
-- [ ] **B.1** Read `clients/stoat/src/` to find any existing voice support (look for `voice`, `livekit`, `webrtc`, `audio`, `rtp` references).
-- [ ] **B.2** Read `servers/test-stoat/src/` for mock voice scaffolding.
-- [ ] **B.3** Report: what voice protocol stoat uses (matrix-style livekit? custom WebRTC? bespoke?), what's wired, what's missing, what a mock would need to be useful for E2E.
+- [x] **B.1** Read `clients/stoat/src/` — `voice.rs` exists, `voice` feature gates audiopus + poly-audio-backend
+- [x] **B.2** Read `servers/test-stoat/src/` — full Vortex mock shipped at `/vortex/ws` with auth + Opus echo + participants
+- [x] **B.3** Reported: protocol is Revolt/Vortex (WS-binary with 8-byte user_id prefix + Opus payload). Backend transport + mock are complete. **GAP:** `join_voice_channel_transport` calls `/join_call` and returns Ok without opening the Vortex WS — needs `AudioBackend` injection through the `IsBackend` trait method signature. Scope to reach discord-parity E2E: **medium, 3-5 days**. Explicitly de-scoped from this session.
 
-## Phase C — cross-shell discord voice E2E
+## Phase C — cross-shell discord voice E2E — BLOCKED at C.3
 
-- [ ] **C.1** Start `poly-test-runner` (or just test-discord on port 9102 if simpler) — fresh state.
-- [ ] **C.2** Drive `poly-web` (Chromium, port 3000) — login as test user A (one of the test animals — pick one from the seed users).
-- [ ] **C.3** Drive `poly-electron` (port 3001) — login as test user B (different animal).
-- [ ] **C.4** Both join the same Discord voice channel in the mock.
-- [ ] **C.5** Verify in browser console logs (`mcp__poly-web__list_console_messages` + `mcp__poly-electron__list_console_messages`) that both clients reached `VOICE_SERVER_UPDATE` → handshake → SESSION_DESCRIPTION → IP discovery → audio round-trip stages.
-- [ ] **C.6** Screenshot the voice-channel-roster UI in both shells showing the other user as present.
+- [x] **C.1** Started `poly-test-runner` — test-discord healthy on 9102, voice UDP echo on port 46752. Seed triggered via `POST /seed` (test-runner doesn't pass `--seed` by default).
+- [x] **C.2a** Both shells boot clean: poly-web (3000), poly-electron (3001). Electron needed two fixes en route:
+  - `target/debug/public` symlink → `target/dx/poly-desktop-electron/debug/web/public` (dioxus-server 0.7.3 path resolution)
+  - dropped duplicate `/host/caps` route from `apps/desktop-electron/src/main.rs` sandbox_router (axum 0.7 forbids merge collisions) — change `rnwrstqr` / `ac39762b`
+- [x] **C.2b** Both Discord tokens minted from test-discord (`POST /api/v10/auth/login`), injected into shared `account_tokens` KV: koala (`fc1050c2…`), kangaroo (`5f95d2fb…`). Verified both visible from poly-electron's `/host/kv/get`.
+- [ ] **C.3** BLOCKED: After reload, neither shell's sidebar shows the Discord accounts. The UI account-loader doesn't instantiate `DiscordClient` for the injected `discord-1`/`discord-2` entries. Root cause unknown — separate from voice plumbing; likely either (a) `dev-plugins` feature gate doesn't transitively enable the discord account-loader path, (b) the loader rejects `instance_id: http://localhost:9102` as non-canonical, or (c) account discovery is account-store-keyed in a way the raw KV inject bypasses.
+- [ ] **C.4–C.6** Cannot proceed until C.3 is unblocked.
 
-## Phase D — cross-shell stoat voice E2E
+## Phase D — cross-shell stoat voice E2E — DEFERRED
 
-Same as Phase C but with stoat backend. Scope TBD pending Phase B findings.
+Pending Phase B's 3-5 day uplift on the stoat side AND Phase C unblock. Out of scope for this session.
 
 ## Phase E — report + lint cleanup
 
-- [ ] **E.1** Run lint-gate + cargo check
-- [ ] **E.2** Commit + push everything to main
-- [ ] **E.3** Mark plan DONE
+- [x] **E.1** cargo check clean across affected crates (poly-discord native+wasm, poly-stoat all-features, poly-test-discord, apps/web, apps/desktop-electron via dx serve verification)
+- [x] **E.2** Pushed to main: `kpomlwsy` (Phase A — mock voice), `orvyzkum` (stoat fix + test cleanup), `rnwrstqr` (electron route fix)
+- [ ] **E.3** Cannot mark DONE — Phase C blocked, Phase D deferred. Status: PARTIAL.
