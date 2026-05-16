@@ -21,7 +21,7 @@ use twilight_model::id::Id;
 
 use crate::state::{
     AuditLogEntry, Attachment, Ban, Channel, DiscordEvent, DiscordState, ForumTag, Message,
-    Role, ThreadMetadata,
+    Role, ThreadMetadata, VoiceSession,
 };
 
 // ---------------------------------------------------------------------------
@@ -672,6 +672,11 @@ async fn handle_gateway_socket(mut socket: WebSocket, state: Arc<DiscordState>) 
                                             .to_string();
                                         let user_id = state.gateway_user_id.read().await.clone();
                                         let session_id = format!("mock-voice-session-{}", uuid::Uuid::new_v4().as_simple());
+                                        // Record the session_id → channel_id mapping so the voice WS
+                                        // handler can look up the channel when registering this
+                                        // client's UDP endpoint into the fan-out registry. (Phase X.1)
+                                        state.voice_session_channels.write().await
+                                            .insert(session_id.clone(), channel_id.clone());
                                         // endpoint is host:port of the HTTP server (voice WS lives at /voice/ws on the same server)
                                         let endpoint = state.server_addr.read().await.clone();
 
@@ -790,18 +795,62 @@ pub async fn bind_and_spawn_udp_echo(state: &Arc<crate::state::DiscordState>) {
     let port = sock.local_addr().map(|a| a.port()).unwrap_or(0);
     state.voice_udp_port.store(port, Ordering::Relaxed);
     tracing::info!(target: "poly_test_discord::voice", udp_port = port, "UDP echo socket bound");
-    tokio::spawn(udp_echo_loop(sock));
+    tokio::spawn(udp_fanout_loop(sock, Arc::clone(state)));
 }
 
-async fn udp_echo_loop(sock: UdpSocket) {
+/// True for a Discord IP-discovery packet: first 2 bytes are `0x00 0x01`
+/// (request type) per the wire spec. IP discovery packets must always be
+/// self-echoed (real Discord echoes them back with the public-IP/port
+/// rewrite); the fan-out path is only for audio payloads.
+fn is_ip_discovery_packet(buf: &[u8]) -> bool {
+    buf.len() >= 2 && buf[0] == 0x00 && buf[1] == 0x01
+}
+
+/// UDP loop: IP-discovery packets self-echo; audio packets from a registered
+/// sender fan out to all OTHER registered sessions in the same voice channel;
+/// packets from an unregistered sender fall back to self-echo (so the prior
+/// test surface — clients that never registered via SELECT_PROTOCOL with a
+/// matching ephemeral port — keeps working). (Phase X.1)
+async fn udp_fanout_loop(sock: UdpSocket, state: Arc<crate::state::DiscordState>) {
     let mut buf = vec![0u8; 4096];
     loop {
         match sock.recv_from(&mut buf).await {
-            Ok((n, peer)) => {
-                let _ = sock.send_to(&buf[..n], peer).await;
+            Ok((n, src)) => {
+                let payload = &buf[..n];
+                if is_ip_discovery_packet(payload) {
+                    let _ = sock.send_to(payload, src).await;
+                    continue;
+                }
+                let sessions = state.voice_sessions.read().await;
+                let sender = sessions.values().find(|s| s.peer_addr == src);
+                match sender {
+                    Some(sender_session) => {
+                        let channel = sender_session.channel_id.clone();
+                        let mut delivered = 0usize;
+                        for s in sessions.values() {
+                            if s.peer_addr == src { continue; }
+                            if s.channel_id != channel { continue; }
+                            if sock.send_to(payload, s.peer_addr).await.is_ok() {
+                                delivered = delivered.saturating_add(1);
+                            }
+                        }
+                        tracing::trace!(
+                            target: "poly_test_discord::voice",
+                            src = %src, channel = %channel, fanout = delivered,
+                            "fanned out audio packet"
+                        );
+                    }
+                    None => {
+                        // Unregistered sender — fall back to self-echo so the
+                        // existing single-client smoke tests (which never call
+                        // SELECT_PROTOCOL with their real ephemeral port) keep
+                        // observing an echo.
+                        let _ = sock.send_to(payload, src).await;
+                    }
+                }
             }
             Err(e) => {
-                tracing::warn!(target: "poly_test_discord::voice", "UDP echo recv error: {e}");
+                tracing::warn!(target: "poly_test_discord::voice", "UDP recv error: {e}");
                 break;
             }
         }
@@ -812,17 +861,32 @@ async fn udp_echo_loop(sock: UdpSocket) {
 // Phase A.2 — Mock voice gateway WS at GET /voice/ws
 // ---------------------------------------------------------------------------
 
+/// Query parameters for `/voice/ws`. Both are optional and only used by tests
+/// that want to drive fan-out without going through the gateway op-4 flow.
+/// In normal usage the channel_id is recovered from the session_id passed at
+/// IDENTIFY time via the `voice_session_channels` map populated by op-4.
+#[derive(Deserialize)]
+pub struct VoiceWsQuery {
+    pub channel_id: Option<String>,
+    pub session_id: Option<String>,
+}
+
 /// GET /voice/ws — upgrade to WebSocket, speak the Discord Voice Gateway v8 protocol.
 pub async fn voice_gateway_ws(
     ws: WebSocketUpgrade,
     State(state): State<Arc<crate::state::DiscordState>>,
+    Query(q): Query<VoiceWsQuery>,
 ) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_voice_gateway_socket(socket, state))
+    ws.on_upgrade(move |socket| handle_voice_gateway_socket(socket, state, q))
 }
 
 // lint-allow-unused: Discord Voice Gateway WS opcodes are bare integer literals in serde_json::json! payloads
 #[allow(clippy::default_numeric_fallback)]
-async fn handle_voice_gateway_socket(mut socket: WebSocket, state: Arc<crate::state::DiscordState>) {
+async fn handle_voice_gateway_socket(
+    mut socket: WebSocket,
+    state: Arc<crate::state::DiscordState>,
+    q: VoiceWsQuery,
+) {
     // 1. Send op 8 HELLO.
     let hello = serde_json::json!({
         "op": 8,
@@ -831,6 +895,12 @@ async fn handle_voice_gateway_socket(mut socket: WebSocket, state: Arc<crate::st
     if socket.send(WsMessage::Text(hello.to_string().into())).await.is_err() {
         return;
     }
+
+    // Per-session bookkeeping for fan-out registration. (Phase X.1)
+    // ssrc 0 sentinel means "no session registered yet".
+    #[allow(unused_assignments)]
+    let mut session_ssrc: u32 = 0;
+    let mut session_id: String = q.session_id.unwrap_or_default();
 
     // Wait for op 0 IDENTIFY, then drive the rest of the handshake.
     loop {
@@ -844,11 +914,23 @@ async fn handle_voice_gateway_socket(mut socket: WebSocket, state: Arc<crate::st
                 match op {
                     // op 0 = IDENTIFY → send op 2 READY
                     0 => {
+                        // Capture the session_id the client identifies with so
+                        // SELECT_PROTOCOL can look up its channel via
+                        // voice_session_channels (seeded by op-4 on the main
+                        // gateway WS).
+                        if let Some(d) = v.get("d")
+                            && let Some(sid) = d.get("session_id").and_then(|s| s.as_str())
+                            && !sid.is_empty()
+                        {
+                            session_id = sid.to_string();
+                        }
+                        // Assign a fresh per-session ssrc.
+                        session_ssrc = state.voice_next_ssrc.fetch_add(1, Ordering::Relaxed);
                         let udp_port = state.voice_udp_port.load(Ordering::Relaxed);
                         let ready = serde_json::json!({
                             "op": 2,
                             "d": {
-                                "ssrc": 1,
+                                "ssrc": session_ssrc,
                                 "ip": "127.0.0.1",
                                 "port": udp_port,
                                 "modes": ["aead_xchacha20_poly1305_rtpsize"]
@@ -888,6 +970,53 @@ async fn handle_voice_gateway_socket(mut socket: WebSocket, state: Arc<crate::st
                 match op {
                     // op 1 = SELECT_PROTOCOL → send op 4 SESSION_DESCRIPTION
                     1 => {
+                        // Extract the client's UDP endpoint and register this
+                        // session for fan-out. (Phase X.1)
+                        if let Some(d) = v.get("d")
+                            && let Some(data) = d.get("data")
+                        {
+                            let addr_str = data
+                                .get("address")
+                                .and_then(|a| a.as_str())
+                                .unwrap_or("127.0.0.1");
+                            let port = data
+                                .get("port")
+                                .and_then(serde_json::Value::as_u64)
+                                .unwrap_or(0);
+                            if let Ok(ip) = addr_str.parse::<std::net::IpAddr>()
+                                && port != 0
+                                && session_ssrc != 0
+                            {
+                                let peer_addr =
+                                    std::net::SocketAddr::new(ip, u16::try_from(port).unwrap_or(0));
+                                // Resolve channel_id: prefer the op-4 mapping
+                                // keyed by session_id, fall back to the
+                                // /voice/ws?channel_id= query param.
+                                let channel_id = {
+                                    let map = state.voice_session_channels.read().await;
+                                    map.get(&session_id).cloned()
+                                }
+                                .or_else(|| q.channel_id.clone())
+                                .unwrap_or_default();
+                                if !channel_id.is_empty() {
+                                    state.voice_sessions.write().await.insert(
+                                        session_ssrc,
+                                        VoiceSession {
+                                            channel_id: channel_id.clone(),
+                                            peer_addr,
+                                            ws_session_id: session_id.clone(),
+                                        },
+                                    );
+                                    tracing::debug!(
+                                        target: "poly_test_discord::voice",
+                                        ssrc = session_ssrc,
+                                        channel_id = %channel_id,
+                                        peer_addr = %peer_addr,
+                                        "registered voice session for fan-out"
+                                    );
+                                }
+                            }
+                        }
                         let secret_key: Vec<u8> = vec![0u8; 32];
                         let session_desc = serde_json::json!({
                             "op": 4,
@@ -897,6 +1026,10 @@ async fn handle_voice_gateway_socket(mut socket: WebSocket, state: Arc<crate::st
                             }
                         });
                         if socket.send(WsMessage::Text(session_desc.to_string().into())).await.is_err() {
+                            // Fall through to cleanup at end of function.
+                            if session_ssrc != 0 {
+                                state.voice_sessions.write().await.remove(&session_ssrc);
+                            }
                             return;
                         }
                         break; // handshake complete — stay alive for heartbeats + speaking
@@ -945,6 +1078,12 @@ async fn handle_voice_gateway_socket(mut socket: WebSocket, state: Arc<crate::st
             #[allow(clippy::wildcard_enum_match_arm)]
             _ => {}
         }
+    }
+
+    // Deregister voice session on disconnect so a re-connecting client
+    // doesn't get stale routes. (Phase X.1)
+    if session_ssrc != 0 {
+        state.voice_sessions.write().await.remove(&session_ssrc);
     }
 }
 

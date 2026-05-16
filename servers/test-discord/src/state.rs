@@ -6,12 +6,28 @@
 
 use dashmap::DashMap;
 use poly_test_common::{AuthState, EventBus, HeaderInspectBuffer};
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use twilight_model::channel::ChannelType;
 use twilight_model::id::marker::{ChannelMarker, GuildMarker, MessageMarker, RoleMarker, UserMarker};
 use twilight_model::id::Id;
-use std::sync::atomic::AtomicU16;
+use std::sync::atomic::{AtomicU16, AtomicU32};
+
+/// A registered voice session — used by the UDP fan-out loop to route audio
+/// packets from one voice-channel participant to the others in the same
+/// channel. Populated when a voice WS client sends `SELECT_PROTOCOL`.
+#[derive(Clone, Debug)]
+pub struct VoiceSession {
+    /// The voice channel ID this session joined (string form, e.g. "204").
+    pub channel_id: String,
+    /// The client's UDP endpoint as observed via SELECT_PROTOCOL (address+port).
+    /// The fan-out loop matches `recv_from` source against this to identify
+    /// the sender and forward to all OTHER sessions in the same channel.
+    pub peer_addr: std::net::SocketAddr,
+    /// The mock-issued voice WS session ID (for debugging / future use).
+    pub ws_session_id: String,
+}
 
 /// Events dispatched to Gateway WebSocket clients.
 #[derive(Clone, Debug)]
@@ -146,6 +162,18 @@ pub struct DiscordState {
     /// Last gateway-identified user_id extracted from op 2 IDENTIFY.
     /// Stored as a string for flexibility; defaults to "mock-user-1".
     pub gateway_user_id: Arc<RwLock<String>>,
+    /// Per-channel voice-session registry, keyed by ssrc. Populated by the
+    /// voice WS handler at SELECT_PROTOCOL time and consumed by the UDP
+    /// fan-out loop. (Phase X.1 — replaces simple self-echo.)
+    pub voice_sessions: Arc<RwLock<HashMap<u32, VoiceSession>>>,
+    /// Monotonic SSRC counter — the voice WS handler increments this at
+    /// IDENTIFY time to assign each session a unique SSRC starting at 1.
+    pub voice_next_ssrc: Arc<AtomicU32>,
+    /// Per-voice-channel mapping seeded by op-4 on the main gateway WS:
+    /// `gateway_voice_session_id -> channel_id`. The voice WS handler looks
+    /// this up when its client passes the session_id at IDENTIFY time so we
+    /// know which voice channel to register the SELECT_PROTOCOL endpoint into.
+    pub voice_session_channels: Arc<RwLock<HashMap<String, String>>>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -270,6 +298,9 @@ impl DiscordState {
             voice_udp_port: Arc::new(AtomicU16::new(0)),
             server_addr: Arc::new(RwLock::new("127.0.0.1:9102".to_string())),
             gateway_user_id: Arc::new(RwLock::new("mock-user-1".to_string())),
+            voice_sessions: Arc::new(RwLock::new(HashMap::new())),
+            voice_next_ssrc: Arc::new(AtomicU32::new(1)),
+            voice_session_channels: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
