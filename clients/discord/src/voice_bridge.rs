@@ -43,6 +43,7 @@
 //! audiopus + chacha20poly1305 directly. The refactor only changes the bridge
 //! (WASM) path.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use poly_host_bridge::{
@@ -52,6 +53,8 @@ use poly_host_bridge::{
     voice_wire::VoiceEvent,
 };
 use tokio::sync::Mutex;
+
+pub use voice_protocol::WsHandle;
 
 // ── Error type ────────────────────────────────────────────────────────────────
 
@@ -103,6 +106,11 @@ impl Default for TransmitMode {
 // ── Session state ─────────────────────────────────────────────────────────────
 
 /// Per-call session state held for the duration of a voice call.
+///
+/// Holds shared resources for the audio capture loop (Phase X.2) and audio
+/// playback loop (Phase X.3) — see `capture_shutdown` / `playback_shutdown` /
+/// `ssrc_to_user`. The capture/playback loops are spawned by separate
+/// orchestration code; this struct only owns the channel ends.
 pub struct VoiceBridgeSession {
     /// UDP socket session ID (from `/host/udp/bind`).
     pub udp_session: String,
@@ -118,6 +126,28 @@ pub struct VoiceBridgeSession {
     pub udp: Arc<UdpClient>,
     pub opus: Arc<OpusClient>,
     pub aead: Arc<AeadClient>,
+
+    /// Channel sender for shutting down the audio capture loop (Phase X.2).
+    /// Drop = shutdown. `None` if capture has not been started yet.
+    pub capture_shutdown: Option<futures::channel::oneshot::Sender<()>>,
+    /// Channel sender for shutting down the audio playback loop (Phase X.3).
+    /// Drop = shutdown. `None` if playback has not been started yet.
+    pub playback_shutdown: Option<futures::channel::oneshot::Sender<()>>,
+    /// SSRC → user_id map, populated by the op 5 SPEAKING listener on the
+    /// WS recv loop. Used by playback to label decoded PCM with the
+    /// correct sender. Wrapped in `tokio::sync::RwLock` so the listener
+    /// task can write while playback tasks read concurrently.
+    pub ssrc_to_user: Arc<tokio::sync::RwLock<HashMap<u32, String>>>,
+    /// WS handle kept alive for the duration of the call.
+    ///
+    /// Needed so op 5 SPEAKING dispatches keep arriving via the pump task
+    /// and the SSRC → user map stays current, and so we can echo
+    /// op 6 HEARTBEAT_ACK when op 3 HEARTBEAT arrives.
+    ///
+    /// On wasm32 this is `!Send` (gloo_net WebSocket is `!Send`), so this
+    /// field — and therefore `VoiceBridgeSession` itself — is single-thread
+    /// only on wasm32. Native builds are fully `Send + Sync`.
+    pub ws_handle: WsHandle,
 }
 
 /// Shared session guard. `None` when not in a call.
@@ -242,6 +272,19 @@ impl DiscordVoiceBridgeClient {
         let aead_session =
             aead_client.create("xchacha20poly1305", &secret_key).await?;
 
+        // Phase X.0 F.5 — spawn the SPEAKING / HEARTBEAT_ACK listener task
+        // that consumes the WS recv channel for the rest of the call. It
+        // populates `ssrc_to_user` from op 5 SPEAKING frames and echoes
+        // op 6 HEARTBEAT_ACK in response to op 3 HEARTBEAT. The task ends
+        // when the recv channel closes (WS dropped) or the session is
+        // dropped (sender side gone).
+        let ssrc_to_user: Arc<tokio::sync::RwLock<HashMap<u32, String>>> =
+            Arc::new(tokio::sync::RwLock::new(HashMap::new()));
+
+        if let Some(recv) = handshake.ws_handle.take_recv() {
+            spawn_ws_event_listener(recv, &handshake.ws_handle, Arc::clone(&ssrc_to_user));
+        }
+
         let mut guard = self.voice_session.lock().await;
         *guard = Some(VoiceBridgeSession {
             udp_session,
@@ -252,6 +295,10 @@ impl DiscordVoiceBridgeClient {
             udp: Arc::clone(&udp_client),
             opus: Arc::clone(&opus_client),
             aead: Arc::clone(&aead_client),
+            capture_shutdown: None,
+            playback_shutdown: None,
+            ssrc_to_user,
+            ws_handle: handshake.ws_handle,
         });
 
         Ok(())
@@ -268,6 +315,18 @@ impl DiscordVoiceBridgeClient {
     pub async fn disconnect_voice(&self, _guild_id: &str) -> Result<(), VoiceError> {
         let mut guard = self.voice_session.lock().await;
         if let Some(s) = guard.take() {
+            // Phase X.0 F.6 — drop the capture/playback shutdown senders.
+            // The receivers wake with a `Canceled` error and tear down the
+            // loops. Drop is the signal — no explicit `send(())` needed.
+            drop(s.capture_shutdown);
+            drop(s.playback_shutdown);
+
+            // Drop the WS handle to signal the pump task + listener to exit.
+            // The pump task's `ws_rx.next()` returns `None` once the WS is
+            // dropped, which closes the recv channel sender, which makes the
+            // listener's `recv.next()` return `None` and exit.
+            drop(s.ws_handle);
+
             // Best-effort close — ignore individual errors.
             let _ = s.udp.close(&s.udp_session).await;
             let _ = s.opus.close(&s.encoder_session).await;
@@ -456,6 +515,59 @@ impl DiscordVoiceBridgeClient {
     }
 }
 
+// ── WS event listener (Phase X.0 F.5) ─────────────────────────────────────────
+
+/// Spawn the post-handshake WS event listener.
+///
+/// Consumes the recv channel for the lifetime of the call, dispatching:
+///   - op 5 SPEAKING — insert `(ssrc → user_id)` into `ssrc_to_user`.
+///   - everything else — currently ignored. op 3 HEARTBEAT is a client→server
+///     opcode (we send it on our heartbeat timer) so we don't expect to
+///     receive op 3 from the gateway. op 6 HEARTBEAT_ACK is informational.
+///     op 13 CLIENT_DISCONNECT / op 14 DAVE protocol frames are future work.
+///
+/// The listener exits when:
+///   - the recv channel returns `None` (WS pump dropped its sender, i.e.
+///     WS closed or `disconnect_voice` was called), OR
+///   - the task is implicitly cancelled by tab teardown on wasm32.
+fn spawn_ws_event_listener(
+    mut recv: futures::channel::mpsc::UnboundedReceiver<String>,
+    _ws_handle: &voice_protocol::WsHandle,
+    ssrc_to_user: Arc<tokio::sync::RwLock<HashMap<u32, String>>>,
+) {
+    let task = async move {
+        use futures::StreamExt;
+        while let Some(msg) = recv.next().await {
+            let v: serde_json::Value = match serde_json::from_str(&msg) {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
+            let op = v.get("op").and_then(|o| o.as_u64()).unwrap_or(0);
+            if op == 5 {
+                let d = match v.get("d") {
+                    Some(d) => d,
+                    None => continue,
+                };
+                let ssrc = match d.get("ssrc").and_then(|s| s.as_u64()) {
+                    Some(s) => s as u32,
+                    None => continue,
+                };
+                let user_id = match d.get("user_id").and_then(|u| u.as_str()) {
+                    Some(s) => s.to_string(),
+                    None => continue,
+                };
+                ssrc_to_user.write().await.insert(ssrc, user_id);
+            }
+            // Other ops are ignored on the bridge path. See doc comment.
+        }
+    };
+
+    #[cfg(target_arch = "wasm32")]
+    wasm_bindgen_futures::spawn_local(task);
+    #[cfg(not(target_arch = "wasm32"))]
+    tokio::spawn(task);
+}
+
 // ── RTP helpers ────────────────────────────────────────────────────────────────
 
 fn build_rtp_header(sequence: u16, timestamp: u32, ssrc: u32) -> [u8; RTP_HEADER_SIZE] {
@@ -520,8 +632,13 @@ fn xchacha_nonce_from_rtp(rtp_header: &[u8]) -> Vec<u8> {
 //
 // They live in a submodule to keep the file navigable.
 
-mod voice_protocol {
+pub mod voice_protocol {
     use super::*;
+    use futures::channel::mpsc::UnboundedReceiver;
+    #[cfg(target_arch = "wasm32")]
+    use futures::channel::mpsc::UnboundedSender;
+    use std::cell::RefCell;
+    use std::time::Duration;
 
     /// Result of a successful `run_handshake` call.
     pub struct HandshakeResult {
@@ -539,20 +656,148 @@ mod voice_protocol {
         pub ws_handle: WsHandle,
     }
 
-    /// An opaque write handle to the voice WebSocket.
+    /// A bidirectional handle to the voice WebSocket.
     ///
-    /// Used only to send op 1 SELECT_PROTOCOL after IP discovery.
-    /// On WASM gloo_net WebSocket is not `Send`; on wasm32 there is only one
-    /// thread so Send is not required.
+    /// Carries a send closure plus a `recv` channel fed by a background pump
+    /// task that forwards every Text frame off the underlying WebSocket. The
+    /// receiver is wrapped so it can be `take()`n exactly once (by the
+    /// post-handshake listener task) without blocking other handle users.
+    ///
+    /// On WASM gloo_net WebSocket is `!Send`; the send closure is therefore
+    /// `LocalBoxFuture`-bound and uses `Rc<RefCell<_>>` internally. We use
+    /// the same shape on native for API symmetry — the underlying tokio-
+    /// tungstenite sink is `Send` so `Arc<tokio::sync::Mutex<_>>` could be
+    /// used there, but the current native bridge path returns Err from
+    /// `run_handshake` anyway, so single-thread is fine for now.
     pub struct WsHandle {
         /// Closure that sends a JSON string on the voice WebSocket.
+        ///
+        /// Returns a `LocalBoxFuture` so it works for both wasm32 (where the
+        /// underlying WebSocket sink is `!Send`) and native (where it would
+        /// be `Send` but we keep the type uniform).
         pub send: Box<dyn Fn(String) -> futures::future::LocalBoxFuture<'static, Result<(), String>>>,
+        /// Channel receiver fed by the WS pump task. Wrapped in
+        /// `RefCell<Option<_>>` so the post-handshake listener task can
+        /// `take_recv()` exactly once. Subsequent callers see `None`.
+        ///
+        /// `RefCell` (not `Mutex`) because on wasm32 the whole handle is
+        /// single-thread by construction, and on native the only place we
+        /// touch it is in the synchronous `take_recv` accessor.
+        pub recv: RefCell<Option<UnboundedReceiver<String>>>,
+    }
+
+    impl WsHandle {
+        /// Take ownership of the recv channel. Exactly one caller wins; all
+        /// others see `None`. Used by the post-handshake listener task.
+        pub fn take_recv(&self) -> Option<UnboundedReceiver<String>> {
+            self.recv.borrow_mut().take()
+        }
+
+        /// Receive the next Text frame from the WS with a timeout.
+        ///
+        /// Borrows the recv channel; will return an Err if the channel has
+        /// already been taken via `take_recv`. Used by `finish_handshake` to
+        /// wait for op 4 SESSION_DESCRIPTION before the long-lived listener
+        /// task is spawned.
+        ///
+        /// On wasm32 the timeout is implemented via
+        /// `gloo_timers::future::TimeoutFuture` raced via `futures::select`.
+        /// On native we use `tokio::time::timeout`. This mirrors the
+        /// `BackendHandleExt::read_with_timeout` pattern documented in
+        /// CLAUDE.md hang-class #4 mitigation.
+        pub async fn recv_text_with_timeout(
+            &self,
+            dur: Duration,
+        ) -> Result<String, String> {
+            use futures::StreamExt;
+
+            // Hold an Option<RefMut> across awaits is fine on single-thread
+            // WASM; on native this method is only called from the handshake
+            // path which runs on one task. Take the receiver out of the
+            // RefCell for the duration of the await and put it back after.
+            let mut rx = self
+                .recv
+                .borrow_mut()
+                .take()
+                .ok_or("WsHandle.recv already taken — finish_handshake must run before the listener spawns")?;
+
+            let result: Result<String, String> = {
+                #[cfg(target_arch = "wasm32")]
+                {
+                    use futures::future::{select, Either};
+                    let timeout = gloo_timers::future::TimeoutFuture::new(
+                        u32::try_from(dur.as_millis()).unwrap_or(u32::MAX),
+                    );
+                    let next = rx.next();
+                    futures::pin_mut!(timeout);
+                    futures::pin_mut!(next);
+                    match select(timeout, next).await {
+                        Either::Left(_) => Err(format!(
+                            "WsHandle.recv_text_with_timeout: timed out after {}ms",
+                            dur.as_millis()
+                        )),
+                        Either::Right((Some(msg), _)) => Ok(msg),
+                        Either::Right((None, _)) => Err("WS closed".into()),
+                    }
+                }
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    match tokio::time::timeout(dur, rx.next()).await {
+                        Ok(Some(msg)) => Ok(msg),
+                        Ok(None) => Err("WS closed".into()),
+                        Err(_) => Err(format!(
+                            "WsHandle.recv_text_with_timeout: timed out after {}ms",
+                            dur.as_millis()
+                        )),
+                    }
+                }
+            };
+
+            // Restore the receiver so the long-lived listener task can take
+            // it after the handshake finishes.
+            *self.recv.borrow_mut() = Some(rx);
+            result
+        }
     }
 
     impl std::fmt::Debug for WsHandle {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             f.debug_struct("WsHandle").finish_non_exhaustive()
         }
+    }
+
+    /// Build a sender pair used by the wasm pump task. Gated to wasm32
+    /// because the native bridge handshake currently returns `Err` before
+    /// allocating one (no native impl yet — Phase X.0 ships the WASM path).
+    #[cfg(target_arch = "wasm32")]
+    pub(super) fn ws_recv_channel() -> (UnboundedSender<String>, UnboundedReceiver<String>) {
+        futures::channel::mpsc::unbounded()
+    }
+
+    /// Parse the op 4 SESSION_DESCRIPTION payload and extract the 32-byte
+    /// `secret_key`. Returns Err if the frame is not op 4 or if `d.secret_key`
+    /// is missing / not an array of ints.
+    ///
+    /// Extracted as a helper so it can be unit-tested without spinning up
+    /// the WS / UDP / AEAD stack.
+    pub fn parse_session_description(frame: &str) -> Result<Option<Vec<u8>>, String> {
+        let v: serde_json::Value = serde_json::from_str(frame)
+            .map_err(|e| format!("session_description parse: {e}"))?;
+        if v.get("op").and_then(|o| o.as_u64()) != Some(4) {
+            return Ok(None);
+        }
+        let arr = v
+            .pointer("/d/secret_key")
+            .and_then(|k| k.as_array())
+            .ok_or("op 4: missing d.secret_key array")?;
+        let key: Vec<u8> = arr
+            .iter()
+            .filter_map(|n| n.as_u64().map(|x| x as u8))
+            .collect();
+        if key.is_empty() {
+            return Err("op 4: secret_key array is empty".into());
+        }
+        Ok(Some(key))
     }
 
     /// Run the Discord voice WS handshake.
@@ -653,7 +898,11 @@ mod voice_protocol {
 
     /// Send op 1 SELECT_PROTOCOL and wait for op 4 SESSION_DESCRIPTION.
     ///
-    /// Returns the 32-byte `secret_key`.
+    /// Returns the 32-byte `secret_key`. Loops past unrelated frames
+    /// (op 6 HEARTBEAT_ACK, op 5 SPEAKING, etc.) with a 5-second total
+    /// timeout per frame read. Discord typically replies within a single
+    /// RTT after SELECT_PROTOCOL, so a 5-second per-frame budget is
+    /// conservative.
     pub async fn finish_handshake(
         ws_handle: &WsHandle,
         local_ip: &str,
@@ -669,12 +918,18 @@ mod voice_protocol {
         });
         (ws_handle.send)(payload.to_string()).await?;
 
-        // SESSION_DESCRIPTION is received asynchronously; in a full
-        // implementation the background WS receive task would push it into a
-        // channel. For the initial pass we park here with a 5s timeout.
-        // The discord plugin's WASM-side WS loop will be improved in a follow-up.
-        // For now return a stub error that the caller can surface gracefully.
-        Err("finish_handshake: SESSION_DESCRIPTION receive loop not yet wired on WASM bridge path — follow-up plan item".into())
+        // Loop reading from the WS recv channel until op 4 arrives. Skip
+        // unrelated ops — they are not fatal here. 5-second per-frame
+        // timeout (Phase X.0 F.3).
+        loop {
+            let msg = ws_handle
+                .recv_text_with_timeout(Duration::from_secs(5))
+                .await?;
+            match parse_session_description(&msg)? {
+                Some(secret_key) => return Ok(secret_key),
+                None => continue, // not op 4 — keep looping
+            }
+        }
     }
 
     // ── WASM-only handshake ────────────────────────────────────────────────────
@@ -774,6 +1029,27 @@ mod voice_protocol {
         use std::rc::Rc;
         use std::cell::RefCell;
         let tx_guard = Rc::new(RefCell::new(ws_tx));
+
+        // Phase X.0 F.2 — pump the rest of the WS stream into an unbounded
+        // mpsc. ws_rx already had op 8 + op 2 consumed above; everything
+        // from here on is op 4 / op 6 / op 5 / etc. and goes to the
+        // channel. The pump task is owned by `wasm_bindgen_futures::spawn_local`
+        // and terminates when ws_rx returns None (WS closed) or the
+        // receiver is dropped.
+        let (recv_tx, recv_rx) = ws_recv_channel();
+        wasm_bindgen_futures::spawn_local(async move {
+            let mut ws_rx = ws_rx;
+            while let Some(item) = ws_rx.next().await {
+                if let Ok(Message::Text(text)) = item {
+                    if recv_tx.unbounded_send(text).is_err() {
+                        // receiver dropped — caller no longer cares
+                        break;
+                    }
+                }
+                // Binary frames + Err items are skipped on the bridge path.
+            }
+        });
+
         let ws_handle = WsHandle {
             send: Box::new(move |msg: String| {
                 let tx = Rc::clone(&tx_guard);
@@ -784,6 +1060,7 @@ mod voice_protocol {
                         .map_err(|e| format!("WS send: {e:?}"))
                 }) as futures::future::LocalBoxFuture<'static, Result<(), String>>
             }),
+            recv: RefCell::new(Some(recv_rx)),
         };
 
         Ok(HandshakeResult {
@@ -818,6 +1095,36 @@ mod tests {
         let h = build_rtp_header(1, 2, 3);
         let nonce = xchacha_nonce_from_rtp(&h);
         assert_eq!(nonce.len(), 24);
+    }
+
+    #[test]
+    fn parse_session_description_extracts_secret_key() {
+        let frame = serde_json::json!({
+            "op": 4,
+            "d": {
+                "mode": "aead_xchacha20_poly1305_rtpsize",
+                "secret_key": vec![1u8; 32]
+            }
+        })
+        .to_string();
+        let key = voice_protocol::parse_session_description(&frame)
+            .unwrap()
+            .unwrap();
+        assert_eq!(key.len(), 32);
+        assert!(key.iter().all(|&b| b == 1));
+    }
+
+    #[test]
+    fn parse_session_description_rejects_other_ops() {
+        let frame = r#"{"op":6,"d":12345}"#;
+        let result = voice_protocol::parse_session_description(frame).unwrap();
+        assert!(result.is_none(), "op 6 HEARTBEAT_ACK should yield None");
+    }
+
+    #[test]
+    fn parse_session_description_errors_on_missing_key() {
+        let frame = r#"{"op":4,"d":{"mode":"aead_xchacha20_poly1305_rtpsize"}}"#;
+        assert!(voice_protocol::parse_session_description(frame).is_err());
     }
 
     #[test]

@@ -68,6 +68,8 @@ voice-bridge = [
     "dep:base64",
     "dep:serde_json",
     "dep:gloo-net",
+    "dep:gloo-timers",
+    "dep:wasm-bindgen-futures",
     "dep:poly-host-bridge",
 ]
 # Gateway bridge — WASM-safe Discord main gateway WebSocket.
@@ -139,6 +141,7 @@ serde_json = { workspace = true }
 
 [dev-dependencies]
 poly-test-discord = { path = "../../servers/test-discord" }
+poly-test-common = { workspace = true }
 axum = { workspace = true }
 serde_json = { workspace = true }
 base64 = { workspace = true }
@@ -163,6 +166,14 @@ path = "tests/super_properties_consistency.rs"
 name = "video_smoke"
 path = "tests/video_smoke.rs"
 required-features = ["voice"]
+
+# Phase X.0 F.7 — voice bridge handshake foundation test.
+# Needs native compilation of `voice_bridge` (so `voice-bridge` feature) plus
+# `gateway` for tokio-tungstenite (used to drive the mock WS directly).
+[[test]]
+name = "voice_bridge_handshake"
+path = "tests/voice_bridge_handshake.rs"
+required-features = ["voice-bridge", "gateway"]
 
 [lints]
 workspace = true
