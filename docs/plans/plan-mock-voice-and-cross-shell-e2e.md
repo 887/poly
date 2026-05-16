@@ -2,6 +2,8 @@
 
 > Created 2026-05-16.
 
+## Status: ✅ DONE for discord — cross-shell two-user voice verified end-to-end through real UI clicks. Stoat deferred (3-5 day uplift, see Phase B).
+
 ## Goal
 
 Make discord and stoat voice testable end-to-end against test-server
@@ -35,8 +37,8 @@ channel as two different test users and verify they connect.
 - [x] **C.3c** Voice channel surfaces in sidebar — fixed by `tvrssqkt` (`get_channels` was filtering out `GuildVoice`/`GuildStageVoice`).
 - [x] **C.3d** Voice channel seeded in mock — shipped in `kmtqzzrk` (`#voice-general` in guild 100, also added to `guild.channels` vec).
 - [x] **C.4 SINGLE-USER VERIFIED**: clicked koala → Australiana → voice-general → Join Voice. Result: "Voice Connected" green state, "1 in channel", voice WS handshake completes against mock `/voice/ws` (HELLO/IDENTIFY/READY/SELECT_PROTOCOL/SESSION_DESCRIPTION), UDP echo socket responds. Same flow works in poly-electron.
-- [ ] **C.5 CROSS-USER BLOCKED**: With BOTH shells sharing the same `~/.local/share/poly/storage.sqlite3`, the guild server-icon for Australiana is bound to whichever account first claimed it (koala). When kangaroo clicks Australiana from the inner column, the URL rebuilds with account_id=1 (koala), not 2 (kangaroo). The `FavoriteServerIcon` doesn't multi-account a shared guild. To verify two-different-users-in-one-channel, would need either: (a) separate `POLY_DATA_DIR` per shell, (b) a per-account guild-icon variant when multiple accounts are members, (c) explicit "switch account, then join from this account's perspective" flow.
-- [ ] **C.6** Cross-shell mutual-presence screenshots — deferred behind C.5.
+- [x] **C.5 CROSS-USER VERIFIED** — shipped in `vmzurqml` (favorites_sidebar.rs + account_restore.rs). Dedup changed from `server.id` to `(server.id, account_id)`; favorite-sidebar rendering switched from O(1) `server_by_id` (which returns only the latest push for a shared id) to a flat-map over `chat_lists.servers` filtered by id. Result: when koala + kangaroo are both members of Australiana, the sidebar renders TWO Australiana icons — each routes through its own account_id. Clicked each in their respective shell: `/discord/.../1/channels/100/204` (koala in poly-web), `/discord/.../2/channels/100/204` (kangaroo in poly-electron), both showing "Voice Connected" green state simultaneously.
+- [x] **C.6** Screenshots captured: poly-web shows koala at bottom-left + voice-general selected + Voice Connected; poly-electron shows kangaroo at bottom-left + voice-general selected + Voice Connected. Both routes show distinct account_id segments (`/1/` vs `/2/`), proving the multi-account guild rendering works end-to-end.
 
 ## Phase D — cross-shell stoat voice E2E — DEFERRED
 
@@ -45,5 +47,5 @@ Pending Phase B's 3-5 day uplift on the stoat side AND Phase C unblock. Out of s
 ## Phase E — report + lint cleanup
 
 - [x] **E.1** cargo check clean across affected crates (poly-discord native+wasm, poly-stoat all-features, poly-test-discord, apps/web, apps/desktop-electron via dx serve verification)
-- [x] **E.2** Pushed to main: `kpomlwsy` (Phase A — mock voice), `orvyzkum` (stoat fix + test cleanup), `rnwrstqr` (electron route fix)
-- [ ] **E.3** Cannot mark DONE — Phase C blocked, Phase D deferred. Status: PARTIAL.
+- [x] **E.2** Pushed to main: `kpomlwsy` (Phase A — mock voice), `orvyzkum` (stoat fix + test cleanup), `rnwrstqr` (electron route fix), `rppzywpt` (account_restore honors discord instance_id), `kmtqzzrk` (seed voice-general), `loploqlp` (strip scheme from Session.instance_id), `tvrssqkt` (get_channels includes voice), `vmzurqml` (multi-account guild rendering)
+- [x] **E.3** Phase C complete with cross-shell verification. Phase D (stoat) explicitly deferred (3-5 day scope). Plan DONE for the discord track.
