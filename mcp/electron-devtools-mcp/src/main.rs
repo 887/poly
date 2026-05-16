@@ -715,7 +715,15 @@ impl ElectronCdpBackend {
             c
         };
 
-        cmd.arg(&electron_dir)
+        // Synthetic audio/video for cross-shell voice E2E smoke tests:
+        // auto-accept getUserMedia permission prompts and return deterministic
+        // fake streams ("Fake Audio 1" / "Fake Video 1") without requiring a
+        // real mic or camera. Electron forwards these Chromium flags when they
+        // appear before the app-directory argument.
+        // See docs/plans/plan-voice-media-plane-e2e.md.
+        cmd.arg("--use-fake-ui-for-media-stream")
+            .arg("--use-fake-device-for-media-stream")
+            .arg(&electron_dir)
             .current_dir(&electron_dir)
             .env("POLY_DEV", "1")
             .env("POLY_DEV_SERVE_PORT", DX_SERVE_PORT.to_string())

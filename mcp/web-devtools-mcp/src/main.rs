@@ -463,6 +463,12 @@ impl ChromeCdpBackend {
             // info bar under the address bar — same behaviour as Puppeteer/
             // ChromeDriver so the user always knows this window is MCP-managed.
             "--enable-automation".to_string(),
+            // Synthetic audio/video for cross-shell voice E2E smoke tests:
+            // auto-accept getUserMedia permission prompts and return deterministic
+            // fake streams ("Fake Audio 1" / "Fake Video 1") without requiring a
+            // real mic or camera. See docs/plans/plan-voice-media-plane-e2e.md.
+            "--use-fake-ui-for-media-stream".to_string(),
+            "--use-fake-device-for-media-stream".to_string(),
         ];
 
         if self.headless {
