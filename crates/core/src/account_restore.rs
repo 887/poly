@@ -74,9 +74,28 @@ fn build_backend_for_slug(
             // hardcodes https://discord.com — if the KV row stored a different
             // base URL (e.g. http://localhost:9102 for the test mock), pass it
             // through. Mirrors the matrix / lemmy / forgejo arms above.
+            //
+            // We also derive a gateway WS URL from the base_url so the
+            // gateway-bridge (wasm32) and native gateway path connect to the
+            // mock's gateway WS instead of the real discord.com gateway. This
+            // is what makes VOICE_SERVER_UPDATE flow on the test path, which
+            // in turn lets DiscordVoiceBridgeClient::connect_voice complete.
             let client = match instance_id {
                 Some(url) if !url.is_empty() && url != "https://discord.com" => {
-                    poly_discord::DiscordClient::with_base_url(url.to_string())
+                    let trimmed = url.trim_end_matches('/');
+                    let host = trimmed
+                        .trim_start_matches("https://")
+                        .trim_start_matches("http://");
+                    let scheme = if host.starts_with("127.0.0.1") || host.starts_with("localhost") {
+                        "ws"
+                    } else {
+                        "wss"
+                    };
+                    let gateway_ws_url = format!("{scheme}://{host}/gateway/ws");
+                    poly_discord::DiscordClient::with_base_url_and_gateway(
+                        url.to_string(),
+                        gateway_ws_url,
+                    )
                 }
                 _ => poly_discord::DiscordClient::new(),
             };
