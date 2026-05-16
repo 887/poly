@@ -68,7 +68,20 @@ fn build_backend_for_slug(
         }
 
         #[cfg(feature = "discord")]
-        "discord" => Some(Box::new(poly_discord::DiscordClient::new())),
+        "discord" => {
+            // Honor a non-default instance_id so test-discord (and any future
+            // self-hosted Discord-API mock) is reachable. `DiscordClient::new()`
+            // hardcodes https://discord.com — if the KV row stored a different
+            // base URL (e.g. http://localhost:9102 for the test mock), pass it
+            // through. Mirrors the matrix / lemmy / forgejo arms above.
+            let client = match instance_id {
+                Some(url) if !url.is_empty() && url != "https://discord.com" => {
+                    poly_discord::DiscordClient::with_base_url(url.to_string())
+                }
+                _ => poly_discord::DiscordClient::new(),
+            };
+            Some(Box::new(client))
+        }
 
         #[cfg(feature = "teams")]
         "teams" => Some(Box::new(poly_teams::TeamsClient::new())),
