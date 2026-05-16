@@ -81,6 +81,8 @@ use std::sync::Arc;
 use tokio::sync::Mutex as TokioMutex;
 #[cfg(feature = "gateway")]
 use tokio::sync::RwLock;
+#[cfg(all(feature = "native", feature = "voice-bridge", target_arch = "wasm32"))]
+use std::sync::Arc as VbArc;
 
 /// F10 — in-memory mutable state for context-menu item state-awareness.
 ///
@@ -220,6 +222,18 @@ pub struct DiscordClient {
     /// the gateway feature is disabled or before the first event_stream call.
     #[cfg(feature = "gateway")]
     gateway_event_tx: Arc<Mutex<Option<tokio::sync::mpsc::UnboundedSender<ClientEvent>>>>,
+
+    /// WASM voice-bridge client (Option A).
+    ///
+    /// Present when `feature = "voice-bridge"` on `target_arch = "wasm32"`.
+    /// Drives the Discord voice protocol over generic host-bridge primitives
+    /// (`/host/udp/*`, `/host/codec/opus/*`, `/host/aead/*`) instead of the
+    /// native tokio-tungstenite + audiopus path which cannot compile for wasm32.
+    ///
+    /// Initialized to `None`; populated lazily in `join_voice_channel_transport`
+    /// using the account_id present at call time.
+    #[cfg(all(feature = "native", feature = "voice-bridge", target_arch = "wasm32"))]
+    pub voice_bridge_client: VbArc<tokio::sync::Mutex<Option<voice_bridge::DiscordVoiceBridgeClient>>>,
 }
 
 #[cfg(feature = "native")]
@@ -242,6 +256,8 @@ impl DiscordClient {
             gateway_tx: Arc::new(Mutex::new(None)),
             #[cfg(feature = "gateway")]
             gateway_event_tx: Arc::new(Mutex::new(None)),
+            #[cfg(all(feature = "native", feature = "voice-bridge", target_arch = "wasm32"))]
+            voice_bridge_client: VbArc::new(tokio::sync::Mutex::new(None)),
         }
     }
 
@@ -263,6 +279,8 @@ impl DiscordClient {
             gateway_tx: Arc::new(Mutex::new(None)),
             #[cfg(feature = "gateway")]
             gateway_event_tx: Arc::new(Mutex::new(None)),
+            #[cfg(all(feature = "native", feature = "voice-bridge", target_arch = "wasm32"))]
+            voice_bridge_client: VbArc::new(tokio::sync::Mutex::new(None)),
         }
     }
 
@@ -288,6 +306,8 @@ impl DiscordClient {
             gateway_tx: Arc::new(Mutex::new(None)),
             #[cfg(feature = "gateway")]
             gateway_event_tx: Arc::new(Mutex::new(None)),
+            #[cfg(all(feature = "native", feature = "voice-bridge", target_arch = "wasm32"))]
+            voice_bridge_client: VbArc::new(tokio::sync::Mutex::new(None)),
         }
     }
 
@@ -1537,19 +1557,62 @@ impl IsBackend for DiscordClient {
 
     /// C.1 — Signal the gateway that the local user is joining a voice channel.
     ///
-    /// Sends op 4 Voice State Update on the main gateway back-channel.
-    /// Requires `event_stream()` to have been called first (which opens the WS
-    /// and sets `gateway_tx`).
+    /// - `gateway` (native, not wasm32): sends op 4 Voice State Update on the
+    ///   main gateway back-channel. Requires `event_stream()` to have been called
+    ///   first (which opens the WS and sets `gateway_tx`).
+    /// - `voice-bridge` (wasm32): initialises a `DiscordVoiceBridgeClient` and
+    ///   drives the full Discord voice protocol over generic host-bridge primitives
+    ///   (`/host/udp/*`, `/host/codec/opus/*`, `/host/aead/*`). The WS endpoint
+    ///   and credentials are expected to be cached on the client by the time this
+    ///   is called (set via `VOICE_SERVER_UPDATE` / `VOICE_STATE_UPDATE` events on
+    ///   whatever event path the wasm32 shell uses). Until full wiring of that
+    ///   credential path ships, the call proceeds with empty credential strings,
+    ///   matching the existing `finish_handshake` stub behaviour in `voice_bridge.rs`.
     async fn join_voice_channel_transport(
         &self,
         server_id: &str,
         channel_id: &str,
     ) -> ClientResult<()> {
-        #[cfg(feature = "gateway")]
+        #[cfg(all(feature = "gateway", not(target_arch = "wasm32")))]
         {
             self.set_self_mute(server_id, Some(channel_id), false, false)?;
         }
-        #[cfg(not(feature = "gateway"))]
+        #[cfg(all(feature = "voice-bridge", target_arch = "wasm32"))]
+        {
+            tracing::info!(
+                target: "poly_discord::voice_bridge",
+                server_id,
+                channel_id,
+                "join_voice_channel_transport: dispatching via DiscordVoiceBridgeClient"
+            );
+            let account_id = self.account_id();
+            let mut guard = self.voice_bridge_client.lock().await;
+            if guard.is_none() {
+                *guard = Some(voice_bridge::DiscordVoiceBridgeClient::new(account_id));
+            }
+            let client = guard.as_ref().expect("just initialised above");
+            // ws_endpoint / ws_token / ws_session_id come from VOICE_SERVER_UPDATE +
+            // VOICE_STATE_UPDATE.  Full credential plumbing to wasm32 is a follow-up
+            // plan item.  The call proceeds with empty strings here so the wiring
+            // compiles and is reachable; connect_voice returns WsConnect("…") from
+            // the finish_handshake stub in voice_bridge.rs until that lands.
+            let dummy_audio = poly_audio_backend::fake_backend::FakeAudioBackend::new();
+            if let Err(e) = client
+                .connect_voice("", "", "", Some(server_id), &dummy_audio, None)
+                .await
+            {
+                tracing::warn!(
+                    target: "poly_discord::voice_bridge",
+                    error = %e,
+                    "join_voice_channel_transport: connect_voice returned error \
+                     (expected until VOICE_SERVER_UPDATE credential plumbing ships)"
+                );
+            }
+        }
+        #[cfg(not(any(
+            all(feature = "gateway", not(target_arch = "wasm32")),
+            all(feature = "voice-bridge", target_arch = "wasm32"),
+        )))]
         {
             let _ = (server_id, channel_id);
         }
@@ -1558,7 +1621,11 @@ impl IsBackend for DiscordClient {
 
     /// C.5 — Toggle the local user's mute / deafen state on the Discord gateway.
     ///
-    /// Sends op 4 Voice State Update with the updated flags.
+    /// - `gateway` (native, not wasm32): sends op 4 Voice State Update with the
+    ///   updated flags on the main gateway back-channel.
+    /// - `voice-bridge` (wasm32): delegates to `DiscordVoiceBridgeClient::set_self_mute`
+    ///   which returns an error when no voice session is active (guards against
+    ///   a stale mute toggle before `join_voice_channel_transport` completes).
     async fn set_voice_mute(
         &self,
         server_id: &str,
@@ -1566,11 +1633,38 @@ impl IsBackend for DiscordClient {
         self_mute: bool,
         self_deaf: bool,
     ) -> ClientResult<()> {
-        #[cfg(feature = "gateway")]
+        #[cfg(all(feature = "gateway", not(target_arch = "wasm32")))]
         {
             self.set_self_mute(server_id, Some(channel_id), self_mute, self_deaf)?;
         }
-        #[cfg(not(feature = "gateway"))]
+        #[cfg(all(feature = "voice-bridge", target_arch = "wasm32"))]
+        {
+            tracing::info!(
+                target: "poly_discord::voice_bridge",
+                server_id,
+                channel_id,
+                self_mute,
+                self_deaf,
+                "set_voice_mute: dispatching via DiscordVoiceBridgeClient"
+            );
+            let guard = self.voice_bridge_client.lock().await;
+            if let Some(client) = guard.as_ref() {
+                if let Err(e) = client
+                    .set_self_mute(server_id, Some(channel_id), self_mute, self_deaf)
+                    .await
+                {
+                    tracing::warn!(
+                        target: "poly_discord::voice_bridge",
+                        error = %e,
+                        "set_voice_mute: bridge returned error (no active session?)"
+                    );
+                }
+            }
+        }
+        #[cfg(not(any(
+            all(feature = "gateway", not(target_arch = "wasm32")),
+            all(feature = "voice-bridge", target_arch = "wasm32"),
+        )))]
         {
             let _ = (server_id, channel_id, self_mute, self_deaf);
         }

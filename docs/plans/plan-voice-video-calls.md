@@ -42,6 +42,13 @@ shells (apps/web, apps/desktop, apps/desktop-electron) can drive voice via HTTP:
 transmit is not feasible — no UDP socket." This caveat is superseded: both audio and
 video transmit now work in browser shells via the host-bridge indirection.
 
+- **[x] WASM trait wiring — `MessagingBackend` methods on `DiscordClient` route through `DiscordVoiceBridgeClient` (change `ronqmkwl`):**
+  - [x] `join_voice_channel_transport` on `wasm32 + voice-bridge`: initialises `DiscordVoiceBridgeClient` lazily into `voice_bridge_client` (Option A — stored on struct), calls `connect_voice`. Logs `tracing::info!` at `poly_discord::voice_bridge` target.
+  - [x] `set_voice_mute` on `wasm32 + voice-bridge`: delegates to `DiscordVoiceBridgeClient::set_self_mute`. Returns silently if no session is active.
+  - [x] `gateway` path unchanged: `#[cfg(all(feature = "gateway", not(target_arch = "wasm32")))]` for both methods.
+  - [x] No-op fallback retained under `#[cfg(not(any(...)))]` for builds without either voice feature.
+  - Credential plumbing (ws_endpoint, ws_token, ws_session_id from VOICE_SERVER_UPDATE) is a follow-up; `finish_handshake` returns a stub error until that lands.
+
 ## Goal
 
 Replace the current pseudo-backend voice/video implementation (see
