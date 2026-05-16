@@ -56,6 +56,13 @@ use tokio::sync::Mutex;
 
 pub use voice_protocol::WsHandle;
 
+// Phase X.3 — wasm-only audio playback loop (UDP recv → AEAD decrypt → Opus
+// decode → per-SSRC AudioContext). Path-attribute lets the submodule live at
+// `src/voice_bridge/audio_playback.rs` without converting this file into a
+// `mod.rs`. Module is `#[cfg(target_arch = "wasm32")]` internally.
+#[path = "voice_bridge/audio_playback.rs"]
+pub mod audio_playback;
+
 // ── Error type ────────────────────────────────────────────────────────────────
 
 /// Errors from the voice-bridge path.
@@ -285,22 +292,118 @@ impl DiscordVoiceBridgeClient {
             spawn_ws_event_listener(recv, &handshake.ws_handle, Arc::clone(&ssrc_to_user));
         }
 
-        let mut guard = self.voice_session.lock().await;
-        *guard = Some(VoiceBridgeSession {
+        {
+            let mut guard = self.voice_session.lock().await;
+            *guard = Some(VoiceBridgeSession {
+                udp_session,
+                encoder_session,
+                decoder_session,
+                aead_session,
+                local_ssrc: handshake.ssrc,
+                udp: Arc::clone(&udp_client),
+                opus: Arc::clone(&opus_client),
+                aead: Arc::clone(&aead_client),
+                capture_shutdown: None,
+                playback_shutdown: None,
+                ssrc_to_user,
+                ws_handle: handshake.ws_handle,
+            });
+        }
+
+        // Phase X.3 — playback is on by default for every connected call so
+        // remote audio plays as soon as the WS handshake settles. Capture
+        // (mic) stays opt-in (user clicks the mic button). On wasm32 this
+        // spawns the AudioContext loop; on native it's a stub that returns
+        // an error which we ignore (native uses CPAL elsewhere).
+        #[cfg(target_arch = "wasm32")]
+        {
+            let (_speaking_tx, _speaking_rx) =
+                futures::channel::mpsc::unbounded::<audio_playback::RemoteSpeakingEvent>();
+            // The receiver is dropped here for now — once the core voice-
+            // event router wires `ClientEvent::VoiceSpeakingUpdate` through
+            // from this crate, `_speaking_rx` becomes the input to that
+            // router. The playback loop's `unbounded_send` will then no-op
+            // (Err on closed channel) which is silently swallowed.
+            if let Err(e) = self.start_audio_playback_with_sink(_speaking_tx).await {
+                tracing::warn!(
+                    target: "poly_discord::voice_bridge",
+                    error = %e,
+                    "connect_voice: start_audio_playback failed (call connected but playback offline)"
+                );
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Start the audio playback loop (Phase X.3).
+    ///
+    /// Returns `Err` when no active call exists. On success the playback
+    /// shutdown sender is stashed on `VoiceBridgeSession.playback_shutdown`
+    /// so `disconnect_voice` tears the loop down by drop.
+    ///
+    /// The `on_remote_speaking` channel emits one `RemoteSpeakingEvent` per
+    /// decoded frame whose RMS exceeds `-45 dB`; consumers map these to
+    /// `ClientEvent::VoiceSpeakingUpdate` for the UI speaking indicators.
+    #[cfg(target_arch = "wasm32")]
+    pub async fn start_audio_playback_with_sink(
+        &self,
+        on_remote_speaking: futures::channel::mpsc::UnboundedSender<
+            audio_playback::RemoteSpeakingEvent,
+        >,
+    ) -> Result<(), VoiceError> {
+        let (udp, opus, aead, udp_session, decoder_session, aead_session, ssrc_to_user, local_ssrc) = {
+            let guard = self.voice_session.lock().await;
+            let s = guard
+                .as_ref()
+                .ok_or_else(|| VoiceError::WsConnect("no active voice session".into()))?;
+            (
+                Arc::clone(&s.udp),
+                Arc::clone(&s.opus),
+                Arc::clone(&s.aead),
+                s.udp_session.clone(),
+                s.decoder_session.clone(),
+                s.aead_session.clone(),
+                Arc::clone(&s.ssrc_to_user),
+                s.local_ssrc,
+            )
+        };
+
+        let shutdown_tx = audio_playback::start_audio_playback(
+            udp,
+            opus,
+            aead,
             udp_session,
-            encoder_session,
             decoder_session,
             aead_session,
-            local_ssrc: handshake.ssrc,
-            udp: Arc::clone(&udp_client),
-            opus: Arc::clone(&opus_client),
-            aead: Arc::clone(&aead_client),
-            capture_shutdown: None,
-            playback_shutdown: None,
             ssrc_to_user,
-            ws_handle: handshake.ws_handle,
-        });
+            local_ssrc,
+            on_remote_speaking,
+        )
+        .await
+        .map_err(VoiceError::WsConnect)?;
 
+        let mut guard = self.voice_session.lock().await;
+        if let Some(s) = guard.as_mut() {
+            s.playback_shutdown = Some(shutdown_tx);
+        }
+        Ok(())
+    }
+
+    /// Native stub for `start_audio_playback_with_sink` — Phase X.3 ships
+    /// the WASM playback path only. Returns Ok unconditionally so callers
+    /// that compile on both targets can invoke it without cfg-gates.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub async fn start_audio_playback_with_sink(
+        &self,
+        _on_remote_speaking: futures::channel::mpsc::UnboundedSender<
+            audio_playback::RemoteSpeakingEvent,
+        >,
+    ) -> Result<(), VoiceError> {
+        let guard = self.voice_session.lock().await;
+        if guard.is_none() {
+            return Err(VoiceError::WsConnect("no active voice session".into()));
+        }
         Ok(())
     }
 

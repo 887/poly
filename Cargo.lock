@@ -7301,7 +7301,9 @@ dependencies = [
  "tracing",
  "twilight-model",
  "uuid",
+ "wasm-bindgen",
  "wasm-bindgen-futures",
+ "web-sys",
  "wit-bindgen 0.53.1",
 ]
 

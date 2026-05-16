@@ -139,6 +139,25 @@ wit-bindgen = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 
+# Phase X.3 — browser audio playback for the voice-bridge path.
+# Features used by `voice_bridge/audio_playback.rs` for per-SSRC AudioContext
+# playback. wasm32-only; merges with the X.2 capture-side getUserMedia
+# features (overlap is harmless — cargo unions feature sets).
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+web-sys = { workspace = true, features = [
+  "AudioContext",
+  "AudioContextOptions",
+  "AudioContextState",
+  "AudioBuffer",
+  "AudioBufferOptions",
+  "AudioBufferSourceNode",
+  "AudioBufferSourceOptions",
+  "AudioNode",
+  "AudioDestinationNode",
+  "AudioScheduledSourceNode",
+] }
+wasm-bindgen = { workspace = true }
+
 [dev-dependencies]
 poly-test-discord = { path = "../../servers/test-discord" }
 poly-test-common = { workspace = true }
