@@ -299,7 +299,14 @@ pub async fn restore_native_accounts(
 
                 chat_lists.batch(|cl| {
                     for srv in servers {
-                        if !cl.servers.iter().any(|s| s.id == srv.id) {
+                        // Dedup by (server.id, account_id) so two accounts that
+                        // share a guild (e.g. koala + kangaroo both in Australiana)
+                        // each get their own Server entry. The sidebar then renders
+                        // one icon per (account, guild) pair, letting each account
+                        // navigate into the same guild from its own perspective.
+                        if !cl.servers.iter()
+                            .any(|s| s.id == srv.id && s.account_id == srv.account_id)
+                        {
                             cl.push_server(srv);
                         }
                     }
@@ -454,7 +461,13 @@ pub async fn restore_native_accounts(
                 if !account_servers.is_empty() {
                     chat_lists.batch(move |cl| {
                         for srv in account_servers {
-                            if !cl.servers.iter().any(|s| s.id == srv.id) {
+                            // Dedup by (id, account_id) — same reasoning as the
+                            // restore_native_accounts path above. Offline restore
+                            // can also legitimately add the same guild under
+                            // multiple accounts (koala + kangaroo + Australiana).
+                            if !cl.servers.iter()
+                                .any(|s| s.id == srv.id && s.account_id == srv.account_id)
+                            {
                                 cl.push_server(srv);
                             }
                         }

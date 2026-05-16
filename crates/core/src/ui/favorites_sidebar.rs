@@ -168,11 +168,24 @@ pub fn FavoritesBar() -> Element {
 
     // Only show servers that have been dragged into favorites.
     let favorited_ids = account_sessions.read().favorited_server_ids.clone(); // poly-lint: allow render-time-read — render snapshot; subscription intentional
-    // Preserve the order from favorited_ids list.
-    let favorite_servers: Vec<_> = favorited_ids
-        .iter()
-        .filter_map(|id| chat_lists.peek().server_by_id(id).cloned())
-        .collect();
+    // Preserve the order from favorited_ids list, but expand to ONE icon per
+    // (account, server.id) pair so that shared guilds (e.g. koala + kangaroo
+    // both members of Australiana) render two icons — one per account. Without
+    // this, only the first account that loaded the guild gets a sidebar icon
+    // and the other can't navigate into the same channel from its perspective.
+    let favorite_servers: Vec<poly_client::Server> = {
+        let snap = chat_lists.peek();
+        favorited_ids
+            .iter()
+            .flat_map(|id| {
+                snap.servers
+                    .iter()
+                    .filter(|s| s.id == *id)
+                    .cloned()
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    };
 
     // Local signal for drop-zone highlight state.
     let mut drag_over = use_signal(|| false);
