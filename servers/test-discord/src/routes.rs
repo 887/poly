@@ -585,6 +585,24 @@ async fn handle_gateway_socket(mut socket: WebSocket, state: Arc<DiscordState>) 
     // Subscribe to events before sending READY so no events are missed.
     let mut rx: broadcast::Receiver<DiscordEvent> = state.events.subscribe();
 
+    // Send op 10 HELLO first — real Discord gateway protocol opens with this,
+    // and the wasm-side gateway-bridge in clients/discord/src/gateway_bridge.rs
+    // waits for HELLO before sending IDENTIFY. Without it the wasm bridge
+    // hangs on first connect against the mock, which blocks app boot. Real
+    // Discord uses heartbeat_interval ~41250ms; we use 13750ms (matches the
+    // voice WS) to keep heartbeat timing consistent across mock components.
+    let hello = serde_json::json!({
+        "op": 10,
+        "d": { "heartbeat_interval": 13750 }
+    });
+    if socket
+        .send(WsMessage::Text(hello.to_string().into()))
+        .await
+        .is_err()
+    {
+        return;
+    }
+
     // Send a minimal READY event so the client knows we accepted the session.
     let ready = serde_json::json!({
         "op": 0,

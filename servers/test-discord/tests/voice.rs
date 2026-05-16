@@ -53,6 +53,10 @@ async fn test_op4_voice_state_and_server_update() {
     let gw_url = format!("ws://127.0.0.1:{port}/gateway/ws");
     let (mut ws, _) = connect_async(&gw_url).await.expect("gateway WS connect failed");
 
+    // Skip op 10 HELLO (real Discord gateway protocol — mock now sends this
+    // before READY so wasm gateway-bridge handshake completes).
+    let _hello_txt = text_of(ws.next().await.unwrap().unwrap());
+
     // Receive the initial READY dispatch.
     let ready_txt = text_of(ws.next().await.unwrap().unwrap());
     let ready: serde_json::Value = serde_json::from_str(&ready_txt).unwrap();
@@ -252,7 +256,8 @@ async fn test_full_voice_pipeline() {
     // 1. Open gateway WS, send op 4, get VOICE_SERVER_UPDATE endpoint.
     let gw_url = format!("ws://127.0.0.1:{port}/gateway/ws");
     let (mut gw_ws, _) = connect_async(&gw_url).await.unwrap();
-    // Consume READY.
+    // Consume op 10 HELLO + op 0 READY.
+    gw_ws.next().await.unwrap().unwrap();
     gw_ws.next().await.unwrap().unwrap();
     // Send IDENTIFY.
     let id = serde_json::json!({"op":2,"d":{"token":"t","intents":513,"properties":{}}});

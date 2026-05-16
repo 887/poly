@@ -152,8 +152,20 @@ async fn test_ws_gateway_route_exists_and_sends_ready() {
     let ws_url = format!("ws://127.0.0.1:{port}/gateway/ws");
     let (mut ws, _) = connect_async(ws_url).await.expect("WS connect failed");
 
-    // First message should be READY (op 0, t "READY").
+    // First message should be op 10 HELLO (the mock now mirrors real Discord
+    // protocol: HELLO precedes READY so the wasm gateway-bridge handshake
+    // succeeds — see routes.rs::handle_gateway_socket).
     let msg = ws.next().await.expect("no message").expect("WS error");
+    let text = match msg {
+        tokio_tungstenite::tungstenite::Message::Text(t) => t.to_string(),
+        other => panic!("expected text frame, got {:?}", other),
+    };
+    let frame: serde_json::Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(frame["op"], 10);
+    assert!(frame["d"]["heartbeat_interval"].as_u64().is_some());
+
+    // Second message should be READY (op 0, t "READY").
+    let msg = ws.next().await.expect("no second message").expect("WS error");
     let text = match msg {
         tokio_tungstenite::tungstenite::Message::Text(t) => t.to_string(),
         other => panic!("expected text frame, got {:?}", other),

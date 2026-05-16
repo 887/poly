@@ -68,7 +68,8 @@ async fn establish_client(
     // 1. Gateway WS — IDENTIFY + op 4 voice-state-update.
     let gw_url = format!("ws://127.0.0.1:{server_port}/gateway/ws");
     let (mut gw_ws, _) = connect_async(&gw_url).await.unwrap();
-    // READY
+    // op 10 HELLO + op 0 READY
+    gw_ws.next().await.unwrap().unwrap();
     gw_ws.next().await.unwrap().unwrap();
 
     let id = serde_json::json!({"op":2,"d":{"token":user_token,"intents":513,"properties":{}}});
