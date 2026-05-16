@@ -338,6 +338,24 @@ impl DiscordState {
             member_count: None,
             thread_message_id: None,
         });
+        // Voice channel — needed for the cross-shell voice E2E test path.
+        // Lives in guild 100 (Australiana) alongside #general and #random
+        // so koala/kangaroo (both members of g100) can join the same VC.
+        self.channels.insert(Id::new(204), Channel {
+            id: Id::new(204),
+            name: "voice-general".into(),
+            guild_id: Some(Id::new(100)),
+            channel_type: ChannelType::GuildVoice,
+            parent_id: None,
+            available_tags: vec![],
+            default_forum_layout: None,
+            applied_tags: vec![],
+            thread_metadata: None,
+            owner_id: None,
+            message_count: None,
+            member_count: None,
+            thread_message_id: None,
+        });
         self.channels.insert(Id::new(202), Channel {
             id: Id::new(202),
             name: "announcements".into(),
@@ -570,7 +588,7 @@ impl DiscordState {
             name: "Australiana".into(),
             owner_id: Id::new(1),
             channels: vec![
-                Id::new(200), Id::new(201), Id::new(250),
+                Id::new(200), Id::new(201), Id::new(204), Id::new(250),
                 Id::new(500), Id::new(501), Id::new(502), Id::new(503),
                 Id::new(510), Id::new(511),
             ],
