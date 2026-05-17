@@ -40,6 +40,10 @@
 /// op 12 Video signaling + H.264 RTP packetization over the same UDP socket.
 pub mod video;
 
+/// RTCP bandwidth feedback — Phase E.9 of `docs/plans/plan-voice-video-calls.md`.
+/// REMB + TWCC parsers + `BandwidthController` with hysteresis for video bitrate.
+pub mod rtcp;
+
 use poly_client::ClientEvent;
 
 use std::{
@@ -214,6 +218,9 @@ pub struct DiscordVoiceConnection {
     pub encryption_mode: String,
     /// Active video transport (Phase E). `None` until `enable_video` is called.
     pub video_transport: Option<video::DiscordVideoTransport>,
+    /// Bandwidth controller for video REMB/TWCC feedback (Phase E.9).
+    /// `None` if video is not enabled; set when the video transport is started.
+    pub bandwidth_ctrl: Option<Arc<rtcp::BandwidthController>>,
 }
 
 impl DiscordVoiceConnection {
@@ -225,6 +232,24 @@ impl DiscordVoiceConnection {
     pub async fn disconnect(self) {
         // Dropping the Sender signals all tasks waiting on the Receiver.
         let _ = self.shutdown_tx.send(()).await;
+    }
+
+    /// Wire the active video transport to this connection's bandwidth controller (Phase E.9).
+    ///
+    /// Call this immediately after setting `self.video_transport = Some(transport)` in
+    /// `DiscordClient::start_video` / `start_screen_share`.  When both fields are `Some`,
+    /// this method shares the controller's `Arc<AtomicU32>` into the transport's `bw_target`
+    /// by copying the current bitrate — giving a close approximation of live linking.
+    ///
+    /// For full real-time linking (every RTCP update flowing immediately to the encode
+    /// loop without a copy), the preferred path is to construct the video transport via
+    /// `DiscordVideoTransport::start_with_bandwidth_ctrl(…, Some(ctrl.clone()))`.  That
+    /// variant shares the underlying Arc directly and is used by new callers in `mod.rs`;
+    /// the `lib.rs` call sites use `start` (legacy) and call this method afterwards.
+    pub fn link_video_bandwidth_ctrl(&self) {
+        if let (Some(transport), Some(ctrl)) = (&self.video_transport, &self.bandwidth_ctrl) {
+            transport.link_bandwidth_ctrl(ctrl);
+        }
     }
 }
 
@@ -364,10 +389,11 @@ pub async fn connect_voice(
     let timestamp = Arc::new(AtomicU32::new(0));
     let is_speaking = Arc::new(AtomicBool::new(false));
 
-    // Voice WS loop (heartbeat + speaking events + auxiliary outbound messages).
+    // Voice WS loop (heartbeat + speaking events + auxiliary outbound messages + E.9 ramp-up).
     {
         let ssrc_map = Arc::clone(&ssrc_user_map);
         let speaking_flag = Arc::clone(&is_speaking);
+        let bw_ramp = Arc::clone(&bandwidth_ctrl);
         tokio::spawn(voice_ws_loop(
             ws_write,
             ws_read,
@@ -377,15 +403,24 @@ pub async fn connect_voice(
             speaking_flag,
             speaking_tx,
             ws_out_rx,
+            bw_ramp,
         ));
     }
 
-    // Decode loop: UDP → AEAD decrypt → RTP depacketize → Opus decode → output.
+    // E.9 — Bandwidth controller for RTCP feedback (shared with video transport later).
+    // Created here (before decode loop) so the decode loop can route RTCP packets to it.
+    // Initially no video transport, so the controller is stored on the connection handle;
+    // when start_video is called, the controller is shared with DiscordVideoTransport.
+    let bandwidth_ctrl: Arc<rtcp::BandwidthController> =
+        Arc::new(rtcp::BandwidthController::new(rtcp::MAX_BITRATE_BPS));
+
+    // Decode loop: UDP → RTCP dispatch (E.9) + AEAD decrypt → RTP depacketize → Opus decode → output.
     let udp_arc = Arc::new(udp);
     {
         let udp = Arc::clone(&udp_arc);
         let ssrc_map = Arc::clone(&ssrc_user_map);
-        tokio::spawn(udp_decode_loop(udp, secret_key, mode.clone(), ssrc_map, output_sink));
+        let bw = Arc::clone(&bandwidth_ctrl);
+        tokio::spawn(udp_decode_loop(udp, secret_key, mode.clone(), ssrc_map, output_sink, Some(bw)));
     }
 
     // Encode loop: mic PCM → Opus → RTP → AEAD encrypt → UDP.
@@ -420,6 +455,7 @@ pub async fn connect_voice(
         secret_key,
         encryption_mode: mode,
         video_transport: None,
+        bandwidth_ctrl: Some(bandwidth_ctrl),
     };
     *guard.lock().await = Some(conn);
 
@@ -645,6 +681,8 @@ async fn ip_discovery(udp: &UdpSocket, ssrc: u32) -> Result<(String, u16), Voice
 /// - Sends op 5 SPEAKING when `speaking_flag` transitions (B.8).
 /// - C.4: emits `ClientEvent::VoiceSpeakingUpdate` via `speaking_tx` when present.
 /// - Drains `ws_out_rx` — auxiliary outbound messages from video transport (op 12/14).
+/// - E.9: fires a slow ramp-up tick (every 2s) via `bandwidth_ctrl` when video is active.
+#[allow(clippy::too_many_arguments)]
 async fn voice_ws_loop(
     mut write: WsWrite,
     mut read: WsRead,
@@ -654,9 +692,14 @@ async fn voice_ws_loop(
     speaking_flag: Arc<AtomicBool>,
     speaking_tx: Option<(String, tokio::sync::mpsc::UnboundedSender<ClientEvent>)>,
     mut ws_out_rx: mpsc::Receiver<serde_json::Value>,
+    bandwidth_ctrl: Arc<rtcp::BandwidthController>,
 ) {
     let interval = Duration::from_millis(heartbeat_interval_ms);
     let mut heartbeat_tick = time::interval(interval);
+    // E.9: slow ramp-up ticker — fires every 2s to gradually recover bitrate
+    // after congestion.  The ramp-up is a no-op when no video transport is active
+    // (bandwidth_ctrl stays at DEFAULT_BITRATE_BPS = 1 Mbps).
+    let mut ramp_up_tick = time::interval(Duration::from_secs(2));
     let mut nonce: u64 = 0;
     let mut last_speaking = false;
 
@@ -674,6 +717,11 @@ async fn voice_ws_loop(
                 if write.send(TMsg::Text(outbound.to_string().into())).await.is_err() {
                     break;
                 }
+            }
+            _ = ramp_up_tick.tick() => {
+                // E.9: slow ramp-up — recover bitrate gradually after congestion.
+                // No-op if already at max.
+                bandwidth_ctrl.ramp_up();
             }
             msg = read.next() => {
                 let text = match msg {
@@ -835,15 +883,21 @@ async fn udp_encode_loop(
     debug!(target: "poly_discord::voice", "encode loop exited");
 }
 
-// ── Decode loop (B.7) ─────────────────────────────────────────────────────────
+// ── Decode loop (B.7 + E.9) ───────────────────────────────────────────────────
 
-/// Decode loop: UDP recv → AEAD decrypt → RTP strip → Opus decode → audio output.
+/// Decode loop: UDP recv → RTCP dispatch (E.9) OR AEAD decrypt → RTP strip → Opus decode → audio output.
+///
+/// Phase E.9: before attempting RTP decode, `is_rtcp_packet` checks whether the
+/// datagram is RTCP (PT 192–223, version 2).  If so, the packet is handed to
+/// `handle_rtcp_datagram` which updates the `BandwidthController` target.  The
+/// encoder task reads `target_bps` on each frame via a shared `Arc<AtomicU32>`.
 async fn udp_decode_loop(
     udp: Arc<UdpSocket>,
     secret_key: [u8; 32],
     mode: String,
     _ssrc_user_map: SsrcUserMap,
     output: Box<dyn poly_audio_backend::AudioOutputStream>,
+    bandwidth_ctrl: Option<Arc<rtcp::BandwidthController>>,
 ) {
     let cipher = match XChaCha20Poly1305::new_from_slice(&secret_key) {
         Ok(c) => c,
@@ -871,6 +925,15 @@ async fn udp_decode_loop(
 
         // Packets shorter than the RTP header are garbage.
         if packet.len() < RTP_HEADER_SIZE {
+            continue;
+        }
+
+        // E.9 — RTCP bandwidth feedback: route RTCP packets to the bandwidth
+        // controller instead of the Opus decode path.
+        if rtcp::is_rtcp_packet(packet) {
+            if let Some(ref ctrl) = bandwidth_ctrl {
+                rtcp::handle_rtcp_datagram(packet, ctrl);
+            }
             continue;
         }
 

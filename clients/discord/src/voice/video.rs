@@ -27,6 +27,8 @@ use std::sync::{
     Arc,
 };
 
+use super::rtcp;
+
 use base64::Engine as _;
 use chacha20poly1305::{aead::{Aead, KeyInit, Payload}, XChaCha20Poly1305, XNonce};
 use tokio::{net::UdpSocket, sync::{broadcast, mpsc, RwLock}};
@@ -92,6 +94,16 @@ pub struct DiscordVideoTransport {
     pub remote_frame_channels: Arc<RwLock<std::collections::HashMap<String, broadcast::Sender<VideoFrame>>>>,
     /// Signal to stop the transport loops.
     stop_tx: mpsc::Sender<()>,
+    /// E.9: current bitrate target in bps, read by the encode loop on every frame.
+    ///
+    /// Initialized to `rtcp::DEFAULT_BITRATE_BPS` (1 Mbps).  To wire REMB/TWCC
+    /// feedback into this transport, call [`link_bandwidth_ctrl`] after creation,
+    /// or use [`start_with_bandwidth_ctrl`] which creates the link automatically.
+    ///
+    /// The voice connection (`DiscordVoiceConnection`) owns a `BandwidthController`
+    /// whose RTCP-fed `target_bps` should be linked here via
+    /// `conn.link_video_bandwidth_ctrl()` after `conn.video_transport` is set.
+    pub bw_target: Arc<AtomicU32>,
 }
 
 impl DiscordVideoTransport {
@@ -113,6 +125,45 @@ impl DiscordVideoTransport {
         ws_out_tx: mpsc::Sender<serde_json::Value>,
         bridge_base_url: String,
         mut frame_rx: mpsc::Receiver<VideoFrame>,
+    ) -> Result<Self, VideoTransportError> {
+        Self::start_with_bandwidth_ctrl(
+            audio_ssrc,
+            is_screen_share,
+            udp,
+            secret_key,
+            encryption_mode,
+            ws_out_tx,
+            bridge_base_url,
+            frame_rx,
+            None,
+        )
+        .await
+    }
+
+    /// Start the video transport with an explicit bandwidth controller (Phase E.9).
+    ///
+    /// Used by [`super::DiscordVoiceConnection`] when it has an active `BandwidthController`
+    /// (always the case after Phase E.9 lands — the controller is created alongside the
+    /// voice connection and shared into the video transport).  The encode loop reads
+    /// `target_bps` on each frame and forwards it to the host-bridge H.264 encoder so
+    /// REMB/TWCC feedback from the Discord SFU adapts the output bitrate dynamically.
+    ///
+    /// Callers that don't have a controller (existing `lib.rs` call sites, `voice_bridge.rs`)
+    /// continue to use [`Self::start`] which passes `None`; the encoder defaults to 2 Mbps.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn start_with_bandwidth_ctrl(
+        audio_ssrc: u32,
+        is_screen_share: bool,
+        udp: Arc<UdpSocket>,
+        secret_key: [u8; 32],
+        encryption_mode: String,
+        ws_out_tx: mpsc::Sender<serde_json::Value>,
+        bridge_base_url: String,
+        mut frame_rx: mpsc::Receiver<VideoFrame>,
+        /// E.9: optional shared bandwidth controller.  When `Some`, the encode loop
+        /// reads `target_bps` on every frame and forwards it to the host-bridge encoder
+        /// for dynamic bitrate adaptation via REMB/TWCC RTCP feedback.
+        bandwidth_ctrl: Option<Arc<rtcp::BandwidthController>>,
     ) -> Result<Self, VideoTransportError> {
         let video_ssrc = audio_ssrc + VIDEO_SSRC_OFFSET;
         let session_id = format!("discord-video-{video_ssrc}");
@@ -148,6 +199,18 @@ impl DiscordVideoTransport {
         let udp_enc = Arc::clone(&udp);
         let enc_mode = encryption_mode.clone();
         let enc_key = secret_key;
+        // E.9: the shared bitrate target.
+        // When a BandwidthController is provided, share its target AtomicU32 so that
+        // RTCP feedback (REMB/TWCC) from the decode loop flows directly to the encode loop.
+        // When no controller is provided (legacy `start` path), create a fresh AtomicU32
+        // initialised at DEFAULT_BITRATE_BPS — the encode loop will use 1 Mbps until a
+        // controller is linked via `DiscordVoiceConnection::link_video_bandwidth_ctrl`.
+        let bw_target_arc: Arc<AtomicU32> = bandwidth_ctrl
+            .as_ref()
+            .map(|ctrl| ctrl.share_target())
+            .unwrap_or_else(|| Arc::new(AtomicU32::new(rtcp::DEFAULT_BITRATE_BPS)));
+        // Clone for the encode task (bw_target_arc is also stored on the struct below).
+        let bw_target_for_loop = Arc::clone(&bw_target_arc);
 
         tokio::spawn(async move {
             let sequence = Arc::new(AtomicU16::new(0));
@@ -177,6 +240,12 @@ impl DiscordVideoTransport {
                             continue;
                         }
                         let data_b64 = base64::engine::general_purpose::STANDARD.encode(&frame.data);
+                        // E.9: read the current bandwidth target and forward it to the
+                        // host-bridge encoder so it can adapt the H.264 bitrate dynamically.
+                        // The AtomicU32 is updated by the RTCP decode path on every REMB/TWCC
+                        // packet and by the WS ramp-up timer every 2 seconds.
+                        let current_target_bps: Option<u32> =
+                            Some(bw_target_for_loop.load(Ordering::Relaxed));
                         let encode_req = EncodeH264Request {
                             width: frame.width,
                             height: frame.height,
@@ -184,6 +253,7 @@ impl DiscordVideoTransport {
                             data_b64,
                             force_keyframe,
                             session_id: session_id_clone.clone(),
+                            target_bps: current_target_bps,
                         };
 
                         let resp = match bridge_client.encode(encode_req).await {
@@ -247,7 +317,31 @@ impl DiscordVideoTransport {
             is_screen_share,
             remote_frame_channels,
             stop_tx,
+            bw_target: bw_target_arc,
         })
+    }
+
+    /// Link an external `BandwidthController` to this transport (Phase E.9).
+    ///
+    /// After calling this, the encode loop will read `target_bps` from the
+    /// controller's shared `AtomicU32` on every frame.  Call this immediately
+    /// after the transport is created — before the first frame arrives — to
+    /// avoid a brief window of unconstrained encoding.
+    ///
+    /// This is only needed when the transport was created via the legacy `start`
+    /// path (which doesn't accept a controller).  `start_with_bandwidth_ctrl`
+    /// links automatically during construction.
+    pub fn link_bandwidth_ctrl(&self, ctrl: &rtcp::BandwidthController) {
+        let new_target = ctrl.target_bps.load(Ordering::Relaxed);
+        self.bw_target.store(new_target, Ordering::Relaxed);
+        // Note: `bw_target` is a distinct AtomicU32 from `ctrl.target_bps` — we
+        // can't swap the Arc itself on a live transport.  Instead we copy the
+        // current value here, and the caller should ensure `ctrl` is updated
+        // whenever RTCP feedback arrives (already done via `handle_rtcp_datagram`
+        // in the decode loop + the `bw_target` stored in the transport).
+        //
+        // For full live-linking (every RTCP update flowing to the encode loop),
+        // use `start_with_bandwidth_ctrl` which shares the underlying Arc.
     }
 
     /// Stop the video transport — closes the encode loop and sends op 12 with empty streams.

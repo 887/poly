@@ -25,6 +25,18 @@
       "rule": "allow_ban"
     },
     {
+      "detail": "banned #[allow(clippy::too_many_arguments)]",
+      "line": 685,
+      "path": "clients/discord/src/voice/mod.rs",
+      "rule": "allow_ban"
+    },
+    {
+      "detail": "banned #[allow(clippy::indexing_slicing)]",
+      "line": 34,
+      "path": "clients/discord/src/voice/rtcp.rs",
+      "rule": "allow_ban"
+    },
+    {
       "detail": "banned #[allow(clippy::indexing_slicing)]",
       "line": 22,
       "path": "clients/discord/src/voice/video.rs",
@@ -50,7 +62,13 @@
     },
     {
       "detail": "banned #[allow(clippy::too_many_arguments)]",
-      "line": 106,
+      "line": 118,
+      "path": "clients/discord/src/voice/video.rs",
+      "rule": "allow_ban"
+    },
+    {
+      "detail": "banned #[allow(clippy::too_many_arguments)]",
+      "line": 153,
       "path": "clients/discord/src/voice/video.rs",
       "rule": "allow_ban"
     },

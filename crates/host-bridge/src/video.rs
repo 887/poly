@@ -98,6 +98,16 @@ pub struct EncodeH264Request {
     /// Unique identifier for the encoder session. Create one encoder per
     /// stream; pass the same `session_id` for every frame in that stream.
     pub session_id: String,
+    /// Optional target bitrate in bps for dynamic bandwidth adaptation (Phase E.9).
+    ///
+    /// When `Some(bps)`, the encoder session is re-initialized with the new bitrate
+    /// if the requested value differs from the current session bitrate by more than
+    /// 15%.  The next frame is automatically forced as a keyframe (IDR) after
+    /// re-initialization so the decoder can resync cleanly.
+    ///
+    /// When `None` (default), the session bitrate is unchanged (starts at 2 Mbps).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_bps: Option<u32>,
 }
 
 /// Response body for `POST /host/video/encode_h264`.
@@ -182,9 +192,13 @@ pub struct CloseSessionResponse {
 /// Encoder and decoder maps are separate because a session may hold both
 /// (e.g. a loopback test that encodes then decodes its own output), though in
 /// practice callers will be either pure encoders or pure decoders.
+///
+/// The encoder map stores `(Encoder, current_bps)` so that Phase E.9 dynamic
+/// bitrate adaptation can detect when the requested `target_bps` differs from
+/// the current session bitrate and re-initialize the encoder accordingly.
 #[derive(Clone)]
 pub struct VideoState {
-    encoders: Arc<Mutex<HashMap<String, Encoder>>>,
+    encoders: Arc<Mutex<HashMap<String, (Encoder, u32)>>>,
     decoders: Arc<Mutex<HashMap<String, openh264::decoder::Decoder>>>,
 }
 
@@ -331,10 +345,17 @@ pub async fn encode_h264(
 
     let width = req.width;
     let height = req.height;
-    let force_keyframe = req.force_keyframe;
+    let mut force_keyframe = req.force_keyframe;
     let session_id = req.session_id.clone();
     let format = req.format.clone();
+    let target_bps = req.target_bps;
     let encoders_arc = Arc::clone(&state.encoders);
+
+    /// Default encoder bitrate when no `target_bps` is provided.
+    const DEFAULT_ENCODER_BPS: u32 = 2_000_000;
+    /// Reinitialize the encoder if the requested bitrate differs by more than this fraction.
+    /// 15% hysteresis avoids churn from minor REMB fluctuations.
+    const BITRATE_REINIT_THRESHOLD: f64 = 0.15;
 
     // Offload CPU-bound encode to blocking thread pool.
     let result = tokio::task::spawn_blocking(move || -> Result<(Vec<Vec<u8>>, bool), String> {
@@ -342,16 +363,31 @@ pub async fn encode_h264(
             .lock()
             .map_err(|e| format!("encoder lock poisoned: {e}"))?;
 
-        if !map.contains_key(&session_id) {
+        // Determine the desired bitrate for this frame.
+        let desired_bps = target_bps.unwrap_or(DEFAULT_ENCODER_BPS);
+
+        // Create a new encoder session OR reinitialize an existing one if the bitrate
+        // has changed beyond the hysteresis threshold (Phase E.9).
+        let needs_init = if let Some((_, current_bps)) = map.get(&session_id) {
+            let delta = (*current_bps as f64 - desired_bps as f64).abs() / *current_bps as f64;
+            delta > BITRATE_REINIT_THRESHOLD
+        } else {
+            true
+        };
+
+        if needs_init {
             let cfg = EncoderConfig::new()
-                .bitrate(BitRate::from_bps(2_000_000))
+                .bitrate(BitRate::from_bps(desired_bps))
                 .skip_frames(true);
             let enc = Encoder::with_api_config(openh264::OpenH264API::from_source(), cfg)
-                .map_err(|e| format!("create encoder: {e}"))?;
-            map.insert(session_id.clone(), enc);
+                .map_err(|e| format!("create encoder (bps={desired_bps}): {e}"))?;
+            map.insert(session_id.clone(), (enc, desired_bps));
+            // Always force a keyframe after re-initialization so the decoder
+            // can resync with the new encoder state.
+            force_keyframe = true;
         }
 
-        let enc = map
+        let (enc, _) = map
             .get_mut(&session_id)
             .ok_or_else(|| "encoder disappeared after insert".to_string())?;
 
