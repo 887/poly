@@ -5,7 +5,6 @@
 //! which backend owns a given server.
 //!
 //! Provided as `Signal<ClientManager>` at the `App` level.
-// TODO(phase-2.5.1): Client Manager Module
 
 use dioxus::prelude::{Callback, Element};
 use poly_client::{

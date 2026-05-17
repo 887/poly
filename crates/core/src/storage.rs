@@ -55,6 +55,37 @@ const fn default_gif_provider() -> GifProviderKind {
 
 pub mod drafts;
 
+/// Canonical KV-namespace keys used by all `Storage::{get,set,delete}_*` helpers.
+///
+/// Centralising these in one module is an Open/Closed win — adding a new
+/// persisted namespace means adding one `const` here instead of grepping the
+/// codebase for string literals. It also prevents the `nuke_all_data` /
+/// `reset_user_data` key list from silently drifting from the per-helper sites.
+pub mod keys {
+    /// `AppSettings` blob.
+    pub const APP_SETTINGS: &str = "app_settings";
+    /// `Vec<AccountTokenRecord>` — per-account auth tokens.
+    pub const ACCOUNT_TOKENS: &str = "account_tokens";
+    /// `Vec<BackupServerRecord>` — backup-server configurations.
+    pub const BACKUP_SERVERS: &str = "backup_servers";
+    /// `Vec<FavoriteItem>` — favourited entities (pins).
+    pub const FAVORITES: &str = "favorites";
+    /// `ThemeConfig` — persisted theme + custom-CSS.
+    pub const THEME_CONFIG: &str = "theme_config";
+    /// `[u8; 32]` — Ed25519 private identity key bytes.
+    pub const IDENTITY_KEY: &str = "identity_key";
+    /// `HashMap<server_id, channel_id>` — sticky last channel per server.
+    pub const LAST_CHANNEL_PER_SERVER: &str = "last_channel_per_server";
+    /// `HashMap<account_id, url>` — sticky last route per account.
+    pub const ACCOUNT_LAST_ROUTES: &str = "account_last_routes";
+    /// `HashMap<account_id, dm_route>` — sticky last DM conversation per account.
+    pub const ACCOUNT_LAST_DM_ROUTES: &str = "account_last_dm_routes";
+    /// `Vec<OfflineServerRecord>` — server metadata snapshot for cold-boot UI.
+    pub const OFFLINE_SERVER_CACHE: &str = "offline_server_cache";
+    /// `u64` — schema-version stamp used by `run_migrations`.
+    pub const STORAGE_VERSION: &str = "storage_version";
+}
+
 // ── Platform backends ─────────────────────────────────────────────────────────
 
 #[cfg(all(not(target_arch = "wasm32"), not(feature = "storage-surreal")))]
@@ -561,8 +592,6 @@ pub enum FavoriteKind {
 /// A favorited item (pinned server, friend, group DM, or channel).
 ///
 /// Persisted under the key `"favorites"`.
-///
-/// TODO(phase-2.4.3.8): Favorites storage implementation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FavoriteItem {
     /// Unique entity ID (backend-specific).
@@ -631,11 +660,11 @@ impl Storage {
     /// favorites, and persisted theme settings.
     pub async fn reset_user_data(&self) -> Result<(), StorageError> {
         for key in [
-            "app_settings",
-            "account_tokens",
-            "backup_servers",
-            "favorites",
-            "theme_config",
+            keys::APP_SETTINGS,
+            keys::ACCOUNT_TOKENS,
+            keys::BACKUP_SERVERS,
+            keys::FAVORITES,
+            keys::THEME_CONFIG,
         ] {
             self.delete(key).await?;
         }
@@ -768,8 +797,6 @@ impl Storage {
     // ── Typed access — FavoriteItem ───────────────────────────────────────────
 
     /// List all stored favorites.
-    ///
-    /// TODO(phase-2.4.3.8): Favorites storage.
     pub async fn get_favorites(&self) -> Result<Vec<FavoriteItem>, StorageError> {
         Ok(self
             .get("favorites")
@@ -844,8 +871,6 @@ impl Storage {
     /// Read the stored theme configuration.
     ///
     /// Returns [`crate::theme::ThemeConfig::default`] (neutral-dark) if not yet set.
-    ///
-    /// TODO(phase-2.4.3.9): Theme preferences storage.
     pub async fn get_theme_config(&self) -> Result<crate::theme::ThemeConfig, StorageError> {
         Ok(self
             .get("theme_config")
@@ -1030,8 +1055,6 @@ impl Storage {
     /// Call once at startup, after [`Storage::init`], before reading any data.
     ///
     /// Each migration step is idempotent — safe to re-run after a crash.
-    ///
-    /// TODO(phase-2.4.3.10): Migration system.
     pub async fn run_migrations(&self) -> Result<(), StorageError> {
         let version = self
             .get("storage_version")
