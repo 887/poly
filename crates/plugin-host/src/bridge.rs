@@ -196,6 +196,9 @@ pub(crate) fn from_wit_backend_capabilities(c: wit::BackendCapabilities) -> pc::
         // capability via WIT; default both off conservatively.
         community_search: pc::CommunitySearchSupport::None,
         supports_comment_feed: false,
+        // WASM plugins don't yet declare video-capture capability via WIT;
+        // default off conservatively until WIT interface is extended.
+        video_capture: pc::VideoCaptureCapability::None,
     }
 }
 

@@ -36,17 +36,18 @@ pub enum VoiceBannerAction {
     ToggleDeafen,
     /// Toggle camera on/off.
     ///
-    /// Phase E: updates local Signal state. For Discord (web shell), the actual
-    /// camera capture is driven by `VoiceChatBar`'s JS_START_CAMERA path in
-    /// `voice_view.rs` — the banner toggle and VoiceChatBar toggle are in sync
-    /// via the shared `VoiceState.is_video_on` signal. Native shells call
-    /// `DiscordClient::start_video` via the backend handle.
-    /// Stoat returns a NotSupported toast; Teams returns a coming-soon toast.
+    /// Dispatches on `BackendCapabilities.video_capture`:
+    /// - `Full` — toggles `VoiceState.is_video_on`; downstream observers
+    ///   (VoiceChatBar JS_START_CAMERA / JS_STOP_CAMERA on web shell,
+    ///   `DiscordVoiceBridgeClient::start_video_capture` on native wasm32)
+    ///   react to the signal change. (Phase Y.4)
+    /// - `None` — shows a "voice-video-coming-soon-camera" toast.
     ToggleCamera,
     /// Toggle screen share on/off.
     ///
-    /// Phase E: analogous to `ToggleCamera`. Screen share JS is driven by
-    /// `VoiceChatBar`'s JS_START_SCREEN path. Stoat and Teams show toasts.
+    /// Dispatches on `BackendCapabilities.video_capture` (same field as camera):
+    /// - `Full` — toggles `VoiceState.is_streaming`.
+    /// - `None` — shows a "voice-video-coming-soon-screen" toast.
     ToggleScreenShare,
     /// Disconnect from voice.
     Disconnect,
@@ -132,59 +133,25 @@ impl UiAction for VoiceBannerAction {
                 }
             }
             Self::ToggleCamera => {
-                // Phase E: toggle local signal state. The actual camera capture
-                // is driven by VoiceChatBar's JS_START_CAMERA / JS_STOP_CAMERA path
-                // in voice_view.rs — that component reacts to is_video_on changes.
-                //
-                // Backend dispatch for toast notifications on unsupported backends:
-                let backend_slug = voice_state
-                    .peek()
-                    .voice_connection
-                    .as_ref()
-                    .map(|vc| vc.backend.slug().to_string())
-                    .unwrap_or_default();
-                match backend_slug.as_str() {
-                    "stoat" => {
-                        // Stoat video is a separate future plan — show NotSupported toast.
-                        if let Some(toast_queue) = dioxus::prelude::try_consume_context::<
-                            dioxus::prelude::Signal<Vec<crate::ui::client_ui::toast::ToastMessage>>,
-                        >() {
-                            crate::ui::client_ui::toast::push_toast(
-                                toast_queue,
-                                crate::ui::client_ui::toast::ToastMessage::new(
-                                    "voice-video-coming-soon-camera",
-                                    poly_client::ToastTone::Info,
-                                ),
-                            );
-                        }
-                    }
-                    "teams" => {
-                        // Teams video is not yet supported — coming-soon toast.
-                        if let Some(toast_queue) = dioxus::prelude::try_consume_context::<
-                            dioxus::prelude::Signal<Vec<crate::ui::client_ui::toast::ToastMessage>>,
-                        >() {
-                            crate::ui::client_ui::toast::push_toast(
-                                toast_queue,
-                                crate::ui::client_ui::toast::ToastMessage::new(
-                                    "voice-video-coming-soon-camera",
-                                    poly_client::ToastTone::Info,
-                                ),
-                            );
-                        }
-                    }
-                    _ => {
-                        // Discord or other: toggle signal — VoiceChatBar handles the actual JS.
-                        //
-                        // Phase Y.4 — the WebCodecs encode pipeline lives behind
-                        // `DiscordVoiceBridgeClient::{start,stop}_video_capture()`
-                        // (voice-bridge feature, wasm32). When the discord backend
-                        // is the active voice connection, the next render
-                        // observes `is_video_on` and dispatches the bridge call
-                        // via the discord client handle that owns the per-call
-                        // `VoiceBridgeSession`. The handle threading is part of
-                        // the discord backend's voice surface; this site just
-                        // toggles the reactive signal that downstream observers
-                        // react to.
+                // Phase E / OCP: dispatch on BackendCapabilities.video_capture rather
+                // than a backend-slug ladder. Adding a new backend that supports video
+                // only requires setting `video_capture: VideoCaptureCapability::Full`
+                // in its capability declaration — no edit here needed.
+                let (backend_slug, video_cap) = {
+                    let vc_ref = voice_state.peek();
+                    let vc = vc_ref.voice_connection.as_ref();
+                    let slug = vc.map(|c| c.backend.slug().to_string()).unwrap_or_default();
+                    let cap = dioxus::prelude::try_consume_context::<BatchedSignal<ClientManager>>()
+                        .map(|cm| cm.peek().capabilities_for_slug(&slug).video_capture)
+                        .unwrap_or(poly_client::VideoCaptureCapability::None);
+                    (slug, cap)
+                };
+                match video_cap {
+                    poly_client::VideoCaptureCapability::Full => {
+                        // Backend supports video — toggle signal; downstream observers
+                        // (VoiceChatBar JS_START_CAMERA / JS_STOP_CAMERA on web shell,
+                        // DiscordVoiceBridgeClient::start_video_capture on native wasm32)
+                        // react to `is_video_on`. Phase Y.4 wiring point.
                         let next_on = voice_state
                             .peek()
                             .voice_connection
@@ -203,18 +170,45 @@ impl UiAction for VoiceBannerAction {
                             }
                         });
                     }
+                    poly_client::VideoCaptureCapability::None => {
+                        // Backend does not support video capture — show a "coming soon" toast.
+                        if let Some(toast_queue) = dioxus::prelude::try_consume_context::<
+                            dioxus::prelude::Signal<Vec<crate::ui::client_ui::toast::ToastMessage>>,
+                        >() {
+                            crate::ui::client_ui::toast::push_toast(
+                                toast_queue,
+                                crate::ui::client_ui::toast::ToastMessage::new(
+                                    "voice-video-coming-soon-camera",
+                                    poly_client::ToastTone::Info,
+                                ),
+                            );
+                        }
+                    }
                 }
             }
             Self::ToggleScreenShare => {
-                // Phase E: same pattern as ToggleCamera.
-                let backend_slug = voice_state
-                    .peek()
-                    .voice_connection
-                    .as_ref()
-                    .map(|vc| vc.backend.slug().to_string())
-                    .unwrap_or_default();
-                match backend_slug.as_str() {
-                    "stoat" | "teams" => {
+                // Phase E / OCP: same pattern as ToggleCamera — dispatch on
+                // BackendCapabilities.video_capture, not a backend-slug ladder.
+                let video_cap = {
+                    let vc_ref = voice_state.peek();
+                    let slug = vc_ref
+                        .voice_connection
+                        .as_ref()
+                        .map(|c| c.backend.slug().to_string())
+                        .unwrap_or_default();
+                    dioxus::prelude::try_consume_context::<BatchedSignal<ClientManager>>()
+                        .map(|cm| cm.peek().capabilities_for_slug(&slug).video_capture)
+                        .unwrap_or(poly_client::VideoCaptureCapability::None)
+                };
+                match video_cap {
+                    poly_client::VideoCaptureCapability::Full => {
+                        voice_state.batch(|v| {
+                            if let Some(ref mut vc) = v.voice_connection {
+                                vc.is_streaming = !vc.is_streaming;
+                            }
+                        });
+                    }
+                    poly_client::VideoCaptureCapability::None => {
                         if let Some(toast_queue) = dioxus::prelude::try_consume_context::<
                             dioxus::prelude::Signal<Vec<crate::ui::client_ui::toast::ToastMessage>>,
                         >() {
@@ -226,13 +220,6 @@ impl UiAction for VoiceBannerAction {
                                 ),
                             );
                         }
-                    }
-                    _ => {
-                        voice_state.batch(|v| {
-                            if let Some(ref mut vc) = v.voice_connection {
-                                vc.is_streaming = !vc.is_streaming;
-                            }
-                        });
                     }
                 }
             }

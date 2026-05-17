@@ -480,6 +480,7 @@ impl ClientManager {
                 has_timed_ban: true,
                 has_channel_mgmt: true,
                 has_moderation_log: true,
+                video_capture: poly_client::VideoCaptureCapability::Full,
                 ..BackendCapabilities::FULL_SOCIAL_CHAT
             }),
             ("demo", BackendCapabilities {

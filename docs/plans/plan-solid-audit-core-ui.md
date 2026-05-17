@@ -102,10 +102,13 @@ Not started in this change — listed for follow-up agents.
   block, drag overlay block, click handler module. Lifts SRP and lets
   drag-handlers be unit-testable. Also a chance to remove the remaining
   ~6 render-time `.read()` allowlists by passing data via props.
-- [ ] **B.2** Extract voice_banner.rs ToggleCamera/ToggleScreenShare
+- [x] **B.2** Extract voice_banner.rs ToggleCamera/ToggleScreenShare
   slug ladder (lines 134-238) into a `VideoCaptureCapability` trait
   on the backend. Toast paths become a trait method's default impl;
   Discord/Matrix override. OCP-compliant. (~120 LoC)
+  Shipped: `VideoCaptureCapability` enum + `BackendCapabilities.video_capture`
+  field in `poly-client`; discord declares `Full`; voice_banner dispatches
+  on capability not slug. `cargo check -p poly-core` + `dx build` green.
 - [ ] **B.3** Split `favorites_sidebar.rs` `FavoritesBar`
   (117-400ish, ~280 LoC). Heavy state-derivation in render body
   (account order, favorited ids, drag state). Move snapshot derivation

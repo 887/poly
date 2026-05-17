@@ -130,7 +130,19 @@ pub fn capabilities_for_slug_static(slug: &str) -> BackendCapabilities {
             has_moderation_log: false,
             ..BackendCapabilities::FULL_SOCIAL_CHAT
         },
-        "discord" | "demo" | "poly" => BackendCapabilities {
+        "discord" => BackendCapabilities {
+            has_roles: true,
+            has_kick: true,
+            has_ban: true,
+            has_timed_ban: true,
+            has_channel_mgmt: true,
+            has_moderation_log: true,
+            // Discord is the only backend that currently supports in-call
+            // video capture (camera + screen share) — Phase Y.4 WebCodecs pipeline.
+            video_capture: VideoCaptureCapability::Full,
+            ..BackendCapabilities::FULL_SOCIAL_CHAT
+        },
+        "demo" | "poly" => BackendCapabilities {
             has_roles: true,
             has_kick: true,
             has_ban: true,
@@ -294,6 +306,31 @@ pub enum VoiceSupport {
     Full,
 }
 
+/// Whether the backend supports in-call video capture (camera) and screen share.
+///
+/// Used by `VoiceBannerAction::ToggleCamera` and `ToggleScreenShare` to decide
+/// whether to toggle the reactive signal (supported) or show a "coming soon" toast
+/// (not supported). This avoids a backend-slug ladder in `voice_banner.rs` and
+/// keeps the dispatch OCP-clean: adding a new backend only requires setting this
+/// field in `BackendCapabilities`, not editing the banner's match arms.
+///
+/// Default: `None` — new backends must opt in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum VideoCaptureCapability {
+    /// Backend does not support video capture or screen share.
+    ///
+    /// `ToggleCamera` / `ToggleScreenShare` show a "coming soon" toast.
+    #[default]
+    None,
+    /// Backend supports video capture and screen share.
+    ///
+    /// `ToggleCamera` / `ToggleScreenShare` toggle the reactive `VoiceState` signal;
+    /// the actual capture is driven by downstream observers (e.g. `VoiceChatBar`'s
+    /// JS_START_CAMERA / JS_STOP_CAMERA path on the web shell, or
+    /// `DiscordVoiceBridgeClient::start_video_capture` on native wasm32).
+    Full,
+}
+
 /// Capability declaration for a backend.
 ///
 /// Drives which UI affordances the host renders for a given account
@@ -380,6 +417,21 @@ pub struct BackendCapabilities {
     /// they get `false` on deserialisation.
     #[serde(default)]
     pub supports_comment_feed: bool,
+
+    // ── Phase E — Voice video capture (OCP gate) ──────────────────────────
+
+    /// Whether the backend supports in-call camera and screen-share capture.
+    ///
+    /// `Full` — `ToggleCamera` / `ToggleScreenShare` in `VoiceBannerAction`
+    /// toggle the reactive `VoiceState` signal; downstream observers drive
+    /// the actual capture. `None` (default) — shows a "coming soon" toast.
+    ///
+    /// Currently `Full` for Discord only. Stoat / Teams / Matrix are `None`.
+    ///
+    /// `#[serde(default)]` keeps older WASM plugin capability blobs valid —
+    /// they get `VideoCaptureCapability::None` on deserialisation.
+    #[serde(default)]
+    pub video_capture: VideoCaptureCapability,
 }
 
 impl BackendCapabilities {
@@ -400,6 +452,7 @@ impl BackendCapabilities {
         has_moderation_log: false,
         community_search: crate::ui_surface::CommunitySearchSupport::None,
         supports_comment_feed: false,
+        video_capture: VideoCaptureCapability::None,
     };
 
     /// Forum-style messaging with an inbox but no friends / DMs / voice (Lemmy).
@@ -419,6 +472,7 @@ impl BackendCapabilities {
         has_moderation_log: false,
         community_search: crate::ui_surface::CommunitySearchSupport::None,
         supports_comment_feed: false,
+        video_capture: VideoCaptureCapability::None,
     };
 
     /// `true` if this backend should render with the forum-style UI layout:
@@ -476,6 +530,9 @@ impl BackendCapabilities {
     }
 
     /// Full social chat (Discord, Matrix, Teams).
+    ///
+    /// `video_capture` defaults to `None` — backends that support in-call
+    /// video (currently Discord only) override this field explicitly.
     pub const FULL_SOCIAL_CHAT: Self = Self {
         messaging: MessagingModel::Full,
         dms: DmSupport::User,
@@ -492,6 +549,7 @@ impl BackendCapabilities {
         has_moderation_log: false,
         community_search: crate::ui_surface::CommunitySearchSupport::None,
         supports_comment_feed: false,
+        video_capture: VideoCaptureCapability::None,
     };
 
     /// `true` if the Discover Communities button should be shown.
