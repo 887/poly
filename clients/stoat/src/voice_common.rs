@@ -44,6 +44,9 @@ pub enum StoatVoiceError {
 
     #[error("JSON parse error: {0}")]
     Json(#[from] serde_json::Error),
+
+    #[error("audio init failed: {0}")]
+    AudioInit(String),
 }
 
 // ── Transmit mode ─────────────────────────────────────────────────────────────

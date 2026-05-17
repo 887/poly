@@ -57,6 +57,51 @@ async-trait = { workspace = true, optional = true }
 tokio-tungstenite = { workspace = true, optional = true }
 tokio-stream = { workspace = true, optional = true }
 
+# Browser-only deps for the WASM audio playback loop (Phase B.4 of
+# plan-stoat-voice-wasm.md). Mirrors the discord voice-bridge pattern.
+# web-sys features cover AudioContext + AudioBufferSourceNode for per-user
+# speaker playback; wasm-bindgen / wasm-bindgen-futures are needed by
+# voice_wasm.rs (B.1) and indirectly by the playback module.
+# gloo-net provides browser WebSocket + HTTP for voice_wasm.rs (B.1).
+# poly-host-bridge provides OpusClient for /host/codec/opus/* codec sessions.
+# tracing and futures are also needed on wasm32 (native has them under the "native" feature).
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+web-sys = { workspace = true, features = [
+    # B.4 — playback (per-user AudioContext + scheduled AudioBufferSourceNode)
+    "AudioContext",
+    "AudioContextOptions",
+    "AudioBuffer",
+    "AudioBufferOptions",
+    "AudioBufferSourceNode",
+    "AudioNode",
+    "AudioDestinationNode",
+    "AudioScheduledSourceNode",
+    # B.3 — mic capture (getUserMedia + MediaStreamTrackProcessor)
+    "Navigator",
+    "Window",
+    "MediaDevices",
+    "MediaStream",
+    "MediaStreamConstraints",
+    "MediaStreamTrack",
+    "MediaStreamTrackProcessor",
+    "MediaStreamTrackProcessorInit",
+    "AudioData",
+    "AudioDataCopyToOptions",
+    "ReadableStream",
+    "ReadableStreamDefaultReader",
+] }
+js-sys = { workspace = true }
+wasm-bindgen = { workspace = true }
+wasm-bindgen-futures = { workspace = true }
+# tracing compiles on wasm32 (log-facade; no OS deps). Used by voice_wasm*.rs.
+tracing = { workspace = true }
+# gloo-net: browser WebSocket + HTTP for voice_wasm.rs (B.1 signaling).
+gloo-net = { workspace = true, features = ["websocket", "http"] }
+# poly-host-bridge: OpusClient for /host/codec/opus/* codec sessions.
+poly-host-bridge = { workspace = true }
+# futures: StreamExt / SinkExt / channel primitives for voice_wasm.rs.
+futures = { workspace = true }
+
 # Voice transport — native only (feature = "voice"). F.1.
 # audiopus provides safe Opus FFI via libopus.
 # poly-audio-backend provides the AudioBackend trait for mic/speaker I/O.

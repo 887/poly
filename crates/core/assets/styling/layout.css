@@ -35,7 +35,6 @@ body {
     flex-direction: column;
 }
 
-<<<<<<< Updated upstream
 .poly-app-stage {
     display: flex;
     flex: 1;
@@ -47,8 +46,6 @@ body {
     display: none;
 }
 
-=======
->>>>>>> Stashed changes
 .poly-startup-overlay {
     position: fixed;
     inset: 0;
@@ -64,14 +61,8 @@ body {
     position: absolute;
     inset: 0;
     background:
-<<<<<<< Updated upstream
         radial-gradient(circle at top, rgb(82 133 255 / 12%), transparent 42%),
         linear-gradient(180deg, rgb(7 10 17 / 100%), rgb(8 11 18 / 100%));
-=======
-        radial-gradient(circle at top, rgb(82 133 255 / 16%), transparent 42%),
-        linear-gradient(180deg, rgb(5 10 18 / 82%), rgb(8 11 18 / 92%));
-    backdrop-filter: blur(8px);
->>>>>>> Stashed changes
 }
 
 .poly-startup-shell {
@@ -125,7 +116,6 @@ body {
     display: flex;
     flex-wrap: wrap;
     gap: 12px;
-<<<<<<< Updated upstream
     /* Cap the height so the overlay window doesn't grow off-screen with many
        accounts (14+ in the test fixture). Scroll inside the overlay rather
        than clipping invisibly. */
@@ -151,8 +141,6 @@ body {
  * pattern fixes. */
 .poly-startup-account-hidden {
     display: none !important;
-=======
->>>>>>> Stashed changes
 }
 
 .poly-startup-account {

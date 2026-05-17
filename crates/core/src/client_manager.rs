@@ -384,22 +384,6 @@ impl Clone for ClientManager {
     }
 }
 
-impl Clone for ClientManager {
-    fn clone(&self) -> Self {
-        Self {
-            backends: self.backends.clone(),
-            demo_active: self.demo_active,
-            server_account_map: self.server_account_map.clone(),
-            sessions: self.sessions.clone(),
-            connection_statuses: self.connection_statuses.clone(),
-            presence_statuses: self.presence_statuses.clone(),
-            plugin_settings: self.plugin_settings.clone(),
-            disabled_native_backends: self.disabled_native_backends.clone(),
-            signup_entries: self.signup_entries.clone(),
-        }
-    }
-}
-
 impl std::fmt::Debug for ClientManager {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ClientManager")

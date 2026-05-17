@@ -51,9 +51,19 @@ pub(crate) mod voice_common;
 
 /// Stoat voice transport — WASM target (Phase B of `plan-stoat-voice-wasm.md`).
 /// Sibling to `voice.rs`; uses `gloo_net` WS + `/host/codec/opus/*` instead of
-/// `tokio_tungstenite` + `audiopus`. Stubbed until Phase B.1 lands.
+/// `tokio_tungstenite` + `audiopus`.
 #[cfg(target_arch = "wasm32")]
 pub(crate) mod voice_wasm;
+
+/// Stoat WASM mic capture (Phase B.3). Stub until B.3 agent lands the real
+/// `MediaStreamTrackProcessor` implementation.
+#[cfg(target_arch = "wasm32")]
+pub(crate) mod voice_wasm_audio_capture;
+
+/// Stoat WASM speaker playback (Phase B.4). Stub until B.4 agent lands the real
+/// `AudioContext` + `AudioBufferSourceNode` implementation.
+#[cfg(target_arch = "wasm32")]
+pub(crate) mod voice_wasm_audio_playback;
 
 /// WIT bindings for the WASM plugin (WASI targets only).
 /// This module isolates the `wit-bindgen` macros for FFI.
@@ -2090,6 +2100,7 @@ fn parse_bonfire_event(json: &serde_json::Value) -> Option<ClientEvent> {
 
 // ── H.4.a — MessagingBackend ─────────────────────────────────────────────────
 
+#[cfg(feature = "native")]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl poly_client::MessagingBackend for StoatClient {

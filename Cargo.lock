@@ -7665,6 +7665,8 @@ dependencies = [
  "chrono",
  "dioxus",
  "futures",
+ "gloo-net",
+ "js-sys",
  "poly-audio-backend",
  "poly-client",
  "poly-host-bridge",
@@ -7680,6 +7682,9 @@ dependencies = [
  "tokio-tungstenite 0.26.2",
  "tracing",
  "uuid",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
  "wit-bindgen 0.53.1",
 ]
 
