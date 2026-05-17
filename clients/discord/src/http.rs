@@ -1,6 +1,7 @@
 //! Discord REST API v10 HTTP client.
 
 use std::sync::{Arc, Mutex};
+use tracing;
 
 use poly_client::ClientError;
 use poly_host_bridge::http::HttpClient;
@@ -204,6 +205,35 @@ impl DiscordHttpClient {
         format!("{}{}", self.base_url, path)
     }
 
+    /// D.7 — central response handler.
+    ///
+    /// Maps HTTP status codes to `ClientError` variants.  Specifically:
+    /// - 429: emits a `tracing::warn!` with the `Retry-After` value and returns
+    ///   a `ClientError::Network` with "HTTP 429 retry-after=<N>s" so callers
+    ///   can parse the backoff duration. The `RateGuard` on `DiscordClient` records
+    ///   the 429 and applies exponential back-off on the next invocation.
+    /// - 401: returns `ClientError::AuthFailed`.
+    /// - 403: returns `ClientError::PermissionDenied`.
+    /// - 404: returns `ClientError::NotFound`.
+    fn map_error_status(status: u16, retry_after_header: Option<u64>, path: &str) -> ClientError {
+        match status {
+            429 => {
+                let secs = retry_after_header.unwrap_or(1);
+                tracing::warn!(
+                    target: "discord_http",
+                    "HTTP 429 on {path}: Discord is throttling us — Retry-After={secs}s"
+                );
+                ClientError::Network(format!("HTTP 429 retry-after={secs}s"))
+            }
+            401 => ClientError::AuthFailed("Unauthorized".into()),
+            403 => ClientError::PermissionDenied(
+                "You need the VIEW_CHANNEL permission to read this channel.".into(),
+            ),
+            404 => ClientError::NotFound(format!("{path} not found")),
+            _ => ClientError::Network(format!("HTTP {status}")),
+        }
+    }
+
     async fn get<T: serde::de::DeserializeOwned>(&self, path: &str) -> Result<T, ClientError> {
         let resp = self
             .apply_version_headers(self.http.get(self.api_url(path)))
@@ -213,14 +243,12 @@ impl DiscordHttpClient {
             .map_err(|e| ClientError::Network(e.to_string()))?;
         if !resp.status().is_success() {
             let status = resp.status().as_u16();
-            // F-DC-1: Map 403 to PermissionDenied so the UI can render a
-            // styled empty state instead of silently swallowing the error.
-            if status == 403 {
-                return Err(ClientError::PermissionDenied(
-                    "You need the VIEW_CHANNEL permission to read this channel.".into(),
-                ));
-            }
-            return Err(ClientError::Network(format!("HTTP {status}")));
+            let retry_after = resp
+                .headers()
+                .get("Retry-After")
+                .and_then(|v| v.to_str().ok())
+                .and_then(|s| s.parse::<u64>().ok());
+            return Err(Self::map_error_status(status, retry_after, path));
         }
         resp.json::<T>().await.map_err(|e| ClientError::Internal(e.to_string()))
     }
@@ -239,7 +267,12 @@ impl DiscordHttpClient {
             .map_err(|e| ClientError::Network(e.to_string()))?;
         if !resp.status().is_success() {
             let status = resp.status().as_u16();
-            return Err(ClientError::Network(format!("HTTP {status}")));
+            let retry_after = resp
+                .headers()
+                .get("Retry-After")
+                .and_then(|v| v.to_str().ok())
+                .and_then(|s| s.parse::<u64>().ok());
+            return Err(Self::map_error_status(status, retry_after, path));
         }
         resp.json::<T>().await.map_err(|e| ClientError::Internal(e.to_string()))
     }

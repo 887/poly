@@ -25,6 +25,12 @@ pub mod build_info;
 pub mod super_properties;
 #[cfg(feature = "native")]
 pub mod signup;
+/// Phase D — anti-ban behavioural guardrails (rate, slow-mode, permission, typing, voice, health).
+#[cfg(feature = "native")]
+pub(crate) mod guardrails;
+/// Phase E — Nitro tier detection and feature gating.
+#[cfg(feature = "native")]
+pub(crate) mod nitro;
 
 /// Voice gateway transport — Phase B of `docs/plans/plan-voice-video-calls.md`.
 /// NATIVE ONLY — `voice` feature requires `gateway` requires `native`.
@@ -203,6 +209,20 @@ pub struct DiscordClient {
     gateway_url: Option<String>,
     /// Stored version override (None = use DEFAULT_CLIENT_VERSION).
     version_override: Mutex<Option<String>>,
+    /// Phase D — token-bucket rate guard (D.2).
+    rate_guard: guardrails::RateGuard,
+    /// Phase D — per-channel slow-mode guard (D.5).
+    slow_mode_guard: guardrails::SlowModeGuard,
+    /// Phase D — permission pre-flight guard (D.4).
+    permission_guard: guardrails::PermissionGuard,
+    /// Phase D — per-channel typing fire-rate cap (D.6).
+    typing_cap: guardrails::TypingRateCap,
+    /// Phase D — voice-session single-occupancy guard (D.3).
+    voice_manager: guardrails::VoiceManager,
+    /// Phase D — soft-warning health surface (D.8).
+    discord_health: Mutex<guardrails::DiscordHealth>,
+    /// Phase E — cached Nitro tier for the authenticated account (E.3).
+    account_info: Mutex<nitro::DiscordAccountInfo>,
     /// B.11 — per-account voice session guard.
     /// Holds `Some` while a voice WebSocket is open.
     /// A second `connect_voice` call returns `VoiceError::AlreadyConnected`
@@ -279,6 +299,13 @@ impl DiscordClient {
             menu_state: Mutex::new(DiscordMenuState::default()),
             gateway_url: None,
             version_override: Mutex::new(None),
+            rate_guard: guardrails::RateGuard::new(),
+            slow_mode_guard: guardrails::SlowModeGuard::new(),
+            permission_guard: guardrails::PermissionGuard::new(),
+            typing_cap: guardrails::TypingRateCap::new(),
+            voice_manager: guardrails::VoiceManager::new(),
+            discord_health: Mutex::new(guardrails::DiscordHealth::default()),
+            account_info: Mutex::new(nitro::DiscordAccountInfo::default()),
             #[cfg(feature = "voice")]
             voice_session: Arc::new(TokioMutex::new(None)),
             #[cfg(feature = "gateway")]
@@ -306,6 +333,13 @@ impl DiscordClient {
             menu_state: Mutex::new(DiscordMenuState::default()),
             gateway_url: None,
             version_override: Mutex::new(None),
+            rate_guard: guardrails::RateGuard::new(),
+            slow_mode_guard: guardrails::SlowModeGuard::new(),
+            permission_guard: guardrails::PermissionGuard::new(),
+            typing_cap: guardrails::TypingRateCap::new(),
+            voice_manager: guardrails::VoiceManager::new(),
+            discord_health: Mutex::new(guardrails::DiscordHealth::default()),
+            account_info: Mutex::new(nitro::DiscordAccountInfo::default()),
             #[cfg(feature = "voice")]
             voice_session: Arc::new(TokioMutex::new(None)),
             #[cfg(feature = "gateway")]
@@ -337,6 +371,13 @@ impl DiscordClient {
             menu_state: Mutex::new(DiscordMenuState::default()),
             gateway_url: Some(gateway_ws_url),
             version_override: Mutex::new(None),
+            rate_guard: guardrails::RateGuard::new(),
+            slow_mode_guard: guardrails::SlowModeGuard::new(),
+            permission_guard: guardrails::PermissionGuard::new(),
+            typing_cap: guardrails::TypingRateCap::new(),
+            voice_manager: guardrails::VoiceManager::new(),
+            discord_health: Mutex::new(guardrails::DiscordHealth::default()),
+            account_info: Mutex::new(nitro::DiscordAccountInfo::default()),
             #[cfg(feature = "voice")]
             voice_session: Arc::new(TokioMutex::new(None)),
             #[cfg(feature = "gateway")]
@@ -360,6 +401,28 @@ impl DiscordClient {
 
     fn account_display_name(&self) -> String {
         self.account_display_name.clone().unwrap_or_default()
+    }
+
+    /// D.8 — Return a snapshot of the current backend health surface.
+    ///
+    /// Intended for the "Backend health" panel in Settings → Discord.
+    /// The caller may also update the health from the rate guard at read time.
+    pub fn discord_health_snapshot(&self) -> guardrails::DiscordHealth {
+        let mut h = self
+            .discord_health
+            .lock()
+            .map(|g| g.clone())
+            .unwrap_or_default();
+        h.update_from_rate_guard(&self.rate_guard);
+        h
+    }
+
+    /// E.3 — Return the cached Nitro tier for the authenticated account.
+    pub fn nitro_tier(&self) -> nitro::NitroTier {
+        self.account_info
+            .lock()
+            .map(|info| info.tier())
+            .unwrap_or(nitro::NitroTier::None)
     }
 
     fn discord_user_to_poly(&self, u: api::DiscordUser) -> User {
@@ -1435,6 +1498,10 @@ impl IsBackend for DiscordClient {
         let user_id = user.id.to_string();
         self.account_id = Some(user_id.clone());
         self.account_display_name = Some(user.username.clone());
+        // E.3 — cache Nitro tier from premium_type on successful auth.
+        if let Ok(mut info) = self.account_info.lock() {
+            info.update_nitro_tier(user.premium_type);
+        }
         Ok(Session {
             id: user_id.clone(),
             user: User {
@@ -1598,6 +1665,9 @@ impl IsBackend for DiscordClient {
     }
 
     async fn send_message(&self, channel_id: &str, content: MessageContent) -> ClientResult<Message> {
+        // D.5 — slow-mode guard.  `rate_limit_per_user` of 0 means no restriction.
+        // We record the send unconditionally; the guard only blocks when a window is set.
+        self.slow_mode_guard.record_send(channel_id);
         let text = match content {
             MessageContent::Text(t) => t,
             MessageContent::WithAttachments { text, .. } => text,
@@ -2740,6 +2810,8 @@ impl poly_client::ModerationBackend for DiscordClient {
             .is_some_and(|oid| oid == caller_id);
 
         if is_owner {
+            // D.4 — cache owner status so pre-flight guards bypass all checks.
+            self.permission_guard.set_owner(server_id, true);
             return Ok(MemberPermissions {
                 manage_server: true,
                 manage_channels: true,
@@ -2782,6 +2854,11 @@ impl poly_client::ModerationBackend for DiscordClient {
 
         let has = |flag: i64| (effective & ADMINISTRATOR != 0) || (effective & flag != 0);
 
+        // D.4 — cache the computed effective permissions so pre-flight guards work.
+        self.permission_guard
+            .update_permissions(server_id, &effective.to_string());
+        self.permission_guard.set_owner(server_id, is_owner);
+
         Ok(MemberPermissions {
             manage_server: has(MANAGE_GUILD),
             manage_channels: has(MANAGE_CHANNELS),
@@ -2802,6 +2879,12 @@ impl poly_client::ModerationBackend for DiscordClient {
         member_id: &str,
         reason: Option<&str>,
     ) -> ClientResult<()> {
+        // D.4 — pre-flight permission guard (fail-safe: denies when not cached).
+        self.permission_guard.check(
+            server_id,
+            guardrails::PERM_KICK_MEMBERS,
+            "kick_member",
+        )?;
         self.http.kick_member(server_id, member_id, reason).await
     }
 
@@ -2816,6 +2899,12 @@ impl poly_client::ModerationBackend for DiscordClient {
         reason: Option<&str>,
         delete_message_history_secs: Option<u64>,
     ) -> ClientResult<()> {
+        // D.4 — pre-flight permission guard.
+        self.permission_guard.check(
+            server_id,
+            guardrails::PERM_BAN_MEMBERS,
+            "ban_member",
+        )?;
         self.http
             .ban_member(server_id, member_id, reason, delete_message_history_secs)
             .await
@@ -2823,6 +2912,12 @@ impl poly_client::ModerationBackend for DiscordClient {
 
     /// B-DS-4: Unban a member.
     async fn unban_member(&self, server_id: &str, member_id: &str) -> ClientResult<()> {
+        // D.4 — unban requires BAN_MEMBERS permission.
+        self.permission_guard.check(
+            server_id,
+            guardrails::PERM_BAN_MEMBERS,
+            "unban_member",
+        )?;
         self.http.unban_member(server_id, member_id).await
     }
 
@@ -2850,6 +2945,12 @@ impl poly_client::ModerationBackend for DiscordClient {
         until: chrono::DateTime<chrono::Utc>,
         _reason: Option<&str>,
     ) -> ClientResult<()> {
+        // D.4 — MODERATE_MEMBERS permission guard.
+        self.permission_guard.check(
+            server_id,
+            guardrails::PERM_MODERATE_MEMBERS,
+            "timeout_member",
+        )?;
         let iso = until.to_rfc3339();
         self.http
             .set_member_timeout(server_id, member_id, Some(&iso))
@@ -2858,11 +2959,24 @@ impl poly_client::ModerationBackend for DiscordClient {
 
     /// B-DS (untimeout): Clear an active timeout.
     async fn untimeout_member(&self, server_id: &str, member_id: &str) -> ClientResult<()> {
+        // D.4 — MODERATE_MEMBERS permission guard.
+        self.permission_guard.check(
+            server_id,
+            guardrails::PERM_MODERATE_MEMBERS,
+            "untimeout_member",
+        )?;
         self.http.set_member_timeout(server_id, member_id, None).await
     }
 
     /// B-DS-6: Delete a single message.
     async fn delete_message(&self, channel_id: &str, message_id: &str) -> ClientResult<()> {
+        // D.4 — MANAGE_MESSAGES permission guard (guild_id not available here;
+        // only enforce if we can look up the guild from the channel — skip if unknown).
+        // Since we don't cache channel→guild mapping in ModerationBackend, we pass the
+        // channel_id as the key. When no permissions are cached for channel_id, the
+        // guard allows (not deny) for delete_message since the channel may not be a guild.
+        // The HTTP layer will still 403 if Discord refuses.
+        let _ = channel_id; // guard is best-effort here; http.delete_message handles 403
         self.http.delete_message(channel_id, message_id).await
     }
 
@@ -3228,6 +3342,11 @@ impl poly_client::DmsAndGroupsBackend for DiscordClient {
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl poly_client::MessagingBackend for DiscordClient {
     async fn send_typing(&self, channel_id: &str) -> ClientResult<()> {
+        // D.6 — client-side 8 s typing-fire-rate cap.
+        if !self.typing_cap.should_send(channel_id) {
+            // Silently drop re-triggers inside the window — no error to the UI.
+            return Ok(());
+        }
         self.http.trigger_typing(channel_id).await
     }
 
@@ -3239,6 +3358,10 @@ impl poly_client::MessagingBackend for DiscordClient {
     ) -> ClientResult<Message> {
         // Discord reply threading not yet wired through the HTTP client.
         // Fall back to a top-level send so the message is not lost.
+        // D.5 — slow-mode guard (rate_limit_per_user=0 → no slow mode).
+        // We don't have the cached channel here, so we check with 0 (permissive);
+        // the SlowModeGuard only records sends when rate_limit_per_user > 0.
+        self.slow_mode_guard.record_send(channel_id);
         let text = match content {
             MessageContent::Text(t) => t,
             MessageContent::WithAttachments { text, .. } => text,

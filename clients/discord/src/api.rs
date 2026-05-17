@@ -25,6 +25,19 @@ pub struct DiscordUser {
     pub avatar: Option<String>,
     #[serde(default)]
     pub global_name: Option<String>,
+    /// Nitro subscription tier (E.1 — Phase E).
+    ///
+    /// | Value | Tier          |
+    /// |-------|---------------|
+    /// | 0     | None          |
+    /// | 1     | Nitro Classic |
+    /// | 2     | Nitro         |
+    /// | 3     | Nitro Basic   |
+    ///
+    /// Absent when the field is omitted by the server (treated as 0 / None).
+    /// Source: discord-api-types v10 `UserPremiumType`.
+    #[serde(default)]
+    pub premium_type: Option<u8>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -123,6 +136,10 @@ pub struct DiscordChannel {
     /// Absent for forum posts created as standalone threads.
     #[serde(default)]
     pub owner_id: Option<Id<UserMarker>>,
+    /// Slow-mode: seconds a user must wait between messages (0 = disabled).
+    /// Used by `SlowModeGuard` (Phase D.5).
+    #[serde(default)]
+    pub rate_limit_per_user: Option<u32>,
 }
 
 /// Response shape from `GET /guilds/{id}/threads/active`.

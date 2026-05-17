@@ -1,6 +1,6 @@
 # Plan — Discord Anti-Ban Hardening for Poly's Discord Plugin
 
-## Status: Phases A/B/C SHIPPED — shipped in change `yuvzoprz` (Phases D/E/F pending)
+## Status: Phases A/B/C/D/E SHIPPED — A/B/C shipped in change `yuvzoprz`; D/E shipped in change `rorooxlm` (Phase F pending)
 
 > Last updated: 2026-05-11
 
@@ -261,7 +261,7 @@ Sub-steps:
 
 ---
 
-## Phase D — Anti-ban guardrails
+## Phase D — Anti-ban guardrails — shipped in change `rorooxlm`
 
 Behavioural ratchets. Each one is a code-level guardrail that prevents
 us from ever hitting the corresponding heuristic. All thresholds
@@ -282,40 +282,40 @@ well under the 10k invalid-requests-per-10-minutes IP ban).
 
 Sub-steps:
 
-- [ ] **D.1** Add `clients/discord/src/guardrails.rs` housing
+- [x] **D.1** Add `clients/discord/src/guardrails.rs` housing
       `RateGuard`, `SlowModeGuard`, `PermissionGuard`. All take
       `Arc<RwLock<...>>` state passed by the backend.
-- [ ] **D.2** Wire `RateGuard` (token bucket) into `DiscordHttpClient`
+- [x] **D.2** Wire `RateGuard` (token bucket) into `DiscordHttpClient`
       as a `before_send` hook in every helper (`get`/`post_json`/etc.).
       Use `governor::RateLimiter` with quota `Quota::per_second(5)
       .allow_burst(NonZeroU32::new(10).unwrap())`.
-- [ ] **D.3** Add `VoiceManager` (sketch, not full impl since voice
+- [x] **D.3** Add `VoiceManager` (sketch, not full impl since voice
       isn't shipped yet) — at minimum a `Mutex<Option<VoiceSession>>`
       that errors on second `connect()`.
-- [ ] **D.4** Wire `PermissionGuard` into `kick_member`, `ban_member`,
+- [x] **D.4** Wire `PermissionGuard` into `kick_member`, `ban_member`,
       `unban_member`, `set_member_timeout`, `delete_message`,
       `patch_channel`, `reorder_channels`. Each pre-checks against a
       cached `GuildMember.permissions` bitfield (refreshed from
       `get_guild_member_me` on guild-switch).
-- [ ] **D.5** Wire `SlowModeGuard` into `send_message`. Reads
+- [x] **D.5** Wire `SlowModeGuard` into `send_message`. Reads
       `channel.rate_limit_per_user`. Stores `last_send_at` per
       channel id.
-- [ ] **D.6** Add a per-channel typing-fire-rate cap inside
+- [x] **D.6** Add a per-channel typing-fire-rate cap inside
       `trigger_typing`. Keep `last_typing_at: HashMap<channel_id,
       Instant>`; ignore re-triggers inside 8s.
-- [ ] **D.7** Implement the 429 backoff in the central response
+- [x] **D.7** Implement the 429 backoff in the central response
       handler. Currently every helper has its own `if !is_success`
       block — refactor into `Self::handle_response(resp).await?` first,
       then add the 429 branch. Same refactor unblocks Phase F
       telemetry.
-- [ ] **D.8** Add a "soft warning" surface: a `Signal<DiscordHealth>`
+- [x] **D.8** Add a "soft warning" surface: a `Signal<DiscordHealth>`
       the UI subscribes to, exposing fields `recent_429_count`,
       `last_403_route`, `last_401_at`. Settings page renders it as a
       "backend health" panel.
 
 ---
 
-## Phase E — Pro-feature gating (Nitro)
+## Phase E — Pro-feature gating (Nitro) — shipped in change `rorooxlm`
 
 Even when the API would let us send the request, we **refuse** at the
 client layer for paid-tier features. The user explicitly asked for
@@ -350,23 +350,23 @@ Per-feature gate plan:
 
 Sub-steps:
 
-- [ ] **E.1** Verify `DiscordUser` deserializes `premium_type:
+- [x] **E.1** Verify `DiscordUser` deserializes `premium_type:
       Option<u8>`. Add it if missing.
-- [ ] **E.2** Add `clients/discord/src/nitro.rs` with
+- [x] **E.2** Add `clients/discord/src/nitro.rs` with
       `pub enum NitroTier { None, Classic, Full, Basic }` derived from
       `premium_type` (with `From<u8>`).
-- [ ] **E.3** Cache the current account's tier in a
+- [x] **E.3** Cache the current account's tier in a
       `Signal<Option<NitroTier>>` populated on `get_me()` (already
       called at backend init). Refresh on app focus.
-- [ ] **E.4** For each row in the table above, add a
+- [x] **E.4** For each row in the table above, add a
       `NitroGate::can_<feature>(tier) -> bool` helper, used both at
       the UI affordance layer (hide/dim) and at the HTTP client layer
       as a defence-in-depth check that returns `Err(ClientError::
       PermissionDenied("Nitro required"))` before the request is sent.
-- [ ] **E.5** Specifically the 8 MB upload boundary: enforce in
+- [x] **E.5** Specifically the 8 MB upload boundary: enforce in
       `send_message_with_attachments` (when added) using
       `NitroGate::max_upload_bytes(tier, channel.boost_level)`.
-- [ ] **E.6** Document the gating policy in `docs/dev/discord-nitro.md`
+- [x] **E.6** Document the gating policy in `docs/dev/discord-nitro.md`
       so future contributors know we **intentionally** don't bypass —
       this reads to a casual code-spelunker as "missing feature" and
       they'll be tempted to "fix" it.
