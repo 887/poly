@@ -106,7 +106,27 @@ fn build_backend_for_slug(
         "teams" => Some(Box::new(poly_teams::TeamsClient::new())),
 
         #[cfg(feature = "stoat")]
-        "stoat" => Some(Box::new(poly_stoat::StoatClient::new())),
+        "stoat" => {
+            // Honor a non-default instance_id so test-stoat (http://localhost:9101)
+            // and any future self-hosted Stoat instance is reachable. Mirrors the
+            // discord/matrix arms above: when the token stored a non-official base URL
+            // (e.g. "http://localhost:9101"), pass it through; otherwise fall back to
+            // the official instance.
+            match instance_id {
+                Some(url) if !url.is_empty() && url != poly_stoat::OFFICIAL_STOAT_BASE_URL => {
+                    match poly_stoat::StoatClient::with_base_url(url) {
+                        Ok(c) => Some(Box::new(c)),
+                        Err(e) => {
+                            tracing::warn!(
+                                "account_restore: stoat with_base_url({url}) failed: {e}"
+                            );
+                            None
+                        }
+                    }
+                }
+                _ => Some(Box::new(poly_stoat::StoatClient::new())),
+            }
+        }
 
         #[cfg(feature = "hackernews")]
         "hackernews" => Some(Box::new(poly_hackernews::HackerNewsClient::new())),
