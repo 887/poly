@@ -1387,6 +1387,12 @@ async fn init_storage(
                         Err(e) => tracing::warn!("Failed to read account last DM routes: {e}"),
                     }
 
+                    // Flip storage_ready=true BEFORE awaiting remote-backend restores —
+                    // local storage IS ready at this point; account_restore fetches over
+                    // the network and can hang on a single misconfigured backend, which
+                    // would otherwise pin the app stage behind the boot overlay forever.
+                    storage_ready.set(true);
+
                     // Restore poly server accounts from persisted tokens.
                     // This runs after demo restore so both can coexist.
                     #[cfg(feature = "server")]
@@ -1405,10 +1411,15 @@ async fn init_storage(
                     )
                     .await;
                 }
-                Ok(_) => tracing::info!("Storage: no setup found, showing wizard"),
-                Err(e) => tracing::warn!("Storage: failed to read app_settings: {e}"),
+                Ok(_) => {
+                    tracing::info!("Storage: no setup found, showing wizard");
+                    storage_ready.set(true);
+                }
+                Err(e) => {
+                    tracing::warn!("Storage: failed to read app_settings: {e}");
+                    storage_ready.set(true);
+                }
             }
-            storage_ready.set(true);
         }
         Err(e) => {
             tracing::error!("Storage init failed: {e}. Running without persistence.");
