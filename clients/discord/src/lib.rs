@@ -1370,6 +1370,49 @@ impl Default for DiscordClient {
     fn default() -> Self { Self::new() }
 }
 
+// ── Gateway-bridge helpers ────────────────────────────────────────────────────
+
+#[cfg(all(feature = "native", feature = "gateway-bridge", target_arch = "wasm32"))]
+impl DiscordClient {
+    /// Wait up to `max_ms` milliseconds for all three voice credentials
+    /// (`endpoint`, `token`, `session_id`) to be populated by the gateway-bridge loop.
+    ///
+    /// The gateway-bridge stashes credentials asynchronously when `VOICE_STATE_UPDATE`
+    /// (→ `session_id`) and `VOICE_SERVER_UPDATE` (→ `endpoint` + `token`) arrive,
+    /// typically 3–50 ms after op 4 is sent. A single-shot read races against that
+    /// arrival; this helper polls with 25 ms steps until all three fields are non-empty
+    /// or the deadline expires.
+    ///
+    /// Returns `Some((endpoint, token, session_id))` on success, `None` on timeout.
+    async fn wait_for_voice_creds(&self, max_ms: u64) -> Option<(String, String, String)> {
+        let steps = (max_ms / 25).max(1);
+        for _ in 0..steps {
+            {
+                let creds = self.voice_server_creds.lock().await;
+                if creds.is_complete() {
+                    return Some((
+                        creds.endpoint.clone().unwrap_or_default(),
+                        creds.token.clone().unwrap_or_default(),
+                        creds.session_id.clone().unwrap_or_default(),
+                    ));
+                }
+            }
+            gloo_timers::future::TimeoutFuture::new(25).await;
+        }
+        // One final check after the last sleep.
+        let creds = self.voice_server_creds.lock().await;
+        if creds.is_complete() {
+            Some((
+                creds.endpoint.clone().unwrap_or_default(),
+                creds.token.clone().unwrap_or_default(),
+                creds.session_id.clone().unwrap_or_default(),
+            ))
+        } else {
+            None
+        }
+    }
+}
+
 #[cfg(feature = "native")]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
@@ -1683,16 +1726,24 @@ impl IsBackend for DiscordClient {
 
             // Read voice credentials — populated by the gateway-bridge loop from
             // VOICE_STATE_UPDATE + VOICE_SERVER_UPDATE once Discord processes op 4.
+            // These arrive asynchronously (~3–50 ms after op 4 is sent), so poll
+            // with wait_for_voice_creds instead of taking a single-shot snapshot.
             // When gateway-bridge is not enabled, fall back to empty strings (the
             // finish_handshake stub in voice_bridge.rs surfaces a clear error).
             #[cfg(feature = "gateway-bridge")]
             let (ws_endpoint, ws_token, ws_session_id) = {
-                let creds = self.voice_server_creds.lock().await;
-                (
-                    creds.endpoint.clone().unwrap_or_default(),
-                    creds.token.clone().unwrap_or_default(),
-                    creds.session_id.clone().unwrap_or_default(),
-                )
+                match self.wait_for_voice_creds(1000).await {
+                    Some(creds) => creds,
+                    None => {
+                        tracing::warn!(
+                            target: "poly_discord::gateway_bridge",
+                            "join_voice_channel_transport: timed out waiting for \
+                             VOICE_SERVER_UPDATE creds (endpoint/token/session_id) — \
+                             proceeding with empty strings; connect_voice will fail"
+                        );
+                        (String::new(), String::new(), String::new())
+                    }
+                }
             };
             #[cfg(not(feature = "gateway-bridge"))]
             let (ws_endpoint, ws_token, ws_session_id) =
