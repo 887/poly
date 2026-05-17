@@ -85,7 +85,7 @@ architectural) recorded for future passes.
 
 ---
 
-## Phase C — Medium refactors (50-300 LoC, max 5)
+## Phase C — Medium refactors (50-300 LoC, max 5) — C.3 shipped in this change
 
 - [ ] **C.1** Wire `send_typing` to Bonfire WS write path. Requires exposing a
   WS-send handle on `StoatClient` (channel-side `ChannelStartTyping` /
@@ -93,8 +93,9 @@ architectural) recorded for future passes.
   `bonfire_ws.rs`.
 - [ ] **C.2** Wire `search_messages` via Revolt `POST /channels/{id}/search`
   + `MessageSearchHit` mapping. ~150 LoC across `http.rs` + `api.rs` + `lib.rs`.
-- [ ] **C.3** Wire `get_server_roles` via Revolt server config role table.
-  ~80 LoC.
+- [x] **C.3** Wire `get_server_roles` via Revolt server config role table. Added
+  `StoatRole` struct to `api.rs`, `roles` field on `StoatServer`, `into_poly_roles()`
+  mapper, and wired `get_server_roles` in `lib.rs`. ~80 LoC.
 - [ ] **C.4** Implement `invite_user_to_server` via `POST /servers/{id}/invites`.
   ~60 LoC.
 - [ ] **C.5** Wire `mute_conversation` / `unmute_conversation` once the

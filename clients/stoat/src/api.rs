@@ -257,6 +257,27 @@ pub struct StoatUser {
     pub online: bool,
 }
 
+/// A role definition returned inside a Stoat server payload.
+///
+/// Revolt stores roles as an object keyed by role ID.  We flatten that
+/// into a `Vec` with the key promoted to `StoatRole::id` so we can
+/// iterate normally.  See `StoatServer::into_poly_roles`.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct StoatRole {
+    /// Role display name.
+    pub name: String,
+    /// Optional hex colour (e.g. `"#5865F2"`).  Revolt stores colours as
+    /// integers; the Stoat fork may expose them as strings.
+    #[serde(default)]
+    pub colour: Option<String>,
+    /// Permission bitmask (Revolt permission model).
+    #[serde(default)]
+    pub permissions: Option<serde_json::Value>,
+    /// Sort rank — lower number means lower in the hierarchy.
+    #[serde(default)]
+    pub rank: Option<u32>,
+}
+
 /// Server/community payload returned by Stoat.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct StoatServer {
@@ -281,6 +302,10 @@ pub struct StoatServer {
     /// Optional server banner.
     #[serde(default)]
     pub banner: Option<StoatFile>,
+    /// Role definitions keyed by role ID.  Most Stoat instances populate this;
+    /// absent on servers with no custom roles.
+    #[serde(default)]
+    pub roles: Option<std::collections::HashMap<String, StoatRole>>,
 }
 
 impl StoatServer {
@@ -322,6 +347,46 @@ impl StoatServer {
             forks_count: None,
             open_issues_count: None,
         }
+    }
+
+    /// Convert the server's role map into Poly's [`poly_client::Role`] vector.
+    ///
+    /// Roles are sorted by `rank` ascending (lower rank = lower in the hierarchy).
+    /// Roles with no rank are placed after those that have one.
+    ///
+    /// Note: Revolt's permission bitmask is not mapped to `MemberPermissions` at
+    /// this stage — that requires understanding the calling member's effective grants.
+    /// All permission fields default to `false`; callers that need grant-level detail
+    /// should consult `StoatServerMemberMe.roles` and the individual role permissions.
+    #[must_use]
+    pub fn into_poly_roles(self) -> Vec<poly_client::Role> {
+        let Some(roles_map) = self.roles else {
+            return Vec::new();
+        };
+
+        let mut roles: Vec<poly_client::Role> = roles_map
+            .into_iter()
+            .map(|(id, role)| poly_client::Role {
+                id,
+                name: role.name,
+                color: role.colour,
+                permissions: poly_client::MemberPermissions {
+                    manage_server: false,
+                    manage_channels: false,
+                    manage_roles: false,
+                    kick_members: false,
+                    ban_members: false,
+                    manage_messages: false,
+                    timeout_members: false,
+                    display_role: String::new(),
+                    power_level: None,
+                },
+                position: role.rank.unwrap_or(u32::MAX),
+            })
+            .collect();
+
+        roles.sort_by_key(|r| r.position);
+        roles
     }
 }
 

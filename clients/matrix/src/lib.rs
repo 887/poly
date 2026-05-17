@@ -1969,12 +1969,19 @@ impl poly_client::DmsAndGroupsBackend for MatrixClient {
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl poly_client::MessagingBackend for MatrixClient {
     async fn send_typing(&self, channel_id: &str) -> ClientResult<()> {
-        // Matrix supports `PUT /_matrix/client/v3/rooms/{roomId}/typing/{userId}`,
-        // but the HTTP wiring is not yet plumbed through MatrixHttpClient.  See
-        // SOLID-audit-matrix Phase B (medium refactor: add `put_room_typing` to
-        // http.rs and call it here with a 4-second `timeout`).  `debug!` instead
-        // of `warn!` so we don't flood logs on every keystroke.
-        tracing::debug!(channel_id, "matrix: send_typing no-op (endpoint not wired)");
+        // SOLID-audit-matrix C.1: wire `PUT /_matrix/client/v3/rooms/{roomId}/typing/{userId}`
+        // with a 4-second timeout.  Errors are best-effort and logged at debug level only —
+        // typing indicators are non-critical and should never surface in the UI as errors.
+        let user_id = match self.http.session().map(|s| s.user_id) {
+            Some(id) => id,
+            None => {
+                tracing::debug!(channel_id, "matrix: send_typing skipped (not authenticated)");
+                return Ok(());
+            }
+        };
+        if let Err(err) = self.http.put_room_typing(channel_id, &user_id, 4000).await {
+            tracing::debug!(channel_id, %err, "matrix: send_typing failed (best-effort)");
+        }
         Ok(())
     }
 
@@ -2066,8 +2073,40 @@ impl poly_client::ServerAdminBackend for MatrixClient {
         Err(ClientError::NotSupported("matrix: update_server_banner not implemented".to_string()))
     }
 
-    async fn mark_channel_read(&self, _channel_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("matrix: mark_channel_read not implemented".to_string()))
+    async fn mark_channel_read(&self, channel_id: &str) -> ClientResult<()> {
+        // SOLID-audit-matrix C.5: POST /rooms/{roomId}/read_markers.
+        // We need the latest event ID in the room to advance the marker.
+        // Fetch the most recent timeline page (dir="b" from the sync token)
+        // and use the first returned event ID (most recent in backward order).
+        let from = self
+            .http
+            .session()
+            .and_then(|s| s.sync_next_batch)
+            .unwrap_or_default();
+
+        // Fetch just 1 message to get the latest event ID cheaply.
+        let response = self
+            .http
+            .fetch_messages(channel_id, &from, "b", Some(1))
+            .await;
+
+        let event_id = match response {
+            Ok(page) => page
+                .chunk
+                .into_iter()
+                .find_map(|ev| ev.event_id),
+            Err(err) => {
+                tracing::debug!(channel_id, %err, "matrix: mark_channel_read could not fetch latest event");
+                return Ok(());
+            }
+        };
+
+        let Some(event_id) = event_id else {
+            tracing::debug!(channel_id, "matrix: mark_channel_read skipped (no events found)");
+            return Ok(());
+        };
+
+        self.http.post_read_markers(channel_id, &event_id).await
     }
 
     async fn respond_to_server_invite(&self, _server_id: &str, _accept: bool) -> ClientResult<()> {

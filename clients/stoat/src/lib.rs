@@ -1766,8 +1766,11 @@ impl poly_client::ModerationBackend for StoatClient {
         Err(ClientError::NotSupported("Stoat: no audit log endpoint".to_string()))
     }
 
-    async fn get_server_roles(&self, _server_id: &str) -> ClientResult<Vec<Role>> {
-        Err(ClientError::NotSupported("Stoat: get_server_roles not yet implemented".to_string()))
+    async fn get_server_roles(&self, server_id: &str) -> ClientResult<Vec<Role>> {
+        // SOLID-audit-stoat C.3: Revolt stores roles inline in the server payload
+        // under a `roles` map keyed by role ID.  Fetch the server and extract them.
+        let server = self.http.fetch_server(server_id).await?;
+        Ok(server.into_poly_roles())
     }
 }
 

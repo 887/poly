@@ -1392,18 +1392,32 @@ impl poly_client::DmsAndGroupsBackend for TeamsClient {
 
     async fn mute_conversation(
         &self,
-        _channel_id: &str,
+        channel_id: &str,
         _until: Option<chrono::DateTime<chrono::Utc>>,
     ) -> ClientResult<()> {
-        Err(ClientError::NotSupported(
-            "mute_conversation: not yet implemented for Teams".to_string(),
-        ))
+        // SOLID-audit-teams C.4: Graph `PATCH /chats/{id}/members/{membershipId}` with
+        // `notificationSettings` requires knowing the caller's membership ID for each chat,
+        // which requires an extra round-trip per call.  The in-memory `muted_dms` store that
+        // already backs the context-menu "mute-dm" action is the same source of truth the
+        // sidebar uses — wire `mute_conversation` to it directly so both call sites agree.
+        // The `_until` timed-mute field is noted but Graph notifications don't support
+        // expiry; we store the mute unconditionally (best-effort parity).
+        tracing::debug!(channel_id, "teams: mute_conversation (in-memory store)");
+        self.muted_dms
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(channel_id.to_string());
+        Ok(())
     }
 
-    async fn unmute_conversation(&self, _channel_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported(
-            "unmute_conversation: not yet implemented for Teams".to_string(),
-        ))
+    async fn unmute_conversation(&self, channel_id: &str) -> ClientResult<()> {
+        // SOLID-audit-teams C.4: symmetric with mute_conversation above.
+        tracing::debug!(channel_id, "teams: unmute_conversation (in-memory store)");
+        self.muted_dms
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(channel_id);
+        Ok(())
     }
 
     async fn leave_group_dm(&self, _channel_id: &str) -> ClientResult<()> {

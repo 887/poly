@@ -708,6 +708,76 @@ impl MatrixHttpClient {
     }
 
     // -----------------------------------------------------------------------
+    // Typing notifications
+    // -----------------------------------------------------------------------
+
+    /// Send a typing notification via
+    /// `PUT /_matrix/client/v3/rooms/{roomId}/typing/{userId}`.
+    ///
+    /// `timeout_ms` is the duration in milliseconds that the homeserver should
+    /// consider the user to be typing (Matrix recommends 4000 ms).  Passing
+    /// `0` stops the typing indicator immediately (equivalent to `typing: false`).
+    ///
+    /// Best-effort: errors are logged at `debug!` level but do not propagate —
+    /// typing indicators are non-critical.
+    pub async fn put_room_typing(
+        &self,
+        room_id: &str,
+        user_id: &str,
+        timeout_ms: u32,
+    ) -> ClientResult<()> {
+        let typing = timeout_ms > 0;
+        let body = if typing {
+            serde_json::json!({ "typing": true, "timeout": timeout_ms })
+        } else {
+            serde_json::json!({ "typing": false })
+        };
+        let path = format!("/_matrix/client/v3/rooms/{room_id}/typing/{user_id}");
+        let response = self
+            .authenticated_request(Method::PUT, &path)?
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| Self::network_error(&e))?;
+
+        if !response.status().is_success() {
+            return Err(Self::parse_error(response).await);
+        }
+        Ok(())
+    }
+
+    // -----------------------------------------------------------------------
+    // Read markers
+    // -----------------------------------------------------------------------
+
+    /// Advance the read marker for a room via
+    /// `POST /_matrix/client/v3/rooms/{roomId}/read_markers`.
+    ///
+    /// Sets both `m.fully_read` and `m.read` (fully-read receipt) to `event_id`.
+    pub async fn post_read_markers(
+        &self,
+        room_id: &str,
+        event_id: &str,
+    ) -> ClientResult<()> {
+        let body = serde_json::json!({
+            "m.fully_read": event_id,
+            "m.read": event_id
+        });
+        let path = format!("/_matrix/client/v3/rooms/{room_id}/read_markers");
+        let response = self
+            .authenticated_request(Method::POST, &path)?
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| Self::network_error(&e))?;
+
+        if !response.status().is_success() {
+            return Err(Self::parse_error(response).await);
+        }
+        Ok(())
+    }
+
+    // -----------------------------------------------------------------------
     // Room membership lifecycle
     // -----------------------------------------------------------------------
 

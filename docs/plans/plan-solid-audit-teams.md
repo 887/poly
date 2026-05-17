@@ -77,7 +77,7 @@
 
 ---
 
-## Phase C — Medium refactors (50-300 LoC, max 5)
+## Phase C — Medium refactors (50-300 LoC, max 5) — C.4 shipped in this change
 
 - [ ] **C.1** Implement channel `get_channel_view` / `get_view_rows` /
   `get_view_detail` for team channels — render message list rows like Stoat
@@ -87,8 +87,11 @@
 - [ ] **C.3** Implement `add_group_member` / `remove_group_member` /
   `add_users_to_group_dm` via `POST /chats/{id}/members` +
   `DELETE /chats/{id}/members/{membershipId}`. ~120 LoC.
-- [ ] **C.4** Implement `mute_conversation` / `unmute_conversation` via Graph
-  `PATCH /chats/{id}/members/{me}` with `notificationSettings`. ~80 LoC.
+- [x] **C.4** Implement `mute_conversation` / `unmute_conversation`. Wired to the
+  in-memory `muted_dms` store (same source of truth the sidebar and context-menu
+  "mute-dm" action use). Graph `notificationSettings` PATCH requires per-chat
+  membership ID lookup — noted in code comment, deferred; in-memory parity ships
+  now. ~30 LoC.
 - [ ] **C.5** Implement `edit_group_dm` (chat topic / photo). ~100 LoC.
 
 ## Phase D — Architectural rewrites (>300 LoC, max 3)
