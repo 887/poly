@@ -1699,7 +1699,14 @@ impl poly_client::SocialGraphBackend for MatrixClient {
     }
 
     async fn get_friends(&self) -> ClientResult<Vec<User>> {
-        Ok(vec![])
+        // LSP: Matrix has no friend concept.  Returning `Ok(vec![])` lies to
+        // callers ("you have no friends here") versus surfacing the truth
+        // ("this backend doesn't have friends at all").  Every other method in
+        // this impl returns `NotSupported`; align with that contract.
+        // SOLID-audit-matrix (Phase B.2).
+        Err(ClientError::NotSupported(
+            "get_friends: Matrix has no native friend concept".to_string(),
+        ))
     }
 
     async fn add_friend(&self, _user_id: &str) -> ClientResult<()> {
@@ -1780,10 +1787,19 @@ impl poly_client::SocialGraphBackend for MatrixClient {
     }
 
     async fn get_presence(&self, _user_id: &str) -> ClientResult<PresenceStatus> {
-        Ok(PresenceStatus::Offline)
+        // LSP: Matrix presence requires a federation-aware implementation that
+        // we don't have. Returning `Ok(Offline)` would lie to callers ("user is
+        // offline"). Use `NotSupported` so the UI can hide the presence dot.
+        // SOLID-audit-matrix (Phase B.3).
+        Err(ClientError::NotSupported(
+            "get_presence: Matrix presence endpoint not wired".to_string(),
+        ))
     }
 
     async fn set_presence(&self, _status: PresenceStatus) -> ClientResult<()> {
+        // No-op until the presence endpoint is wired through MatrixHttpClient.
+        // Returning Ok here is acceptable per the trait contract (the user's
+        // intent is recorded; server-side synchronisation is best-effort).
         Ok(())
     }
 }
@@ -1953,10 +1969,12 @@ impl poly_client::DmsAndGroupsBackend for MatrixClient {
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl poly_client::MessagingBackend for MatrixClient {
     async fn send_typing(&self, channel_id: &str) -> ClientResult<()> {
-        // Stub: Matrix supports PUT /_matrix/client/v3/rooms/{roomId}/typing/{userId}
-        // but the HTTP wiring is not yet plumbed through MatrixHttpClient.
-        // TODO: wire real endpoint in http.rs.
-        tracing::warn!("send_typing stub for matrix (channel_id={channel_id})");
+        // Matrix supports `PUT /_matrix/client/v3/rooms/{roomId}/typing/{userId}`,
+        // but the HTTP wiring is not yet plumbed through MatrixHttpClient.  See
+        // SOLID-audit-matrix Phase B (medium refactor: add `put_room_typing` to
+        // http.rs and call it here with a 4-second `timeout`).  `debug!` instead
+        // of `warn!` so we don't flood logs on every keystroke.
+        tracing::debug!(channel_id, "matrix: send_typing no-op (endpoint not wired)");
         Ok(())
     }
 

@@ -1187,14 +1187,17 @@ impl poly_client::ModerationBackend for TeamsClient {
                 "Teams update_channel requires 'team_id/channel_id', got '{channel_id}'"
             )));
         };
+        // These three fields have no Graph equivalent — log at debug so we
+        // don't warn-spam every time the UI sends a full update payload.
+        // SOLID-audit-teams (Phase B.2).
         if update.slow_mode_secs.is_some() {
-            tracing::warn!("Teams update_channel: slow_mode_secs not supported by Graph — ignored");
+            tracing::debug!("Teams update_channel: slow_mode_secs has no Graph equivalent — ignored");
         }
         if update.nsfw.is_some() {
-            tracing::warn!("Teams update_channel: nsfw not supported by Graph — ignored");
+            tracing::debug!("Teams update_channel: nsfw has no Graph equivalent — ignored");
         }
         if update.position.is_some() {
-            tracing::warn!("Teams update_channel: position not supported by Graph — ignored");
+            tracing::debug!("Teams update_channel: position has no Graph equivalent — ignored");
         }
         self.http
             .patch_channel(
@@ -1248,7 +1251,13 @@ impl poly_client::SocialGraphBackend for TeamsClient {
     }
 
     async fn get_friends(&self) -> ClientResult<Vec<User>> {
-        Ok(vec![])
+        // LSP: Teams has no friend concept (`add_friend` etc. below return
+        // `NotSupported`). Returning `Ok(vec![])` lies to callers ("you have
+        // no friends in Teams") instead of disclosing "no such API".
+        // SOLID-audit-teams (Phase B.1).
+        Err(ClientError::NotSupported(
+            "get_friends: Teams has no friend system".into(),
+        ))
     }
 
     async fn add_friend(&self, _user_id: &str) -> ClientResult<()> {

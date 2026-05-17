@@ -21,8 +21,6 @@
 //!
 //! DECISION(D21): WASM Plugin Backends.
 
-// TODO(phase-3.1): Implement Stoat client
-
 /// The backend slug used in all [`poly_client::BackendType`] constructions for this crate.
 pub const SLUG: &str = "stoat";
 
@@ -2044,10 +2042,11 @@ impl poly_client::DmsAndGroupsBackend for StoatClient {
     ) -> ClientResult<()> {
         if avatar_url.is_some() {
             // Revolt icon updates require an Autumn file upload first; we can't
-            // accept a plain URL here.  Log and proceed with whatever else changed.
-            tracing::warn!(
-                "edit_group_dm: Stoat requires an Autumn upload for icon changes; \
-                 avatar_url ignored for channel {channel_id}"
+            // accept a plain URL here.  Log at debug (UI surfaces this — no need
+            // to warn-spam server logs).  SOLID-audit-stoat (Phase B.2).
+            tracing::debug!(
+                channel_id,
+                "edit_group_dm: Stoat requires an Autumn upload for icon changes; avatar_url ignored",
             );
         }
 
@@ -2154,10 +2153,12 @@ fn parse_bonfire_event(json: &serde_json::Value) -> Option<ClientEvent> {
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl poly_client::MessagingBackend for StoatClient {
     async fn send_typing(&self, channel_id: &str) -> ClientResult<()> {
-        // Stub: Stoat has a typing-indicator WebSocket event but the HTTP
-        // wiring is not yet plumbed through StoatClient.
-        // TODO: wire real endpoint in http.rs.
-        tracing::warn!("send_typing stub for stoat (channel_id={channel_id})");
+        // Stoat (Revolt) ships typing indicators only over the Bonfire WebSocket
+        // (`ChannelStartTyping` / `ChannelStopTyping`) — there is no HTTP endpoint.
+        // The Bonfire WS write path is not yet routed through StoatClient, so this
+        // is a documented no-op rather than an error.  `debug!` instead of `warn!`
+        // to avoid flooding logs on every keystroke. SOLID-audit-stoat (Phase B.1).
+        tracing::debug!(channel_id, "stoat: send_typing no-op (Bonfire WS path not wired)");
         Ok(())
     }
 
