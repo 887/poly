@@ -175,14 +175,14 @@ Pure data items that already compile on wasm32 and should be hoisted to `voice_c
 
 **Integration-test coverage:** `clients/stoat/tests/integration.rs` is wired up per `Cargo.toml`. No dedicated voice-named integration test file; the native `voice.rs` is contractually verified on the native side. Per decision 4, no wasm-pack-test added.
 
-### Phase B — WASM Vortex client implementation — shipped in change `oxuznzwv` (B.1+B.2+B.5)
+### Phase B — WASM Vortex client implementation — shipped in change `oxuznzwv` (B.1+B.2+B.5), B.6 in `pwuvwxtp`
 
 - [x] **B.1** Replace native WS (`tokio_tungstenite`) with `gloo_net::websocket::futures::WebSocket` on wasm32. Mirror discord's `voice_bridge.rs:run_handshake_wasm` pattern. shipped in change `oxuznzwv`
 - [x] **B.2** Replace native Opus (`audiopus` FFI) with the `/host/codec/opus/*` host-bridge pattern already used by `clients/discord/src/voice_bridge/audio_capture.rs` and `audio_playback.rs`. Reuse the same encoder/decoder session-ID lifecycle. shipped in change `oxuznzwv`
 - [ ] **B.3** Replace native mic input (presumably `cpal`) with `MediaStreamTrackProcessor` — exact same browser-side capture path discord uses. Lift the helper from discord into a shared place (`clients/common/wasm_audio.rs`?) OR duplicate ~50 LoC. **B.3 agent owns `voice_wasm_audio_capture.rs`.**
 - [ ] **B.4** Replace native speaker output with the WebAudio `AudioContext` + `AudioBufferSourceNode` pattern from discord's `audio_playback.rs`. Same reuse-vs-duplicate question as B.3. **B.4 agent owns `voice_wasm_audio_playback.rs`.**
 - [x] **B.5** Implement the Vortex frame format on the wire: `[8 bytes user_id padded with 0x00][opus bytes]`. No RTP, no encryption. Per-user `OpusDecoder` keyed off the 8-byte prefix. shipped in change `oxuznzwv`
-- [ ] **B.6** Wire the WASM `StoatVoiceConnection` into `clients/stoat/src/lib.rs` so the `IsBackend` trait surface includes a `join_voice_channel(channel_id)` method that does the HTTP `/join_call` POST then opens the Vortex WS.
+- [x] **B.6** Wire the WASM `StoatVoiceConnection` into `clients/stoat/src/lib.rs` so the `IsBackend` trait surface includes a `join_voice_channel(channel_id)` method that does the HTTP `/join_call` POST then opens the Vortex WS. shipped in change `pwuvwxtp`
 
 ### Phase C — UI integration
 

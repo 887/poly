@@ -153,6 +153,15 @@ pub struct StoatClient {
     /// channel_id → Vec<VoiceParticipant>
     #[cfg(feature = "voice")]
     voice_participants: std::sync::Arc<tokio::sync::RwLock<std::collections::HashMap<String, Vec<VoiceParticipant>>>>,
+    /// B.6 — live WASM voice connection handle.
+    ///
+    /// Holds `Some` while a WASM Vortex voice WS is open.
+    /// Set by `join_voice_channel_transport` on wasm32.
+    /// The `StoatVoiceConnection` must be stored here (not dropped) or all
+    /// background tasks (encode/decode/event loops) immediately stop.
+    /// Analogous to discord's `voice_bridge_client` field.
+    #[cfg(target_arch = "wasm32")]
+    voice_wasm_conn: std::sync::Arc<std::sync::Mutex<Option<voice_wasm::StoatVoiceConnection>>>,
 }
 
 #[cfg(feature = "native")]
@@ -180,6 +189,8 @@ impl StoatClient {
             voice_guard: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
             #[cfg(feature = "voice")]
             voice_participants: std::sync::Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new())),
+            #[cfg(target_arch = "wasm32")]
+            voice_wasm_conn: std::sync::Arc::new(std::sync::Mutex::new(None)),
         }
     }
 
@@ -921,18 +932,54 @@ impl IsBackend for StoatClient {
         Ok(vec![])
     }
 
-    /// G.1 — Signal the Stoat backend that the local user is joining a voice channel.
+    /// G.1 / B.6 — Signal the Stoat backend that the local user is joining a voice channel.
     ///
-    /// Calls `POST /channels/{channel_id}/join_call` to obtain a Vortex token + WS URL.
-    /// The full voice transport (Vortex WS + Opus loops) is started separately via
-    /// `StoatClient::connect_voice` which takes a real `AudioBackend` reference.
-    /// This method only performs the REST signaling step so the voice banner updates.
-    #[cfg_attr(not(feature = "voice"), allow(unused_variables))]
+    /// On **native** (feature = "voice"): calls `POST /channels/{channel_id}/join_call`
+    /// for the REST signaling step only; the full Vortex WS transport is started
+    /// separately via `StoatClient::connect_voice`.
+    ///
+    /// On **wasm32**: calls `voice_wasm::connect_voice_wasm`, which performs the
+    /// join_call HTTP POST, opens the Vortex WebSocket, and spawns Opus
+    /// encode/decode/event loops. The resulting `StoatVoiceConnection` is stored in
+    /// `self.voice_wasm_conn` so it isn't dropped (which would tear down all tasks).
+    #[cfg_attr(not(any(feature = "voice", target_arch = "wasm32")), allow(unused_variables))]
     async fn join_voice_channel_transport(
         &self,
         _server_id: &str,
         channel_id: &str,
     ) -> ClientResult<()> {
+        // ── WASM arm (B.6) ───────────────────────────────────────────────────────
+        #[cfg(target_arch = "wasm32")]
+        {
+            let base_url = self.http.base_url().to_string();
+            let auth_token = self
+                .session_token()
+                .ok_or_else(|| ClientError::AuthFailed("not authenticated".into()))?;
+
+            // An internal event channel: voice events flow into the main event_stream
+            // sink elsewhere. Using an unbounded channel is fine — WASM is single-threaded
+            // and the receive half is consumed by the decode loop inside connect_voice_wasm.
+            let (event_tx, _event_rx) = futures::channel::mpsc::unbounded::<ClientEvent>();
+
+            let conn = voice_wasm::connect_voice_wasm(
+                channel_id.to_string(),
+                base_url,
+                auth_token,
+                None, // transmit_mode: default (push-to-talk off)
+                event_tx,
+            )
+            .await
+            .map_err(|e| ClientError::Internal(format!("Stoat WASM voice: {e:?}")))?;
+
+            // Store the live connection — dropping it would kill all background tasks.
+            if let Ok(mut guard) = self.voice_wasm_conn.lock() {
+                *guard = Some(conn);
+            }
+
+            return Ok(());
+        }
+
+        // ── Native arm (feature = "voice") ───────────────────────────────────────
         #[cfg(feature = "voice")]
         {
             // POST /channels/{channel_id}/join_call — tell the Vortex server we're joining.
@@ -969,7 +1016,8 @@ impl IsBackend for StoatClient {
             return Ok(());
         }
 
-        #[cfg(not(feature = "voice"))]
+        // ── Fallback: native build without voice feature ──────────────────────────
+        #[cfg(not(any(feature = "voice", target_arch = "wasm32")))]
         Ok(())
     }
 
