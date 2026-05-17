@@ -386,9 +386,13 @@ Goal: outgoing video and screen share over the same voice connection.
 - [x] **E.8** Screen share + camera at the same time: UI shows "screen" tile
   (`voice-video-coming-soon-screen` locale) distinct from "camera" tile
   (`voice-video-coming-soon-camera` locale).
-- [ ] **E.9** Bandwidth caps: respect Discord's REMB / TWCC RTCP
+- [x] **E.9** Bandwidth caps: respect Discord's REMB / TWCC RTCP
   feedback. webrtc-rs handles this in its congestion controller.
-  — **DEFERRED to follow-up** — requires webrtc-rs (decision gate same as E.5).
+  — shipped in git commit `6f6dffa8` (worktree-agent-a217bdc23063a573e) without
+  webrtc-rs: hand-rolled REMB/TWCC parsers + BandwidthController in
+  `clients/discord/src/voice/rtcp.rs`; wired into udp_decode_loop (RTCP dispatch),
+  voice_ws_loop (ramp-up tick), DiscordVideoTransport (bw_target AtomicU32 per
+  frame), and host-bridge EncodeH264Request (target_bps → encoder reinit).
 
 **Open questions**:
 - Hardware-accelerated H.264 decode (VAAPI / VideoToolbox /
