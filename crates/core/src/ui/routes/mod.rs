@@ -973,3 +973,96 @@ pub fn sync_route_to_app_state(route: &Route, app_state: BatchedSignal<AppState>
         prefs.batch(|p| p.settings_section = section);
     }
 }
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::Route;
+
+    /// Regression test: stoat `/channels/:server_id/:channel_id` must parse to
+    /// `ServerChat` — not `ServerHome` — preserving the full channel segment.
+    ///
+    /// Before the fix, `GET /users/@me/servers` in the test-stoat server returned
+    /// an empty list, so `server_account_map` never got `SRV001 → STOAT01`.
+    /// `restore_server_channel` then returned `None` (backend not found for server),
+    /// and `ServerChat::use_spawn_once` called `nav.replace(ServerHome)` — silently
+    /// truncating the URL to the server-only form.
+    ///
+    /// This test verifies the URL shape the router accepts, independent of runtime
+    /// backend availability.
+    #[test]
+    fn stoat_server_channel_url_parses_to_server_chat() {
+        let url = "/stoat/localhost:9101/STOAT01/channels/SRV001/CHVOICE001";
+        let route: Route = url.parse().expect("stoat channel URL must parse to a valid Route");
+        match route {
+            Route::ServerChat {
+                ref backend,
+                ref instance_id,
+                ref account_id,
+                ref server_id,
+                ref channel_id,
+            } => {
+                assert_eq!(backend, "stoat");
+                assert_eq!(instance_id, "localhost:9101");
+                assert_eq!(account_id, "STOAT01");
+                assert_eq!(server_id, "SRV001");
+                assert_eq!(channel_id, "CHVOICE001", "channel_id must NOT be truncated");
+            }
+            other => panic!(
+                "stoat channel URL parsed to wrong variant: {other:?}\n\
+                 Expected Route::ServerChat — if this is Route::ServerHome the channel_id \
+                 segment was dropped by the router."
+            ),
+        }
+    }
+
+    /// Mirror test: discord `/channels/:server_id/:channel_id` also parses to
+    /// `ServerChat` with both segments intact.  The stoat and discord routes use
+    /// the same generic `ServerChat` variant, so both must pass or neither will.
+    #[test]
+    fn discord_server_channel_url_parses_to_server_chat() {
+        let url = "/discord/localhost:9102/1/channels/100/204";
+        let route: Route = url.parse().expect("discord channel URL must parse to a valid Route");
+        match route {
+            Route::ServerChat {
+                ref backend,
+                ref server_id,
+                ref channel_id,
+                ..
+            } => {
+                assert_eq!(backend, "discord");
+                assert_eq!(server_id, "100");
+                assert_eq!(channel_id, "204", "discord channel_id must not be truncated");
+            }
+            other => panic!("discord channel URL parsed to wrong variant: {other:?}"),
+        }
+    }
+
+    /// Verify the `Display` impl (used by `sync_route_to_app_state` for
+    /// `account_last_routes`) round-trips through `parse` for the stoat channel route.
+    #[test]
+    fn stoat_server_chat_route_display_round_trips() {
+        let original_url = "/stoat/localhost:9101/STOAT01/channels/SRV001/CHVOICE001";
+        let route: Route = original_url.parse().unwrap();
+        let displayed = format!("{route}");
+        assert_eq!(
+            displayed, original_url,
+            "Route::Display must reproduce the original URL — if it drops the channel_id segment \
+             then account_last_routes will store the truncated URL and future restores will land \
+             on ServerHome instead of ServerChat."
+        );
+    }
+
+    /// Verify that the server-only URL parses to `ServerHome` (NOT `ServerChat`).
+    /// This is the URL shape that appears after the truncation bug fires — it
+    /// must be a different variant, confirming the two routes are distinct.
+    #[test]
+    fn stoat_server_home_url_parses_to_server_home() {
+        let url = "/stoat/localhost:9101/STOAT01/channels/SRV001";
+        let route: Route = url.parse().expect("stoat server-home URL must parse");
+        assert!(
+            matches!(route, Route::ServerHome { .. }),
+            "Server-only URL must parse to ServerHome, got: {route:?}"
+        );
+    }
+}
