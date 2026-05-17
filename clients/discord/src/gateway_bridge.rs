@@ -9,7 +9,7 @@
 //! 1. Connect to `wss://gateway.discord.gg/?v=10`.
 //! 2. Send op 2 IDENTIFY with the caller's bot/user token.
 //! 3. Receive dispatches and stash voice credentials:
-//!    - `VOICE_STATE_UPDATE` → extract `session_id` (local user only) → `CredsGuard`.
+//!    - `VOICE_STATE_UPDATE` → extract `session_id` → `CredsGuard`.
 //!    - `VOICE_SERVER_UPDATE` → extract `endpoint` + `token` → `CredsGuard`.
 //! 4. Forward outbound payloads sent via `outbound_rx` (op 4 Voice State Update,
 //!    etc.) on the WebSocket.
@@ -131,6 +131,10 @@ async fn run_loop(
     local_user_id: String,
     mut outbound_rx: tokio::sync::mpsc::UnboundedReceiver<String>,
 ) {
+    // local_user_id is no longer used for filtering — each DiscordClient has its own
+    // gateway connection so VOICE_STATE_UPDATE is implicitly for this account.
+    let _ = local_user_id;
+
     let mut heartbeat_interval_ms: u64 = 45_000;
     let mut identified = false;
 
@@ -244,22 +248,19 @@ async fn run_loop(
 
                         match event_name {
                             "VOICE_STATE_UPDATE" => {
-                                let uid = data.get("user_id").and_then(Value::as_str).unwrap_or("");
-                                if uid == local_user_id || local_user_id.is_empty() {
-                                    let sid = data
-                                        .get("session_id")
-                                        .and_then(Value::as_str)
-                                        .unwrap_or("")
-                                        .to_string();
-                                    if !sid.is_empty() {
-                                        let mut guard = creds.lock().await;
-                                        guard.session_id = Some(sid.clone());
-                                        tracing::info!(
-                                            target: "poly_discord::gateway_bridge",
-                                            session_id = %sid,
-                                            "gateway-bridge: stashed session_id from VOICE_STATE_UPDATE"
-                                        );
-                                    }
+                                let sid = data
+                                    .get("session_id")
+                                    .and_then(Value::as_str)
+                                    .unwrap_or("")
+                                    .to_string();
+                                if !sid.is_empty() {
+                                    let mut guard = creds.lock().await;
+                                    guard.session_id = Some(sid.clone());
+                                    tracing::info!(
+                                        target: "poly_discord::gateway_bridge",
+                                        session_id = %sid,
+                                        "gateway-bridge: stashed session_id from VOICE_STATE_UPDATE"
+                                    );
                                 }
                             }
                             "VOICE_SERVER_UPDATE" => {
