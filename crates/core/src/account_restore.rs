@@ -29,7 +29,7 @@ use tokio::sync::RwLock;
 
 use poly_client::{AuthCredentials, BackendType, IsBackend, PresenceStatus, Session, User};
 use crate::client_manager::{BackendHandle, BackendHandleExt};
-use crate::state::{AccountSessions, BatchedSignal, ChatLists};
+use crate::state::{AccountSessions, AppState, BatchedSignal, ChatLists, ChatViewState, NavState, VoiceState};
 use crate::storage::{OfflineServerRecord, Storage};
 use crate::client_manager::ClientManager;
 
@@ -170,6 +170,10 @@ pub async fn restore_native_accounts(
     chat_lists: BatchedSignal<ChatLists>,
     account_sessions: BatchedSignal<AccountSessions>,
     slug_filter: Option<&str>,
+    app_state: BatchedSignal<AppState>,
+    nav: BatchedSignal<NavState>,
+    chat_view_state: BatchedSignal<ChatViewState>,
+    voice_state: BatchedSignal<VoiceState>,
 ) {
     let Ok(tokens) = storage.get_account_tokens().await else {
         return;
@@ -299,6 +303,21 @@ pub async fn restore_native_accounts(
                         as_.account_sessions.insert(aid, session.clone());
                     });
                 }
+
+                // Start the event-stream listener so real-time events (voice
+                // gateway-bridge connect, messages, presence, etc.) are processed
+                // for this restored account — mirrors what toggle_demo does for
+                // demo accounts.
+                crate::event_stream::spawn_event_stream_listener(
+                    account_id.clone(),
+                    backend_handle.clone(),
+                    app_state,
+                    nav,
+                    client_manager,
+                    chat_view_state,
+                    account_sessions,
+                    voice_state,
+                );
 
                 // Build OfflineServerRecord cache records before consuming servers.
                 let backend_slug = token.backend.clone();
@@ -527,12 +546,24 @@ mod tests {
 
     fn make_signals_in_runtime(
         vdom: &VirtualDom,
-    ) -> (BatchedSignal<ClientManager>, BatchedSignal<crate::state::ChatLists>, BatchedSignal<crate::state::AccountSessions>) {
+    ) -> (
+        BatchedSignal<ClientManager>,
+        BatchedSignal<crate::state::ChatLists>,
+        BatchedSignal<crate::state::AccountSessions>,
+        BatchedSignal<crate::state::AppState>,
+        BatchedSignal<crate::state::NavState>,
+        BatchedSignal<crate::state::ChatViewState>,
+        BatchedSignal<crate::state::VoiceState>,
+    ) {
         vdom.in_scope(ScopeId::ROOT, || {
             let cm = BatchedSignal::from_signal(Signal::new(ClientManager::default()));
             let cl = BatchedSignal::from_signal(Signal::new(crate::state::ChatLists::default()));
             let as_ = BatchedSignal::from_signal(Signal::new(crate::state::AccountSessions::default()));
-            (cm, cl, as_)
+            let app_state = BatchedSignal::from_signal(Signal::new(crate::state::AppState::default()));
+            let nav = BatchedSignal::from_signal(Signal::new(crate::state::NavState::default()));
+            let cv = BatchedSignal::from_signal(Signal::new(crate::state::ChatViewState::default()));
+            let vs = BatchedSignal::from_signal(Signal::new(crate::state::VoiceState::default()));
+            (cm, cl, as_, app_state, nav, cv, vs)
         })
     }
 
@@ -580,7 +611,7 @@ mod tests {
     fn restore_empty_storage_is_noop() {
         run_test(|vdom| async move {
             let storage = make_storage().await;
-            let (cm, cl, as_) = make_signals_in_runtime(&vdom);
+            let (cm, cl, as_, app_state, nav, cv, vs) = make_signals_in_runtime(&vdom);
             vdom.in_scope(ScopeId::ROOT, || {
                 let storage = storage.clone();
                 // We're inside in_scope — batch is valid. But restore is async,
@@ -589,7 +620,7 @@ mod tests {
             });
             // restore_native_accounts calls batch internally; it runs outside
             // in_scope but on the same thread as the vdom, so the arena is valid.
-            restore_native_accounts(&storage, cm, cl, as_, None).await;
+            restore_native_accounts(&storage, cm, cl, as_, None, app_state, nav, cv, vs).await;
         });
     }
 
@@ -612,13 +643,13 @@ mod tests {
                 .await
                 .unwrap();
 
-            let (cm, cl, as_) = make_signals_in_runtime(&vdom);
+            let (cm, cl, as_, app_state, nav, cv, vs) = make_signals_in_runtime(&vdom);
             // Set disabled backends while in scope.
             vdom.in_scope(ScopeId::ROOT, || {
                 cm.batch(|c| c.set_disabled_native_backends(vec!["discord".to_string()]));
             });
 
-            restore_native_accounts(&storage, cm, cl, as_, None).await;
+            restore_native_accounts(&storage, cm, cl, as_, None, app_state, nav, cv, vs).await;
 
             let sessions_count = vdom.in_scope(ScopeId::ROOT, || {
                 as_.peek().account_sessions.len()
@@ -646,7 +677,7 @@ mod tests {
                 .await
                 .unwrap();
 
-            let (cm, cl, as_) = make_signals_in_runtime(&vdom);
+            let (cm, cl, as_, app_state, nav, cv, vs) = make_signals_in_runtime(&vdom);
 
             let dummy_session = Session {
                 id: "discord-user-2".to_string(),
@@ -675,7 +706,7 @@ mod tests {
                 });
             });
 
-            restore_native_accounts(&storage, cm, cl, as_, None).await;
+            restore_native_accounts(&storage, cm, cl, as_, None, app_state, nav, cv, vs).await;
 
             let count = vdom.in_scope(ScopeId::ROOT, || as_.peek().account_sessions.len());
             assert_eq!(count, 1, "already-restored account should not be duplicated");
@@ -701,9 +732,9 @@ mod tests {
                 .await
                 .unwrap();
 
-            let (cm, cl, as_) = make_signals_in_runtime(&vdom);
+            let (cm, cl, as_, app_state, nav, cv, vs) = make_signals_in_runtime(&vdom);
 
-            restore_native_accounts(&storage, cm, cl, as_, Some("stoat")).await;
+            restore_native_accounts(&storage, cm, cl, as_, Some("stoat"), app_state, nav, cv, vs).await;
 
             let count = vdom.in_scope(ScopeId::ROOT, || as_.peek().account_sessions.len());
             assert_eq!(count, 0, "slug filter should skip non-matching backends");

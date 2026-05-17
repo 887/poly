@@ -1398,6 +1398,10 @@ async fn init_storage(
                         chat_lists,
                         account_sessions,
                         None,
+                        app_state,
+                        nav,
+                        chat_view_state,
+                        voice_state,
                     )
                     .await;
                 }

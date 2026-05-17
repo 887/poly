@@ -569,6 +569,10 @@ pub fn PluginsSettings() -> Element {
                                                         chat_lists,
                                                         account_sessions,
                                                         Some(&toggled_for_restore),
+                                                        app_state,
+                                                        nav,
+                                                        chat_view_state,
+                                                        voice_state,
                                                     )
                                                     .await;
                                                 }
