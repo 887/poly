@@ -67,9 +67,9 @@ crates/core/src/ui/code_explorer.rs:67
 # `startup_overlay_finished.set(true)` BEFORE the spawn, so the next
 # effect run hits the early return. Explicit guard, no cycle.
 crates/core/src/ui/mod.rs:1515
-crates/core/src/ui.rs:1840
-# Startup-overlay dismiss timer — shifted +4 from H.3.c get_dm_channels if-let expansion
-crates/core/src/ui.rs:1844
+# Startup-overlay dismiss timer — shifted +8 from H.3.c get_dm_channels if-let expansion
+# + b610de14 restore_native_accounts extra parameters (+4 each time)
+crates/core/src/ui.rs:1848
 # Phase J device picker — one-shot mount that loads input/output device lists
 # from the AudioBackend. The spawn writes only local Signals (input_devices,
 # output_devices) that the effect does NOT subscribe to (they're captured

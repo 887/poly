@@ -51,8 +51,7 @@ crates/core/src/ui/main_layout.rs:251 # Phase 2 migration pending — review cap
 crates/core/src/ui/main_layout.rs:262 # Phase 2 migration pending — review capture shape
 crates/core/src/ui/main_layout.rs:292 # Phase 2 migration pending — review capture shape
 crates/core/src/ui/mod.rs:1521 # Phase 2 migration pending — review capture shape
-crates/core/src/ui.rs:1840 # Phase 2 migration pending — review capture shape
-crates/core/src/ui.rs:1844 # MEDIUM — shifted +4 from H.3.c get_dm_channels if-let expansion; same as :1840 above
+crates/core/src/ui.rs:1848 # MEDIUM — startup-overlay dismiss timer; shifted +8 total from H.3.c if-let expansion + b610de14 parameter additions; same safe pattern, explicit finished guard prevents re-spawn
 crates/core/src/ui/routes.rs:1188 # Phase 2 migration pending — review capture shape
 crates/core/src/ui/routes.rs:1255 # Phase 2 migration pending — review capture shape
 crates/core/src/ui/routes.rs:1394 # Phase 2 migration pending — review capture shape

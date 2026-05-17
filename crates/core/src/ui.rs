@@ -1874,14 +1874,15 @@ pub fn App() -> Element {
                 let remaining_ms = startup_overlay_config
                     .min_visible_ms
                     .saturating_sub(elapsed_ms.max(0.0) as u32);
-                // lint-allow-unused: fire-and-forget JS timer; recv() ignored.
-                #[allow(clippy::let_underscore_must_use)]
-                let _ = document::eval(&format!(
-                    "setTimeout(() => requestAnimationFrame(() => requestAnimationFrame(() => dioxus.send(true))), {});",
-                    remaining_ms
-                ))
-                .recv::<bool>()
-                .await;
+                // Use gloo_timers::future::TimeoutFuture instead of document::eval
+                // for all timing — eval-based timers are unreliable when multiple
+                // concurrent eval channels are active (e.g. event_stream listeners
+                // or auto_signin_test_accounts spawned from use_future context on the
+                // discord-restore path). gloo_timers uses the browser-native setTimeout
+                // directly without routing through Dioxus's eval channel, so it is
+                // immune to eval-channel contention and never hangs. (Bug: boot overlay
+                // was stuck indefinitely on discord-voice-bridge path due to this.)
+                gloo_timers::future::TimeoutFuture::new(remaining_ms).await;
 
                 // Wait for auto_signin_test_accounts loop to finish so the
                 // overlay doesn't dismiss while accounts are still popping in
@@ -1896,13 +1897,7 @@ pub fn App() -> Element {
                     while !AUTO_SIGNIN_DONE.load(Ordering::SeqCst)
                         && js_sys::Date::now() < deadline_ms
                     {
-                        // lint-allow-unused: fire-and-forget JS timer; recv() ignored.
-                        #[allow(clippy::let_underscore_must_use)]
-                        let _ = document::eval(
-                            "setTimeout(() => dioxus.send(true), 100);",
-                        )
-                        .recv::<bool>()
-                        .await;
+                        gloo_timers::future::TimeoutFuture::new(100).await;
                     }
                 }
 
@@ -1916,24 +1911,14 @@ pub fn App() -> Element {
                     if *storage_ready.read() && app_state.read().is_setup_complete {
                         break;
                     }
-                    // lint-allow-unused: fire-and-forget JS timer; recv() ignored.
-                    #[allow(clippy::let_underscore_must_use)]
-                    let _ = document::eval(
-                        "setTimeout(() => dioxus.send(true), 50);",
-                    )
-                    .recv::<bool>()
-                    .await;
+                    gloo_timers::future::TimeoutFuture::new(50).await;
                 }
-                // Extra double-rAF so the shell's first real paint lands
-                // before the overlay drops — without this the stage
-                // becomes display:flex but the inner Router subtree
-                // hasn't yet been painted in the same frame.
-                #[allow(clippy::let_underscore_must_use)]
-                let _ = document::eval(
-                    "requestAnimationFrame(() => requestAnimationFrame(() => dioxus.send(true)));",
-                )
-                .recv::<bool>()
-                .await;
+                // Extra two-frame pause so the shell's first real paint lands
+                // before the overlay drops — without this the stage becomes
+                // display:flex but the inner Router subtree hasn't yet been
+                // painted in the same frame. Two 16 ms ticks ≈ two rAF frames.
+                gloo_timers::future::TimeoutFuture::new(16).await;
+                gloo_timers::future::TimeoutFuture::new(16).await;
             }
             startup_overlay_visible.set(false);
             startup_overlay_finished.set(true);
