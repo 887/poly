@@ -1,0 +1,15 @@
+[package]
+name = "poly-common-forge"
+description = "Shared helpers for GitHub and Forgejo clients — b64 decode, file-kind, owner/repo splitting"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+poly-client = { workspace = true }
+
+[lints]
+workspace = true

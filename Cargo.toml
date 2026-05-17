@@ -19,6 +19,7 @@ members = [
     "clients/teams",
     "clients/lemmy",
     "clients/hackernews",
+    "clients/common-forge",
     "clients/github",
     "clients/forgejo",
     "clients/reddit",
@@ -264,6 +265,7 @@ poly-discord = { path = "clients/discord" }
 poly-teams = { path = "clients/teams" }
 poly-lemmy = { path = "clients/lemmy" }
 poly-hackernews = { path = "clients/hackernews" }
+poly-common-forge = { path = "clients/common-forge" }
 poly-github = { path = "clients/github" }
 poly-forgejo = { path = "clients/forgejo" }
 poly-reddit = { path = "clients/reddit" }

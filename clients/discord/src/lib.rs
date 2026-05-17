@@ -287,17 +287,37 @@ pub struct DiscordClient {
     pub voice_server_creds: gateway_bridge::CredsGuard,
 }
 
+/// Discord gateway permission-bit constants.
+///
+/// Centralised here so `get_my_permissions` and `get_server_roles` (and any
+/// future callers) always agree on the same bit positions.  Adding a new
+/// permission is a one-line edit in this module — no silent drift between two
+/// copies (OCP / DRY).
+mod permission_bits {
+    pub const KICK_MEMBERS: i64 = 1 << 1;
+    pub const BAN_MEMBERS: i64 = 1 << 2;
+    pub const ADMINISTRATOR: i64 = 1 << 3;
+    pub const MANAGE_CHANNELS: i64 = 1 << 4;
+    pub const MANAGE_GUILD: i64 = 1 << 5;
+    pub const MANAGE_MESSAGES: i64 = 1 << 13;
+    pub const MANAGE_ROLES: i64 = 1 << 28;
+    pub const MODERATE_MEMBERS: i64 = 1 << 40;
+}
+
 #[cfg(feature = "native")]
 impl DiscordClient {
-    #[must_use]
-    pub fn new() -> Self {
+    /// Private constructor that initialises every field.
+    ///
+    /// All public constructors are thin wrappers around this one so that
+    /// adding a new field only requires a single edit here (SRP/DRY).
+    fn build(base_url: String, gateway_url: Option<String>) -> Self {
         Self {
-            http: DiscordHttpClient::new("https://discord.com".to_string()),
+            http: DiscordHttpClient::new(base_url),
             account_id: None,
             account_display_name: None,
             settings_storage: SettingsStorageCell::new(),
             menu_state: Mutex::new(DiscordMenuState::default()),
-            gateway_url: None,
+            gateway_url,
             version_override: Mutex::new(None),
             rate_guard: guardrails::RateGuard::new(),
             slow_mode_guard: guardrails::SlowModeGuard::new(),
@@ -324,37 +344,13 @@ impl DiscordClient {
     }
 
     #[must_use]
+    pub fn new() -> Self {
+        Self::build("https://discord.com".to_string(), None)
+    }
+
+    #[must_use]
     pub fn with_base_url(base_url: String) -> Self {
-        Self {
-            http: DiscordHttpClient::new(base_url),
-            account_id: None,
-            account_display_name: None,
-            settings_storage: SettingsStorageCell::new(),
-            menu_state: Mutex::new(DiscordMenuState::default()),
-            gateway_url: None,
-            version_override: Mutex::new(None),
-            rate_guard: guardrails::RateGuard::new(),
-            slow_mode_guard: guardrails::SlowModeGuard::new(),
-            permission_guard: guardrails::PermissionGuard::new(),
-            typing_cap: guardrails::TypingRateCap::new(),
-            voice_manager: guardrails::VoiceManager::new(),
-            discord_health: Mutex::new(guardrails::DiscordHealth::default()),
-            account_info: Mutex::new(nitro::DiscordAccountInfo::default()),
-            #[cfg(feature = "voice")]
-            voice_session: Arc::new(TokioMutex::new(None)),
-            #[cfg(feature = "gateway")]
-            voice_states: Arc::new(RwLock::new(HashMap::new())),
-            #[cfg(feature = "gateway")]
-            gateway_tx: Arc::new(Mutex::new(None)),
-            #[cfg(feature = "gateway")]
-            gateway_event_tx: Arc::new(Mutex::new(None)),
-            #[cfg(all(feature = "native", feature = "voice-bridge", target_arch = "wasm32"))]
-            voice_bridge_client: VbArc::new(tokio::sync::Mutex::new(None)),
-            #[cfg(all(feature = "native", feature = "gateway-bridge", target_arch = "wasm32"))]
-            gateway_bridge_tx: GbArc::new(std::sync::Mutex::new(None)),
-            #[cfg(all(feature = "native", feature = "gateway-bridge", target_arch = "wasm32"))]
-            voice_server_creds: GbArc::new(tokio::sync::Mutex::new(gateway_bridge::VoiceServerCreds::default())),
-        }
+        Self::build(base_url, None)
     }
 
     /// Create a client with a REST base URL and a WS gateway URL.
@@ -363,36 +359,7 @@ impl DiscordClient {
     /// `event_stream()`.  Example: `"ws://127.0.0.1:9999/gateway/ws"`.
     #[must_use]
     pub fn with_base_url_and_gateway(base_url: String, gateway_ws_url: String) -> Self {
-        Self {
-            http: DiscordHttpClient::new(base_url),
-            account_id: None,
-            account_display_name: None,
-            settings_storage: SettingsStorageCell::new(),
-            menu_state: Mutex::new(DiscordMenuState::default()),
-            gateway_url: Some(gateway_ws_url),
-            version_override: Mutex::new(None),
-            rate_guard: guardrails::RateGuard::new(),
-            slow_mode_guard: guardrails::SlowModeGuard::new(),
-            permission_guard: guardrails::PermissionGuard::new(),
-            typing_cap: guardrails::TypingRateCap::new(),
-            voice_manager: guardrails::VoiceManager::new(),
-            discord_health: Mutex::new(guardrails::DiscordHealth::default()),
-            account_info: Mutex::new(nitro::DiscordAccountInfo::default()),
-            #[cfg(feature = "voice")]
-            voice_session: Arc::new(TokioMutex::new(None)),
-            #[cfg(feature = "gateway")]
-            voice_states: Arc::new(RwLock::new(HashMap::new())),
-            #[cfg(feature = "gateway")]
-            gateway_tx: Arc::new(Mutex::new(None)),
-            #[cfg(feature = "gateway")]
-            gateway_event_tx: Arc::new(Mutex::new(None)),
-            #[cfg(all(feature = "native", feature = "voice-bridge", target_arch = "wasm32"))]
-            voice_bridge_client: VbArc::new(tokio::sync::Mutex::new(None)),
-            #[cfg(all(feature = "native", feature = "gateway-bridge", target_arch = "wasm32"))]
-            gateway_bridge_tx: GbArc::new(std::sync::Mutex::new(None)),
-            #[cfg(all(feature = "native", feature = "gateway-bridge", target_arch = "wasm32"))]
-            voice_server_creds: GbArc::new(tokio::sync::Mutex::new(gateway_bridge::VoiceServerCreds::default())),
-        }
+        Self::build(base_url, Some(gateway_ws_url))
     }
 
     fn account_id(&self) -> String {
@@ -401,6 +368,22 @@ impl DiscordClient {
 
     fn account_display_name(&self) -> String {
         self.account_display_name.clone().unwrap_or_default()
+    }
+
+    /// Format the CDN icon and banner URLs for a Discord guild.
+    ///
+    /// Both `get_servers` and `get_server` need the same `format!` chains;
+    /// centralising here eliminates silent drift (DRY/SRP).
+    fn guild_image_urls(
+        guild_id: &str,
+        icon: Option<&str>,
+        banner: Option<&str>,
+        cdn_base: &str,
+    ) -> (Option<String>, Option<String>) {
+        let base = cdn_base.trim_end_matches('/');
+        let icon_url = icon.map(|hash| format!("{}/icons/{}/{}.png?size=128", base, guild_id, hash));
+        let banner_url = banner.map(|hash| format!("{}/banners/{}/{}.png", base, guild_id, hash));
+        (icon_url, banner_url)
     }
 
     /// D.8 — Return a snapshot of the current backend health surface.
@@ -1561,10 +1544,10 @@ impl IsBackend for DiscordClient {
         let account_name = self.account_display_name();
         let cdn_base = self.http.cdn_base_url();
         Ok(self.http.get_guilds().await?.into_iter().map(|g| {
-            let icon_url = g.icon.as_deref()
-                .map(|hash| format!("{}/icons/{}/{}.png?size=128", cdn_base.trim_end_matches('/'), g.id, hash));
-            let banner_url = g.banner.as_deref()
-                .map(|hash| format!("{}/banners/{}/{}.png", cdn_base.trim_end_matches('/'), g.id, hash));
+            let gid = g.id.to_string();
+            let (icon_url, banner_url) = Self::guild_image_urls(
+                &gid, g.icon.as_deref(), g.banner.as_deref(), &cdn_base,
+            );
             Server {
                 id: g.id.to_string(),
                 name: g.name,
@@ -1591,10 +1574,10 @@ impl IsBackend for DiscordClient {
         let account_name = self.account_display_name();
         let cdn_base = self.http.cdn_base_url();
         let g = self.http.get_guild(id).await?;
-        let icon_url = g.icon.as_deref()
-            .map(|hash| format!("{}/icons/{}/{}.png?size=128", cdn_base.trim_end_matches('/'), g.id, hash));
-        let banner_url = g.banner.as_deref()
-            .map(|hash| format!("{}/banners/{}/{}.png", cdn_base.trim_end_matches('/'), g.id, hash));
+        let gid = g.id.to_string();
+        let (icon_url, banner_url) = Self::guild_image_urls(
+            &gid, g.icon.as_deref(), g.banner.as_deref(), &cdn_base,
+        );
         Ok(Server {
             id: g.id.to_string(),
             name: g.name,
@@ -2787,16 +2770,7 @@ impl poly_client::ModerationBackend for DiscordClient {
     ) -> ClientResult<MemberPermissions> {
         use twilight_model::id::marker::RoleMarker;
         use twilight_model::id::Id as TwilightId;
-
-        // Discord permission bit constants.
-        const KICK_MEMBERS: i64 = 1 << 1;
-        const BAN_MEMBERS: i64 = 1 << 2;
-        const ADMINISTRATOR: i64 = 1 << 3;
-        const MANAGE_CHANNELS: i64 = 1 << 4;
-        const MANAGE_GUILD: i64 = 1 << 5;
-        const MANAGE_MESSAGES: i64 = 1 << 13;
-        const MANAGE_ROLES: i64 = 1 << 28;
-        const MODERATE_MEMBERS: i64 = 1 << 40;
+        use permission_bits::*;
 
         let member = self.http.get_guild_member_me(server_id).await?;
         let all_roles = self.http.get_guild_roles(server_id).await?;
@@ -3106,19 +3080,18 @@ impl poly_client::ModerationBackend for DiscordClient {
         let mut roles: Vec<Role> = discord_roles
             .into_iter()
             .map(|dr| {
+                use permission_bits::*;
                 let perms_bits: i64 = dr.permissions.parse().unwrap_or(0);
-                // Derive display_role name as the role's own name.
-                let admin_bit: i64 = 1_i64 << 3_i32;
-                let is_admin = perms_bits & admin_bit != 0;
+                let is_admin = perms_bits & ADMINISTRATOR != 0;
                 let has = |flag_bit: i64| is_admin || (perms_bits & flag_bit != 0);
                 let permissions = MemberPermissions {
-                    manage_server: has(1_i64 << 5_i32),
-                    manage_channels: has(1_i64 << 4_i32),
-                    manage_roles: has(1_i64 << 28_i32),
-                    kick_members: has(1_i64 << 1_i32),
-                    ban_members: has(1_i64 << 2_i32),
-                    manage_messages: has(1_i64 << 13_i32),
-                    timeout_members: has(1_i64 << 40_i32),
+                    manage_server: has(MANAGE_GUILD),
+                    manage_channels: has(MANAGE_CHANNELS),
+                    manage_roles: has(MANAGE_ROLES),
+                    kick_members: has(KICK_MEMBERS),
+                    ban_members: has(BAN_MEMBERS),
+                    manage_messages: has(MANAGE_MESSAGES),
+                    timeout_members: has(MODERATE_MEMBERS),
                     display_role: dr.name.clone(),
                     power_level: None,
                 };

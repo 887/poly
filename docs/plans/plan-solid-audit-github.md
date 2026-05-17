@@ -25,19 +25,16 @@ Scope: only `clients/github/`. Do NOT touch other client crates.
       (line 190) + `CodeRepoBackend` (line 793) + `ModerationBackend`
       (line 849) + `SocialGraphBackend` (line 1009) +
       `DmsAndGroupsBackend` (line 1078) into sibling modules. SRP/ISP.
-- [ ] **B.2** Extract `decode_b64` / `decode_b64_simple` (`lib.rs:1170-1220`)
-      into a small `base64` helper module. **This logic is duplicated
-      verbatim in `clients/forgejo/src/lib.rs:1110-1153`** — but a
-      cross-crate dedup is out of scope here (would need a new
-      `clients/common-forge` crate). Within github crate alone, move
-      to `mapping.rs` or `b64.rs`.
+- [x] **B.2** Extract `decode_b64` / `decode_b64_simple` (`lib.rs:1170-1220`)
+      into a small `base64` helper module. **Resolved via `clients/common-forge`
+      crate** — both github and forgejo now import from the shared crate;
+      local copies deleted.
 - [ ] **B.3** `lib.rs:280` `IsBackend::get_messages` for forum channels
       returns `NotSupported(...)` — re-route to `CodeRepoBackend`'s
       issue/PR/discussion handlers instead of refusing.
-- [ ] **B.4** `kind_from_string` / `split_owner_repo` / `parse_forum_channel`
-      (`lib.rs:1137-1168`) are all parsing helpers; move to a
-      `channel_ids.rs` so they're testable without pulling the whole
-      backend impl into a test binary.
+- [x] **B.4** `kind_from_string` / `split_owner_repo` (`lib.rs:1137-1168`)
+      extracted to `clients/common-forge`. `parse_forum_channel` (github-specific
+      `gh-` prefixes) remains in github lib.rs.
 - [ ] **B.5** `IsBackend::send_message` (~line 695) returns
       `NotSupported` for several channel kinds. Each branch should
       delegate to a `ChannelKind` handler trait — current shape is a

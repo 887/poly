@@ -10,27 +10,27 @@ Out of scope per dispatch contract:
 - `clients/discord/src/nitro.rs` (just landed)
 - everything outside `clients/discord/`
 
-## Status: AUDIT ONLY — Phase A ship-now wins were attempted but dropped upstream due to anti-ban merge conflict (orchestrator rewrote the commit). Re-do Phase A after the anti-ban work settles. Phases B + C are deferred work logs.
+## Status: Phase A DONE — shipped in change `qkmuqpks`. Phases B + C are deferred work logs.
 
 ---
 
-## Phase A — Ship-now wins (this commit, `nprtmlvu`)
+## Phase A — Ship-now wins (shipped in change `qkmuqpks`)
 
-- [ ] **A.1** DRY the three `DiscordClient` constructors (`new`, `with_base_url`,
+- [x] **A.1** DRY the three `DiscordClient` constructors (`new`, `with_base_url`,
       `with_base_url_and_gateway`) into a single private `build` helper.
       lib.rs:273-355 was ~83 lines of duplicated field init — collapses to one
-      helper + three thin wrappers. SRP+DRY win. Shipped in `nprtmlvu`.
-- [ ] **A.2** Extract duplicated Discord permission-bit constants into a private
+      helper + three thin wrappers. SRP+DRY win. Shipped in `qkmuqpks`.
+- [x] **A.2** Extract duplicated Discord permission-bit constants into a private
       `permission_bits` module. The same eight `const _: i64 = 1 << N` lines
       appeared in both `get_my_permissions` (lib.rs:2722-2729) and
       `get_server_roles` (lib.rs:2997-3007). Pull-up removes the silent
       drift risk (two copies must stay in sync; one is `i32` shifts, the other
       `i64`). SRP+OCP win — adding a new perm bit is now a one-line edit.
-      Shipped in `nprtmlvu`.
-- [ ] **A.3** Extract CDN guild image URL formatting into a private
+      Shipped in `qkmuqpks`.
+- [x] **A.3** Extract CDN guild image URL formatting into a private
       `Self::guild_image_urls` helper. `get_servers` (lib.rs:1496-1500) and
       `get_server` (lib.rs:1527-1530) both had identical `format!` chains for
-      `(icon_url, banner_url)`. SRP/DRY win. Shipped in `nprtmlvu`.
+      `(icon_url, banner_url)`. SRP/DRY win. Shipped in `qkmuqpks`.
 
 ---
 

@@ -7070,6 +7070,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "poly-common-forge"
+version = "0.1.0"
+dependencies = [
+ "poly-client",
+]
+
+[[package]]
 name = "poly-core"
 version = "0.1.0"
 dependencies = [
@@ -7335,6 +7342,7 @@ dependencies = [
  "dioxus",
  "futures",
  "poly-client",
+ "poly-common-forge",
  "poly-host-bridge",
  "poly-test-forgejo",
  "poly-ui-macros",
@@ -7357,6 +7365,7 @@ dependencies = [
  "dioxus",
  "futures",
  "poly-client",
+ "poly-common-forge",
  "poly-host-bridge",
  "poly-test-github",
  "poly-ui-macros",

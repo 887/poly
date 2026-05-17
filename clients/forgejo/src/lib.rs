@@ -38,6 +38,8 @@ use futures::stream::{self, Stream};
 #[cfg(feature = "native")]
 use poly_client::*;
 #[cfg(feature = "native")]
+use poly_common_forge::{decode_b64, kind_from_string, split_owner_repo};
+#[cfg(feature = "native")]
 use std::pin::Pin;
 
 /// Return FTL translation source for the Forgejo client plugin.
@@ -1085,69 +1087,3 @@ fn parse_forum_channel(channel_id: &str) -> ClientResult<(String, String)> {
     split_owner_repo(rest)
 }
 
-#[cfg(feature = "native")]
-fn kind_from_string(s: &str) -> FileKind {
-    match s {
-        "dir" => FileKind::Directory,
-        "symlink" => FileKind::Symlink,
-        "submodule" => FileKind::Submodule,
-        _ => FileKind::File,
-    }
-}
-
-#[cfg(feature = "native")]
-fn split_owner_repo(s: &str) -> ClientResult<(String, String)> {
-    // Channel IDs embed owner/repo with '~' as separator (e.g. "flamingo~pink-css").
-    // Cannot use '/' because the host's Dioxus router treats it as a path
-    // delimiter and truncates the channel_id segment. '~' is URL-safe and
-    // disallowed in Forgejo owner / repo names.
-    s.split_once('~')
-        .map(|(o, r)| (o.to_string(), r.to_string()))
-        .ok_or_else(|| ClientError::NotFound(format!("malformed owner/repo segment: {s}")))
-}
-
-#[cfg(feature = "native")]
-fn decode_b64(s: &str) -> Vec<u8> {
-    // Forgejo returns base64 with embedded newlines; strip them.
-    let cleaned: String = s.chars().filter(|c| !c.is_whitespace()).collect();
-    decode_b64_simple(&cleaned)
-}
-
-#[cfg(feature = "native")]
-fn decode_b64_simple(input: &str) -> Vec<u8> {
-    const TABLE: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut lookup = [255u8; 256];
-    for (i, &b) in TABLE.iter().enumerate() {
-        if let Some(slot) = lookup.get_mut(usize::from(b)) {
-            // lint-allow-unused: i is bounded by TABLE.len() == 64 < u8::MAX
-            #[allow(clippy::cast_possible_truncation, clippy::as_conversions)]
-            {
-                *slot = i as u8;
-            }
-        }
-    }
-    let bytes = input.as_bytes();
-    // lint-allow-unused: capacity is best-effort hint; truncating arithmetic safe here
-    #[allow(clippy::integer_division, clippy::arithmetic_side_effects)]
-    let mut out = Vec::with_capacity(bytes.len() * 3 / 4);
-    let mut buf: u32 = 0;
-    let mut bits: u32 = 0;
-    for &b in bytes {
-        if b == b'=' {
-            break;
-        }
-        let v = lookup.get(usize::from(b)).copied().unwrap_or(255);
-        if v == 255 {
-            continue;
-        }
-        buf = (buf << 6_u32) | u32::from(v);
-        bits = bits.saturating_add(6);
-        if bits >= 8 {
-            bits = bits.saturating_sub(8);
-            // lint-allow-unused: masked to 0xff so byte cast is exact
-            #[allow(clippy::cast_possible_truncation, clippy::as_conversions)]
-            out.push(((buf >> bits) & 0xff) as u8);
-        }
-    }
-    out
-}

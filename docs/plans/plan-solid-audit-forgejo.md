@@ -43,7 +43,7 @@ Scope: only `clients/forgejo/`. Do NOT touch other client crates.
 
 ## Phase C — Architectural rewrites (>300 LoC, max 3)
 
-- [ ] **C.1** **Shared `clients/common-forge` crate.** GitHub + Forgejo
+- [x] **C.1** **Shared `clients/common-forge` crate.** GitHub + Forgejo
       duplicate:
       - `decode_b64` / `decode_b64_simple` (50 LoC each, identical),
       - `kind_from_string` (FileKind dir/symlink/submodule),
