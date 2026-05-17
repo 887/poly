@@ -87,22 +87,22 @@ label_key, group_label_key?)` tuples and renders them as a Discord-
 style channel list under the active server (subreddit / community) in
 Bar 1.
 
-- [ ] **A.1** Add `SidebarLayoutKind::SortModes` variant to
+- [x] **A.1** Add `SidebarLayoutKind::SortModes` variant to
       `clients/client/src/lib.rs::SidebarLayoutKind` (NOT renaming
       `Feed`; `Feed` stays for HN since its model genuinely is a
       static feed list, not per-server sort).
-- [ ] **A.2** Add a `sort_modes: Vec<SidebarItem>` carrier on
+- [x] **A.2** Add a `sort_modes: Vec<SidebarItem>` carrier on
       `SidebarDeclaration` (already there as `sections` — reuse the
       first section's items rather than adding a parallel field).
-- [ ] **A.3** Implement `crates/core/src/ui/client_ui/sidebar/sort_modes.rs`
+- [x] **A.3** Implement `crates/core/src/ui/client_ui/sidebar/sort_modes.rs`
       following the `feed.rs` shape: clickable rows that dispatch
       `invoke_sidebar_action(action_id)`. Selected row gets a `selected`
       class. Sub-grouping (e.g. Reddit's `Top: hour / day / week`) via
       a collapsible `<details>` per group.
-- [ ] **A.4** Wire it into `crates/core/src/ui/client_ui/sidebar.rs`
+- [x] **A.4** Wire it into `crates/core/src/ui/client_ui/sidebar.rs`
       next to the existing `Feed` / `Communities` / `RepoTree`
       branches.
-- [ ] **A.5** FTL keys: `ui-sidebar-sort-{hot,active,scaled,…}` for
+- [x] **A.5** FTL keys: `ui-sidebar-sort-{hot,active,scaled,…}` for
       Lemmy + `ui-sidebar-sort-{reddit-hot,reddit-new,…}` for Reddit.
       Keep the current Reddit-uses-HN-FTL strings as transitional
       `# DEPRECATED` aliases for one release.
