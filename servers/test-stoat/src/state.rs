@@ -186,6 +186,12 @@ impl poly_test_common::BackendHarness for StoatState {
     fn new(auth: poly_test_common::AuthState) -> Self {
         let mut s = StoatState::new();
         s.auth = auth;
+        // Auto-seed on every startup: persisted auth tokens survive restarts but
+        // in-memory server/channel/message state does not. Without auto-seeding,
+        // a restart without --seed leaves valid tokens but empty servers, causing
+        // GET /users/@me/servers to return []. seed() is idempotent (no-ops if
+        // users already present) so calling it here is always safe.
+        s.seed();
         s
     }
 
