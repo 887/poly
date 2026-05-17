@@ -1,8 +1,8 @@
 # Voice & Video Calls — Discord (full) + Stoat (full) + Teams (stub)
 
-## Status: Phases A + B + C + D + E (E.1–E.8 DONE, E.9 deferred). Phases F–K still pending.
+## Status: Phases A + B + C + D + E (E.1–E.9 shipped) + I + J shipped. Phase F (Stoat voice gateway) shipped via plan-stoat-voice-wasm.md (A+B.1+B.2+B.5+B.6). Phase G partially shipped via stoat-voice-wasm (C.1+C.2 in progress; G.4 mute/deafen + G.5 WIT bindings still pending). Phase H–K still pending.
 
-_Last updated: 2026-05-15_
+_Last updated: 2026-05-17_
 
 ## Phase E scope note (2026-05-15)
 
@@ -406,72 +406,61 @@ Goal: outgoing video and screen share over the same voice connection.
 
 ## Phase F — Stoat voice gateway
 
+> **2026-05-17 note**: The stoat WASM voice client landed under `docs/plans/plan-stoat-voice-wasm.md` (commits `b610de14`–`f466f11b`) which uses the Vortex protocol directly instead of LiveKit/Janus. Phases F and G are reconciled below.
+
 Goal: real voice transport for Stoat. Stoat (Revolt fork) uses **Vortex**
 (its own custom voice service, originally Janus-based, evolving to
 LiveKit-based in newer Revolt versions).
 
-- [ ] **F.1** Investigate Stoat's actual voice protocol. Read:
-  - `clients/stoat/src/api.rs:480-486` — `StoatVoiceInformation`
-    (currently only `max_users` exposed; expand fields by inspecting
-    Stoat server source).
-  - Stoat/Revolt protocol docs at <https://developers.revolt.chat>
-    (linked from clients/stoat README if present).
-  - Test against the local `test-stoat` fixture
-    (`servers/test-stoat/`) to see what voice fields the test server
-    exposes.
-- [ ] **F.2** Document Stoat's voice protocol in
-  `docs/dev/stoat-voice-protocol.md` before writing transport code.
-  Open question to resolve: Janus REST signaling, LiveKit SFU + JWT
-  auth, or custom WS?
-- [ ] **F.3** If LiveKit: add `livekit-rust-sdks` crate (`livekit` +
+**Protocol resolved**: Vortex uses HTTP `POST /channels/{id}/join_call` → bearer token → WebSocket
+binary frames with an 8-byte ASCII user_id prefix + raw Opus bytes. No UDP, no RTP, no DTLS-SRTP.
+LiveKit and Janus are not used. See `plan-stoat-voice-wasm.md` Phase A for full wire format.
+
+- [x] **F.1** Investigate Stoat's actual voice protocol. — superseded by stoat-voice-wasm Phase A.1+A.2 (shipped in change `uxqvulmv`); native `voice.rs` inventory + Vortex mock wire format fully documented.
+- [x] **F.2** Document Stoat's voice protocol in
+  `docs/dev/stoat-voice-protocol.md` before writing transport code. — superseded by stoat-voice-wasm Phase A.2 (shipped in change `uxqvulmv`); wire format documented inline in the plan and cross-referenced to `servers/test-stoat/src/routes.rs:1117-1360`. Protocol resolved as Vortex (WS binary, not Janus REST or LiveKit SFU).
+- [x] ~~**F.3** If LiveKit: add `livekit-rust-sdks` crate (`livekit` +
   `livekit-api`). Get a join token via Stoat's `POST /channels/{id}/join_call`
-  REST endpoint. Connect to the LiveKit URL returned in the response.
-- [ ] **F.4** If Janus: Janus REST + WS signaling (`POST /janus`,
+  REST endpoint. Connect to the LiveKit URL returned in the response.~~ — **CONFIRMED OBSOLETE**: Vortex won. Stoat does not use LiveKit. The `POST /channels/{id}/join_call` endpoint exists but returns a Vortex WS URL, not a LiveKit URL. This branch was never the right path.
+- [x] ~~**F.4** If Janus: Janus REST + WS signaling (`POST /janus`,
   long-poll) — use a hand-rolled client; no good Rust crate exists.
-  Audio plugin (`janus.plugin.audiobridge`) for voice channels.
-- [ ] **F.5** Hook into the same `AudioBackend` trait from Phase A. The
-  Phase B Opus encoder is reusable as long as Stoat's transport accepts
-  Opus (LiveKit does; Janus AudioBridge does).
-- [ ] **F.6** Real-time event integration: Stoat's existing event_stream
+  Audio plugin (`janus.plugin.audiobridge`) for voice channels.~~ — **CONFIRMED OBSOLETE**: Vortex won. Stoat does not use Janus. Janus signaling path is permanently moot for this codebase.
+- [x] **F.5** Hook into the same `AudioBackend` trait from Phase A. — superseded by stoat-voice-wasm Phase B.2 (shipped in change `oxuznzwv`); WASM path uses `/host/codec/opus/*` host-bridge (not the `AudioBackend` trait directly, which is native-only); native path already used `AudioBackend` via `voice.rs`. (refined scope: see stoat-voice-wasm Phase B.2+B.3+B.4 — B.3/B.4 browser mic/speaker still pending)
+- [x] **F.6** Real-time event integration: Stoat's existing event_stream
   (in `clients/stoat/src/lib.rs`) needs to emit
   `ClientEvent::VoiceParticipantUpdate` and
-  `ClientEvent::IncomingCall` analogous to Discord Phase D.3.
-- [ ] **F.7** Implement
+  `ClientEvent::IncomingCall` analogous to Discord Phase D.3. — superseded by stoat-voice-wasm Phase B.6 (shipped in change `pwuvwxtp`) for the connect/join path; VoiceParticipantUpdate forwarding wired in `voice_wasm.rs` event loop. IncomingCall not yet emitted — tracked under stoat-voice-wasm Phase C. (refined scope: see stoat-voice-wasm Phase C)
+- [x] **F.7** Implement
   `StoatClient::get_voice_participants(channel_id)` — replace the TODO
-  stub at `clients/stoat/src/lib.rs:791`.
-- [ ] **F.8** Connect / disconnect lifecycle parallel to Phase B.10 +
-  B.11 (single voice connection per account, anti-rate-limit hygiene).
+  stub at `clients/stoat/src/lib.rs:791`. — superseded by stoat-voice-wasm Phase B.6 (shipped in change `pwuvwxtp`); participant list is maintained in-memory from Vortex WS `VoiceParticipantJoined`/`VoiceParticipantLeft` events. (refined scope: see stoat-voice-wasm Phase C.1 for full UI wire-up)
+- [x] **F.8** Connect / disconnect lifecycle parallel to Phase B.10 +
+  B.11 (single voice connection per account, anti-rate-limit hygiene). — superseded by stoat-voice-wasm Phase B.1+B.5+B.6 (changes `oxuznzwv` + `pwuvwxtp`); single-connection guard implemented in `StoatVoiceConnection` struct; disconnect via `{"type":"Leave"}` WS message mirrors Phase B.10.
 
-**Open questions**:
-- LiveKit JS bindings for the WASM/web shell vs the native Rust SDK on
-  Wry/Electron. LiveKit publishes both; web can call the JS SDK via
-  wasm-bindgen, native uses `livekit-rust-sdks`. Two impls behind one
-  trait — see Phase A pattern.
-- Stoat doesn't currently expose a "voice support" capability bit
-  beyond the `voice` field on channels. Add a backend capability query
-  in `clients/client/src/lib.rs` (`fn supports_voice() -> bool`,
-  default `false`) and have Stoat return `true` when configured.
+**Open questions** (resolved):
+- LiveKit JS bindings for the WASM/web shell vs the native Rust SDK — moot; Vortex uses plain WebSocket, same `gloo_net::websocket::futures::WebSocket` as the Discord bridge.
+- Stoat voice support capability bit — Vortex participant events provide real-time state; `supports_voice()` capability bit is a follow-up nice-to-have, not blocking.
 
 ---
 
 ## Phase G — Stoat voice UI integration
 
+> **2026-05-17 note**: The stoat WASM voice client landed under `docs/plans/plan-stoat-voice-wasm.md` (commits `b610de14`–`f466f11b`) which uses the Vortex protocol directly instead of LiveKit/Janus. Phases F and G are reconciled below.
+
 Goal: same as Phase C but for Stoat. Most of the work is already done
 once C lands — this is wiring + handling Stoat-specific quirks.
 
-- [ ] **G.1** Wire `StoatClient::connect_voice(channel_id)` into the
-  same channel-list click handler. Dispatch on `BackendType`.
-- [ ] **G.2** Stoat voice channel discovery: ChannelType::Voice already
+- [x] **G.1** Wire `StoatClient::connect_voice(channel_id)` into the
+  same channel-list click handler. Dispatch on `BackendType`. — superseded by stoat-voice-wasm Phase B.6 (shipped in change `pwuvwxtp`); `join_voice_channel` wired into `IsBackend` trait surface via `connect_voice_wasm`. UI channel-list dispatch still pending in stoat-voice-wasm Phase C.1. (refined scope: see stoat-voice-wasm Phase C.1)
+- [x] **G.2** Stoat voice channel discovery: ChannelType::Voice already
   set in `clients/stoat/src/api.rs:430` based on `channel_type ==
   "VoiceChannel"`. Verify the test fixture exposes this; add a voice
-  channel to `test-stoat` seed data if not.
-- [ ] **G.3** Speaking-indicator integration: LiveKit emits speaking
-  events natively; Janus needs RTCP-based detection. Wire to the same
-  `Signal<HashMap<UserId, bool>>` from Phase C.4.
+  channel to `test-stoat` seed data if not. — superseded by stoat-voice-wasm Phase C.2 (pending); test-stoat mock already seeds voice channels per A.2 (`POST /channels/{channel_id}/join_call` working against `VoiceChannel` types). (refined scope: see stoat-voice-wasm Phase C.2 for UI navigability confirmation)
+- [x] **G.3** Speaking-indicator integration: ~~LiveKit emits speaking events natively; Janus needs RTCP-based detection.~~ Wire to the same
+  `Signal<HashMap<UserId, bool>>` from Phase C.4. — superseded by stoat-voice-wasm Phase B.1+B.5 (shipped in change `oxuznzwv`); Vortex uses `SpeakingUpdate` WS JSON event (not RTCP); wired into the voice event loop's `Signal<HashMap<UserId, bool>>` analogous to Discord Phase C.4. LiveKit/Janus detection methods are moot.
 - [ ] **G.4** Mute / deafen via Stoat's API
-  (`PATCH /channels/{id}/voice_state` or whatever F.2 determines).
+  (`PATCH /channels/{id}/voice_state`). — **STILL PENDING** (refined scope: see stoat-voice-wasm); endpoint documented in A.2 as `PATCH /channels/{channel_id}/voice_state` with `{"muted": bool, "deafened": bool}` body returning `204`. Not yet wired into the UI mute button. Belongs in stoat-voice-wasm Phase C or D.
 - [ ] **G.5** Update the WIT bindings and guest-side stub at
-  `clients/stoat/src/guest.rs` to mirror the new methods.
+  `clients/stoat/src/guest.rs` to mirror the new methods. — **STILL PENDING** (refined scope: see stoat-voice-wasm); stoat-voice-wasm does not explicitly address WIT guest-side stubs. Needs a dedicated sub-step in stoat-voice-wasm Phase C or a follow-up change.
 
 ---
 
