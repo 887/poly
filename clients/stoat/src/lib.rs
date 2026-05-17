@@ -44,6 +44,12 @@ pub mod signup;
 #[cfg(feature = "voice")]
 pub mod voice;
 
+/// Stoat voice transport — WASM target (Phase B of `plan-stoat-voice-wasm.md`).
+/// Sibling to `voice.rs`; uses `gloo_net` WS + `/host/codec/opus/*` instead of
+/// `tokio_tungstenite` + `audiopus`. Stubbed until Phase B.1 lands.
+#[cfg(target_arch = "wasm32")]
+pub(crate) mod voice_wasm;
+
 /// WIT bindings for the WASM plugin (WASI targets only).
 /// This module isolates the `wit-bindgen` macros for FFI.
 #[cfg(target_os = "wasi")]
