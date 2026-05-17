@@ -1097,8 +1097,15 @@ impl IsBackend for StoatClient {
         }
         #[cfg(target_arch = "wasm32")]
         {
-            // WebSocket transport is native-only; WASM builds return an empty stream.
-            Box::pin(stream::empty())
+            // WASM has no live Bonfire WS yet, but we still need to publish
+            // Connected so the UI unblocks the voice / capability surface.
+            // Emit a single ConnectionStateChanged then end the stream.
+            Box::pin(stream::once(async {
+                ClientEvent::ConnectionStateChanged {
+                    backend: BackendType::from(crate::SLUG),
+                    connected: true,
+                }
+            }))
         }
     }
 
