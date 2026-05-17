@@ -172,20 +172,12 @@ fn message_id_for_post(post_id: &str) -> String {
     format!("t3_{post_id}")
 }
 
-fn _message_id_for_comment(comment_id: &str) -> String {
-    format!("t1_{comment_id}")
-}
-
 fn message_id_for_dm(dm_id: &str) -> String {
     format!("t4_{dm_id}")
 }
 
 fn dm_channel_id_for_dm(dm_id: &str) -> String {
     format!("dm_{dm_id}")
-}
-
-fn _dm_id_from_channel_id(id: &str) -> Option<&str> {
-    id.strip_prefix("dm_")
 }
 
 fn user_id_for_name(name: &str) -> String {
