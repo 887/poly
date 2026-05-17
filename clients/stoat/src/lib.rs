@@ -2145,6 +2145,14 @@ fn parse_bonfire_event(json: &serde_json::Value) -> Option<ClientEvent> {
             Some(ClientEvent::VoiceSpeakingUpdate { channel_id, user_id, is_speaking })
         }
 
+        // Bonfire WS sends {"type":"Authenticated"} as its first message after
+        // successful token validation. Translate this into ConnectionStateChanged so
+        // the event_stream listener can mark the account as Connected in ClientManager.
+        "Authenticated" => Some(ClientEvent::ConnectionStateChanged {
+            backend: BackendType::from(crate::SLUG),
+            connected: true,
+        }),
+
         _ => None,
     }
 }

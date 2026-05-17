@@ -244,6 +244,20 @@ pub(crate) fn spawn_event_stream_listener(
                         }
                     });
                 }
+                // Stoat (and future backends) emit this when the Bonfire/gateway WS
+                // successfully authenticates. Update connection_statuses so the startup
+                // overlay shows "connected" rather than "disconnected" / "cached".
+                ClientEvent::ConnectionStateChanged { connected, .. } => {
+                    let aid = account_id.clone();
+                    client_manager.batch(move |cm| {
+                        let status = if connected {
+                            poly_client::ConnectionStatus::Connected
+                        } else {
+                            poly_client::ConnectionStatus::Disconnected
+                        };
+                        cm.connection_statuses.insert(aid, status);
+                    });
+                }
                 // lint-allow-unused: ClientEvent has dozens of variants;
                 // the handler only wires the explicitly handled ones.
                 #[allow(clippy::wildcard_enum_match_arm)]
