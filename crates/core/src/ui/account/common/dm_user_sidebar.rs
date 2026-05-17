@@ -51,11 +51,16 @@ pub fn DmUserSidebar() -> Element {
     let chat_view_state: BatchedSignal<crate::state::ChatViewState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
 
-    let members = if chat_view_state.read().members.is_empty() { // poly-lint: allow render-time-read — render snapshot; subscription intentional
-        chat_view_state.read().active_group_members.clone() // poly-lint: allow render-time-read — render snapshot; subscription intentional
-    } else {
-        chat_view_state.read().members.clone() // poly-lint: allow render-time-read — render snapshot; subscription intentional
-    };
+    // Single read-guard scope — subscription intentional but avoid 3 repeated
+    // .read() calls / clones (one would-be subscription is enough; three are
+    // hang-class #1 fuel if any downstream effect writes chat_view_state).
+    let members = chat_view_state.with(|cvs| { // poly-lint: allow render-time-read — render snapshot; subscription intentional
+        if cvs.members.is_empty() {
+            cvs.active_group_members.clone()
+        } else {
+            cvs.members.clone()
+        }
+    });
     let group_id = nav.read().selected_channel.cloned();
     let active_account_id = nav.read().active_account_id.cloned();
     let member_count = members.len();

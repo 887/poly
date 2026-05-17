@@ -124,23 +124,26 @@ pub fn SavedItemsView() -> Element {
         .account_sessions
         .get(&account_id)
         .map(|session| session.user.id.clone());
-    let dm_channels: Vec<_> = chat_lists
-        .read() // poly-lint: allow render-time-read — render snapshot; subscription intentional
-        .dm_channels
-        .iter()
-        .filter(|dm| {
-            dm.account_id == account_id
-                && active_user_id.as_deref() != Some(dm.user.id.as_str())
-        })
-        .cloned()
-        .collect();
-    let groups: Vec<_> = chat_lists
-        .read() // poly-lint: allow render-time-read — render snapshot; subscription intentional
-        .groups
-        .iter()
-        .filter(|group| group.account_id == account_id)
-        .cloned()
-        .collect();
+    // Single read-guard scope — two prior .read() calls subscribed twice and
+    // cloned twice. One .with() block, one subscription, two filtered Vecs.
+    let (dm_channels, groups): (Vec<_>, Vec<_>) = chat_lists.with(|cl| { // poly-lint: allow render-time-read — render snapshot; subscription intentional
+        let dms = cl
+            .dm_channels
+            .iter()
+            .filter(|dm| {
+                dm.account_id == account_id
+                    && active_user_id.as_deref() != Some(dm.user.id.as_str())
+            })
+            .cloned()
+            .collect();
+        let grps = cl
+            .groups
+            .iter()
+            .filter(|group| group.account_id == account_id)
+            .cloned()
+            .collect();
+        (dms, grps)
+    });
 
     let saved_items = use_resource(move || {
         let account_id = account_id.clone();

@@ -189,20 +189,23 @@ pub fn ConversationSearchView() -> Element {
         .map(|session| session.user.id.clone());
     let q_lower = query.read().to_lowercase();
 
-    let mut dm_channels: Vec<_> = chat_lists
-        .read() // poly-lint: allow render-time-read — render snapshot; subscription intentional
-        .dm_channels
-        .iter()
-        .filter(|dm| dm.account_id == active_account_id)
-        .cloned()
-        .collect();
-    let mut groups: Vec<_> = chat_lists
-        .read() // poly-lint: allow render-time-read — render snapshot; subscription intentional
-        .groups
-        .iter()
-        .filter(|group| group.account_id == active_account_id)
-        .cloned()
-        .collect();
+    // Single read-guard scope — collapse two .read()/clone passes into one
+    // .with() block (one subscription, two filtered Vecs).
+    let (mut dm_channels, mut groups): (Vec<_>, Vec<_>) = chat_lists.with(|cl| { // poly-lint: allow render-time-read — render snapshot; subscription intentional
+        let dms = cl
+            .dm_channels
+            .iter()
+            .filter(|dm| dm.account_id == active_account_id)
+            .cloned()
+            .collect();
+        let grps = cl
+            .groups
+            .iter()
+            .filter(|group| group.account_id == active_account_id)
+            .cloned()
+            .collect();
+        (dms, grps)
+    });
 
     dm_channels.sort_by(|a, b| {
         dm_last_incoming_timestamp(b)
@@ -235,20 +238,22 @@ pub fn ConversationSearchView() -> Element {
 
     let dm_total = visible_dms.len();
     let grp_total = visible_grps.len();
-    let account_label = account_sessions
-        .read() // poly-lint: allow render-time-read — render snapshot; subscription intentional
-        .account_sessions
-        .get(&active_account_id).map_or_else(|| active_account_id.clone(), |session| session.user.display_name.clone());
-    let instance_id = account_sessions
-        .read() // poly-lint: allow render-time-read — render snapshot; subscription intentional
-        .account_sessions
-        .get(&active_account_id)
-        .map(|session| session.instance_id.clone())
-        .unwrap_or_default();
-    let backend_slug = account_sessions
-        .read() // poly-lint: allow render-time-read — render snapshot; subscription intentional
-        .account_sessions
-        .get(&active_account_id).map_or_else(|| "demo".to_string(), |session| session.user.backend.slug().to_string());
+    // Single render-time read of account_sessions for three derived strings —
+    // collapses three subscription registrations to one (subscription
+    // intentional; account_sessions changes legitimately re-render).
+    let (account_label, instance_id, backend_slug) = account_sessions.with(|sess| { // poly-lint: allow render-time-read — render snapshot; subscription intentional
+        let session = sess.account_sessions.get(&active_account_id);
+        let label = session.map_or_else(
+            || active_account_id.clone(),
+            |s| s.user.display_name.clone(),
+        );
+        let inst = session.map(|s| s.instance_id.clone()).unwrap_or_default();
+        let slug = session.map_or_else(
+            || "demo".to_string(),
+            |s| s.user.backend.slug().to_string(),
+        );
+        (label, inst, slug)
+    });
 
     rsx! {
         main { class: "search-page-results search-page-results-embedded",

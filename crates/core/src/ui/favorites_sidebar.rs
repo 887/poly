@@ -902,19 +902,23 @@ fn FavoriteServerIcon(
     let chat_lists: BatchedSignal<ChatLists> = use_context();
     let chat_view_state: BatchedSignal<ChatViewState> = use_context();
 
-    // Get account's connection and presence status
-    let _account_conn_class: &'static str = client_manager
-        .read()
-        .connection_statuses
-        .get(&account_id)
-        .map_or("disconnected", ConnectionStatus::css_class);
-    let account_presence_class: &'static str = client_manager
-        .read()
-        .presence_statuses
-        .get(&account_id)
-        .copied()
-        .unwrap_or(AccountPresence::Online)
-        .css_class();
+    // Single render-time read of client_manager — avoid two separate .read()
+    // calls (each subscribes the component to the same signal twice and adds
+    // a hang-class #1 cascade vector). Subscription is intentional for both.
+    let (_account_conn_class, account_presence_class): (&'static str, &'static str) =
+        client_manager.with(|cm| {
+            let conn = cm
+                .connection_statuses
+                .get(&account_id)
+                .map_or("disconnected", ConnectionStatus::css_class);
+            let pres = cm
+                .presence_statuses
+                .get(&account_id)
+                .copied()
+                .unwrap_or(AccountPresence::Online)
+                .css_class();
+            (conn, pres)
+        });
 
     // Connection icon emoji for account connection status
     let conn_icon = match _account_conn_class {
