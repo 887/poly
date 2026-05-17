@@ -15,6 +15,12 @@
 //! - Per-user `OpusDecoder` keyed off the 8-byte ASCII user-id prefix on each
 //!   binary WS frame
 //!
+//! # Shared symbols
+//!
+//! Cfg-free constants, the `StoatVoiceError` enum, `TransmitMode`, `VortexServerInfo`,
+//! and `rms_db()` live in `super::voice_common` (always compiled, no native deps).
+//! Phase B.1 should `use super::voice_common::{…}` rather than re-defining them.
+//!
 //! Until Phase B lands, this module exists only so that Phase A.3's
 //! architectural decision (sibling file) is materialized in the tree and
 //! parallel B-phase sonnet agents can edit `voice_wasm.rs` independently

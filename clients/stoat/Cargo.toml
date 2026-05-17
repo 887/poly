@@ -16,10 +16,8 @@ native = [
     "dep:futures",
     "dep:tokio",
     "dep:serde",
-    "dep:serde_json",
     "dep:chrono",
     "dep:uuid",
-    "dep:thiserror",
     "dep:tracing",
     "dep:poly-host-bridge",
     "dep:tokio-tungstenite",
@@ -42,14 +40,16 @@ poly-client = { workspace = true }
 poly-host-bridge = { workspace = true, optional = true }
 dioxus = { workspace = true, optional = true }
 
+# Unconditional — used by voice_common.rs which is cfg-free (compiles on wasm32 too).
+thiserror = { workspace = true }
+serde_json = { workspace = true }
+
 # Native-only dependencies (feature-gated)
 serde = { workspace = true, optional = true }
-serde_json = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
 chrono = { workspace = true, optional = true }
 uuid = { workspace = true, optional = true, features = ["js"] }
 futures = { workspace = true, optional = true }
-thiserror = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 # Native-only: WebSocket transport (not needed / not compilable for WASM)

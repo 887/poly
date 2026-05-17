@@ -44,6 +44,11 @@ pub mod signup;
 #[cfg(feature = "voice")]
 pub mod voice;
 
+/// Shared voice constants, types, and utilities — cfg-free, compiles on both
+/// native and wasm32. Both `voice.rs` (native) and `voice_wasm.rs` (WASM, Phase B)
+/// import from here. See `docs/plans/plan-stoat-voice-wasm.md` Phase B serial prep.
+pub(crate) mod voice_common;
+
 /// Stoat voice transport — WASM target (Phase B of `plan-stoat-voice-wasm.md`).
 /// Sibling to `voice.rs`; uses `gloo_net` WS + `/host/codec/opus/*` instead of
 /// `tokio_tungstenite` + `audiopus`. Stubbed until Phase B.1 lands.
@@ -225,34 +230,34 @@ impl StoatClient {
         &self,
         channel_id: &str,
         audio: &dyn poly_audio_backend::AudioBackend,
-        transmit_mode: Option<voice::TransmitMode>,
+        transmit_mode: Option<voice_common::TransmitMode>,
         event_tx: tokio::sync::mpsc::Sender<poly_client::ClientEvent>,
-    ) -> Result<(), voice::StoatVoiceError> {
+    ) -> Result<(), voice_common::StoatVoiceError> {
         // Step 1: obtain Vortex token + WS URL.
         let response = self
             .http
             .authenticated_request(Method::POST, &format!("/channels/{channel_id}/join_call"))
-            .map_err(|e| voice::StoatVoiceError::JoinCallFailed(e.to_string()))?
+            .map_err(|e| voice_common::StoatVoiceError::JoinCallFailed(e.to_string()))?
             .json(&serde_json::json!({}))
             .send()
             .await
-            .map_err(|e| voice::StoatVoiceError::JoinCallFailed(e.to_string()))?;
+            .map_err(|e| voice_common::StoatVoiceError::JoinCallFailed(e.to_string()))?;
 
         let resp: serde_json::Value = response
             .json()
             .await
-            .map_err(|e| voice::StoatVoiceError::JoinCallFailed(e.to_string()))?;
+            .map_err(|e| voice_common::StoatVoiceError::JoinCallFailed(e.to_string()))?;
 
         let token = resp.get("token")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| voice::StoatVoiceError::JoinCallFailed("missing token".into()))?
+            .ok_or_else(|| voice_common::StoatVoiceError::JoinCallFailed("missing token".into()))?
             .to_string();
         let ws_url = resp.get("url")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| voice::StoatVoiceError::JoinCallFailed("missing url".into()))?
+            .ok_or_else(|| voice_common::StoatVoiceError::JoinCallFailed("missing url".into()))?
             .to_string();
 
-        let server_info = voice::VortexServerInfo {
+        let server_info = voice_common::VortexServerInfo {
             token,
             ws_url,
             channel_id: channel_id.to_string(),
