@@ -1114,11 +1114,12 @@ impl IsBackend for StoatClient {
 
     fn backend_capabilities(&self) -> BackendCapabilities {
         BackendCapabilities {
-            // G.1 — expose voice support when the voice feature is compiled in.
+            // G.1 — expose voice support when the voice feature is compiled in (native)
+            // OR on wasm32 (voice_wasm.rs path, shipped in `docs/plans/plan-stoat-voice-wasm.md`).
             // The test-stoat mock provides the required join_call + Vortex WS endpoints.
-            #[cfg(feature = "voice")]
+            #[cfg(any(feature = "voice", target_arch = "wasm32"))]
             voice: VoiceSupport::Full,
-            #[cfg(not(feature = "voice"))]
+            #[cfg(not(any(feature = "voice", target_arch = "wasm32")))]
             voice: VoiceSupport::None,
             landing: poly_client::LandingPage::DirectMessages,
             has_roles: true,
