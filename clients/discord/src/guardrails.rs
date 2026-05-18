@@ -15,8 +15,11 @@
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
-    time::{Duration, Instant},
+    time::Duration,
 };
+// web_time::Instant is a drop-in replacement that uses Performance.now() on wasm32.
+// std::time::Instant::now() panics "time not implemented" on wasm32-unknown-unknown.
+use web_time::Instant;
 
 use poly_client::ClientError;
 

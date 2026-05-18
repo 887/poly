@@ -150,6 +150,9 @@ twilight-model = "0.17"
 # Utilities
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde", "wasmbind"] }
+# Drop-in `Instant` replacement that uses Performance.now() on wasm32 and std::time::Instant on native.
+# Without this, `Instant::now()` panics with "time not implemented on this platform" on wasm32.
+web-time = "1"
 futures = "0.3"
 async-stream = "0.3"
 thiserror = "2"

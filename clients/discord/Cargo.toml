@@ -116,6 +116,8 @@ tokio-stream = { workspace = true, optional = true }
 # Voice transport — native only (feature = "voice"). B.1.
 audiopus = { workspace = true, optional = true }
 discortp = { workspace = true, optional = true }
+# web-time: wasm32-safe Instant for anti-ban guardrails.
+web-time = { workspace = true }
 chacha20poly1305 = { workspace = true, optional = true }
 byteorder = { workspace = true, optional = true }
 poly-audio-backend = { workspace = true, optional = true }
