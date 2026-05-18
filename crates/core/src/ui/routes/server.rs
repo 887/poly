@@ -5,7 +5,8 @@
 
 use crate::client_manager::ClientManager;
 use crate::state::{
-    AppState, BatchedSignal, ChatLists, ChatViewState, NavState, VoiceState, use_spawn_once,
+    AppState, BatchedSignal, ChatAction, ChatLists, ChatViewState, NavState, VoiceState,
+    use_spawn_once,
 };
 use crate::ui::account::common::{FeatureUnsupportedPlaceholder, UnsupportedFeature};
 use crate::ui::account::common::discover_communities::DiscoverCommunitiesView;
@@ -76,6 +77,29 @@ pub(super) fn ServerHome(
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let chat_lists: BatchedSignal<ChatLists> = use_context();
     let chat_view_state: BatchedSignal<ChatViewState> = use_context();
+
+    // Clear stale channel context on URL-navigation before is_voice_channel is
+    // computed.  Without this, deep-link / F5 to a ServerHome URL while
+    // `current_channel.channel_type == Voice` (left over from a previous
+    // stoat voice visit) causes `VoiceChannelView` to render immediately —
+    // before `load_server_data` runs — which triggers `getUserMedia` /
+    // audio-device access and hard-crashes Chromium on Linux.
+    //
+    // The click-based path in `account_server_bar.rs:460` applies the same
+    // fix but only fires on explicit icon click, not on URL navigation.
+    // This block covers the URL-navigation / deep-link case.
+    //
+    // We use a component-local signal so the clear fires exactly once per
+    // (account_id, server_id) key change, synchronously during the render
+    // that sees the new key — guaranteeing the `is_voice_channel` check
+    // below reads the fresh (empty) state, not the stale one.
+    let mut cleared_key: Signal<String> = use_signal(|| String::new());
+    let clear_key = format!("{account_id}|{server_id}");
+    if *cleared_key.peek() != clear_key {
+        cleared_key.set(clear_key.clone());
+        chat_view_state.batch(|cv| cv.apply(ChatAction::ClearChannelContext));
+        chat_lists.batch(|cl| cl.set_channels(Vec::new()));
+    }
 
     // URL-restore: server data is absent after a hard reload. Load it now.
     //
