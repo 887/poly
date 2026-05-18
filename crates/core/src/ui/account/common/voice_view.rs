@@ -341,6 +341,31 @@ pub fn VoiceChannelView() -> Element {
         .is_some_and(|vc| vc.channel_id == channel_id.clone().unwrap_or_default());
     let is_local_streaming = voice_conn.as_ref().is_some_and(|vc| vc.is_streaming);
 
+    // Render-time safety net: if we're connected to this channel but the
+    // participant cache is empty (e.g. mock returned [] before our join, then
+    // an event_stream Left fired for self), show self so the user always sees
+    // themselves in the tile. Without this the grid is empty after Leave+Rejoin.
+    let mut participants = participants;
+    if is_connected && participants.is_empty() {
+        if let Some(ref vc) = voice_conn {
+            let self_session = account_sessions
+                .read() // poly-lint: allow render-time-read — drives self-tile fallback
+                .account_sessions
+                .get(&vc.account_id)
+                .cloned();
+            if let Some(session) = self_session {
+                participants.push(poly_client::VoiceParticipant {
+                    user: session.user,
+                    is_muted: vc.is_muted,
+                    is_deafened: vc.is_deafened,
+                    is_streaming: vc.is_streaming,
+                    is_video_on: vc.is_video_on,
+                    is_speaking: false,
+                });
+            }
+        }
+    }
+
     let participant_count = participants.len();
 
     let channel_type = current_channel
