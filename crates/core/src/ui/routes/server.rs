@@ -93,11 +93,21 @@ pub(super) fn ServerHome(
     // (account_id, server_id) key change, synchronously during the render
     // that sees the new key — guaranteeing the `is_voice_channel` check
     // below reads the fresh (empty) state, not the stale one.
+    //
+    // IMPORTANT: use ClearActiveChannel (not ClearChannelContext) so that
+    // `current_server` is NOT nulled out here.  ClearChannelContext sets
+    // `current_server = None`, which makes ChannelList fall through to the
+    // "channel-empty" placeholder even when nav.view == View::Server — the
+    // sidebar shows "Select a channel" instead of the server channel list.
+    // ClearActiveChannel clears only `current_channel`, which is enough to
+    // prevent the stale Voice channel from triggering VoiceChannelView
+    // (the is_voice_channel guard also checks server_matches, so a mismatched
+    // current_server can never activate VoiceChannelView for the wrong server).
     let mut cleared_key: Signal<String> = use_signal(|| String::new());
     let clear_key = format!("{account_id}|{server_id}");
     if *cleared_key.peek() != clear_key {
         cleared_key.set(clear_key.clone());
-        chat_view_state.batch(|cv| cv.apply(ChatAction::ClearChannelContext));
+        chat_view_state.batch(|cv| cv.apply(ChatAction::ClearActiveChannel));
         chat_lists.batch(|cl| cl.set_channels(Vec::new()));
     }
 
@@ -112,7 +122,31 @@ pub(super) fn ServerHome(
     // `docs/plans/plan-use-spawn-once.md`.
     // Key on (account_id, server_id) so switching accounts on the same
     // server URL forces a reload of that account's view of the server.
-    let spawn_key = format!("{account_id}|{server_id}");
+    //
+    // STARTUP RACE — backend not yet registered:
+    // On a cold boot / deep-link / F5, `restore_native_accounts` runs
+    // asynchronously after `is_setup_complete = true` causes the Router to
+    // mount.  `ServerHome` can therefore render (and fire use_spawn_once)
+    // BEFORE the stoat/matrix/discord backend is registered in ClientManager.
+    // `load_server_data_internal` would then call `get_backend_for_server` →
+    // None → early return → current_server stays None → sidebar shows the
+    // fallback placeholder indefinitely.
+    //
+    // Fix: include a `backend_registered` flag in the spawn key.  The
+    // `client_manager.read()` call subscribes ServerHome to ClientManager
+    // changes, so when account_restore finishes and calls
+    // `client_manager.batch(|cm| cm.commit_backend_account(...))`, ServerHome
+    // re-renders with backend_registered=true, the key changes, and
+    // use_spawn_once fires a second spawn that succeeds this time.
+    //
+    // The Teams‐style "team_id ∉ server_account_map" case is unaffected:
+    // the Teams backend IS registered (backend_registered=true) so the key is
+    // stable at "backend=true" after the first successful spawn; use_spawn_once
+    // never re-fires for that key regardless of load_server_data returning early.
+    let backend_registered = client_manager.read() // poly-lint: allow render-time-read — startup-race guard; subscription on client_manager intentional so ServerHome re-renders when the backend is registered
+        .get_backend(account_id.as_str())
+        .is_some();
+    let spawn_key = format!("{account_id}|{server_id}|br={backend_registered}");
     let sid_for_async = server_id.clone();
     use_spawn_once(spawn_key, move |_key| {
         let sid = sid_for_async.clone();
