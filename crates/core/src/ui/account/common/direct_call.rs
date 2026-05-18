@@ -563,11 +563,19 @@ pub(crate) fn swap_to_first_held_call(voice_state: BatchedSignal<VoiceState>) {
 }
 
 /// Disconnect the active call and automatically resume the most recent held call.
+///
+/// Also clears the cached participant list for the disconnected channel so the
+/// UI immediately stops showing self (or stale others) under the channel and in
+/// the voice grid. The next `load_channel_data` call re-fetches fresh state.
 pub(crate) fn disconnect_active_call(voice_state: BatchedSignal<VoiceState>) {
     voice_state.batch(|v| {
-        if v.voice_connection.is_none() {
+        let Some(active) = v.voice_connection.take() else {
             return;
-        }
+        };
+        // Drop the cached participant list for this channel — otherwise the
+        // sidebar voice-channel sub-row and the participant tile keep showing
+        // self even after the local WS closes.
+        v.voice_channel_participants.remove(&active.channel_id);
         v.voice_connection = v.held_voice_connections.first().cloned();
         if !v.held_voice_connections.is_empty() {
             v.held_voice_connections.remove(0);
