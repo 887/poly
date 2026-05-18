@@ -1630,6 +1630,17 @@ fn ChannelItemRow(channel: Channel) -> Element {
             ontouchmove: long_press.on_touch_move(),
             ontouchcancel: long_press.on_touch_cancel(),
             onclick: move |_| {
+                // No-op when re-clicking the channel we're already on. Without this
+                // guard a re-click re-runs `load_channel_data` → `get_voice_participants`
+                // which overwrites the in-voice participant list with whatever the
+                // backend returns (which may not include the local user mid-session)
+                // and visibly drops your own avatar from the voice grid even though
+                // the WS connection is still live.
+                if let Some(prev) = nav.peek().selected_channel.cloned()
+                    && prev == ch_id
+                {
+                    return;
+                }
                 if let Some(previous_channel_id) = nav.read().selected_channel.cloned()
                 {
                     remember_message_list_scroll_position(&previous_channel_id);
