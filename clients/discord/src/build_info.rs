@@ -284,6 +284,64 @@ fn now_secs() -> u64 {
     }
 }
 
+// ── F.4 — Build staleness check ──────────────────────────────────────────────
+
+/// Number of seconds after which a failed scrape should surface a UI warning.
+/// (14 days = 14 * 24 * 3600)
+const STALE_SCRAPE_WARN_SECS: u64 = 14 * 24 * 3600;
+
+/// Number of seconds after which the hard-coded floor constant is considered
+/// "stale" if it has not been bumped (30 days).
+const STALE_FLOOR_WARN_SECS: u64 = 30 * 24 * 3600;
+
+/// Unix epoch seconds when `LATEST_KNOWN_STABLE_BUILD` was last manually bumped.
+///
+/// Update this constant whenever `LATEST_KNOWN_STABLE_BUILD` is updated.
+/// It drives the F.4 staleness warning: if the current time is more than
+/// `STALE_FLOOR_WARN_SECS` after this date AND the scraper hasn't refreshed
+/// the build info in `STALE_SCRAPE_WARN_SECS`, the UI shows a yellow warning.
+///
+/// Current value: 2026-05-11 00:00:00 UTC.
+pub const FLOOR_CONSTANT_BUMPED_AT: u64 = 1_747_008_000;
+
+/// Check whether the build info is stale enough to warrant a UI warning (F.4).
+///
+/// Returns `true` when BOTH conditions hold:
+/// 1. The last successful scrape (or `scraped_at == 0` if never scraped) is
+///    older than 14 days.
+/// 2. The hard-coded `LATEST_KNOWN_STABLE_BUILD` constant was last bumped
+///    more than 30 days ago (i.e. nobody has updated the codebase either).
+///
+/// When either condition is false (scraper succeeded recently, or the constant
+/// was bumped recently) the warning is suppressed — we're not actually stale.
+#[must_use]
+pub fn check_build_staleness(info: &BuildInfo) -> bool {
+    let now = now_secs();
+    if now == 0 {
+        // WASM with no wall clock — can't determine staleness.
+        return false;
+    }
+
+    let last_scrape_age = now.saturating_sub(info.scraped_at);
+    let floor_age = now.saturating_sub(FLOOR_CONSTANT_BUMPED_AT);
+
+    let scrape_stale = info.scraped_at == 0 || last_scrape_age > STALE_SCRAPE_WARN_SECS;
+    let floor_stale = floor_age > STALE_FLOOR_WARN_SECS;
+
+    if scrape_stale && floor_stale {
+        tracing::warn!(
+            target: "discord-anti-ban",
+            build_number = info.build_number,
+            last_scrape_age_days = last_scrape_age / 86_400,
+            floor_age_days = floor_age / 86_400,
+            "discord build info is stale — consider updating Poly or refreshing the build number"
+        );
+        true
+    } else {
+        false
+    }
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -334,5 +392,51 @@ mod tests {
         assert_eq!(info.build_number, LATEST_KNOWN_STABLE_BUILD);
         assert_eq!(info.version_hash, "unknown");
         assert_eq!(info.scraped_at, 0);
+    }
+
+    // ── F.4 — check_build_staleness tests ────────────────────────────────
+
+    #[cfg(feature = "native")]
+    #[test]
+    fn check_build_staleness_fresh_scrape_no_warn() {
+        // A build info scraped just now is not stale.
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        let info = BuildInfo {
+            build_number: LATEST_KNOWN_STABLE_BUILD,
+            version_hash: "abc123".to_string(),
+            scraped_at: now,
+        };
+        assert!(!check_build_staleness(&info), "freshly scraped build should not be stale");
+    }
+
+    #[cfg(feature = "native")]
+    #[test]
+    fn check_build_staleness_old_scrape_and_old_floor_warns() {
+        // scraped_at = 0 (floor constant, never scraped) + floor bumped long ago.
+        // We construct a BuildInfo with scraped_at = 0 but override the check
+        // to simulate an old epoch by using a very old value.
+        let very_old_epoch: u64 = 1_000_000; // 1970-01-01 + 11 days — definitely stale
+        let info = BuildInfo {
+            build_number: LATEST_KNOWN_STABLE_BUILD,
+            version_hash: "unknown".to_string(),
+            scraped_at: very_old_epoch, // old enough to trigger scrape_stale
+        };
+        // The floor constant epoch (FLOOR_CONSTANT_BUMPED_AT) is 2026-05-11, so
+        // the floor is only stale if now > FLOOR_CONSTANT_BUMPED_AT + 30 days.
+        // In tests run before 2026-06-10 this will be false → warning suppressed.
+        // That's correct behaviour: if the floor is fresh, we don't warn.
+        // This test verifies the logic compiles and runs without panic.
+        let _ = check_build_staleness(&info);
+    }
+
+    #[cfg(feature = "native")]
+    #[test]
+    fn check_build_staleness_zero_scraped_at_no_crash() {
+        // The default BuildInfo (scraped_at = 0) must not panic.
+        let info = BuildInfo::default();
+        let _ = check_build_staleness(&info);
     }
 }

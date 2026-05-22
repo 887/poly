@@ -389,6 +389,13 @@ pub async fn connect_voice(
     let timestamp = Arc::new(AtomicU32::new(0));
     let is_speaking = Arc::new(AtomicBool::new(false));
 
+    // E.9 — Bandwidth controller for RTCP feedback (shared with video transport later).
+    // Created here (before the WS loop + decode loop) so both can reference it.
+    // Initially no video transport, so the controller is stored on the connection handle;
+    // when start_video is called, the controller is shared with DiscordVideoTransport.
+    let bandwidth_ctrl: Arc<rtcp::BandwidthController> =
+        Arc::new(rtcp::BandwidthController::new(rtcp::MAX_BITRATE_BPS));
+
     // Voice WS loop (heartbeat + speaking events + auxiliary outbound messages + E.9 ramp-up).
     {
         let ssrc_map = Arc::clone(&ssrc_user_map);
@@ -406,13 +413,6 @@ pub async fn connect_voice(
             bw_ramp,
         ));
     }
-
-    // E.9 — Bandwidth controller for RTCP feedback (shared with video transport later).
-    // Created here (before decode loop) so the decode loop can route RTCP packets to it.
-    // Initially no video transport, so the controller is stored on the connection handle;
-    // when start_video is called, the controller is shared with DiscordVideoTransport.
-    let bandwidth_ctrl: Arc<rtcp::BandwidthController> =
-        Arc::new(rtcp::BandwidthController::new(rtcp::MAX_BITRATE_BPS));
 
     // Decode loop: UDP → RTCP dispatch (E.9) + AEAD decrypt → RTP depacketize → Opus decode → output.
     let udp_arc = Arc::new(udp);

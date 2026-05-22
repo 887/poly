@@ -160,9 +160,9 @@ impl DiscordVideoTransport {
         ws_out_tx: mpsc::Sender<serde_json::Value>,
         bridge_base_url: String,
         mut frame_rx: mpsc::Receiver<VideoFrame>,
-        /// E.9: optional shared bandwidth controller.  When `Some`, the encode loop
-        /// reads `target_bps` on every frame and forwards it to the host-bridge encoder
-        /// for dynamic bitrate adaptation via REMB/TWCC RTCP feedback.
+        // E.9: optional shared bandwidth controller.  When `Some`, the encode loop
+        // reads `target_bps` on every frame and forwards it to the host-bridge encoder
+        // for dynamic bitrate adaptation via REMB/TWCC RTCP feedback.
         bandwidth_ctrl: Option<Arc<rtcp::BandwidthController>>,
     ) -> Result<Self, VideoTransportError> {
         let video_ssrc = audio_ssrc + VIDEO_SSRC_OFFSET;

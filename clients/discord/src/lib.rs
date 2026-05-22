@@ -400,6 +400,24 @@ impl DiscordClient {
         h
     }
 
+    /// F.1 — Return a snapshot of all telemetry counters for the "Backend health" panel.
+    ///
+    /// Counters are monotonically increasing since backend init.  The snapshot
+    /// can be polled by the UI on a timer or exposed via `DiscordHealth`.
+    /// Grep `discord-anti-ban` in logs to correlate events with these counts.
+    pub fn guardrail_stats(&self) -> guardrails::GuardrailStats {
+        self.http.counters.snapshot()
+    }
+
+    /// F.1 — Return a clone of the shared `GuardrailCounters` so gateway /
+    /// guardrail code can increment counters without going through `DiscordClient`.
+    ///
+    /// The gateway loop uses this to call `inc_gateway_identify_success` and
+    /// `inc_gateway_invalid_session`.
+    pub(crate) fn counters(&self) -> guardrails::GuardrailCounters {
+        self.http.counters.clone()
+    }
+
     /// E.3 — Return the cached Nitro tier for the authenticated account.
     pub fn nitro_tier(&self) -> nitro::NitroTier {
         self.account_info

@@ -1,7 +1,6 @@
 //! Discord REST API v10 HTTP client.
 
 use std::sync::{Arc, Mutex};
-use tracing;
 
 use poly_client::ClientError;
 use poly_host_bridge::http::HttpClient;
@@ -12,6 +11,7 @@ use crate::api::{
     DiscordUser,
 };
 use crate::super_properties::SuperProperties;
+use crate::guardrails::GuardrailCounters;
 
 /// Default User-Agent — the browser-style UA that the Linux Discord desktop
 /// client sends.  This is NOT a bot UA; it must never contain "DiscordBot".
@@ -34,6 +34,10 @@ pub struct DiscordHttpClient {
     /// Optional UA override set via `set_user_agent`.  When `Some`, it is
     /// propagated into `super_props.browser_user_agent` (Phase B.5).
     ua_override: Arc<Mutex<Option<String>>>,
+    /// Phase F.1 — shared telemetry counters.  Cloned into `DiscordClient`
+    /// so the same `Arc<Mutex<GuardrailStats>>` is exposed via
+    /// `DiscordClient::guardrail_stats()`.
+    pub(crate) counters: GuardrailCounters,
 }
 
 impl DiscordHttpClient {
@@ -48,6 +52,7 @@ impl DiscordHttpClient {
             http: HttpClient::new(),
             super_props: Arc::new(Mutex::new(props)),
             ua_override: Arc::new(Mutex::new(None)),
+            counters: GuardrailCounters::new(),
         }
     }
 
@@ -68,6 +73,7 @@ impl DiscordHttpClient {
             http: HttpClient::new(),
             super_props: Arc::new(Mutex::new(props)),
             ua_override: Arc::new(Mutex::new(version_override)),
+            counters: GuardrailCounters::new(),
         }
     }
 
@@ -205,31 +211,46 @@ impl DiscordHttpClient {
         format!("{}{}", self.base_url, path)
     }
 
-    /// D.7 — central response handler.
+    /// D.7 + F.1 — central response handler.
     ///
-    /// Maps HTTP status codes to `ClientError` variants.  Specifically:
-    /// - 429: emits a `tracing::warn!` with the `Retry-After` value and returns
-    ///   a `ClientError::Network` with "HTTP 429 retry-after=<N>s" so callers
-    ///   can parse the backoff duration. The `RateGuard` on `DiscordClient` records
-    ///   the 429 and applies exponential back-off on the next invocation.
-    /// - 401: returns `ClientError::AuthFailed`.
-    /// - 403: returns `ClientError::PermissionDenied`.
-    /// - 404: returns `ClientError::NotFound`.
-    fn map_error_status(status: u16, retry_after_header: Option<u64>, path: &str) -> ClientError {
+    /// Maps HTTP status codes to `ClientError` variants and emits telemetry via
+    /// `counters`.  Specifically:
+    /// - 429: emits a `tracing::warn!` via `counters.inc_429` with the
+    ///   `Retry-After` value; returns `ClientError::Network("HTTP 429 retry-after=Ns")`.
+    /// - 401: increments `counters.inc_401`; returns `ClientError::AuthFailed`.
+    /// - 403: increments `counters.inc_403`; returns `ClientError::PermissionDenied`.
+    /// - 404: increments `counters.inc_404`; returns `ClientError::NotFound`.
+    /// - 5xx: increments `counters.inc_5xx`; returns `ClientError::Network`.
+    fn map_error_status(
+        counters: &GuardrailCounters,
+        status: u16,
+        retry_after_header: Option<u64>,
+        path: &str,
+    ) -> ClientError {
         match status {
             429 => {
                 let secs = retry_after_header.unwrap_or(1);
-                tracing::warn!(
-                    target: "discord_http",
-                    "HTTP 429 on {path}: Discord is throttling us — Retry-After={secs}s"
-                );
+                counters.inc_429(path, secs);
                 ClientError::Network(format!("HTTP 429 retry-after={secs}s"))
             }
-            401 => ClientError::AuthFailed("Unauthorized".into()),
-            403 => ClientError::PermissionDenied(
-                "You need the VIEW_CHANNEL permission to read this channel.".into(),
-            ),
-            404 => ClientError::NotFound(format!("{path} not found")),
+            401 => {
+                counters.inc_401();
+                ClientError::AuthFailed("Unauthorized".into())
+            }
+            403 => {
+                counters.inc_403(path);
+                ClientError::PermissionDenied(
+                    "You need the VIEW_CHANNEL permission to read this channel.".into(),
+                )
+            }
+            404 => {
+                counters.inc_404();
+                ClientError::NotFound(format!("{path} not found"))
+            }
+            s if s >= 500 => {
+                counters.inc_5xx(s);
+                ClientError::Network(format!("HTTP {s}"))
+            }
             _ => ClientError::Network(format!("HTTP {status}")),
         }
     }
@@ -248,8 +269,9 @@ impl DiscordHttpClient {
                 .get("Retry-After")
                 .and_then(|v| v.to_str().ok())
                 .and_then(|s| s.parse::<u64>().ok());
-            return Err(Self::map_error_status(status, retry_after, path));
+            return Err(Self::map_error_status(&self.counters, status, retry_after, path));
         }
+        self.counters.inc_2xx();
         resp.json::<T>().await.map_err(|e| ClientError::Internal(e.to_string()))
     }
 
@@ -272,8 +294,9 @@ impl DiscordHttpClient {
                 .get("Retry-After")
                 .and_then(|v| v.to_str().ok())
                 .and_then(|s| s.parse::<u64>().ok());
-            return Err(Self::map_error_status(status, retry_after, path));
+            return Err(Self::map_error_status(&self.counters, status, retry_after, path));
         }
+        self.counters.inc_2xx();
         resp.json::<T>().await.map_err(|e| ClientError::Internal(e.to_string()))
     }
 

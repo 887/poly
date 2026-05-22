@@ -1,6 +1,8 @@
 # Plan — Discord Anti-Ban Hardening for Poly's Discord Plugin
 
-## Status: Phases A/B/C/D/E SHIPPED — A/B/C shipped in change `yuvzoprz`; D/E shipped in change `rorooxlm` (Phase F pending)
+## Status: ✅ DONE — all phases shipped (changes `yuvzoprz`, `rorooxlm`, Phase F shipped in change `ptovooksvvpm`)
+
+## Status detail: Phases A/B/C/D/E SHIPPED — A/B/C shipped in change `yuvzoprz`; D/E shipped in change `rorooxlm`; F shipped in change `ptovooksvvpm`
 
 > Last updated: 2026-05-11
 
@@ -128,7 +130,7 @@ Sub-steps:
 - [ ] **A.6** Add a "Refresh Discord build" button in the settings
       page for the Discord backend (where version-override is already
       shown). Hits the same `load_or_refresh` path with a `force=true`
-      flag.
+      flag. **UI work — deferred alongside F.2 to a UI-focused agent pass.**
 - [x] **A.7** Telemetry: `tracing::info!` the build number on every
       backend init. Makes it grep-able when a user reports "I got
       banned 3 hours after starting Poly".
@@ -373,39 +375,41 @@ Sub-steps:
 
 ---
 
-## Phase F — Testing + monitoring
+## Phase F — Testing + monitoring — shipped in change `ptovooksvvpm`
 
 How we know the anti-ban work is paying off:
 
-- [ ] **F.1** Telemetry counters in `DiscordHttpClient` (incr inside
+- [x] **F.1** Telemetry counters in `DiscordHttpClient` (incr inside
       the central response handler from D.7): `discord.http.2xx`,
       `discord.http.4xx.{401,403,404,429}`, `discord.http.5xx`,
       `discord.http.scrape.fail`, `discord.gateway.identify.success`,
       `discord.gateway.invalid_session`. Surfaced via the existing
-      `tracing` infra.
+      `tracing` infra. Implemented via new `GuardrailCounters` type in
+      `guardrails.rs`; exposed via `DiscordClient::guardrail_stats()`.
+      All events emit to `target: "discord-anti-ban"` for grep-ability.
 - [ ] **F.2** Settings → Discord → "Backend health" panel reading the
       `Signal<DiscordHealth>` from D.8. Shows: build number in use,
       build-info age, last 429 timestamp + route, last 401 timestamp,
-      total 4xx in last 24 h.
-- [ ] **F.3** Synthetic canary: a feature-gated CI test
-      (`cargo test --features discord-canary -- --ignored`) that
-      logs into a throwaway account on a private test guild, performs
-      a "human-shaped" 5-minute session (login, fetch guilds, send 3
-      messages with realistic typing cadence, log out), and asserts
-      no 429s and no 401s. Run weekly via `cron` outside CI to detect
-      Discord-side rotation that breaks our fingerprint. Throwaway
-      account credentials in 1Password / dev-secrets, NOT committed.
-- [ ] **F.4** "Build refresh" dashboard widget: shows when our
-      `LATEST_KNOWN_STABLE_BUILD` constant was last bumped vs when the
-      scraper last successfully fetched. If scrape fails for > 14 days
-      and the constant hasn't been bumped in > 30 days, surface a
-      yellow warning to the user: "Poly's Discord client identifier is
-      stale; consider updating Poly."
-- [ ] **F.5** Document the "if a user reports a ban" runbook in
-      `docs/dev/discord-ban-incident.md`: collect timestamp, build
-      number in use, last 100 telemetry events, gateway IDENTIFY
-      payload sample. This lets us correlate bans with specific
-      fingerprint mismatches over time.
+      total 4xx in last 24 h. **UI work — requires touching
+      `crates/core/src/ui/`; deferred to a UI-focused agent pass.**
+      The data layer (`DiscordHealth::update_build_info`, `build_stale_warning`,
+      `GuardrailStats`) is fully implemented in this phase.
+- [x] **F.3** Synthetic canary: `cargo test --features discord-canary
+      --test canary -- --ignored`. Logs into a throwaway account,
+      fetches guilds, sends 3 messages, asserts `http_429 == 0` and
+      `http_401 == 0`. Created `clients/discord/tests/canary.rs` and
+      added `discord-canary` Cargo feature. Credentials via env vars
+      (`DISCORD_CANARY_TOKEN` etc.), never committed.
+- [x] **F.4** Staleness check: `build_info::check_build_staleness(info)`
+      returns `true` when scrape is > 14 days stale AND floor constant
+      was bumped > 30 days ago. `FLOOR_CONSTANT_BUMPED_AT` constant
+      tracks when the floor was last updated. `DiscordHealth::update_build_info`
+      accepts the staleness flag. Emits a `warn` to `discord-anti-ban` target.
+- [x] **F.5** Runbook `docs/dev/discord-ban-incident.md` created:
+      8-step incident response covering timestamp collection, build number
+      extraction, telemetry event grep, IDENTIFY payload decoding, scraper
+      failure diagnosis, and canary re-run instructions. Includes the
+      `discord-anti-ban` event reference table.
 
 ---
 

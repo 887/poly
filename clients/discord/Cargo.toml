@@ -91,6 +91,11 @@ gateway-bridge = [
     "dep:tokio",
     "dep:tracing",
 ]
+# Phase F.3 — synthetic canary test feature.
+# Enables the `tests/canary.rs` test that runs a live session against a real
+# throwaway Discord account and asserts no 429s / 401s occur.
+# Run manually (never in regular CI): see tests/canary.rs for the env-var protocol.
+discord-canary = ["native", "gateway"]
 
 [dependencies]
 poly-ui-macros = { workspace = true }
@@ -211,6 +216,11 @@ required-features = ["voice"]
 name = "voice_bridge_handshake"
 path = "tests/voice_bridge_handshake.rs"
 required-features = ["voice-bridge", "gateway"]
+
+# Phase F.3 — canary test (synthetic live session, run manually).
+[[test]]
+name = "canary"
+path = "tests/canary.rs"
 
 [lints]
 workspace = true

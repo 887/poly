@@ -1,4 +1,4 @@
-//! Anti-ban guardrails for the Discord client (Phase D).
+//! Anti-ban guardrails for the Discord client (Phase D + F).
 //!
 //! Provides three guards:
 //!
@@ -11,6 +11,8 @@
 //! - [`VoiceManager`] — sketch that enforces single active voice session per account.
 //! - [`DiscordHealth`] — soft-warning signal surface (D.8) for the UI to
 //!   render a "backend health" panel.
+//! - [`GuardrailStats`] — snapshot of all telemetry counters (Phase F.1), exposed
+//!   via [`DiscordClient::guardrail_stats`] for the "Backend health" panel.
 
 use std::{
     collections::HashMap,
@@ -401,12 +403,212 @@ impl VoiceManager {
     }
 }
 
+// ── F.1 — GuardrailStats telemetry snapshot ───────────────────────────────
+
+/// Snapshot of all anti-ban telemetry counters (Phase F.1).
+///
+/// Returned by [`DiscordClient::guardrail_stats`]. The counters correspond to
+/// the `discord-anti-ban` grep targets documented in the monitoring runbook
+/// (`docs/dev/discord-ban-incident.md`).
+///
+/// All fields are monotonically increasing since backend init.
+#[derive(Clone, Debug, Default)]
+pub struct GuardrailStats {
+    /// Number of successful (2xx) HTTP responses.
+    pub http_2xx: u64,
+    /// Number of HTTP 401 Unauthorized responses.
+    pub http_401: u64,
+    /// Number of HTTP 403 Forbidden responses.
+    pub http_403: u64,
+    /// Number of HTTP 404 Not Found responses.
+    pub http_404: u64,
+    /// Number of HTTP 429 Too Many Requests responses.
+    pub http_429: u64,
+    /// Number of 5xx server-error responses.
+    pub http_5xx: u64,
+    /// Number of times the build-info scraper failed (fell back to floor or cache).
+    pub scrape_fail: u64,
+    /// Number of successful gateway IDENTIFY completions (gateway READY received).
+    pub gateway_identify_success: u64,
+    /// Number of gateway Invalid Session events received.
+    pub gateway_invalid_session: u64,
+    /// Number of times a rate-guard trip blocked an outbound request.
+    pub rate_guard_trips: u64,
+    /// Number of times slow-mode blocked a message send.
+    pub slow_mode_trips: u64,
+    /// Number of times the permission guard blocked a moderator action.
+    pub permission_guard_trips: u64,
+    /// Number of times the typing rate cap dropped a re-trigger.
+    pub typing_cap_drops: u64,
+}
+
+/// Shared, thread-safe container for telemetry counters.
+///
+/// `DiscordHttpClient` and the gateway loop both clone this `Arc` and increment
+/// counters in-place via `Arc<Mutex<GuardrailStats>>`.
+#[derive(Clone, Default)]
+pub struct GuardrailCounters {
+    inner: Arc<Mutex<GuardrailStats>>,
+}
+
+impl GuardrailCounters {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Record a 2xx HTTP success.
+    pub fn inc_2xx(&self) {
+        if let Ok(mut s) = self.inner.lock() {
+            s.http_2xx = s.http_2xx.saturating_add(1);
+        }
+    }
+
+    /// Record a 401 response.
+    pub fn inc_401(&self) {
+        if let Ok(mut s) = self.inner.lock() {
+            s.http_401 = s.http_401.saturating_add(1);
+        }
+        tracing::warn!(
+            target: "discord-anti-ban",
+            "discord.http.4xx.401 — Unauthorized (token revoked or session expired)"
+        );
+    }
+
+    /// Record a 403 response on `route`.
+    pub fn inc_403(&self, route: &str) {
+        if let Ok(mut s) = self.inner.lock() {
+            s.http_403 = s.http_403.saturating_add(1);
+        }
+        tracing::warn!(
+            target: "discord-anti-ban",
+            "discord.http.4xx.403 on {route} — permission denied (counts toward 10k/10min IP ban)"
+        );
+    }
+
+    /// Record a 404 response.
+    pub fn inc_404(&self) {
+        if let Ok(mut s) = self.inner.lock() {
+            s.http_404 = s.http_404.saturating_add(1);
+        }
+        tracing::info!(
+            target: "discord-anti-ban",
+            "discord.http.4xx.404 — resource not found"
+        );
+    }
+
+    /// Record a 429 response on `route` with the `retry_after_secs` backoff.
+    pub fn inc_429(&self, route: &str, retry_after_secs: u64) {
+        if let Ok(mut s) = self.inner.lock() {
+            s.http_429 = s.http_429.saturating_add(1);
+        }
+        tracing::warn!(
+            target: "discord-anti-ban",
+            "discord.http.4xx.429 on {route} — throttled by Discord; retry-after={retry_after_secs}s"
+        );
+    }
+
+    /// Record a 5xx response.
+    pub fn inc_5xx(&self, status: u16) {
+        if let Ok(mut s) = self.inner.lock() {
+            s.http_5xx = s.http_5xx.saturating_add(1);
+        }
+        tracing::warn!(
+            target: "discord-anti-ban",
+            "discord.http.5xx — server error HTTP {status}"
+        );
+    }
+
+    /// Record a scraper failure (fell back to floor constant or stale cache).
+    pub fn inc_scrape_fail(&self, reason: &str) {
+        if let Ok(mut s) = self.inner.lock() {
+            s.scrape_fail = s.scrape_fail.saturating_add(1);
+        }
+        tracing::warn!(
+            target: "discord-anti-ban",
+            "discord.http.scrape.fail — build-number scrape failed: {reason}"
+        );
+    }
+
+    /// Record a successful gateway READY after IDENTIFY.
+    pub fn inc_gateway_identify_success(&self, build_number: u32) {
+        if let Ok(mut s) = self.inner.lock() {
+            s.gateway_identify_success = s.gateway_identify_success.saturating_add(1);
+        }
+        tracing::info!(
+            target: "discord-anti-ban",
+            "discord.gateway.identify.success — gateway READY received (build_number={build_number})"
+        );
+    }
+
+    /// Record an Invalid Session gateway event.
+    pub fn inc_gateway_invalid_session(&self) {
+        if let Ok(mut s) = self.inner.lock() {
+            s.gateway_invalid_session = s.gateway_invalid_session.saturating_add(1);
+        }
+        tracing::warn!(
+            target: "discord-anti-ban",
+            "discord.gateway.invalid_session — session invalidated by Discord; will re-identify"
+        );
+    }
+
+    /// Record a rate-guard trip (outbound request blocked by token bucket).
+    pub fn inc_rate_guard_trip(&self) {
+        if let Ok(mut s) = self.inner.lock() {
+            s.rate_guard_trips = s.rate_guard_trips.saturating_add(1);
+        }
+        tracing::info!(
+            target: "discord-anti-ban",
+            "discord.guardrail.rate_guard.trip — outbound request held by token bucket"
+        );
+    }
+
+    /// Record a slow-mode guard trip.
+    pub fn inc_slow_mode_trip(&self, channel_id: &str) {
+        if let Ok(mut s) = self.inner.lock() {
+            s.slow_mode_trips = s.slow_mode_trips.saturating_add(1);
+        }
+        tracing::info!(
+            target: "discord-anti-ban",
+            "discord.guardrail.slow_mode.trip — channel {channel_id} is in slow mode; send blocked"
+        );
+    }
+
+    /// Record a permission guard trip.
+    pub fn inc_permission_trip(&self, action: &str, guild_id: &str) {
+        if let Ok(mut s) = self.inner.lock() {
+            s.permission_guard_trips = s.permission_guard_trips.saturating_add(1);
+        }
+        tracing::warn!(
+            target: "discord-anti-ban",
+            "discord.guardrail.permission.trip — {action} on guild {guild_id} blocked (missing permission)"
+        );
+    }
+
+    /// Record a typing-cap drop (re-trigger suppressed within 8s window).
+    pub fn inc_typing_cap_drop(&self, channel_id: &str) {
+        if let Ok(mut s) = self.inner.lock() {
+            s.typing_cap_drops = s.typing_cap_drops.saturating_add(1);
+        }
+        tracing::info!(
+            target: "discord-anti-ban",
+            "discord.guardrail.typing_cap.drop — typing re-trigger suppressed on {channel_id} (within 8s window)"
+        );
+    }
+
+    /// Return a point-in-time snapshot of all counters.
+    #[must_use]
+    pub fn snapshot(&self) -> GuardrailStats {
+        self.inner.lock().map(|s| s.clone()).unwrap_or_default()
+    }
+}
+
 // ── D.8 — DiscordHealth soft-warning surface ───────────────────────────────
 
-/// Soft-warning health surface for the UI (D.8).
+/// Soft-warning health surface for the UI (D.8 + F.2).
 ///
 /// Updated by the central response handler and rate-guard. The UI subscribes
-/// to a `Signal<DiscordHealth>` and renders a "backend health" panel.
+/// to a `Signal<DiscordHealth>` and renders a "Backend health" panel (F.2).
 #[derive(Clone, Debug, Default)]
 pub struct DiscordHealth {
     /// Number of 429 responses seen since backend init.
@@ -415,13 +617,34 @@ pub struct DiscordHealth {
     pub last_403_route: Option<String>,
     /// When the last 401 was seen (epoch seconds, for display).
     pub last_401_at: Option<u64>,
+    /// The Discord build number currently in use (from `build_info.build_number`).
+    pub build_number_in_use: u32,
+    /// Unix epoch seconds when the build info was last scraped (0 = floor constant).
+    pub build_info_scraped_at: u64,
+    /// When the last 429 was seen (epoch seconds, for display).
+    pub last_429_at: Option<u64>,
+    /// Whether the build info is considered stale (scrape failed for > 14 days AND
+    /// floor constant is > 30 days old). When `true` the UI shows a yellow warning.
+    pub build_stale_warning: bool,
 }
 
 impl DiscordHealth {
     /// Update 429 telemetry from a [`RateGuard`] snapshot.
     pub fn update_from_rate_guard(&mut self, guard: &RateGuard) {
-        let (count, _last) = guard.health_snapshot();
+        let (count, last) = guard.health_snapshot();
         self.recent_429_count = count;
+        // Convert Instant to epoch seconds by computing elapsed from now.
+        if let Some(last_instant) = last {
+            let elapsed_secs = Instant::now()
+                .duration_since(last_instant)
+                .as_secs();
+            // Approximate epoch: current wall-clock minus elapsed.
+            // We don't have access to SystemTime here (WASM-safe), so we store
+            // the elapsed-seconds-ago value as a negative offset sentinel.
+            // The UI can display "last 429 was N seconds ago" from this.
+            // Store as saturating subtraction from a large sentinel so 0 means "none".
+            self.last_429_at = Some(elapsed_secs);
+        }
     }
 
     /// Record a 403 response for a route.
@@ -432,6 +655,17 @@ impl DiscordHealth {
     /// Record a 401 response (epoch seconds from caller).
     pub fn record_401(&mut self, epoch_secs: u64) {
         self.last_401_at = Some(epoch_secs);
+    }
+
+    /// Update build-info fields for the F.2 health panel.
+    ///
+    /// `scraped_at` is the Unix epoch seconds from `BuildInfo::scraped_at`
+    /// (0 = synthesised floor constant, never actually scraped).
+    /// `stale` should be set by [`check_build_staleness`] in `build_info.rs`.
+    pub fn update_build_info(&mut self, build_number: u32, scraped_at: u64, stale: bool) {
+        self.build_number_in_use = build_number;
+        self.build_info_scraped_at = scraped_at;
+        self.build_stale_warning = stale;
     }
 }
 
