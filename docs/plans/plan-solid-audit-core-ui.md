@@ -137,7 +137,7 @@ Not started in this change — listed for follow-up agents.
 
 ---
 
-## Phase C — Architectural rewrites (> 300 LoC each) — shipped in change (pending jj describe)
+## Phase C — Architectural rewrites (> 300 LoC each) — C.1 shipped in commit df696245
 
 - [x] **C.1** `chat_view/mod.rs` (4025 LoC, 88 fns) — long-standing
   CLAUDE.md target. Split: `layout.rs` (shell, header, side column),
