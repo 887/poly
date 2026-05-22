@@ -189,9 +189,9 @@ Pure data items that already compile on wasm32 and should be hoisted to `voice_c
 - [ ] **C.1** Add stoat to the voice-view UI's backend match arm — discord already shows Join Voice; mirror that for stoat. Check `crates/core/src/ui/voice_view.rs` (or wherever the discord Join Voice button is rendered) and add the stoat case.
 - [ ] **C.2** Confirm the stoat voice channels are seeded in the test-stoat mock and navigable via URL like `/stoat/<instance_id>/<account_num>/channels/<channel_id>`.
 
-### Phase D — Mock fixes (if surfaced during smoke)
+### Phase D — Mock fixes (if surfaced during smoke) — shipped in change `ptovooks`
 
-- [ ] **D.1** Catch-all for whatever the live smoke turns up. Likely candidates: WS upgrade rejection on a query-param the WASM client sends, frame format off-by-one, opus-session reuse across clients.
+- [x] **D.1** Catch-all for whatever the live smoke turns up. Root cause found: the WASM `event_stream()` was a stub that emitted only a single `ConnectionStateChanged(connected: true)` and then ended — it never opened a Bonfire WebSocket. The mock WAS already broadcasting `VoiceUserJoined`/`VoiceUserLeft` over Bonfire (join_call handler + vortex_handler cleanup both publish to the bus; bonfire_handler forwards them). The `parse_bonfire_event` function was also gated off on wasm32. Fixed: (a) removed `#[cfg(not(target_arch = "wasm32"))]` gate from `http::ws_url()` so WASM can read the Bonfire URL; (b) widened `parse_bonfire_event` from `cfg(all(feature = "native", not(target_arch = "wasm32")))` to `cfg(feature = "native")`; (c) replaced WASM `event_stream` stub with a real `gloo_net::websocket::futures::WebSocket` connection that authenticates and streams all Bonfire events through `parse_bonfire_event`. shipped in change `ptovooks`
 
 ### Phase E — Live mutual-audio cross-shell smoke
 

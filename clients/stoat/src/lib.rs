@@ -1097,15 +1097,90 @@ impl IsBackend for StoatClient {
         }
         #[cfg(target_arch = "wasm32")]
         {
-            // WASM has no live Bonfire WS yet, but we still need to publish
-            // Connected so the UI unblocks the voice / capability surface.
-            // Emit a single ConnectionStateChanged then end the stream.
-            Box::pin(stream::once(async {
-                ClientEvent::ConnectionStateChanged {
-                    backend: BackendType::from(crate::SLUG),
-                    connected: true,
+            // WASM Bonfire WS — mirror the native path using gloo_net instead
+            // of tokio_tungstenite, and spawn_local instead of tokio::spawn.
+            // Events are bridged through a futures::channel::mpsc so the
+            // returned stream is Send (required by the IsBackend trait).
+            let ws_url = match self.http.ws_url() {
+                Some(url) => url,
+                None => {
+                    // Not yet authenticated — emit Connected so the UI unblocks,
+                    // then end the stream. Voice joins will retry when ready.
+                    return Box::pin(stream::once(async {
+                        ClientEvent::ConnectionStateChanged {
+                            backend: BackendType::from(crate::SLUG),
+                            connected: true,
+                        }
+                    }));
                 }
-            }))
+            };
+            let token = match self.http.session().map(|s| s.token) {
+                Some(t) => t,
+                None => {
+                    return Box::pin(stream::once(async {
+                        ClientEvent::ConnectionStateChanged {
+                            backend: BackendType::from(crate::SLUG),
+                            connected: true,
+                        }
+                    }));
+                }
+            };
+
+            let (tx, rx) = futures::channel::mpsc::unbounded::<ClientEvent>();
+
+            wasm_bindgen_futures::spawn_local(async move {
+                use futures::StreamExt as _;
+                use gloo_net::websocket::Message as GlooWsMsg;
+                use gloo_net::websocket::futures::WebSocket;
+
+                let ws = match WebSocket::open(&ws_url) {
+                    Ok(ws) => ws,
+                    Err(e) => {
+                        tracing::warn!("Bonfire WS open failed (WASM): {e:?}");
+                        // Emit a Connected=false so the UI knows.
+                        let _ = tx.unbounded_send(ClientEvent::ConnectionStateChanged {
+                            backend: BackendType::from(crate::SLUG),
+                            connected: false,
+                        });
+                        return;
+                    }
+                };
+
+                let (mut write, mut read) = futures::StreamExt::split(ws);
+
+                // Authenticate over Bonfire.
+                let auth_msg = serde_json::json!({"type": "Authenticate", "token": token});
+                if let Err(e) = futures::SinkExt::send(
+                    &mut write,
+                    GlooWsMsg::Text(auth_msg.to_string()),
+                ).await {
+                    tracing::warn!("Bonfire WS authenticate failed (WASM): {e:?}");
+                    return;
+                }
+
+                // Forward all Bonfire text events through parse_bonfire_event.
+                while let Some(msg) = read.next().await {
+                    match msg {
+                        Ok(GlooWsMsg::Text(text)) => {
+                            if let Ok(event_json) =
+                                serde_json::from_str::<serde_json::Value>(&text)
+                                && let Some(ev) = parse_bonfire_event(&event_json)
+                            {
+                                if tx.unbounded_send(ev).is_err() {
+                                    break; // receiver dropped — stream closed
+                                }
+                            }
+                        }
+                        Ok(GlooWsMsg::Bytes(_)) => {}
+                        Err(e) => {
+                            tracing::warn!("Bonfire WS error (WASM): {e:?}");
+                            break;
+                        }
+                    }
+                }
+            });
+
+            Box::pin(rx)
         }
     }
 
@@ -2069,7 +2144,7 @@ impl poly_client::DmsAndGroupsBackend for StoatClient {
     }
 }
 
-#[cfg(all(feature = "native", not(target_arch = "wasm32")))]
+#[cfg(feature = "native")]
 fn parse_bonfire_event(json: &serde_json::Value) -> Option<ClientEvent> {
     match json.get("type")?.as_str()? {
         "Message" => {
