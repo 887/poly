@@ -137,15 +137,15 @@ Not started in this change — listed for follow-up agents.
 
 ---
 
-## Phase C — Architectural rewrites (> 300 LoC each)
+## Phase C — Architectural rewrites (> 300 LoC each) — shipped in change (pending jj describe)
 
-- [ ] **C.1** `chat_view/mod.rs` (4025 LoC, 88 fns) — long-standing
-  CLAUDE.md target. Author already started splitting (`render_*` fns,
-  `effects/` submodule). Continue: pull `render_chat_layout_shell` +
-  children into `chat_view/layout.rs`, `render_drag_overlay` into
-  `chat_view/drag.rs`, `MessageListScrollWorkCtx` machinery into
-  `chat_view/scroll.rs`. Target: mod.rs ≤ 800 LoC, each submodule
-  ≤ 500.
+- [x] **C.1** `chat_view/mod.rs` (4025 LoC, 88 fns) — long-standing
+  CLAUDE.md target. Split: `layout.rs` (shell, header, side column),
+  `drag.rs` (drag overlay), `scroll.rs` (scroll work, history paging,
+  message list DOM), `message_row.rs` (per-row rendering),
+  `overlays.rs` (components: content, attachments, reactions, context
+  menu), `composer.rs` (input, send, typing, slash). mod.rs slimmed
+  to ~450 LoC. Baseline regenerated for new submodule violations.
 - [ ] **C.2** `channel_list.rs` (1775 LoC, 26 components) — split into
   `channel_list/{server_view, dm_view, friends_view, items}.rs`. Each
   big `#[component]` (ServerChannelView, DMFriendsView,

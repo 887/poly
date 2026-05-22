@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 use super::super::signals::ChatViewSignals;
 use super::super::markup_ctx::ChatViewMarkupCtx;
-use super::super::sync_mobile_side_column_open;
+use super::super::layout::sync_mobile_side_column_open;
 
 pub(in super::super) fn use_mobile_side_column_effect(signals: &ChatViewSignals, ctx: &ChatViewMarkupCtx) {
     let ui_layout = signals.ui_layout;
