@@ -120,13 +120,13 @@ Verification: `cargo check -p poly-core --all-features` — green, 2m43s.
   re-exporting `install_wasm_crash_handler`. No debug_keys or Rust-level
   bridge code existed in the original (both are pure JS). Both WASM and
   native `cargo check` green. Shipped in change `tworxtwl`.
-- [ ] **B.7** **`AccountSessions::content_policy` is a singleton field on
+- [x] **B.7** **`AccountSessions::content_policy` is a singleton field on
   a per-account-collection struct** (`state/account_sessions.rs:47`). When
   switching accounts the policy is replaced wholesale — but the struct
   already keys other fields by account ID (`account_sessions`,
   `blocked_users`). Promote `content_policy: ContentPolicy` to
   `content_policies: HashMap<String, ContentPolicy>`. LSP win — the field
-  shape matches every other per-account map. Shipped in change `<B.7-change-id>` (to be filled after describe).
+  shape matches every other per-account map. Shipped in change `olmzksur`.
 - [ ] **B.8** **Voice-noise integration is a real missing impl, not a
   stale comment** (`state/chat_data.rs:27`,
   `TODO(phase-voice-3)`). The toggle is wired in the UI but the
