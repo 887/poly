@@ -1665,6 +1665,24 @@ impl IsBackend for DiscordClient {
         Some(self)
     }
 
+    // ── C.1 — moved to sub-traits at the bottom of this file ────────────────
+
+    fn as_voice_transport(&self) -> Option<&dyn poly_client::VoiceTransportBackend> {
+        Some(self)
+    }
+
+    fn as_settings(&self) -> Option<&dyn poly_client::SettingsBackend> {
+        Some(self)
+    }
+
+    fn as_view_descriptor(&self) -> Option<&dyn poly_client::ViewDescriptorBackend> {
+        Some(self)
+    }
+
+    fn as_context_action(&self) -> Option<&dyn poly_client::ContextActionBackend> {
+        Some(self)
+    }
+
     async fn send_message(&self, channel_id: &str, content: MessageContent) -> ClientResult<Message> {
         // D.5 — slow-mode guard.  `rate_limit_per_user` of 0 means no restriction.
         // We record the send unconditionally; the guard only blocks when a window is set.
@@ -1706,199 +1724,6 @@ impl IsBackend for DiscordClient {
     ///
     /// The cache is populated by `VOICE_STATE_UPDATE` gateway events.
     /// Returns an empty list if no participants are cached (not an error).
-    async fn get_voice_participants(&self, channel_id: &str) -> ClientResult<Vec<VoiceParticipant>> {
-        #[cfg(feature = "gateway")]
-        {
-            let states = self.voice_states.read().await;
-            return Ok(states.get(channel_id).cloned().unwrap_or_default());
-        }
-        #[cfg(not(feature = "gateway"))]
-        {
-            let _ = channel_id;
-            Ok(vec![])
-        }
-    }
-
-    /// D.2 / D.5 — Initiate a DM call via the Discord gateway op 13.
-    async fn start_dm_call_transport(&self, dm_channel_id: &str) -> ClientResult<()> {
-        #[cfg(feature = "gateway")]
-        {
-            self.start_direct_call(dm_channel_id)?;
-        }
-        #[cfg(not(feature = "gateway"))]
-        {
-            let _ = dm_channel_id;
-        }
-        Ok(())
-    }
-
-    /// C.1 — Signal the gateway that the local user is joining a voice channel.
-    ///
-    /// - `gateway` (native, not wasm32): sends op 4 Voice State Update on the
-    ///   main gateway back-channel. Requires `event_stream()` to have been called
-    ///   first (which opens the WS and sets `gateway_tx`).
-    /// - `voice-bridge` (wasm32): initialises a `DiscordVoiceBridgeClient` and
-    ///   drives the full Discord voice protocol over generic host-bridge primitives
-    ///   (`/host/udp/*`, `/host/codec/opus/*`, `/host/aead/*`). The WS endpoint
-    ///   and credentials are expected to be cached on the client by the time this
-    ///   is called (set via `VOICE_SERVER_UPDATE` / `VOICE_STATE_UPDATE` events on
-    ///   whatever event path the wasm32 shell uses). Until full wiring of that
-    ///   credential path ships, the call proceeds with empty credential strings,
-    ///   matching the existing `finish_handshake` stub behaviour in `voice_bridge.rs`.
-    async fn join_voice_channel_transport(
-        &self,
-        server_id: &str,
-        channel_id: &str,
-    ) -> ClientResult<()> {
-        #[cfg(all(feature = "gateway", not(target_arch = "wasm32")))]
-        {
-            self.set_self_mute(server_id, Some(channel_id), false, false)?;
-        }
-        #[cfg(all(feature = "voice-bridge", target_arch = "wasm32"))]
-        {
-            tracing::info!(
-                target: "poly_discord::voice_bridge",
-                server_id,
-                channel_id,
-                "join_voice_channel_transport: dispatching via DiscordVoiceBridgeClient"
-            );
-
-            // gateway-bridge: send op 4 Voice State Update so Discord dispatches
-            // VOICE_STATE_UPDATE + VOICE_SERVER_UPDATE back to us.
-            #[cfg(feature = "gateway-bridge")]
-            {
-                let op4 = serde_json::json!({
-                    "op": 4,
-                    "d": {
-                        "guild_id": server_id,
-                        "channel_id": channel_id,
-                        "self_mute": false,
-                        "self_deaf": false,
-                    }
-                });
-                if let Ok(guard) = self.gateway_bridge_tx.lock() {
-                    if let Some(tx) = guard.as_ref() {
-                        let _ = tx.send(op4.to_string());
-                        tracing::info!(
-                            target: "poly_discord::gateway_bridge",
-                            server_id,
-                            channel_id,
-                            "join_voice_channel_transport: sent op4 via gateway-bridge"
-                        );
-                    } else {
-                        tracing::warn!(
-                            target: "poly_discord::gateway_bridge",
-                            "join_voice_channel_transport: gateway-bridge not yet connected \
-                             (event_stream not called or connection pending)"
-                        );
-                    }
-                }
-            }
-
-            // Read voice credentials — populated by the gateway-bridge loop from
-            // VOICE_STATE_UPDATE + VOICE_SERVER_UPDATE once Discord processes op 4.
-            // These arrive asynchronously (~3–50 ms after op 4 is sent), so poll
-            // with wait_for_voice_creds instead of taking a single-shot snapshot.
-            // When gateway-bridge is not enabled, fall back to empty strings (the
-            // finish_handshake stub in voice_bridge.rs surfaces a clear error).
-            #[cfg(feature = "gateway-bridge")]
-            let (ws_endpoint, ws_token, ws_session_id) = {
-                match self.wait_for_voice_creds(1000).await {
-                    Some(creds) => creds,
-                    None => {
-                        tracing::warn!(
-                            target: "poly_discord::gateway_bridge",
-                            "join_voice_channel_transport: timed out waiting for \
-                             VOICE_SERVER_UPDATE creds (endpoint/token/session_id) — \
-                             proceeding with empty strings; connect_voice will fail"
-                        );
-                        (String::new(), String::new(), String::new())
-                    }
-                }
-            };
-            #[cfg(not(feature = "gateway-bridge"))]
-            let (ws_endpoint, ws_token, ws_session_id) =
-                (String::new(), String::new(), String::new());
-
-            let account_id = self.account_id();
-            let mut guard = self.voice_bridge_client.lock().await;
-            if guard.is_none() {
-                *guard = Some(voice_bridge::DiscordVoiceBridgeClient::new(account_id));
-            }
-            let client = guard.as_ref().expect("just initialised above");
-            let dummy_audio = poly_audio_backend::fake_backend::FakeAudioBackend::new();
-            if let Err(e) = client
-                .connect_voice(&ws_endpoint, &ws_token, &ws_session_id, Some(server_id), &dummy_audio, None)
-                .await
-            {
-                tracing::warn!(
-                    target: "poly_discord::voice_bridge",
-                    error = %e,
-                    "join_voice_channel_transport: connect_voice returned error"
-                );
-            }
-        }
-        #[cfg(not(any(
-            all(feature = "gateway", not(target_arch = "wasm32")),
-            all(feature = "voice-bridge", target_arch = "wasm32"),
-        )))]
-        {
-            let _ = (server_id, channel_id);
-        }
-        Ok(())
-    }
-
-    /// C.5 — Toggle the local user's mute / deafen state on the Discord gateway.
-    ///
-    /// - `gateway` (native, not wasm32): sends op 4 Voice State Update with the
-    ///   updated flags on the main gateway back-channel.
-    /// - `voice-bridge` (wasm32): delegates to `DiscordVoiceBridgeClient::set_self_mute`
-    ///   which returns an error when no voice session is active (guards against
-    ///   a stale mute toggle before `join_voice_channel_transport` completes).
-    async fn set_voice_mute(
-        &self,
-        server_id: &str,
-        channel_id: &str,
-        self_mute: bool,
-        self_deaf: bool,
-    ) -> ClientResult<()> {
-        #[cfg(all(feature = "gateway", not(target_arch = "wasm32")))]
-        {
-            self.set_self_mute(server_id, Some(channel_id), self_mute, self_deaf)?;
-        }
-        #[cfg(all(feature = "voice-bridge", target_arch = "wasm32"))]
-        {
-            tracing::info!(
-                target: "poly_discord::voice_bridge",
-                server_id,
-                channel_id,
-                self_mute,
-                self_deaf,
-                "set_voice_mute: dispatching via DiscordVoiceBridgeClient"
-            );
-            let guard = self.voice_bridge_client.lock().await;
-            if let Some(client) = guard.as_ref() {
-                if let Err(e) = client
-                    .set_self_mute(server_id, Some(channel_id), self_mute, self_deaf)
-                    .await
-                {
-                    tracing::warn!(
-                        target: "poly_discord::voice_bridge",
-                        error = %e,
-                        "set_voice_mute: bridge returned error (no active session?)"
-                    );
-                }
-            }
-        }
-        #[cfg(not(any(
-            all(feature = "gateway", not(target_arch = "wasm32")),
-            all(feature = "voice-bridge", target_arch = "wasm32"),
-        )))]
-        {
-            let _ = (server_id, channel_id, self_mute, self_deaf);
-        }
-        Ok(())
-    }
 
     // ── Moderation methods moved to ModerationBackend (H.3.a) ────────────────
 
@@ -2006,390 +1831,7 @@ impl IsBackend for DiscordClient {
 
     // ── WP 1 / F10 — state-aware context menus ──────────────────────────────
 
-    async fn get_context_menu_items(
-        &self, target: MenuTargetKind, target_id: &str,
-    ) -> Result<Vec<MenuItem>, ClientError> {
-        match target {
-            MenuTargetKind::Server => {
-                // State-aware: Mute Server / Unmute Server, plus static items.
-                let muted = self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).muted_servers.contains(target_id);
-                let mute_item = if muted {
-                    MenuItem {
-                        id: "unmute-server".to_string(),
-                        parent_id: None,
-                        slot: MenuSlot::AfterFavorites,
-                        label_key: "plugin-discord-menu-unmute-server-label".to_string(),
-                        icon: None,
-                        item_variant: MenuItemVariant::Normal,
-                        shortcut: None,
-                        block: None,
-                    }
-                } else {
-                    MenuItem {
-                        id: "mute-server".to_string(),
-                        parent_id: None,
-                        slot: MenuSlot::AfterFavorites,
-                        label_key: "plugin-discord-menu-mute-server-label".to_string(),
-                        icon: None,
-                        item_variant: MenuItemVariant::Normal,
-                        shortcut: None,
-                        block: None,
-                    }
-                };
-                Ok(vec![
-                    MenuItem {
-                        id: "invite-people".to_string(),
-                        parent_id: None,
-                        slot: MenuSlot::AfterFavorites,
-                        label_key: "plugin-discord-menu-invite-people-label".to_string(),
-                        icon: None,
-                        item_variant: MenuItemVariant::Normal,
-                        shortcut: None,
-                        block: None,
-                    },
-                    MenuItem {
-                        id: "privacy-settings".to_string(),
-                        parent_id: None,
-                        slot: MenuSlot::AfterFavorites,
-                        label_key: "plugin-discord-menu-privacy-settings-label".to_string(),
-                        icon: None,
-                        item_variant: MenuItemVariant::Normal,
-                        shortcut: None,
-                        block: None,
-                    },
-                    MenuItem {
-                        id: "edit-per-server-profile".to_string(),
-                        parent_id: None,
-                        slot: MenuSlot::AfterFavorites,
-                        label_key: "plugin-discord-menu-edit-per-server-profile-label".to_string(),
-                        icon: None,
-                        item_variant: MenuItemVariant::Normal,
-                        shortcut: None,
-                        block: None,
-                    },
-                    MenuItem {
-                        id: "server-boost".to_string(),
-                        parent_id: None,
-                        slot: MenuSlot::AfterFavorites,
-                        label_key: "plugin-discord-menu-server-boost-label".to_string(),
-                        icon: None,
-                        item_variant: MenuItemVariant::Normal,
-                        shortcut: None,
-                        block: None,
-                    },
-                    mute_item,
-                    MenuItem {
-                        id: "leave-server".to_string(),
-                        parent_id: None,
-                        slot: MenuSlot::BeforeLeave,
-                        label_key: "plugin-discord-menu-leave-server-label".to_string(),
-                        icon: None,
-                        item_variant: MenuItemVariant::Destructive,
-                        shortcut: None,
-                        block: None,
-                    },
-                ])
-            }
-            MenuTargetKind::Channel => {
-                // State-aware: Mute/Unmute Channel, Mark Read.
-                let muted = self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).muted_channels.contains(target_id);
-                let mute_item = if muted {
-                    MenuItem {
-                        id: "unmute-channel".to_string(),
-                        parent_id: None,
-                        slot: MenuSlot::AfterFavorites,
-                        label_key: "plugin-discord-menu-unmute-channel-label".to_string(),
-                        icon: None,
-                        item_variant: MenuItemVariant::Normal,
-                        shortcut: None,
-                        block: None,
-                    }
-                } else {
-                    MenuItem {
-                        id: "mute-channel".to_string(),
-                        parent_id: None,
-                        slot: MenuSlot::AfterFavorites,
-                        label_key: "plugin-discord-menu-mute-channel-label".to_string(),
-                        icon: None,
-                        item_variant: MenuItemVariant::Normal,
-                        shortcut: None,
-                        block: None,
-                    }
-                };
-                Ok(vec![
-                    mute_item,
-                    MenuItem {
-                        id: "mark-channel-read".to_string(),
-                        parent_id: None,
-                        slot: MenuSlot::AfterFavorites,
-                        label_key: "plugin-discord-menu-mark-channel-read-label".to_string(),
-                        icon: None,
-                        item_variant: MenuItemVariant::Normal,
-                        shortcut: None,
-                        block: None,
-                    },
-                ])
-            }
-            MenuTargetKind::User => {
-                // State-aware: Block/Unblock, Add Friend/Remove Friend, Open DM.
-                let blocked = self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).blocked_users.contains(target_id);
-                let is_friend = self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).friend_ids.contains(target_id);
-                let block_item = if blocked {
-                    MenuItem {
-                        id: "unblock-user".to_string(),
-                        parent_id: None,
-                        slot: MenuSlot::BeforeLeave,
-                        label_key: "plugin-discord-menu-unblock-user-label".to_string(),
-                        icon: None,
-                        item_variant: MenuItemVariant::Normal,
-                        shortcut: None,
-                        block: None,
-                    }
-                } else {
-                    MenuItem {
-                        id: "block-user".to_string(),
-                        parent_id: None,
-                        slot: MenuSlot::BeforeLeave,
-                        label_key: "plugin-discord-menu-block-user-label".to_string(),
-                        icon: None,
-                        item_variant: MenuItemVariant::Destructive,
-                        shortcut: None,
-                        block: None,
-                    }
-                };
-                let friend_item = if is_friend {
-                    MenuItem {
-                        id: "remove-friend".to_string(),
-                        parent_id: None,
-                        slot: MenuSlot::AfterFavorites,
-                        label_key: "plugin-discord-menu-remove-friend-label".to_string(),
-                        icon: None,
-                        item_variant: MenuItemVariant::Normal,
-                        shortcut: None,
-                        block: None,
-                    }
-                } else {
-                    MenuItem {
-                        id: "add-friend".to_string(),
-                        parent_id: None,
-                        slot: MenuSlot::AfterFavorites,
-                        label_key: "plugin-discord-menu-add-friend-label".to_string(),
-                        icon: None,
-                        item_variant: MenuItemVariant::Normal,
-                        shortcut: None,
-                        block: None,
-                    }
-                };
-                Ok(vec![
-                    MenuItem {
-                        id: "open-dm".to_string(),
-                        parent_id: None,
-                        slot: MenuSlot::AfterFavorites,
-                        label_key: "plugin-discord-menu-open-dm-label".to_string(),
-                        icon: None,
-                        item_variant: MenuItemVariant::Normal,
-                        shortcut: None,
-                        block: None,
-                    },
-                    friend_item,
-                    block_item,
-                ])
-            }
-            MenuTargetKind::Message => {
-                // Copy Link is always available; Delete is destructive.
-                Ok(vec![
-                    MenuItem {
-                        id: "copy-message-link".to_string(),
-                        parent_id: None,
-                        slot: MenuSlot::AfterFavorites,
-                        label_key: "plugin-discord-menu-copy-message-link-label".to_string(),
-                        icon: None,
-                        item_variant: MenuItemVariant::Normal,
-                        shortcut: None,
-                        block: None,
-                    },
-                    MenuItem {
-                        id: "delete-message".to_string(),
-                        parent_id: None,
-                        slot: MenuSlot::BeforeLeave,
-                        label_key: "plugin-discord-menu-delete-message-label".to_string(),
-                        icon: None,
-                        item_variant: MenuItemVariant::Destructive,
-                        shortcut: None,
-                        block: None,
-                    },
-                ])
-            }
-            MenuTargetKind::Dm => {
-                // State-aware: Mute/Unmute DM, Close DM.
-                let muted = self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).muted_dms.contains(target_id);
-                let mute_item = if muted {
-                    MenuItem {
-                        id: "unmute-dm".to_string(),
-                        parent_id: None,
-                        slot: MenuSlot::AfterFavorites,
-                        label_key: "plugin-discord-menu-unmute-dm-label".to_string(),
-                        icon: None,
-                        item_variant: MenuItemVariant::Normal,
-                        shortcut: None,
-                        block: None,
-                    }
-                } else {
-                    MenuItem {
-                        id: "mute-dm".to_string(),
-                        parent_id: None,
-                        slot: MenuSlot::AfterFavorites,
-                        label_key: "plugin-discord-menu-mute-dm-label".to_string(),
-                        icon: None,
-                        item_variant: MenuItemVariant::Normal,
-                        shortcut: None,
-                        block: None,
-                    }
-                };
-                Ok(vec![
-                    mute_item,
-                    MenuItem {
-                        id: "close-dm".to_string(),
-                        parent_id: None,
-                        slot: MenuSlot::BeforeLeave,
-                        label_key: "plugin-discord-menu-close-dm-label".to_string(),
-                        icon: None,
-                        item_variant: MenuItemVariant::Destructive,
-                        shortcut: None,
-                        block: None,
-                    },
-                ])
-            }
-            MenuTargetKind::Category => Ok(Vec::new()),
-        }
-    }
 
-    async fn invoke_context_action(
-        &self, action_id: &str, _target: MenuTargetKind, target_id: &str,
-    ) -> Result<ActionOutcome, ClientError> {
-        match action_id {
-            // Server / channel / user / message actions that are pure no-ops at this layer.
-            "invite-people"
-            | "privacy-settings"
-            | "edit-per-server-profile"
-            | "server-boost"
-            | "leave-server"
-            | "mark-channel-read"
-            | "open-dm"
-            | "copy-message-link"
-            | "delete-message"
-            | "close-dm" => Ok(ActionOutcome::Noop),
-            "mute-server" => {
-                self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).muted_servers.insert(target_id.to_string());
-                Ok(ActionOutcome::Noop)
-            }
-            "unmute-server" => {
-                self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).muted_servers.remove(target_id);
-                Ok(ActionOutcome::Noop)
-            }
-            // Channel actions
-            "mute-channel" => {
-                self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).muted_channels.insert(target_id.to_string());
-                Ok(ActionOutcome::Noop)
-            }
-            "unmute-channel" => {
-                self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).muted_channels.remove(target_id);
-                Ok(ActionOutcome::Noop)
-            }
-            // User actions
-            "add-friend" => {
-                self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).friend_ids.insert(target_id.to_string());
-                Ok(ActionOutcome::Noop)
-            }
-            "remove-friend" => {
-                self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).friend_ids.remove(target_id);
-                Ok(ActionOutcome::Noop)
-            }
-            "block-user" => {
-                self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).blocked_users.insert(target_id.to_string());
-                Ok(ActionOutcome::Noop)
-            }
-            "unblock-user" => {
-                self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).blocked_users.remove(target_id);
-                Ok(ActionOutcome::Noop)
-            }
-            // DM actions
-            "mute-dm" => {
-                self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).muted_dms.insert(target_id.to_string());
-                Ok(ActionOutcome::Noop)
-            }
-            "unmute-dm" => {
-                self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).muted_dms.remove(target_id);
-                Ok(ActionOutcome::Noop)
-            }
-            other => Err(ClientError::NotFound(format!("unknown action: {other}"))),
-        }
-    }
-
-    async fn poll_action(&self, _handle: PendingHandle) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound("no pending actions".into()))
-    }
-
-    async fn get_settings_sections(&self) -> ClientResult<Vec<SettingsSection>> {
-        Ok(vec![
-            SettingsSection {
-                scope: SettingsScope::PerServer,
-                section_key: "profile".to_string(),
-                icon: None,
-                fields: vec![
-                    SettingDescriptor {
-                        key: "nickname".to_string(),
-                        kind: SettingKind::TextInput,
-                        default_value: "\"\"".to_string(),
-                        extra: String::new(),
-                    },
-                    SettingDescriptor {
-                        key: "server-avatar-url".to_string(),
-                        kind: SettingKind::TextInput,
-                        default_value: "\"\"".to_string(),
-                        extra: String::new(),
-                    },
-                ],
-                info_block: None,
-            },
-            SettingsSection {
-                scope: SettingsScope::PerServer,
-                section_key: "notification-rules".to_string(),
-                icon: None,
-                fields: vec![
-                    SettingDescriptor {
-                        key: "mentions-only".to_string(),
-                        kind: SettingKind::Toggle,
-                        default_value: "false".to_string(),
-                        extra: String::new(),
-                    },
-                    SettingDescriptor {
-                        key: "mute-category".to_string(),
-                        kind: SettingKind::Toggle,
-                        default_value: "false".to_string(),
-                        extra: String::new(),
-                    },
-                ],
-                info_block: None,
-            },
-            SettingsSection {
-                scope: SettingsScope::PerServer,
-                section_key: "privacy".to_string(),
-                icon: None,
-                fields: vec![SettingDescriptor {
-                    key: "allow-dms-from-server-members".to_string(),
-                    kind: SettingKind::Toggle,
-                    default_value: "true".to_string(),
-                    extra: String::new(),
-                }],
-                info_block: None,
-            },
-        ])
-    }
-
-    fn settings_storage(&self) -> &SettingsStorageCell {
-        &self.settings_storage
-    }
 
     /// Discord declares two mechanisms:
     ///
@@ -2449,173 +1891,7 @@ impl IsBackend for DiscordClient {
         }
     }
 
-    async fn get_sidebar_declaration(&self) -> ClientResult<SidebarDeclaration> {
-        Ok(SidebarDeclaration {
-            layout: SidebarLayoutKind::ChannelList,
-            sections: Vec::new(),
-            header_block: None,
-        })
-    }
 
-    async fn invoke_sidebar_action(&self, action_id: &str) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound(format!("unknown sidebar action: {action_id}")))
-    }
-
-    /// Account-level overview: a card grid of the user's Discord guilds.
-    ///
-    /// Each card shows the guild name, description (if any), and a
-    /// `"N members · X unread · @Y mentions"` meta line.  The actual row
-    /// data is fetched by `get_view_rows` when `channel_id == ""`.
-    async fn get_account_overview_view(&self) -> ClientResult<ViewDescriptor> {
-        Ok(ViewDescriptor {
-            kind: ViewKind::CardGrid,
-            header: Some(ViewHeader {
-                title_key: Some("plugin-discord-overview-title".to_string()),
-                subtitle_key: Some("plugin-discord-overview-subtitle".to_string()),
-                info_block: None,
-            }),
-            toolbar: None,
-            body: ViewBody::CardBody(CardSpec {
-                primary_field: "name".to_string(),
-            }),
-        })
-    }
-
-    async fn get_channel_view(&self, _channel_id: &str) -> ClientResult<ViewDescriptor> {
-        Err(ClientError::NotSupported("channel-view not yet implemented".into()))
-    }
-
-    /// Paged row data for views.
-    ///
-    /// When `channel_id == ""` (the account-overview sentinel emitted by the
-    /// host's `AccountOverviewView` route), returns one [`ViewRow`] per joined
-    /// Discord guild, mapping guild name / description / unread badges into the
-    /// card-grid layout declared by [`get_account_overview_view`].
-    ///
-    /// Member counts are fetched in parallel via `GET /guilds/{id}?with_counts=true`.
-    /// Individual failures degrade gracefully to `"? members"` so one
-    /// rate-limited guild doesn't blank the entire overview.
-    ///
-    /// Non-overview `channel_id`s return `NotSupported` (channel views are not
-    /// yet implemented for Discord).
-    async fn get_view_rows(
-        &self,
-        channel_id: &str,
-        _cursor: Option<Cursor>,
-        _sort_id: Option<&str>,
-        _filter_id: Option<&str>,
-        _tab_id: Option<&str>,
-    ) -> ClientResult<ViewRowsPage> {
-        if !channel_id.is_empty() {
-            return Err(ClientError::NotSupported("view-rows not yet implemented".into()));
-        }
-
-        let servers = self.get_servers().await?;
-
-        // Fan out member-count fetches in parallel; degrade gracefully on
-        // individual failures so one unavailable guild doesn't blank the card.
-        let member_counts: Vec<Option<u32>> = {
-            use futures::future;
-            let futs: Vec<_> = servers
-                .iter()
-                .map(|s| self.http.get_guild_with_counts(&s.id))
-                .collect();
-            future::join_all(futs)
-                .await
-                .into_iter()
-                .map(|r| r.ok().and_then(|g| g.approximate_member_count))
-                .collect()
-        };
-
-        let rows = servers
-            .into_iter()
-            .zip(member_counts)
-            .map(|(s, member_count_opt)| {
-                let meta = {
-                    let members_str = match member_count_opt {
-                        Some(n) => format!("{n} members"),
-                        None => "? members".to_string(),
-                    };
-                    let unread_part = if s.unread_count > 0 {
-                        format!(" · {} unread", s.unread_count)
-                    } else {
-                        String::new()
-                    };
-                    let mention_part = if s.mention_count > 0 {
-                        format!(" · @{}", s.mention_count)
-                    } else {
-                        String::new()
-                    };
-                    format!("{members_str}{unread_part}{mention_part}")
-                };
-                ViewRow {
-                    id: s.id.clone(),
-                    primary_text: s.name.clone(),
-                    secondary_text: s.description.clone(),
-                    meta_text: Some(meta),
-                    icon: s.icon_url.clone(),
-                    badge: None,
-                    context_menu_target_kind: MenuTargetKind::Server,
-                    preview_image_url: None,
-                    is_video: false,
-                }
-            })
-            .collect();
-
-        Ok(ViewRowsPage { rows, next_cursor: None })
-    }
-
-    async fn get_view_detail(
-        &self,
-        _channel_id: &str,
-        _row_id: &str,
-    ) -> ClientResult<ViewDetail> {
-        Err(ClientError::NotSupported("view-detail not yet implemented".into()))
-    }
-
-    async fn get_composer_buttons(&self, _channel_id: &str) -> ClientResult<Vec<ComposerButton>> {
-        // Stickers/GIF picker lives in the unified MediaPickerPopup
-        // (composer-common emoji button → tabs for emoji/GIF/stickers).
-        // Don't duplicate it as a separate composer button.
-        Ok(vec![])
-    }
-
-    async fn get_message_actions(
-        &self,
-        _channel_id: &str,
-        _message_id: &str,
-    ) -> ClientResult<Vec<MenuItem>> {
-        Ok(vec![MenuItem {
-            id: "pin-message".to_string(),
-            parent_id: None,
-            slot: MenuSlot::AfterFavorites,
-            label_key: "plugin-discord-message-action-pin-message-label".to_string(),
-            icon: None,
-            item_variant: MenuItemVariant::Normal,
-            shortcut: None,
-            block: None,
-        }])
-    }
-
-    async fn invoke_composer_action(
-        &self,
-        action_id: &str,
-        _channel_id: &str,
-    ) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound(format!("unknown composer action: {action_id}")))
-    }
-
-    async fn invoke_message_action(
-        &self,
-        action_id: &str,
-        _channel_id: &str,
-        _message_id: &str,
-    ) -> ClientResult<ActionOutcome> {
-        match action_id {
-            "pin-message" => Ok(ActionOutcome::Noop),
-            other => Err(ClientError::NotFound(format!("unknown message action: {other}"))),
-        }
-    }
 
     // ── Social graph methods moved to SocialGraphBackend (H.3.b) ────────────
     // ── DMs and groups moved to DmsAndGroupsBackend (H.3.c) ─────────────────
@@ -3532,5 +2808,775 @@ mod mechanism_tests {
             result.is_err(),
             "set_client_mechanism should return Err for unknown mechanism IDs"
         );
+    }
+}
+
+// ── C.1 — VoiceTransportBackend ──────────────────────────────────────────────
+
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::VoiceTransportBackend for DiscordClient {
+    async fn get_voice_participants(&self, channel_id: &str) -> ClientResult<Vec<VoiceParticipant>> {
+        #[cfg(feature = "gateway")]
+        {
+            let states = self.voice_states.read().await;
+            return Ok(states.get(channel_id).cloned().unwrap_or_default());
+        }
+        #[cfg(not(feature = "gateway"))]
+        {
+            let _ = channel_id;
+            Ok(vec![])
+        }
+    }
+
+    /// D.2 / D.5 — Initiate a DM call via the Discord gateway op 13.
+    async fn start_dm_call_transport(&self, dm_channel_id: &str) -> ClientResult<()> {
+        #[cfg(feature = "gateway")]
+        {
+            self.start_direct_call(dm_channel_id)?;
+        }
+        #[cfg(not(feature = "gateway"))]
+        {
+            let _ = dm_channel_id;
+        }
+        Ok(())
+    }
+
+    /// C.1 — Signal the gateway that the local user is joining a voice channel.
+    ///
+    /// - `gateway` (native, not wasm32): sends op 4 Voice State Update on the
+    ///   main gateway back-channel. Requires `event_stream()` to have been called
+    ///   first (which opens the WS and sets `gateway_tx`).
+    /// - `voice-bridge` (wasm32): initialises a `DiscordVoiceBridgeClient` and
+    ///   drives the full Discord voice protocol over generic host-bridge primitives
+    ///   (`/host/udp/*`, `/host/codec/opus/*`, `/host/aead/*`). The WS endpoint
+    ///   and credentials are expected to be cached on the client by the time this
+    ///   is called (set via `VOICE_SERVER_UPDATE` / `VOICE_STATE_UPDATE` events on
+    ///   whatever event path the wasm32 shell uses). Until full wiring of that
+    ///   credential path ships, the call proceeds with empty credential strings,
+    ///   matching the existing `finish_handshake` stub behaviour in `voice_bridge.rs`.
+    async fn join_voice_channel_transport(
+        &self,
+        server_id: &str,
+        channel_id: &str,
+    ) -> ClientResult<()> {
+        #[cfg(all(feature = "gateway", not(target_arch = "wasm32")))]
+        {
+            self.set_self_mute(server_id, Some(channel_id), false, false)?;
+        }
+        #[cfg(all(feature = "voice-bridge", target_arch = "wasm32"))]
+        {
+            tracing::info!(
+                target: "poly_discord::voice_bridge",
+                server_id,
+                channel_id,
+                "join_voice_channel_transport: dispatching via DiscordVoiceBridgeClient"
+            );
+
+            // gateway-bridge: send op 4 Voice State Update so Discord dispatches
+            // VOICE_STATE_UPDATE + VOICE_SERVER_UPDATE back to us.
+            #[cfg(feature = "gateway-bridge")]
+            {
+                let op4 = serde_json::json!({
+                    "op": 4,
+                    "d": {
+                        "guild_id": server_id,
+                        "channel_id": channel_id,
+                        "self_mute": false,
+                        "self_deaf": false,
+                    }
+                });
+                if let Ok(guard) = self.gateway_bridge_tx.lock() {
+                    if let Some(tx) = guard.as_ref() {
+                        let _ = tx.send(op4.to_string());
+                        tracing::info!(
+                            target: "poly_discord::gateway_bridge",
+                            server_id,
+                            channel_id,
+                            "join_voice_channel_transport: sent op4 via gateway-bridge"
+                        );
+                    } else {
+                        tracing::warn!(
+                            target: "poly_discord::gateway_bridge",
+                            "join_voice_channel_transport: gateway-bridge not yet connected \
+                             (event_stream not called or connection pending)"
+                        );
+                    }
+                }
+            }
+
+            // Read voice credentials — populated by the gateway-bridge loop from
+            // VOICE_STATE_UPDATE + VOICE_SERVER_UPDATE once Discord processes op 4.
+            // These arrive asynchronously (~3–50 ms after op 4 is sent), so poll
+            // with wait_for_voice_creds instead of taking a single-shot snapshot.
+            // When gateway-bridge is not enabled, fall back to empty strings (the
+            // finish_handshake stub in voice_bridge.rs surfaces a clear error).
+            #[cfg(feature = "gateway-bridge")]
+            let (ws_endpoint, ws_token, ws_session_id) = {
+                match self.wait_for_voice_creds(1000).await {
+                    Some(creds) => creds,
+                    None => {
+                        tracing::warn!(
+                            target: "poly_discord::gateway_bridge",
+                            "join_voice_channel_transport: timed out waiting for \
+                             VOICE_SERVER_UPDATE creds (endpoint/token/session_id) — \
+                             proceeding with empty strings; connect_voice will fail"
+                        );
+                        (String::new(), String::new(), String::new())
+                    }
+                }
+            };
+            #[cfg(not(feature = "gateway-bridge"))]
+            let (ws_endpoint, ws_token, ws_session_id) =
+                (String::new(), String::new(), String::new());
+
+            let account_id = self.account_id();
+            let mut guard = self.voice_bridge_client.lock().await;
+            if guard.is_none() {
+                *guard = Some(voice_bridge::DiscordVoiceBridgeClient::new(account_id));
+            }
+            let client = guard.as_ref().expect("just initialised above");
+            let dummy_audio = poly_audio_backend::fake_backend::FakeAudioBackend::new();
+            if let Err(e) = client
+                .connect_voice(&ws_endpoint, &ws_token, &ws_session_id, Some(server_id), &dummy_audio, None)
+                .await
+            {
+                tracing::warn!(
+                    target: "poly_discord::voice_bridge",
+                    error = %e,
+                    "join_voice_channel_transport: connect_voice returned error"
+                );
+            }
+        }
+        #[cfg(not(any(
+            all(feature = "gateway", not(target_arch = "wasm32")),
+            all(feature = "voice-bridge", target_arch = "wasm32"),
+        )))]
+        {
+            let _ = (server_id, channel_id);
+        }
+        Ok(())
+    }
+
+    /// C.5 — Toggle the local user's mute / deafen state on the Discord gateway.
+    ///
+    /// - `gateway` (native, not wasm32): sends op 4 Voice State Update with the
+    ///   updated flags on the main gateway back-channel.
+    /// - `voice-bridge` (wasm32): delegates to `DiscordVoiceBridgeClient::set_self_mute`
+    ///   which returns an error when no voice session is active (guards against
+    ///   a stale mute toggle before `join_voice_channel_transport` completes).
+    async fn set_voice_mute(
+        &self,
+        server_id: &str,
+        channel_id: &str,
+        self_mute: bool,
+        self_deaf: bool,
+    ) -> ClientResult<()> {
+        #[cfg(all(feature = "gateway", not(target_arch = "wasm32")))]
+        {
+            self.set_self_mute(server_id, Some(channel_id), self_mute, self_deaf)?;
+        }
+        #[cfg(all(feature = "voice-bridge", target_arch = "wasm32"))]
+        {
+            tracing::info!(
+                target: "poly_discord::voice_bridge",
+                server_id,
+                channel_id,
+                self_mute,
+                self_deaf,
+                "set_voice_mute: dispatching via DiscordVoiceBridgeClient"
+            );
+            let guard = self.voice_bridge_client.lock().await;
+            if let Some(client) = guard.as_ref() {
+                if let Err(e) = client
+                    .set_self_mute(server_id, Some(channel_id), self_mute, self_deaf)
+                    .await
+                {
+                    tracing::warn!(
+                        target: "poly_discord::voice_bridge",
+                        error = %e,
+                        "set_voice_mute: bridge returned error (no active session?)"
+                    );
+                }
+            }
+        }
+        #[cfg(not(any(
+            all(feature = "gateway", not(target_arch = "wasm32")),
+            all(feature = "voice-bridge", target_arch = "wasm32"),
+        )))]
+        {
+            let _ = (server_id, channel_id, self_mute, self_deaf);
+        }
+        Ok(())
+    }
+}
+
+// ── C.1 — SettingsBackend ────────────────────────────────────────────────────
+
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::SettingsBackend for DiscordClient {
+    async fn get_settings_sections(&self) -> ClientResult<Vec<SettingsSection>> {
+        Ok(vec![
+            SettingsSection {
+                scope: SettingsScope::PerServer,
+                section_key: "profile".to_string(),
+                icon: None,
+                fields: vec![
+                    SettingDescriptor {
+                        key: "nickname".to_string(),
+                        kind: SettingKind::TextInput,
+                        default_value: "\"\"".to_string(),
+                        extra: String::new(),
+                    },
+                    SettingDescriptor {
+                        key: "server-avatar-url".to_string(),
+                        kind: SettingKind::TextInput,
+                        default_value: "\"\"".to_string(),
+                        extra: String::new(),
+                    },
+                ],
+                info_block: None,
+            },
+            SettingsSection {
+                scope: SettingsScope::PerServer,
+                section_key: "notification-rules".to_string(),
+                icon: None,
+                fields: vec![
+                    SettingDescriptor {
+                        key: "mentions-only".to_string(),
+                        kind: SettingKind::Toggle,
+                        default_value: "false".to_string(),
+                        extra: String::new(),
+                    },
+                    SettingDescriptor {
+                        key: "mute-category".to_string(),
+                        kind: SettingKind::Toggle,
+                        default_value: "false".to_string(),
+                        extra: String::new(),
+                    },
+                ],
+                info_block: None,
+            },
+            SettingsSection {
+                scope: SettingsScope::PerServer,
+                section_key: "privacy".to_string(),
+                icon: None,
+                fields: vec![SettingDescriptor {
+                    key: "allow-dms-from-server-members".to_string(),
+                    kind: SettingKind::Toggle,
+                    default_value: "true".to_string(),
+                    extra: String::new(),
+                }],
+                info_block: None,
+            },
+        ])
+    }
+
+    fn settings_storage(&self) -> &SettingsStorageCell {
+        &self.settings_storage
+    }
+}
+
+// ── C.1 — ViewDescriptorBackend ──────────────────────────────────────────────
+
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::ViewDescriptorBackend for DiscordClient {
+    async fn get_sidebar_declaration(&self) -> ClientResult<SidebarDeclaration> {
+        Ok(SidebarDeclaration {
+            layout: SidebarLayoutKind::ChannelList,
+            sections: Vec::new(),
+            header_block: None,
+        })
+    }
+
+    async fn invoke_sidebar_action(&self, action_id: &str) -> ClientResult<ActionOutcome> {
+        Err(ClientError::NotFound(format!("unknown sidebar action: {action_id}")))
+    }
+
+    /// Account-level overview: a card grid of the user's Discord guilds.
+    ///
+    /// Each card shows the guild name, description (if any), and a
+    /// `"N members · X unread · @Y mentions"` meta line.  The actual row
+    /// data is fetched by `get_view_rows` when `channel_id == ""`.
+    async fn get_account_overview_view(&self) -> ClientResult<ViewDescriptor> {
+        Ok(ViewDescriptor {
+            kind: ViewKind::CardGrid,
+            header: Some(ViewHeader {
+                title_key: Some("plugin-discord-overview-title".to_string()),
+                subtitle_key: Some("plugin-discord-overview-subtitle".to_string()),
+                info_block: None,
+            }),
+            toolbar: None,
+            body: ViewBody::CardBody(CardSpec {
+                primary_field: "name".to_string(),
+            }),
+        })
+    }
+
+    async fn get_channel_view(&self, _channel_id: &str) -> ClientResult<ViewDescriptor> {
+        Err(ClientError::NotSupported("channel-view not yet implemented".into()))
+    }
+
+    /// Paged row data for views.
+    ///
+    /// When `channel_id == ""` (the account-overview sentinel emitted by the
+    /// host's `AccountOverviewView` route), returns one [`ViewRow`] per joined
+    /// Discord guild, mapping guild name / description / unread badges into the
+    /// card-grid layout declared by [`get_account_overview_view`].
+    ///
+    /// Member counts are fetched in parallel via `GET /guilds/{id}?with_counts=true`.
+    /// Individual failures degrade gracefully to `"? members"` so one
+    /// rate-limited guild doesn't blank the entire overview.
+    ///
+    /// Non-overview `channel_id`s return `NotSupported` (channel views are not
+    /// yet implemented for Discord).
+    async fn get_view_rows(
+        &self,
+        channel_id: &str,
+        _cursor: Option<Cursor>,
+        _sort_id: Option<&str>,
+        _filter_id: Option<&str>,
+        _tab_id: Option<&str>,
+    ) -> ClientResult<ViewRowsPage> {
+        if !channel_id.is_empty() {
+            return Err(ClientError::NotSupported("view-rows not yet implemented".into()));
+        }
+
+        let servers = self.get_servers().await?;
+
+        // Fan out member-count fetches in parallel; degrade gracefully on
+        // individual failures so one unavailable guild doesn't blank the card.
+        let member_counts: Vec<Option<u32>> = {
+            use futures::future;
+            let futs: Vec<_> = servers
+                .iter()
+                .map(|s| self.http.get_guild_with_counts(&s.id))
+                .collect();
+            future::join_all(futs)
+                .await
+                .into_iter()
+                .map(|r| r.ok().and_then(|g| g.approximate_member_count))
+                .collect()
+        };
+
+        let rows = servers
+            .into_iter()
+            .zip(member_counts)
+            .map(|(s, member_count_opt)| {
+                let meta = {
+                    let members_str = match member_count_opt {
+                        Some(n) => format!("{n} members"),
+                        None => "? members".to_string(),
+                    };
+                    let unread_part = if s.unread_count > 0 {
+                        format!(" · {} unread", s.unread_count)
+                    } else {
+                        String::new()
+                    };
+                    let mention_part = if s.mention_count > 0 {
+                        format!(" · @{}", s.mention_count)
+                    } else {
+                        String::new()
+                    };
+                    format!("{members_str}{unread_part}{mention_part}")
+                };
+                ViewRow {
+                    id: s.id.clone(),
+                    primary_text: s.name.clone(),
+                    secondary_text: s.description.clone(),
+                    meta_text: Some(meta),
+                    icon: s.icon_url.clone(),
+                    badge: None,
+                    context_menu_target_kind: MenuTargetKind::Server,
+                    preview_image_url: None,
+                    is_video: false,
+                }
+            })
+            .collect();
+
+        Ok(ViewRowsPage { rows, next_cursor: None })
+    }
+
+    async fn get_view_detail(
+        &self,
+        _channel_id: &str,
+        _row_id: &str,
+    ) -> ClientResult<ViewDetail> {
+        Err(ClientError::NotSupported("view-detail not yet implemented".into()))
+    }
+}
+
+// ── C.1 — ContextActionBackend ───────────────────────────────────────────────
+
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::ContextActionBackend for DiscordClient {
+    async fn get_context_menu_items(
+        &self, target: MenuTargetKind, target_id: &str,
+    ) -> Result<Vec<MenuItem>, ClientError> {
+        match target {
+            MenuTargetKind::Server => {
+                // State-aware: Mute Server / Unmute Server, plus static items.
+                let muted = self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).muted_servers.contains(target_id);
+                let mute_item = if muted {
+                    MenuItem {
+                        id: "unmute-server".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-discord-menu-unmute-server-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    }
+                } else {
+                    MenuItem {
+                        id: "mute-server".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-discord-menu-mute-server-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    }
+                };
+                Ok(vec![
+                    MenuItem {
+                        id: "invite-people".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-discord-menu-invite-people-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    },
+                    MenuItem {
+                        id: "privacy-settings".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-discord-menu-privacy-settings-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    },
+                    MenuItem {
+                        id: "edit-per-server-profile".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-discord-menu-edit-per-server-profile-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    },
+                    MenuItem {
+                        id: "server-boost".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-discord-menu-server-boost-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    },
+                    mute_item,
+                    MenuItem {
+                        id: "leave-server".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::BeforeLeave,
+                        label_key: "plugin-discord-menu-leave-server-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Destructive,
+                        shortcut: None,
+                        block: None,
+                    },
+                ])
+            }
+            MenuTargetKind::Channel => {
+                // State-aware: Mute/Unmute Channel, Mark Read.
+                let muted = self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).muted_channels.contains(target_id);
+                let mute_item = if muted {
+                    MenuItem {
+                        id: "unmute-channel".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-discord-menu-unmute-channel-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    }
+                } else {
+                    MenuItem {
+                        id: "mute-channel".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-discord-menu-mute-channel-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    }
+                };
+                Ok(vec![
+                    mute_item,
+                    MenuItem {
+                        id: "mark-channel-read".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-discord-menu-mark-channel-read-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    },
+                ])
+            }
+            MenuTargetKind::User => {
+                // State-aware: Block/Unblock, Add Friend/Remove Friend, Open DM.
+                let blocked = self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).blocked_users.contains(target_id);
+                let is_friend = self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).friend_ids.contains(target_id);
+                let block_item = if blocked {
+                    MenuItem {
+                        id: "unblock-user".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::BeforeLeave,
+                        label_key: "plugin-discord-menu-unblock-user-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    }
+                } else {
+                    MenuItem {
+                        id: "block-user".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::BeforeLeave,
+                        label_key: "plugin-discord-menu-block-user-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Destructive,
+                        shortcut: None,
+                        block: None,
+                    }
+                };
+                let friend_item = if is_friend {
+                    MenuItem {
+                        id: "remove-friend".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-discord-menu-remove-friend-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    }
+                } else {
+                    MenuItem {
+                        id: "add-friend".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-discord-menu-add-friend-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    }
+                };
+                Ok(vec![
+                    MenuItem {
+                        id: "open-dm".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-discord-menu-open-dm-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    },
+                    friend_item,
+                    block_item,
+                ])
+            }
+            MenuTargetKind::Message => {
+                // Copy Link is always available; Delete is destructive.
+                Ok(vec![
+                    MenuItem {
+                        id: "copy-message-link".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-discord-menu-copy-message-link-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    },
+                    MenuItem {
+                        id: "delete-message".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::BeforeLeave,
+                        label_key: "plugin-discord-menu-delete-message-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Destructive,
+                        shortcut: None,
+                        block: None,
+                    },
+                ])
+            }
+            MenuTargetKind::Dm => {
+                // State-aware: Mute/Unmute DM, Close DM.
+                let muted = self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).muted_dms.contains(target_id);
+                let mute_item = if muted {
+                    MenuItem {
+                        id: "unmute-dm".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-discord-menu-unmute-dm-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    }
+                } else {
+                    MenuItem {
+                        id: "mute-dm".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-discord-menu-mute-dm-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    }
+                };
+                Ok(vec![
+                    mute_item,
+                    MenuItem {
+                        id: "close-dm".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::BeforeLeave,
+                        label_key: "plugin-discord-menu-close-dm-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Destructive,
+                        shortcut: None,
+                        block: None,
+                    },
+                ])
+            }
+            MenuTargetKind::Category => Ok(Vec::new()),
+        }
+    }
+
+    async fn invoke_context_action(
+        &self, action_id: &str, _target: MenuTargetKind, target_id: &str,
+    ) -> Result<ActionOutcome, ClientError> {
+        match action_id {
+            // Server / channel / user / message actions that are pure no-ops at this layer.
+            "invite-people"
+            | "privacy-settings"
+            | "edit-per-server-profile"
+            | "server-boost"
+            | "leave-server"
+            | "mark-channel-read"
+            | "open-dm"
+            | "copy-message-link"
+            | "delete-message"
+            | "close-dm" => Ok(ActionOutcome::Noop),
+            "mute-server" => {
+                self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).muted_servers.insert(target_id.to_string());
+                Ok(ActionOutcome::Noop)
+            }
+            "unmute-server" => {
+                self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).muted_servers.remove(target_id);
+                Ok(ActionOutcome::Noop)
+            }
+            // Channel actions
+            "mute-channel" => {
+                self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).muted_channels.insert(target_id.to_string());
+                Ok(ActionOutcome::Noop)
+            }
+            "unmute-channel" => {
+                self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).muted_channels.remove(target_id);
+                Ok(ActionOutcome::Noop)
+            }
+            // User actions
+            "add-friend" => {
+                self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).friend_ids.insert(target_id.to_string());
+                Ok(ActionOutcome::Noop)
+            }
+            "remove-friend" => {
+                self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).friend_ids.remove(target_id);
+                Ok(ActionOutcome::Noop)
+            }
+            "block-user" => {
+                self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).blocked_users.insert(target_id.to_string());
+                Ok(ActionOutcome::Noop)
+            }
+            "unblock-user" => {
+                self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).blocked_users.remove(target_id);
+                Ok(ActionOutcome::Noop)
+            }
+            // DM actions
+            "mute-dm" => {
+                self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).muted_dms.insert(target_id.to_string());
+                Ok(ActionOutcome::Noop)
+            }
+            "unmute-dm" => {
+                self.menu_state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).muted_dms.remove(target_id);
+                Ok(ActionOutcome::Noop)
+            }
+            other => Err(ClientError::NotFound(format!("unknown action: {other}"))),
+        }
+    }
+
+    async fn poll_action(&self, _handle: PendingHandle) -> ClientResult<ActionOutcome> {
+        Err(ClientError::NotFound("no pending actions".into()))
+    }
+    async fn get_composer_buttons(&self, _channel_id: &str) -> ClientResult<Vec<ComposerButton>> {
+        // Stickers/GIF picker lives in the unified MediaPickerPopup
+        // (composer-common emoji button → tabs for emoji/GIF/stickers).
+        // Don't duplicate it as a separate composer button.
+        Ok(vec![])
+    }
+
+    async fn get_message_actions(
+        &self,
+        _channel_id: &str,
+        _message_id: &str,
+    ) -> ClientResult<Vec<MenuItem>> {
+        Ok(vec![MenuItem {
+            id: "pin-message".to_string(),
+            parent_id: None,
+            slot: MenuSlot::AfterFavorites,
+            label_key: "plugin-discord-message-action-pin-message-label".to_string(),
+            icon: None,
+            item_variant: MenuItemVariant::Normal,
+            shortcut: None,
+            block: None,
+        }])
+    }
+
+    async fn invoke_composer_action(
+        &self,
+        action_id: &str,
+        _channel_id: &str,
+    ) -> ClientResult<ActionOutcome> {
+        Err(ClientError::NotFound(format!("unknown composer action: {action_id}")))
+    }
+
+    async fn invoke_message_action(
+        &self,
+        action_id: &str,
+        _channel_id: &str,
+        _message_id: &str,
+    ) -> ClientResult<ActionOutcome> {
+        match action_id {
+            "pin-message" => Ok(ActionOutcome::Noop),
+            other => Err(ClientError::NotFound(format!("unknown message action: {other}"))),
+        }
     }
 }

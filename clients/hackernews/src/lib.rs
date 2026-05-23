@@ -376,13 +376,14 @@ impl IsBackend for HackerNewsClient {
         Ok(Vec::new())
     }
 
-    // --- Voice ---
+    // --- Voice / Settings / Views / Context actions: moved to C.1 sub-traits below ---
 
-    async fn get_voice_participants(
-        &self,
-        _channel_id: &str,
-    ) -> ClientResult<Vec<VoiceParticipant>> {
-        Ok(Vec::new())
+    fn as_settings(&self) -> Option<&dyn poly_client::SettingsBackend> {
+        Some(self)
+    }
+
+    fn as_view_descriptor(&self) -> Option<&dyn poly_client::ViewDescriptorBackend> {
+        Some(self)
     }
 
     // --- Real-time events ---
@@ -407,263 +408,7 @@ impl IsBackend for HackerNewsClient {
         BackendCapabilities::READ_ONLY_FEED
     }
 
-    // --- Client-provided UI surface (WP 1.D) ---
-
-    async fn get_context_menu_items(
-        &self,
-        _target: MenuTargetKind,
-        _target_id: &str,
-    ) -> ClientResult<Vec<MenuItem>> {
-        // HackerNews is a read-only feed — no server/channel/user/message
-        // concepts that support declarative menu items.
-        Ok(Vec::new())
-    }
-
-    async fn invoke_context_action(
-        &self,
-        action_id: &str,
-        _target: MenuTargetKind,
-        _target_id: &str,
-    ) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound(format!("unknown action: {action_id}")))
-    }
-
-    async fn poll_action(&self, _handle: PendingHandle) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound("no pending actions".into()))
-    }
-
-    async fn get_settings_sections(&self) -> ClientResult<Vec<SettingsSection>> {
-        Ok(vec![SettingsSection {
-            scope: SettingsScope::AccountGlobal,
-            section_key: "preferences".to_string(),
-            icon: None,
-            fields: vec![
-                SettingDescriptor {
-                    key: "default-feed".to_string(),
-                    kind: SettingKind::Select,
-                    default_value: "\"top\"".to_string(),
-                    extra: "[\"top\",\"new\",\"best\",\"ask\",\"show\",\"jobs\"]".to_string(),
-                },
-                SettingDescriptor {
-                    key: "items-per-page".to_string(),
-                    kind: SettingKind::Slider,
-                    default_value: "30".to_string(),
-                    extra: "{\"min\":10,\"max\":100,\"step\":5}".to_string(),
-                },
-            ],
-            info_block: None,
-        }])
-    }
-
-    fn settings_storage(&self) -> &SettingsStorageCell {
-        &self.settings_storage
-    }
-
-    async fn get_sidebar_declaration(&self) -> ClientResult<SidebarDeclaration> {
-        Ok(SidebarDeclaration {
-            layout: SidebarLayoutKind::Feed,
-            sections: Vec::new(),
-            header_block: None,
-        })
-    }
-
-    async fn invoke_sidebar_action(&self, action_id: &str) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound(format!("unknown sidebar action: {action_id}")))
-    }
-
-    /// HN account overview — show the top stories as a curated welcome view.
-    /// HN has no concept of multiple servers/accounts beyond "the front page",
-    /// so the overview is simply the current Top feed rendered as a ListBody.
-    async fn get_account_overview_view(&self) -> ClientResult<ViewDescriptor> {
-        Ok(ViewDescriptor {
-            kind: ViewKind::FlatList,
-            header: Some(ViewHeader {
-                title_key: Some("plugin-hackernews-overview-title".to_string()),
-                subtitle_key: Some("plugin-hackernews-overview-subtitle".to_string()),
-                info_block: None,
-            }),
-            toolbar: None,
-            body: ViewBody::ListBody(ListSpec {
-                row_template: RowTemplate {
-                    primary_field: "title".to_string(),
-                    secondary_field: Some("author-domain".to_string()),
-                    meta_field: Some("points-comments-age".to_string()),
-                    icon_field: None,
-                },
-                page_size: 30,
-            }),
-        })
-    }
-
-    async fn get_channel_view(&self, _channel_id: &str) -> ClientResult<ViewDescriptor> {
-        Ok(ViewDescriptor {
-            kind: ViewKind::FlatList,
-            header: Some(ViewHeader {
-                title_key: Some("plugin-hackernews-view-stories-title".to_string()),
-                subtitle_key: None,
-                info_block: None,
-            }),
-            toolbar: None, // HN toolbar already lives in the sidebar
-            body: ViewBody::ListBody(ListSpec {
-                row_template: RowTemplate {
-                    primary_field: "title".to_string(),
-                    secondary_field: Some("url".to_string()),
-                    meta_field: Some("score-comments-age".to_string()),
-                    icon_field: None,
-                },
-                page_size: 30,
-            }),
-        })
-    }
-
-    async fn get_view_rows(
-        &self,
-        channel_id: &str,
-        cursor: Option<Cursor>,
-        _sort_id: Option<&str>,
-        _filter_id: Option<&str>,
-        _tab_id: Option<&str>,
-    ) -> ClientResult<ViewRowsPage> {
-        // Empty channel_id means the host is requesting overview rows
-        // (see `AccountOverviewView` in core — it passes `""` for overview).
-        // Route those to the Top feed and use the overview row format.
-        let (feed, is_overview) = if channel_id.is_empty() {
-            (HnFeed::Top, true)
-        } else {
-            let f = HnFeed::from_channel_id(channel_id).ok_or_else(|| {
-                ClientError::NotFound(format!("unknown channel: {channel_id}"))
-            })?;
-            (f, false)
-        };
-
-        // Determine page offset from cursor (Offset kind).
-        let offset: usize = cursor
-            .as_ref()
-            .and_then(|c| {
-                if c.kind == CursorKind::Offset {
-                    c.value.parse().ok()
-                } else {
-                    None
-                }
-            })
-            .unwrap_or(0);
-
-        // Get the view descriptor's page_size; default to 30.
-        let page_size: usize = 30;
-
-        let ids = self.api.get_feed_ids(feed).await?;
-        let slice: Vec<u64> = ids
-            .into_iter()
-            .skip(offset)
-            .take(page_size)
-            .collect();
-
-        let next_cursor = if slice.len() == page_size {
-            Some(Cursor {
-                kind: CursorKind::Offset,
-                value: offset.saturating_add(page_size).to_string(),
-            })
-        } else {
-            None
-        };
-
-        let items = self.api.get_items_batch(&slice).await?;
-
-        let rows = items
-            .iter()
-            .filter(|item| !item.deleted.unwrap_or(false) && !item.dead.unwrap_or(false))
-            .map(|item| {
-                if is_overview {
-                    hn_item_to_overview_row(item)
-                } else {
-                    hn_item_to_view_row(item)
-                }
-            })
-            .collect();
-
-        Ok(ViewRowsPage { rows, next_cursor })
-    }
-
-    async fn get_view_detail(
-        &self,
-        _channel_id: &str,
-        row_id: &str,
-    ) -> ClientResult<ViewDetail> {
-        let story_id: u64 = row_id.parse().map_err(|_e| {
-            ClientError::NotFound(format!("invalid story id: {row_id}"))
-        })?;
-
-        let story = self
-            .api
-            .get_item(story_id)
-            .await?
-            .ok_or_else(|| ClientError::NotFound(format!("story not found: {story_id}")))?;
-
-        // Build the body block: prefer text body, fall back to URL.
-        let body_html = if let Some(ref text) = story.text {
-            format!("<p>{text}</p>")
-        } else if let Some(ref url) = story.url {
-            let title = story.title.as_deref().unwrap_or("Link");
-            format!("<p><a href=\"{url}\">{title}</a></p>")
-        } else {
-            let title = story.title.as_deref().unwrap_or("(no title)");
-            format!("<p>{title}</p>")
-        };
-
-        // F6 — declare the comment tree shape. The host calls get_messages
-        // for the post's channel separately; that path runs the recursive
-        // BFS fetcher in get_comment_thread (parent_ids preserved). Just
-        // tell the host how deep / wide we expect the tree.
-        let has_comments = story.kids.as_ref().is_some_and(|k| !k.is_empty());
-        let comments_section = if has_comments {
-            Some(poly_client::TreeSpec {
-                root_page_size: 30,
-                max_depth: 8,
-            })
-        } else {
-            None
-        };
-
-        Ok(ViewDetail {
-            body_block: CustomBlock {
-                sanitized_html: body_html,
-                stylesheet: None,
-                max_height_px: None,
-            },
-            comments_section,
-        })
-    }
-
-    async fn get_composer_buttons(&self, _channel_id: &str) -> ClientResult<Vec<ComposerButton>> {
-        // HackerNews is read-only — no composer.
-        Ok(Vec::new())
-    }
-
-    async fn get_message_actions(
-        &self,
-        _channel_id: &str,
-        _message_id: &str,
-    ) -> ClientResult<Vec<MenuItem>> {
-        // HackerNews is read-only — no per-message actions.
-        Ok(Vec::new())
-    }
-
-    async fn invoke_composer_action(
-        &self,
-        action_id: &str,
-        _channel_id: &str,
-    ) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound(format!("unknown composer action: {action_id}")))
-    }
-
-    async fn invoke_message_action(
-        &self,
-        action_id: &str,
-        _channel_id: &str,
-        _message_id: &str,
-    ) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound(format!("unknown message action: {action_id}")))
-    }
+    // --- Client-provided UI surface (WP 1.D) — sub-traits below ---
 
     fn get_signup_method(&self, _server_url: Option<&str>) -> SignupMethod {
         // HN login page serves as registration too
@@ -827,6 +572,208 @@ impl poly_client::DmsAndGroupsBackend for HackerNewsClient {
         _avatar_url: Option<&str>,
     ) -> ClientResult<()> {
         Err(ClientError::NotSupported("Hacker News has no group DMs".to_string()))
+    }
+}
+
+// ── C.1 — SettingsBackend ────────────────────────────────────────────────────
+
+#[cfg(feature = "native")]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::SettingsBackend for HackerNewsClient {
+    async fn get_settings_sections(&self) -> ClientResult<Vec<SettingsSection>> {
+        Ok(vec![SettingsSection {
+            scope: SettingsScope::AccountGlobal,
+            section_key: "preferences".to_string(),
+            icon: None,
+            fields: vec![
+                SettingDescriptor {
+                    key: "default-feed".to_string(),
+                    kind: SettingKind::Select,
+                    default_value: "\"top\"".to_string(),
+                    extra: "[\"top\",\"new\",\"best\",\"ask\",\"show\",\"jobs\"]".to_string(),
+                },
+                SettingDescriptor {
+                    key: "items-per-page".to_string(),
+                    kind: SettingKind::Slider,
+                    default_value: "30".to_string(),
+                    extra: "{\"min\":10,\"max\":100,\"step\":5}".to_string(),
+                },
+            ],
+            info_block: None,
+        }])
+    }
+
+    fn settings_storage(&self) -> &SettingsStorageCell {
+        &self.settings_storage
+    }
+}
+
+// ── C.1 — ViewDescriptorBackend ──────────────────────────────────────────────
+
+#[cfg(feature = "native")]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::ViewDescriptorBackend for HackerNewsClient {
+    async fn get_sidebar_declaration(&self) -> ClientResult<SidebarDeclaration> {
+        Ok(SidebarDeclaration {
+            layout: SidebarLayoutKind::Feed,
+            sections: Vec::new(),
+            header_block: None,
+        })
+    }
+
+    /// HN account overview — show the top stories as a curated welcome view.
+    /// HN has no concept of multiple servers/accounts beyond "the front page",
+    /// so the overview is simply the current Top feed rendered as a ListBody.
+    async fn get_account_overview_view(&self) -> ClientResult<ViewDescriptor> {
+        Ok(ViewDescriptor {
+            kind: ViewKind::FlatList,
+            header: Some(ViewHeader {
+                title_key: Some("plugin-hackernews-overview-title".to_string()),
+                subtitle_key: Some("plugin-hackernews-overview-subtitle".to_string()),
+                info_block: None,
+            }),
+            toolbar: None,
+            body: ViewBody::ListBody(ListSpec {
+                row_template: RowTemplate {
+                    primary_field: "title".to_string(),
+                    secondary_field: Some("author-domain".to_string()),
+                    meta_field: Some("points-comments-age".to_string()),
+                    icon_field: None,
+                },
+                page_size: 30,
+            }),
+        })
+    }
+
+    async fn get_channel_view(&self, _channel_id: &str) -> ClientResult<ViewDescriptor> {
+        Ok(ViewDescriptor {
+            kind: ViewKind::FlatList,
+            header: Some(ViewHeader {
+                title_key: Some("plugin-hackernews-view-stories-title".to_string()),
+                subtitle_key: None,
+                info_block: None,
+            }),
+            toolbar: None,
+            body: ViewBody::ListBody(ListSpec {
+                row_template: RowTemplate {
+                    primary_field: "title".to_string(),
+                    secondary_field: Some("url".to_string()),
+                    meta_field: Some("score-comments-age".to_string()),
+                    icon_field: None,
+                },
+                page_size: 30,
+            }),
+        })
+    }
+
+    async fn get_view_rows(
+        &self,
+        channel_id: &str,
+        cursor: Option<Cursor>,
+        _sort_id: Option<&str>,
+        _filter_id: Option<&str>,
+        _tab_id: Option<&str>,
+    ) -> ClientResult<ViewRowsPage> {
+        let (feed, is_overview) = if channel_id.is_empty() {
+            (HnFeed::Top, true)
+        } else {
+            let f = HnFeed::from_channel_id(channel_id).ok_or_else(|| {
+                ClientError::NotFound(format!("unknown channel: {channel_id}"))
+            })?;
+            (f, false)
+        };
+
+        let offset: usize = cursor
+            .as_ref()
+            .and_then(|c| {
+                if c.kind == CursorKind::Offset {
+                    c.value.parse().ok()
+                } else {
+                    None
+                }
+            })
+            .unwrap_or(0);
+
+        let page_size: usize = 30;
+
+        let ids = self.api.get_feed_ids(feed).await?;
+        let slice: Vec<u64> = ids
+            .into_iter()
+            .skip(offset)
+            .take(page_size)
+            .collect();
+
+        let next_cursor = if slice.len() == page_size {
+            Some(Cursor {
+                kind: CursorKind::Offset,
+                value: offset.saturating_add(page_size).to_string(),
+            })
+        } else {
+            None
+        };
+
+        let items = self.api.get_items_batch(&slice).await?;
+
+        let rows = items
+            .iter()
+            .filter(|item| !item.deleted.unwrap_or(false) && !item.dead.unwrap_or(false))
+            .map(|item| {
+                if is_overview {
+                    hn_item_to_overview_row(item)
+                } else {
+                    hn_item_to_view_row(item)
+                }
+            })
+            .collect();
+
+        Ok(ViewRowsPage { rows, next_cursor })
+    }
+
+    async fn get_view_detail(
+        &self,
+        _channel_id: &str,
+        row_id: &str,
+    ) -> ClientResult<ViewDetail> {
+        let story_id: u64 = row_id.parse().map_err(|_e| {
+            ClientError::NotFound(format!("invalid story id: {row_id}"))
+        })?;
+
+        let story = self
+            .api
+            .get_item(story_id)
+            .await?
+            .ok_or_else(|| ClientError::NotFound(format!("story not found: {story_id}")))?;
+
+        let body_html = if let Some(ref text) = story.text {
+            format!("<p>{text}</p>")
+        } else if let Some(ref url) = story.url {
+            let title = story.title.as_deref().unwrap_or("Link");
+            format!("<p><a href=\"{url}\">{title}</a></p>")
+        } else {
+            let title = story.title.as_deref().unwrap_or("(no title)");
+            format!("<p>{title}</p>")
+        };
+
+        let has_comments = story.kids.as_ref().is_some_and(|k| !k.is_empty());
+        let comments_section = if has_comments {
+            Some(poly_client::TreeSpec {
+                root_page_size: 30,
+                max_depth: 8,
+            })
+        } else {
+            None
+        };
+
+        Ok(ViewDetail {
+            body_block: CustomBlock {
+                sanitized_html: body_html,
+                stylesheet: None,
+                max_height_px: None,
+            },
+            comments_section,
+        })
     }
 }
 

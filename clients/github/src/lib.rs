@@ -355,13 +355,18 @@ impl IsBackend for GitHubClient {
         Ok(Vec::new())
     }
 
-    // --- Voice ---
+    // --- Voice / Settings / Views / Context: moved to C.1 sub-traits below ---
 
-    async fn get_voice_participants(
-        &self,
-        _channel_id: &str,
-    ) -> ClientResult<Vec<VoiceParticipant>> {
-        Ok(Vec::new())
+    fn as_settings(&self) -> Option<&dyn poly_client::SettingsBackend> {
+        Some(self)
+    }
+
+    fn as_view_descriptor(&self) -> Option<&dyn poly_client::ViewDescriptorBackend> {
+        Some(self)
+    }
+
+    fn as_context_action(&self) -> Option<&dyn poly_client::ContextActionBackend> {
+        Some(self)
     }
 
     // --- Real-time events ---
@@ -415,346 +420,13 @@ impl IsBackend for GitHubClient {
         Some(self)
     }
 
-    // --- Client-provided UI surface (WP 1) ---
-
-    async fn get_context_menu_items(
-        &self,
-        target: MenuTargetKind,
-        target_id: &str,
-    ) -> ClientResult<Vec<MenuItem>> {
-        if target != MenuTargetKind::Server {
-            return Ok(Vec::new());
-        }
-
-        // Resolve state-aware star label when authenticated and target_id
-        // resolves to a known repo.
-        let star_label_key = if self.is_authenticated() {
-            match self.resolve_owner_repo_from_server_id(target_id).await {
-                Some((owner, repo)) => {
-                    let starred = self.cli.is_starred(&owner, &repo).await.unwrap_or(false);
-                    if starred {
-                        "plugin-github-menu-unstar-repo-label"
-                    } else {
-                        "plugin-github-menu-star-repo-label"
-                    }
-                }
-                None => "plugin-github-menu-star-repo-label",
-            }
-        } else {
-            "plugin-github-menu-star-repo-label"
-        };
-
-        Ok(vec![
-            MenuItem {
-                id: "open-in-github".to_string(),
-                parent_id: None,
-                slot: MenuSlot::AfterFavorites,
-                label_key: "plugin-github-menu-open-in-github-label".to_string(),
-                icon: None,
-                item_variant: MenuItemVariant::Normal,
-                shortcut: None,
-                block: None,
-            },
-            MenuItem {
-                id: "star-repo".to_string(),
-                parent_id: None,
-                slot: MenuSlot::AfterFavorites,
-                label_key: star_label_key.to_string(),
-                icon: None,
-                item_variant: MenuItemVariant::Normal,
-                shortcut: None,
-                block: None,
-            },
-            MenuItem {
-                id: "watch-repo".to_string(),
-                parent_id: None,
-                slot: MenuSlot::AfterFavorites,
-                label_key: "plugin-github-menu-watch-repo-label".to_string(),
-                icon: None,
-                item_variant: MenuItemVariant::Normal,
-                shortcut: None,
-                block: None,
-            },
-        ])
-    }
-
-    async fn invoke_context_action(
-        &self,
-        action_id: &str,
-        _target: MenuTargetKind,
-        _target_id: &str,
-    ) -> ClientResult<ActionOutcome> {
-        match action_id {
-            "open-in-github" | "star-repo" | "watch-repo" => Ok(ActionOutcome::Noop),
-            _ => Err(ClientError::NotFound(format!("unknown action: {action_id}"))),
-        }
-    }
-
-    async fn poll_action(&self, _handle: PendingHandle) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound("no pending actions".into()))
-    }
-
-    async fn get_settings_sections(&self) -> ClientResult<Vec<SettingsSection>> {
-        Ok(vec![SettingsSection {
-            scope: SettingsScope::AccountGlobal,
-            section_key: "preferences".to_string(),
-            icon: None,
-            fields: vec![
-                SettingDescriptor {
-                    key: "show-private-repos".to_string(),
-                    kind: SettingKind::Toggle,
-                    default_value: "true".to_string(),
-                    extra: String::new(),
-                },
-                SettingDescriptor {
-                    key: "default-issue-state".to_string(),
-                    kind: SettingKind::Select,
-                    default_value: "\"open\"".to_string(),
-                    extra: "[\"open\",\"closed\",\"all\"]".to_string(),
-                },
-            ],
-            info_block: None,
-        }])
-    }
-
-    fn settings_storage(&self) -> &SettingsStorageCell {
-        &self.settings_storage
-    }
-
-    async fn get_sidebar_declaration(&self) -> ClientResult<SidebarDeclaration> {
-        Ok(SidebarDeclaration {
-            layout: SidebarLayoutKind::RepoTree,
-            sections: Vec::new(),
-            header_block: None,
-        })
-    }
-
-    async fn invoke_sidebar_action(&self, action_id: &str) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound(format!("unknown sidebar action: {action_id}")))
-    }
-
-    /// Return a CardGrid overview of the user's repos with stars/forks/open-issue counts.
-    ///
-    /// The host passes an empty `channel_id` when it calls `get_view_rows` for
-    /// this view (see `AccountOverviewView` in `crates/core/src/ui/client_ui/view/mod.rs`).
-    async fn get_account_overview_view(&self) -> ClientResult<ViewDescriptor> {
-        Ok(ViewDescriptor {
-            kind: ViewKind::CardGrid,
-            header: Some(ViewHeader {
-                title_key: Some("plugin-github-overview-title".to_string()),
-                subtitle_key: Some("plugin-github-overview-subtitle".to_string()),
-                info_block: None,
-            }),
-            toolbar: None,
-            body: ViewBody::CardBody(CardSpec {
-                primary_field: "name".to_string(),
-            }),
-        })
-    }
-
-    async fn get_channel_view(&self, channel_id: &str) -> ClientResult<ViewDescriptor> {
-        // Per-channel header: each of the 3 forum channels (issues / pulls /
-        // discussions) is its own focused view in the sidebar so the
-        // content area no longer needs the toolbar tab row to switch
-        // between them. The sidebar's channel selection IS the switch.
-        let title_key = if channel_id.starts_with("gh-pulls-") {
-            "plugin-github-view-pulls-title"
-        } else if channel_id.starts_with("gh-discussions-") {
-            "plugin-github-view-discussions-title"
-        } else {
-            "plugin-github-view-issues-title"
-        };
-        Ok(ViewDescriptor {
-            kind: ViewKind::Split,
-            header: Some(ViewHeader {
-                title_key: Some(title_key.to_string()),
-                subtitle_key: None,
-                info_block: None,
-            }),
-            toolbar: Some(ViewToolbar {
-                sort_options: vec![],
-                filter_options: vec![
-                    ToolbarOption { id: "open".to_string(), label_key: "plugin-github-filter-open".to_string(), icon: None, default_selected: true },
-                    ToolbarOption { id: "closed".to_string(), label_key: "plugin-github-filter-closed".to_string(), icon: None, default_selected: false },
-                ],
-                // Tabs row eliminated — the channel sidebar is the switcher.
-                tabs: vec![],
-                action_items: vec![],
-            }),
-            body: ViewBody::SplitBody(SplitSpec {
-                list_side: ListSpec {
-                    row_template: RowTemplate {
-                        primary_field: "title".to_string(),
-                        secondary_field: Some("number".to_string()),
-                        meta_field: Some("state-labels-author".to_string()),
-                        icon_field: None,
-                    },
-                    page_size: 30,
-                },
-                detail_view_kind: ViewKind::FlatList,
-            }),
-        })
-    }
-
-    async fn get_view_rows(
-        &self,
-        channel_id: &str,
-        _cursor: Option<Cursor>,
-        _sort_id: Option<&str>,
-        filter_id: Option<&str>,
-        tab_id: Option<&str>,
-    ) -> ClientResult<ViewRowsPage> {
-        // Empty channel_id is the host's signal that this is the account
-        // overview view (see `AccountOverviewView` — it calls get_view_rows
-        // with channel_id = ""). Return one card per cached repo.
-        if channel_id.is_empty() {
-            let repos = self.repos.lock().await;
-            let rows: Vec<ViewRow> = repos
-                .iter()
-                .map(|r| ViewRow {
-                    id: mapping::server_id_for_repo(r),
-                    primary_text: r.full_name.clone(),
-                    secondary_text: r.description.clone(),
-                    meta_text: Some(format!(
-                        "★ {} · {} forks · {} open",
-                        r.stargazers_count, r.forks_count, r.open_issues_count
-                    )),
-                    icon: None,
-                    badge: r.language.clone(),
-                    context_menu_target_kind: MenuTargetKind::Server,
-                    preview_image_url: None,
-                    is_video: false,
-                })
-                .collect();
-            return Ok(ViewRowsPage { rows, next_cursor: None });
-        }
-
-        let (owner, repo) = parse_forum_channel(channel_id)?;
-
-        // Discussions is now a top-level channel in the sidebar
-        // (`gh-discussions-*`); keep the legacy `tab_id == "discussions"`
-        // path for the host's older toolbar code-path during transition.
-        if channel_id.starts_with("gh-discussions-") || tab_id == Some("discussions") {
-            let (discussions, next_cursor) = self
-                .cli
-                .list_discussions(&owner, &repo, 50, None)
-                .await
-                .map_err(Self::convert_err)?;
-            let rows = discussions
-                .iter()
-                .map(mapping::map_discussion_to_viewrow)
-                .collect();
-            return Ok(ViewRowsPage {
-                rows,
-                next_cursor: next_cursor.map(|v| Cursor {
-                    kind: CursorKind::Opaque,
-                    value: v,
-                }),
-            });
-        }
-        let state = filter_id.unwrap_or("open");
-
-        // Determine which kind of items to return based on tab_id or channel prefix.
-        let want_pulls = tab_id == Some("pulls")
-            || channel_id.starts_with("gh-pulls-");
-        let want_issues = tab_id == Some("issues")
-            || channel_id.starts_with("gh-issues-");
-
-        // Fetch via issues endpoint (returns issues + PRs mixed).
-        let endpoint = format!(
-            "/repos/{owner}/{repo}/issues?state={state}&per_page=50&sort=updated"
-        );
-        let raw: Vec<types::GhIssue> = self
-            .cli
-            .api_get(&endpoint, &[])
-            .await
-            .map_err(Self::convert_err)?;
-
-        let rows: Vec<_> = raw
-            .iter()
-            .filter(|i| {
-                if want_pulls {
-                    i.is_pull_request()
-                } else if want_issues {
-                    !i.is_pull_request()
-                } else {
-                    true
-                }
-            })
-            .map(mapping::map_issue_to_viewrow)
-            .collect();
-
-        Ok(ViewRowsPage { rows, next_cursor: None })
-    }
-
-    async fn get_view_detail(
-        &self,
-        channel_id: &str,
-        row_id: &str,
-    ) -> ClientResult<ViewDetail> {
-        if channel_id.starts_with("gh-discussions-") {
-            return Err(ClientError::NotSupported(
-                "GitHub discussions detail is not available via the REST API; \
-                 open the discussion in your browser for the full view."
-                    .to_string(),
-            ));
-        }
-        let (owner, repo) = parse_forum_channel(channel_id)?;
-        let number: u64 = row_id
-            .parse()
-            .map_err(|_e| ClientError::NotFound(format!("row_id must be an issue number: {row_id}")))?;
-        let issue = self
-            .cli
-            .get_issue(&owner, &repo, number)
-            .await
-            .map_err(Self::convert_err)?;
-        // Fetch comments so the split-pane detail panel shows the full thread.
-        // On failure (e.g. network error) fall back to an empty comment list so
-        // the issue body is still shown rather than returning an error.
-        let comments = self
-            .cli
-            .list_issue_comments(&owner, &repo, number)
-            .await
-            .unwrap_or_default();
-        Ok(mapping::issue_to_view_detail(&issue, &comments))
-    }
-
-    async fn get_composer_buttons(&self, _channel_id: &str) -> ClientResult<Vec<ComposerButton>> {
-        // GitHub is a code-review/issue tracker — composer contributions are out of scope for this client.
-        Ok(Vec::new())
-    }
-
     // --- Moderation methods moved to ModerationBackend (H.3.a) ---
 
     fn as_moderation(&self) -> Option<&dyn poly_client::ModerationBackend> {
         Some(self)
     }
 
-    async fn get_message_actions(
-        &self,
-        _channel_id: &str,
-        _message_id: &str,
-    ) -> ClientResult<Vec<MenuItem>> {
-        // GitHub is a code-review/issue tracker — per-message actions are out of scope for this client.
-        Ok(Vec::new())
-    }
-
-    async fn invoke_composer_action(
-        &self,
-        action_id: &str,
-        _channel_id: &str,
-    ) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound(format!("unknown composer action: {action_id}")))
-    }
-
-    async fn invoke_message_action(
-        &self,
-        action_id: &str,
-        _channel_id: &str,
-        _message_id: &str,
-    ) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound(format!("unknown message action: {action_id}")))
-    }
+    // --- Client-provided UI surface — moved to C.1 sub-trait impls below ---
 
     fn get_signup_method(&self, server_url: Option<&str>) -> SignupMethod {
         if let Some(url) = server_url {
@@ -1148,3 +820,293 @@ fn parse_forum_channel(channel_id: &str) -> ClientResult<(String, String)> {
     split_owner_repo(rest)
 }
 
+
+// ── C.1 — SettingsBackend ────────────────────────────────────────────────────
+
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::SettingsBackend for GitHubClient {
+    async fn get_settings_sections(&self) -> ClientResult<Vec<SettingsSection>> {
+        Ok(vec![SettingsSection {
+            scope: SettingsScope::AccountGlobal,
+            section_key: "preferences".to_string(),
+            icon: None,
+            fields: vec![
+                SettingDescriptor {
+                    key: "show-private-repos".to_string(),
+                    kind: SettingKind::Toggle,
+                    default_value: "true".to_string(),
+                    extra: String::new(),
+                },
+                SettingDescriptor {
+                    key: "default-issue-state".to_string(),
+                    kind: SettingKind::Select,
+                    default_value: "\"open\"".to_string(),
+                    extra: "[\"open\",\"closed\",\"all\"]".to_string(),
+                },
+            ],
+            info_block: None,
+        }])
+    }
+
+    fn settings_storage(&self) -> &SettingsStorageCell {
+        &self.settings_storage
+    }
+}
+
+// ── C.1 — ViewDescriptorBackend ──────────────────────────────────────────────
+
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::ViewDescriptorBackend for GitHubClient {
+    async fn get_sidebar_declaration(&self) -> ClientResult<SidebarDeclaration> {
+        Ok(SidebarDeclaration {
+            layout: SidebarLayoutKind::RepoTree,
+            sections: Vec::new(),
+            header_block: None,
+        })
+    }
+
+    async fn get_account_overview_view(&self) -> ClientResult<ViewDescriptor> {
+        Ok(ViewDescriptor {
+            kind: ViewKind::CardGrid,
+            header: Some(ViewHeader {
+                title_key: Some("plugin-github-overview-title".to_string()),
+                subtitle_key: Some("plugin-github-overview-subtitle".to_string()),
+                info_block: None,
+            }),
+            toolbar: None,
+            body: ViewBody::CardBody(CardSpec {
+                primary_field: "name".to_string(),
+            }),
+        })
+    }
+
+    async fn get_channel_view(&self, channel_id: &str) -> ClientResult<ViewDescriptor> {
+        let title_key = if channel_id.starts_with("gh-pulls-") {
+            "plugin-github-view-pulls-title"
+        } else if channel_id.starts_with("gh-discussions-") {
+            "plugin-github-view-discussions-title"
+        } else {
+            "plugin-github-view-issues-title"
+        };
+        Ok(ViewDescriptor {
+            kind: ViewKind::Split,
+            header: Some(ViewHeader {
+                title_key: Some(title_key.to_string()),
+                subtitle_key: None,
+                info_block: None,
+            }),
+            toolbar: Some(ViewToolbar {
+                sort_options: vec![],
+                filter_options: vec![
+                    ToolbarOption { id: "open".to_string(), label_key: "plugin-github-filter-open".to_string(), icon: None, default_selected: true },
+                    ToolbarOption { id: "closed".to_string(), label_key: "plugin-github-filter-closed".to_string(), icon: None, default_selected: false },
+                ],
+                tabs: vec![],
+                action_items: vec![],
+            }),
+            body: ViewBody::SplitBody(SplitSpec {
+                list_side: ListSpec {
+                    row_template: RowTemplate {
+                        primary_field: "title".to_string(),
+                        secondary_field: Some("number".to_string()),
+                        meta_field: Some("state-labels-author".to_string()),
+                        icon_field: None,
+                    },
+                    page_size: 30,
+                },
+                detail_view_kind: ViewKind::FlatList,
+            }),
+        })
+    }
+
+    async fn get_view_rows(
+        &self,
+        channel_id: &str,
+        _cursor: Option<Cursor>,
+        _sort_id: Option<&str>,
+        filter_id: Option<&str>,
+        tab_id: Option<&str>,
+    ) -> ClientResult<ViewRowsPage> {
+        if channel_id.is_empty() {
+            let repos = self.repos.lock().await;
+            let rows: Vec<ViewRow> = repos
+                .iter()
+                .map(|r| ViewRow {
+                    id: mapping::server_id_for_repo(r),
+                    primary_text: r.full_name.clone(),
+                    secondary_text: r.description.clone(),
+                    meta_text: Some(format!(
+                        "★ {} · {} forks · {} open",
+                        r.stargazers_count, r.forks_count, r.open_issues_count
+                    )),
+                    icon: None,
+                    badge: r.language.clone(),
+                    context_menu_target_kind: MenuTargetKind::Server,
+                    preview_image_url: None,
+                    is_video: false,
+                })
+                .collect();
+            return Ok(ViewRowsPage { rows, next_cursor: None });
+        }
+
+        let (owner, repo) = parse_forum_channel(channel_id)?;
+
+        if channel_id.starts_with("gh-discussions-") || tab_id == Some("discussions") {
+            let (discussions, next_cursor) = self
+                .cli
+                .list_discussions(&owner, &repo, 50, None)
+                .await
+                .map_err(Self::convert_err)?;
+            let rows = discussions
+                .iter()
+                .map(mapping::map_discussion_to_viewrow)
+                .collect();
+            return Ok(ViewRowsPage {
+                rows,
+                next_cursor: next_cursor.map(|v| Cursor {
+                    kind: CursorKind::Opaque,
+                    value: v,
+                }),
+            });
+        }
+        let state = filter_id.unwrap_or("open");
+
+        let want_pulls = tab_id == Some("pulls")
+            || channel_id.starts_with("gh-pulls-");
+        let want_issues = tab_id == Some("issues")
+            || channel_id.starts_with("gh-issues-");
+
+        let endpoint = format!(
+            "/repos/{owner}/{repo}/issues?state={state}&per_page=50&sort=updated"
+        );
+        let raw: Vec<types::GhIssue> = self
+            .cli
+            .api_get(&endpoint, &[])
+            .await
+            .map_err(Self::convert_err)?;
+
+        let rows: Vec<_> = raw
+            .iter()
+            .filter(|i| {
+                if want_pulls {
+                    i.is_pull_request()
+                } else if want_issues {
+                    !i.is_pull_request()
+                } else {
+                    true
+                }
+            })
+            .map(mapping::map_issue_to_viewrow)
+            .collect();
+
+        Ok(ViewRowsPage { rows, next_cursor: None })
+    }
+
+    async fn get_view_detail(
+        &self,
+        channel_id: &str,
+        row_id: &str,
+    ) -> ClientResult<ViewDetail> {
+        if channel_id.starts_with("gh-discussions-") {
+            return Err(ClientError::NotSupported(
+                "GitHub discussions detail is not available via the REST API; \
+                 open the discussion in your browser for the full view."
+                    .to_string(),
+            ));
+        }
+        let (owner, repo) = parse_forum_channel(channel_id)?;
+        let number: u64 = row_id
+            .parse()
+            .map_err(|_e| ClientError::NotFound(format!("row_id must be an issue number: {row_id}")))?;
+        let issue = self
+            .cli
+            .get_issue(&owner, &repo, number)
+            .await
+            .map_err(Self::convert_err)?;
+        let comments = self
+            .cli
+            .list_issue_comments(&owner, &repo, number)
+            .await
+            .unwrap_or_default();
+        Ok(mapping::issue_to_view_detail(&issue, &comments))
+    }
+}
+
+// ── C.1 — ContextActionBackend ───────────────────────────────────────────────
+
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::ContextActionBackend for GitHubClient {
+    async fn get_context_menu_items(
+        &self,
+        target: MenuTargetKind,
+        target_id: &str,
+    ) -> ClientResult<Vec<MenuItem>> {
+        if target != MenuTargetKind::Server {
+            return Ok(Vec::new());
+        }
+
+        let star_label_key = if self.is_authenticated() {
+            match self.resolve_owner_repo_from_server_id(target_id).await {
+                Some((owner, repo)) => {
+                    let starred = self.cli.is_starred(&owner, &repo).await.unwrap_or(false);
+                    if starred {
+                        "plugin-github-menu-unstar-repo-label"
+                    } else {
+                        "plugin-github-menu-star-repo-label"
+                    }
+                }
+                None => "plugin-github-menu-star-repo-label",
+            }
+        } else {
+            "plugin-github-menu-star-repo-label"
+        };
+
+        Ok(vec![
+            MenuItem {
+                id: "open-in-github".to_string(),
+                parent_id: None,
+                slot: MenuSlot::AfterFavorites,
+                label_key: "plugin-github-menu-open-in-github-label".to_string(),
+                icon: None,
+                item_variant: MenuItemVariant::Normal,
+                shortcut: None,
+                block: None,
+            },
+            MenuItem {
+                id: "star-repo".to_string(),
+                parent_id: None,
+                slot: MenuSlot::AfterFavorites,
+                label_key: star_label_key.to_string(),
+                icon: None,
+                item_variant: MenuItemVariant::Normal,
+                shortcut: None,
+                block: None,
+            },
+            MenuItem {
+                id: "watch-repo".to_string(),
+                parent_id: None,
+                slot: MenuSlot::AfterFavorites,
+                label_key: "plugin-github-menu-watch-repo-label".to_string(),
+                icon: None,
+                item_variant: MenuItemVariant::Normal,
+                shortcut: None,
+                block: None,
+            },
+        ])
+    }
+
+    async fn invoke_context_action(
+        &self,
+        action_id: &str,
+        _target: MenuTargetKind,
+        _target_id: &str,
+    ) -> ClientResult<ActionOutcome> {
+        match action_id {
+            "open-in-github" | "star-repo" | "watch-repo" => Ok(ActionOutcome::Noop),
+            _ => Err(ClientError::NotFound(format!("unknown action: {action_id}"))),
+        }
+    }
+}

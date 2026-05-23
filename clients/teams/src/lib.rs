@@ -492,8 +492,16 @@ impl IsBackend for TeamsClient {
         Ok(vec![])
     }
 
-    async fn get_voice_participants(&self, _channel_id: &str) -> ClientResult<Vec<VoiceParticipant>> {
-        Ok(vec![])
+    fn as_settings(&self) -> Option<&dyn poly_client::SettingsBackend> {
+        Some(self)
+    }
+
+    fn as_view_descriptor(&self) -> Option<&dyn poly_client::ViewDescriptorBackend> {
+        Some(self)
+    }
+
+    fn as_context_action(&self) -> Option<&dyn poly_client::ContextActionBackend> {
+        Some(self)
     }
 
     // ── Moderation methods moved to ModerationBackend (H.3.a) ────────────────
@@ -555,298 +563,6 @@ impl IsBackend for TeamsClient {
         }
     }
 
-    async fn get_context_menu_items(
-        &self,
-        target: MenuTargetKind,
-        target_id: &str,
-    ) -> ClientResult<Vec<MenuItem>> {
-        // Inline helper: build a MenuItem with common defaults.
-        let item = |id: &str, label_key: &str, slot: MenuSlot, variant: MenuItemVariant| MenuItem {
-            id: id.to_string(),
-            parent_id: None,
-            slot,
-            label_key: label_key.to_string(),
-            icon: None,
-            item_variant: variant,
-            shortcut: None,
-            block: None,
-        };
-
-        match target {
-            MenuTargetKind::Channel => {
-                let hidden = self
-                    .hidden_channels
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .contains(target_id);
-                let pinned = self
-                    .pinned_channels
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .contains(target_id);
-                let muted = self
-                    .muted_channels
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .contains(target_id);
-                Ok(vec![
-                    item("mark-read", "plugin-teams-menu-mark-read-label", MenuSlot::Top, MenuItemVariant::Normal),
-                    item("mark-unread", "plugin-teams-menu-mark-unread-label", MenuSlot::Top, MenuItemVariant::Normal),
-                    if pinned {
-                        item("unpin-channel", "plugin-teams-menu-unpin-channel-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
-                    } else {
-                        item("pin-channel", "plugin-teams-menu-pin-channel-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
-                    },
-                    if hidden {
-                        item("show-channel", "plugin-teams-menu-show-channel-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
-                    } else {
-                        item("hide-channel", "plugin-teams-menu-hide-channel-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
-                    },
-                    if muted {
-                        item("unmute-channel", "plugin-teams-menu-unmute-channel-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
-                    } else {
-                        item("mute-channel", "plugin-teams-menu-mute-channel-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
-                    },
-                ])
-            }
-
-            MenuTargetKind::Server => {
-                let muted = self
-                    .muted_teams
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .contains(target_id);
-                Ok(vec![
-                    if muted {
-                        item("unmute-team", "plugin-teams-menu-unmute-team-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
-                    } else {
-                        item("mute-team", "plugin-teams-menu-mute-team-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
-                    },
-                    item("get-team-code", "plugin-teams-menu-get-team-code-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal),
-                    item("manage-team", "plugin-teams-menu-manage-team-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal),
-                    item("team-settings", "plugin-teams-menu-team-settings-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal),
-                    item("edit-per-team-profile", "plugin-teams-menu-edit-per-team-profile-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal),
-                    item("leave-team", "plugin-teams-menu-leave-team-label", MenuSlot::BeforeLeave, MenuItemVariant::Destructive),
-                ])
-            }
-
-            MenuTargetKind::User => Ok(vec![
-                item("open-chat", "plugin-teams-menu-open-chat-label", MenuSlot::Top, MenuItemVariant::Normal),
-                item("view-profile", "plugin-teams-menu-view-profile-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal),
-                item("schedule-meeting", "plugin-teams-menu-schedule-meeting-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal),
-            ]),
-
-            MenuTargetKind::Message => {
-                let saved = self
-                    .saved_messages
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .contains(target_id);
-                Ok(vec![
-                    item("react", "plugin-teams-menu-react-label", MenuSlot::Top, MenuItemVariant::Normal),
-                    item("reply-in-thread", "plugin-teams-menu-reply-in-thread-label", MenuSlot::Top, MenuItemVariant::Normal),
-                    if saved {
-                        item("unsave-message", "plugin-teams-menu-unsave-message-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
-                    } else {
-                        item("save-message", "plugin-teams-menu-save-message-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
-                    },
-                    item("mark-important", "plugin-teams-menu-mark-important-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal),
-                    item("delete-message", "plugin-teams-menu-delete-message-label", MenuSlot::BeforeLeave, MenuItemVariant::Destructive),
-                ])
-            }
-
-            MenuTargetKind::Dm => {
-                let muted = self
-                    .muted_dms
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .contains(target_id);
-                let hidden = self
-                    .hidden_dms
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .contains(target_id);
-                Ok(vec![
-                    if muted {
-                        item("unmute-dm", "plugin-teams-menu-unmute-dm-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
-                    } else {
-                        item("mute-dm", "plugin-teams-menu-mute-dm-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
-                    },
-                    if hidden {
-                        item("show-dm", "plugin-teams-menu-show-dm-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
-                    } else {
-                        item("hide-dm", "plugin-teams-menu-hide-dm-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
-                    },
-                ])
-            }
-
-            MenuTargetKind::Category => Ok(Vec::new()),
-        }
-    }
-
-    async fn invoke_context_action(
-        &self,
-        action_id: &str,
-        _target: MenuTargetKind,
-        target_id: &str,
-    ) -> ClientResult<ActionOutcome> {
-        match action_id {
-            // ── Channel toggles ──────────────────────────────────────────────
-            "pin-channel" => {
-                self.pinned_channels
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .insert(target_id.to_string());
-                Ok(ActionOutcome::RefreshTarget)
-            }
-            "unpin-channel" => {
-                self.pinned_channels
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .remove(target_id);
-                Ok(ActionOutcome::RefreshTarget)
-            }
-            "hide-channel" => {
-                self.hidden_channels
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .insert(target_id.to_string());
-                Ok(ActionOutcome::RefreshTarget)
-            }
-            "show-channel" => {
-                self.hidden_channels
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .remove(target_id);
-                Ok(ActionOutcome::RefreshTarget)
-            }
-            "mute-channel" => {
-                self.muted_channels
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .insert(target_id.to_string());
-                Ok(ActionOutcome::RefreshTarget)
-            }
-            "unmute-channel" => {
-                self.muted_channels
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .remove(target_id);
-                Ok(ActionOutcome::RefreshTarget)
-            }
-            "mark-read"
-            | "mark-unread"
-            | "leave-team"
-            | "get-team-code"
-            | "manage-team"
-            | "team-settings"
-            | "edit-per-team-profile"
-            | "open-chat"
-            | "view-profile"
-            | "schedule-meeting" => Ok(ActionOutcome::Noop),
-
-            // ── Team toggles ─────────────────────────────────────────────────
-            "mute-team" => {
-                self.muted_teams
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .insert(target_id.to_string());
-                Ok(ActionOutcome::RefreshTarget)
-            }
-            "unmute-team" => {
-                self.muted_teams
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .remove(target_id);
-                Ok(ActionOutcome::RefreshTarget)
-            }
-
-            // ── User actions ─────────────────────────────────────────────────
-
-            // ── Message toggles ──────────────────────────────────────────────
-            "save-message" => {
-                self.saved_messages
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .insert(target_id.to_string());
-                Ok(ActionOutcome::RefreshTarget)
-            }
-            "unsave-message" => {
-                self.saved_messages
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .remove(target_id);
-                Ok(ActionOutcome::RefreshTarget)
-            }
-            "react" | "reply-in-thread" | "mark-important" | "delete-message" => {
-                Ok(ActionOutcome::Noop)
-            }
-
-            // ── DM toggles ───────────────────────────────────────────────────
-            "mute-dm" => {
-                self.muted_dms
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .insert(target_id.to_string());
-                Ok(ActionOutcome::RefreshTarget)
-            }
-            "unmute-dm" => {
-                self.muted_dms
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .remove(target_id);
-                Ok(ActionOutcome::RefreshTarget)
-            }
-            "hide-dm" => {
-                self.hidden_dms
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .insert(target_id.to_string());
-                Ok(ActionOutcome::RefreshTarget)
-            }
-            "show-dm" => {
-                self.hidden_dms
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .remove(target_id);
-                Ok(ActionOutcome::RefreshTarget)
-            }
-
-            _ => Err(ClientError::NotFound(format!("unknown action: {action_id}"))),
-        }
-    }
-
-    async fn poll_action(&self, _handle: PendingHandle) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound("no pending actions".into()))
-    }
-
-    async fn get_settings_sections(&self) -> ClientResult<Vec<SettingsSection>> {
-        Ok(vec![SettingsSection {
-            scope: SettingsScope::PerServer,
-            section_key: "team-profile".to_string(),
-            icon: None,
-            fields: vec![
-                SettingDescriptor {
-                    key: "display-name".to_string(),
-                    kind: SettingKind::TextInput,
-                    default_value: "\"\"".to_string(),
-                    extra: String::new(),
-                },
-                SettingDescriptor {
-                    key: "description".to_string(),
-                    kind: SettingKind::TextInput,
-                    default_value: "\"\"".to_string(),
-                    extra: String::new(),
-                },
-            ],
-            info_block: None,
-        }])
-    }
-
-    fn settings_storage(&self) -> &SettingsStorageCell {
-        &self.settings_storage
-    }
-
     /// Teams declares one mechanism:
     ///
     /// - `oauth-sandbox` — route the Microsoft Entra ID (AAD) OAuth popup
@@ -885,136 +601,6 @@ impl IsBackend for TeamsClient {
         }
     }
 
-    async fn get_sidebar_declaration(&self) -> ClientResult<SidebarDeclaration> {
-        Ok(SidebarDeclaration {
-            layout: SidebarLayoutKind::ChannelList,
-            sections: Vec::new(),
-            header_block: None,
-        })
-    }
-
-    async fn invoke_sidebar_action(&self, action_id: &str) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound(format!("unknown sidebar action: {action_id}")))
-    }
-
-    async fn get_account_overview_view(&self) -> ClientResult<ViewDescriptor> {
-        Ok(ViewDescriptor {
-            kind: ViewKind::CardGrid,
-            header: Some(ViewHeader {
-                title_key: Some("plugin-teams-overview-title".to_string()),
-                subtitle_key: Some("plugin-teams-overview-subtitle".to_string()),
-                info_block: None,
-            }),
-            toolbar: None,
-            body: ViewBody::CardBody(CardSpec {
-                primary_field: "name".to_string(),
-            }),
-        })
-    }
-
-    async fn get_channel_view(&self, _channel_id: &str) -> ClientResult<ViewDescriptor> {
-        Err(ClientError::NotSupported("channel-view not yet implemented".into()))
-    }
-
-    async fn get_view_rows(
-        &self,
-        channel_id: &str,
-        _cursor: Option<Cursor>,
-        _sort_id: Option<&str>,
-        _filter_id: Option<&str>,
-        _tab_id: Option<&str>,
-    ) -> ClientResult<ViewRowsPage> {
-        // Empty channel_id signals the account overview — return one card per team.
-        if !channel_id.is_empty() {
-            return Err(ClientError::NotSupported("view-rows not yet implemented for team channels".into()));
-        }
-
-        let servers = self.get_servers().await?;
-
-        // Fetch channel counts concurrently for each team.
-        let mut rows = Vec::with_capacity(servers.len());
-        for server in &servers {
-            let channel_count = self
-                .get_channels(&server.id)
-                .await
-                .map(|chs| chs.len())
-                .unwrap_or(0);
-
-            let meta = format!(
-                "{} channel{} · {} unread · @{} mentions",
-                channel_count,
-                if channel_count == 1 { "" } else { "s" },
-                server.unread_count,
-                server.mention_count,
-            );
-
-            rows.push(ViewRow {
-                id: server.id.clone(),
-                primary_text: server.name.clone(),
-                secondary_text: server.description.clone(),
-                meta_text: Some(meta),
-                icon: None,
-                badge: if server.mention_count > 0 {
-                    Some(format!("@{}", server.mention_count))
-                } else if server.unread_count > 0 {
-                    Some(server.unread_count.to_string())
-                } else {
-                    None
-                },
-                context_menu_target_kind: MenuTargetKind::Server,
-                preview_image_url: None,
-                is_video: false,
-            });
-        }
-
-        Ok(ViewRowsPage { rows, next_cursor: None })
-    }
-
-    async fn get_view_detail(
-        &self,
-        _channel_id: &str,
-        _row_id: &str,
-    ) -> ClientResult<ViewDetail> {
-        Err(ClientError::NotSupported("view-detail not yet implemented".into()))
-    }
-
-    async fn get_composer_buttons(&self, _channel_id: &str) -> ClientResult<Vec<ComposerButton>> {
-        Ok(vec![ComposerButton {
-            id: "mention".to_string(),
-            label_key: "plugin-teams-composer-mention-label".to_string(),
-            icon: "@".to_string(),
-            position: ComposerSlot::RightOfInput,
-        }])
-    }
-
-    async fn get_message_actions(
-        &self,
-        _channel_id: &str,
-        _message_id: &str,
-    ) -> ClientResult<Vec<MenuItem>> {
-        // Teams has no backend-specific per-message actions beyond host universals.
-        Ok(Vec::new())
-    }
-
-    async fn invoke_composer_action(
-        &self,
-        action_id: &str,
-        _channel_id: &str,
-    ) -> ClientResult<ActionOutcome> {
-        match action_id {
-            "mention" => Ok(ActionOutcome::Noop),
-            other => Err(ClientError::NotFound(format!("unknown composer action: {other}"))),
-        }
-    }
-
-    async fn invoke_message_action(
-        &self,
-        action_id: &str,
-        _channel_id: &str,
-        _message_id: &str,
-    ) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound(format!("unknown message action: {action_id}")))
-    }
 
     fn get_signup_method(&self, _server_url: Option<&str>) -> SignupMethod {
         // Last verified 2026-04-30
@@ -1435,5 +1021,449 @@ impl poly_client::DmsAndGroupsBackend for TeamsClient {
         Err(ClientError::NotSupported(
             "edit_group_dm: not yet implemented for Teams".to_string(),
         ))
+    }
+}
+
+// ── C.1 — SettingsBackend ────────────────────────────────────────────────────
+
+#[cfg(feature = "native")]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::SettingsBackend for TeamsClient {
+    async fn get_settings_sections(&self) -> ClientResult<Vec<SettingsSection>> {
+        Ok(vec![SettingsSection {
+            scope: SettingsScope::PerServer,
+            section_key: "team-profile".to_string(),
+            icon: None,
+            fields: vec![
+                SettingDescriptor {
+                    key: "display-name".to_string(),
+                    kind: SettingKind::TextInput,
+                    default_value: "\"\"".to_string(),
+                    extra: String::new(),
+                },
+                SettingDescriptor {
+                    key: "description".to_string(),
+                    kind: SettingKind::TextInput,
+                    default_value: "\"\"".to_string(),
+                    extra: String::new(),
+                },
+            ],
+            info_block: None,
+        }])
+    }
+
+    fn settings_storage(&self) -> &SettingsStorageCell {
+        &self.settings_storage
+    }
+}
+
+// ── C.1 — ViewDescriptorBackend ──────────────────────────────────────────────
+
+#[cfg(feature = "native")]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::ViewDescriptorBackend for TeamsClient {
+    async fn get_sidebar_declaration(&self) -> ClientResult<SidebarDeclaration> {
+        Ok(SidebarDeclaration {
+            layout: SidebarLayoutKind::ChannelList,
+            sections: Vec::new(),
+            header_block: None,
+        })
+    }
+
+    async fn invoke_sidebar_action(&self, action_id: &str) -> ClientResult<ActionOutcome> {
+        Err(ClientError::NotFound(format!("unknown sidebar action: {action_id}")))
+    }
+
+    async fn get_account_overview_view(&self) -> ClientResult<ViewDescriptor> {
+        Ok(ViewDescriptor {
+            kind: ViewKind::CardGrid,
+            header: Some(ViewHeader {
+                title_key: Some("plugin-teams-overview-title".to_string()),
+                subtitle_key: Some("plugin-teams-overview-subtitle".to_string()),
+                info_block: None,
+            }),
+            toolbar: None,
+            body: ViewBody::CardBody(CardSpec {
+                primary_field: "name".to_string(),
+            }),
+        })
+    }
+
+    async fn get_channel_view(&self, _channel_id: &str) -> ClientResult<ViewDescriptor> {
+        Err(ClientError::NotSupported("channel-view not yet implemented".into()))
+    }
+
+    async fn get_view_rows(
+        &self,
+        channel_id: &str,
+        _cursor: Option<Cursor>,
+        _sort_id: Option<&str>,
+        _filter_id: Option<&str>,
+        _tab_id: Option<&str>,
+    ) -> ClientResult<ViewRowsPage> {
+        // Empty channel_id signals the account overview — return one card per team.
+        if !channel_id.is_empty() {
+            return Err(ClientError::NotSupported("view-rows not yet implemented for team channels".into()));
+        }
+
+        let servers = self.get_servers().await?;
+
+        // Fetch channel counts concurrently for each team.
+        let mut rows = Vec::with_capacity(servers.len());
+        for server in &servers {
+            let channel_count = self
+                .get_channels(&server.id)
+                .await
+                .map(|chs| chs.len())
+                .unwrap_or(0);
+
+            let meta = format!(
+                "{} channel{} · {} unread · @{} mentions",
+                channel_count,
+                if channel_count == 1 { "" } else { "s" },
+                server.unread_count,
+                server.mention_count,
+            );
+
+            rows.push(ViewRow {
+                id: server.id.clone(),
+                primary_text: server.name.clone(),
+                secondary_text: server.description.clone(),
+                meta_text: Some(meta),
+                icon: None,
+                badge: if server.mention_count > 0 {
+                    Some(format!("@{}", server.mention_count))
+                } else if server.unread_count > 0 {
+                    Some(server.unread_count.to_string())
+                } else {
+                    None
+                },
+                context_menu_target_kind: MenuTargetKind::Server,
+                preview_image_url: None,
+                is_video: false,
+            });
+        }
+
+        Ok(ViewRowsPage { rows, next_cursor: None })
+    }
+
+    async fn get_view_detail(
+        &self,
+        _channel_id: &str,
+        _row_id: &str,
+    ) -> ClientResult<ViewDetail> {
+        Err(ClientError::NotSupported("view-detail not yet implemented".into()))
+    }
+}
+
+// ── C.1 — ContextActionBackend ───────────────────────────────────────────────
+
+#[cfg(feature = "native")]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::ContextActionBackend for TeamsClient {
+    async fn get_context_menu_items(
+        &self,
+        target: MenuTargetKind,
+        target_id: &str,
+    ) -> ClientResult<Vec<MenuItem>> {
+        // Inline helper: build a MenuItem with common defaults.
+        let item = |id: &str, label_key: &str, slot: MenuSlot, variant: MenuItemVariant| MenuItem {
+            id: id.to_string(),
+            parent_id: None,
+            slot,
+            label_key: label_key.to_string(),
+            icon: None,
+            item_variant: variant,
+            shortcut: None,
+            block: None,
+        };
+
+        match target {
+            MenuTargetKind::Channel => {
+                let hidden = self
+                    .hidden_channels
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .contains(target_id);
+                let pinned = self
+                    .pinned_channels
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .contains(target_id);
+                let muted = self
+                    .muted_channels
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .contains(target_id);
+                Ok(vec![
+                    item("mark-read", "plugin-teams-menu-mark-read-label", MenuSlot::Top, MenuItemVariant::Normal),
+                    item("mark-unread", "plugin-teams-menu-mark-unread-label", MenuSlot::Top, MenuItemVariant::Normal),
+                    if pinned {
+                        item("unpin-channel", "plugin-teams-menu-unpin-channel-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
+                    } else {
+                        item("pin-channel", "plugin-teams-menu-pin-channel-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
+                    },
+                    if hidden {
+                        item("show-channel", "plugin-teams-menu-show-channel-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
+                    } else {
+                        item("hide-channel", "plugin-teams-menu-hide-channel-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
+                    },
+                    if muted {
+                        item("unmute-channel", "plugin-teams-menu-unmute-channel-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
+                    } else {
+                        item("mute-channel", "plugin-teams-menu-mute-channel-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
+                    },
+                ])
+            }
+
+            MenuTargetKind::Server => {
+                let muted = self
+                    .muted_teams
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .contains(target_id);
+                Ok(vec![
+                    if muted {
+                        item("unmute-team", "plugin-teams-menu-unmute-team-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
+                    } else {
+                        item("mute-team", "plugin-teams-menu-mute-team-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
+                    },
+                    item("get-team-code", "plugin-teams-menu-get-team-code-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal),
+                    item("manage-team", "plugin-teams-menu-manage-team-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal),
+                    item("team-settings", "plugin-teams-menu-team-settings-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal),
+                    item("edit-per-team-profile", "plugin-teams-menu-edit-per-team-profile-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal),
+                    item("leave-team", "plugin-teams-menu-leave-team-label", MenuSlot::BeforeLeave, MenuItemVariant::Destructive),
+                ])
+            }
+
+            MenuTargetKind::User => Ok(vec![
+                item("open-chat", "plugin-teams-menu-open-chat-label", MenuSlot::Top, MenuItemVariant::Normal),
+                item("view-profile", "plugin-teams-menu-view-profile-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal),
+                item("schedule-meeting", "plugin-teams-menu-schedule-meeting-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal),
+            ]),
+
+            MenuTargetKind::Message => {
+                let saved = self
+                    .saved_messages
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .contains(target_id);
+                Ok(vec![
+                    item("react", "plugin-teams-menu-react-label", MenuSlot::Top, MenuItemVariant::Normal),
+                    item("reply-in-thread", "plugin-teams-menu-reply-in-thread-label", MenuSlot::Top, MenuItemVariant::Normal),
+                    if saved {
+                        item("unsave-message", "plugin-teams-menu-unsave-message-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
+                    } else {
+                        item("save-message", "plugin-teams-menu-save-message-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
+                    },
+                    item("mark-important", "plugin-teams-menu-mark-important-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal),
+                    item("delete-message", "plugin-teams-menu-delete-message-label", MenuSlot::BeforeLeave, MenuItemVariant::Destructive),
+                ])
+            }
+
+            MenuTargetKind::Dm => {
+                let muted = self
+                    .muted_dms
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .contains(target_id);
+                let hidden = self
+                    .hidden_dms
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .contains(target_id);
+                Ok(vec![
+                    if muted {
+                        item("unmute-dm", "plugin-teams-menu-unmute-dm-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
+                    } else {
+                        item("mute-dm", "plugin-teams-menu-mute-dm-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
+                    },
+                    if hidden {
+                        item("show-dm", "plugin-teams-menu-show-dm-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
+                    } else {
+                        item("hide-dm", "plugin-teams-menu-hide-dm-label", MenuSlot::AfterFavorites, MenuItemVariant::Normal)
+                    },
+                ])
+            }
+
+            MenuTargetKind::Category => Ok(Vec::new()),
+        }
+    }
+
+    async fn invoke_context_action(
+        &self,
+        action_id: &str,
+        _target: MenuTargetKind,
+        target_id: &str,
+    ) -> ClientResult<ActionOutcome> {
+        match action_id {
+            // ── Channel toggles ──────────────────────────────────────────────
+            "pin-channel" => {
+                self.pinned_channels
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .insert(target_id.to_string());
+                Ok(ActionOutcome::RefreshTarget)
+            }
+            "unpin-channel" => {
+                self.pinned_channels
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .remove(target_id);
+                Ok(ActionOutcome::RefreshTarget)
+            }
+            "hide-channel" => {
+                self.hidden_channels
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .insert(target_id.to_string());
+                Ok(ActionOutcome::RefreshTarget)
+            }
+            "show-channel" => {
+                self.hidden_channels
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .remove(target_id);
+                Ok(ActionOutcome::RefreshTarget)
+            }
+            "mute-channel" => {
+                self.muted_channels
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .insert(target_id.to_string());
+                Ok(ActionOutcome::RefreshTarget)
+            }
+            "unmute-channel" => {
+                self.muted_channels
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .remove(target_id);
+                Ok(ActionOutcome::RefreshTarget)
+            }
+            "mark-read"
+            | "mark-unread"
+            | "leave-team"
+            | "get-team-code"
+            | "manage-team"
+            | "team-settings"
+            | "edit-per-team-profile"
+            | "open-chat"
+            | "view-profile"
+            | "schedule-meeting" => Ok(ActionOutcome::Noop),
+
+            // ── Team toggles ─────────────────────────────────────────────────
+            "mute-team" => {
+                self.muted_teams
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .insert(target_id.to_string());
+                Ok(ActionOutcome::RefreshTarget)
+            }
+            "unmute-team" => {
+                self.muted_teams
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .remove(target_id);
+                Ok(ActionOutcome::RefreshTarget)
+            }
+
+            // ── User actions ─────────────────────────────────────────────────
+
+            // ── Message toggles ──────────────────────────────────────────────
+            "save-message" => {
+                self.saved_messages
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .insert(target_id.to_string());
+                Ok(ActionOutcome::RefreshTarget)
+            }
+            "unsave-message" => {
+                self.saved_messages
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .remove(target_id);
+                Ok(ActionOutcome::RefreshTarget)
+            }
+            "react" | "reply-in-thread" | "mark-important" | "delete-message" => {
+                Ok(ActionOutcome::Noop)
+            }
+
+            // ── DM toggles ───────────────────────────────────────────────────
+            "mute-dm" => {
+                self.muted_dms
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .insert(target_id.to_string());
+                Ok(ActionOutcome::RefreshTarget)
+            }
+            "unmute-dm" => {
+                self.muted_dms
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .remove(target_id);
+                Ok(ActionOutcome::RefreshTarget)
+            }
+            "hide-dm" => {
+                self.hidden_dms
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .insert(target_id.to_string());
+                Ok(ActionOutcome::RefreshTarget)
+            }
+            "show-dm" => {
+                self.hidden_dms
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .remove(target_id);
+                Ok(ActionOutcome::RefreshTarget)
+            }
+
+            _ => Err(ClientError::NotFound(format!("unknown action: {action_id}"))),
+        }
+    }
+
+    async fn poll_action(&self, _handle: PendingHandle) -> ClientResult<ActionOutcome> {
+        Err(ClientError::NotFound("no pending actions".into()))
+    }
+
+    async fn get_composer_buttons(&self, _channel_id: &str) -> ClientResult<Vec<ComposerButton>> {
+        Ok(vec![ComposerButton {
+            id: "mention".to_string(),
+            label_key: "plugin-teams-composer-mention-label".to_string(),
+            icon: "@".to_string(),
+            position: ComposerSlot::RightOfInput,
+        }])
+    }
+
+    async fn get_message_actions(
+        &self,
+        _channel_id: &str,
+        _message_id: &str,
+    ) -> ClientResult<Vec<MenuItem>> {
+        // Teams has no backend-specific per-message actions beyond host universals.
+        Ok(Vec::new())
+    }
+
+    async fn invoke_composer_action(
+        &self,
+        action_id: &str,
+        _channel_id: &str,
+    ) -> ClientResult<ActionOutcome> {
+        match action_id {
+            "mention" => Ok(ActionOutcome::Noop),
+            other => Err(ClientError::NotFound(format!("unknown composer action: {other}"))),
+        }
+    }
+
+    async fn invoke_message_action(
+        &self,
+        action_id: &str,
+        _channel_id: &str,
+        _message_id: &str,
+    ) -> ClientResult<ActionOutcome> {
+        Err(ClientError::NotFound(format!("unknown message action: {action_id}")))
     }
 }

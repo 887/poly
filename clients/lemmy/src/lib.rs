@@ -433,13 +433,18 @@ impl IsBackend for LemmyClient {
         Ok(vec![])
     }
 
-    // ── Voice ─────────────────────────────────────────────────────────────────
+    // ── Voice / Settings / Views / Context: moved to C.1 sub-traits below ────
 
-    async fn get_voice_participants(
-        &self,
-        _channel_id: &str,
-    ) -> ClientResult<Vec<VoiceParticipant>> {
-        Ok(vec![])
+    fn as_settings(&self) -> Option<&dyn poly_client::SettingsBackend> {
+        Some(self)
+    }
+
+    fn as_view_descriptor(&self) -> Option<&dyn poly_client::ViewDescriptorBackend> {
+        Some(self)
+    }
+
+    fn as_context_action(&self) -> Option<&dyn poly_client::ContextActionBackend> {
+        Some(self)
     }
 
     // ── Real-time events ──────────────────────────────────────────────────────
@@ -450,141 +455,7 @@ impl IsBackend for LemmyClient {
         Box::pin(stream::empty())
     }
 
-    // ── Client UI surface (WP 1.D) ────────────────────────────────────────────
 
-    async fn get_context_menu_items(
-        &self,
-        target: MenuTargetKind,
-        target_id: &str,
-    ) -> ClientResult<Vec<MenuItem>> {
-        match target {
-            MenuTargetKind::Server => {
-                // Pack E.1 (P43): probe subscription state and pick between
-                // Subscribe / Unsubscribe. Any lookup error falls back to
-                // "Subscribe" — safer default (can't accidentally unsubscribe
-                // someone with a stale menu).
-                let subscribed = match Self::parse_community_id(target_id) {
-                    Ok(cid) => match self.http.fetch_community(cid).await {
-                        Ok(view) => view
-                            .subscribed
-                            .as_deref()
-                            .is_some_and(|s| s == "Subscribed" || s == "Pending"),
-                        // Lookup failed (network / auth): default to unsubscribed.
-                        Err(_) => false,
-                    },
-                    Err(_) => false,
-                };
-
-                let sub_item = if subscribed {
-                    MenuItem {
-                        id: "unsubscribe-community".to_string(),
-                        parent_id: None,
-                        slot: MenuSlot::AfterFavorites,
-                        label_key: "plugin-lemmy-menu-unsubscribe-community-label".to_string(),
-                        icon: None,
-                        item_variant: MenuItemVariant::Normal,
-                        shortcut: None,
-                        block: None,
-                    }
-                } else {
-                    MenuItem {
-                        id: "subscribe-community".to_string(),
-                        parent_id: None,
-                        slot: MenuSlot::AfterFavorites,
-                        label_key: "plugin-lemmy-menu-subscribe-community-label".to_string(),
-                        icon: None,
-                        item_variant: MenuItemVariant::Normal,
-                        shortcut: None,
-                        block: None,
-                    }
-                };
-
-                Ok(vec![
-                    MenuItem {
-                        id: "view-community".to_string(),
-                        parent_id: None,
-                        slot: MenuSlot::AfterFavorites,
-                        label_key: "plugin-lemmy-menu-view-community-label".to_string(),
-                        icon: None,
-                        item_variant: MenuItemVariant::Normal,
-                        shortcut: None,
-                        block: None,
-                    },
-                    sub_item,
-                    MenuItem {
-                        id: "view-modlog".to_string(),
-                        parent_id: None,
-                        slot: MenuSlot::AfterFavorites,
-                        label_key: "plugin-lemmy-menu-view-modlog-label".to_string(),
-                        icon: None,
-                        item_variant: MenuItemVariant::Normal,
-                        shortcut: None,
-                        block: None,
-                    },
-                    MenuItem {
-                        id: "block-community".to_string(),
-                        parent_id: None,
-                        slot: MenuSlot::BeforeLeave,
-                        label_key: "plugin-lemmy-menu-block-community-label".to_string(),
-                        icon: None,
-                        item_variant: MenuItemVariant::Destructive,
-                        shortcut: None,
-                        block: None,
-                    },
-                ])
-            }
-            MenuTargetKind::Category
-            | MenuTargetKind::Channel
-            | MenuTargetKind::Dm
-            | MenuTargetKind::Message
-            | MenuTargetKind::User => Ok(Vec::new()),
-        }
-    }
-
-    async fn invoke_context_action(
-        &self,
-        action_id: &str,
-        _target: MenuTargetKind,
-        _target_id: &str,
-    ) -> ClientResult<ActionOutcome> {
-        match action_id {
-            "view-community" | "subscribe-community" | "view-modlog" | "block-community" => {
-                Ok(ActionOutcome::Noop)
-            }
-            _ => Err(ClientError::NotFound(format!("unknown action: {action_id}"))),
-        }
-    }
-
-    async fn poll_action(&self, _handle: PendingHandle) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound("no pending actions".into()))
-    }
-
-    async fn get_settings_sections(&self) -> ClientResult<Vec<SettingsSection>> {
-        Ok(vec![SettingsSection {
-            scope: SettingsScope::PerServer,
-            section_key: "community".to_string(),
-            icon: None,
-            fields: vec![
-                SettingDescriptor {
-                    key: "mute-community".to_string(),
-                    kind: SettingKind::Toggle,
-                    default_value: "false".to_string(),
-                    extra: String::new(),
-                },
-                SettingDescriptor {
-                    key: "show-nsfw".to_string(),
-                    kind: SettingKind::Toggle,
-                    default_value: "false".to_string(),
-                    extra: String::new(),
-                },
-            ],
-            info_block: None,
-        }])
-    }
-
-    fn settings_storage(&self) -> &SettingsStorageCell {
-        &self.settings_storage
-    }
 
     /// Return the mechanism inventory for this backend.
     ///
@@ -615,316 +486,10 @@ impl IsBackend for LemmyClient {
         }
     }
 
-    async fn get_sidebar_declaration(&self) -> ClientResult<SidebarDeclaration> {
-        Ok(SidebarDeclaration {
-            layout: SidebarLayoutKind::Communities,
-            sections: Vec::new(),
-            header_block: None,
-        })
-    }
-
-    async fn invoke_sidebar_action(&self, action_id: &str) -> ClientResult<ActionOutcome> {
-        // Phase B (in-flight): SortModes sidebar dispatches `sort-*` action ids.
-        // Persist the chosen sort under per-account-global storage; `get_view_rows`
-        // reads it back as the fallback when the toolbar sort is unset.
-        let sort_value = match action_id {
-            "sort-hot" => "Hot",
-            "sort-active" => "Active",
-            "sort-scaled" => "Scaled",
-            "sort-controversial" => "Controversial",
-            "sort-new" => "New",
-            "sort-old" => "Old",
-            "sort-most-comments" => "MostComments",
-            "sort-new-comments" => "NewComments",
-            "sort-top" | "sort-top-day" => "TopDay",
-            "sort-top-hour" => "TopHour",
-            "sort-top-six-hours" => "TopSixHour",
-            "sort-top-twelve-hours" => "TopTwelveHour",
-            "sort-top-week" => "TopWeek",
-            "sort-top-month" => "TopMonth",
-            "sort-top-year" => "TopYear",
-            "sort-top-all" => "TopAll",
-            _ => {
-                return Err(ClientError::NotFound(format!(
-                    "unknown sidebar action: {action_id}"
-                )));
-            }
-        };
-        self.settings_storage.set(
-            SettingsScope::AccountGlobal,
-            "",
-            "current-sort",
-            sort_value,
-        )?;
-        Ok(ActionOutcome::RefreshTarget)
-    }
-
-    /// Account overview: a CardGrid of the user's subscribed communities.
-    ///
-    /// Uses the synthetic channel id `"lemmy-overview"`. `get_view_rows`
-    /// recognises this id and fetches subscribed communities instead of posts.
-    async fn get_account_overview_view(&self) -> ClientResult<ViewDescriptor> {
-        Ok(ViewDescriptor {
-            kind: ViewKind::CardGrid,
-            header: Some(ViewHeader {
-                title_key: Some("plugin-lemmy-overview-title".to_string()),
-                subtitle_key: None,
-                info_block: None,
-            }),
-            toolbar: None,
-            body: ViewBody::CardBody(CardSpec {
-                primary_field: "name".to_string(),
-            }),
-        })
-    }
-
-    async fn get_channel_view(&self, channel_id: &str) -> ClientResult<ViewDescriptor> {
-        // Phase D — comments feed: `lemmy-comments-{community_id}` routes to
-        // the community-level recent-comments endpoint instead of the post list.
-        if Self::parse_comments_channel(channel_id).is_some() {
-            return Ok(ViewDescriptor {
-                kind: ViewKind::FlatList,
-                header: Some(ViewHeader {
-                    title_key: Some("plugin-lemmy-view-comments-title".to_string()),
-                    subtitle_key: None,
-                    info_block: None,
-                }),
-                toolbar: None,
-                body: ViewBody::ListBody(ListSpec {
-                    row_template: RowTemplate {
-                        primary_field: "text".to_string(),
-                        secondary_field: Some("author".to_string()),
-                        meta_field: None,
-                        icon_field: None,
-                    },
-                    page_size: 50,
-                }),
-            });
-        }
-        Ok(ViewDescriptor {
-            kind: ViewKind::Tree,
-            header: Some(ViewHeader {
-                title_key: Some("plugin-lemmy-view-posts-title".to_string()),
-                subtitle_key: None,
-                info_block: None,
-            }),
-            toolbar: Some(ViewToolbar {
-                // Sort options live in the SortModes sidebar — declaring
-                // them here would render a duplicate dropdown above posts.
-                sort_options: vec![],
-                filter_options: vec![],
-                tabs: vec![],
-                action_items: vec![],
-            }),
-            body: ViewBody::TreeBody(TreeSpec {
-                root_page_size: 25,
-                max_depth: 8,
-            }),
-        })
-    }
-
-    async fn get_view_rows(
-        &self,
-        channel_id: &str,
-        cursor: Option<Cursor>,
-        sort_id: Option<&str>,
-        _filter_id: Option<&str>,
-        _tab_id: Option<&str>,
-    ) -> ClientResult<ViewRowsPage> {
-        // The account overview uses a synthetic channel id that routes here
-        // instead of to a community post feed.
-        if channel_id.is_empty() || channel_id == "lemmy-overview" {
-            let resp = self.http.fetch_subscribed_communities().await?;
-            let rows: Vec<ViewRow> = resp
-                .communities
-                .iter()
-                .map(|view| map_community_to_viewrow(view, 0))
-                .collect();
-            return Ok(ViewRowsPage { rows, next_cursor: None });
-        }
-
-        // Phase D — comments feed: `lemmy-comments-{community_id}` routes to
-        // the community-level recent-comments endpoint instead of the post list.
-        if let Some(community_id) = Self::parse_comments_channel(channel_id) {
-            let limit: u32 = 50;
-            let resp = self.http.fetch_community_comments(community_id, limit).await?;
-            let rows: Vec<ViewRow> = resp.comments.iter().map(|view| {
-                let msg = map_comment_to_message(view);
-                let content_text = match &msg.content {
-                    MessageContent::Text(s) => s.clone(),
-                    MessageContent::WithAttachments { text, .. } => text.clone(),
-                };
-                ViewRow {
-                    id: msg.id.clone(),
-                    primary_text: content_text,
-                    secondary_text: Some(msg.author.display_name.clone()),
-                    meta_text: None,
-                    icon: msg.author.avatar_url.clone(),
-                    badge: None,
-                    context_menu_target_kind: MenuTargetKind::Message,
-                    preview_image_url: None,
-                    is_video: false,
-                }
-            }).collect();
-            return Ok(ViewRowsPage { rows, next_cursor: None });
-        }
-
-        let community_id = Self::parse_feed_channel(channel_id).ok_or_else(|| {
-            ClientError::NotFound(format!(
-                "get_view_rows: channel must be a lemmy-feed-{{id}} or lemmy-overview: {channel_id}"
-            ))
-        })?;
-
-        let page = cursor_to_page(cursor.as_ref());
-        // Sort priority: explicit toolbar override → SortModes sidebar
-        // selection (settings_storage) → "Hot" default.
-        let stored_sort = self.settings_storage.get(
-            SettingsScope::AccountGlobal,
-            "",
-            "current-sort",
-        );
-        let sort: &str = sort_id
-            .or(stored_sort.as_deref())
-            .unwrap_or("Hot");
-        let page_size: u32 = 25;
-
-        let resp = self
-            .http
-            .fetch_posts_paged(community_id, sort, page, page_size)
-            .await?;
-
-        let now = chrono::Utc::now();
-        let render_previews = self.render_previews_enabled();
-        let rows: Vec<ViewRow> = resp.posts.iter().map(|v| map_post_to_viewrow(v, now, render_previews)).collect();
-        let next_cursor = next_page_cursor(page, page_size.try_into().unwrap_or(usize::MAX), rows.len());
-
-        Ok(ViewRowsPage { rows, next_cursor })
-    }
-
-    async fn get_view_detail(
-        &self,
-        _channel_id: &str,
-        row_id: &str,
-    ) -> ClientResult<ViewDetail> {
-        // row_id is either the post's integer id (from map_post_to_viewrow when
-        // `ap_id` was absent) or the `ap_id` URL. Try integer first; if that
-        // fails, extract the numeric suffix from a `.../post/{id}` URL.
-        let post_id = row_id
-            .parse::<i64>()
-            .ok()
-            .or_else(|| {
-                row_id
-                    .rsplit('/')
-                    .next()
-                    .and_then(|last| last.parse::<i64>().ok())
-            })
-            .ok_or_else(|| {
-                ClientError::NotFound(format!("get_view_detail: cannot parse row id: {row_id}"))
-            })?;
-
-        fn html_escape(s: &str) -> String {
-            s.replace('&', "&amp;")
-                .replace('<', "&lt;")
-                .replace('>', "&gt;")
-                .replace('"', "&quot;")
-        }
-
-        let post_view = self.http.fetch_post(post_id).await?;
-        let body = post_view.post.body.clone().unwrap_or_default();
-        let url_line = post_view
-            .post
-            .url
-            .as_deref()
-            .map(|u| format!("<p><a href=\"{}\">{}</a></p>", html_escape(u), html_escape(u)))
-            .unwrap_or_default();
-        let sanitized_html = format!(
-            "<h3>{}</h3>{}<p>{}</p>",
-            html_escape(&post_view.post.name),
-            url_line,
-            html_escape(&body),
-        );
-
-        Ok(ViewDetail {
-            body_block: CustomBlock {
-                sanitized_html,
-                stylesheet: None,
-                max_height_px: None,
-            },
-            comments_section: Some(TreeSpec {
-                root_page_size: 25,
-                max_depth: 8,
-            }),
-        })
-    }
-
     // --- Forum channels (H.2.b — moved to ForumBackend) ---
 
     fn as_forum(&self) -> Option<&dyn poly_client::ForumBackend> {
         Some(self)
-    }
-
-    async fn get_composer_buttons(&self, _channel_id: &str) -> ClientResult<Vec<ComposerButton>> {
-        // Lemmy is a read/vote platform — no freeform composer beyond post creation.
-        Ok(Vec::new())
-    }
-
-    async fn get_message_actions(
-        &self,
-        _channel_id: &str,
-        _message_id: &str,
-    ) -> ClientResult<Vec<MenuItem>> {
-        Ok(vec![
-            MenuItem {
-                id: "upvote".to_string(),
-                parent_id: None,
-                slot: MenuSlot::AfterFavorites,
-                label_key: "plugin-lemmy-message-action-upvote-label".to_string(),
-                icon: None,
-                item_variant: MenuItemVariant::Normal,
-                shortcut: None,
-                block: None,
-            },
-            MenuItem {
-                id: "downvote".to_string(),
-                parent_id: None,
-                slot: MenuSlot::AfterFavorites,
-                label_key: "plugin-lemmy-message-action-downvote-label".to_string(),
-                icon: None,
-                item_variant: MenuItemVariant::Normal,
-                shortcut: None,
-                block: None,
-            },
-            MenuItem {
-                id: "report".to_string(),
-                parent_id: None,
-                slot: MenuSlot::BeforeLeave,
-                label_key: "plugin-lemmy-message-action-report-label".to_string(),
-                icon: None,
-                item_variant: MenuItemVariant::Normal,
-                shortcut: None,
-                block: None,
-            },
-        ])
-    }
-
-    async fn invoke_composer_action(
-        &self,
-        action_id: &str,
-        _channel_id: &str,
-    ) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound(format!("unknown composer action: {action_id}")))
-    }
-
-    async fn invoke_message_action(
-        &self,
-        action_id: &str,
-        _channel_id: &str,
-        _message_id: &str,
-    ) -> ClientResult<ActionOutcome> {
-        match action_id {
-            "upvote" | "downvote" | "report" => Ok(ActionOutcome::Noop),
-            other => Err(ClientError::NotFound(format!("unknown message action: {other}"))),
-        }
     }
 
     // ── Moderation methods moved to ModerationBackend (H.3.a) ────────────────
@@ -1725,5 +1290,424 @@ impl poly_client::DiscoverBackend for LemmyClient {
             .collect();
 
         Ok(CommunityPage { items, next_cursor })
+    }
+}
+
+// ── C.1 — SettingsBackend ────────────────────────────────────────────────────
+
+#[cfg(feature = "native")]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::SettingsBackend for LemmyClient {
+    async fn get_settings_sections(&self) -> ClientResult<Vec<SettingsSection>> {
+        Ok(vec![SettingsSection {
+            scope: SettingsScope::PerServer,
+            section_key: "community".to_string(),
+            icon: None,
+            fields: vec![
+                SettingDescriptor {
+                    key: "mute-community".to_string(),
+                    kind: SettingKind::Toggle,
+                    default_value: "false".to_string(),
+                    extra: String::new(),
+                },
+                SettingDescriptor {
+                    key: "show-nsfw".to_string(),
+                    kind: SettingKind::Toggle,
+                    default_value: "false".to_string(),
+                    extra: String::new(),
+                },
+            ],
+            info_block: None,
+        }])
+    }
+
+    fn settings_storage(&self) -> &SettingsStorageCell {
+        &self.settings_storage
+    }
+}
+
+// ── C.1 — ViewDescriptorBackend ──────────────────────────────────────────────
+
+#[cfg(feature = "native")]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::ViewDescriptorBackend for LemmyClient {
+    async fn get_sidebar_declaration(&self) -> ClientResult<SidebarDeclaration> {
+        Ok(SidebarDeclaration {
+            layout: SidebarLayoutKind::Communities,
+            sections: Vec::new(),
+            header_block: None,
+        })
+    }
+
+    async fn invoke_sidebar_action(&self, action_id: &str) -> ClientResult<ActionOutcome> {
+        let sort_value = match action_id {
+            "sort-hot" => "Hot",
+            "sort-active" => "Active",
+            "sort-scaled" => "Scaled",
+            "sort-controversial" => "Controversial",
+            "sort-new" => "New",
+            "sort-old" => "Old",
+            "sort-most-comments" => "MostComments",
+            "sort-new-comments" => "NewComments",
+            "sort-top" | "sort-top-day" => "TopDay",
+            "sort-top-hour" => "TopHour",
+            "sort-top-six-hours" => "TopSixHour",
+            "sort-top-twelve-hours" => "TopTwelveHour",
+            "sort-top-week" => "TopWeek",
+            "sort-top-month" => "TopMonth",
+            "sort-top-year" => "TopYear",
+            "sort-top-all" => "TopAll",
+            _ => {
+                return Err(ClientError::NotFound(format!(
+                    "unknown sidebar action: {action_id}"
+                )));
+            }
+        };
+        self.settings_storage.set(
+            SettingsScope::AccountGlobal,
+            "",
+            "current-sort",
+            sort_value,
+        )?;
+        Ok(ActionOutcome::RefreshTarget)
+    }
+
+    async fn get_account_overview_view(&self) -> ClientResult<ViewDescriptor> {
+        Ok(ViewDescriptor {
+            kind: ViewKind::CardGrid,
+            header: Some(ViewHeader {
+                title_key: Some("plugin-lemmy-overview-title".to_string()),
+                subtitle_key: None,
+                info_block: None,
+            }),
+            toolbar: None,
+            body: ViewBody::CardBody(CardSpec {
+                primary_field: "name".to_string(),
+            }),
+        })
+    }
+
+    async fn get_channel_view(&self, channel_id: &str) -> ClientResult<ViewDescriptor> {
+        if Self::parse_comments_channel(channel_id).is_some() {
+            return Ok(ViewDescriptor {
+                kind: ViewKind::FlatList,
+                header: Some(ViewHeader {
+                    title_key: Some("plugin-lemmy-view-comments-title".to_string()),
+                    subtitle_key: None,
+                    info_block: None,
+                }),
+                toolbar: None,
+                body: ViewBody::ListBody(ListSpec {
+                    row_template: RowTemplate {
+                        primary_field: "text".to_string(),
+                        secondary_field: Some("author".to_string()),
+                        meta_field: None,
+                        icon_field: None,
+                    },
+                    page_size: 50,
+                }),
+            });
+        }
+        Ok(ViewDescriptor {
+            kind: ViewKind::Tree,
+            header: Some(ViewHeader {
+                title_key: Some("plugin-lemmy-view-posts-title".to_string()),
+                subtitle_key: None,
+                info_block: None,
+            }),
+            toolbar: Some(ViewToolbar {
+                sort_options: vec![],
+                filter_options: vec![],
+                tabs: vec![],
+                action_items: vec![],
+            }),
+            body: ViewBody::TreeBody(TreeSpec {
+                root_page_size: 25,
+                max_depth: 8,
+            }),
+        })
+    }
+
+    async fn get_view_rows(
+        &self,
+        channel_id: &str,
+        cursor: Option<Cursor>,
+        sort_id: Option<&str>,
+        _filter_id: Option<&str>,
+        _tab_id: Option<&str>,
+    ) -> ClientResult<ViewRowsPage> {
+        if channel_id.is_empty() || channel_id == "lemmy-overview" {
+            let resp = self.http.fetch_subscribed_communities().await?;
+            let rows: Vec<ViewRow> = resp
+                .communities
+                .iter()
+                .map(|view| map_community_to_viewrow(view, 0))
+                .collect();
+            return Ok(ViewRowsPage { rows, next_cursor: None });
+        }
+
+        if let Some(community_id) = Self::parse_comments_channel(channel_id) {
+            let limit: u32 = 50;
+            let resp = self.http.fetch_community_comments(community_id, limit).await?;
+            let rows: Vec<ViewRow> = resp.comments.iter().map(|view| {
+                let msg = map_comment_to_message(view);
+                let content_text = match &msg.content {
+                    MessageContent::Text(s) => s.clone(),
+                    MessageContent::WithAttachments { text, .. } => text.clone(),
+                };
+                ViewRow {
+                    id: msg.id.clone(),
+                    primary_text: content_text,
+                    secondary_text: Some(msg.author.display_name.clone()),
+                    meta_text: None,
+                    icon: msg.author.avatar_url.clone(),
+                    badge: None,
+                    context_menu_target_kind: MenuTargetKind::Message,
+                    preview_image_url: None,
+                    is_video: false,
+                }
+            }).collect();
+            return Ok(ViewRowsPage { rows, next_cursor: None });
+        }
+
+        let community_id = Self::parse_feed_channel(channel_id).ok_or_else(|| {
+            ClientError::NotFound(format!(
+                "get_view_rows: channel must be a lemmy-feed-{{id}} or lemmy-overview: {channel_id}"
+            ))
+        })?;
+
+        let page = cursor_to_page(cursor.as_ref());
+        let stored_sort = self.settings_storage.get(
+            SettingsScope::AccountGlobal,
+            "",
+            "current-sort",
+        );
+        let sort: &str = sort_id
+            .or(stored_sort.as_deref())
+            .unwrap_or("Hot");
+        let page_size: u32 = 25;
+
+        let resp = self
+            .http
+            .fetch_posts_paged(community_id, sort, page, page_size)
+            .await?;
+
+        let now = chrono::Utc::now();
+        let render_previews = self.render_previews_enabled();
+        let rows: Vec<ViewRow> = resp.posts.iter().map(|v| map_post_to_viewrow(v, now, render_previews)).collect();
+        let next_cursor = next_page_cursor(page, page_size.try_into().unwrap_or(usize::MAX), rows.len());
+
+        Ok(ViewRowsPage { rows, next_cursor })
+    }
+
+    async fn get_view_detail(
+        &self,
+        _channel_id: &str,
+        row_id: &str,
+    ) -> ClientResult<ViewDetail> {
+        let post_id = row_id
+            .parse::<i64>()
+            .ok()
+            .or_else(|| {
+                row_id
+                    .rsplit('/')
+                    .next()
+                    .and_then(|last| last.parse::<i64>().ok())
+            })
+            .ok_or_else(|| {
+                ClientError::NotFound(format!("get_view_detail: cannot parse row id: {row_id}"))
+            })?;
+
+        fn html_escape(s: &str) -> String {
+            s.replace('&', "&amp;")
+                .replace('<', "&lt;")
+                .replace('>', "&gt;")
+                .replace('"', "&quot;")
+        }
+
+        let post_view = self.http.fetch_post(post_id).await?;
+        let body = post_view.post.body.clone().unwrap_or_default();
+        let url_line = post_view
+            .post
+            .url
+            .as_deref()
+            .map(|u| format!("<p><a href=\"{}\">{}</a></p>", html_escape(u), html_escape(u)))
+            .unwrap_or_default();
+        let sanitized_html = format!(
+            "<h3>{}</h3>{}<p>{}</p>",
+            html_escape(&post_view.post.name),
+            url_line,
+            html_escape(&body),
+        );
+
+        Ok(ViewDetail {
+            body_block: CustomBlock {
+                sanitized_html,
+                stylesheet: None,
+                max_height_px: None,
+            },
+            comments_section: Some(TreeSpec {
+                root_page_size: 25,
+                max_depth: 8,
+            }),
+        })
+    }
+}
+
+// ── C.1 — ContextActionBackend ───────────────────────────────────────────────
+
+#[cfg(feature = "native")]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::ContextActionBackend for LemmyClient {
+    async fn get_context_menu_items(
+        &self,
+        target: MenuTargetKind,
+        target_id: &str,
+    ) -> ClientResult<Vec<MenuItem>> {
+        match target {
+            MenuTargetKind::Server => {
+                let subscribed = match Self::parse_community_id(target_id) {
+                    Ok(cid) => match self.http.fetch_community(cid).await {
+                        Ok(view) => view
+                            .subscribed
+                            .as_deref()
+                            .is_some_and(|s| s == "Subscribed" || s == "Pending"),
+                        Err(_) => false,
+                    },
+                    Err(_) => false,
+                };
+
+                let sub_item = if subscribed {
+                    MenuItem {
+                        id: "unsubscribe-community".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-lemmy-menu-unsubscribe-community-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    }
+                } else {
+                    MenuItem {
+                        id: "subscribe-community".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-lemmy-menu-subscribe-community-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    }
+                };
+
+                Ok(vec![
+                    MenuItem {
+                        id: "view-community".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-lemmy-menu-view-community-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    },
+                    sub_item,
+                    MenuItem {
+                        id: "view-modlog".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::AfterFavorites,
+                        label_key: "plugin-lemmy-menu-view-modlog-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Normal,
+                        shortcut: None,
+                        block: None,
+                    },
+                    MenuItem {
+                        id: "block-community".to_string(),
+                        parent_id: None,
+                        slot: MenuSlot::BeforeLeave,
+                        label_key: "plugin-lemmy-menu-block-community-label".to_string(),
+                        icon: None,
+                        item_variant: MenuItemVariant::Destructive,
+                        shortcut: None,
+                        block: None,
+                    },
+                ])
+            }
+            MenuTargetKind::Category
+            | MenuTargetKind::Channel
+            | MenuTargetKind::Dm
+            | MenuTargetKind::Message
+            | MenuTargetKind::User => Ok(Vec::new()),
+        }
+    }
+
+    async fn invoke_context_action(
+        &self,
+        action_id: &str,
+        _target: MenuTargetKind,
+        _target_id: &str,
+    ) -> ClientResult<ActionOutcome> {
+        match action_id {
+            "view-community" | "subscribe-community" | "view-modlog" | "block-community" => {
+                Ok(ActionOutcome::Noop)
+            }
+            _ => Err(ClientError::NotFound(format!("unknown action: {action_id}"))),
+        }
+    }
+
+    async fn get_message_actions(
+        &self,
+        _channel_id: &str,
+        _message_id: &str,
+    ) -> ClientResult<Vec<MenuItem>> {
+        Ok(vec![
+            MenuItem {
+                id: "upvote".to_string(),
+                parent_id: None,
+                slot: MenuSlot::AfterFavorites,
+                label_key: "plugin-lemmy-message-action-upvote-label".to_string(),
+                icon: None,
+                item_variant: MenuItemVariant::Normal,
+                shortcut: None,
+                block: None,
+            },
+            MenuItem {
+                id: "downvote".to_string(),
+                parent_id: None,
+                slot: MenuSlot::AfterFavorites,
+                label_key: "plugin-lemmy-message-action-downvote-label".to_string(),
+                icon: None,
+                item_variant: MenuItemVariant::Normal,
+                shortcut: None,
+                block: None,
+            },
+            MenuItem {
+                id: "report".to_string(),
+                parent_id: None,
+                slot: MenuSlot::BeforeLeave,
+                label_key: "plugin-lemmy-message-action-report-label".to_string(),
+                icon: None,
+                item_variant: MenuItemVariant::Normal,
+                shortcut: None,
+                block: None,
+            },
+        ])
+    }
+
+    async fn invoke_message_action(
+        &self,
+        action_id: &str,
+        _channel_id: &str,
+        _message_id: &str,
+    ) -> ClientResult<ActionOutcome> {
+        match action_id {
+            "upvote" | "downvote" | "report" => Ok(ActionOutcome::Noop),
+            other => Err(ClientError::NotFound(format!("unknown message action: {other}"))),
+        }
     }
 }

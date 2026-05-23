@@ -218,11 +218,20 @@ impl<F: DemoFlavour> IsBackend for DemoClientGeneric<F> {
         Ok(F::notifications())
     }
 
-    async fn get_voice_participants(
-        &self,
-        channel_id: &str,
-    ) -> ClientResult<Vec<VoiceParticipant>> {
-        Ok(F::voice_participants(channel_id))
+    fn as_voice_transport(&self) -> Option<&dyn poly_client::VoiceTransportBackend> {
+        Some(self)
+    }
+
+    fn as_settings(&self) -> Option<&dyn poly_client::SettingsBackend> {
+        Some(self)
+    }
+
+    fn as_view_descriptor(&self) -> Option<&dyn poly_client::ViewDescriptorBackend> {
+        Some(self)
+    }
+
+    fn as_context_action(&self) -> Option<&dyn poly_client::ContextActionBackend> {
+        Some(self)
     }
 
     fn event_stream(&self) -> Pin<Box<dyn Stream<Item = ClientEvent> + Send>> {
@@ -241,123 +250,7 @@ impl<F: DemoFlavour> IsBackend for DemoClientGeneric<F> {
         F::capabilities()
     }
 
-    async fn get_context_menu_items(
-        &self, target: MenuTargetKind, _target_id: &str,
-    ) -> Result<Vec<MenuItem>, ClientError> {
-        if target != MenuTargetKind::Server {
-            return Ok(Vec::new());
-        }
-        Ok(vec![MenuItem {
-            id: "regenerate-demo-data".to_string(),
-            parent_id: None,
-            slot: MenuSlot::AfterFavorites,
-            label_key: "plugin-demo-menu-regenerate-demo-data-label".to_string(),
-            icon: None,
-            item_variant: MenuItemVariant::Normal,
-            shortcut: None,
-            block: None,
-        }])
-    }
-
-    async fn invoke_context_action(
-        &self, action_id: &str, _target: MenuTargetKind, _target_id: &str,
-    ) -> Result<ActionOutcome, ClientError> {
-        match action_id {
-            "regenerate-demo-data" => Ok(ActionOutcome::Noop),
-            _ => Err(ClientError::NotFound(format!("unknown action: {action_id}"))),
-        }
-    }
-
-    async fn poll_action(
-        &self, _handle: PendingHandle,
-    ) -> Result<ActionOutcome, ClientError> {
-        Err(ClientError::NotFound("no pending actions".into()))
-    }
-
-    async fn get_settings_sections(&self) -> Result<Vec<SettingsSection>, ClientError> {
-        Ok(vec![SettingsSection {
-            scope: SettingsScope::AccountGlobal,
-            section_key: "preferences".to_string(),
-            icon: None,
-            fields: vec![
-                SettingDescriptor {
-                    key: "regenerate-on-start".to_string(),
-                    kind: SettingKind::Toggle,
-                    default_value: "false".to_string(),
-                    extra: String::new(),
-                },
-                SettingDescriptor {
-                    key: "message-count".to_string(),
-                    kind: SettingKind::Slider,
-                    default_value: "50".to_string(),
-                    extra: "{\"min\":10,\"max\":500,\"step\":10}".to_string(),
-                },
-            ],
-            info_block: None,
-        }])
-    }
-
-    fn settings_storage(&self) -> &SettingsStorageCell {
-        &self.settings_storage
-    }
-
-    async fn get_sidebar_declaration(&self) -> Result<SidebarDeclaration, ClientError> {
-        F::sidebar_declaration()
-    }
-
-    async fn invoke_sidebar_action(
-        &self, action_id: &str,
-    ) -> Result<ActionOutcome, ClientError> {
-        F::invoke_sidebar_action(action_id, &self.settings_storage)
-            .unwrap_or_else(|| Err(ClientError::NotFound(format!("unknown sidebar action: {action_id}"))))
-    }
-
-    async fn get_account_overview_view(&self) -> ClientResult<ViewDescriptor> {
-        F::account_overview_view()
-    }
-
-    async fn get_channel_view(&self, channel_id: &str) -> Result<ViewDescriptor, ClientError> {
-        F::channel_view(channel_id)
-    }
-
-    async fn get_view_rows(
-        &self, channel_id: &str, _cursor: Option<Cursor>,
-        _sort_id: Option<&str>, _filter_id: Option<&str>, tab_id: Option<&str>,
-    ) -> Result<ViewRowsPage, ClientError> {
-        F::view_rows(channel_id, tab_id)
-    }
-
-    async fn get_view_detail(
-        &self, channel_id: &str, row_id: &str,
-    ) -> Result<ViewDetail, ClientError> {
-        F::view_detail(channel_id, row_id)
-    }
-
-    async fn get_composer_buttons(
-        &self, _channel_id: &str,
-    ) -> Result<Vec<ComposerButton>, ClientError> {
-        // Demo client — no real composer extensions; exists solely for UI smoke testing.
-        Ok(Vec::new())
-    }
-
-    async fn get_message_actions(
-        &self, _channel_id: &str, _message_id: &str,
-    ) -> Result<Vec<MenuItem>, ClientError> {
-        // Demo client — no real message actions; exists solely for UI smoke testing.
-        Ok(Vec::new())
-    }
-
-    async fn invoke_composer_action(
-        &self, action_id: &str, _channel_id: &str,
-    ) -> Result<ActionOutcome, ClientError> {
-        Err(ClientError::NotFound(format!("unknown composer action: {action_id}")))
-    }
-
-    async fn invoke_message_action(
-        &self, action_id: &str, _channel_id: &str, _message_id: &str,
-    ) -> Result<ActionOutcome, ClientError> {
-        Err(ClientError::NotFound(format!("unknown message action: {action_id}")))
-    }
+    // --- C.1 — UI surface / settings / views / context-actions moved below ---
 
     fn client_version(&self) -> String {
         self.version_override
@@ -661,3 +554,136 @@ pub type DemoClient2 = DemoClientGeneric<flavour::DemoChat>;
 /// Externally: `poly_demo::DemoClient3::new()`.
 #[cfg(feature = "native")]
 pub type DemoClient3 = DemoClientGeneric<flavour::DemoForum>;
+
+// ── C.1 — VoiceTransportBackend ──────────────────────────────────────────────
+
+#[cfg(feature = "native")]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl<F: DemoFlavour> poly_client::VoiceTransportBackend for DemoClientGeneric<F> {
+    async fn get_voice_participants(
+        &self,
+        channel_id: &str,
+    ) -> ClientResult<Vec<VoiceParticipant>> {
+        Ok(F::voice_participants(channel_id))
+    }
+}
+
+// ── C.1 — SettingsBackend ────────────────────────────────────────────────────
+
+#[cfg(feature = "native")]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl<F: DemoFlavour> poly_client::SettingsBackend for DemoClientGeneric<F> {
+    async fn get_settings_sections(&self) -> ClientResult<Vec<SettingsSection>> {
+        Ok(vec![SettingsSection {
+            scope: SettingsScope::AccountGlobal,
+            section_key: "preferences".to_string(),
+            icon: None,
+            fields: vec![
+                SettingDescriptor {
+                    key: "regenerate-on-start".to_string(),
+                    kind: SettingKind::Toggle,
+                    default_value: "false".to_string(),
+                    extra: String::new(),
+                },
+                SettingDescriptor {
+                    key: "message-count".to_string(),
+                    kind: SettingKind::Slider,
+                    default_value: "50".to_string(),
+                    extra: "{\"min\":10,\"max\":500,\"step\":10}".to_string(),
+                },
+            ],
+            info_block: None,
+        }])
+    }
+
+    fn settings_storage(&self) -> &SettingsStorageCell {
+        &self.settings_storage
+    }
+}
+
+// ── C.1 — ViewDescriptorBackend ──────────────────────────────────────────────
+
+#[cfg(feature = "native")]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl<F: DemoFlavour> poly_client::ViewDescriptorBackend for DemoClientGeneric<F> {
+    async fn get_sidebar_declaration(&self) -> ClientResult<SidebarDeclaration> {
+        F::sidebar_declaration()
+    }
+
+    async fn invoke_sidebar_action(
+        &self,
+        action_id: &str,
+    ) -> ClientResult<ActionOutcome> {
+        F::invoke_sidebar_action(action_id, &self.settings_storage)
+            .unwrap_or_else(|| Err(ClientError::NotFound(format!("unknown sidebar action: {action_id}"))))
+    }
+
+    async fn get_account_overview_view(&self) -> ClientResult<ViewDescriptor> {
+        F::account_overview_view()
+    }
+
+    async fn get_channel_view(&self, channel_id: &str) -> ClientResult<ViewDescriptor> {
+        F::channel_view(channel_id)
+    }
+
+    async fn get_view_rows(
+        &self,
+        channel_id: &str,
+        _cursor: Option<Cursor>,
+        _sort_id: Option<&str>,
+        _filter_id: Option<&str>,
+        tab_id: Option<&str>,
+    ) -> ClientResult<ViewRowsPage> {
+        F::view_rows(channel_id, tab_id)
+    }
+
+    async fn get_view_detail(
+        &self,
+        channel_id: &str,
+        row_id: &str,
+    ) -> ClientResult<ViewDetail> {
+        F::view_detail(channel_id, row_id)
+    }
+}
+
+// ── C.1 — ContextActionBackend ───────────────────────────────────────────────
+
+#[cfg(feature = "native")]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl<F: DemoFlavour> poly_client::ContextActionBackend for DemoClientGeneric<F> {
+    async fn get_context_menu_items(
+        &self,
+        target: MenuTargetKind,
+        _target_id: &str,
+    ) -> ClientResult<Vec<MenuItem>> {
+        if target != MenuTargetKind::Server {
+            return Ok(Vec::new());
+        }
+        Ok(vec![MenuItem {
+            id: "regenerate-demo-data".to_string(),
+            parent_id: None,
+            slot: MenuSlot::AfterFavorites,
+            label_key: "plugin-demo-menu-regenerate-demo-data-label".to_string(),
+            icon: None,
+            item_variant: MenuItemVariant::Normal,
+            shortcut: None,
+            block: None,
+        }])
+    }
+
+    async fn invoke_context_action(
+        &self,
+        action_id: &str,
+        _target: MenuTargetKind,
+        _target_id: &str,
+    ) -> ClientResult<ActionOutcome> {
+        match action_id {
+            "regenerate-demo-data" => Ok(ActionOutcome::Noop),
+            _ => Err(ClientError::NotFound(format!("unknown action: {action_id}"))),
+        }
+    }
+}

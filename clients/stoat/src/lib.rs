@@ -943,141 +943,23 @@ impl IsBackend for StoatClient {
         Some(self)
     }
 
+    fn as_voice_transport(&self) -> Option<&dyn poly_client::VoiceTransportBackend> {
+        Some(self)
+    }
+
+    fn as_settings(&self) -> Option<&dyn poly_client::SettingsBackend> {
+        Some(self)
+    }
+
+    fn as_view_descriptor(&self) -> Option<&dyn poly_client::ViewDescriptorBackend> {
+        Some(self)
+    }
+
+    fn as_context_action(&self) -> Option<&dyn poly_client::ContextActionBackend> {
+        Some(self)
+    }
+
     #[cfg_attr(not(feature = "voice"), allow(unused_variables))]
-    async fn get_voice_participants(
-        &self,
-        channel_id: &str,
-    ) -> ClientResult<Vec<VoiceParticipant>> {
-        // F.7 — return participants from the voice cache populated by Vortex WS events.
-        // Falls back to empty vec when voice feature is not enabled or no active session.
-        #[cfg(feature = "voice")]
-        {
-            let guard = voice::get_voice_participants_cached(&self.voice_guard, channel_id).await;
-            if !guard.is_empty() {
-                return Ok(guard);
-            }
-            // Also check the RwLock cache (populated by event_stream).
-            if let Ok(cache) = self.voice_participants.try_read() {
-                if let Some(participants) = cache.get(channel_id) {
-                    return Ok(participants.clone());
-                }
-            }
-        }
-        Ok(vec![])
-    }
-
-    /// G.1 / B.6 — Signal the Stoat backend that the local user is joining a voice channel.
-    ///
-    /// On **native** (feature = "voice"): calls `POST /channels/{channel_id}/join_call`
-    /// for the REST signaling step only; the full Vortex WS transport is started
-    /// separately via `StoatClient::connect_voice`.
-    ///
-    /// On **wasm32**: calls `voice_wasm::connect_voice_wasm`, which performs the
-    /// join_call HTTP POST, opens the Vortex WebSocket, and spawns Opus
-    /// encode/decode/event loops. The resulting `StoatVoiceConnection` is stored in
-    /// `self.voice_wasm_conn` so it isn't dropped (which would tear down all tasks).
-    #[cfg_attr(not(any(feature = "voice", target_arch = "wasm32")), allow(unused_variables))]
-    async fn join_voice_channel_transport(
-        &self,
-        _server_id: &str,
-        channel_id: &str,
-    ) -> ClientResult<()> {
-        // ── WASM arm (B.6) ───────────────────────────────────────────────────────
-        #[cfg(target_arch = "wasm32")]
-        {
-            let base_url = self.http.base_url().to_string();
-            let auth_token = self
-                .session_token()
-                .ok_or_else(|| ClientError::AuthFailed("not authenticated".into()))?;
-
-            // An internal event channel: voice events flow into the main event_stream
-            // sink elsewhere. Using an unbounded channel is fine — WASM is single-threaded
-            // and the receive half is consumed by the decode loop inside connect_voice_wasm.
-            let (event_tx, _event_rx) = futures::channel::mpsc::unbounded::<ClientEvent>();
-
-            // B.8 — pass the shared noise-cancel flag to the encode loop.
-            // The Arc<AtomicBool> is stored in self.voice_noise_cancel and can be
-            // updated at runtime via set_noise_cancel() without reconnecting.
-            let noise_cancel = std::sync::Arc::clone(&self.voice_noise_cancel);
-
-            let conn = voice_wasm::connect_voice_wasm(
-                channel_id.to_string(),
-                base_url,
-                auth_token,
-                None, // transmit_mode: default (push-to-talk off)
-                noise_cancel,
-                event_tx,
-            )
-            .await
-            .map_err(|e| ClientError::Internal(format!("Stoat WASM voice: {e:?}")))?;
-
-            // Store the live connection — dropping it would kill all background tasks.
-            if let Ok(mut guard) = self.voice_wasm_conn.lock() {
-                *guard = Some(conn);
-            }
-
-            return Ok(());
-        }
-
-        // ── Native arm (feature = "voice") ───────────────────────────────────────
-        #[cfg(feature = "voice")]
-        {
-            // POST /channels/{channel_id}/join_call — tell the Vortex server we're joining.
-            let response = self
-                .http
-                .authenticated_request(Method::POST, &format!("/channels/{channel_id}/join_call"))?
-                .json(&serde_json::json!({}))
-                .send()
-                .await
-                .map_err(|e| ClientError::Network(e.to_string()))?;
-
-            if !response.status().is_success() {
-                return Err(ClientError::Network(format!(
-                    "join_call failed: HTTP {}",
-                    response.status()
-                )));
-            }
-
-            let resp: serde_json::Value = response
-                .json()
-                .await
-                .map_err(|e| ClientError::Network(e.to_string()))?;
-
-            let token = resp.get("token")
-                .and_then(|v| v.as_str())
-                .ok_or_else(|| ClientError::Internal("join_call: missing token".into()))?
-                .to_string();
-            let ws_url = resp.get("url")
-                .and_then(|v| v.as_str())
-                .ok_or_else(|| ClientError::Internal("join_call: missing url".into()))?
-                .to_string();
-
-            tracing::info!(channel_id, token = %token, ws_url = %ws_url, "Stoat join_call OK");
-            return Ok(());
-        }
-
-        // ── Fallback: native build without voice feature ──────────────────────────
-        #[cfg(not(any(feature = "voice", target_arch = "wasm32")))]
-        Ok(())
-    }
-
-    /// H.4 — Stoat DM call via synthetic voice channel (Phase H.2).
-    ///
-    /// On "cancel:<dm_id>" prefix, disconnects the active call instead.
-    async fn start_dm_call_transport(&self, dm_channel_id: &str) -> ClientResult<()> {
-        // H.4 cancel path.
-        if let Some(real_dm_id) = dm_channel_id.strip_prefix("cancel:") {
-            tracing::info!("Stoat DM call cancel for dm_id={real_dm_id}");
-            #[cfg(feature = "voice")]
-            voice::disconnect_voice(std::sync::Arc::clone(&self.voice_guard)).await;
-            return Ok(());
-        }
-
-        // H.2 — delegate to join_voice_channel_transport using the DM channel id.
-        // Real implementation would create a transient voice channel first.
-        self.join_voice_channel_transport("", dm_channel_id).await
-    }
-
     fn event_stream(&self) -> Pin<Box<dyn Stream<Item = ClientEvent> + Send>> {
         #[cfg(not(target_arch = "wasm32"))]
         {
@@ -1254,401 +1136,9 @@ impl IsBackend for StoatClient {
         }
     }
 
-    async fn get_context_menu_items(
-        &self,
-        target: MenuTargetKind,
-        target_id: &str,
-    ) -> ClientResult<Vec<MenuItem>> {
-        fn normal(id: &str, label_key: &str, slot: MenuSlot) -> MenuItem {
-            MenuItem {
-                id: id.to_string(),
-                parent_id: None,
-                slot,
-                label_key: label_key.to_string(),
-                icon: None,
-                item_variant: MenuItemVariant::Normal,
-                shortcut: None,
-                block: None,
-            }
-        }
 
-        fn destructive(id: &str, label_key: &str, slot: MenuSlot) -> MenuItem {
-            MenuItem {
-                id: id.to_string(),
-                parent_id: None,
-                slot,
-                label_key: label_key.to_string(),
-                icon: None,
-                item_variant: MenuItemVariant::Destructive,
-                shortcut: None,
-                block: None,
-            }
-        }
 
-        let (is_channel_muted, is_server_muted, is_user_blocked, is_friend, is_dm_muted) =
-            self.menu_state
-                .lock()
-                .map(|state| {
-                    (
-                        state.muted_channels.contains(target_id),
-                        state.muted_servers.contains(target_id),
-                        state.blocked_users.contains(target_id),
-                        state.friends.contains(target_id),
-                        state.muted_dms.contains(target_id),
-                    )
-                })
-                .unwrap_or((false, false, false, false, false));
 
-        match target {
-            MenuTargetKind::Channel => {
-                let mute_item = if is_channel_muted {
-                    normal("unmute-channel", "plugin-stoat-menu-unmute-channel-label", MenuSlot::AfterFavorites)
-                } else {
-                    normal("mute-channel", "plugin-stoat-menu-mute-channel-label", MenuSlot::AfterFavorites)
-                };
-                Ok(vec![
-                    mute_item,
-                    normal("mark-channel-read", "plugin-stoat-menu-mark-channel-read-label", MenuSlot::AfterFavorites),
-                ])
-            }
-            MenuTargetKind::Server => {
-                let mute_item = if is_server_muted {
-                    normal("unmute-server", "plugin-stoat-menu-unmute-server-label", MenuSlot::AfterFavorites)
-                } else {
-                    normal("mute-server", "plugin-stoat-menu-mute-server-label", MenuSlot::AfterFavorites)
-                };
-                Ok(vec![
-                    normal("invite-people", "plugin-stoat-menu-invite-people-label", MenuSlot::AfterFavorites),
-                    normal("privacy-settings", "plugin-stoat-menu-privacy-settings-label", MenuSlot::AfterFavorites),
-                    normal("edit-per-server-profile", "plugin-stoat-menu-edit-per-server-profile-label", MenuSlot::AfterFavorites),
-                    normal("manage-bots", "plugin-stoat-menu-manage-bots-label", MenuSlot::AfterFavorites),
-                    mute_item,
-                    destructive("leave-server", "plugin-stoat-menu-leave-server-label", MenuSlot::BeforeLeave),
-                ])
-            }
-            MenuTargetKind::User => {
-                let block_item = if is_user_blocked {
-                    normal("unblock-user", "plugin-stoat-menu-unblock-user-label", MenuSlot::BeforeLeave)
-                } else {
-                    destructive("block-user", "plugin-stoat-menu-block-user-label", MenuSlot::BeforeLeave)
-                };
-                let friend_item = if is_friend {
-                    normal("remove-friend", "plugin-stoat-menu-remove-friend-label", MenuSlot::AfterFavorites)
-                } else {
-                    normal("add-friend", "plugin-stoat-menu-add-friend-label", MenuSlot::AfterFavorites)
-                };
-                Ok(vec![
-                    normal("open-dm", "plugin-stoat-menu-open-dm-label", MenuSlot::AfterFavorites),
-                    friend_item,
-                    block_item,
-                ])
-            }
-            MenuTargetKind::Message => Ok(vec![
-                normal("react-message", "plugin-stoat-menu-react-message-label", MenuSlot::Top),
-                normal("copy-message-link", "plugin-stoat-menu-copy-message-link-label", MenuSlot::AfterFavorites),
-                destructive("delete-message", "plugin-stoat-menu-delete-message-label", MenuSlot::BeforeLeave),
-            ]),
-            MenuTargetKind::Dm => {
-                let mute_item = if is_dm_muted {
-                    normal("unmute-dm", "plugin-stoat-menu-unmute-dm-label", MenuSlot::AfterFavorites)
-                } else {
-                    normal("mute-dm", "plugin-stoat-menu-mute-dm-label", MenuSlot::AfterFavorites)
-                };
-                Ok(vec![
-                    destructive("close-dm", "plugin-stoat-menu-close-dm-label", MenuSlot::BeforeLeave),
-                    mute_item,
-                ])
-            }
-            MenuTargetKind::Category => Ok(vec![]),
-        }
-    }
-
-    async fn invoke_context_action(
-        &self,
-        action_id: &str,
-        _target: MenuTargetKind,
-        target_id: &str,
-    ) -> ClientResult<ActionOutcome> {
-        match action_id {
-            "mute-channel" => {
-                if let Ok(mut state) = self.menu_state.lock() {
-                    state.muted_channels.insert(target_id.to_string());
-                }
-                Ok(ActionOutcome::Completed)
-            }
-            "unmute-channel" => {
-                if let Ok(mut state) = self.menu_state.lock() {
-                    state.muted_channels.remove(target_id);
-                }
-                Ok(ActionOutcome::Completed)
-            }
-            "mark-channel-read" | "leave-server" | "delete-message" => {
-                Ok(ActionOutcome::Completed)
-            }
-            "mute-server" => {
-                if let Ok(mut state) = self.menu_state.lock() {
-                    state.muted_servers.insert(target_id.to_string());
-                }
-                Ok(ActionOutcome::Completed)
-            }
-            "unmute-server" => {
-                if let Ok(mut state) = self.menu_state.lock() {
-                    state.muted_servers.remove(target_id);
-                }
-                Ok(ActionOutcome::Completed)
-            }
-            "invite-people" | "privacy-settings" | "edit-per-server-profile" | "manage-bots" => {
-                Ok(ActionOutcome::Noop)
-            }
-            "block-user" => {
-                if let Ok(mut state) = self.menu_state.lock() {
-                    state.blocked_users.insert(target_id.to_string());
-                }
-                Ok(ActionOutcome::Completed)
-            }
-            "unblock-user" => {
-                if let Ok(mut state) = self.menu_state.lock() {
-                    state.blocked_users.remove(target_id);
-                }
-                Ok(ActionOutcome::Completed)
-            }
-            "add-friend" => {
-                if let Ok(mut state) = self.menu_state.lock() {
-                    state.friends.insert(target_id.to_string());
-                }
-                Ok(ActionOutcome::Completed)
-            }
-            "remove-friend" => {
-                if let Ok(mut state) = self.menu_state.lock() {
-                    state.friends.remove(target_id);
-                }
-                Ok(ActionOutcome::Completed)
-            }
-            "open-dm" | "react-message" | "copy-message-link" => Ok(ActionOutcome::Noop),
-            "close-dm" => {
-                if let Ok(mut state) = self.menu_state.lock() {
-                    state.closed_dms.insert(target_id.to_string());
-                }
-                Ok(ActionOutcome::Completed)
-            }
-            "mute-dm" => {
-                if let Ok(mut state) = self.menu_state.lock() {
-                    state.muted_dms.insert(target_id.to_string());
-                }
-                Ok(ActionOutcome::Completed)
-            }
-            "unmute-dm" => {
-                if let Ok(mut state) = self.menu_state.lock() {
-                    state.muted_dms.remove(target_id);
-                }
-                Ok(ActionOutcome::Completed)
-            }
-            other => Err(ClientError::NotFound(format!("unknown stoat action: {other}"))),
-        }
-    }
-
-    async fn poll_action(&self, _handle: PendingHandle) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound("no pending actions".into()))
-    }
-
-    async fn get_settings_sections(&self) -> ClientResult<Vec<SettingsSection>> {
-        Ok(vec![
-            SettingsSection {
-                scope: SettingsScope::PerServer,
-                section_key: "profile".to_string(),
-                icon: None,
-                fields: vec![
-                    SettingDescriptor {
-                        key: "nickname".to_string(),
-                        kind: SettingKind::TextInput,
-                        default_value: "\"\"".to_string(),
-                        extra: String::new(),
-                    },
-                    SettingDescriptor {
-                        key: "avatar-url".to_string(),
-                        kind: SettingKind::TextInput,
-                        default_value: "\"\"".to_string(),
-                        extra: String::new(),
-                    },
-                ],
-                info_block: None,
-            },
-            SettingsSection {
-                scope: SettingsScope::PerServer,
-                section_key: "privacy".to_string(),
-                icon: None,
-                fields: vec![SettingDescriptor {
-                    key: "allow-dms-from-server-members".to_string(),
-                    kind: SettingKind::Toggle,
-                    default_value: "true".to_string(),
-                    extra: String::new(),
-                }],
-                info_block: None,
-            },
-        ])
-    }
-
-    fn settings_storage(&self) -> &SettingsStorageCell {
-        &self.settings_storage
-    }
-
-    async fn get_sidebar_declaration(&self) -> ClientResult<SidebarDeclaration> {
-        Ok(SidebarDeclaration {
-            layout: SidebarLayoutKind::ChannelList,
-            sections: Vec::new(),
-            header_block: None,
-        })
-    }
-
-    async fn invoke_sidebar_action(&self, action_id: &str) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound(format!("unknown sidebar action: {action_id}")))
-    }
-
-    async fn get_account_overview_view(&self) -> ClientResult<ViewDescriptor> {
-        Ok(ViewDescriptor {
-            kind: ViewKind::CardGrid,
-            header: Some(ViewHeader {
-                title_key: Some("plugin-stoat-overview-title".to_string()),
-                subtitle_key: Some("plugin-stoat-overview-subtitle".to_string()),
-                info_block: None,
-            }),
-            toolbar: None,
-            body: ViewBody::CardBody(CardSpec {
-                primary_field: "name".to_string(),
-            }),
-        })
-    }
-
-    async fn get_channel_view(&self, _channel_id: &str) -> ClientResult<ViewDescriptor> {
-        Err(ClientError::NotSupported("channel-view not yet implemented".into()))
-    }
-
-    async fn get_view_rows(
-        &self,
-        channel_id: &str,
-        _cursor: Option<Cursor>,
-        _sort_id: Option<&str>,
-        _filter_id: Option<&str>,
-        _tab_id: Option<&str>,
-    ) -> ClientResult<ViewRowsPage> {
-        // Empty channel_id is the account-overview sentinel emitted by
-        // `AccountOverviewView` (routes.rs line ~149). Map each joined
-        // server to a card row with member count + unread indicators.
-        if !channel_id.is_empty() {
-            return Err(ClientError::NotSupported("view-rows not yet implemented".into()));
-        }
-
-        let servers = self.get_servers().await?;
-
-        // Fan out member-count fetches in parallel; degrade gracefully
-        // on individual failures so one unauthorized server doesn't
-        // blank the entire overview.
-        let member_counts: Vec<Option<usize>> = {
-            let futs: Vec<_> = servers
-                .iter()
-                .map(|s| self.http.fetch_server_members(&s.id))
-                .collect();
-            future::join_all(futs)
-                .await
-                .into_iter()
-                .map(|r| r.ok().map(|resp| resp.members.len()))
-                .collect()
-        };
-
-        let rows = servers
-            .into_iter()
-            .zip(member_counts)
-            .map(|(s, member_count_opt)| {
-                let meta = {
-                    let members_str = match member_count_opt {
-                        Some(n) => format!("{n} members"),
-                        None => "? members".to_string(),
-                    };
-                    let unread_part = if s.unread_count > 0 {
-                        format!(" · {} unread", s.unread_count)
-                    } else {
-                        String::new()
-                    };
-                    let mention_part = if s.mention_count > 0 {
-                        format!(" · @{}", s.mention_count)
-                    } else {
-                        String::new()
-                    };
-                    format!("{members_str}{unread_part}{mention_part}")
-                };
-                ViewRow {
-                    id: s.id.clone(),
-                    primary_text: s.name.clone(),
-                    secondary_text: s.description.clone(),
-                    meta_text: Some(meta),
-                    icon: s.icon_url.clone(),
-                    badge: None,
-                    context_menu_target_kind: MenuTargetKind::Server,
-                    preview_image_url: None,
-                    is_video: false,
-                }
-            })
-            .collect();
-
-        Ok(ViewRowsPage { rows, next_cursor: None })
-    }
-
-    async fn get_view_detail(
-        &self,
-        _channel_id: &str,
-        _row_id: &str,
-    ) -> ClientResult<ViewDetail> {
-        Err(ClientError::NotSupported("view-detail not yet implemented".into()))
-    }
-
-    async fn get_composer_buttons(&self, _channel_id: &str) -> ClientResult<Vec<ComposerButton>> {
-        Ok(vec![ComposerButton {
-            id: "emoji-picker".to_string(),
-            label_key: "plugin-stoat-composer-emoji-label".to_string(),
-            icon: "😀".to_string(),
-            position: ComposerSlot::RightOfInput,
-        }])
-    }
-
-    async fn get_message_actions(
-        &self,
-        _channel_id: &str,
-        _message_id: &str,
-    ) -> ClientResult<Vec<MenuItem>> {
-        Ok(vec![MenuItem {
-            id: "report".to_string(),
-            parent_id: None,
-            slot: MenuSlot::AfterFavorites,
-            label_key: "plugin-stoat-message-action-report-label".to_string(),
-            icon: None,
-            item_variant: MenuItemVariant::Normal,
-            shortcut: None,
-            block: None,
-        }])
-    }
-
-    async fn invoke_composer_action(
-        &self,
-        action_id: &str,
-        _channel_id: &str,
-    ) -> ClientResult<ActionOutcome> {
-        match action_id {
-            "emoji-picker" => Ok(ActionOutcome::Noop),
-            other => Err(ClientError::NotFound(format!("unknown composer action: {other}"))),
-        }
-    }
-
-    async fn invoke_message_action(
-        &self,
-        action_id: &str,
-        _channel_id: &str,
-        _message_id: &str,
-    ) -> ClientResult<ActionOutcome> {
-        match action_id {
-            "report" => Ok(ActionOutcome::Noop),
-            other => Err(ClientError::NotFound(format!("unknown message action: {other}"))),
-        }
-    }
 
     // ── Social graph methods moved to SocialGraphBackend (H.3.b) ─────────────
     // ── DMs and groups moved to DmsAndGroupsBackend (H.3.c) ─────────────────
@@ -2816,5 +2306,569 @@ mod tests {
         assert_eq!(user.backend, BackendType::from(crate::SLUG));
 
         Ok(())
+    }
+}
+
+// ── C.1 — VoiceTransportBackend ──────────────────────────────────────────────
+
+#[cfg(feature = "native")]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::VoiceTransportBackend for StoatClient {
+    async fn get_voice_participants(
+        &self,
+        channel_id: &str,
+    ) -> ClientResult<Vec<VoiceParticipant>> {
+        // F.7 — return participants from the voice cache populated by Vortex WS events.
+        // Falls back to empty vec when voice feature is not enabled or no active session.
+        #[cfg(feature = "voice")]
+        {
+            let guard = voice::get_voice_participants_cached(&self.voice_guard, channel_id).await;
+            if !guard.is_empty() {
+                return Ok(guard);
+            }
+            // Also check the RwLock cache (populated by event_stream).
+            if let Ok(cache) = self.voice_participants.try_read() {
+                if let Some(participants) = cache.get(channel_id) {
+                    return Ok(participants.clone());
+                }
+            }
+        }
+        Ok(vec![])
+    }
+
+    /// G.1 / B.6 — Signal the Stoat backend that the local user is joining a voice channel.
+    ///
+    /// On **native** (feature = "voice"): calls `POST /channels/{channel_id}/join_call`
+    /// for the REST signaling step only; the full Vortex WS transport is started
+    /// separately via `StoatClient::connect_voice`.
+    ///
+    /// On **wasm32**: calls `voice_wasm::connect_voice_wasm`, which performs the
+    /// join_call HTTP POST, opens the Vortex WebSocket, and spawns Opus
+    /// encode/decode/event loops. The resulting `StoatVoiceConnection` is stored in
+    /// `self.voice_wasm_conn` so it isn't dropped (which would tear down all tasks).
+    #[cfg_attr(not(any(feature = "voice", target_arch = "wasm32")), allow(unused_variables))]
+    async fn join_voice_channel_transport(
+        &self,
+        _server_id: &str,
+        channel_id: &str,
+    ) -> ClientResult<()> {
+        // ── WASM arm (B.6) ───────────────────────────────────────────────────────
+        #[cfg(target_arch = "wasm32")]
+        {
+            let base_url = self.http.base_url().to_string();
+            let auth_token = self
+                .session_token()
+                .ok_or_else(|| ClientError::AuthFailed("not authenticated".into()))?;
+
+            // An internal event channel: voice events flow into the main event_stream
+            // sink elsewhere. Using an unbounded channel is fine — WASM is single-threaded
+            // and the receive half is consumed by the decode loop inside connect_voice_wasm.
+            let (event_tx, _event_rx) = futures::channel::mpsc::unbounded::<ClientEvent>();
+
+            // B.8 — pass the shared noise-cancel flag to the encode loop.
+            // The Arc<AtomicBool> is stored in self.voice_noise_cancel and can be
+            // updated at runtime via set_noise_cancel() without reconnecting.
+            let noise_cancel = std::sync::Arc::clone(&self.voice_noise_cancel);
+
+            let conn = voice_wasm::connect_voice_wasm(
+                channel_id.to_string(),
+                base_url,
+                auth_token,
+                None, // transmit_mode: default (push-to-talk off)
+                noise_cancel,
+                event_tx,
+            )
+            .await
+            .map_err(|e| ClientError::Internal(format!("Stoat WASM voice: {e:?}")))?;
+
+            // Store the live connection — dropping it would kill all background tasks.
+            if let Ok(mut guard) = self.voice_wasm_conn.lock() {
+                *guard = Some(conn);
+            }
+
+            return Ok(());
+        }
+
+        // ── Native arm (feature = "voice") ───────────────────────────────────────
+        #[cfg(feature = "voice")]
+        {
+            // POST /channels/{channel_id}/join_call — tell the Vortex server we're joining.
+            let response = self
+                .http
+                .authenticated_request(Method::POST, &format!("/channels/{channel_id}/join_call"))?
+                .json(&serde_json::json!({}))
+                .send()
+                .await
+                .map_err(|e| ClientError::Network(e.to_string()))?;
+
+            if !response.status().is_success() {
+                return Err(ClientError::Network(format!(
+                    "join_call failed: HTTP {}",
+                    response.status()
+                )));
+            }
+
+            let resp: serde_json::Value = response
+                .json()
+                .await
+                .map_err(|e| ClientError::Network(e.to_string()))?;
+
+            let token = resp.get("token")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| ClientError::Internal("join_call: missing token".into()))?
+                .to_string();
+            let ws_url = resp.get("url")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| ClientError::Internal("join_call: missing url".into()))?
+                .to_string();
+
+            tracing::info!(channel_id, token = %token, ws_url = %ws_url, "Stoat join_call OK");
+            return Ok(());
+        }
+
+        // ── Fallback: native build without voice feature ──────────────────────────
+        #[cfg(not(any(feature = "voice", target_arch = "wasm32")))]
+        Ok(())
+    }
+
+    /// H.4 — Stoat DM call via synthetic voice channel (Phase H.2).
+    ///
+    /// On "cancel:<dm_id>" prefix, disconnects the active call instead.
+    async fn start_dm_call_transport(&self, dm_channel_id: &str) -> ClientResult<()> {
+        // H.4 cancel path.
+        if let Some(real_dm_id) = dm_channel_id.strip_prefix("cancel:") {
+            tracing::info!("Stoat DM call cancel for dm_id={real_dm_id}");
+            #[cfg(feature = "voice")]
+            voice::disconnect_voice(std::sync::Arc::clone(&self.voice_guard)).await;
+            return Ok(());
+        }
+
+        // H.2 — delegate to join_voice_channel_transport using the DM channel id.
+        // Real implementation would create a transient voice channel first.
+        // Phase C.1 — disambiguate: both IsBackend and VoiceTransportBackend
+        // expose this method; call the sub-trait directly.
+        <Self as poly_client::VoiceTransportBackend>::join_voice_channel_transport(
+            self,
+            "",
+            dm_channel_id,
+        )
+        .await
+    }
+}
+
+// ── C.1 — SettingsBackend ────────────────────────────────────────────────────
+
+#[cfg(feature = "native")]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::SettingsBackend for StoatClient {
+    async fn get_settings_sections(&self) -> ClientResult<Vec<SettingsSection>> {
+        Ok(vec![
+            SettingsSection {
+                scope: SettingsScope::PerServer,
+                section_key: "profile".to_string(),
+                icon: None,
+                fields: vec![
+                    SettingDescriptor {
+                        key: "nickname".to_string(),
+                        kind: SettingKind::TextInput,
+                        default_value: "\"\"".to_string(),
+                        extra: String::new(),
+                    },
+                    SettingDescriptor {
+                        key: "avatar-url".to_string(),
+                        kind: SettingKind::TextInput,
+                        default_value: "\"\"".to_string(),
+                        extra: String::new(),
+                    },
+                ],
+                info_block: None,
+            },
+            SettingsSection {
+                scope: SettingsScope::PerServer,
+                section_key: "privacy".to_string(),
+                icon: None,
+                fields: vec![SettingDescriptor {
+                    key: "allow-dms-from-server-members".to_string(),
+                    kind: SettingKind::Toggle,
+                    default_value: "true".to_string(),
+                    extra: String::new(),
+                }],
+                info_block: None,
+            },
+        ])
+    }
+
+    fn settings_storage(&self) -> &SettingsStorageCell {
+        &self.settings_storage
+    }
+}
+
+// ── C.1 — ViewDescriptorBackend ──────────────────────────────────────────────
+
+#[cfg(feature = "native")]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::ViewDescriptorBackend for StoatClient {
+    async fn get_sidebar_declaration(&self) -> ClientResult<SidebarDeclaration> {
+        Ok(SidebarDeclaration {
+            layout: SidebarLayoutKind::ChannelList,
+            sections: Vec::new(),
+            header_block: None,
+        })
+    }
+
+    async fn invoke_sidebar_action(&self, action_id: &str) -> ClientResult<ActionOutcome> {
+        Err(ClientError::NotFound(format!("unknown sidebar action: {action_id}")))
+    }
+
+    async fn get_account_overview_view(&self) -> ClientResult<ViewDescriptor> {
+        Ok(ViewDescriptor {
+            kind: ViewKind::CardGrid,
+            header: Some(ViewHeader {
+                title_key: Some("plugin-stoat-overview-title".to_string()),
+                subtitle_key: Some("plugin-stoat-overview-subtitle".to_string()),
+                info_block: None,
+            }),
+            toolbar: None,
+            body: ViewBody::CardBody(CardSpec {
+                primary_field: "name".to_string(),
+            }),
+        })
+    }
+
+    async fn get_channel_view(&self, _channel_id: &str) -> ClientResult<ViewDescriptor> {
+        Err(ClientError::NotSupported("channel-view not yet implemented".into()))
+    }
+
+    async fn get_view_rows(
+        &self,
+        channel_id: &str,
+        _cursor: Option<Cursor>,
+        _sort_id: Option<&str>,
+        _filter_id: Option<&str>,
+        _tab_id: Option<&str>,
+    ) -> ClientResult<ViewRowsPage> {
+        // Empty channel_id is the account-overview sentinel emitted by
+        // `AccountOverviewView` (routes.rs line ~149). Map each joined
+        // server to a card row with member count + unread indicators.
+        if !channel_id.is_empty() {
+            return Err(ClientError::NotSupported("view-rows not yet implemented".into()));
+        }
+
+        let servers = self.get_servers().await?;
+
+        // Fan out member-count fetches in parallel; degrade gracefully
+        // on individual failures so one unauthorized server doesn't
+        // blank the entire overview.
+        let member_counts: Vec<Option<usize>> = {
+            let futs: Vec<_> = servers
+                .iter()
+                .map(|s| self.http.fetch_server_members(&s.id))
+                .collect();
+            future::join_all(futs)
+                .await
+                .into_iter()
+                .map(|r| r.ok().map(|resp| resp.members.len()))
+                .collect()
+        };
+
+        let rows = servers
+            .into_iter()
+            .zip(member_counts)
+            .map(|(s, member_count_opt)| {
+                let meta = {
+                    let members_str = match member_count_opt {
+                        Some(n) => format!("{n} members"),
+                        None => "? members".to_string(),
+                    };
+                    let unread_part = if s.unread_count > 0 {
+                        format!(" · {} unread", s.unread_count)
+                    } else {
+                        String::new()
+                    };
+                    let mention_part = if s.mention_count > 0 {
+                        format!(" · @{}", s.mention_count)
+                    } else {
+                        String::new()
+                    };
+                    format!("{members_str}{unread_part}{mention_part}")
+                };
+                ViewRow {
+                    id: s.id.clone(),
+                    primary_text: s.name.clone(),
+                    secondary_text: s.description.clone(),
+                    meta_text: Some(meta),
+                    icon: s.icon_url.clone(),
+                    badge: None,
+                    context_menu_target_kind: MenuTargetKind::Server,
+                    preview_image_url: None,
+                    is_video: false,
+                }
+            })
+            .collect();
+
+        Ok(ViewRowsPage { rows, next_cursor: None })
+    }
+
+    async fn get_view_detail(
+        &self,
+        _channel_id: &str,
+        _row_id: &str,
+    ) -> ClientResult<ViewDetail> {
+        Err(ClientError::NotSupported("view-detail not yet implemented".into()))
+    }
+}
+
+// ── C.1 — ContextActionBackend ───────────────────────────────────────────────
+
+#[cfg(feature = "native")]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::ContextActionBackend for StoatClient {
+    async fn get_context_menu_items(
+        &self,
+        target: MenuTargetKind,
+        target_id: &str,
+    ) -> ClientResult<Vec<MenuItem>> {
+        fn normal(id: &str, label_key: &str, slot: MenuSlot) -> MenuItem {
+            MenuItem {
+                id: id.to_string(),
+                parent_id: None,
+                slot,
+                label_key: label_key.to_string(),
+                icon: None,
+                item_variant: MenuItemVariant::Normal,
+                shortcut: None,
+                block: None,
+            }
+        }
+
+        fn destructive(id: &str, label_key: &str, slot: MenuSlot) -> MenuItem {
+            MenuItem {
+                id: id.to_string(),
+                parent_id: None,
+                slot,
+                label_key: label_key.to_string(),
+                icon: None,
+                item_variant: MenuItemVariant::Destructive,
+                shortcut: None,
+                block: None,
+            }
+        }
+
+        let (is_channel_muted, is_server_muted, is_user_blocked, is_friend, is_dm_muted) =
+            self.menu_state
+                .lock()
+                .map(|state| {
+                    (
+                        state.muted_channels.contains(target_id),
+                        state.muted_servers.contains(target_id),
+                        state.blocked_users.contains(target_id),
+                        state.friends.contains(target_id),
+                        state.muted_dms.contains(target_id),
+                    )
+                })
+                .unwrap_or((false, false, false, false, false));
+
+        match target {
+            MenuTargetKind::Channel => {
+                let mute_item = if is_channel_muted {
+                    normal("unmute-channel", "plugin-stoat-menu-unmute-channel-label", MenuSlot::AfterFavorites)
+                } else {
+                    normal("mute-channel", "plugin-stoat-menu-mute-channel-label", MenuSlot::AfterFavorites)
+                };
+                Ok(vec![
+                    mute_item,
+                    normal("mark-channel-read", "plugin-stoat-menu-mark-channel-read-label", MenuSlot::AfterFavorites),
+                ])
+            }
+            MenuTargetKind::Server => {
+                let mute_item = if is_server_muted {
+                    normal("unmute-server", "plugin-stoat-menu-unmute-server-label", MenuSlot::AfterFavorites)
+                } else {
+                    normal("mute-server", "plugin-stoat-menu-mute-server-label", MenuSlot::AfterFavorites)
+                };
+                Ok(vec![
+                    normal("invite-people", "plugin-stoat-menu-invite-people-label", MenuSlot::AfterFavorites),
+                    normal("privacy-settings", "plugin-stoat-menu-privacy-settings-label", MenuSlot::AfterFavorites),
+                    normal("edit-per-server-profile", "plugin-stoat-menu-edit-per-server-profile-label", MenuSlot::AfterFavorites),
+                    normal("manage-bots", "plugin-stoat-menu-manage-bots-label", MenuSlot::AfterFavorites),
+                    mute_item,
+                    destructive("leave-server", "plugin-stoat-menu-leave-server-label", MenuSlot::BeforeLeave),
+                ])
+            }
+            MenuTargetKind::User => {
+                let block_item = if is_user_blocked {
+                    normal("unblock-user", "plugin-stoat-menu-unblock-user-label", MenuSlot::BeforeLeave)
+                } else {
+                    destructive("block-user", "plugin-stoat-menu-block-user-label", MenuSlot::BeforeLeave)
+                };
+                let friend_item = if is_friend {
+                    normal("remove-friend", "plugin-stoat-menu-remove-friend-label", MenuSlot::AfterFavorites)
+                } else {
+                    normal("add-friend", "plugin-stoat-menu-add-friend-label", MenuSlot::AfterFavorites)
+                };
+                Ok(vec![
+                    normal("open-dm", "plugin-stoat-menu-open-dm-label", MenuSlot::AfterFavorites),
+                    friend_item,
+                    block_item,
+                ])
+            }
+            MenuTargetKind::Message => Ok(vec![
+                normal("react-message", "plugin-stoat-menu-react-message-label", MenuSlot::Top),
+                normal("copy-message-link", "plugin-stoat-menu-copy-message-link-label", MenuSlot::AfterFavorites),
+                destructive("delete-message", "plugin-stoat-menu-delete-message-label", MenuSlot::BeforeLeave),
+            ]),
+            MenuTargetKind::Dm => {
+                let mute_item = if is_dm_muted {
+                    normal("unmute-dm", "plugin-stoat-menu-unmute-dm-label", MenuSlot::AfterFavorites)
+                } else {
+                    normal("mute-dm", "plugin-stoat-menu-mute-dm-label", MenuSlot::AfterFavorites)
+                };
+                Ok(vec![
+                    destructive("close-dm", "plugin-stoat-menu-close-dm-label", MenuSlot::BeforeLeave),
+                    mute_item,
+                ])
+            }
+            MenuTargetKind::Category => Ok(vec![]),
+        }
+    }
+
+    async fn invoke_context_action(
+        &self,
+        action_id: &str,
+        _target: MenuTargetKind,
+        target_id: &str,
+    ) -> ClientResult<ActionOutcome> {
+        match action_id {
+            "mute-channel" => {
+                if let Ok(mut state) = self.menu_state.lock() {
+                    state.muted_channels.insert(target_id.to_string());
+                }
+                Ok(ActionOutcome::Completed)
+            }
+            "unmute-channel" => {
+                if let Ok(mut state) = self.menu_state.lock() {
+                    state.muted_channels.remove(target_id);
+                }
+                Ok(ActionOutcome::Completed)
+            }
+            "mark-channel-read" | "leave-server" | "delete-message" => {
+                Ok(ActionOutcome::Completed)
+            }
+            "mute-server" => {
+                if let Ok(mut state) = self.menu_state.lock() {
+                    state.muted_servers.insert(target_id.to_string());
+                }
+                Ok(ActionOutcome::Completed)
+            }
+            "unmute-server" => {
+                if let Ok(mut state) = self.menu_state.lock() {
+                    state.muted_servers.remove(target_id);
+                }
+                Ok(ActionOutcome::Completed)
+            }
+            "invite-people" | "privacy-settings" | "edit-per-server-profile" | "manage-bots" => {
+                Ok(ActionOutcome::Noop)
+            }
+            "block-user" => {
+                if let Ok(mut state) = self.menu_state.lock() {
+                    state.blocked_users.insert(target_id.to_string());
+                }
+                Ok(ActionOutcome::Completed)
+            }
+            "unblock-user" => {
+                if let Ok(mut state) = self.menu_state.lock() {
+                    state.blocked_users.remove(target_id);
+                }
+                Ok(ActionOutcome::Completed)
+            }
+            "add-friend" => {
+                if let Ok(mut state) = self.menu_state.lock() {
+                    state.friends.insert(target_id.to_string());
+                }
+                Ok(ActionOutcome::Completed)
+            }
+            "remove-friend" => {
+                if let Ok(mut state) = self.menu_state.lock() {
+                    state.friends.remove(target_id);
+                }
+                Ok(ActionOutcome::Completed)
+            }
+            "open-dm" | "react-message" | "copy-message-link" => Ok(ActionOutcome::Noop),
+            "close-dm" => {
+                if let Ok(mut state) = self.menu_state.lock() {
+                    state.closed_dms.insert(target_id.to_string());
+                }
+                Ok(ActionOutcome::Completed)
+            }
+            "mute-dm" => {
+                if let Ok(mut state) = self.menu_state.lock() {
+                    state.muted_dms.insert(target_id.to_string());
+                }
+                Ok(ActionOutcome::Completed)
+            }
+            "unmute-dm" => {
+                if let Ok(mut state) = self.menu_state.lock() {
+                    state.muted_dms.remove(target_id);
+                }
+                Ok(ActionOutcome::Completed)
+            }
+            other => Err(ClientError::NotFound(format!("unknown stoat action: {other}"))),
+        }
+    }
+
+    async fn poll_action(&self, _handle: PendingHandle) -> ClientResult<ActionOutcome> {
+        Err(ClientError::NotFound("no pending actions".into()))
+    }
+    async fn get_composer_buttons(&self, _channel_id: &str) -> ClientResult<Vec<ComposerButton>> {
+        Ok(vec![ComposerButton {
+            id: "emoji-picker".to_string(),
+            label_key: "plugin-stoat-composer-emoji-label".to_string(),
+            icon: "😀".to_string(),
+            position: ComposerSlot::RightOfInput,
+        }])
+    }
+
+    async fn get_message_actions(
+        &self,
+        _channel_id: &str,
+        _message_id: &str,
+    ) -> ClientResult<Vec<MenuItem>> {
+        Ok(vec![MenuItem {
+            id: "report".to_string(),
+            parent_id: None,
+            slot: MenuSlot::AfterFavorites,
+            label_key: "plugin-stoat-message-action-report-label".to_string(),
+            icon: None,
+            item_variant: MenuItemVariant::Normal,
+            shortcut: None,
+            block: None,
+        }])
+    }
+
+    async fn invoke_composer_action(
+        &self,
+        action_id: &str,
+        _channel_id: &str,
+    ) -> ClientResult<ActionOutcome> {
+        match action_id {
+            "emoji-picker" => Ok(ActionOutcome::Noop),
+            other => Err(ClientError::NotFound(format!("unknown composer action: {other}"))),
+        }
+    }
+
+    async fn invoke_message_action(
+        &self,
+        action_id: &str,
+        _channel_id: &str,
+        _message_id: &str,
+    ) -> ClientResult<ActionOutcome> {
+        match action_id {
+            "report" => Ok(ActionOutcome::Noop),
+            other => Err(ClientError::NotFound(format!("unknown message action: {other}"))),
+        }
     }
 }

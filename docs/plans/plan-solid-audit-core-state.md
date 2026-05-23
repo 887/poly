@@ -143,9 +143,27 @@ Verification: `cargo check -p poly-core --all-features` — green, 2m43s.
 
 ## Phase C — Architectural rewrites (>300 LoC each)
 
-- [ ] **C.1** **`IsBackend` ISP split** (`clients/client/src/lib.rs`, 773
-  LoC, 60+ methods). Move every default-`NotSupported` method onto its own
-  capability trait exposed via `as_*`. Targets: `start_dm_call_transport`,
+- [x] **C.1** **`IsBackend` ISP split** — shipped (worktree branch
+  `worktree-agent-aebfac01c7d8152e1`). Four new capability sub-traits
+  defined in `clients/client/src/{voice_transport,settings,view_descriptor,context_action}.rs`
+  with `as_voice_transport`/`as_settings`/`as_view_descriptor`/`as_context_action`
+  accessors on `IsBackend`. Default impls on the legacy `IsBackend`
+  methods delegate to the accessor when `Some`, else fall back to the
+  documented historical default — so call sites in `crates/core/` and
+  `mcp/` keep working unchanged. Each in-tree backend
+  (`discord`, `matrix`, `teams`, `stoat`, `lemmy`, `hackernews`,
+  `forgejo`, `github`, `reddit`, `server-client`, `demo`) had its
+  C.1-cluster overrides extracted out of `impl IsBackend` and into
+  `impl <SubTrait>` blocks, with stub no-op overrides dropped
+  (~40 `NotSupported` returns deleted in favour of the trait
+  defaults). Liskov-safe: contract on every moved method preserved
+  byte-for-byte from the IsBackend version. CI: `cargo check -p
+  poly-{client,demo,discord,matrix,teams,lemmy,hackernews,forgejo,
+  github,reddit,server-client}` all green; `cargo check -p poly-core`
+  and `cargo check --target wasm32-unknown-unknown -p poly-core` green
+  too. **Out of scope for this plan when written** (file ownership
+  belongs to the per-client agents) — completed opportunistically by
+  the C.1 sub-agent. Targets covered: `start_dm_call_transport`,
   `join_voice_channel_transport`, `set_voice_mute`, `get_voice_participants`
   → `VoiceTransportBackend`. `get_settings_sections`, `settings_storage`,
   `get_setting_value`, `set_setting_value` → `SettingsBackend`.
@@ -154,11 +172,9 @@ Verification: `cargo check -p poly-core --all-features` — green, 2m43s.
   `get_view_detail` → `ViewDescriptorBackend`. `get_context_menu_items`,
   `invoke_context_action`, `get_message_actions`, `invoke_message_action`,
   `get_composer_buttons`, `invoke_composer_action`, `poll_action` →
-  `ContextActionBackend`. Net: `IsBackend` shrinks to ~12 mandatory
-  methods (auth, plugin metadata, server/channel/message read,
-  event-stream). Backends drop ~40 stub `Err(NotSupported)` overrides.
-  **Out of scope for this plan** (file is owned by the per-client agents);
-  recorded so the next backend audit can pick it up.
+  `ContextActionBackend`. `set_voice_deafen` / `leave_voice_channel_transport`
+  noted in the prompt do not exist in the current trait surface —
+  skipped; can be added under the new sub-trait whenever they land.
 - [x] **C.2** **Unify the four voice/codec/aead/udp host-bridge clients
   behind a common transport trait.** Each of `voice_client.rs`,
   `codec_opus_client.rs`, `aead_client.rs`, `udp_client.rs` re-implements

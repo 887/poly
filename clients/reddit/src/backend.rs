@@ -805,13 +805,14 @@ impl IsBackend for RedditBackend {
         Ok(Vec::new())
     }
 
-    // ── Voice ─────────────────────────────────────────────────────────────────
+    // ── Voice / Settings / Views / Context: moved to C.1 sub-traits below ────
 
-    async fn get_voice_participants(
-        &self,
-        _channel_id: &str,
-    ) -> ClientResult<Vec<VoiceParticipant>> {
-        Ok(Vec::new())
+    fn as_settings(&self) -> Option<&dyn poly_client::SettingsBackend> {
+        Some(self)
+    }
+
+    fn as_view_descriptor(&self) -> Option<&dyn poly_client::ViewDescriptorBackend> {
+        Some(self)
     }
 
     // ── Real-time events ─────────────────────────────────────────────────────
@@ -853,37 +854,13 @@ impl IsBackend for RedditBackend {
         SignupMethod::InApp("/signup/reddit".to_string())
     }
 
-    // ── D-series UI extension (stubs matching hackernews pattern) ────────────
-
-    async fn get_context_menu_items(
-        &self,
-        _target: MenuTargetKind,
-        _target_id: &str,
-    ) -> ClientResult<Vec<MenuItem>> {
-        Ok(Vec::new())
-    }
-
-    async fn invoke_context_action(
-        &self,
-        action_id: &str,
-        _target: MenuTargetKind,
-        _target_id: &str,
-    ) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound(format!("unknown action: {action_id}")))
-    }
-
-    async fn poll_action(&self, _handle: PendingHandle) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound("no pending actions".into()))
-    }
-
-    async fn get_settings_sections(&self) -> ClientResult<Vec<SettingsSection>> {
-        // Reddit has no per-server / per-channel settings exposed yet.
-        Ok(Vec::new())
-    }
-
-    fn settings_storage(&self) -> &SettingsStorageCell {
-        &self.settings_storage
-    }
+    // ── D-series UI extension — context/composer/message actions are all
+    //    empty stubs that match the default; dropped in C.1 (the IsBackend
+    //    defaults already return Ok(empty) / NotFound).
+    //    `get_settings_sections` / `settings_storage` / `get_sidebar_declaration`
+    //    / `invoke_sidebar_action` / `get_channel_view` / `get_view_rows`
+    //    / `get_view_detail` moved to the C.1 sub-trait impls at the
+    //    bottom of this file. ─────────────────────────────────────────────────
 
     /// Declares the `show-media-previews` mechanism, which controls whether
     /// image/video thumbnail previews are rendered next to forum post titles.
@@ -919,390 +896,6 @@ impl IsBackend for RedditBackend {
         }
     }
 
-    async fn get_sidebar_declaration(&self) -> ClientResult<SidebarDeclaration> {
-        let items = vec![
-            SidebarItem {
-                id: "sort-reddit-hot".to_string(),
-                parent_id: None,
-                label_key: "ui-sidebar-sort-hot".to_string(),
-                icon: None,
-                badge: None,
-                route_kind: SidebarRouteKind::Channel,
-            },
-            SidebarItem {
-                id: "sort-reddit-new".to_string(),
-                parent_id: None,
-                label_key: "ui-sidebar-sort-new".to_string(),
-                icon: None,
-                badge: None,
-                route_kind: SidebarRouteKind::Channel,
-            },
-            SidebarItem {
-                id: "sort-reddit-rising".to_string(),
-                parent_id: None,
-                label_key: "ui-sidebar-sort-rising".to_string(),
-                icon: None,
-                badge: None,
-                route_kind: SidebarRouteKind::Channel,
-            },
-            SidebarItem {
-                id: "sort-reddit-controversial".to_string(),
-                parent_id: None,
-                label_key: "ui-sidebar-sort-controversial".to_string(),
-                icon: None,
-                badge: None,
-                route_kind: SidebarRouteKind::Channel,
-            },
-            SidebarItem {
-                id: "sort-reddit-top".to_string(),
-                parent_id: None,
-                label_key: "ui-sidebar-sort-top".to_string(),
-                icon: None,
-                badge: None,
-                route_kind: SidebarRouteKind::Channel,
-            },
-            // "Top by time" sub-modes — nested under sort-reddit-top.
-            SidebarItem {
-                id: "sort-reddit-top-hour".to_string(),
-                parent_id: Some("sort-reddit-top".to_string()),
-                label_key: "ui-sidebar-sort-top-hour".to_string(),
-                icon: None,
-                badge: None,
-                route_kind: SidebarRouteKind::Channel,
-            },
-            SidebarItem {
-                id: "sort-reddit-top-day".to_string(),
-                parent_id: Some("sort-reddit-top".to_string()),
-                label_key: "ui-sidebar-sort-top-day".to_string(),
-                icon: None,
-                badge: None,
-                route_kind: SidebarRouteKind::Channel,
-            },
-            SidebarItem {
-                id: "sort-reddit-top-week".to_string(),
-                parent_id: Some("sort-reddit-top".to_string()),
-                label_key: "ui-sidebar-sort-top-week".to_string(),
-                icon: None,
-                badge: None,
-                route_kind: SidebarRouteKind::Channel,
-            },
-            SidebarItem {
-                id: "sort-reddit-top-month".to_string(),
-                parent_id: Some("sort-reddit-top".to_string()),
-                label_key: "ui-sidebar-sort-top-month".to_string(),
-                icon: None,
-                badge: None,
-                route_kind: SidebarRouteKind::Channel,
-            },
-            SidebarItem {
-                id: "sort-reddit-top-year".to_string(),
-                parent_id: Some("sort-reddit-top".to_string()),
-                label_key: "ui-sidebar-sort-top-year".to_string(),
-                icon: None,
-                badge: None,
-                route_kind: SidebarRouteKind::Channel,
-            },
-            SidebarItem {
-                id: "sort-reddit-top-all".to_string(),
-                parent_id: Some("sort-reddit-top".to_string()),
-                label_key: "ui-sidebar-sort-top-all".to_string(),
-                icon: None,
-                badge: None,
-                route_kind: SidebarRouteKind::Channel,
-            },
-        ];
-        Ok(SidebarDeclaration {
-            layout: SidebarLayoutKind::SortModes,
-            sections: vec![SidebarSection {
-                header_key: None,
-                collapsible: false,
-                default_collapsed: false,
-                items,
-            }],
-            header_block: None,
-        })
-    }
-
-    async fn invoke_sidebar_action(&self, action_id: &str) -> ClientResult<ActionOutcome> {
-        let sort = match action_id {
-            "sort-reddit-hot" => SortKind::Hot,
-            "sort-reddit-new" => SortKind::New,
-            "sort-reddit-rising" => SortKind::Rising,
-            "sort-reddit-controversial" => SortKind::Controversial,
-            "sort-reddit-top" => SortKind::Top,
-            "sort-reddit-top-hour" => SortKind::TopHour,
-            "sort-reddit-top-day" => SortKind::TopDay,
-            "sort-reddit-top-week" => SortKind::TopWeek,
-            "sort-reddit-top-month" => SortKind::TopMonth,
-            "sort-reddit-top-year" => SortKind::TopYear,
-            "sort-reddit-top-all" => SortKind::TopAll,
-            _ => {
-                return Err(ClientError::NotFound(format!(
-                    "unknown sidebar action: {action_id}"
-                )));
-            }
-        };
-        self.settings_storage.set(
-            SettingsScope::AccountGlobal,
-            "",
-            "current-sort",
-            sort_kind_to_str(sort),
-        )?;
-        Ok(ActionOutcome::RefreshTarget)
-    }
-
-    async fn get_channel_view(&self, _channel_id: &str) -> ClientResult<ViewDescriptor> {
-        Ok(ViewDescriptor {
-            kind: ViewKind::FlatList,
-            header: None,
-            toolbar: None,
-            body: ViewBody::ListBody(ListSpec {
-                row_template: RowTemplate {
-                    primary_field: "title".to_string(),
-                    secondary_field: Some("author".to_string()),
-                    meta_field: Some("score-comments-age".to_string()),
-                    icon_field: None,
-                },
-                page_size: 25,
-            }),
-        })
-    }
-
-    async fn get_view_rows(
-        &self,
-        channel_id: &str,
-        _cursor: Option<Cursor>,
-        _sort_id: Option<&str>,
-        _filter_id: Option<&str>,
-        _tab_id: Option<&str>,
-    ) -> ClientResult<ViewRowsPage> {
-        let sub = sub_from_channel_id(channel_id)
-            .ok_or_else(|| ClientError::NotFound(format!("channel not found: {channel_id}")))?;
-
-        let posts = self
-            .client
-            .list_subreddit(sub, self.current_sort())
-            .await
-            .map_err(ClientError::from)?;
-
-        let show_previews = self.media_previews_enabled();
-
-        let rows = posts
-            .iter()
-            .map(|p| raw_post_to_viewrow(p, show_previews))
-            .collect();
-
-        Ok(ViewRowsPage { rows, next_cursor: None })
-    }
-
-    async fn get_view_detail(
-        &self,
-        _channel_id: &str,
-        row_id: &str,
-    ) -> ClientResult<ViewDetail> {
-        // ViewRow ids are emitted as `t3_<post_id>` by raw_post_to_viewrow.
-        let post_id = row_id
-            .strip_prefix("t3_")
-            .ok_or_else(|| ClientError::NotFound(format!("get_view_detail: not a t3_ row: {row_id}")))?;
-
-        // Fetch the post + comment tree. Comments are rendered inline via
-        // depth-indented HTML inside body_block (TreeSpec needs hierarchy
-        // support on ViewRow that doesn't exist yet).
-        let (post, comments) = self.client.get_post(post_id).await.map_err(ClientError::from)?;
-
-        // Always try the gallery JSON — cheap (one extra request) and
-        // robust against parser misclassification of is_gallery.
-        // Empty Vec falls back to single-cover-image render below.
-        let gallery_from_json = self
-            .client
-            .get_gallery_urls(post_id)
-            .await
-            .unwrap_or_default();
-
-        // If the JSON gave us multiple URLs, that's a real gallery.
-        // Otherwise fall back to the cover preview (single image post).
-        let gallery_urls: Vec<String> = if gallery_from_json.len() >= 2 {
-            gallery_from_json
-        } else if let Some(ref preview) = post.preview_url {
-            vec![preview.clone()]
-        } else {
-            Vec::new()
-        };
-        let is_real_gallery = gallery_urls.len() >= 2;
-
-        fn html_escape(s: &str) -> String {
-            s.replace('&', "&amp;")
-                .replace('<', "&lt;")
-                .replace('>', "&gt;")
-                .replace('"', "&quot;")
-        }
-
-        let mut html = String::new();
-        // Title heading.
-        html.push_str(&format!("<h3>{}</h3>", html_escape(&post.title)));
-        // Author + score line.
-        html.push_str(&format!(
-            "<p class=\"reddit-post-meta\">by u/{} · {} points · {} comments</p>",
-            html_escape(&post.author),
-            post.score,
-            post.comment_count,
-        ));
-        // External URL link, if any (for non-image link posts).
-        if let Some(ref url) = post.url
-            && gallery_urls.is_empty()
-        {
-            let escaped = html_escape(url);
-            html.push_str(&format!(
-                "<p class=\"reddit-post-link\"><a href=\"{escaped}\">{escaped}</a></p>"
-            ));
-        }
-        // Self-post body markdown (already HTML-rendered by parser).
-        if let Some(ref body) = post.body
-            && !body.is_empty()
-        {
-            html.push_str(&format!("<div class=\"reddit-post-body\">{body}</div>"));
-        }
-        // Gallery / single-image rendering. Multi-image (>=2) posts use a
-        // scroll-snap carousel; single-image posts get a centered cover.
-        if !gallery_urls.is_empty() {
-            let wrapper_class = if is_real_gallery {
-                "reddit-gallery reddit-gallery-carousel"
-            } else {
-                "reddit-gallery"
-            };
-            html.push_str(&format!("<div class=\"{wrapper_class}\">"));
-            for (i, url) in gallery_urls.iter().enumerate() {
-                let alt = if is_real_gallery {
-                    format!("Gallery image {}/{}", i + 1, gallery_urls.len())
-                } else {
-                    "Post image".to_string()
-                };
-                html.push_str(&format!(
-                    "<img class=\"reddit-gallery-item\" src=\"{}\" alt=\"{}\" loading=\"lazy\" />",
-                    html_escape(url),
-                    html_escape(&alt),
-                ));
-            }
-            html.push_str("</div>");
-            if is_real_gallery {
-                html.push_str(&format!(
-                    "<p class=\"reddit-gallery-count\">{} images — swipe / scroll to view</p>",
-                    gallery_urls.len(),
-                ));
-            }
-        }
-
-        // Threaded comments rendered inline. Each RawComment becomes a
-        // .reddit-comment block with depth-indented left margin (capped
-        // at depth 8 to avoid runaway indentation).
-        if !comments.is_empty() {
-            html.push_str(&format!(
-                "<h4 class=\"reddit-comments-heading\">Comments ({})</h4>",
-                post.comment_count.min(9999),
-            ));
-            html.push_str("<div class=\"reddit-comments\">");
-            render_comments_to_html(&mut html, &comments, 0, 8);
-            html.push_str("</div>");
-        }
-
-        // Scoped stylesheet — flex strip for single images, scroll-snap
-        // carousel for multi-image galleries, depth-indented comments.
-        let stylesheet = Some(
-            ".reddit-post-meta { color: var(--text-muted, #888); font-size: 0.85rem; }
-             .reddit-post-body { margin: 12px 0; line-height: 1.5; }
-             .reddit-post-link a { color: var(--text-link, #60a5fa); word-break: break-all; }
-             .reddit-gallery {
-                 display: flex;
-                 gap: 8px;
-                 margin-top: 12px;
-                 align-items: flex-start;
-             }
-             .reddit-gallery-carousel {
-                 overflow-x: auto;
-                 scroll-snap-type: x mandatory;
-                 scroll-behavior: smooth;
-                 padding-bottom: 8px;
-             }
-             .reddit-gallery-carousel .reddit-gallery-item {
-                 scroll-snap-align: center;
-                 flex: 0 0 auto;
-             }
-             .reddit-gallery-item {
-                 max-width: min(100%, 480px);
-                 max-height: 540px;
-                 object-fit: contain;
-                 border-radius: 6px;
-                 background: rgba(0, 0, 0, 0.3);
-             }
-             .reddit-gallery-count {
-                 color: var(--text-muted, #888);
-                 font-size: 0.8rem;
-                 margin: 4px 0 0;
-             }
-             .reddit-comments-heading {
-                 margin-top: 24px;
-                 padding-top: 12px;
-                 border-top: 1px solid var(--border-primary, #333);
-             }
-             .reddit-comments { display: flex; flex-direction: column; gap: 12px; }
-             .reddit-comment {
-                 padding: 8px 12px;
-                 border-left: 2px solid var(--border-primary, #333);
-                 background: rgba(255, 255, 255, 0.02);
-                 border-radius: 0 4px 4px 0;
-             }
-             .reddit-comment-meta {
-                 color: var(--text-muted, #888);
-                 font-size: 0.78rem;
-                 margin-bottom: 4px;
-             }
-             .reddit-comment-body { line-height: 1.45; }
-             .reddit-comment-body p { margin: 4px 0; }"
-                .to_string(),
-        );
-
-        Ok(ViewDetail {
-            body_block: CustomBlock {
-                sanitized_html: html,
-                stylesheet,
-                max_height_px: None,
-            },
-            comments_section: None,
-        })
-    }
-
-    async fn get_composer_buttons(&self, _channel_id: &str) -> ClientResult<Vec<ComposerButton>> {
-        Ok(Vec::new())
-    }
-
-    async fn get_message_actions(
-        &self,
-        _channel_id: &str,
-        _message_id: &str,
-    ) -> ClientResult<Vec<MenuItem>> {
-        Ok(Vec::new())
-    }
-
-    async fn invoke_composer_action(
-        &self,
-        action_id: &str,
-        _channel_id: &str,
-    ) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound(format!(
-            "unknown composer action: {action_id}"
-        )))
-    }
-
-    async fn invoke_message_action(
-        &self,
-        action_id: &str,
-        _channel_id: &str,
-        _message_id: &str,
-    ) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound(format!(
-            "unknown message action: {action_id}"
-        )))
-    }
 
     // ── Phase E: community search (moved to DiscoverBackend H.4.c) ────────────
 
@@ -1592,6 +1185,358 @@ impl poly_client::DiscoverBackend for RedditBackend {
         Ok(poly_client::CommunityPage {
             items,
             next_cursor: next_after,
+        })
+    }
+}
+
+// ── C.1 — SettingsBackend ────────────────────────────────────────────────────
+
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::SettingsBackend for RedditBackend {
+    async fn get_settings_sections(&self) -> ClientResult<Vec<SettingsSection>> {
+        // Reddit has no per-server / per-channel settings exposed yet.
+        Ok(Vec::new())
+    }
+
+    fn settings_storage(&self) -> &SettingsStorageCell {
+        &self.settings_storage
+    }
+}
+
+// ── C.1 — ViewDescriptorBackend ──────────────────────────────────────────────
+
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::ViewDescriptorBackend for RedditBackend {
+    async fn get_sidebar_declaration(&self) -> ClientResult<SidebarDeclaration> {
+        let items = vec![
+            SidebarItem {
+                id: "sort-reddit-hot".to_string(),
+                parent_id: None,
+                label_key: "ui-sidebar-sort-hot".to_string(),
+                icon: None,
+                badge: None,
+                route_kind: SidebarRouteKind::Channel,
+            },
+            SidebarItem {
+                id: "sort-reddit-new".to_string(),
+                parent_id: None,
+                label_key: "ui-sidebar-sort-new".to_string(),
+                icon: None,
+                badge: None,
+                route_kind: SidebarRouteKind::Channel,
+            },
+            SidebarItem {
+                id: "sort-reddit-rising".to_string(),
+                parent_id: None,
+                label_key: "ui-sidebar-sort-rising".to_string(),
+                icon: None,
+                badge: None,
+                route_kind: SidebarRouteKind::Channel,
+            },
+            SidebarItem {
+                id: "sort-reddit-controversial".to_string(),
+                parent_id: None,
+                label_key: "ui-sidebar-sort-controversial".to_string(),
+                icon: None,
+                badge: None,
+                route_kind: SidebarRouteKind::Channel,
+            },
+            SidebarItem {
+                id: "sort-reddit-top".to_string(),
+                parent_id: None,
+                label_key: "ui-sidebar-sort-top".to_string(),
+                icon: None,
+                badge: None,
+                route_kind: SidebarRouteKind::Channel,
+            },
+            SidebarItem {
+                id: "sort-reddit-top-hour".to_string(),
+                parent_id: Some("sort-reddit-top".to_string()),
+                label_key: "ui-sidebar-sort-top-hour".to_string(),
+                icon: None,
+                badge: None,
+                route_kind: SidebarRouteKind::Channel,
+            },
+            SidebarItem {
+                id: "sort-reddit-top-day".to_string(),
+                parent_id: Some("sort-reddit-top".to_string()),
+                label_key: "ui-sidebar-sort-top-day".to_string(),
+                icon: None,
+                badge: None,
+                route_kind: SidebarRouteKind::Channel,
+            },
+            SidebarItem {
+                id: "sort-reddit-top-week".to_string(),
+                parent_id: Some("sort-reddit-top".to_string()),
+                label_key: "ui-sidebar-sort-top-week".to_string(),
+                icon: None,
+                badge: None,
+                route_kind: SidebarRouteKind::Channel,
+            },
+            SidebarItem {
+                id: "sort-reddit-top-month".to_string(),
+                parent_id: Some("sort-reddit-top".to_string()),
+                label_key: "ui-sidebar-sort-top-month".to_string(),
+                icon: None,
+                badge: None,
+                route_kind: SidebarRouteKind::Channel,
+            },
+            SidebarItem {
+                id: "sort-reddit-top-year".to_string(),
+                parent_id: Some("sort-reddit-top".to_string()),
+                label_key: "ui-sidebar-sort-top-year".to_string(),
+                icon: None,
+                badge: None,
+                route_kind: SidebarRouteKind::Channel,
+            },
+            SidebarItem {
+                id: "sort-reddit-top-all".to_string(),
+                parent_id: Some("sort-reddit-top".to_string()),
+                label_key: "ui-sidebar-sort-top-all".to_string(),
+                icon: None,
+                badge: None,
+                route_kind: SidebarRouteKind::Channel,
+            },
+        ];
+        Ok(SidebarDeclaration {
+            layout: SidebarLayoutKind::SortModes,
+            sections: vec![SidebarSection {
+                header_key: None,
+                collapsible: false,
+                default_collapsed: false,
+                items,
+            }],
+            header_block: None,
+        })
+    }
+
+    async fn invoke_sidebar_action(&self, action_id: &str) -> ClientResult<ActionOutcome> {
+        let sort = match action_id {
+            "sort-reddit-hot" => SortKind::Hot,
+            "sort-reddit-new" => SortKind::New,
+            "sort-reddit-rising" => SortKind::Rising,
+            "sort-reddit-controversial" => SortKind::Controversial,
+            "sort-reddit-top" => SortKind::Top,
+            "sort-reddit-top-hour" => SortKind::TopHour,
+            "sort-reddit-top-day" => SortKind::TopDay,
+            "sort-reddit-top-week" => SortKind::TopWeek,
+            "sort-reddit-top-month" => SortKind::TopMonth,
+            "sort-reddit-top-year" => SortKind::TopYear,
+            "sort-reddit-top-all" => SortKind::TopAll,
+            _ => {
+                return Err(ClientError::NotFound(format!(
+                    "unknown sidebar action: {action_id}"
+                )));
+            }
+        };
+        self.settings_storage.set(
+            SettingsScope::AccountGlobal,
+            "",
+            "current-sort",
+            sort_kind_to_str(sort),
+        )?;
+        Ok(ActionOutcome::RefreshTarget)
+    }
+
+    async fn get_channel_view(&self, _channel_id: &str) -> ClientResult<ViewDescriptor> {
+        Ok(ViewDescriptor {
+            kind: ViewKind::FlatList,
+            header: None,
+            toolbar: None,
+            body: ViewBody::ListBody(ListSpec {
+                row_template: RowTemplate {
+                    primary_field: "title".to_string(),
+                    secondary_field: Some("author".to_string()),
+                    meta_field: Some("score-comments-age".to_string()),
+                    icon_field: None,
+                },
+                page_size: 25,
+            }),
+        })
+    }
+
+    async fn get_view_rows(
+        &self,
+        channel_id: &str,
+        _cursor: Option<Cursor>,
+        _sort_id: Option<&str>,
+        _filter_id: Option<&str>,
+        _tab_id: Option<&str>,
+    ) -> ClientResult<ViewRowsPage> {
+        let sub = sub_from_channel_id(channel_id)
+            .ok_or_else(|| ClientError::NotFound(format!("channel not found: {channel_id}")))?;
+
+        let posts = self
+            .client
+            .list_subreddit(sub, self.current_sort())
+            .await
+            .map_err(ClientError::from)?;
+
+        let show_previews = self.media_previews_enabled();
+
+        let rows = posts
+            .iter()
+            .map(|p| raw_post_to_viewrow(p, show_previews))
+            .collect();
+
+        Ok(ViewRowsPage { rows, next_cursor: None })
+    }
+
+    async fn get_view_detail(
+        &self,
+        _channel_id: &str,
+        row_id: &str,
+    ) -> ClientResult<ViewDetail> {
+        let post_id = row_id
+            .strip_prefix("t3_")
+            .ok_or_else(|| ClientError::NotFound(format!("get_view_detail: not a t3_ row: {row_id}")))?;
+
+        let (post, comments) = self.client.get_post(post_id).await.map_err(ClientError::from)?;
+
+        let gallery_from_json = self
+            .client
+            .get_gallery_urls(post_id)
+            .await
+            .unwrap_or_default();
+
+        let gallery_urls: Vec<String> = if gallery_from_json.len() >= 2 {
+            gallery_from_json
+        } else if let Some(ref preview) = post.preview_url {
+            vec![preview.clone()]
+        } else {
+            Vec::new()
+        };
+        let is_real_gallery = gallery_urls.len() >= 2;
+
+        fn html_escape(s: &str) -> String {
+            s.replace('&', "&amp;")
+                .replace('<', "&lt;")
+                .replace('>', "&gt;")
+                .replace('"', "&quot;")
+        }
+
+        let mut html = String::new();
+        html.push_str(&format!("<h3>{}</h3>", html_escape(&post.title)));
+        html.push_str(&format!(
+            "<p class=\"reddit-post-meta\">by u/{} · {} points · {} comments</p>",
+            html_escape(&post.author),
+            post.score,
+            post.comment_count,
+        ));
+        if let Some(ref url) = post.url
+            && gallery_urls.is_empty()
+        {
+            let escaped = html_escape(url);
+            html.push_str(&format!(
+                "<p class=\"reddit-post-link\"><a href=\"{escaped}\">{escaped}</a></p>"
+            ));
+        }
+        if let Some(ref body) = post.body
+            && !body.is_empty()
+        {
+            html.push_str(&format!("<div class=\"reddit-post-body\">{body}</div>"));
+        }
+        if !gallery_urls.is_empty() {
+            let wrapper_class = if is_real_gallery {
+                "reddit-gallery reddit-gallery-carousel"
+            } else {
+                "reddit-gallery"
+            };
+            html.push_str(&format!("<div class=\"{wrapper_class}\">"));
+            for (i, url) in gallery_urls.iter().enumerate() {
+                let alt = if is_real_gallery {
+                    format!("Gallery image {}/{}", i + 1, gallery_urls.len())
+                } else {
+                    "Post image".to_string()
+                };
+                html.push_str(&format!(
+                    "<img class=\"reddit-gallery-item\" src=\"{}\" alt=\"{}\" loading=\"lazy\" />",
+                    html_escape(url),
+                    html_escape(&alt),
+                ));
+            }
+            html.push_str("</div>");
+            if is_real_gallery {
+                html.push_str(&format!(
+                    "<p class=\"reddit-gallery-count\">{} images — swipe / scroll to view</p>",
+                    gallery_urls.len(),
+                ));
+            }
+        }
+
+        if !comments.is_empty() {
+            html.push_str(&format!(
+                "<h4 class=\"reddit-comments-heading\">Comments ({})</h4>",
+                post.comment_count.min(9999),
+            ));
+            html.push_str("<div class=\"reddit-comments\">");
+            render_comments_to_html(&mut html, &comments, 0, 8);
+            html.push_str("</div>");
+        }
+
+        let stylesheet = Some(
+            ".reddit-post-meta { color: var(--text-muted, #888); font-size: 0.85rem; }
+             .reddit-post-body { margin: 12px 0; line-height: 1.5; }
+             .reddit-post-link a { color: var(--text-link, #60a5fa); word-break: break-all; }
+             .reddit-gallery {
+                 display: flex;
+                 gap: 8px;
+                 margin-top: 12px;
+                 align-items: flex-start;
+             }
+             .reddit-gallery-carousel {
+                 overflow-x: auto;
+                 scroll-snap-type: x mandatory;
+                 scroll-behavior: smooth;
+                 padding-bottom: 8px;
+             }
+             .reddit-gallery-carousel .reddit-gallery-item {
+                 scroll-snap-align: center;
+                 flex: 0 0 auto;
+             }
+             .reddit-gallery-item {
+                 max-width: min(100%, 480px);
+                 max-height: 540px;
+                 object-fit: contain;
+                 border-radius: 6px;
+                 background: rgba(0, 0, 0, 0.3);
+             }
+             .reddit-gallery-count {
+                 color: var(--text-muted, #888);
+                 font-size: 0.8rem;
+                 margin: 4px 0 0;
+             }
+             .reddit-comments-heading {
+                 margin-top: 24px;
+                 padding-top: 12px;
+                 border-top: 1px solid var(--border-primary, #333);
+             }
+             .reddit-comments { display: flex; flex-direction: column; gap: 12px; }
+             .reddit-comment {
+                 padding: 8px 12px;
+                 border-left: 2px solid var(--border-primary, #333);
+                 background: rgba(255, 255, 255, 0.02);
+                 border-radius: 0 4px 4px 0;
+             }
+             .reddit-comment-meta {
+                 color: var(--text-muted, #888);
+                 font-size: 0.78rem;
+                 margin-bottom: 4px;
+             }
+             .reddit-comment-body { line-height: 1.45; }
+             .reddit-comment-body p { margin: 4px 0; }"
+                .to_string(),
+        );
+
+        Ok(ViewDetail {
+            body_block: CustomBlock {
+                sanitized_html: html,
+                stylesheet,
+                max_height_px: None,
+            },
+            comments_section: None,
         })
     }
 }

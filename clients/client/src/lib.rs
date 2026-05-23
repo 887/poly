@@ -8,6 +8,7 @@
 
 pub mod code_repo;
 pub mod content_policy;
+pub mod context_action;
 pub mod dms_and_groups;
 pub mod events;
 pub mod forum;
@@ -15,24 +16,31 @@ pub mod discover;
 pub mod messaging;
 pub mod moderation;
 pub mod server_admin;
+pub mod settings;
 pub mod social_graph;
 pub mod threads;
 pub mod types;
 pub mod ui_surface;
+pub mod view_descriptor;
+pub mod voice_transport;
 
 pub use code_repo::CodeRepoBackend;
 pub use content_policy::ContentPolicyBackend;
+pub use context_action::ContextActionBackend;
 pub use dms_and_groups::DmsAndGroupsBackend;
 pub use events::*;
 pub use forum::ForumBackend;
 pub use discover::DiscoverBackend;
 pub use messaging::MessagingBackend;
 pub use server_admin::ServerAdminBackend;
+pub use settings::SettingsBackend;
 pub use moderation::ModerationBackend;
 pub use social_graph::SocialGraphBackend;
 pub use threads::ThreadsBackend;
 pub use types::*;
 pub use ui_surface::*;
+pub use view_descriptor::ViewDescriptorBackend;
+pub use voice_transport::VoiceTransportBackend;
 
 use async_trait::async_trait;
 use futures::stream::Stream;
@@ -300,6 +308,43 @@ pub trait IsBackend: Send + Sync {
         None
     }
 
+    /// Returns `Some(self)` if this backend implements [`VoiceTransportBackend`].
+    ///
+    /// Default: `None`.  Override in backends that carry voice / DM-call
+    /// transport (Discord gateway op 4 / op 13, Stoat WS, Matrix RTC).
+    /// Phase C.1 — ISP split.
+    fn as_voice_transport(&self) -> Option<&dyn VoiceTransportBackend> {
+        None
+    }
+
+    /// Returns `Some(self)` if this backend implements [`SettingsBackend`].
+    ///
+    /// Default: `None`.  Override in backends that declare their own
+    /// settings sections / persistent settings cells.
+    /// Phase C.1 — ISP split.
+    fn as_settings(&self) -> Option<&dyn SettingsBackend> {
+        None
+    }
+
+    /// Returns `Some(self)` if this backend implements [`ViewDescriptorBackend`].
+    ///
+    /// Default: `None`.  Override in backends that drive the
+    /// plugin-controlled UI surface (sidebar, account overview, channel
+    /// views, paged data feeds).
+    /// Phase C.1 — ISP split.
+    fn as_view_descriptor(&self) -> Option<&dyn ViewDescriptorBackend> {
+        None
+    }
+
+    /// Returns `Some(self)` if this backend implements [`ContextActionBackend`].
+    ///
+    /// Default: `None`.  Override in backends that contribute context-menu
+    /// items, composer buttons, or per-message actions.
+    /// Phase C.1 — ISP split.
+    fn as_context_action(&self) -> Option<&dyn ContextActionBackend> {
+        None
+    }
+
     // --- Servers / Communities (H.4.e) ---
 
     /// Get all servers/communities the user has joined.
@@ -378,54 +423,62 @@ pub trait IsBackend: Send + Sync {
 
     /// Get the current voice participants in a voice or video channel.
     ///
-    /// Default: `Ok(vec![])`.
+    /// Phase C.1 — default delegates to [`Self::as_voice_transport`] when
+    /// `Some`, otherwise returns `Ok(vec![])`.
     async fn get_voice_participants(
         &self,
-        _channel_id: &str,
+        channel_id: &str,
     ) -> ClientResult<Vec<VoiceParticipant>> {
-        Ok(vec![])
+        match self.as_voice_transport() {
+            Some(vt) => vt.get_voice_participants(channel_id).await,
+            None => Ok(vec![]),
+        }
     }
 
     /// C.1 — Signal the backend that the local user is joining a voice channel.
     ///
-    /// For backends with gateway-based signaling (e.g. Discord), this sends the
-    /// op 4 Voice State Update so the server knows the user has joined. UI state
-    /// (`VoiceConnection`) is updated separately by the caller.
-    ///
-    /// Default: `Ok(())` — no transport action required (pseudo-backend fallback).
+    /// Phase C.1 — default delegates to [`Self::as_voice_transport`] when
+    /// `Some`, otherwise `Ok(())` (pseudo-backend fallback).
     async fn join_voice_channel_transport(
         &self,
-        _server_id: &str,
-        _channel_id: &str,
+        server_id: &str,
+        channel_id: &str,
     ) -> ClientResult<()> {
-        Ok(())
+        match self.as_voice_transport() {
+            Some(vt) => vt.join_voice_channel_transport(server_id, channel_id).await,
+            None => Ok(()),
+        }
     }
 
     /// D.2 / D.5 — Initiate a DM call via backend transport (real signaling).
     ///
-    /// For Discord, sends op 13 Call Connect on the main gateway. The caller is
-    /// responsible for routing to the pending-call route and managing UI state.
-    ///
-    /// Default: `Err(NotSupported)` — caller should fall back to pseudo-backend.
-    async fn start_dm_call_transport(&self, _dm_channel_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("start_dm_call_transport".into()))
+    /// Phase C.1 — default delegates to [`Self::as_voice_transport`] when
+    /// `Some`, otherwise `Err(NotSupported)`.
+    async fn start_dm_call_transport(&self, dm_channel_id: &str) -> ClientResult<()> {
+        match self.as_voice_transport() {
+            Some(vt) => vt.start_dm_call_transport(dm_channel_id).await,
+            None => Err(ClientError::NotSupported("start_dm_call_transport".into())),
+        }
     }
 
     /// C.5 — Toggle the local user's mute / deafen state on the backend.
     ///
-    /// For backends with gateway-based signaling (e.g. Discord), this resends
-    /// op 4 Voice State Update with the updated flags. UI state is updated
-    /// separately by the caller.
-    ///
-    /// Default: `Ok(())` — no transport action required (pseudo-backend fallback).
+    /// Phase C.1 — default delegates to [`Self::as_voice_transport`] when
+    /// `Some`, otherwise `Ok(())` (pseudo-backend fallback).
     async fn set_voice_mute(
         &self,
-        _server_id: &str,
-        _channel_id: &str,
-        _self_mute: bool,
-        _self_deaf: bool,
+        server_id: &str,
+        channel_id: &str,
+        self_mute: bool,
+        self_deaf: bool,
     ) -> ClientResult<()> {
-        Ok(())
+        match self.as_voice_transport() {
+            Some(vt) => {
+                vt.set_voice_mute(server_id, channel_id, self_mute, self_deaf)
+                    .await
+            }
+            None => Ok(()),
+        }
     }
 
     // --- Real-time events (H.4.e) ---
@@ -441,58 +494,83 @@ pub trait IsBackend: Send + Sync {
 
     /// D11 — return plugin-declared context menu items for `target`.
     ///
-    /// Default: `Ok(vec![])` — backend contributes no context menu items.
+    /// Phase C.1 — default delegates to [`Self::as_context_action`] when
+    /// `Some`, otherwise `Ok(vec![])`.
     async fn get_context_menu_items(
         &self,
-        _target: MenuTargetKind,
-        _target_id: &str,
+        target: MenuTargetKind,
+        target_id: &str,
     ) -> ClientResult<Vec<MenuItem>> {
-        Ok(vec![])
+        match self.as_context_action() {
+            Some(ca) => ca.get_context_menu_items(target, target_id).await,
+            None => Ok(vec![]),
+        }
     }
 
     /// D14 / D22 — dispatch a plugin action.
     ///
-    /// Default: `Err(NotFound(action_id))`.
+    /// Phase C.1 — default delegates to [`Self::as_context_action`] when
+    /// `Some`, otherwise `Err(NotFound(action_id))`.
     async fn invoke_context_action(
         &self,
         action_id: &str,
-        _target: MenuTargetKind,
-        _target_id: &str,
+        target: MenuTargetKind,
+        target_id: &str,
     ) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound(action_id.to_string()))
+        match self.as_context_action() {
+            Some(ca) => ca.invoke_context_action(action_id, target, target_id).await,
+            None => Err(ClientError::NotFound(action_id.to_string())),
+        }
     }
 
     /// D16 — poll a pending async action for its final outcome.
     ///
-    /// Default: `Err(NotSupported)`.
-    async fn poll_action(&self, _handle: PendingHandle) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotSupported("poll_action".to_string()))
+    /// Phase C.1 — default delegates to [`Self::as_context_action`] when
+    /// `Some`, otherwise `Err(NotSupported)`.
+    async fn poll_action(&self, handle: PendingHandle) -> ClientResult<ActionOutcome> {
+        match self.as_context_action() {
+            Some(ca) => ca.poll_action(handle).await,
+            None => Err(ClientError::NotSupported("poll_action".to_string())),
+        }
     }
 
     /// D11 / D18 — every settings section this plugin contributes.
     ///
-    /// Default: `Ok(vec![])`.
+    /// Phase C.1 — default delegates to [`Self::as_settings`] when `Some`,
+    /// otherwise `Ok(vec![])`.
     async fn get_settings_sections(&self) -> ClientResult<Vec<SettingsSection>> {
-        Ok(vec![])
+        match self.as_settings() {
+            Some(s) => s.get_settings_sections().await,
+            None => Ok(vec![]),
+        }
     }
 
     /// Storage cell for backend-local settings.
     ///
-    /// Default: a static empty cell.
+    /// Phase C.1 — default delegates to [`Self::as_settings`] when `Some`,
+    /// otherwise returns a static empty cell.
     fn settings_storage(&self) -> &SettingsStorageCell {
+        if let Some(s) = self.as_settings() {
+            return s.settings_storage();
+        }
         static EMPTY: std::sync::OnceLock<SettingsStorageCell> = std::sync::OnceLock::new();
         EMPTY.get_or_init(SettingsStorageCell::new)
     }
 
     /// D15 — read a JSON-encoded setting value.
     ///
-    /// Default: reads from `self.settings_storage()`.
+    /// Phase C.1 — default delegates to [`Self::as_settings`] when `Some`
+    /// (the sub-trait default reads through `settings_storage`); otherwise
+    /// reads from the IsBackend's storage cell with the same fallback chain.
     async fn get_setting_value(
         &self,
         scope: SettingsScope,
         scope_id: &str,
         key: &str,
     ) -> ClientResult<String> {
+        if let Some(s) = self.as_settings() {
+            return s.get_setting_value(scope, scope_id, key).await;
+        }
         if let Some(v) = self.settings_storage().get(scope, scope_id, key) {
             return Ok(v);
         }
@@ -508,7 +586,8 @@ pub trait IsBackend: Send + Sync {
 
     /// D15 — write a JSON-encoded setting value.
     ///
-    /// Default: writes to `self.settings_storage()`.
+    /// Phase C.1 — default delegates to [`Self::as_settings`] when `Some`,
+    /// otherwise writes to the IsBackend's storage cell.
     async fn set_setting_value(
         &self,
         scope: SettingsScope,
@@ -516,122 +595,171 @@ pub trait IsBackend: Send + Sync {
         key: &str,
         value: &str,
     ) -> ClientResult<()> {
+        if let Some(s) = self.as_settings() {
+            return s.set_setting_value(scope, scope_id, key, value).await;
+        }
         self.settings_storage().set(scope, scope_id, key, value)
     }
 
     /// D5 / D19 — plugin's current sidebar declaration.
     ///
-    /// Default: Custom layout with no sections.
+    /// Phase C.1 — default delegates to [`Self::as_view_descriptor`] when
+    /// `Some`, otherwise returns an empty Custom layout.
     async fn get_sidebar_declaration(&self) -> ClientResult<SidebarDeclaration> {
-        Ok(SidebarDeclaration {
-            layout: SidebarLayoutKind::Custom,
-            sections: vec![],
-            header_block: None,
-        })
+        match self.as_view_descriptor() {
+            Some(vd) => vd.get_sidebar_declaration().await,
+            None => Ok(SidebarDeclaration {
+                layout: SidebarLayoutKind::Custom,
+                sections: vec![],
+                header_block: None,
+            }),
+        }
     }
 
     /// D14 / D25 — dispatch a sidebar-item click.
     ///
-    /// Default: `Err(NotFound(action_id))`.
+    /// Phase C.1 — default delegates to [`Self::as_view_descriptor`] when
+    /// `Some`, otherwise `Err(NotFound(action_id))`.
     async fn invoke_sidebar_action(&self, action_id: &str) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound(action_id.to_string()))
+        match self.as_view_descriptor() {
+            Some(vd) => vd.invoke_sidebar_action(action_id).await,
+            None => Err(ClientError::NotFound(action_id.to_string())),
+        }
     }
 
     /// Fetch the account-level overview view descriptor.
     ///
-    /// Default: generic CardGrid descriptor.
+    /// Phase C.1 — default delegates to [`Self::as_view_descriptor`] when
+    /// `Some`, otherwise returns the generic CardGrid descriptor.
     async fn get_account_overview_view(&self) -> ClientResult<ViewDescriptor> {
-        Ok(ViewDescriptor {
-            kind: ViewKind::CardGrid,
-            header: Some(ViewHeader {
-                title_key: Some("overview-default-title".to_string()),
-                subtitle_key: Some("overview-default-subtitle".to_string()),
-                info_block: None,
+        match self.as_view_descriptor() {
+            Some(vd) => vd.get_account_overview_view().await,
+            None => Ok(ViewDescriptor {
+                kind: ViewKind::CardGrid,
+                header: Some(ViewHeader {
+                    title_key: Some("overview-default-title".to_string()),
+                    subtitle_key: Some("overview-default-subtitle".to_string()),
+                    info_block: None,
+                }),
+                toolbar: None,
+                body: ViewBody::CardBody(CardSpec {
+                    primary_field: "name".to_string(),
+                }),
             }),
-            toolbar: None,
-            body: ViewBody::CardBody(CardSpec {
-                primary_field: "name".to_string(),
-            }),
-        })
+        }
     }
 
     /// D5 — fetch a channel's non-chat view descriptor.
     ///
-    /// Default: `Err(NotSupported)`.
-    async fn get_channel_view(&self, _channel_id: &str) -> ClientResult<ViewDescriptor> {
-        Err(ClientError::NotSupported("get_channel_view".to_string()))
+    /// Phase C.1 — default delegates to [`Self::as_view_descriptor`] when
+    /// `Some`, otherwise `Err(NotSupported)`.
+    async fn get_channel_view(&self, channel_id: &str) -> ClientResult<ViewDescriptor> {
+        match self.as_view_descriptor() {
+            Some(vd) => vd.get_channel_view(channel_id).await,
+            None => Err(ClientError::NotSupported("get_channel_view".to_string())),
+        }
     }
 
     /// D23 — paged data feed.
     ///
-    /// Default: empty page.
+    /// Phase C.1 — default delegates to [`Self::as_view_descriptor`] when
+    /// `Some`, otherwise returns an empty page.
     async fn get_view_rows(
         &self,
-        _channel_id: &str,
-        _cursor: Option<Cursor>,
-        _sort_id: Option<&str>,
-        _filter_id: Option<&str>,
-        _tab_id: Option<&str>,
+        channel_id: &str,
+        cursor: Option<Cursor>,
+        sort_id: Option<&str>,
+        filter_id: Option<&str>,
+        tab_id: Option<&str>,
     ) -> ClientResult<ViewRowsPage> {
-        Ok(ViewRowsPage {
-            rows: vec![],
-            next_cursor: None,
-        })
+        match self.as_view_descriptor() {
+            Some(vd) => {
+                vd.get_view_rows(channel_id, cursor, sort_id, filter_id, tab_id)
+                    .await
+            }
+            None => Ok(ViewRowsPage {
+                rows: vec![],
+                next_cursor: None,
+            }),
+        }
     }
 
     /// D5 — detail payload for `split` views.
     ///
-    /// Default: `Err(NotSupported)`.
+    /// Phase C.1 — default delegates to [`Self::as_view_descriptor`] when
+    /// `Some`, otherwise `Err(NotSupported)`.
     async fn get_view_detail(
         &self,
-        _channel_id: &str,
-        _row_id: &str,
+        channel_id: &str,
+        row_id: &str,
     ) -> ClientResult<ViewDetail> {
-        Err(ClientError::NotSupported("get_view_detail".to_string()))
+        match self.as_view_descriptor() {
+            Some(vd) => vd.get_view_detail(channel_id, row_id).await,
+            None => Err(ClientError::NotSupported("get_view_detail".to_string())),
+        }
     }
 
     /// D8 — composer-toolbar buttons for the given channel.
     ///
-    /// Default: `Ok(vec![])`.
+    /// Phase C.1 — default delegates to [`Self::as_context_action`] when
+    /// `Some`, otherwise `Ok(vec![])`.
     async fn get_composer_buttons(
         &self,
-        _channel_id: &str,
+        channel_id: &str,
     ) -> ClientResult<Vec<ComposerButton>> {
-        Ok(vec![])
+        match self.as_context_action() {
+            Some(ca) => ca.get_composer_buttons(channel_id).await,
+            None => Ok(vec![]),
+        }
     }
 
     /// D8 — per-message actions, merged into the message hover/overflow menu.
     ///
-    /// Default: `Ok(vec![])`.
+    /// Phase C.1 — default delegates to [`Self::as_context_action`] when
+    /// `Some`, otherwise `Ok(vec![])`.
     async fn get_message_actions(
         &self,
-        _channel_id: &str,
-        _message_id: &str,
+        channel_id: &str,
+        message_id: &str,
     ) -> ClientResult<Vec<MenuItem>> {
-        Ok(vec![])
+        match self.as_context_action() {
+            Some(ca) => ca.get_message_actions(channel_id, message_id).await,
+            None => Ok(vec![]),
+        }
     }
 
     /// D14 / D25 — dispatch a composer button action.
     ///
-    /// Default: `Err(NotFound(action_id))`.
+    /// Phase C.1 — default delegates to [`Self::as_context_action`] when
+    /// `Some`, otherwise `Err(NotFound(action_id))`.
     async fn invoke_composer_action(
         &self,
         action_id: &str,
-        _channel_id: &str,
+        channel_id: &str,
     ) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound(action_id.to_string()))
+        match self.as_context_action() {
+            Some(ca) => ca.invoke_composer_action(action_id, channel_id).await,
+            None => Err(ClientError::NotFound(action_id.to_string())),
+        }
     }
 
     /// D14 / D25 — dispatch a per-message action.
     ///
-    /// Default: `Err(NotFound(action_id))`.
+    /// Phase C.1 — default delegates to [`Self::as_context_action`] when
+    /// `Some`, otherwise `Err(NotFound(action_id))`.
     async fn invoke_message_action(
         &self,
         action_id: &str,
-        _channel_id: &str,
-        _message_id: &str,
+        channel_id: &str,
+        message_id: &str,
     ) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound(action_id.to_string()))
+        match self.as_context_action() {
+            Some(ca) => {
+                ca.invoke_message_action(action_id, channel_id, message_id)
+                    .await
+            }
+            None => Err(ClientError::NotFound(action_id.to_string())),
+        }
     }
 }
 
