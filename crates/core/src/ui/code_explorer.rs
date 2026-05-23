@@ -10,7 +10,7 @@
 //! params (per the github backend doc-comment) so users get the full code
 //! search experience without us having to host an index.
 
-use crate::state::BatchedSignal;
+use crate::state::{BatchedSignal, use_reactive_effect};
 use dioxus::prelude::*;
 use poly_client::FileEntry;
 
@@ -61,13 +61,15 @@ pub fn CodeExplorerView(#[props(default)] route_channel_id: String) -> Element {
     let mut loading = use_signal(|| false);
     let mut error_msg: Signal<Option<String>> = use_signal(|| None);
 
-    // Refetch the directory listing whenever the channel or path changes.
-    {
-        let channel_id = channel_id.clone();
-        let server_id_for_eff = server_id.clone();
-        use_effect(move || {
-            let Some(ch_id) = channel_id.clone() else { return; };
-            let Some(srv_id) = server_id_for_eff.clone() else { return; };
+    // Refetch the directory listing whenever the channel, server, or path changes.
+    // use_reactive_effect fixes hang-class #6: channel_id/server_id are non-Signal
+    // props that would be stale inside a plain use_effect. The body also reads
+    // current_path Signal, so it re-fires on path changes via Signal subscription.
+    use_reactive_effect(
+        (channel_id.clone(), server_id.clone()),
+        move |(ch_id, srv_id): (Option<String>, Option<String>)| {
+            let Some(ch_id) = ch_id else { return; };
+            let Some(srv_id) = srv_id else { return; };
             let path = current_path.read().clone();
             let cm = client_manager;
             spawn(async move {
@@ -92,8 +94,8 @@ pub fn CodeExplorerView(#[props(default)] route_channel_id: String) -> Element {
                 }
                 loading.set(false);
             });
-        });
-    }
+        },
+    );
 
     let path_display = current_path.read().clone();
     let breadcrumb = if path_display.is_empty() {

@@ -132,7 +132,7 @@ fn ToastRow(msg: ToastMessage) -> Element {
     let sticky = msg.sticky;
 
     // Auto-dismiss effect — fires once per toast. Sticky toasts never tick.
-    use_effect(move || {
+    use_effect(move || { // poly-lint: allow stale-effect-capture — mount-once auto-dismiss timer; id/sticky props are stable for this component instance's lifetime
         if sticky {
             return;
         }

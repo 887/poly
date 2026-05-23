@@ -20,7 +20,7 @@ use super::favorites_sidebar::FavoritesBar;
 use super::routes::{Route, route_targets_unknown_account, sync_route_to_app_state};
 use super::voice_banner::VoiceBanner;
 use crate::client_manager::ClientManager;
-use crate::state::{AppState, BatchedSignal, ModerationDialog, SettingsSection};
+use crate::state::{AppState, BatchedSignal, ModerationDialog, SettingsSection, use_reactive_effect};
 use crate::ui::dialogs::{BanMemberDialog, EditChannelDialog, KickMemberDialog, TimeoutMemberDialog};
 use dioxus::prelude::*;
 use dioxus_router::use_route;
@@ -232,13 +232,12 @@ pub fn MainLayout() -> Element {
     let route = use_route::<Route>();
     sync_route_to_app_state(&route, app_state, nav, Some(user_prefs));
 
-    use_effect(move || {
+    use_effect(move || { // poly-lint: allow stale-effect-capture — mount-only JS init, no captured props that drift
         init_mobile_drawer_runtime();
     });
 
     let route_key = format!("{route}");
-    use_effect(move || {
-        let _ = &route_key;
+    use_reactive_effect(route_key.clone(), move |_rk| {
         crate::ui::preserve_layout_override_query_in_url();
         close_mobile_right_wing();
         if runtime_mobile_ui_active() {
@@ -249,8 +248,8 @@ pub fn MainLayout() -> Element {
         }
     });
 
-    use_effect(move || {
-        if route_targets_unknown_account(&route, &client_manager.read()) {
+    use_reactive_effect(route.clone(), move |r| {
+        if route_targets_unknown_account(&r, &client_manager.read()) {
             user_prefs.batch(|p| p.settings_section = SettingsSection::Accounts);
             navigator().replace(Route::SettingsRoute);
         }
@@ -260,7 +259,7 @@ pub fn MainLayout() -> Element {
     // This fires after every route navigation (because sync_route_to_app_state
     // updates account_last_routes inside AppState, which re-renders MainLayout).
     // The spawn ensures the async storage write doesn't block the render.
-    use_effect(move || {
+    use_effect(move || { // poly-lint: allow stale-effect-capture — body reads nav Signal only; spawn writes to storage (no Signal), no stale prop captures
         let routes_snapshot = nav.read().account_last_routes.clone();
         if routes_snapshot.is_empty() {
             return;
@@ -290,7 +289,7 @@ pub fn MainLayout() -> Element {
     // These run synchronously in the browser JS engine (before Dioxus IPC round-trips),
     // satisfying the WebKit requirements. Dioxus's own ondragstart / ondragover / ondrop
     // handlers still fire afterwards and update ChatData state correctly.
-    use_effect(move || {
+    use_effect(move || { // poly-lint: allow stale-effect-capture — mount-only drag-bridge JS loader; browser_runtime() is a const-equivalent fn, no drift risk
         if browser_runtime() == BrowserRuntime::WasmDom {
             spawn(async move {
                 let _ = crate::ui::load_js_asset(DRAG_BRIDGE_RUNTIME_JS).await;

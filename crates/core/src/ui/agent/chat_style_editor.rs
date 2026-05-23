@@ -14,6 +14,7 @@
 //! available on the WASM side.
 
 use crate::i18n::t;
+use crate::state::use_reactive_effect;
 use dioxus::prelude::*;
 use poly_ui_macros::{context_menu, ui_action};
 
@@ -42,27 +43,28 @@ pub fn ChatStyleEditor(account_id: String, chat_id: String) -> Element {
     let mut extra_notes  = use_signal(String::new);
     let mut saved        = use_signal(|| false);
 
-    // Load existing values from KV on first render.
-    let acc = account_id.clone();
-    let cid = chat_id.clone();
-    use_effect(move || {
-        let acc = acc.clone();
-        let cid = cid.clone();
-        spawn(async move {
-            if let Some(storage) = crate::STORAGE.get() {
-                if let Ok(Some(v)) = storage.get(&kv_key(&acc, &cid, "tone")).await
-                    && let Some(s) = v.as_str() { tone.set(s.to_string()); }
-                if let Ok(Some(v)) = storage.get(&kv_key(&acc, &cid, "formality")).await
-                    && let Some(s) = v.as_str() { formality.set(s.to_string()); }
-                if let Ok(Some(v)) = storage.get(&kv_key(&acc, &cid, "emoji_allowed")).await
-                    && let Some(b) = v.as_bool() { emoji.set(b); }
-                if let Ok(Some(v)) = storage.get(&kv_key(&acc, &cid, "signature")).await
-                    && let Some(s) = v.as_str() { signature.set(s.to_string()); }
-                if let Ok(Some(v)) = storage.get(&kv_key(&acc, &cid, "extra_notes")).await
-                    && let Some(s) = v.as_str() { extra_notes.set(s.to_string()); }
-            }
-        });
-    });
+    // Load existing values from KV whenever account_id/chat_id change.
+    // use_reactive_effect fixes hang-class #6: account_id/chat_id are String props
+    // that would be stale inside a plain use_effect on subsequent renders.
+    use_reactive_effect(
+        (account_id.clone(), chat_id.clone()),
+        move |(acc, cid)| {
+            spawn(async move {
+                if let Some(storage) = crate::STORAGE.get() {
+                    if let Ok(Some(v)) = storage.get(&kv_key(&acc, &cid, "tone")).await
+                        && let Some(s) = v.as_str() { tone.set(s.to_string()); }
+                    if let Ok(Some(v)) = storage.get(&kv_key(&acc, &cid, "formality")).await
+                        && let Some(s) = v.as_str() { formality.set(s.to_string()); }
+                    if let Ok(Some(v)) = storage.get(&kv_key(&acc, &cid, "emoji_allowed")).await
+                        && let Some(b) = v.as_bool() { emoji.set(b); }
+                    if let Ok(Some(v)) = storage.get(&kv_key(&acc, &cid, "signature")).await
+                        && let Some(s) = v.as_str() { signature.set(s.to_string()); }
+                    if let Ok(Some(v)) = storage.get(&kv_key(&acc, &cid, "extra_notes")).await
+                        && let Some(s) = v.as_str() { extra_notes.set(s.to_string()); }
+                }
+            });
+        },
+    );
 
     let acc_save = account_id.clone();
     let cid_save = chat_id.clone();

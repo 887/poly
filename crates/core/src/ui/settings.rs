@@ -587,7 +587,7 @@ pub fn SettingsPage() -> Element {
 
     // Scroll to the active section whenever it changes (inc. initial route load).
     // Defer with setTimeout to ensure DOM has rendered before scrolling.
-    use_effect(move || {
+    use_effect(move || { // poly-lint: allow stale-effect-capture — body reads section_memo Signal only; DOM scrollIntoView side-effect, no non-Signal captures
         let slug = section_memo.read().to_slug().to_string();
         // Use setTimeout(0) to defer until after DOM paints
         let js = format!(
@@ -601,13 +601,13 @@ pub fn SettingsPage() -> Element {
 
     // Install scroll spy when plugins change; memoized plugin_section_ids prevents
     // spurious re-runs on unrelated state updates (e.g., search, section changes).
-    use_effect(move || {
+    use_effect(move || { // poly-lint: allow stale-effect-capture — body reads plugin_section_ids Signal; user_prefs and active_plugin_slug are BatchedSignals (Copy), no stale props
         install_settings_scroll_spy(user_prefs, (*plugin_section_ids.read()).clone(), active_plugin_slug);
     });
 
     // When the search query changes to non-empty, scroll the content area to the
     // top so the user sees filtered results from the beginning.
-    use_effect(move || {
+    use_effect(move || { // poly-lint: allow stale-effect-capture — body reads search_text Signal only; DOM scrollTop side-effect, no non-Signal captures
         let q = search_text.read().to_lowercase();
         if q.is_empty() {
             return;

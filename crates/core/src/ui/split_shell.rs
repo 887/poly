@@ -149,7 +149,7 @@ pub(crate) fn RightWingShell(props: RightWingShellProps) -> Element {
     // Install the drag-to-resize handler once. Fire-and-forget eval avoids an orphaned
     // Promise (which `load_js_asset` + `use_future` would create on hot-reload re-renders).
     #[cfg(target_arch = "wasm32")]
-    use_effect(move || {
+    use_effect(move || { // poly-lint: allow stale-effect-capture — mount-only WASM DOM resize-handler install; no captured props, unconditional eval
         let _ = document::eval(RIGHT_PANEL_RESIZE_INLINE_JS);
     });
 

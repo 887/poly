@@ -100,7 +100,7 @@ pub(super) fn PageNotFound(segments: Vec<String>) -> Element {
     // need it for the route match; discard it so the unused-variable lint stays clean.
     drop(segments);
     let nav = navigator();
-    use_effect(move || {
+    use_effect(move || { // poly-lint: allow stale-effect-capture — mount-only belt-and-suspenders redirect; nav is a hook return value stable per component instance
         // Belt-and-suspenders: redirect in case on_update hasn't fired yet
         // (e.g. stale browser history URLs from old route formats).
         nav.replace(Route::Root);

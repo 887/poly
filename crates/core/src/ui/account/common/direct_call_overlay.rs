@@ -95,7 +95,7 @@ pub fn OutgoingDirectCallOverlay(
     let close_button_route = return_route.clone();
     let cancel_button_route = return_route.clone();
 
-    use_effect(move || {
+    use_effect(move || { // poly-lint: allow stale-effect-capture — mount-once call-setup effect; overlay is rendered at a specific route with stable props per instance lifetime
         #[cfg(target_arch = "wasm32")]
         if user_for_connect.is_none() {
             return;
