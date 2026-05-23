@@ -160,13 +160,21 @@ Verification: `cargo check -p poly-core --all-features` — green, 2m43s.
   and one generic `fn call<R: HostRoute>(req: R::Req) -> Result<R::Resp, R::Err>`.
   Touches ~600 LoC across the four `*_client.rs` files. DIP + DRY win.
   Shipped in change `mztttyox`.
-- [ ] **C.3** **`AppState` is now nearly empty (2 fields, post-G.5)** —
+- [x] **C.3** **`AppState` is now nearly empty (2 fields, post-G.5)** —
   consider deleting the struct entirely. `is_setup_complete` belongs on
   `AccountSessions` (it's an identity-init flag), `sidebar_invalidated_tick`
   belongs on `ChatLists` (it gates `get_sidebar_declaration` refresh).
   Removes the last "god-struct" name from the codebase and one whole
   `BatchedSignal` context. ~300 LoC of call-site updates across
   `crates/core/src/ui/` (so requires coordination with parallel UI agent).
+  Shipped in change `tllpzsqw` (git commit `6bd11b71` on
+  worktree-agent-a2323d431ccdc055c). Deleted `AppState` struct entirely;
+  migrated `is_setup_complete` → `AccountSessions`, `sidebar_invalidated_tick`
+  → `ChatLists`; removed `BatchedSignal<AppState>` context provider; removed
+  `cx.state: &mut AppState` from `ActionCx` (no `UiAction::apply` impl ever
+  read it); simplified `dispatch_action!` macro from 4-arg to 3-arg. 82
+  files modified, +891 / -485. WASM + native + tests all green; lint
+  baseline regenerated (route_graph violations untouched).
 
 ## Hang-class spot-checks (in scope)
 
