@@ -131,9 +131,12 @@ Not started in this change — listed for follow-up agents.
   `.read()` allowlists (lines 146, 154, 170, 427, 437, 444, 450, 459,
   475, 940) — most are `account_sessions` snapshots that could share
   ONE `.with()` per component instead of N.
-- [ ] **B.8** Split `account_server_bar.rs` (807 LoC) — server bar
+- [x] **B.8** Split `account_server_bar.rs` (807 LoC) — server bar
   combines server list, account list, and DM-bar concerns. ISP
   candidate: separate the three lists into per-concern sub-components.
+  Shipped in change `uomykqqnlxww`:
+  `account_server_bar/{mod,server_list,dm_bar,account_list}.rs`;
+  mod.rs thin shell; each sub-module owns its concern. Lint-gate green.
 
 ---
 
