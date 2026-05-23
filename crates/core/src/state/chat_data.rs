@@ -5,7 +5,7 @@
 //! sub-signal types that replaced it are:
 //! - `ChatLists` — servers, channels, dm_channels, groups, friends, notifications + by-id shadows
 //! - `ChatViewState` — messages, members, current_server/channel, typing_users, loading, etc.
-//! - `AccountSessions` — account_sessions, favorited_server_ids, account_order, content_policy, blocked_users
+//! - `AccountSessions` — account_sessions, favorited_server_ids, account_order, content_policies, blocked_users
 //!
 // DECISION(V-4): VoiceMediaSettings is defined here and re-exported via VoiceState
 // (phase-G.2 of plan-solid-refactor-survey.md). Persistence TBD.

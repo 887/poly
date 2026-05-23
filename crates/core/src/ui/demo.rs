@@ -402,7 +402,7 @@ pub(crate) async fn toggle_demo(
                 // Load content policy and blocked users for the first account only.
                 account_sessions.batch(move |as_| {
                     if !as_.blocked_users.contains_key(aid_as.as_str()) {
-                        as_.content_policy = poly_demo::data::demo_content_policy();
+                        as_.set_content_policy(aid_as.clone(), poly_demo::data::demo_content_policy());
                         as_.blocked_users.insert(aid_as.clone(), poly_demo::data::demo_blocked_users());
                     }
                 });

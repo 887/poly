@@ -38,13 +38,32 @@ pub struct AccountSessions {
     /// layout is stable across `HashMap`-based `ClientManager.backends`
     /// iteration order.
     pub account_order: Vec<String>,
-    /// Content and social policy for the currently active account.
+    /// Content and social policy per account (account_id → policy).
+    ///
+    /// Mirrors the shape of `account_sessions` and `blocked_users` — one
+    /// entry per account, keyed by account ID.
     ///
     /// Loaded from `get_content_policy()` on account switch.
     /// Falls back to `ContentPolicy::default()` if the backend returns
-    /// `NotSupported`. Written to when the user changes settings in the
-    /// Content & Social settings page.
-    pub content_policy: ContentPolicy,
+    /// `NotSupported` or the account has no entry yet. Written to when the
+    /// user changes settings in the Content & Social settings page.
+    pub content_policies: HashMap<String, ContentPolicy>,
     /// Users blocked per account (account_id → blocked list).
     pub blocked_users: HashMap<String, Vec<BlockedUser>>,
+}
+
+impl AccountSessions {
+    /// Returns the content policy for the given account, or a default if the
+    /// account has no policy stored yet.
+    pub fn get_content_policy(&self, account_id: &str) -> ContentPolicy {
+        self.content_policies
+            .get(account_id)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    /// Stores the content policy for the given account.
+    pub fn set_content_policy(&mut self, account_id: impl Into<String>, policy: ContentPolicy) {
+        self.content_policies.insert(account_id.into(), policy);
+    }
 }

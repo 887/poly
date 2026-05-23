@@ -7,7 +7,7 @@
 //! - Friend request origin filters
 //! - Age-restricted content access
 //!
-//! All settings are read from `AccountSessions::content_policy` and written back immediately on change.
+//! All settings are read from `AccountSessions::content_policies[account_id]` and written back immediately on change.
 //!
 //! Blocked users are managed in the People page, not in account settings.
 //!
@@ -113,12 +113,16 @@ impl UiAction for SensitiveMediaSectionAction {
 #[component]
 fn SensitiveMediaSection(
     account_sessions: BatchedSignal<AccountSessions>,
+    account_id: String,
     /// Show DM-related rows (dm-friends and dm-others). Requires `dms` capability.
     show_dm_rows: bool,
     /// Show the dm-friends row specifically. Requires `dms && friends`.
     show_dm_friends_row: bool,
 ) -> Element {
-    let policy = account_sessions.read().content_policy.clone();
+    let policy = account_sessions.read().get_content_policy(&account_id); // poly-lint: allow render-time-read — reactive display of policy fields; component must re-render on policy change
+    let aid1 = account_id.clone();
+    let aid2 = account_id.clone();
+    let aid3 = account_id.clone();
     rsx! {
         div { class: "content-social-section",
             div { class: "content-social-section-header",
@@ -130,7 +134,9 @@ fn SensitiveMediaSection(
                     label: t("content-social-dm-friends"),
                     value: policy.sensitive_content_dm_friends,
                     on_change: move |level| {
-                        account_sessions.batch(|as_| as_.content_policy.sensitive_content_dm_friends = level);
+                        account_sessions.batch(|as_| {
+                            as_.content_policies.entry(aid1.clone()).or_default().sensitive_content_dm_friends = level;
+                        });
                     },
                 }
             }
@@ -139,7 +145,9 @@ fn SensitiveMediaSection(
                     label: t("content-social-dm-others"),
                     value: policy.sensitive_content_dm_others,
                     on_change: move |level| {
-                        account_sessions.batch(|as_| as_.content_policy.sensitive_content_dm_others = level);
+                        account_sessions.batch(|as_| {
+                            as_.content_policies.entry(aid2.clone()).or_default().sensitive_content_dm_others = level;
+                        });
                     },
                 }
             }
@@ -147,7 +155,9 @@ fn SensitiveMediaSection(
                 label: t("content-social-server-channels"),
                 value: policy.sensitive_content_server_channels,
                 on_change: move |level| {
-                    account_sessions.batch(|as_| as_.content_policy.sensitive_content_server_channels = level);
+                    account_sessions.batch(|as_| {
+                        as_.content_policies.entry(aid3.clone()).or_default().sensitive_content_server_channels = level;
+                    });
                 },
             }
         }
@@ -171,8 +181,8 @@ impl UiAction for SpamFilterSectionAction {
 #[ui_action(SpamFilterSectionAction)]
 #[context_menu(none)]
 #[component]
-fn SpamFilterSection(mut account_sessions: BatchedSignal<AccountSessions>) -> Element {
-    let current = account_sessions.read().content_policy.dm_spam_filter;
+fn SpamFilterSection(mut account_sessions: BatchedSignal<AccountSessions>, account_id: String) -> Element {
+    let current = account_sessions.read().get_content_policy(&account_id).dm_spam_filter; // poly-lint: allow render-time-read — reactive display of dm_spam_filter; component must re-render on policy change
     rsx! {
         div { class: "content-social-section",
             div { class: "content-social-section-header",
@@ -187,6 +197,7 @@ fn SpamFilterSection(mut account_sessions: BatchedSignal<AccountSessions>) -> El
                 ] {
                     {
                         let is_checked = current == value;
+                        let aid = account_id.clone();
                         rsx! {
                             label { class: "content-social-radio-row",
                                 input {
@@ -194,7 +205,9 @@ fn SpamFilterSection(mut account_sessions: BatchedSignal<AccountSessions>) -> El
                                     name: "dm-spam-filter",
                                     checked: is_checked,
                                     onchange: move |_| {
-                                        account_sessions.batch(|as_| as_.content_policy.dm_spam_filter = value);
+                                        account_sessions.batch(|as_| {
+                                            as_.content_policies.entry(aid.clone()).or_default().dm_spam_filter = value;
+                                        });
                                     },
                                 }
                                 span { "{t(label_key)}" }
@@ -229,8 +242,10 @@ impl UiAction for AgeRestrictedSectionAction {
 #[ui_action(AgeRestrictedSectionAction)]
 #[context_menu(none)]
 #[component]
-fn AgeRestrictedSection(mut account_sessions: BatchedSignal<AccountSessions>, show_dm_commands: bool) -> Element {
-    let policy = account_sessions.read().content_policy.clone();
+fn AgeRestrictedSection(mut account_sessions: BatchedSignal<AccountSessions>, account_id: String, show_dm_commands: bool) -> Element {
+    let policy = account_sessions.read().get_content_policy(&account_id); // poly-lint: allow render-time-read — reactive display of age-restricted policy; component must re-render on policy change
+    let aid1 = account_id.clone();
+    let aid2 = account_id.clone();
     rsx! {
         div { class: "content-social-section",
             h3 { class: "content-social-section-title", "{t(\"content-social-age-restricted\")}" }
@@ -238,7 +253,9 @@ fn AgeRestrictedSection(mut account_sessions: BatchedSignal<AccountSessions>, sh
                 label: t("content-social-age-restricted-servers"),
                 checked: policy.allow_age_restricted_servers,
                 on_change: move |val| {
-                    account_sessions.batch(|as_| as_.content_policy.allow_age_restricted_servers = val);
+                    account_sessions.batch(|as_| {
+                        as_.content_policies.entry(aid1.clone()).or_default().allow_age_restricted_servers = val;
+                    });
                 },
             }
             if show_dm_commands {
@@ -246,7 +263,9 @@ fn AgeRestrictedSection(mut account_sessions: BatchedSignal<AccountSessions>, sh
                     label: t("content-social-age-restricted-commands"),
                     checked: policy.allow_age_restricted_commands_in_dms,
                     on_change: move |val| {
-                        account_sessions.batch(|as_| as_.content_policy.allow_age_restricted_commands_in_dms = val);
+                        account_sessions.batch(|as_| {
+                            as_.content_policies.entry(aid2.clone()).or_default().allow_age_restricted_commands_in_dms = val;
+                        });
                     },
                 }
             }
@@ -273,8 +292,10 @@ impl UiAction for SocialPermissionsSectionAction {
 #[ui_action(SocialPermissionsSectionAction)]
 #[context_menu(none)]
 #[component]
-fn SocialPermissionsSection(mut account_sessions: BatchedSignal<AccountSessions>) -> Element {
-    let policy = account_sessions.read().content_policy.clone();
+fn SocialPermissionsSection(mut account_sessions: BatchedSignal<AccountSessions>, account_id: String) -> Element {
+    let policy = account_sessions.read().get_content_policy(&account_id); // poly-lint: allow render-time-read — reactive display of social permissions policy; component must re-render on policy change
+    let aid1 = account_id.clone();
+    let aid2 = account_id.clone();
     rsx! {
         div { class: "content-social-section",
             div { class: "content-social-section-header",
@@ -285,14 +306,18 @@ fn SocialPermissionsSection(mut account_sessions: BatchedSignal<AccountSessions>
                 label: t("content-social-dms-from-members"),
                 checked: policy.allow_dms_from_server_members,
                 on_change: move |val| {
-                    account_sessions.batch(|as_| as_.content_policy.allow_dms_from_server_members = val);
+                    account_sessions.batch(|as_| {
+                        as_.content_policies.entry(aid1.clone()).or_default().allow_dms_from_server_members = val;
+                    });
                 },
             }
             ToggleRow {
                 label: t("content-social-message-requests"),
                 checked: policy.allow_message_requests,
                 on_change: move |val| {
-                    account_sessions.batch(|as_| as_.content_policy.allow_message_requests = val);
+                    account_sessions.batch(|as_| {
+                        as_.content_policies.entry(aid2.clone()).or_default().allow_message_requests = val;
+                    });
                 },
             }
         }
@@ -320,8 +345,11 @@ impl UiAction for FriendRequestsSectionAction {
 #[ui_action(FriendRequestsSectionAction)]
 #[context_menu(none)]
 #[component]
-fn FriendRequestsSection(mut account_sessions: BatchedSignal<AccountSessions>) -> Element {
-    let policy = account_sessions.read().content_policy.clone();
+fn FriendRequestsSection(mut account_sessions: BatchedSignal<AccountSessions>, account_id: String) -> Element {
+    let policy = account_sessions.read().get_content_policy(&account_id); // poly-lint: allow render-time-read — reactive display of friend request policy; component must re-render on policy change
+    let aid1 = account_id.clone();
+    let aid2 = account_id.clone();
+    let aid3 = account_id.clone();
     rsx! {
         div { class: "content-social-section",
             h3 { class: "content-social-section-title", "{t(\"content-social-friend-requests\")}" }
@@ -329,21 +357,27 @@ fn FriendRequestsSection(mut account_sessions: BatchedSignal<AccountSessions>) -
                 label: t("content-social-fr-everyone"),
                 checked: policy.friend_request_from_everyone,
                 on_change: move |val| {
-                    account_sessions.batch(|as_| as_.content_policy.friend_request_from_everyone = val);
+                    account_sessions.batch(|as_| {
+                        as_.content_policies.entry(aid1.clone()).or_default().friend_request_from_everyone = val;
+                    });
                 },
             }
             ToggleRow {
                 label: t("content-social-fr-friends-of-friends"),
                 checked: policy.friend_request_from_friends_of_friends,
                 on_change: move |val| {
-                    account_sessions.batch(|as_| as_.content_policy.friend_request_from_friends_of_friends = val);
+                    account_sessions.batch(|as_| {
+                        as_.content_policies.entry(aid2.clone()).or_default().friend_request_from_friends_of_friends = val;
+                    });
                 },
             }
             ToggleRow {
                 label: t("content-social-fr-server-members"),
                 checked: policy.friend_request_from_server_members,
                 on_change: move |val| {
-                    account_sessions.batch(|as_| as_.content_policy.friend_request_from_server_members = val);
+                    account_sessions.batch(|as_| {
+                        as_.content_policies.entry(aid3.clone()).or_default().friend_request_from_server_members = val;
+                    });
                 },
             }
         }
@@ -371,7 +405,7 @@ impl UiAction for ContentSocialSettingsAction {
 /// Sections that require DMs, friends, or voice are hidden for backends that
 /// don't support those features (e.g. Lemmy, Forgejo, GitHub, HackerNews).
 ///
-/// Reads policy from `AccountSessions::content_policy`. All writes go directly back to `AccountSessions`.
+/// Reads policy from `AccountSessions::content_policies[account_id]`. All writes go directly back to `AccountSessions`.
 ///
 /// Blocked users are managed in the People page, not here.
 ///
@@ -381,7 +415,7 @@ impl UiAction for ContentSocialSettingsAction {
 #[ui_action(ContentSocialSettingsAction)]
 #[context_menu(none)]
 #[component]
-pub fn ContentSocialSettings(_account_id: String, backend: String) -> Element {
+pub fn ContentSocialSettings(account_id: String, backend: String) -> Element {
     let account_sessions = use_context::<BatchedSignal<AccountSessions>>();
     let client_manager = use_context::<BatchedSignal<ClientManager>>();
     let caps = client_manager.peek().capabilities_for_slug(&backend);
@@ -392,19 +426,20 @@ pub fn ContentSocialSettings(_account_id: String, backend: String) -> Element {
             h2 { class: "settings-section-title", "{t(\"content-social-title\")}" }
             SensitiveMediaSection {
                 account_sessions,
+                account_id: account_id.clone(),
                 show_dm_rows: has_dms,
                 show_dm_friends_row: has_dms && has_friends,
             }
             if has_dms {
-                SpamFilterSection { account_sessions }
+                SpamFilterSection { account_sessions, account_id: account_id.clone() }
             }
             if has_dms || has_friends {
-                SocialPermissionsSection { account_sessions }
+                SocialPermissionsSection { account_sessions, account_id: account_id.clone() }
             }
             if has_friends {
-                FriendRequestsSection { account_sessions }
+                FriendRequestsSection { account_sessions, account_id: account_id.clone() }
             }
-            AgeRestrictedSection { account_sessions, show_dm_commands: has_dms }
+            AgeRestrictedSection { account_sessions, account_id, show_dm_commands: has_dms }
         }
     }
 }

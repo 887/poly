@@ -345,8 +345,9 @@ fn build_on_complete_inner(
                     });
                 }
                 if let Some(policy) = policy {
+                    let aid = account_id.clone();
                     account_sessions.batch(move |as_| {
-                        as_.content_policy = policy;
+                        as_.set_content_policy(aid, policy);
                     });
                 }
             }
