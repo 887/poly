@@ -5,6 +5,31 @@
 //! which backend owns a given server.
 //!
 //! Provided as `Signal<ClientManager>` at the `App` level.
+//!
+//! ## SRP sub-store types (Phase B.1)
+//!
+//! The 12 fields are logically grouped into three sub-stores, each with one
+//! reason to change. The type definitions live in their own modules for
+//! single-responsibility clarity:
+//!
+//! | Sub-store | Fields | Change driver |
+//! |-----------|--------|---------------|
+//! | [`BackendRegistry`] | `backends`, `server_account_map`, `expected_account_ids`, `backend_capabilities` | backend added/removed/updated |
+//! | [`AccountIdentity`] | `sessions`, `connection_statuses`, `presence_statuses`, `disabled_native_backends` | account identity/status changes |
+//! | [`PluginRegistry`] | `plugin_settings`, `signup_entries`, `test_account_entries`, `demo_active` | plugin registered/deregistered |
+//!
+//! `ClientManager` keeps its flat-field layout so existing call sites
+//! (`cm.sessions`, `cm.demo_active`, etc.) continue to compile without changes.
+//! The sub-store types are available as documentation, type annotations in
+//! tests, and a future caller-migration target.
+
+pub mod account_identity;
+pub mod backend_registry;
+pub mod plugin_registry;
+
+pub use account_identity::AccountIdentity;
+pub use backend_registry::BackendRegistry;
+pub use plugin_registry::PluginRegistry;
 
 use dioxus::prelude::{Callback, Element};
 use poly_client::{
@@ -296,51 +321,76 @@ mod builtin_backend_registry_tests {
     }
 }
 
+// ── DIP — BackendLookup trait (Phase B.3) ───────────────────────────────────
+//
+// Read-only consumers that only need to resolve an account ID to a backend
+// handle should depend on this trait rather than `&ClientManager`. This lets
+// future test fakes and persona-MCP shims swap in a lightweight impl without
+// dragging in the full 12-field struct.
+//
+// **Migration of existing UI consumers is out-of-scope for Phase B.3** — the
+// plan header explicitly limits the deliverable to the trait definition +
+// impl on `ClientManager`. UI call sites continue to hold
+// `Signal<ClientManager>` and call `.get_backend()` directly; they will be
+// migrated incrementally as each component is refactored under a separate plan.
+
+/// Read-only backend resolution — the minimal surface for consumers that only
+/// need to look up a backend handle by account ID.
+///
+/// # DIP intent
+///
+/// UI components and MCP tools that only call `get_backend` should depend on
+/// `&dyn BackendLookup` (or `impl BackendLookup`) rather than the full
+/// `&ClientManager`.  This decouples read-only consumers from the entire
+/// `ClientManager` surface and makes it easy to inject lightweight fakes in
+/// integration tests or the persona-MCP shim without constructing a real
+/// `ClientManager`.
+///
+/// # Current implementors
+///
+/// - [`ClientManager`] — the production impl (delegates to `backends`).
+///
+/// # Example
+///
+/// ```rust,ignore
+/// fn resolve_backend(lookup: &impl BackendLookup, account_id: &str) -> Option<BackendHandle> {
+///     lookup.get_backend(account_id)
+/// }
+/// ```
+pub trait BackendLookup {
+    /// Return the backend handle for `account_id`, or `None` if no backend is
+    /// registered for that account.
+    fn get_backend(&self, account_id: &str) -> Option<BackendHandle>;
+}
+
+// ── ClientManager ────────────────────────────────────────────────────────────
+
 /// Manages active messenger backend connections.
 ///
 /// Each backend is keyed by its account ID (e.g., `"demo-cat"` for the cat demo client).
 /// Multiple accounts from the same backend type can be active simultaneously
 /// (e.g., two Discord accounts, three Matrix accounts).
+///
+/// ## SRP groupings
+///
+/// The 12 fields are logically grouped into three sub-stores — see the module
+/// doc for the breakdown. The struct retains flat public fields to preserve
+/// the existing call-site API (`cm.sessions`, `cm.demo_active`, etc.). A
+/// future migration pass will move callers to the sub-store types and promote
+/// the grouping from documentation to structural enforcement.
+///
+/// - **Backend routing** (via [`BackendRegistry`]): `backends`,
+///   `server_account_map`, `expected_account_ids`, `backend_capabilities`.
+/// - **Account identity** (via [`AccountIdentity`]): `sessions`,
+///   `connection_statuses`, `presence_statuses`, `disabled_native_backends`.
+/// - **Plugin registration** (via [`PluginRegistry`]): `plugin_settings`,
+///   `signup_entries`, `test_account_entries`, `demo_active`.
 pub struct ClientManager {
+    // ── BackendRegistry group ──────────────────────────────────────────────
     /// Active backends keyed by account ID.
     backends: HashMap<String, BackendHandle>,
-    /// Whether the demo client is currently active.
-    pub demo_active: bool,
     /// Cached mapping from server ID → account ID that owns it.
     server_account_map: HashMap<String, String>,
-    /// Authenticated sessions keyed by account ID.
-    ///
-    /// Stored so the UI can retrieve per-account identity info (e.g. `icon_emoji`)
-    /// without going through the async backend trait.
-    pub sessions: HashMap<String, Session>,
-    /// Live connection state per account.
-    ///
-    /// Set to `Connecting` when a backend activates, updated to `Connected` or
-    /// `Error` by the event-stream consumer. Demo accounts start `Connected`.
-    pub connection_statuses: HashMap<String, ConnectionStatus>,
-    /// User-chosen presence/availability status per account.
-    ///
-    /// Persisted to local storage so the preference survives restarts.
-    /// Defaults to `Online` for new accounts.
-    pub presence_statuses: HashMap<String, AccountPresence>,
-    /// Settings pages registered by active plugin backends at runtime.
-    ///
-    /// Populated via [`register_plugin_settings`] when a backend activates
-    /// and cleared via [`unregister_plugin_settings`] when it deactivates.
-    /// The settings nav sidebar and content area iterate this list to render
-    /// plugin settings — nothing is hardcoded in the host.
-    pub plugin_settings: Vec<PluginSettingsEntry>,
-    /// Native backends currently disabled by the user in Settings → Plugins.
-    pub disabled_native_backends: Vec<String>,
-    /// Signup entries registered by compiled-in or WASM plugins at startup.
-    ///
-    /// The signup picker (`/signup` route) reads this list at runtime to
-    /// show the available backends.  The host has no compile-time knowledge
-    /// of any specific backend — each plugin registers itself via
-    /// [`register_signup_entry`].
-    pub signup_entries: Vec<SignupEntry>,
-    /// Test accounts registered by native plugins for the quick-add dev panel.
-    pub test_account_entries: Vec<TestAccountEntry>,
     /// Account IDs that exist in persisted storage (`account_tokens` KV)
     /// but have not yet been restored into `backends` / `sessions`.
     ///
@@ -362,6 +412,45 @@ pub struct ClientManager {
     /// of the old free function so caps always reflect the backend's own
     /// declaration.
     pub backend_capabilities: HashMap<String, BackendCapabilities>,
+
+    // ── AccountIdentity group ──────────────────────────────────────────────
+    /// Authenticated sessions keyed by account ID.
+    ///
+    /// Stored so the UI can retrieve per-account identity info (e.g. `icon_emoji`)
+    /// without going through the async backend trait.
+    pub sessions: HashMap<String, Session>,
+    /// Live connection state per account.
+    ///
+    /// Set to `Connecting` when a backend activates, updated to `Connected` or
+    /// `Error` by the event-stream consumer. Demo accounts start `Connected`.
+    pub connection_statuses: HashMap<String, ConnectionStatus>,
+    /// User-chosen presence/availability status per account.
+    ///
+    /// Persisted to local storage so the preference survives restarts.
+    /// Defaults to `Online` for new accounts.
+    pub presence_statuses: HashMap<String, AccountPresence>,
+    /// Native backends currently disabled by the user in Settings → Plugins.
+    pub disabled_native_backends: Vec<String>,
+
+    // ── PluginRegistry group ───────────────────────────────────────────────
+    /// Settings pages registered by active plugin backends at runtime.
+    ///
+    /// Populated via [`register_plugin_settings`] when a backend activates
+    /// and cleared via [`unregister_plugin_settings`] when it deactivates.
+    /// The settings nav sidebar and content area iterate this list to render
+    /// plugin settings — nothing is hardcoded in the host.
+    pub plugin_settings: Vec<PluginSettingsEntry>,
+    /// Signup entries registered by compiled-in or WASM plugins at startup.
+    ///
+    /// The signup picker (`/signup` route) reads this list at runtime to
+    /// show the available backends.  The host has no compile-time knowledge
+    /// of any specific backend — each plugin registers itself via
+    /// [`register_signup_entry`].
+    pub signup_entries: Vec<SignupEntry>,
+    /// Test accounts registered by native plugins for the quick-add dev panel.
+    pub test_account_entries: Vec<TestAccountEntry>,
+    /// Whether the demo client is currently active.
+    pub demo_active: bool,
 }
 
 impl Clone for ClientManager {
@@ -396,6 +485,18 @@ impl std::fmt::Debug for ClientManager {
 impl Default for ClientManager {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl BackendLookup for ClientManager {
+    /// Resolve an account ID to its backend handle.
+    ///
+    /// Returns `None` if no backend is registered for `account_id`.
+    ///
+    /// Read-only consumers should depend on [`BackendLookup`] rather than the
+    /// full `&ClientManager` — see the trait doc for the DIP rationale.
+    fn get_backend(&self, account_id: &str) -> Option<BackendHandle> {
+        self.backends.get(account_id).cloned()
     }
 }
 
@@ -628,7 +729,7 @@ impl ClientManager {
     /// `backend` field is [`poly_client::BackendType::from("demo")`]. This keeps the
     /// UI layer free from any knowledge of hard-coded demo account IDs.
     #[cfg(feature = "demo")]
-    #[must_use] 
+    #[must_use]
     pub fn demo_account_ids(&self) -> Vec<String> {
         self.sessions
             .iter()
@@ -679,13 +780,13 @@ impl ClientManager {
     }
 
     /// Get the backend for a specific account ID.
-    #[must_use] 
+    #[must_use]
     pub fn get_backend(&self, account_id: &str) -> Option<BackendHandle> {
         self.backends.get(account_id).cloned()
     }
 
     /// Find which account owns a given server, return (account_id, backend_arc).
-    #[must_use] 
+    #[must_use]
     pub fn get_backend_for_server(&self, server_id: &str) -> Option<(String, BackendHandle)> {
         let account_id = self.server_account_map.get(server_id)?;
         let backend = self.backends.get(account_id)?;
@@ -728,7 +829,7 @@ impl ClientManager {
     /// Both cases need to stay visible so the user can click through to
     /// reauthenticate. Live operations (send message, sync) still iterate
     /// `backends` directly and skip offline entries naturally.
-    #[must_use] 
+    #[must_use]
     pub fn active_account_ids(&self) -> Vec<String> {
         let mut ids: Vec<String> = self.backends.keys().cloned().collect();
         for id in self.sessions.keys() {

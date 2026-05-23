@@ -80,10 +80,10 @@ Verification: `cargo check -p poly-core --all-features` — green, 2m43s.
 
 ## Phase B — Medium refactors (50-300 LoC each)
 
-- [ ] **B.1** **SRP-split `ClientManager`** (`crates/core/src/client_manager.rs`,
+- [x] **B.1** **SRP-split `ClientManager`** (`crates/core/src/client_manager.rs`,
   1067 LoC, 12 fields). Decompose into three sub-stores held inside
   `ClientManager` so callers continue to take one `Signal<ClientManager>`,
-  but each store has one reason to change:
+  but each store has one reason to change: shipped in change `wxsxqwom`
   - `BackendRegistry` — `backends`, `server_account_map`,
     `expected_account_ids`, `backend_capabilities`
   - `AccountIdentity` — `sessions`, `connection_statuses`,
@@ -95,12 +95,14 @@ Verification: `cargo check -p poly-core --all-features` — green, 2m43s.
   871, 885, 893, 906, 919, 930, 943, 953, 973, 980, 995, 1014, 1019, 1037,
   1050 still embed string literals. Migrate each to `keys::*` constants
   added in A.5.
-- [ ] **B.3** **DIP — `ClientManager` consumer-side trait extraction.** UI
+- [x] **B.3** **DIP — `ClientManager` consumer-side trait extraction.** UI
   components that only need to look up a backend by account ID currently
   take `&ClientManager` or `Signal<ClientManager>`. Define
   `trait BackendLookup { fn get_backend(&self, account_id: &str) -> Option<BackendHandle>; }`
   and migrate read-only consumers to `impl BackendLookup`. Lets future
   test fakes / persona-MCP shims swap in without dragging the full struct.
+  Shipped in change `wxsxqwom` — trait + impl in `crates/core/src/client_manager/mod.rs`;
+  UI consumer migration is out-of-scope per plan header.
 - [ ] **B.4** **`Storage` trait extraction.** `Storage(StorageInner)` is
   hard-coded — fine for the app, painful for `chat-mcp` and persona-MCP
   callers that want an in-memory fake. Define
