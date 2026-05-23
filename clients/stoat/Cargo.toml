@@ -43,6 +43,10 @@ dioxus = { workspace = true, optional = true }
 # Unconditional — used by voice_common.rs which is cfg-free (compiles on wasm32 too).
 thiserror = { workspace = true }
 serde_json = { workspace = true }
+# B.8 — RNNoise noise cancellation (pure Rust, wasm32-compatible).
+# voice_noise_filter.rs is cfg-free and compiles on all targets.
+# nnnoiseless wraps the RNNoise model entirely in safe Rust — no C FFI, no build.rs.
+nnnoiseless = { workspace = true }
 
 # Native-only dependencies (feature-gated)
 serde = { workspace = true, optional = true }

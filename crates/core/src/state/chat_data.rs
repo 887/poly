@@ -22,9 +22,23 @@ pub struct VoiceMediaSettings {
     /// Whether RNNoise-based noise cancellation is enabled.
     ///
     /// When true, the mic audio pipeline routes through `nnnoiseless`
-    /// before reaching the WebRTC send track (Phase 3 implementation).
-    /// The toggle is functional in the UI; the actual audio worklet
-    /// integration is TODO(phase-voice-3).
+    /// (pure-Rust RNNoise port) before the Opus encode step.
+    ///
+    /// # Integration (B.8)
+    ///
+    /// Wired in `clients/stoat/src/voice_wasm_audio_capture.rs` via an
+    /// `Arc<AtomicBool>` stored in `StoatClient::voice_noise_cancel`.
+    /// The filter is applied inline in the `spawn_local` audio-capture task:
+    /// mono f32 → scale to i16 range → `nnnoiseless::DenoiseState` → scale back
+    /// → `float32_to_i16` → 960-sample i16 Opus frame.
+    ///
+    /// The UI toggle writes to this field; `StoatClient::set_noise_cancel(bool)`
+    /// propagates changes to the `Arc<AtomicBool>` so the running capture loop
+    /// picks them up on the very next 480-sample chunk.
+    ///
+    /// UI→backend wiring (via `use_reactive_effect`) is tracked at
+    /// `crates/core/src/ui/account/settings/voice_settings.rs`.
+    ///
     /// Defaults to `true` — noise cancellation is on by default.
     pub noise_cancel_enabled: bool,
     /// Selected microphone input device ID (`None` = system default).

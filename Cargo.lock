@@ -7677,6 +7677,7 @@ dependencies = [
  "futures",
  "gloo-net",
  "js-sys",
+ "nnnoiseless",
  "poly-audio-backend",
  "poly-client",
  "poly-host-bridge",

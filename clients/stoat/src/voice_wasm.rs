@@ -34,6 +34,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
 };
+use super::voice_noise_filter::{apply_rnnoise, NoiseFilter};
 
 use futures::{
     channel::mpsc::{self, UnboundedSender},
@@ -98,12 +99,17 @@ impl StoatVoiceConnection {
 /// 3. Open a `gloo_net::websocket::futures::WebSocket` to the WS URL.
 /// 4. Spawn encode, decode, and event loops.
 ///
+/// `noise_cancel_enabled` — shared `Arc<AtomicBool>` from `StoatClient::voice_noise_cancel`.
+/// Written to at runtime via `StoatClient::set_noise_cancel`.  The encode loop reads it on
+/// each 480-sample RNNoise chunk; toggling takes effect immediately with no gap.
+///
 /// Returns a `StoatVoiceConnection` handle. Call `.disconnect()` to leave.
 pub async fn connect_voice_wasm(
     channel_id: String,
     base_url: String,
     auth_token: String,
     transmit_mode: Option<TransmitMode>,
+    noise_cancel_enabled: Arc<AtomicBool>,
     event_tx: mpsc::UnboundedSender<ClientEvent>,
 ) -> Result<StoatVoiceConnection, StoatVoiceError> {
     // ── Step 1: POST /channels/{channel_id}/join_call ─────────────────────────
@@ -307,11 +313,13 @@ pub async fn connect_voice_wasm(
         let encoder_session_enc = encoder_session.clone();
         let shutdown_enc = Arc::clone(&shutdown);
         let transmit = transmit_mode.unwrap_or_default();
+        // B.8 — thread the noise-cancel flag into the audio-capture task.
+        let noise_cancel_enc = Arc::clone(&noise_cancel_enabled);
 
         spawn_local(async move {
-            // Open the mic stream (Phase B.3).
+            // Open the mic stream (Phase B.3 / B.8).
             let mut mic_stream =
-                match super::voice_wasm_audio_capture::open_mic_stream().await {
+                match super::voice_wasm_audio_capture::open_mic_stream(noise_cancel_enc).await {
                     Ok(stream) => Box::pin(stream),
                     Err(e) => {
                         warn!("Stoat WASM voice: mic open failed: {e}");

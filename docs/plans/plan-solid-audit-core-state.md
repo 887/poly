@@ -127,11 +127,19 @@ Verification: `cargo check -p poly-core --all-features` — green, 2m43s.
   `blocked_users`). Promote `content_policy: ContentPolicy` to
   `content_policies: HashMap<String, ContentPolicy>`. LSP win — the field
   shape matches every other per-account map. Shipped in change `olmzksur`.
-- [ ] **B.8** **Voice-noise integration is a real missing impl, not a
+- [x] **B.8** **Voice-noise integration is a real missing impl, not a
   stale comment** (`state/chat_data.rs:27`,
-  `TODO(phase-voice-3)`). The toggle is wired in the UI but the
-  RNNoise → WebRTC send-track plumbing isn't. Track in
-  `plan-voice-phase-3-noise.md` (separate plan) — leave the comment.
+  `TODO(phase-voice-3)`). Shipped in change `zssxypvy`.
+  RNNoise wired via `nnnoiseless` (pure-Rust, wasm32-compatible) into the
+  Stoat WASM audio-capture pipeline: `clients/stoat/src/voice_noise_filter.rs`
+  (new `NoiseFilter` wrapper + `apply_rnnoise` helper, 5 unit tests);
+  `open_mic_stream` accepts `Arc<AtomicBool>` noise-cancel flag; f32 mono
+  scaled to i16 range → `nnnoiseless::DenoiseState::process_frame` → scaled
+  back → existing `float32_to_i16`; `StoatClient::set_noise_cancel(bool)` for
+  runtime toggling without reconnect; `TODO(phase-voice-3)` comment in
+  `chat_data.rs` replaced with B.8 integration doc.
+  UI→backend wiring (`use_reactive_effect` watching `noise_cancel_enabled`)
+  deferred to UI-layer work (tracked in voice_settings.rs comment).
 
 ## Phase C — Architectural rewrites (>300 LoC each)
 

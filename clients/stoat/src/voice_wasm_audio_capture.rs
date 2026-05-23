@@ -31,6 +31,8 @@
 //! needed. If the constructor throws the function returns
 //! `Err(StoatVoiceError::AudioInit(…))`.
 
+use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+
 use futures::channel::mpsc;
 use js_sys::{Float32Array, Object, Reflect};
 use wasm_bindgen::{JsCast, JsValue};
@@ -42,11 +44,20 @@ use web_sys::{
 };
 
 use super::voice_common::{StoatVoiceError, OPUS_FRAME_SAMPLES};
+use super::voice_noise_filter::{apply_rnnoise, NoiseFilter};
 
 // ── Public entry point ────────────────────────────────────────────────────────
 
 /// Open the default microphone and return a stream of 960-sample mono i16 PCM
 /// frames (20 ms at 48 kHz).
+///
+/// # Noise cancellation (B.8)
+///
+/// When `noise_cancel_enabled` is `true` at frame time, each mono f32 frame is
+/// processed through an [`nnnoiseless::DenoiseState`] (RNNoise) before the
+/// float32→i16 conversion.  The filter is applied in-place on the f32 buffer so
+/// no extra allocation is needed.  Toggling the `AtomicBool` takes effect on the
+/// very next 480-sample chunk — there is no audio gap or reconnect required.
 ///
 /// The stream runs until dropped. Dropping the stream stops the mic track and
 /// releases the browser device lock.
@@ -57,6 +68,7 @@ use super::voice_common::{StoatVoiceError, OPUS_FRAME_SAMPLES};
 /// - No audio track on the returned `MediaStream`
 /// - `MediaStreamTrackProcessor` constructor throws
 pub async fn open_mic_stream(
+    noise_cancel_enabled: Arc<AtomicBool>,
 ) -> Result<impl futures::Stream<Item = Vec<i16>> + 'static, StoatVoiceError> {
     // 1. Acquire mic stream.
     let window =
@@ -112,6 +124,10 @@ pub async fn open_mic_stream(
     wasm_bindgen_futures::spawn_local(async move {
         let _track_owned = track; // keep mic track alive for the loop's lifetime
         let mut frame_buf: Vec<i16> = Vec::with_capacity(OPUS_FRAME_SAMPLES * 2);
+        // B.8 — one RNNoise state per voice session. Allocated once; the
+        // recurrent model state is preserved across chunks so the denoiser
+        // can track background noise over the session lifetime.
+        let mut noise_filter = NoiseFilter::new();
 
         loop {
             // Stop if the consumer dropped the receiver.
@@ -137,7 +153,9 @@ pub async fn open_mic_stream(
                 continue;
             };
 
-            process_audio_data(&audio_data, &mut frame_buf, &mut tx);
+            // B.8 — pass the per-session filter + live toggle flag.
+            let nc_enabled = noise_cancel_enabled.load(Ordering::Relaxed);
+            process_audio_data(&audio_data, &mut frame_buf, &mut tx, nc_enabled, &mut noise_filter);
             audio_data.close();
 
             // If the consumer fell behind and closed, stop.
@@ -175,10 +193,19 @@ fn read_chunk_parts(chunk: &JsValue) -> (bool, Option<AudioData>) {
 
 /// Decode one `AudioData` chunk into mono i16 PCM and push complete
 /// 960-sample frames into `tx`. Partial frames are buffered in `frame_buf`.
+///
+/// # Noise cancellation (B.8)
+///
+/// When `noise_cancel` is `true`, the mono f32 buffer is scaled to i16 range
+/// (`[-32768, 32767]`), processed through the RNNoise denoiser (`filter`), then
+/// scaled back to `[-1.0, 1.0]` before the existing `float32_to_i16` step.
+/// This matches the value range expected by `nnnoiseless::DenoiseState::process_frame`.
 fn process_audio_data(
     audio_data: &AudioData,
     frame_buf: &mut Vec<i16>,
     tx: &mut mpsc::Sender<Vec<i16>>,
+    noise_cancel: bool,
+    filter: &mut NoiseFilter,
 ) {
     let sample_rate = audio_data.sample_rate() as u32;
     let channels = audio_data.number_of_channels();
@@ -219,11 +246,27 @@ fn process_audio_data(
     }
 
     // Resample to 48 kHz if the source rate differs.
-    let resampled = if sample_rate == 48_000 {
+    let mut resampled = if sample_rate == 48_000 {
         mono
     } else {
         resample_mono_linear(&mono, sample_rate, 48_000)
     };
+
+    // B.8 — RNNoise noise cancellation (when enabled).
+    //
+    // nnnoiseless expects samples in i16 scale ([-32768, 32767]), not [-1.0, 1.0].
+    // We scale up, filter, then scale back down so the existing float32_to_i16
+    // helper continues to work unmodified.
+    if noise_cancel {
+        const I16_MAX_F: f32 = i16::MAX as f32; // 32767.0
+        for s in &mut resampled {
+            *s *= I16_MAX_F;
+        }
+        apply_rnnoise(&mut resampled, filter);
+        for s in &mut resampled {
+            *s /= I16_MAX_F;
+        }
+    }
 
     // Float32 → i16.
     let pcm_i16 = float32_to_i16(&resampled);

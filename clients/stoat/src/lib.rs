@@ -47,6 +47,13 @@ pub mod voice;
 /// import from here. See `docs/plans/plan-stoat-voice-wasm.md` Phase B serial prep.
 pub(crate) mod voice_common;
 
+/// RNNoise-based noise-cancellation filter for the Stoat voice pipeline (B.8).
+///
+/// cfg-free — compiles on both native and wasm32. The nnnoiseless crate is pure
+/// Rust and has no C FFI dependencies. Used by `voice_wasm_audio_capture` on
+/// wasm32 and exposed via `StoatClient::set_noise_cancel` for runtime toggling.
+pub(crate) mod voice_noise_filter;
+
 /// Stoat voice transport — WASM target (Phase B of `plan-stoat-voice-wasm.md`).
 /// Sibling to `voice.rs`; uses `gloo_net` WS + `/host/codec/opus/*` instead of
 /// `tokio_tungstenite` + `audiopus`.
@@ -160,6 +167,18 @@ pub struct StoatClient {
     /// Analogous to discord's `voice_bridge_client` field.
     #[cfg(target_arch = "wasm32")]
     voice_wasm_conn: std::sync::Arc<std::sync::Mutex<Option<voice_wasm::StoatVoiceConnection>>>,
+    /// B.8 — runtime noise-cancellation toggle.
+    ///
+    /// Shared with the audio-capture task via an `Arc<AtomicBool>`.  Writing
+    /// this flag takes effect on the very next 480-sample RNNoise chunk —
+    /// there is no audio gap.  Defaults to `true` (noise cancellation on).
+    ///
+    /// Call `set_noise_cancel(enabled)` to update.  The UI writes to
+    /// `VoiceMediaSettings.noise_cancel_enabled` and a `use_reactive_effect`
+    /// in voice settings forwards changes here (deferred to UI-layer work;
+    /// wiring tracked at crates/core/src/ui/account/settings/voice_settings.rs).
+    #[cfg(target_arch = "wasm32")]
+    voice_noise_cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 #[cfg(feature = "native")]
@@ -189,6 +208,8 @@ impl StoatClient {
             voice_participants: std::sync::Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new())),
             #[cfg(target_arch = "wasm32")]
             voice_wasm_conn: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            #[cfg(target_arch = "wasm32")]
+            voice_noise_cancel: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true)),
         }
     }
 
@@ -303,6 +324,21 @@ impl StoatClient {
     #[cfg(feature = "voice")]
     pub async fn voice_participants_for(&self, channel_id: &str) -> Vec<poly_client::VoiceParticipant> {
         voice::get_voice_participants_cached(&self.voice_guard, channel_id).await
+    }
+
+    /// B.8 — Toggle RNNoise noise cancellation on the running WASM voice session.
+    ///
+    /// Takes effect on the next 480-sample chunk — no audio gap, no reconnect
+    /// required.  Safe to call while disconnected (the flag is stored and applied
+    /// when the next voice session is started).
+    ///
+    /// The UI layer calls this from a `use_reactive_effect` that watches
+    /// `VoiceMediaSettings.noise_cancel_enabled` (wired in
+    /// `crates/core/src/ui/account/settings/voice_settings.rs`).
+    #[cfg(target_arch = "wasm32")]
+    pub fn set_noise_cancel(&self, enabled: bool) {
+        self.voice_noise_cancel
+            .store(enabled, std::sync::atomic::Ordering::Relaxed);
     }
 
     /// Fetch Stoat instance configuration from `GET /`.
@@ -959,11 +995,17 @@ impl IsBackend for StoatClient {
             // and the receive half is consumed by the decode loop inside connect_voice_wasm.
             let (event_tx, _event_rx) = futures::channel::mpsc::unbounded::<ClientEvent>();
 
+            // B.8 — pass the shared noise-cancel flag to the encode loop.
+            // The Arc<AtomicBool> is stored in self.voice_noise_cancel and can be
+            // updated at runtime via set_noise_cancel() without reconnecting.
+            let noise_cancel = std::sync::Arc::clone(&self.voice_noise_cancel);
+
             let conn = voice_wasm::connect_voice_wasm(
                 channel_id.to_string(),
                 base_url,
                 auth_token,
                 None, // transmit_mode: default (push-to-talk off)
+                noise_cancel,
                 event_tx,
             )
             .await
