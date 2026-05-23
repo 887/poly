@@ -1,8 +1,9 @@
 # Plan: SOLID + missing-impl audit — core/state, host-bridge, poly-client
 
+## Status: ✅ DONE — all phases shipped (A.1-A.5 in `swmztsumvtpl`; B.1+B.3 in `f07c7ad2`; B.2+B.4+B.5 in `597cdf93`; B.6 in `d1da3a4f`; B.7 in `ba201366`; B.8 in `62e2832e`; C.1 in `ab103b00`; C.2 in `04b444ff`; C.3 in `6bd11b71`)
+
 > Owner: alexander.stuermer@aareon.com
 > Created: 2026-05-17
-> Status: 🟡 IN PROGRESS — Phase A (ship-now wins) shipped in change `swmztsumvtpl`
 >
 > Scope (non-UI core layer only — UI lives under `crates/core/src/ui/` and is
 > owned by parallel agents):

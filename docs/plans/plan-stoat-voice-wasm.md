@@ -5,7 +5,7 @@
 > `a7ea37e6` (event_stream listener for native restores + voice creds polling
 > + gloo_timers boot overlay + dropped user_id filter).
 
-## Status: IN PROGRESS — A.0/A.1/A.2/A.3 decisions landed by opus agent; Phase B ready to dispatch
+## Status: ✅ DONE — A.0/A.1/A.2/A.3 in `uxqvulmv`; B.1/B.2/B.5 in `oxuznzwv`; B.3/B.4 shipped (sibling files exist; B.3 further extended by RNNoise B.8); B.6 in `pwuvwxtp`; C.1 via core-state C.1 ISP split (`ab103b00`); C.2 via test-stoat seed; D.1 in `ptovooks`; E.1/E.2 verified via the live bug-bash that produced `8193daa9` / `63b97280` / `fb7c4d99` / `e7f7bde9` / `799bceab` / `59199fd5`. E.3 stretch deferred.
 
 ## Decisions (opus agent, 2026-05-17)
 
@@ -179,15 +179,15 @@ Pure data items that already compile on wasm32 and should be hoisted to `voice_c
 
 - [x] **B.1** Replace native WS (`tokio_tungstenite`) with `gloo_net::websocket::futures::WebSocket` on wasm32. Mirror discord's `voice_bridge.rs:run_handshake_wasm` pattern. shipped in change `oxuznzwv`
 - [x] **B.2** Replace native Opus (`audiopus` FFI) with the `/host/codec/opus/*` host-bridge pattern already used by `clients/discord/src/voice_bridge/audio_capture.rs` and `audio_playback.rs`. Reuse the same encoder/decoder session-ID lifecycle. shipped in change `oxuznzwv`
-- [ ] **B.3** Replace native mic input (presumably `cpal`) with `MediaStreamTrackProcessor` — exact same browser-side capture path discord uses. Lift the helper from discord into a shared place (`clients/common/wasm_audio.rs`?) OR duplicate ~50 LoC. **B.3 agent owns `voice_wasm_audio_capture.rs`.**
-- [ ] **B.4** Replace native speaker output with the WebAudio `AudioContext` + `AudioBufferSourceNode` pattern from discord's `audio_playback.rs`. Same reuse-vs-duplicate question as B.3. **B.4 agent owns `voice_wasm_audio_playback.rs`.**
+- [x] **B.3** Replace native mic input (presumably `cpal`) with `MediaStreamTrackProcessor` — exact same browser-side capture path discord uses. Lift the helper from discord into a shared place (`clients/common/wasm_audio.rs`?) OR duplicate ~50 LoC. **B.3 agent owns `voice_wasm_audio_capture.rs`.** Shipped — `clients/stoat/src/voice_wasm_audio_capture.rs` exists; further extended by RNNoise integration (B.8 of core-state plan).
+- [x] **B.4** Replace native speaker output with the WebAudio `AudioContext` + `AudioBufferSourceNode` pattern from discord's `audio_playback.rs`. Same reuse-vs-duplicate question as B.3. **B.4 agent owns `voice_wasm_audio_playback.rs`.** Shipped — `clients/stoat/src/voice_wasm_audio_playback.rs` exists (185 LoC).
 - [x] **B.5** Implement the Vortex frame format on the wire: `[8 bytes user_id padded with 0x00][opus bytes]`. No RTP, no encryption. Per-user `OpusDecoder` keyed off the 8-byte prefix. shipped in change `oxuznzwv`
 - [x] **B.6** Wire the WASM `StoatVoiceConnection` into `clients/stoat/src/lib.rs` so the `IsBackend` trait surface includes a `join_voice_channel(channel_id)` method that does the HTTP `/join_call` POST then opens the Vortex WS. shipped in change `pwuvwxtp`
 
 ### Phase C — UI integration
 
-- [ ] **C.1** Add stoat to the voice-view UI's backend match arm — discord already shows Join Voice; mirror that for stoat. Check `crates/core/src/ui/voice_view.rs` (or wherever the discord Join Voice button is rendered) and add the stoat case.
-- [ ] **C.2** Confirm the stoat voice channels are seeded in the test-stoat mock and navigable via URL like `/stoat/<instance_id>/<account_num>/channels/<channel_id>`.
+- [x] **C.1** Add stoat to the voice-view UI's backend match arm — discord already shows Join Voice; mirror that for stoat. Check `crates/core/src/ui/voice_view.rs` (or wherever the discord Join Voice button is rendered) and add the stoat case. Shipped — no per-slug match arm needed any more: `VoiceJoinButton` dispatches via `BackendLookup` + `as_voice_transport()` (post-C.1 of core-state plan), so any backend implementing `VoiceTransportBackend` (incl. stoat) gets the Join Voice flow for free.
+- [x] **C.2** Confirm the stoat voice channels are seeded in the test-stoat mock and navigable via URL like `/stoat/<instance_id>/<account_num>/channels/<channel_id>`. Shipped — `CHVOICE001` ("burrow-voice", VoiceChannel) seeded in `servers/test-stoat/src/state.rs:332` and reachable via the standard channel URL.
 
 ### Phase D — Mock fixes (if surfaced during smoke) — shipped in change `ptovooks`
 
@@ -195,9 +195,9 @@ Pure data items that already compile on wasm32 and should be hoisted to `voice_c
 
 ### Phase E — Live mutual-audio cross-shell smoke
 
-- [ ] **E.1** Launch poly-web as stoat account (otter), poly-electron as stoat account (beaver), both join the same voice channel via mock.
-- [ ] **E.2** Both shells reach the in-voice UI with 🎤🔊📵 buttons; no console warnings; participant list shows both users.
-- [ ] **E.3** (Optional, stretch) Add a `RemoteSpeakingEvent` tracing log analogous to discord, drive mic capture on one shell, observe the log on the other. This is the load-bearing mutual-audio byte-flow verification.
+- [x] **E.1** Launch poly-web as stoat account (otter), poly-electron as stoat account (beaver), both join the same voice channel via mock. Shipped — live smoke ran; surfaced and fixed bugs `8193daa9` (stale channel context crash), `63b97280` (startup race), `fb7c4d99` (re-click drops participants), `e7f7bde9` (departing channel cleanup), `799bceab` (render-time safety net).
+- [x] **E.2** Both shells reach the in-voice UI with 🎤🔊📵 buttons; no console warnings; participant list shows both users. Shipped — verified during the bug-bash that produced the fixes listed in E.1; participant cache populated via Bonfire WS broadcast in `59199fd5`.
+- [ ] **E.3** (Optional, stretch) Add a `RemoteSpeakingEvent` tracing log analogous to discord, drive mic capture on one shell, observe the log on the other. This is the load-bearing mutual-audio byte-flow verification. Stretch — deferred.
 
 ## Open architectural questions for the OPUS agent
 

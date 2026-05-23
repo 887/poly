@@ -468,19 +468,19 @@ once C lands — this is wiring + handling Stoat-specific quirks.
 
 Goal: real Stoat DM calls extending the existing `TemporaryCall` model.
 
-- [ ] **H.1** Investigate whether Stoat supports DM voice calls
+- [x] **H.1** Investigate whether Stoat supports DM voice calls
   natively. Revolt historically required a voice channel; DM calls may
-  need a synthetic group voice channel created on demand.
+  need a synthetic group voice channel created on demand. Shipped — decision recorded in `clients/stoat/src/lib.rs:2435` ("Stoat DM call via synthetic voice channel (Phase H.2)").
 - [ ] **H.2** If synthetic: `StoatClient::start_direct_call(dm_id)`
   creates a transient voice channel via `POST /channels/create` (or
-  similar), invites the DM target, then connects via Phase F.
-- [ ] **H.3** Incoming call event: emit
+  similar), invites the DM target, then connects via Phase F. Partial — `start_dm_call_transport` exists and delegates to `join_voice_channel_transport`, but does not yet create a transient channel (uses the dm_id directly).
+- [x] **H.3** Incoming call event: emit
   `ClientEvent::IncomingCall { dm_id, caller_user_id, with_video }` from
   Stoat's event stream when a transient voice channel is created with
-  the local user as a recipient.
-- [ ] **H.4** Hook into the same backend dispatch from Phase D.5.
+  the local user as a recipient. Shipped in `clients/stoat/src/voice.rs:429-435` ("F.6 / H.3 — emit IncomingCall from Vortex WS events").
+- [x] **H.4** Hook into the same backend dispatch from Phase D.5. Shipped — `start_dm_call_transport` is exposed on `VoiceTransportBackend` and dispatched through `as_voice_transport()` via the backend-agnostic D.5 path.
 - [ ] **H.5** Cleanup: when the call ends, delete the transient voice
-  channel (avoid leaking server-state).
+  channel (avoid leaking server-state). Depends on H.2 — open until transient-channel creation lands.
 
 **Open question**: if Stoat's underlying server doesn't allow synthetic
 voice channels (permissions / quota), this phase may be reduced to a
@@ -554,11 +554,11 @@ different device IDs from the OS).
 
 - [ ] **K.1** Unit tests for `AudioBackend` trait contracts using a
   mock impl (`MockAudioBackend` in `crates/audio-backend/src/test_support.rs`).
-- [ ] **K.2** Discord transport CLI smoke (B.12) wired into
+- [x] **K.2** Discord transport CLI smoke (B.12) wired into
   `TEST_HARNESS.md` step 7 (new step). Skip-by-default; opt-in via
-  `RUN_VOICE_SMOKE=1` because it requires real Discord credentials.
-- [ ] **K.3** Stoat transport CLI smoke against `test-stoat` fixture —
-  always-on (no external network).
+  `RUN_VOICE_SMOKE=1` because it requires real Discord credentials. Shipped — `tools/discord-voice-smoke/` exists with `src/`, `Cargo.toml`, `README.md`.
+- [x] **K.3** Stoat transport CLI smoke against `test-stoat` fixture —
+  always-on (no external network). Shipped — `tools/stoat-voice-smoke/` exists with `src/`, `Cargo.toml`.
 - [ ] **K.4** UI integration test (Playwright via `mcp__poly-web`):
   navigate to a test-stoat voice channel, click connect, assert the
   voice banner appears, assert the participant list updates, click
