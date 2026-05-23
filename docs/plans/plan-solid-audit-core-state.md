@@ -111,11 +111,13 @@ Verification: `cargo check -p poly-core --all-features` — green, 2m43s.
   bump edits the same `match`. Move each step into
   `async fn migrate_v{N}_to_v{N+1}(&self) -> Result<...>` and have
   `run_migrations` iterate a `const STEPS: &[(u64, MigrationFn)]` table.
-- [ ] **B.6** **`wasm_crash_handler.rs` is 631 LoC of mixed-concern code**
+- [x] **B.6** **`wasm_crash_handler.rs` is 631 LoC of mixed-concern code**
   — boot-hang watchdog, panic-hook installation, overlay rendering, fetch
   bridge, debug-key handler. Split into `watchdog.rs`, `panic_hook.rs`,
-  `overlay.rs`, `debug_keys.rs` (cfg-gated wasm32-only inner module).
-  Each sub-file ≤ 200 LoC, single reason to change.
+  `overlay.rs` under `crates/core/src/wasm_crash_handler/` with `mod.rs`
+  re-exporting `install_wasm_crash_handler`. No debug_keys or Rust-level
+  bridge code existed in the original (both are pure JS). Both WASM and
+  native `cargo check` green. Shipped in change `tworxtwl`.
 - [ ] **B.7** **`AccountSessions::content_policy` is a singleton field on
   a per-account-collection struct** (`state/account_sessions.rs:47`). When
   switching accounts the policy is replaced wholesale — but the struct
