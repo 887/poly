@@ -13,7 +13,7 @@
 use crate::client_manager::BackendHandleExt;
 use crate::state::BatchedSignal;
 use crate::i18n::{t, t_args};
-use crate::state::{AccountSessions, AppState, ChatLists};
+use crate::state::{AccountSessions, ChatLists};
 use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::main_layout::close_mobile_drawer;
 use crate::ui::routes::Route;

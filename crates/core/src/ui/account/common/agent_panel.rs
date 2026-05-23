@@ -24,7 +24,7 @@
 //! Each `#[component]` fn body MUST stay under 150 lines of RSX + logic.
 
 use crate::i18n::{t, t_args};
-use crate::state::{AppState, BatchedSignal, ChatViewState};
+use crate::state::{BatchedSignal, ChatViewState};
 use crate::ui::account::common::chat_view::catch_up_clipboard_text;
 use crate::ui::agent::persona::talk_to_overlay::{PersonaTalkToOverlay, TalkSession};
 use crate::ui::agent::persona::{PersonaListPanel, PersonaSummary};
@@ -314,7 +314,6 @@ pub fn AgentPanel(
     chat_id: String,
     chat_name: String,
 ) -> Element {
-    let mut app_state: BatchedSignal<AppState> = use_context();
 
     // Access toggle — load persisted value from KV.
     let mut access_enabled = use_signal(|| false);
@@ -339,8 +338,6 @@ pub fn AgentPanel(
     // Snapshot for overlay render — peek avoids subscribing AgentPanel to talk_session
     // on every render (hang class #7 countermeasure).
     let current_talk = talk_session.peek().clone();
-
-    let _ = &mut app_state;
 
     rsx! {
         aside { class: "user-sidebar agent-panel-sidebar",

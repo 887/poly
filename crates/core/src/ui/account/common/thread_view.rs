@@ -11,7 +11,7 @@
 use crate::state::BatchedSignal;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
-use crate::state::{AppState, ChatViewState, use_reactive_effect, use_spawn_once};
+use crate::state::{ChatViewState, use_reactive_effect, use_spawn_once};
 use crate::ui::routes::Route;
 use dioxus::prelude::*;
 use poly_client::{Channel, ChannelType, Message, MessageQuery, ThreadInfo};

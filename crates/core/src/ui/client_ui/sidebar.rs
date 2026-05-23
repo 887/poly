@@ -38,7 +38,7 @@ pub use sort_modes::SortModesLayout;
 
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
-use crate::state::{AppState, BatchedSignal};
+use crate::state::{BatchedSignal, ChatLists};
 use dioxus::prelude::*;
 use poly_client::{ClientError, SidebarDeclaration, SidebarLayoutKind};
 use poly_ui_macros::{context_menu, ui_action};
@@ -53,7 +53,7 @@ use poly_ui_macros::{context_menu, ui_action};
 #[context_menu(inherit)]
 #[component]
 pub fn ClientSidebar() -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
     let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
 
@@ -74,7 +74,8 @@ pub fn ClientSidebar() -> Element {
         use_resource(move || {
             // P28 — subscribe to sidebar_invalidated_tick so plugin-emitted
             // `ClientEvent::SidebarInvalidated` events force a refetch.
-            let _tick = app_state.read().sidebar_invalidated_tick;
+            // The tick now lives on `ChatLists` post Phase C.3.
+            let _tick = chat_lists.read().sidebar_invalidated_tick;
             // E6 — subscribe to client_manager so the resource re-runs when a
             // backend is committed after first account activation (Discord and
             // other native backends may be committed after the route sets
@@ -174,7 +175,7 @@ pub(crate) fn bump_sidebar_tick(current: u32) -> u32 {
 #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod tests {
     use super::*;
-    use crate::state::AppState;
+    use crate::state::ChatLists;
 
     #[test]
     fn bump_sidebar_tick_increments() {
@@ -191,8 +192,8 @@ mod tests {
     }
 
     #[test]
-    fn app_state_default_has_zero_sidebar_tick() {
-        let s = AppState::default();
+    fn chat_lists_default_has_zero_sidebar_tick() {
+        let s = ChatLists::default();
         assert_eq!(s.sidebar_invalidated_tick, 0);
     }
 
@@ -202,7 +203,7 @@ mod tests {
         // the `use_resource` closure, each increment produces a distinct
         // dep value → use_resource re-runs. Model that with a Vec that
         // records the tick observed on each "fetch".
-        let mut s = AppState::default();
+        let mut s = ChatLists::default();
         let tick0 = s.sidebar_invalidated_tick;
         let _fetch_a = tick0; // first observation
         s.sidebar_invalidated_tick = bump_sidebar_tick(s.sidebar_invalidated_tick);

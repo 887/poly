@@ -88,7 +88,7 @@ use crate::ui::client_ui::{ComposerHooks, MessageActions};
 use poly_client::ComposerSlot;
 use crate::i18n::{t, t_args};
 use crate::state::chat_data::{backend_badge, format_file_size, user_color};
-use crate::state::{AccountSessions, AppState, ChatLists, ChatViewState, UiOverlays, VoiceState, use_reactive_effect, use_spawn_once};
+use crate::state::{AccountSessions, ChatLists, ChatViewState, UiOverlays, VoiceState, use_reactive_effect, use_spawn_once};
 use crate::ui::split_shell::RightWingShell;
 use dioxus::html::HasFileData;
 use dioxus::prelude::*;
@@ -309,7 +309,6 @@ pub(crate) async fn open_message_hit(
     current_server_id: Option<String>,
     client_manager: BatchedSignal<ClientManager>,
     chat_view_state: BatchedSignal<ChatViewState>,
-    mut app_state: BatchedSignal<AppState>,
     nav: BatchedSignal<crate::state::NavState>,
 ) -> Option<(Route, String)> {
     let target_message_id = hit.message.id.clone();
@@ -410,7 +409,6 @@ pub(crate) async fn open_message_hit(
     }
 
     Some(build_message_hit_route(
-        &mut app_state,
         MessageHitRouteCtx {
             client_manager,
             active_instance_id,
@@ -448,7 +446,6 @@ struct MessageHitRouteCtx {
 }
 
 fn build_message_hit_route(
-    _app_state: &mut BatchedSignal<AppState>,
     ctx: MessageHitRouteCtx,
 ) -> (Route, String) {
     let MessageHitRouteCtx {

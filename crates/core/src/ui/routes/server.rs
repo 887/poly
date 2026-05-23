@@ -5,7 +5,7 @@
 
 use crate::client_manager::ClientManager;
 use crate::state::{
-    AppState, BatchedSignal, ChatAction, ChatLists, ChatViewState, NavState, VoiceState,
+    BatchedSignal, ChatAction, ChatLists, ChatViewState, NavState, VoiceState,
     use_spawn_once,
 };
 use crate::ui::account::common::{FeatureUnsupportedPlaceholder, UnsupportedFeature};
@@ -239,7 +239,6 @@ pub(super) fn ServerChat(
     channel_id: String,
 ) -> Element {
     let voice_state: BatchedSignal<VoiceState> = use_context();
-    let app_state: BatchedSignal<AppState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let chat_lists: BatchedSignal<ChatLists> = use_context();
     let chat_view_state: BatchedSignal<ChatViewState> = use_context();
@@ -269,7 +268,6 @@ pub(super) fn ServerChat(
             let resolved_channel_id = crate::ui::favorites_sidebar::restore_server_channel(
                 sid,
                 cid.clone(),
-                app_state,
                 client_manager,
                 voice_state,
                 chat_lists,
@@ -358,7 +356,6 @@ pub(super) fn ServerMediaViewerRoute(
     attachment_index: usize,
 ) -> Element {
     let voice_state: BatchedSignal<VoiceState> = use_context();
-    let app_state: BatchedSignal<AppState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let chat_lists: BatchedSignal<ChatLists> = use_context();
     let chat_view_state: BatchedSignal<ChatViewState> = use_context();
@@ -407,7 +404,6 @@ pub(super) fn ServerMediaViewerRoute(
             let resolved_channel_id = crate::ui::favorites_sidebar::restore_server_channel(
                 sid,
                 cid.clone(),
-                app_state,
                 client_manager,
                 voice_state,
                 chat_lists,

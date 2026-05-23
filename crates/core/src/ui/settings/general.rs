@@ -8,7 +8,7 @@
 
 use crate::state::BatchedSignal;
 use crate::i18n::t;
-use crate::state::{AppState, LayoutMode};
+use crate::state::{LayoutMode};
 use crate::storage::AppSettings;
 use crate::ui::actions::{ActionCx, UiAction};
 use dioxus::prelude::*;
@@ -286,7 +286,6 @@ async fn run_reset_flow(
     client_manager: BatchedSignal<crate::client_manager::ClientManager>,
     chat_lists: BatchedSignal<crate::state::ChatLists>,
     account_sessions: BatchedSignal<crate::state::AccountSessions>,
-    app_state: BatchedSignal<AppState>,
 ) -> Result<(), String> {
     let account_ids = client_manager.peek().active_account_ids();
     for account_id in account_ids {
@@ -301,10 +300,9 @@ async fn run_reset_flow(
     client_manager.batch(crate::client_manager::ClientManager::clear_all_backends);
 
     chat_lists.batch(|cl| *cl = crate::state::ChatLists::default());
+    // Resets both account-session state AND the is_setup_complete flag
+    // (now lives on AccountSessions, Phase C.3 — default is false).
     account_sessions.batch(|as_| *as_ = crate::state::AccountSessions::default());
-    app_state.batch(|state| {
-        state.is_setup_complete = false;
-    });
 
     let Some(storage) = crate::STORAGE.get() else {
         return Err(t("settings-reset-error-no-storage"));
@@ -331,7 +329,6 @@ async fn run_reset_flow(
 #[context_menu(inherit)]
 #[component]
 fn ResetButton(kind: ResetKind, busy: Signal<bool>, on_error: EventHandler<String>) -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
     let client_manager: BatchedSignal<crate::client_manager::ClientManager> = use_context();
     let chat_lists: BatchedSignal<crate::state::ChatLists> = use_context();
     let account_sessions: BatchedSignal<crate::state::AccountSessions> = use_context();
@@ -355,7 +352,7 @@ fn ResetButton(kind: ResetKind, busy: Signal<bool>, on_error: EventHandler<Strin
                 }
                 busy_signal.set(true);
                 spawn(async move {
-                    if let Err(err) = run_reset_flow(kind, client_manager, chat_lists, account_sessions, app_state)
+                    if let Err(err) = run_reset_flow(kind, client_manager, chat_lists, account_sessions)
                         .await
                     {
                         on_error.call(err);

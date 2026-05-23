@@ -7,7 +7,7 @@
 
 use dioxus::prelude::*;
 use crate::state::BatchedSignal;
-use crate::state::{AppState, ChatLists, ChatViewState, NavState, UiLayout, UiOverlays, VoiceState};
+use crate::state::{ChatLists, ChatViewState, NavState, UiLayout, UiOverlays, VoiceState};
 use crate::client_manager::ClientManager;
 use super::super::chat_history::ChatHistoryUiState;
 use super::composer_helpers::PendingAttachmentPreview;
@@ -28,7 +28,6 @@ use poly_client::{
 
 #[derive(Clone)]
 pub(super) struct ChatViewMarkupCtx {
-    pub(super) app_state: BatchedSignal<AppState>,
     pub(super) nav: BatchedSignal<NavState>,
     pub(super) ui_layout: BatchedSignal<UiLayout>,
     pub(super) ui_overlays: BatchedSignal<UiOverlays>,
@@ -113,7 +112,6 @@ pub(super) struct ChatViewMarkupCtx {
 }
 
 pub(super) fn build_chat_view_markup_ctx(signals: &ChatViewSignals) -> ChatViewMarkupCtx {
-    let app_state = signals.app_state;
     let nav_signal = signals.nav;
     let ui_layout = signals.ui_layout;
     let ui_overlays = signals.ui_overlays;
@@ -157,7 +155,6 @@ pub(super) fn build_chat_view_markup_ctx(signals: &ChatViewSignals) -> ChatViewM
     ) = build_unread_banner_fields(signals.history_state, &messages);
 
     ChatViewMarkupCtx {
-        app_state,
         nav: nav_signal,
         ui_layout,
         ui_overlays,

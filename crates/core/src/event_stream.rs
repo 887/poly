@@ -12,7 +12,7 @@
 use dioxus::prelude::*;
 
 use crate::client_manager::{BackendHandle, BackendHandleExt, ClientManager};
-use crate::state::{AccountSessions, AppState, NavState, VoiceState};
+use crate::state::{AccountSessions, ChatLists, NavState, VoiceState};
 use crate::state::BatchedSignal;
 use crate::ui::account::common::chat_history::{
     read_message_list_scroll_metrics, request_scroll_to_bottom,
@@ -39,7 +39,7 @@ const AUTO_SCROLL_THRESHOLD_PX: f64 = 60.0;
 pub(crate) fn spawn_event_stream_listener(
     account_id: String,
     backend: BackendHandle,
-    app_state: BatchedSignal<AppState>,
+    chat_lists: BatchedSignal<ChatLists>,
     nav: BatchedSignal<NavState>,
     client_manager: BatchedSignal<ClientManager>,
     chat_view_state: BatchedSignal<crate::state::ChatViewState>,
@@ -136,9 +136,10 @@ pub(crate) fn spawn_event_stream_listener(
                 ClientEvent::SidebarInvalidated => {
                     // P28 — bump the tick so `ClientSidebar`'s
                     // `use_resource` re-fetches `get_sidebar_declaration`.
-                    app_state.batch(|s| {
-                        s.sidebar_invalidated_tick =
-                            s.sidebar_invalidated_tick.wrapping_add(1);
+                    // The tick now lives on `ChatLists` post Phase C.3.
+                    chat_lists.batch(|cl| {
+                        cl.sidebar_invalidated_tick =
+                            cl.sidebar_invalidated_tick.wrapping_add(1);
                     });
                 }
                 // D.3 — route to the incoming-call screen when a DM call rings.

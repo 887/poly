@@ -16,7 +16,7 @@ use dioxus::prelude::*;
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::state::BatchedSignal;
-use crate::state::{AppState, ChatLists, ChatViewState};
+use crate::state::{ChatLists, ChatViewState};
 use super::super::super::super::routes::Route;
 use super::super::chat_history::{
     ChatHistoryUiState, MAX_LOADED_MESSAGES, OLDER_MESSAGES_PAGE_SIZE,
@@ -51,7 +51,6 @@ pub(super) struct MessageListScrollWorkCtx {
     pub(super) unread_count: u32,
     pub(super) search_query_value: String,
     pub(super) virtual_window: Signal<MessageVirtualWindowState>,
-    pub(super) app_state: BatchedSignal<AppState>,
     pub(super) nav: BatchedSignal<crate::state::NavState>,
     pub(super) client_manager: BatchedSignal<ClientManager>,
     pub(super) chat_view_state: BatchedSignal<ChatViewState>,
@@ -415,7 +414,6 @@ pub(super) async fn load_newer_messages(
 #[allow(clippy::needless_pass_by_value)]
 pub(super) fn render_message_list(ctx: ChatViewMarkupCtx) -> Element {
     let loading = ctx.loading;
-    let app_state = ctx.app_state;
     let nav = ctx.nav;
     let client_manager = ctx.client_manager;
     let chat_view_state_for_scroll = ctx.chat_view_state;
@@ -500,7 +498,6 @@ pub(super) fn render_message_list(ctx: ChatViewMarkupCtx) -> Element {
                         unread_count,
                         search_query_value: scroll_search_query_value,
                         virtual_window,
-                        app_state,
                         nav,
                         client_manager,
                         chat_view_state: chat_view_state_for_scroll,

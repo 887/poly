@@ -9,7 +9,7 @@ use super::super::super::super::routes::Route;
 use crate::client_manager::ClientManager;
 use crate::state::chat_data::user_color;
 use crate::state::{
-    AccountSessions, AppState, ChatAction, ChatLists, ChatViewState, ContextMenuState,
+    AccountSessions, ChatAction, ChatLists, ChatViewState, ContextMenuState,
     DragSource, DragState, NavState, UiOverlays,
 };
 use crate::ui::context_menu::menus::server_icon_entry_at;
@@ -113,7 +113,6 @@ pub fn AccountServerIcon(
     /// `None`, falls back to a colored first-letter placeholder.
     icon_url: Option<String>,
 ) -> Element {
-    let _app_state: BatchedSignal<AppState> = use_context();
     let ui_overlays: BatchedSignal<UiOverlays> = use_context();
     let nav_state: BatchedSignal<NavState> = use_context();
     let _client_manager: BatchedSignal<ClientManager> = use_context();

@@ -11,7 +11,7 @@
 
 use crate::state::BatchedSignal;
 use crate::i18n::t;
-use crate::state::{AppState, ChatViewState, ReactionContextMenuState};
+use crate::state::{ChatViewState, ReactionContextMenuState};
 use crate::ui::account::common::chat_view::toggle_reaction_on_message;
 use dioxus::prelude::*;
 use poly_ui_macros::{context_menu, ui_action};
@@ -24,7 +24,6 @@ use poly_ui_macros::{context_menu, ui_action};
 #[context_menu(inherit)]
 #[component]
 pub fn ReactionContextMenuInner(menu: ReactionContextMenuState, close: EventHandler<()>) -> Element {
-    let _app_state: BatchedSignal<AppState> = use_context();
     let chat_view_state: BatchedSignal<ChatViewState> = use_context();
 
     let x = menu.x;

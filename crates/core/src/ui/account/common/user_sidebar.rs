@@ -20,7 +20,7 @@
 use crate::state::BatchedSignal;
 use crate::i18n::t;
 use crate::state::chat_data::user_color;
-use crate::state::{AppState, ChatViewState, MemberListGrouping, MemberListSortOrder, UiOverlays};
+use crate::state::{ChatViewState, MemberListGrouping, MemberListSortOrder, UiOverlays};
 use crate::ui::account::common::user_profile_modal::open_user_profile;
 use dioxus::prelude::*;
 use poly_client::{PresenceStatus, User};

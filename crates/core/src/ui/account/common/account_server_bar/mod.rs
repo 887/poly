@@ -35,7 +35,7 @@ pub use server_list::AccountServerIcon;
 
 use crate::state::BatchedSignal;
 use crate::client_manager::{BackendHandleExt, ClientManager};
-use crate::state::{AccountSessions, AppState, ChatLists, NavState, View};
+use crate::state::{AccountSessions, ChatLists, NavState, View};
 use dioxus::prelude::*;
 use poly_ui_macros::{context_menu, ui_action};
 use server_list::get_ordered_servers;
@@ -51,7 +51,6 @@ use server_list::get_ordered_servers;
 #[context_menu(inherit)]
 #[component]
 pub fn AccountServerBar() -> Element {
-    let _app_state: BatchedSignal<AppState> = use_context();
     let nav_state: BatchedSignal<NavState> = use_context();
     let chat_lists: BatchedSignal<ChatLists> = use_context();
     let account_sessions: BatchedSignal<AccountSessions> = use_context();

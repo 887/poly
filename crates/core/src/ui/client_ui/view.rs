@@ -381,9 +381,9 @@ fn render_descriptor_inner(
                     // actually re-fire the body's use_resource. Without
                     // including the tick in body_key, the resource captures
                     // stale Strings and the click does nothing visible.
-                    let app_state_for_tick: BatchedSignal<crate::state::AppState>
+                    let chat_lists_for_tick: BatchedSignal<crate::state::ChatLists>
                         = use_context();
-                    let sidebar_tick = app_state_for_tick.read().sidebar_invalidated_tick; // poly-lint: allow render-time-read — scoped snapshot for body_key composition; subscription ensures key updates on sidebar invalidation
+                    let sidebar_tick = chat_lists_for_tick.read().sidebar_invalidated_tick; // poly-lint: allow render-time-read — scoped snapshot for body_key composition; subscription ensures key updates on sidebar invalidation
                     let body_key = format!(
                         "{}:{}:{:?}:{:?}:{:?}:{}",
                         channel_id,

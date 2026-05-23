@@ -24,6 +24,16 @@ use std::collections::HashMap;
 /// preferences change.
 #[derive(Debug, Clone, Default)]
 pub struct ChatLists {
+    /// Pack B P28 — monotonic counter incremented on receipt of a
+    /// [`poly_client::ClientEvent::SidebarInvalidated`] event from any
+    /// active backend. `ClientSidebar` reads this into its `use_resource`
+    /// dependency list so an increment forces a re-fetch of
+    /// `get_sidebar_declaration`.
+    ///
+    /// Migrated here from the deleted `AppState` struct (Phase C.3 of
+    /// plan-solid-audit-core-state.md) — the tick gates the sidebar
+    /// declaration refresh, which is fundamentally a chat-lists concern.
+    pub sidebar_invalidated_tick: u32,
     /// All favorited/joined servers from all backends.
     pub servers: Vec<Server>,
     /// Channels for the currently selected server.

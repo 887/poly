@@ -105,7 +105,7 @@ use settings::{
 
 use crate::ui::main_layout::MainLayout;
 use crate::client_manager::ClientManager;
-use crate::state::{AppState, NavState, SettingsSection, View};
+use crate::state::{NavState, SettingsSection, View};
 use dioxus::prelude::*;
 use poly_client::BackendType;
 
@@ -498,14 +498,13 @@ pub enum Route {
 // behaviour for its specific Route variant; merging would obscure intent
 // and the arms are likely to diverge as new fields are added per-route.
 #[allow(clippy::match_same_arms)]
-pub fn sync_route_to_app_state(route: &Route, app_state: BatchedSignal<AppState>, nav: BatchedSignal<NavState>, user_prefs: Option<BatchedSignal<crate::state::UserPrefs>>) {
+pub fn sync_route_to_app_state(route: &Route, nav: BatchedSignal<NavState>, user_prefs: Option<BatchedSignal<crate::state::UserPrefs>>) {
     #[cfg(debug_assertions)]
     account::record_route_visit(route);
 
     // Compute the URL string before borrowing nav mutably.
     // Routable derives Display, so format!("{route}") gives the URL path.
     let route_url = format!("{route}");
-    let _ = app_state; // retained for debug record_route_visit; no nav fields remain
     // Extract settings_section from the route before the nav.batch borrow.
     let settings_section_override: Option<SettingsSection> = match route {
         Route::SettingsSectionRoute { section } => Some(SettingsSection::from_slug(section)),

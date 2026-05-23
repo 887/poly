@@ -4,7 +4,7 @@
 //! (`.client-view-cards { display: grid; }`).
 
 use super::list_body::fetch_first_page;
-use crate::state::{AppState, BatchedSignal};
+use crate::state::{BatchedSignal};
 use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::errors::{is_session_expired, SessionExpiredCard};
 use crate::ui::routes::Route;

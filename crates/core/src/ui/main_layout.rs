@@ -20,7 +20,7 @@ use super::favorites_sidebar::FavoritesBar;
 use super::routes::{Route, route_targets_unknown_account, sync_route_to_app_state};
 use super::voice_banner::VoiceBanner;
 use crate::client_manager::ClientManager;
-use crate::state::{AppState, BatchedSignal, ModerationDialog, SettingsSection, use_reactive_effect};
+use crate::state::{BatchedSignal, ModerationDialog, SettingsSection, use_reactive_effect};
 use crate::ui::dialogs::{BanMemberDialog, EditChannelDialog, KickMemberDialog, TimeoutMemberDialog};
 use dioxus::prelude::*;
 use dioxus_router::use_route;
@@ -208,7 +208,6 @@ fn NavBar() -> Element {
 #[context_menu(inherit)]
 #[component]
 pub fn MainLayout() -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
     let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
     let ui_layout: crate::state::BatchedSignal<crate::state::UiLayout> = use_context();
     let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
@@ -230,7 +229,7 @@ pub fn MainLayout() -> Element {
     // NOTE: writing to a Signal during render is safe here because MainLayout does not
     // read app_state via .read() in its own render body — only in event handlers.
     let route = use_route::<Route>();
-    sync_route_to_app_state(&route, app_state, nav, Some(user_prefs));
+    sync_route_to_app_state(&route, nav, Some(user_prefs));
 
     use_effect(move || { // poly-lint: allow stale-effect-capture — mount-only JS init, no captured props that drift
         init_mobile_drawer_runtime();
@@ -257,7 +256,7 @@ pub fn MainLayout() -> Element {
 
     // Persist per-account last-visited routes to storage whenever they change.
     // This fires after every route navigation (because sync_route_to_app_state
-    // updates account_last_routes inside AppState, which re-renders MainLayout).
+    // updates account_last_routes inside which re-renders MainLayout).
     // The spawn ensures the async storage write doesn't block the render.
     use_effect(move || { // poly-lint: allow stale-effect-capture — body reads nav Signal only; spawn writes to storage (no Signal), no stale prop captures
         let routes_snapshot = nav.read().account_last_routes.clone();

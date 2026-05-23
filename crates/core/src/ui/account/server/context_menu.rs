@@ -24,7 +24,7 @@
 use crate::state::BatchedSignal;
 use super::super::super::routes::Route;
 use crate::i18n::{t, t_args};
-use crate::state::{AccountSessions, AppState, ContextMenuState};
+use crate::state::{AccountSessions, ContextMenuState};
 use crate::ui::client_ui::ClientMenu;
 use dioxus::prelude::*;
 use poly_client::MenuTargetKind;

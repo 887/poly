@@ -15,7 +15,7 @@ use super::ChannelListAction;
 use crate::client_manager::ClientManager;
 use crate::state::BatchedSignal;
 use crate::state::{
-    AppState, ChannelContextMenuState, ChatLists, ChatViewState, DmContextMenuState,
+    ChannelContextMenuState, ChatLists, ChatViewState, DmContextMenuState,
     GroupDmContextMenuState, VoiceState,
 };
 use crate::ui::account::common::chat_history::remember_message_list_scroll_position;
@@ -74,7 +74,6 @@ pub(super) fn CategorySection(
 #[ui_action(inherit)]
 #[component]
 pub(super) fn ChannelItemRow(channel: Channel) -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
     let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
     let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
     let chat_lists: BatchedSignal<ChatLists> = use_context();
@@ -231,7 +230,7 @@ pub(super) fn ChannelItemRow(channel: Channel) -> Element {
                 });
                 let cid = ch_id.clone();
                 spawn(async move {
-                    load_channel_data(cid, client_manager, app_state, nav, voice_state, chat_view_state).await;
+                    load_channel_data(cid, client_manager, nav, voice_state, chat_view_state).await;
                 });
                 let server_id = nav.read().selected_server.cloned().unwrap_or_default();
                 let (backend_slug, instance_id, account_id) = {

@@ -12,7 +12,7 @@
 
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
-use crate::state::{AppState, BatchedSignal};
+use crate::state::{BatchedSignal, ChatLists};
 use crate::ui::client_ui::action_outcome::{handle_action_outcome, ActionOutcomeCx};
 use crate::ui::client_ui::toast::ToastMessage;
 use dioxus::prelude::*;
@@ -25,7 +25,7 @@ use poly_ui_macros::{context_menu, ui_action};
 #[context_menu(inherit)]
 #[component]
 pub fn SortModesLayout(decl: SidebarDeclaration) -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
     let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let mut active_id = use_signal(String::new);
@@ -79,7 +79,7 @@ pub fn SortModesLayout(decl: SidebarDeclaration) -> Element {
                         let action_id = id_disp.clone();
                         let client_manager = client_manager;
                         spawn(async move {
-                            dispatch_sort_action(client_manager, app_state, account_id, action_id).await;
+                            dispatch_sort_action(client_manager, chat_lists, account_id, action_id).await;
                         });
                     };
                     let kids_clone = kids.clone();
@@ -111,7 +111,7 @@ pub fn SortModesLayout(decl: SidebarDeclaration) -> Element {
                                                 let action_id = id_disp.clone();
                                                 let client_manager = client_manager;
                                                 spawn(async move {
-                                                    dispatch_sort_action(client_manager, app_state, account_id, action_id).await;
+                                                    dispatch_sort_action(client_manager, chat_lists, account_id, action_id).await;
                                                 });
                                             };
                                             rsx! {
@@ -137,7 +137,7 @@ pub fn SortModesLayout(decl: SidebarDeclaration) -> Element {
 
 async fn dispatch_sort_action(
     client_manager: BatchedSignal<ClientManager>,
-    app_state: BatchedSignal<AppState>,
+    chat_lists: BatchedSignal<ChatLists>,
     account_id: String,
     action_id: String,
 ) {
@@ -147,8 +147,9 @@ async fn dispatch_sort_action(
     // Bump the global sidebar-invalidated tick so the body engine's
     // use_resource (keyed on this tick via render_descriptor_inner)
     // re-fires and picks up the backend's new current-sort.
-    app_state.batch(|s| {
-        s.sidebar_invalidated_tick = s.sidebar_invalidated_tick.wrapping_add(1);
+    // The tick now lives on `ChatLists` post Phase C.3.
+    chat_lists.batch(|cl| {
+        cl.sidebar_invalidated_tick = cl.sidebar_invalidated_tick.wrapping_add(1);
     });
     let Some(toast_queue) = try_consume_context::<Signal<Vec<ToastMessage>>>() else {
         tracing::info!("SortModesLayout: action outcome (no-toast-ctx): {outcome:?}");

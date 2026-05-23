@@ -15,7 +15,7 @@
 use crate::state::BatchedSignal;
 use crate::i18n::t;
 use crate::nav;
-use crate::state::{AppState, ChannelContextMenuState, ChatLists, ChatViewState};
+use crate::state::{ChannelContextMenuState, ChatLists, ChatViewState};
 use crate::ui::account::common::chat_view::mark_channel_as_read;
 use crate::ui::routes::Route;
 use dioxus::prelude::*;

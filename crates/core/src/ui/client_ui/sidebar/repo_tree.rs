@@ -14,7 +14,7 @@
 
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
-use crate::state::{AppState, BatchedSignal};
+use crate::state::{BatchedSignal};
 use crate::ui::client_ui::action_outcome::{handle_action_outcome, ActionOutcomeCx};
 use crate::ui::client_ui::toast::ToastMessage;
 use dioxus::prelude::*;

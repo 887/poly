@@ -16,7 +16,7 @@
 
 use super::list_body::{fetch_first_page, parse_score_meta, score_class, ViewRowDetail};
 use crate::client_manager::{BackendHandleExt, ClientManager};
-use crate::state::{AppState, BatchedSignal, NavState};
+use crate::state::{BatchedSignal, NavState};
 use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::errors::{is_session_expired, SessionExpiredCard};
 use dioxus::prelude::*;

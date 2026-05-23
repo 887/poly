@@ -8,7 +8,7 @@
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::nav;
-use crate::state::{AccountContextMenuState, AppState, BatchedSignal, ChatLists, ChatViewState};
+use crate::state::{AccountContextMenuState, BatchedSignal, ChatLists, ChatViewState};
 use crate::ui::account::common::chat_view::mark_channel_as_read;
 use crate::ui::routes::Route;
 use dioxus::prelude::*;
@@ -18,7 +18,6 @@ use poly_ui_macros::{context_menu, ui_action};
 #[context_menu(inherit)]
 #[component]
 pub fn AccountContextMenuInner(menu: AccountContextMenuState, close: EventHandler<()>) -> Element {
-    let _app_state: BatchedSignal<AppState> = use_context();
     let chat_lists: BatchedSignal<ChatLists> = use_context();
     let chat_view_state: BatchedSignal<ChatViewState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();

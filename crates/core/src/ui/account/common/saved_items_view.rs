@@ -9,7 +9,7 @@ use super::VoiceAccountFooter;
 use super::chat_view::{highlight_message, open_message_hit};
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
-use crate::state::{AccountSessions, AppState, ChatLists, ChatViewState, NavState};
+use crate::state::{AccountSessions, ChatLists, ChatViewState, NavState};
 use crate::ui::split_shell::SplitMenuShell;
 use dioxus::prelude::*;
 use poly_client::{MessageContent, MessageSearchHit, MessagingBackend};
@@ -104,7 +104,6 @@ fn build_saved_sources(items: &[SavedPinnedItem]) -> Vec<SavedSourceSummary> {
 #[context_menu(inherit)]
 #[component]
 pub fn SavedItemsView() -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
     let nav_state: BatchedSignal<NavState> = use_context();
     let chat_lists: BatchedSignal<ChatLists> = use_context();
     let account_sessions: BatchedSignal<AccountSessions> = use_context();
@@ -318,7 +317,6 @@ pub fn SavedItemsView() -> Element {
                                                     current_server_id,
                                                     client_manager,
                                                     chat_view_state,
-                                                    app_state,
                                                     nav_state,
                                                 ).await {
                                                     nav.push(route);

@@ -3,11 +3,16 @@
 //! See `docs/plans/plan-ui-action-types.md`.
 
 use crate::ui::dioxus_router::Navigator;
-use crate::state::{AppState, BatchedSignal, NavState};
+use crate::state::NavState;
 
 /// Context available to every `UiAction::apply()` call.
+///
+/// Phase C.3 (plan-solid-audit-core-state.md): the former `state: &mut AppState`
+/// field was removed when the `AppState` god-struct was deleted. No production
+/// `UiAction::apply` impl ever read or wrote `cx.state`; the two surviving
+/// `AppState` fields migrated to `AccountSessions` / `ChatLists` and any action
+/// needing them now reaches the context directly via `try_consume_context`.
 pub struct ActionCx<'a> {
-    pub state: &'a mut AppState,
     /// Read-only snapshot of navigation state (active account, backend, etc.)
     pub nav: &'a NavState,
     /// `None` when constructed via `ActionCx::test()` — no Dioxus runtime needed.
@@ -15,23 +20,22 @@ pub struct ActionCx<'a> {
 }
 
 impl<'a> ActionCx<'a> {
-    pub fn live(state: &'a mut AppState, nav: &'a NavState, navigator: Navigator) -> Self {
-        Self { state, nav, navigator: Some(navigator) }
+    pub fn live(nav: &'a NavState, navigator: Navigator) -> Self {
+        Self { nav, navigator: Some(navigator) }
     }
 
     /// Construct a test context — no Dioxus runtime needed.
     /// Accepts optional nav state; pass `&NavState::default()` when nav fields
     /// are not relevant to the action under test.
-    pub fn test(state: &'a mut AppState, nav: &'a NavState) -> Self {
-        Self { state, nav, navigator: None }
+    pub fn test(nav: &'a NavState) -> Self {
+        Self { nav, navigator: None }
     }
 
     /// Construct a test context with default nav state — convenience for tests
     /// where the action under test does not read nav fields.
-    pub fn test_no_nav(state: &'a mut AppState) -> Self {
+    pub fn test_no_nav() -> Self {
         static DEFAULT_NAV: std::sync::OnceLock<NavState> = std::sync::OnceLock::new();
         Self {
-            state,
             nav: DEFAULT_NAV.get_or_init(NavState::default),
             navigator: None,
         }
@@ -49,31 +53,30 @@ pub trait UiAction: Sized + 'static {
 
 /// Dispatch a typed action from a Dioxus event handler.
 ///
-/// Acquires `app_state` via `.batch()` so the action can mutate `AppState`
-/// if it needs to, while also being correct for actions that use
-/// `try_consume_context` (e.g. `VoiceBannerAction`).
+/// Phase C.3 (plan-solid-audit-core-state.md): the old four-arg signature
+/// `dispatch_action!(action, app_state, nav_state, nav)` was reduced to
+/// three args after `AppState` was deleted — the `app_state` BatchedSignal
+/// it required no longer exists. All slot-state mutation happens via the
+/// new sub-signal contexts (`AccountSessions`, `ChatLists`, etc.) which
+/// actions reach directly via `try_consume_context` when needed.
 ///
 /// # Example
 /// ```ignore
-/// let app_state = use_context::<BatchedSignal<AppState>>();
 /// let nav_state = use_context::<BatchedSignal<NavState>>();
 /// let nav = navigator();
-/// onclick: move |_| dispatch_action!(MyAction::Save, app_state, nav_state, nav),
+/// onclick: move |_| dispatch_action!(MyAction::Save, nav_state, nav),
 /// ```
 #[macro_export]
 macro_rules! dispatch_action {
-    ($action:expr, $state:expr, $nav_state:expr, $nav:expr) => {{
+    ($action:expr, $nav_state:expr, $nav:expr) => {{
         fn _assert_ui_action<T: $crate::ui::actions::UiAction>(_: &T) {}
         _assert_ui_action(&$action);
         let _action = $action;
         let _nav_snap = $nav_state.peek().clone();
         let _nav_val = $nav.clone();
-        $state.batch(move |state| {
-            _action.apply($crate::ui::actions::ActionCx::live(
-                state,
-                &_nav_snap,
-                _nav_val,
-            ));
-        });
+        _action.apply($crate::ui::actions::ActionCx::live(
+            &_nav_snap,
+            _nav_val,
+        ));
     }};
 }

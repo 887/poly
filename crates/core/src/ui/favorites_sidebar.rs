@@ -36,7 +36,7 @@ use super::routes::Route;
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::state::chat_data::user_color;
-use crate::state::{AccountContextMenuState, AccountSessions, AppState, ChatAction, ChatLists, ChatViewState, ContextMenuState, DragSource, DragState, NavState, UiOverlays, View, VoiceState};
+use crate::state::{AccountContextMenuState, AccountSessions, ChatAction, ChatLists, ChatViewState, ContextMenuState, DragSource, DragState, NavState, UiOverlays, View, VoiceState};
 use crate::ui::context_menu::menus::{account_entry_at, server_icon_entry_at};
 use crate::ui::account::common::chat_history::{
     initial_message_query, remember_message_list_scroll_position,
@@ -1398,7 +1398,6 @@ async fn load_server_data_internal(
 pub async fn restore_server_channel(
     server_id: String,
     channel_id: String,
-    mut app_state: BatchedSignal<AppState>,
     client_manager: BatchedSignal<ClientManager>,
     voice_state: BatchedSignal<VoiceState>,
     chat_lists: BatchedSignal<ChatLists>,
@@ -1461,7 +1460,6 @@ pub async fn restore_server_channel(
     } else {
         None
     };
-    let _ = &mut app_state;
 
     let target = exact.or(fallback);
 

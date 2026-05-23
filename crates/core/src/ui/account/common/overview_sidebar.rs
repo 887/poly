@@ -12,7 +12,7 @@
 //! the column width and look stay consistent.
 
 use crate::i18n::t;
-use crate::state::{AppState, BatchedSignal, NavState};
+use crate::state::{BatchedSignal, NavState};
 use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::routes::Route;
 use dioxus::prelude::*;

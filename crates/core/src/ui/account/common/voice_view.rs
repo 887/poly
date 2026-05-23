@@ -20,7 +20,7 @@ use super::direct_call::disconnect_active_call;
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::state::chat_data::{backend_badge, user_color};
-use crate::state::{AccountSessions, AppState, ChatViewState, NavState, UiOverlays, VoiceState};
+use crate::state::{AccountSessions, ChatViewState, NavState, UiOverlays, VoiceState};
 use crate::ui::account::common::chat_history::remember_message_list_scroll_position;
 use crate::ui::account::common::user_profile_modal::open_user_profile;
 use crate::ui::actions::{ActionCx, UiAction};

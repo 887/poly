@@ -7,7 +7,7 @@
 
 use crate::client_manager::{ClientManager};
 use crate::i18n::t;
-use crate::state::{AccountSessions, AppState, BatchedSignal, ChatLists};
+use crate::state::{AccountSessions, BatchedSignal, ChatLists};
 use crate::state::VoiceState;
 use dioxus::prelude::*;
 use poly_client::User;
@@ -88,7 +88,6 @@ pub(super) fn HeaderOverflowItem(
 #[context_menu(inherit)]
 #[component]
 pub(super) fn ChatHeaderActions(
-    app_state: BatchedSignal<AppState>,
     utility_panel: Signal<Option<ChatUtilityPanel>>,
     notifications_muted: Signal<bool>,
     show_search_filters: Signal<bool>,
@@ -110,7 +109,6 @@ pub(super) fn ChatHeaderActions(
     let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
     let chat_lists: BatchedSignal<ChatLists> = use_context();
     let account_sessions: BatchedSignal<AccountSessions> = use_context();
-    let app_state = app_state;
     let mut utility_panel = utility_panel;
     let notifications_muted = notifications_muted;
     let mut show_search_filters = show_search_filters;
@@ -176,7 +174,7 @@ pub(super) fn ChatHeaderActions(
                         }
                     }
                 }
-                {render_agent_toggle_button(app_state, utility_panel, show_search_filters, is_dm_channel, is_group_channel)}
+                {render_agent_toggle_button(utility_panel, show_search_filters, is_dm_channel, is_group_channel)}
                 {
                     render_member_toggle_button(
                         ui_layout,
@@ -490,7 +488,6 @@ pub(super) fn render_search_tab_button(
 }
 
 pub(super) fn render_agent_toggle_button(
-    _app_state: BatchedSignal<AppState>,
     mut utility_panel: Signal<Option<ChatUtilityPanel>>,
     mut show_search_filters: Signal<bool>,
     is_dm_channel: bool,

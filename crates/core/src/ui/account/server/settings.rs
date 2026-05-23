@@ -24,7 +24,6 @@ mod roles;
 use crate::state::BatchedSignal;
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
-use crate::state::AppState;
 use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::client_ui::PluginSettingsSection;
 use poly_client::{BackendCapabilities, SettingsScope, SettingsSection as PluginSettingsSectionData};

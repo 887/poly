@@ -6,7 +6,6 @@
 use crate::state::BatchedSignal;
 use super::super::super::super::routes::Route;
 use crate::i18n::{t, t_args};
-use crate::state::AppState;
 use crate::ui::actions::{ActionCx, UiAction};
 use dioxus::prelude::*;
 use poly_ui_macros::{context_menu, ui_action};
@@ -105,7 +104,6 @@ fn LeaveServerConfirm(
     account_id: String,
     oncancel: EventHandler<MouseEvent>,
 ) -> Element {
-    let _app_state: BatchedSignal<AppState> = use_context();
     let chat_lists: BatchedSignal<crate::state::ChatLists> = use_context();
     let account_sessions: BatchedSignal<crate::state::AccountSessions> = use_context();
 

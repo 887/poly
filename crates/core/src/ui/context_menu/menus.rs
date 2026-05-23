@@ -18,7 +18,7 @@ use super::host::register_menu;
 use super::ContextMenuFor;
 use crate::i18n::t;
 use crate::state::{
-    AccountContextMenuState, ActiveContextMenu, AppState, AttachmentContextMenuState,
+    AccountContextMenuState, ActiveContextMenu, AttachmentContextMenuState,
     AvatarContextMenuState, BatchedSignal, ChannelContextMenuState, ContextMenuState,
     DmContextMenuState, GroupDmContextMenuState, MenuAnchor, ModerationDialog,
     ReactionContextMenuState,

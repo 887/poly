@@ -7,7 +7,7 @@
 
 use dioxus::prelude::*;
 use crate::state::BatchedSignal;
-use crate::state::{AccountSessions, AppState, ChatLists, ChatViewState, NavState, UiLayout, UiOverlays, VoiceState};
+use crate::state::{AccountSessions, ChatLists, ChatViewState, NavState, UiLayout, UiOverlays, VoiceState};
 use crate::client_manager::ClientManager;
 use super::super::chat_history::ChatHistoryUiState;
 use super::composer_helpers::PendingAttachmentPreview;
@@ -17,7 +17,6 @@ use super::ChatUtilityPanel;
 use poly_client::{ChatCommand, Message, MessageReplyPreview, MessageSearchHit};
 
 pub(super) struct ChatViewSignals {
-    pub(super) app_state: BatchedSignal<AppState>,
     pub(super) nav: BatchedSignal<NavState>,
     pub(super) ui_layout: BatchedSignal<UiLayout>,
     pub(super) ui_overlays: BatchedSignal<UiOverlays>,
@@ -71,7 +70,6 @@ pub(super) struct ChatViewSignals {
 
 pub(super) fn use_chat_view_signals() -> ChatViewSignals {
     ChatViewSignals {
-        app_state: use_context(),
         nav: use_context(),
         ui_layout: use_context(),
         ui_overlays: use_context(),

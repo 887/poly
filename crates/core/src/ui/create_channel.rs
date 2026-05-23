@@ -14,7 +14,6 @@
 use crate::state::BatchedSignal;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
-use crate::state::AppState;
 use crate::ui::routes::Route;
 use dioxus::prelude::*;
 use poly_client::{ChannelType, ServerAdminBackend};
@@ -68,7 +67,6 @@ pub(crate) fn CreateChannelPage(
     server_id: String,
 ) -> Element {
     let client_manager: BatchedSignal<ClientManager> = use_context();
-    let app_state: BatchedSignal<AppState> = use_context();
     let chat_lists: BatchedSignal<crate::state::ChatLists> = use_context();
     let chat_view_state: BatchedSignal<crate::state::ChatViewState> = use_context();
 
@@ -113,7 +111,7 @@ pub(crate) fn CreateChannelPage(
                                             account_id_kd.clone(),
                                             backend_kd.clone(),
                                             instance_id_kd.clone(),
-                                            CreateChannelSignals { client_manager, app_state, chat_lists, chat_view_state, creating, error_msg },
+                                            CreateChannelSignals { client_manager, chat_lists, chat_view_state, creating, error_msg },
                                         );
                                     }
                                 }
@@ -150,7 +148,7 @@ pub(crate) fn CreateChannelPage(
                                     account_id.clone(),
                                     backend.clone(),
                                     instance_id.clone(),
-                                    CreateChannelSignals { client_manager, app_state, chat_lists, chat_view_state, creating, error_msg },
+                                    CreateChannelSignals { client_manager, chat_lists, chat_view_state, creating, error_msg },
                                 );
                             },
                             if *creating.read() { "{t(\"create-channel-creating\")}" } else { "{t(\"create-channel-submit\")}" }
@@ -165,7 +163,6 @@ pub(crate) fn CreateChannelPage(
 /// Bundle of mutable signals passed to the create-channel async task.
 struct CreateChannelSignals {
     client_manager: BatchedSignal<ClientManager>,
-    app_state: BatchedSignal<AppState>,
     chat_lists: BatchedSignal<crate::state::ChatLists>,
     chat_view_state: BatchedSignal<crate::state::ChatViewState>,
     creating: Signal<bool>,
@@ -185,7 +182,6 @@ fn do_create_channel(
     info!("do_create_channel: name={name:?} server_id={server_id:?}");
     let CreateChannelSignals {
         client_manager,
-        app_state: _,
         chat_lists,
         chat_view_state,
         mut creating,

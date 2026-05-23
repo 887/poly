@@ -98,7 +98,7 @@ pub(crate) use runtime_js::load_js_asset;
 pub use setup_wizard::SetupWizard;
 
 use crate::client_manager::{ClientManager, SignupEntry};
-use crate::state::{AccountSessions, AppState, BatchedSignal, ChatLists, ChatViewState, DragState, LayoutMode, NavState, SettingsSection, UiLayout, UiOverlays, UserPrefs, View, VoiceState};
+use crate::state::{AccountSessions, BatchedSignal, ChatLists, ChatViewState, DragState, LayoutMode, NavState, SettingsSection, UiLayout, UiOverlays, UserPrefs, View, VoiceState};
 use dioxus::prelude::*;
 use poly_ui_macros::{context_menu, ui_action};
 use routes::{route_targets_unknown_account, sync_route_to_app_state};
@@ -1251,7 +1251,6 @@ async fn restore_poly_accounts(
 async fn init_storage(
     theme_config: BatchedSignal<crate::theme::ThemeConfig>,
     mut storage_ready: Signal<bool>,
-    app_state: BatchedSignal<AppState>,
     nav: BatchedSignal<NavState>,
     ui_layout: BatchedSignal<UiLayout>,
     ui_overlays: BatchedSignal<UiOverlays>,
@@ -1321,8 +1320,8 @@ async fn init_storage(
                         p.member_list_sort_order = member_list_sort_order;
                         p.member_list_show_offline = member_list_show_offline;
                     });
-                    app_state.batch(|st| {
-                        st.is_setup_complete = true;
+                    account_sessions.batch(|as_| {
+                        as_.is_setup_complete = true;
                     });
                     // nav.view is written by sync_route_to_app_state on the next nav.push
                     // Restore favorited servers so Bar 1 repopulates immediately
@@ -1357,7 +1356,7 @@ async fn init_storage(
                     // toggle_demo activates all demo data; the Router's Root component
                     // then redirects to /demo/demo/dms once it mounts.
                     if settings.demo_active {
-                        demo::toggle_demo(client_manager, voice_state, drag_state, app_state, nav, ui_layout, ui_overlays, user_prefs, chat_lists, account_sessions, chat_view_state).await;
+                        demo::toggle_demo(client_manager, voice_state, drag_state, nav, ui_layout, ui_overlays, user_prefs, chat_lists, account_sessions, chat_view_state).await;
                     }
                     // Collapse the sidebar visibility cascade into one batch on UiLayout.
                     // Mobile layout forces both visibility bits to false.
@@ -1404,7 +1403,6 @@ async fn init_storage(
                         chat_lists,
                         account_sessions,
                         None,
-                        app_state,
                         nav,
                         chat_view_state,
                         voice_state,
@@ -1478,7 +1476,6 @@ async fn persist_setup_completion(account_id: String) {
 }
 
 fn router_config(
-    app_state: BatchedSignal<AppState>,
     nav: BatchedSignal<NavState>,
     user_prefs: BatchedSignal<UserPrefs>,
     client_manager: BatchedSignal<ClientManager>,
@@ -1486,7 +1483,7 @@ fn router_config(
     dioxus_router::RouterConfig::default().on_update(
         move |state: dioxus_router::GenericRouterContext<Route>| {
             let route = state.current();
-            sync_route_to_app_state(&route, app_state, nav, Some(user_prefs));
+            sync_route_to_app_state(&route, nav, Some(user_prefs));
             preserve_layout_override_query_in_url();
 
             if route_targets_unknown_account(&route, &client_manager.read()) {
@@ -1525,7 +1522,7 @@ fn router_config(
 #[ui_action(None)]
 #[context_menu(inherit)]
 #[component]
-fn AppBody(storage_ready: bool, setup_complete: bool, app_state: BatchedSignal<AppState>) -> Element {
+fn AppBody(storage_ready: bool, setup_complete: bool) -> Element {
     // Pull context signals so we can activate demo after setup completes.
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let voice_state: BatchedSignal<VoiceState> = use_context();
@@ -1554,16 +1551,16 @@ fn AppBody(storage_ready: bool, setup_complete: bool, app_state: BatchedSignal<A
                         // right away without needing an app restart.
                         // demo_active is true in persist_setup_completion so it
                         // will also be restored correctly on subsequent launches.
-                        demo::toggle_demo(client_manager, voice_state, drag_state, app_state, nav, ui_layout, ui_overlays, user_prefs, chat_lists, account_sessions, chat_view_state).await;
+                        demo::toggle_demo(client_manager, voice_state, drag_state, nav, ui_layout, ui_overlays, user_prefs, chat_lists, account_sessions, chat_view_state).await;
                         // Only now flip is_setup_complete — this mounts the Router
                         // with demo already active, so on_update's initial redirect
                         // lands on DmsHome.
-                        app_state.batch(|st| st.is_setup_complete = true);
+                        account_sessions.batch(|as_| as_.is_setup_complete = true);
                     });
                 },
             }
         } else {
-            Router::<Route> { config: move || router_config(app_state, nav, user_prefs, client_manager) }
+            Router::<Route> { config: move || router_config(nav, user_prefs, client_manager) }
         }
     }
 }
@@ -1714,8 +1711,6 @@ pub fn App() -> Element {
         return rsx! { div { id: "poly-app-shell" } };
     }
 
-    let app_state: BatchedSignal<AppState> =
-        BatchedSignal::from_signal(use_signal(AppState::default));
     let storage_ready = use_signal(|| false);
     let startup_overlay_config = startup_overlay_config_from_query();
     let startup_overlay_enabled = startup_overlay_config.enabled;
@@ -1797,11 +1792,6 @@ pub fn App() -> Element {
         }
     });
 
-    // Provide app_state as context so child components subscribe independently
-    // via use_context() instead of receiving it as a prop (which enables Dioxus
-    // prop-comparison skip optimization that can suppress signal-triggered re-renders).
-    provide_context(app_state);
-
     // DECISION(G.5): Four sub-signal contexts split off from AppState to narrow
     // subscriber sets. Writing to UiOverlays (open context menu) does NOT re-render
     // components that only subscribe to NavState (selected channel), etc.
@@ -1832,7 +1822,6 @@ pub fn App() -> Element {
         init_storage(
             theme_config,
             storage_ready,
-            app_state,
             nav,
             ui_layout,
             ui_overlays,
@@ -1849,9 +1838,8 @@ pub fn App() -> Element {
     });
     let theme_css = crate::theme::generate_css(&theme_config.read());
     let storage_ready_now = *storage_ready.read();
-    let app_state_snapshot = app_state.read().clone();
     let ui_layout_snapshot = ui_layout.read().clone();
-    let setup_complete = app_state_snapshot.is_setup_complete;
+    let setup_complete = account_sessions.read().is_setup_complete; // poly-lint: allow render-time-read — App must re-render to swap SetupWizard → Router on setup completion
     let root_class = app_root_class(&ui_layout_snapshot);
     let client_manager_snapshot = client_manager.read().clone();
     let chat_view_state_snapshot = chat_view_state.read().clone();
@@ -1919,7 +1907,7 @@ pub fn App() -> Element {
                 // path doesn't trap the user behind the overlay.
                 let ready_deadline_ms = js_sys::Date::now() + 8_000.0_f64;
                 while js_sys::Date::now() < ready_deadline_ms {
-                    if *storage_ready.read() && app_state.read().is_setup_complete {
+                    if *storage_ready.read() && account_sessions.peek().is_setup_complete {
                         break;
                     }
                     gloo_timers::future::TimeoutFuture::new(50).await;
@@ -1985,7 +1973,6 @@ pub fn App() -> Element {
                 AppBody {
                     storage_ready: storage_ready_now,
                     setup_complete,
-                    app_state,
                 }
             }
         }

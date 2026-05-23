@@ -6,7 +6,7 @@
 
 use crate::state::BatchedSignal;
 use super::super::super::super::routes::Route;
-use crate::state::{AppState, ChatAction, ChatLists, ChatViewState, View};
+use crate::state::{ChatAction, ChatLists, ChatViewState, View};
 use crate::i18n::t;
 use crate::ui::favorites_sidebar::SidebarTooltip;
 use dioxus::prelude::*;
@@ -69,7 +69,6 @@ pub fn AccountBarFriendsButton(
     instance_id: String,
     account_id: String,
 ) -> Element {
-    let _app_state: BatchedSignal<AppState> = use_context();
     let chat_view_state: BatchedSignal<ChatViewState> = use_context();
     let chat_lists: BatchedSignal<ChatLists> = use_context();
 

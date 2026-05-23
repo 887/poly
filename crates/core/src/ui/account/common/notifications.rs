@@ -15,7 +15,7 @@
 use crate::state::BatchedSignal;
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
-use crate::state::{AccountSessions, AppState, ChatLists, NavState};
+use crate::state::{AccountSessions, ChatLists, NavState};
 use crate::state::chat_data::backend_badge;
 use crate::ui::account::common::VoiceAccountFooter;
 use crate::ui::actions::{ActionCx, UiAction};
@@ -273,7 +273,6 @@ pub(crate) fn filters_for_backend(slug: &str, caps: poly_client::BackendCapabili
 pub fn NotificationsView(account_id: String, backend_slug: String) -> Element {
     let chat_lists: BatchedSignal<ChatLists> = use_context();
     let account_sessions: BatchedSignal<AccountSessions> = use_context();
-    let app_state: BatchedSignal<AppState> = use_context();
     let nav_state: BatchedSignal<NavState> = use_context();
     let mut kind_filter = use_signal(|| NotificationMenuFilter::All);
     use_context_provider(|| kind_filter);
@@ -358,7 +357,7 @@ pub fn NotificationsView(account_id: String, backend_slug: String) -> Element {
                     if total_count > 0 {
                         button {
                             class: "special-page-sidebar-button",
-                            onclick: move |_| crate::dispatch_action!(NotificationsViewAction::MarkAllRead, app_state, nav_state, navigator()),
+                            onclick: move |_| crate::dispatch_action!(NotificationsViewAction::MarkAllRead, nav_state, navigator()),
                             "{notifications_mark_read}"
                         }
                     }
@@ -498,7 +497,6 @@ fn NotificationItemContent(
     preview: String,
     time_ago: String,
 ) -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
     let nav_state: BatchedSignal<NavState> = use_context();
     let (kind_icon, kind_label) = match &kind {
         NotificationKind::Mention { .. } => ("💬", "Mention"),
@@ -533,7 +531,7 @@ fn NotificationItemContent(
                                     let nid = nid_accept.clone();
                                     move |_| crate::dispatch_action!(
                                         NotificationsViewAction::AcceptFriendRequest { notif_id: nid.clone(), user_id: uid.clone() },
-                                        app_state, nav_state, navigator()
+                                        nav_state, navigator()
                                     )
                                 },
                                 "{t(\"notifications-accept\")}"
@@ -545,7 +543,7 @@ fn NotificationItemContent(
                                     let nid = nid_deny.clone();
                                     move |_| crate::dispatch_action!(
                                         NotificationsViewAction::DenyFriendRequest { notif_id: nid.clone(), user_id: uid.clone() },
-                                        app_state, nav_state, navigator()
+                                        nav_state, navigator()
                                     )
                                 },
                                 "{t(\"notifications-deny\")}"
@@ -562,7 +560,7 @@ fn NotificationItemContent(
                                     let nid = nid_accept.clone();
                                     move |_| crate::dispatch_action!(
                                         NotificationsViewAction::AcceptServerInvite(nid.clone()),
-                                        app_state, nav_state, navigator()
+                                        nav_state, navigator()
                                     )
                                 },
                                 "{t(\"notifications-accept\")}"
@@ -573,7 +571,7 @@ fn NotificationItemContent(
                                     let nid = nid_deny.clone();
                                     move |_| crate::dispatch_action!(
                                         NotificationsViewAction::Dismiss(nid.clone()),
-                                        app_state, nav_state, navigator()
+                                        nav_state, navigator()
                                     )
                                 },
                                 "{t(\"notifications-decline\")}"
@@ -590,7 +588,7 @@ fn NotificationItemContent(
                                     let nid = nid_join.clone();
                                     move |_| crate::dispatch_action!(
                                         NotificationsViewAction::Dismiss(nid.clone()),
-                                        app_state, nav_state, navigator()
+                                        nav_state, navigator()
                                     )
                                 },
                                 "{t(\"notifications-join-voice\")}"
@@ -601,7 +599,7 @@ fn NotificationItemContent(
                                     let nid = nid_dismiss.clone();
                                     move |_| crate::dispatch_action!(
                                         NotificationsViewAction::Dismiss(nid.clone()),
-                                        app_state, nav_state, navigator()
+                                        nav_state, navigator()
                                     )
                                 },
                                 "{t(\"notifications-dismiss\")}"
@@ -615,7 +613,7 @@ fn NotificationItemContent(
                                 class: "btn btn-warning btn-sm notif-action-reauth",
                                 onclick: move |_| crate::dispatch_action!(
                                     NotificationsViewAction::Reauth(aid.clone()),
-                                    app_state, nav_state, navigator()
+                                    nav_state, navigator()
                                 ),
                                 "{t(\"notifications-reconnect\")}"
                             }
@@ -630,7 +628,7 @@ fn NotificationItemContent(
                                     let nid = nid.clone();
                                     move |_| crate::dispatch_action!(
                                         NotificationsViewAction::Dismiss(nid.clone()),
-                                        app_state, nav_state, navigator()
+                                        nav_state, navigator()
                                     )
                                 },
                                 "{t(\"notifications-mark-read\")}"

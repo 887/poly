@@ -14,7 +14,7 @@
 
 use crate::state::BatchedSignal;
 use crate::client_manager::{BackendHandle, BackendHandleExt, ClientManager, PluginSettingsEntry};
-use crate::state::{AccountSessions, AppState, ChatAction, DragState, NavState, UiLayout, UiOverlays, UserPrefs, VoiceState};
+use crate::state::{AccountSessions, ChatAction, DragState, NavState, UiLayout, UiOverlays, UserPrefs, VoiceState};
 use dioxus::prelude::*;
 // ClientBackend trait must be in scope for `.authenticate()` to be callable on
 // DemoClient / DemoClient2 inside the #[cfg(feature = "demo")] activation path.
@@ -47,7 +47,6 @@ pub(crate) async fn toggle_demo(
     client_manager: BatchedSignal<ClientManager>,
     voice_state: BatchedSignal<VoiceState>,
     drag_state: BatchedSignal<DragState>,
-    app_state: BatchedSignal<AppState>,
     nav: BatchedSignal<NavState>,
     _ui_layout: BatchedSignal<UiLayout>,
     _ui_overlays: BatchedSignal<UiOverlays>,
@@ -446,7 +445,7 @@ pub(crate) async fn toggle_demo(
             // Start real-time event stream listeners for each demo account.
             // Re-use the already-cloned handles — no extra Signal read needed.
             for (aid, backend) in backend_handles {
-                spawn_event_stream_listener(aid, backend, app_state, nav, client_manager, chat_view_state, account_sessions, voice_state);
+                spawn_event_stream_listener(aid, backend, chat_lists, nav, client_manager, chat_view_state, account_sessions, voice_state);
             }
         }
     }
@@ -542,7 +541,7 @@ pub(crate) async fn toggle_demo_forum_on(
 pub(crate) fn spawn_event_stream_listener(
     account_id: String,
     backend: BackendHandle,
-    app_state: BatchedSignal<AppState>,
+    chat_lists: BatchedSignal<crate::state::ChatLists>,
     nav: BatchedSignal<NavState>,
     client_manager: BatchedSignal<ClientManager>,
     chat_view_state: BatchedSignal<crate::state::ChatViewState>,
@@ -552,7 +551,7 @@ pub(crate) fn spawn_event_stream_listener(
     crate::event_stream::spawn_event_stream_listener(
         account_id,
         backend,
-        app_state,
+        chat_lists,
         nav,
         client_manager,
         chat_view_state,

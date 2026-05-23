@@ -7,7 +7,7 @@
 use crate::state::BatchedSignal;
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
-use crate::state::{AccountSessions, AppState, ChatLists, NavState, PendingDirectCallRequest, UiOverlays, VoiceState};
+use crate::state::{AccountSessions, ChatLists, NavState, PendingDirectCallRequest, UiOverlays, VoiceState};
 use crate::ui::client_ui::toast::{push_toast, ToastMessage};
 use crate::ui::routes::Route;
 use dioxus::prelude::*;

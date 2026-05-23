@@ -21,7 +21,7 @@
 //! non-forum backend (HN, GitHub, …) is unaffected.
 
 use crate::client_manager::{BackendHandleExt, ClientManager};
-use crate::state::{AppState, BatchedSignal, UiOverlays};
+use crate::state::{BatchedSignal, UiOverlays};
 use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::client_ui::CustomBlock;
 use crate::ui::client_ui::use_view_resource::{use_view_resource, ViewQuery};

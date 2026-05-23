@@ -42,7 +42,6 @@ impl UiAction for VoiceVideoSettingsAction {
 #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod tests {
     use super::*;
-    use crate::state::AppState;
 
     /// Structural test: all variants construct and the type implements UiAction.
     #[test]

@@ -19,7 +19,7 @@
 //! directly). New menus — `ForumPostContextMenu`, `UserRowContextMenu`,
 //! and eventually the migrated originals — target this host.
 
-use crate::state::{ActiveContextMenu, AppState, BatchedSignal, MenuAnchor};
+use crate::state::{ActiveContextMenu, BatchedSignal, MenuAnchor};
 use dioxus::prelude::*;
 use poly_ui_macros::{context_menu, ui_action};
 use std::cell::RefCell;

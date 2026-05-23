@@ -50,7 +50,6 @@ impl UiAction for DemoPluginSettingsAction {
 #[ui_action(DemoPluginSettingsAction)]
 #[component]
 pub fn DemoPluginSettings() -> Element {
-    let app_state: crate::state::BatchedSignal<crate::state::AppState> = use_context();
     let client_manager: BatchedSignal<crate::client_manager::ClientManager> = use_context();
     let voice_state: BatchedSignal<crate::state::VoiceState> = use_context();
     let drag_state: BatchedSignal<crate::state::DragState> = use_context();
@@ -98,10 +97,10 @@ pub fn DemoPluginSettings() -> Element {
                             let was_active = client_manager.read().demo_active; // poly-lint: allow render-time-read — inside onchange closure (multi-line, lint heuristic doesn't see opener)
                             dioxus::core::spawn_forever(async move {
                                 crate::ui::demo::toggle_demo(
-                                    client_manager, voice_state, drag_state, app_state, nav, ui_layout, ui_overlays, user_prefs, chat_lists, account_sessions, chat_view_state,
+                                    client_manager, voice_state, drag_state, nav, ui_layout, ui_overlays, user_prefs, chat_lists, account_sessions, chat_view_state,
                                 ).await;
                                 if !was_active {
-                                    app_state.batch(|st| st.is_setup_complete = true);
+                                    account_sessions.batch(|as_| as_.is_setup_complete = true);
                                 }
                             });
                         },

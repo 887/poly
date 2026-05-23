@@ -18,7 +18,7 @@
 
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
-use crate::state::{AccountSessions, AppState, BatchedSignal, ChatLists, ChatViewState, DmContextMenuState, NavState, UiOverlays, VoiceState};
+use crate::state::{AccountSessions, BatchedSignal, ChatLists, ChatViewState, DmContextMenuState, NavState, UiOverlays, VoiceState};
 use crate::ui::account::common::chat_view::mark_channel_as_read;
 use crate::ui::account::common::direct_call::{
     DirectCallRequest, start_direct_call_from_active_account,

@@ -25,7 +25,7 @@ use super::super::super::routes::Route;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::chat_data::user_color;
-use crate::state::{AccountSessions, AppState, NavState, VoiceState};
+use crate::state::{AccountSessions, NavState, VoiceState};
 use dioxus::prelude::*;
 use poly_client::{AccountPresence, ConnectionStatus};
 use poly_ui_macros::{context_menu, ui_action};
@@ -285,7 +285,6 @@ fn AccountProfilePopup(
 fn AccountBarControls(
     is_muted: bool,
     is_deafened: bool,
-    app_state: BatchedSignal<AppState>,
     voice_state: BatchedSignal<VoiceState>,
 ) -> Element {
     let client_manager: BatchedSignal<ClientManager> = use_context();
@@ -365,7 +364,6 @@ fn AccountBarControls(
 #[context_menu(inherit)]
 #[component]
 pub fn AccountBar() -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
     let nav_state: BatchedSignal<NavState> = use_context();
     let account_sessions: BatchedSignal<crate::state::AccountSessions> = use_context();
     let voice_state: BatchedSignal<VoiceState> = use_context();
@@ -383,7 +381,6 @@ pub fn AccountBar() -> Element {
             AccountBarControls {
                 is_muted,
                 is_deafened,
-                app_state,
                 voice_state,
             }
         }

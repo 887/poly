@@ -6,7 +6,7 @@
 
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
-use crate::state::{AppState, BatchedSignal};
+use crate::state::{BatchedSignal};
 use dioxus::prelude::*;
 use poly_client::UpdateChannelParams;
 use poly_ui_macros::{context_menu, ui_action};

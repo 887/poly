@@ -4,7 +4,6 @@ use crate::state::use_spawn_once;
 use super::super::signals::ChatViewSignals;
 
 pub(in super::super) fn use_member_list_effect(signals: &ChatViewSignals) {
-    let _app_state = signals.app_state;
     let nav = signals.nav;
     let client_manager = signals.client_manager;
     let chat_view_state = signals.chat_view_state;

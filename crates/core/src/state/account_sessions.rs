@@ -16,6 +16,13 @@ use std::collections::HashMap;
 /// signal and are not re-rendered when messages or channel lists change.
 #[derive(Debug, Clone, Default)]
 pub struct AccountSessions {
+    /// Whether the app has completed first-launch setup (keys generated,
+    /// first account created). Gates the SetupWizard vs Router mount.
+    ///
+    /// Migrated here from the deleted `AppState` struct (Phase C.3 of
+    /// plan-solid-audit-core-state.md) — setup completion is fundamentally
+    /// an identity-layer flag (no account exists ⇒ no setup completed).
+    pub is_setup_complete: bool,
     /// Sessions keyed by account ID — one entry per active account.
     ///
     /// Used to look up `icon_emoji`, display name, and other per-account

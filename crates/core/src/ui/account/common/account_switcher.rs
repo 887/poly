@@ -12,7 +12,7 @@
 use crate::state::BatchedSignal;
 use super::super::super::routes::Route;
 use crate::i18n::t;
-use crate::state::{AppState, SettingsSection, VoiceState};
+use crate::state::{SettingsSection, VoiceState};
 use dioxus::prelude::*;
 use poly_ui_macros::{context_menu, ui_action};
 

@@ -19,7 +19,7 @@
 //! `UserRowContextMenu` annotations on sidebar rows are left untouched.
 
 use crate::i18n::t;
-use crate::state::{AppState, AvatarContextMenuState, BatchedSignal, UiOverlays};
+use crate::state::{AvatarContextMenuState, BatchedSignal, UiOverlays};
 use crate::ui::account::common::user_profile_modal::open_user_profile;
 use dioxus::prelude::*;
 use poly_client::{PresenceStatus, User};

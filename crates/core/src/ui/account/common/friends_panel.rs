@@ -6,7 +6,7 @@ use super::channel_list::open_direct_message_from_active_account;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::chat_data::user_color;
-use crate::state::{AccountSessions, AppState, ChatLists};
+use crate::state::{AccountSessions, ChatLists};
 use crate::ui::account::common::chat_history::remember_message_list_scroll_position;
 use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::client_ui::toast::{ToastMessage, push_toast};

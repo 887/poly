@@ -63,7 +63,7 @@ mod translation;
 mod voice_video;
 
 use crate::i18n::t;
-use crate::state::{AppState, BatchedSignal, SettingsSection, UserPrefs};
+use crate::state::{BatchedSignal, SettingsSection, UserPrefs};
 use crate::ui::main_layout::close_mobile_drawer;
 use crate::ui::routes::Route;
 use crate::ui::split_shell::SplitMenuShell;

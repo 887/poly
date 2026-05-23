@@ -11,7 +11,7 @@ use crate::client_manager::ClientManager;
 use crate::i18n::t;
 use crate::state::BatchedSignal;
 use crate::state::{
-    AccountSessions, AppState, ChatLists, ChatViewState, NavState, UiLayout, UiOverlays,
+    AccountSessions, ChatLists, ChatViewState, NavState, UiLayout, UiOverlays,
     VoiceState,
 };
 use crate::state::chat_data::{backend_badge, user_color};
@@ -258,7 +258,6 @@ fn render_chat_header_right(ctx: ChatViewMarkupCtx) -> Element {
                 {render_mobile_chat_header_right_toggle(ctx)}
             } else {
                 ChatHeaderActions {
-                    app_state: ctx.app_state,
                     utility_panel: ctx.utility_panel,
                     notifications_muted: ctx.notifications_muted,
                     show_search_filters: ctx.show_search_filters,
@@ -505,7 +504,6 @@ fn render_chat_side_column(ctx: ChatViewMarkupCtx) -> Element {
 // lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
 #[allow(clippy::needless_pass_by_value)]
 fn render_chat_tools_panel(ctx: ChatViewMarkupCtx) -> Element {
-    let app_state = ctx.app_state;
     let ui_layout = ctx.ui_layout;
     let mut utility_panel = ctx.utility_panel;
     let notifications_muted = ctx.notifications_muted;
@@ -600,7 +598,7 @@ fn render_chat_tools_panel(ctx: ChatViewMarkupCtx) -> Element {
                             ui_layout,
                         )
                     }
-                    {render_agent_toggle_button(app_state, utility_panel, show_search_filters, is_dm_channel, is_group_channel)}
+                    {render_agent_toggle_button(utility_panel, show_search_filters, is_dm_channel, is_group_channel)}
                     button {
                         class: if member_sidebar_active && utility_panel.read().is_none() { "header-btn soft-active chat-members-toggle-btn chat-header-btn-members" } else { "header-btn chat-members-toggle-btn chat-header-btn-members" },
                         title: if is_dm_channel { t("chat-toggle-contact") } else { t("chat-toggle-members") },
@@ -649,7 +647,6 @@ fn render_chat_utility_rail(
     let nav_state_for_pinned = ctx.nav;
     let client_manager = ctx.client_manager;
     let chat_view_state = ctx.chat_view_state;
-    let app_state = ctx.app_state;
     let notifications_muted = ctx.notifications_muted;
     let pinned_filter_open = ctx.pinned_filter_open;
     let pinned_filter_query = ctx.pinned_filter_query;
@@ -685,7 +682,6 @@ fn render_chat_utility_rail(
                             current_server_id,
                             client_manager,
                             chat_view_state,
-                            app_state,
                             nav_state,
                         )
                         .await
@@ -720,7 +716,6 @@ fn render_chat_utility_rail(
                             current_server_id,
                             client_manager,
                             chat_view_state,
-                            app_state,
                             nav_state,
                         )
                         .await

@@ -57,7 +57,6 @@ impl UiAction for PluginsSettingsAction {
 #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod tests {
     use super::*;
-    use crate::state::AppState;
 
     /// Structural test: all variants construct and the type implements UiAction.
     #[test]
@@ -379,7 +378,6 @@ pub fn PluginsSettings() -> Element {
     let account_sessions: BatchedSignal<crate::state::AccountSessions> = use_context();
     let voice_state: BatchedSignal<crate::state::VoiceState> = use_context();
     let drag_state: BatchedSignal<crate::state::DragState> = use_context();
-    let app_state: crate::state::BatchedSignal<crate::state::AppState> = use_context();
     let nav: crate::state::BatchedSignal<crate::state::NavState> = use_context();
     let ui_layout: crate::state::BatchedSignal<crate::state::UiLayout> = use_context();
     let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
@@ -451,7 +449,7 @@ pub fn PluginsSettings() -> Element {
                                         // visibility in sync across the whole app.
                                         spawn(async move {
                                             crate::ui::demo::toggle_demo(
-                                                client_manager, voice_state, drag_state, app_state, nav, ui_layout, ui_overlays, user_prefs, chat_lists, account_sessions, chat_view_state,
+                                                client_manager, voice_state, drag_state, nav, ui_layout, ui_overlays, user_prefs, chat_lists, account_sessions, chat_view_state,
                                             ).await;
                                         });
                                     } else {
@@ -569,7 +567,6 @@ pub fn PluginsSettings() -> Element {
                                                         chat_lists,
                                                         account_sessions,
                                                         Some(&toggled_for_restore),
-                                                        app_state,
                                                         nav,
                                                         chat_view_state,
                                                         voice_state,

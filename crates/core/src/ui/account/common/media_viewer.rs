@@ -7,7 +7,7 @@
 
 use crate::state::BatchedSignal;
 use crate::i18n::t;
-use crate::state::{AppState, AttachmentContextMenuState, ChatViewState};
+use crate::state::{AttachmentContextMenuState, ChatViewState};
 use crate::ui::context_menu::menus::attachment_entry_at;
 use dioxus::prelude::*;
 use poly_client::Attachment;

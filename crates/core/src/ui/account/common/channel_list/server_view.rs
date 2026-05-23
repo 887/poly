@@ -21,7 +21,7 @@ use super::ChannelListAction;
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::state::BatchedSignal;
-use crate::state::{AppState, ChatLists, ChatViewState, NavState, UserPrefs, VoiceState};
+use crate::state::{ChatLists, ChatViewState, NavState, UserPrefs, VoiceState};
 use crate::ui::account::common::chat_history::{
     initial_message_query, read_channel_view_anchor, remember_message_list_scroll_position,
     request_restore_scroll_position_or_bottom, request_restore_to_anchor,
@@ -101,7 +101,6 @@ impl ServerChannelFilter {
 pub(super) async fn load_channel_data(
     channel_id: String,
     client_manager: BatchedSignal<ClientManager>,
-    app_state: BatchedSignal<AppState>,
     nav: BatchedSignal<NavState>,
     voice_state: BatchedSignal<VoiceState>,
     chat_view_state: BatchedSignal<ChatViewState>,
@@ -200,7 +199,6 @@ pub(super) async fn load_channel_data(
 
     pending.set(|cv| cv.loading = false);
     pending.apply();
-    let _ = app_state;
 }
 
 // ── Components ────────────────────────────────────────────────────────────────

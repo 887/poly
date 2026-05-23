@@ -18,7 +18,7 @@ use super::routes::Route;
 use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::state::chat_data::user_color;
-use crate::state::{AppState, NavState, VoiceState};
+use crate::state::{NavState, VoiceState};
 use crate::ui::account::common::chat_history::remember_message_list_scroll_position;
 use crate::ui::account::common::device_picker::DevicePickerToggle;
 use crate::ui::account::common::direct_call::{disconnect_active_call, swap_to_first_held_call};
@@ -320,7 +320,6 @@ fn VoiceBannerChannelLink(
     server_name: String,
     connection_kind: VoiceConnectionKind,
 ) -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
     let nav_state: BatchedSignal<NavState> = use_context();
     rsx! {
         button {
@@ -330,7 +329,7 @@ fn VoiceBannerChannelLink(
             } else {
                 t("voice-go-to-channel")
             },
-            onclick: move |_| crate::dispatch_action!(VoiceBannerAction::GoToChannel, app_state, nav_state, navigator()),
+            onclick: move |_| crate::dispatch_action!(VoiceBannerAction::GoToChannel, nav_state, navigator()),
             span { class: "voice-banner-icon", "🔊" }
             span { class: "voice-banner-channel", "{channel_name}" }
             span { class: "voice-banner-server", "— {server_name}" }
@@ -356,7 +355,6 @@ fn VoiceBannerControls(
     is_streaming: bool,
     held_count: usize,
 ) -> Element {
-    let app_state: BatchedSignal<AppState> = use_context();
     let nav_state: BatchedSignal<NavState> = use_context();
     let mute_title = if is_muted {
         t("voice-unmute-mic")
@@ -381,14 +379,14 @@ fn VoiceBannerControls(
                 button {
                     class: "voice-ctrl-btn",
                     title: t("voice-swap-held-call"),
-                    onclick: move |_| crate::dispatch_action!(VoiceBannerAction::SwapHeldCall, app_state, nav_state, navigator()),
+                    onclick: move |_| crate::dispatch_action!(VoiceBannerAction::SwapHeldCall, nav_state, navigator()),
                     "🔁"
                 }
             }
             button {
                 class: if is_muted { "voice-ctrl-btn muted" } else { "voice-ctrl-btn" },
                 title: "{mute_title}",
-                onclick: move |_| crate::dispatch_action!(VoiceBannerAction::ToggleMute, app_state, nav_state, navigator()),
+                onclick: move |_| crate::dispatch_action!(VoiceBannerAction::ToggleMute, nav_state, navigator()),
                 if is_muted {
                     "🔇"
                 } else {
@@ -398,7 +396,7 @@ fn VoiceBannerControls(
             button {
                 class: if is_deafened { "voice-ctrl-btn muted" } else { "voice-ctrl-btn" },
                 title: "{deafen_title}",
-                onclick: move |_| crate::dispatch_action!(VoiceBannerAction::ToggleDeafen, app_state, nav_state, navigator()),
+                onclick: move |_| crate::dispatch_action!(VoiceBannerAction::ToggleDeafen, nav_state, navigator()),
                 if is_deafened {
                     "🔕"
                 } else {
@@ -411,14 +409,14 @@ fn VoiceBannerControls(
             button {
                 class: if is_video_on { "voice-ctrl-btn active" } else { "voice-ctrl-btn" },
                 title: "{camera_title}",
-                onclick: move |_| crate::dispatch_action!(VoiceBannerAction::ToggleCamera, app_state, nav_state, navigator()),
+                onclick: move |_| crate::dispatch_action!(VoiceBannerAction::ToggleCamera, nav_state, navigator()),
                 "📹"
             }
             // Phase E: screen-share toggle. Same dispatch pattern as camera.
             button {
                 class: if is_streaming { "voice-ctrl-btn active" } else { "voice-ctrl-btn" },
                 title: "{screen_title}",
-                onclick: move |_| crate::dispatch_action!(VoiceBannerAction::ToggleScreenShare, app_state, nav_state, navigator()),
+                onclick: move |_| crate::dispatch_action!(VoiceBannerAction::ToggleScreenShare, nav_state, navigator()),
                 "🖥"
             }
             // J.1 — device picker gear icon (Phase J of plan-voice-video-calls.md)
@@ -426,7 +424,7 @@ fn VoiceBannerControls(
             button {
                 class: "voice-ctrl-btn disconnect",
                 title: "{t(\"voice-disconnect\")}",
-                onclick: move |_| crate::dispatch_action!(VoiceBannerAction::Disconnect, app_state, nav_state, navigator()),
+                onclick: move |_| crate::dispatch_action!(VoiceBannerAction::Disconnect, nav_state, navigator()),
                 "📵"
             }
         }

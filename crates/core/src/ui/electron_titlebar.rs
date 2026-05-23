@@ -14,12 +14,12 @@
 
 use crate::state::BatchedSignal;
 use crate::i18n::t;
-use crate::state::{AppState, ChatViewState, NavState, View};
+use crate::state::{AccountSessions, ChatViewState, NavState, View};
 use dioxus::prelude::*;
 use poly_ui_macros::{context_menu, ui_action};
 
-fn current_title(app_state: &AppState, nav_state: &NavState, chat_view_state: &ChatViewState) -> String {
-    if !app_state.is_setup_complete {
+fn current_title(account_sessions: &AccountSessions, nav_state: &NavState, chat_view_state: &ChatViewState) -> String {
+    if !account_sessions.is_setup_complete {
         return t("app-title");
     }
 
@@ -113,7 +113,7 @@ fn ElectronWindowControls() -> Element {
 #[component]
 pub fn ElectronTitleBar() -> Element {
     let mut is_electron = use_signal(|| false);
-    let app_state: BatchedSignal<AppState> = use_context();
+    let account_sessions: BatchedSignal<AccountSessions> = use_context();
     let nav_state: BatchedSignal<NavState> = use_context();
     let chat_view_state: BatchedSignal<ChatViewState> = use_context();
 
@@ -130,10 +130,10 @@ pub fn ElectronTitleBar() -> Element {
         };
     }
 
-    let st_snap = app_state.read().clone();
+    let as_snap = account_sessions.read().clone();
     let nav_snap = nav_state.read().clone();
     let cd_snap = chat_view_state.read().clone();
-    let title = current_title(&st_snap, &nav_snap, &cd_snap);
+    let title = current_title(&as_snap, &nav_snap, &cd_snap);
 
     // Keep the OS-level window title (taskbar/dock) in sync with the custom titlebar.
     let title_for_doc = title.clone();

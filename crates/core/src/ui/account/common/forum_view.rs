@@ -5,7 +5,7 @@
 use crate::state::BatchedSignal;
 use crate::client_manager::ClientManager;
 use crate::state::chat_data::user_color;
-use crate::state::{AppState, ChatLists, VoiceState, PostsOrComments, use_spawn_once};
+use crate::state::{ChatLists, VoiceState, PostsOrComments, use_spawn_once};
 use crate::ui::account::common::forum_composer::{ComposerMode, ForumComposer, SubmitPayload};
 use crate::ui::client_ui::ClientView;
 use crate::ui::context_menu::menus::{forum_post_entry, ForumPostCtx};
@@ -378,7 +378,6 @@ pub fn ForumView() -> Element {
 pub fn ForumPostView(channel_id: String, post_id: String) -> Element {
     let chat_lists: BatchedSignal<ChatLists> = use_context();
     let chat_view_state: BatchedSignal<crate::state::ChatViewState> = use_context();
-    let app_state: BatchedSignal<AppState> = use_context();
     let nav: BatchedSignal<crate::state::NavState> = use_context();
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let voice_state: BatchedSignal<VoiceState> = use_context();
@@ -446,7 +445,6 @@ pub fn ForumPostView(channel_id: String, post_id: String) -> Element {
                 restore_server_channel(
                     server_id,
                     cid,
-                    app_state,
                     client_manager,
                     voice_state,
                     chat_lists,

@@ -8,7 +8,7 @@ use crate::state::BatchedSignal;
 use super::channel_list::open_direct_message_from_active_account;
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
-use crate::state::{AccountSessions, AppState, ChatLists};
+use crate::state::{AccountSessions, ChatLists};
 use dioxus::prelude::*;
 use poly_ui_macros::{context_menu, ui_action};
 

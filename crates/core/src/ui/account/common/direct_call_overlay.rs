@@ -9,7 +9,7 @@ use crate::state::BatchedSignal;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::client_manager::ClientManager;
 use crate::i18n::t;
-use crate::state::{AccountSessions, AppState, ChatLists, NavState, VoiceState};
+use crate::state::{AccountSessions, ChatLists, NavState, VoiceState};
 use crate::ui::routes::Route;
 use dioxus::prelude::*;
 use poly_client::VoiceConnectionKind;

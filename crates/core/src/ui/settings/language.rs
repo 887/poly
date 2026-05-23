@@ -204,17 +204,15 @@ pub(super) fn LanguageSettings() -> Element {
 #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod tests {
     use super::*;
-    use crate::state::AppState;
 
     /// Verify that applying a valid locale code does not panic and calls
     /// `set_locale` — we only assert the locale is one of the supported ones
     /// since tests run in parallel and share the global i18n lock.
     #[test]
     fn set_language_valid_code_does_not_panic() {
-        let mut state = AppState::default();
         // Must not panic — this is the primary guarantee.
         LanguageSettingsAction::SetLanguage("en".to_string())
-            .apply(crate::ui::actions::ActionCx::test_no_nav(&mut state));
+            .apply(crate::ui::actions::ActionCx::test_no_nav());
         let locale = crate::i18n::current_locale();
         assert!(
             crate::i18n::SUPPORTED_LOCALES.contains(&&*locale),
@@ -224,11 +222,10 @@ mod tests {
 
     #[test]
     fn set_language_unsupported_code_does_not_panic() {
-        let mut state = AppState::default();
         // An unsupported locale leaves the current locale unchanged without panicking.
         let before = crate::i18n::current_locale();
         LanguageSettingsAction::SetLanguage("xx".to_string())
-            .apply(crate::ui::actions::ActionCx::test_no_nav(&mut state));
+            .apply(crate::ui::actions::ActionCx::test_no_nav());
         // Locale must still be a valid supported locale.
         let after = crate::i18n::current_locale();
         assert!(
@@ -240,10 +237,9 @@ mod tests {
 
     #[test]
     fn set_language_empty_resolves_to_supported_locale() {
-        let mut state = AppState::default();
         // Empty string = "system" auto-detect, resolves to "en" outside WASM.
         LanguageSettingsAction::SetLanguage(String::new())
-            .apply(crate::ui::actions::ActionCx::test_no_nav(&mut state));
+            .apply(crate::ui::actions::ActionCx::test_no_nav());
         let locale = crate::i18n::current_locale();
         assert!(
             crate::i18n::SUPPORTED_LOCALES.contains(&&*locale),

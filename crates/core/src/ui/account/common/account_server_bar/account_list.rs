@@ -7,7 +7,7 @@
 
 use crate::state::BatchedSignal;
 use super::super::super::super::routes::Route;
-use crate::state::{AppState, ChatAction, ChatLists, ChatViewState, NavState, View};
+use crate::state::{ChatAction, ChatLists, ChatViewState, NavState, View};
 use crate::i18n::t;
 use crate::ui::favorites_sidebar::SidebarTooltip;
 use crate::ui::main_layout::close_mobile_drawer;
@@ -66,7 +66,6 @@ pub fn AccountBarOverviewButton(
 #[context_menu(inherit)]
 #[component]
 pub fn AccountBarNotifsButton(current_view: View, notif_count: usize) -> Element {
-    let _app_state: BatchedSignal<AppState> = use_context();
     let nav: BatchedSignal<NavState> = use_context();
     let chat_view_state: BatchedSignal<ChatViewState> = use_context();
     let chat_lists: BatchedSignal<ChatLists> = use_context();

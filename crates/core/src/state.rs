@@ -680,39 +680,10 @@ pub struct ChannelContextMenuState {
     pub backend_slug: String,
 }
 
-/// Global app state provided at the root level.
-///
-/// ## Phase G.5 Migration Notes
-///
-/// Four sub-signals are now provided as separate `BatchedSignal` contexts
-/// alongside `AppState` (plan-solid-refactor-survey.md Phase G.5):
-///
-/// | Context type | What it replaces |
-/// |---|---|
-/// | `BatchedSignal<NavState>` | Previously `app_state.read().nav` (route-synced fields + last-routes) |
-/// | `BatchedSignal<UiLayout>` | `layout_mode`, `mirror_*`, sidebar visibility (previously under `nav`) |
-/// | `BatchedSignal<UiOverlays>` | `context_menu_stack`, modals (previously `nav.profile_modal_user` etc.) |
-/// | `BatchedSignal<UserPrefs>` | `settings_section`, `member_list_*`, `forum_scope`, etc. |
-///
-/// `AppState` itself retains only the two singleton fields below.
-/// All field accesses should be migrated to the appropriate sub-signal.
-#[derive(Debug, Clone)]
-pub struct AppState {
-    /// Whether the app has been set up (keys generated).
-    pub is_setup_complete: bool,
-    /// Pack B P28 — monotonic counter incremented on receipt of a
-    /// [`poly_client::ClientEvent::SidebarInvalidated`] event from any
-    /// active backend. `ClientSidebar` reads this into its `use_resource`
-    /// dependency list so an increment forces a re-fetch of
-    /// `get_sidebar_declaration`.
-    pub sidebar_invalidated_tick: u32,
-}
-
-impl Default for AppState {
-    fn default() -> Self {
-        Self {
-            is_setup_complete: false,
-            sidebar_invalidated_tick: 0,
-        }
-    }
-}
+// The `AppState` god-struct was deleted in Phase C.3 of
+// plan-solid-audit-core-state.md. Its two remaining fields migrated to:
+// - `is_setup_complete` → `AccountSessions` (identity-init flag)
+// - `sidebar_invalidated_tick` → `ChatLists` (gates sidebar declaration refresh)
+//
+// See `crate::state::account_sessions::AccountSessions` and
+// `crate::state::chat_lists::ChatLists` for the new homes.

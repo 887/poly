@@ -31,7 +31,7 @@
 
 use crate::state::BatchedSignal;
 use crate::client_manager::{BackendHandleExt, ClientManager};
-use crate::state::{AppState, ChatLists, ChatViewState};
+use crate::state::{ChatLists, ChatViewState};
 use crate::ui::routes::Route;
 use chrono::{DateTime, Utc};
 use dioxus::prelude::*;
