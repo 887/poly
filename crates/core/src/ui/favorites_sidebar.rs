@@ -18,6 +18,18 @@
 //! # 150-line component rule
 //! Each `#[component]` fn body MUST stay under 150 lines of RSX+logic.
 //! Extract sub-components rather than growing this file.
+//!
+//! # Module layout (SOLID — C.3 split)
+//! - `favorites_sidebar.rs` — rendering components (this file)
+//! - `favorites_sidebar/persist.rs` — pure-async persistence helpers
+//!   (`persist_favorites`, `persist_account_order`, `apply_server_icon_overrides`)
+
+// ── Submodules ────────────────────────────────────────────────────────────
+
+pub mod persist;
+pub(crate) use persist::{apply_server_icon_overrides, persist_account_order, persist_favorites};
+
+// ── Imports ───────────────────────────────────────────────────────────────
 
 use crate::state::BatchedSignal;
 use super::routes::Route;
@@ -35,6 +47,8 @@ use crate::ui::main_layout::{close_mobile_drawer, mobile_left_drawer_open};
 use dioxus::prelude::*;
 use poly_client::{AccountPresence, ConnectionStatus};
 use poly_ui_macros::{context_menu, ui_action};
+
+// ── Action enum ───────────────────────────────────────────────────────────
 
 /// Actions for the favorites sidebar (Bar 1).
 #[derive(Debug, Clone)]
@@ -58,6 +72,38 @@ impl UiAction for FavoritesBarAction {
         todo!("phase-E: FavoritesBarAction requires Signal + async handles");
     }
 }
+
+// ── Snapshot structs (B.3 — single .with() per component) ────────────────
+
+/// All data derived from `account_sessions` + `client_manager` that
+/// `FavoritesBar` needs in its render body. Collapsed into one `.with()`
+/// per signal so each signal subscription fires exactly once per render.
+struct FavoritesBarSnapshot {
+    /// Ordered list of active account IDs (user-defined order or priority fallback).
+    account_ids: Vec<String>,
+    /// Server IDs the user has dragged into Bar 1 (in display order).
+    favorited_ids: Vec<String>,
+    /// Whether the demo backend is active (controls the drop-hint).
+    demo_active: bool,
+}
+
+/// All `account_sessions` data that `AccountIcon` needs, extracted in one
+/// `.with()` call to avoid N separate subscriptions (B.7).
+struct AccountIconSnapshot {
+    is_forum_account: bool,
+    avatar_url: Option<String>,
+    display_name: String,
+    backend_name: String,
+    icon_label: String,
+}
+
+/// All `account_sessions` data that `FavoriteServerIcon` needs, extracted
+/// in one `.with()` call (B.7).
+struct FavoriteServerIconSnapshot {
+    account_avatar_url: Option<String>,
+}
+
+// ── Shared sub-components (B.1 split) ────────────────────────────────────
 
 /// Spacer that reserves room for the native back/forward nav-bar (desktop/mobile).
 /// On web, the browser provides its own back/forward buttons so no space is needed.
@@ -105,6 +151,96 @@ pub(crate) fn SidebarTooltip(
     }
 }
 
+/// Avatar block for `FavoriteServerIcon` (B.1 — avatar/badge split).
+///
+/// Renders the server icon image (or first-letter fallback) plus the
+/// source-account badge overlay. Pure display — no signal reads.
+#[context_menu(inherit)]
+#[ui_action(inherit)]
+#[component]
+fn FavoriteServerAvatarBlock(
+    icon_url: Option<String>,
+    icon_color: String,
+    first_letter: String,
+    server_name: String,
+    account_avatar_url: Option<String>,
+    account_display_name: String,
+) -> Element {
+    rsx! {
+        if let Some(ref url) = icon_url {
+            img {
+                class: "server-icon-image",
+                src: "{url}",
+                alt: "{server_name}",
+            }
+        } else {
+            div {
+                class: "server-icon-letter",
+                style: "background-color: {icon_color};",
+                "{first_letter}"
+            }
+        }
+        // Source badge: show account avatar image (or fallback letter) — top-left overlay
+        if let Some(url) = &account_avatar_url {
+            img {
+                src: "{url}",
+                class: "source-badge-image",
+                alt: "{account_display_name}",
+            }
+        } else {
+            span { class: "source-badge", "A" }
+        }
+    }
+}
+
+/// Status badge block for `FavoriteServerIcon` (B.1 — badge split).
+///
+/// Renders connection status icon, mention/unread count badge, and
+/// presence dot. Pure display — no signal reads.
+#[context_menu(inherit)]
+#[ui_action(inherit)]
+#[component]
+fn FavoriteServerBadgeBlock(
+    is_forum: bool,
+    conn_class: String,
+    conn_icon: String,
+    server_needs_reauth: bool,
+    mention: u32,
+    unread: u32,
+    presence_class: String,
+) -> Element {
+    rsx! {
+        // Bottom-left: account connection status emoji icon (not for forum,
+        // unless reauth is needed — forum accounts still surface the 🔑 badge).
+        if !is_forum {
+            span {
+                class: "account-conn-icon account-conn-icon--{conn_class}",
+                "{conn_icon}"
+            }
+        } else if server_needs_reauth {
+            span {
+                class: "account-conn-icon account-conn-icon--unauthenticated",
+                title: "Sign in again",
+                "🔑"
+            }
+        }
+        // Top-left: mention count badge
+        if mention > 0 {
+            span { class: "badge mention-count-badge", "@{mention}" }
+        } else if unread > 0 {
+            span { class: "badge mention-count-badge", "{unread}" }
+        }
+        // Bottom-right: presence dot (not for forum)
+        if !is_forum {
+            span {
+                class: "status-dot presence-dot {presence_class}",
+            }
+        }
+    }
+}
+
+// ── FavoritesBar (B.3 — state derivation lifted + split rendering) ────────
+
 /// Favorites Bar component — **Favorites Bar** (Bar 1).
 ///
 /// Shows: Account icons, separator, favorited server icons with
@@ -116,69 +252,61 @@ pub(crate) fn SidebarTooltip(
 #[allow(non_snake_case)]
 pub fn FavoritesBar() -> Element {
     let nav_state: BatchedSignal<NavState> = use_context();
-    let current_view = *nav_state.read().view;
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let account_sessions: BatchedSignal<AccountSessions> = use_context();
     let drag_state: BatchedSignal<DragState> = use_context();
-
     let chat_lists: BatchedSignal<ChatLists> = use_context();
-    let demo_active = client_manager.read().demo_active;
-    let active_account = nav_state.read().active_account_id.cloned();
-    let _active_backend_slug = nav_state
-        .read()
-        .active_backend
-        .cloned()
-        .map(|b| b.slug().to_string());
-    let _active_instance_id = nav_state.read().active_instance_id.cloned();
 
-    // Collect distinct active account IDs for account icons, applying the
-    // user-saved order from `ChatData.account_order` (hydrated at startup
-    // from `AppSettings.account_order`). Accounts not listed in the saved
-    // order are appended by a priority fallback so the default install is
-    // predictable and groups related accounts together:
-    //   0. demo messenger accounts (Cat, Dog)
-    //   1. demo forum accounts (Platypus)
-    //   2. every other account (user-added: HN, poly, etc.), alphabetical
-    // This ordering is what a brand-new user expects: play with the demo
-    // messengers first, see the forum variant next, then their own accounts.
-    let account_ids = {
-        let live: Vec<String> = client_manager.read().active_account_ids();
-        let saved_order = account_sessions.read().account_order.clone(); // poly-lint: allow render-time-read — render snapshot; subscription intentional
-        let live_set: std::collections::HashSet<_> = live.iter().cloned().collect();
-        let mut ordered: Vec<String> = saved_order
-            .iter()
-            .filter(|id| live_set.contains(*id))
-            .cloned()
-            .collect();
-        let placed: std::collections::HashSet<_> = ordered.iter().cloned().collect();
-        let as_ = account_sessions.read(); // poly-lint: allow render-time-read — render snapshot; subscription intentional
-        let priority = |id: &String| -> u8 {
-            match as_.account_sessions.get(id) {
-                Some(s) if s.backend == "demo" => 0,
-                Some(s) if s.backend == "demo_forum" => 1,
-                _ => 2,
-            }
-        };
-        let mut rest: Vec<String> =
-            live.into_iter().filter(|id| !placed.contains(id)).collect();
-        rest.sort_by(|a, b| priority(a).cmp(&priority(b)).then_with(|| a.cmp(b)));
-        ordered.extend(rest);
-        ordered
+    // B.3 + B.7: Collapse all state derivation into ONE .with() per signal.
+    // Kills the N separate .read() subscriptions that were allowlisted on
+    // lines 146, 154, 170 (account_sessions) and the client_manager reads.
+    let snap = {
+        let live: Vec<String> = client_manager.with(|cm| cm.active_account_ids());
+        let (account_ids, favorited_ids, demo_active) = account_sessions.with(|as_| {
+            // Collect distinct active account IDs applying user-saved order.
+            // Accounts not in saved order appended by priority fallback:
+            //   0. demo messenger accounts (Cat, Dog)
+            //   1. demo forum accounts (Platypus)
+            //   2. every other account (user-added: HN, poly, etc.), alphabetical
+            let saved_order = &as_.account_order;
+            let live_set: std::collections::HashSet<_> = live.iter().cloned().collect();
+            let mut ordered: Vec<String> = saved_order
+                .iter()
+                .filter(|id| live_set.contains(*id))
+                .cloned()
+                .collect();
+            let placed: std::collections::HashSet<_> = ordered.iter().cloned().collect();
+            let priority = |id: &String| -> u8 {
+                match as_.account_sessions.get(id) {
+                    Some(s) if s.backend == "demo" => 0,
+                    Some(s) if s.backend == "demo_forum" => 1,
+                    _ => 2,
+                }
+            };
+            let mut rest: Vec<String> =
+                live.into_iter().filter(|id| !placed.contains(id)).collect();
+            rest.sort_by(|a, b| priority(a).cmp(&priority(b)).then_with(|| a.cmp(b)));
+            ordered.extend(rest);
+            let favorited_ids = as_.favorited_server_ids.clone();
+            (ordered, favorited_ids, false) // demo_active derived below
+        });
+        let demo_active = client_manager.with(|cm| cm.demo_active);
+        FavoritesBarSnapshot { account_ids, favorited_ids, demo_active }
     };
 
-    // Only show servers that have been dragged into favorites.
-    let favorited_ids = account_sessions.read().favorited_server_ids.clone(); // poly-lint: allow render-time-read — render snapshot; subscription intentional
-    // Preserve the order from favorited_ids list, but expand to ONE icon per
-    // (account, server.id) pair so that shared guilds (e.g. koala + kangaroo
-    // both members of Australiana) render two icons — one per account. Without
-    // this, only the first account that loaded the guild gets a sidebar icon
-    // and the other can't navigate into the same channel from its perspective.
+    // Derive the current view and active account from nav_state (intentional subscription).
+    let current_view = nav_state.with(|n| *n.view);
+    let active_account = nav_state.with(|n| n.active_account_id.cloned());
+
+    // Expand favorited_ids to one icon per (account, server.id) pair so that
+    // shared guilds render two icons — one per account.
     let favorite_servers: Vec<poly_client::Server> = {
-        let snap = chat_lists.peek();
-        favorited_ids
+        let snap_cl = chat_lists.peek();
+        snap.favorited_ids
             .iter()
             .flat_map(|id| {
-                snap.servers
+                snap_cl
+                    .servers
                     .iter()
                     .filter(|s| s.id == *id)
                     .cloned()
@@ -191,10 +319,7 @@ pub fn FavoritesBar() -> Element {
     let mut drag_over = use_signal(|| false);
 
     // Global tooltip show/hide + positioning for ALL sidebar icons.
-    // Uses document-level mouseover/mouseout (which bubble) so it works
-    // for both Bar 1 (.server-sidebar) and Bar 2 (.account-server-bar),
-    // including draggable server icons where CSS :hover is unreliable.
-    use_effect(move || {
+    use_effect(move || { // poly-lint: allow stale-effect-capture — one-shot DOM initialiser; no non-Signal captures
         let _ = dioxus::prelude::document::eval(r#"
             (function() {
                 if (document._sidebarTooltipInit) return;
@@ -239,9 +364,7 @@ pub fn FavoritesBar() -> Element {
 
     rsx! {
         nav { class: "server-sidebar",
-            // Scrollable content area (accounts, favorites, spacer)
             div { class: "sidebar-scroll-area",
-                // Allow drops from Bar 2 server icons.
                 ondragover: move |evt| {
                     evt.prevent_default();
                     drag_over.set(true);
@@ -250,7 +373,6 @@ pub fn FavoritesBar() -> Element {
                 ondrop: move |evt| {
                     evt.prevent_default();
                     drag_over.set(false);
-                    // Snapshot drag state before clearing it.
                     let (drag_id, drag_src) = drag_state.batch(|d| {
                         let id = d.dragging_server_id.clone();
                         let src = d.drag_source.clone();
@@ -259,8 +381,6 @@ pub fn FavoritesBar() -> Element {
                         d.drag_over_id = None;
                         (id, src)
                     });
-                    // Per-item ondrop handles positional drops via stop_propagation.
-                    // This handler catches drops on the nav background (append to end).
                     let new_favorites = account_sessions.batch(|as_| {
                         if let Some(sid) = drag_id {
                             match drag_src {
@@ -279,23 +399,21 @@ pub fn FavoritesBar() -> Element {
                     });
                 },
                 class: if drag_over() { "drag-over" } else { "" },
-                
+
                 NavBarSpacer {}
 
-                // ── Account icons (one per active account) ────────────────
-                for aid in &account_ids {
-                    AccountIcon {
-                        account_id: aid.clone(),
-                        is_active: active_account.as_deref() == Some(aid.as_str()),
-                    }
+                // ── Account icons (B.3 — FavoritesBarLeft concern) ───────────
+                FavoritesBarAccountList {
+                    account_ids: snap.account_ids.clone(),
+                    active_account: active_account.clone(),
                 }
 
                 // Separator (between accounts and favorites)
-                if !account_ids.is_empty() {
+                if !snap.account_ids.is_empty() {
                     div { class: "sidebar-separator" }
                 }
 
-                // ── Favorited servers (dragged in from Bar 2) ─────────────
+                // ── Favorited servers (B.3 — FavoritesBarMain concern) ───────
                 for server in &favorite_servers {
                     {
                         let instance_id = account_sessions
@@ -321,7 +439,7 @@ pub fn FavoritesBar() -> Element {
                 }
 
                 // Drop hint — shown only when no favorites yet.
-                if favorite_servers.is_empty() && demo_active {
+                if favorite_servers.is_empty() && snap.demo_active {
                     div { class: "favorites-drop-hint",
                         span { "← Drag servers here" }
                     }
@@ -332,64 +450,86 @@ pub fn FavoritesBar() -> Element {
             }
 
             // Footer: search + agent + settings buttons float at bottom
-            div { class: "sidebar-footer",
-                // Global Search button — ALWAYS truly global, regardless of
-                // which account the user came from. Per-account scoping
-                // happens inside the search page via the AccountFilter
-                // toggles. The previous context-aware nav routed to
-                // AccountSearchRoute when on an account page, which created
-                // a surprising "I clicked the global search but it's
-                // pre-scoped" UX. The global magnifier should mean global.
-                {
-                    let is_search = current_view == View::Search;
-                    rsx! {
-                        div {
-                            class: if is_search { "server-icon active" } else { "server-icon" },
-                            onclick: move |_| {
-                                close_mobile_drawer();
-                                crate::nav!(Route::SearchRoute);
-                            },
-                            title: "{t(\"nav-search\")}",
-                            div { class: "icon-search", "🔍" }
-                        }
-                    }
-                }
-
-                // Agent button — navigates to the Agent page (integrations + profile)
-                {
-                    let is_agent = current_view == View::Agent;
-                    rsx! {
-                        div {
-                            class: if is_agent { "server-icon active" } else { "server-icon" },
-                            onclick: move |_| {
-                                close_mobile_drawer();
-                                crate::nav!(Route::AgentRoute);
-                            },
-                            title: "{t(\"nav-agent\")}",
-                            div { class: "icon-agent", "🤖" }
-                        }
-                    }
-                }
-
-                // App Settings button — only "active" for app-level settings (no account scoped)
-                {
-                    let is_app_settings = current_view == View::Settings && active_account.is_none();
-                    rsx! {
-                        div {
-                            class: if is_app_settings { "server-icon active" } else { "server-icon" },
-                            onclick: move |_| {
-                                close_mobile_drawer();
-                                crate::nav!(Route::SettingsRoute);
-                            },
-                            title: "{t(\"nav-settings\")}",
-                            div { class: "icon-settings", "⚙" }
-                        }
-                    }
-                }
+            FavoritesBarFooter {
+                current_view,
+                active_account,
             }
         }
     }
 }
+
+/// Account icon list sub-component (B.3 — FavoritesBarLeft).
+///
+/// Single responsibility: render the ordered list of account icons.
+/// All state derivation (ordering, active account) is done by `FavoritesBar`.
+#[context_menu(inherit)]
+#[ui_action(inherit)]
+#[component]
+fn FavoritesBarAccountList(
+    account_ids: Vec<String>,
+    active_account: Option<String>,
+) -> Element {
+    rsx! {
+        for aid in &account_ids {
+            AccountIcon {
+                account_id: aid.clone(),
+                is_active: active_account.as_deref() == Some(aid.as_str()),
+            }
+        }
+    }
+}
+
+/// Footer sub-component (B.3 — FavoritesBarMain footer concern).
+///
+/// Renders search, agent, and settings footer buttons.
+/// Receives `current_view` and `active_account` as props — no signal reads.
+#[context_menu(inherit)]
+#[ui_action(inherit)]
+#[component]
+fn FavoritesBarFooter(
+    current_view: View,
+    active_account: Option<String>,
+) -> Element {
+    let is_search = current_view == View::Search;
+    let is_agent = current_view == View::Agent;
+    let is_app_settings = current_view == View::Settings && active_account.is_none();
+    rsx! {
+        div { class: "sidebar-footer",
+            // Global Search button
+            div {
+                class: if is_search { "server-icon active" } else { "server-icon" },
+                onclick: move |_| {
+                    close_mobile_drawer();
+                    crate::nav!(Route::SearchRoute);
+                },
+                title: "{t(\"nav-search\")}",
+                div { class: "icon-search", "🔍" }
+            }
+            // Agent button
+            div {
+                class: if is_agent { "server-icon active" } else { "server-icon" },
+                onclick: move |_| {
+                    close_mobile_drawer();
+                    crate::nav!(Route::AgentRoute);
+                },
+                title: "{t(\"nav-agent\")}",
+                div { class: "icon-agent", "🤖" }
+            }
+            // App Settings button — only "active" for app-level settings (no account scoped)
+            div {
+                class: if is_app_settings { "server-icon active" } else { "server-icon" },
+                onclick: move |_| {
+                    close_mobile_drawer();
+                    crate::nav!(Route::SettingsRoute);
+                },
+                title: "{t(\"nav-settings\")}",
+                div { class: "icon-settings", "⚙" }
+            }
+        }
+    }
+}
+
+// ── AccountIcon ───────────────────────────────────────────────────────────
 
 /// Single account icon in the favorites bar.
 ///
@@ -409,79 +549,59 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
     let chat_view_state: BatchedSignal<ChatViewState> = use_context();
     let chat_lists: BatchedSignal<ChatLists> = use_context();
 
-    // Read connection and presence statuses for this account.
-    let conn_class: &'static str = client_manager
-        .read()
-        .connection_statuses
-        .get(&account_id)
-        .map_or("disconnected", ConnectionStatus::css_class);
-    let presence_class: &'static str = client_manager
-        .read()
-        .presence_statuses
-        .get(&account_id)
-        .copied()
-        .unwrap_or(AccountPresence::Online)
-        .css_class();
-
-    let is_forum_account = account_sessions
-        .read() // poly-lint: allow render-time-read — render snapshot; subscription intentional
-        .account_sessions
-        .get(&account_id)
-        .is_some_and(|s| client_manager.peek().capabilities_for_slug(s.backend.as_str()).is_forum_layout());
-
-    let color = user_color(&account_id);
-
-    // Determine avatar URL: real accounts use user.avatar_url; demo accounts
-    // get locally bundled cat/dog images; others fall back to icon_emoji text.
-    let avatar_url: Option<String> = account_sessions
-        .read() // poly-lint: allow render-time-read — render snapshot; subscription intentional
-        .account_sessions
-        .get(&account_id)
-        .and_then(|s| s.user.avatar_url.clone());
-
-    // Display name shown in the tooltip when hovering the account icon.
-    let display_name: String = account_sessions
-        .read() // poly-lint: allow render-time-read — render snapshot; subscription intentional
-        .account_sessions
-        .get(&account_id)
-        .map_or_else(|| account_id.clone(), |s| s.user.display_name.clone());
-
-    let backend_name: String = account_sessions
-        .read() // poly-lint: allow render-time-read — render snapshot; subscription intentional
-        .account_sessions
-        .get(&account_id)
-        .map_or_else(|| "Unknown".to_string(), |s| s.backend.display_name().to_string());
-
-    // Use icon_emoji from session if available, else fall back to the first
-    // letter of the account's display name (NOT the account_id, which starts
-    // with the backend slug — e.g. all Lemmy accounts would collapse to "L").
-    let icon_label: String = account_sessions
-        .read() // poly-lint: allow render-time-read — render snapshot; subscription intentional
-        .account_sessions
-        .get(&account_id)
-        .and_then(|s| s.icon_emoji.clone())
-        .unwrap_or_else(|| {
-            display_name
-                .chars()
-                .next()
-                .map(|c| c.to_uppercase().to_string())
-                .unwrap_or_default()
+    // B.7: Collapse 2 separate client_manager.read() calls into ONE .with()
+    // (kills the per-signal subscription duplication; subscription intentional).
+    let (conn_class, presence_class): (&'static str, &'static str) =
+        client_manager.with(|cm| {
+            let conn = cm
+                .connection_statuses
+                .get(&account_id)
+                .map_or("disconnected", ConnectionStatus::css_class);
+            let pres = cm
+                .presence_statuses
+                .get(&account_id)
+                .copied()
+                .unwrap_or(AccountPresence::Online)
+                .css_class();
+            (conn, pres)
         });
 
-    // Show unread notification count only — matches the bell badge in account server bar.
-    // DM unread counts are surfaced separately in Bar 2.
+    // B.7: Collapse 5 separate account_sessions.read() calls (lines 427, 437,
+    // 444, 450, 459) into ONE .with() block — one subscription, all fields.
+    let as_snap: AccountIconSnapshot = account_sessions.with(|as_| {
+        let session = as_.account_sessions.get(&account_id);
+        let is_forum_account = session
+            .is_some_and(|s| client_manager.peek().capabilities_for_slug(s.backend.as_str()).is_forum_layout());
+        let avatar_url = session.and_then(|s| s.user.avatar_url.clone());
+        let display_name = session
+            .map_or_else(|| account_id.clone(), |s| s.user.display_name.clone());
+        let backend_name = session
+            .map_or_else(|| "Unknown".to_string(), |s| s.backend.display_name().to_string());
+        // Use icon_emoji if available, else first letter of display_name.
+        let icon_label = session
+            .and_then(|s| s.icon_emoji.clone())
+            .unwrap_or_else(|| {
+                display_name
+                    .chars()
+                    .next()
+                    .map(|c| c.to_uppercase().to_string())
+                    .unwrap_or_default()
+            });
+        AccountIconSnapshot { is_forum_account, avatar_url, display_name, backend_name, icon_label }
+    });
+
+    // B.7: Collapse the single chat_lists.read() (line 475) into .with().
     let total_unreads = u32::try_from(
-        chat_lists
-            .read() // poly-lint: allow render-time-read — render snapshot; subscription intentional
-            .notifications
-            .iter()
-            .filter(|n| n.account_id == account_id)
-            .count(),
+        chat_lists.with(|cl| {
+            cl.notifications
+                .iter()
+                .filter(|n| n.account_id == account_id)
+                .count()
+        }),
     )
     .unwrap_or(u32::MAX);
 
-    // Resolve backend slug and instance_id for routing — read from the session.
-    let aid_for_click = account_id.clone();
+    let color = user_color(&account_id);
 
     // Connection icon emoji for connection status
     let conn_icon = match conn_class {
@@ -493,9 +613,10 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
     };
     let needs_reauth_badge = conn_class == "unauthenticated";
 
-    let is_drag_over_account = drag_state.read().drag_over_id.as_deref()
-        == Some(account_id.as_str())
-        && drag_state.read().drag_source == DragSource::AccountIcon;
+    let is_drag_over_account = drag_state.with(|d| {
+        d.drag_over_id.as_deref() == Some(account_id.as_str())
+            && d.drag_source == DragSource::AccountIcon
+    });
 
     let drag_start_id = account_id.clone();
     let on_account_drag_start = move |_: Event<DragData>| {
@@ -507,7 +628,7 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
 
     let drag_over_id = account_id.clone();
     let on_account_drag_over = move |evt: Event<DragData>| {
-        if drag_state.read().drag_source != DragSource::AccountIcon {
+        if drag_state.with(|d| d.drag_source != DragSource::AccountIcon) {
             return;
         }
         evt.prevent_default();
@@ -527,12 +648,11 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
     let drop_target_id = account_id.clone();
     let client_manager_for_drop = client_manager;
     let on_account_drop = move |evt: Event<DragData>| {
-        if drag_state.read().drag_source != DragSource::AccountIcon {
+        if drag_state.with(|d| d.drag_source != DragSource::AccountIcon) {
             return;
         }
         evt.prevent_default();
         evt.stop_propagation();
-        // Snapshot and clear drag state first.
         let (dragging, drag_id_valid) = drag_state.batch(|d| {
             let dragging = d.dragging_server_id.clone();
             d.drag_over_id = None;
@@ -550,17 +670,14 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
             return;
         }
         let snapshot = account_sessions.batch(|as_| {
-            // Seed account_order from the live accounts if empty so we have
-            // something to reorder against. Live list is sorted so the
-            // baseline is deterministic.
             if as_.account_order.is_empty() {
+                // peek() inside a batch closure — not a render-time read, no reactive subscription.
                 let mut live: Vec<String> = client_manager_for_drop
-                    .read()
+                    .peek()
                     .active_account_ids();
                 live.sort();
                 as_.account_order = live;
             }
-            // Ensure both dragged + target are present in the order vec.
             if !as_.account_order.contains(&drag_id) {
                 as_.account_order.push(drag_id.clone());
             }
@@ -579,7 +696,6 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
             }
             Some(as_.account_order.clone())
         });
-        // Clear drag source after the reorder batch.
         drag_state.batch(|d| {
             d.dragging_server_id = None;
             d.drag_source = DragSource::None;
@@ -605,7 +721,7 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
     };
 
     let menu_aid = account_id.clone();
-    let menu_display = display_name.clone();
+    let menu_display = as_snap.display_name.clone();
     let menu_ui_overlays = ui_overlays;
     let menu_account_sessions = account_sessions;
     let on_account_contextmenu = move |evt: Event<MouseData>| {
@@ -637,6 +753,10 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
         });
     };
 
+    let aid_for_click = account_id.clone();
+    let display_name = as_snap.display_name.clone();
+    let backend_name = as_snap.backend_name.clone();
+
     rsx! {
         div {
             class: "{account_item_class}",
@@ -651,13 +771,8 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                 let aid = aid_for_click.clone();
                 let preserve_drawer_context = mobile_left_drawer_open();
 
-                // If this account needs reauth, skip the normal route resolution —
-                // sending it through NotificationsRoute / ServerHome would mount a
-                // component that spins waiting on a backend that no longer exists,
-                // freezing the UI. Route to the account-scoped reauth page so the
-                // existing token is updated (or the account removed) in place.
                 let needs_reauth = {
-                    let cm = client_manager.read();
+                    let cm = client_manager.peek();
                     cm.connection_statuses
                         .get(&aid)
                         .is_some_and(ConnectionStatus::needs_reauth)
@@ -669,10 +784,6 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                         .get(&aid)
                         .map(|s| (s.backend.slug().to_string(), s.instance_id.clone()));
                     if let Some((slug, instance_id)) = info {
-                        // Session.instance_id may be stored with scheme (e.g.
-                        // "http://localhost:9106") when restored from the
-                        // persisted AccountToken. Route path segments cannot
-                        // contain `//`, so normalize here.
                         let instance_id = instance_id
                             .trim_start_matches("https://")
                             .trim_start_matches("http://")
@@ -687,25 +798,12 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                     }
                 }
 
-                // Clear server/channel state — the target route will reload what's needed.
-                // Split into sub-signal batches (ChatViewState view fields + ChatLists channels).
                 chat_view_state.batch(|cv| cv.apply(ChatAction::ClearChannelContext));
                 chat_lists.batch(|cl| cl.set_channels(Vec::new()));
 
-                // If we have a stored last route for this account, restore it.
-                // This makes account-switching feel like a true tab switch.
-                //
-                // EXCEPT — if the stored route is a DMs/Friends/Notifications
-                // route but the backend doesn't actually support that surface,
-                // ignore it and fall through to the capability-based default.
-                // Without this guard, a one-off visit to a non-supported page
-                // (manual URL nav, deep-link, stale persisted state from an
-                // earlier capability shape) leaves the account permanently
-                // landing there — e.g. demo_forum opening on an empty Direct
-                // Messages page even though demo_forum has has_dms == false.
                 if !preserve_drawer_context {
                     let last_route_url = nav_state
-                        .read()
+                        .peek()
                         .account_last_routes
                         .get(&aid)
                         .cloned();
@@ -737,14 +835,6 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                     }
                 }
 
-                // No stored route — pick a sensible fallback based on the
-                // backend's capabilities. Forum/read-only backends have no
-                // DMs, so routing them to DmsHome would land on an empty
-                // placeholder. Instead, drop forum accounts on their first
-                // server (community) so the user sees content immediately.
-                // IMPORTANT: read the signal once and extract all needed data
-                // before dropping the guard; nested read() calls while an outer
-                // read guard is held cause a runtime borrow panic in WASM.
                 let (backend_slug, instance_id, first_server_id) = {
                     let (slug, inst) = if let Some(session) =
                         account_sessions.peek().account_sessions.get(&aid).cloned()
@@ -767,12 +857,6 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                         .map(|s| s.id.clone());
                     (slug, inst, first_server)
                 };
-                // Belt-and-suspenders: strip any URL scheme that may have been
-                // persisted in session.instance_id before the fix landed
-                // (stored as backend_url which includes "http://...").
-                // Route path segments cannot contain "://" — a scheme-inclusive
-                // instance_id parses as PageNotFound and triggers an infinite
-                // redirect + app_state.write() cascade (CLAUDE.md hang class #1).
                 let instance_id = instance_id
                     .trim_start_matches("https://")
                     .trim_start_matches("http://")
@@ -813,9 +897,8 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                 };
                 navigator().push(fallback_route);
             },
-            // Render image avatar if available (avatar_url is set by the client;
-            // demo client sets it to the bundled cat/dog asset path).
-            if let Some(url) = &avatar_url {
+            // Render image avatar if available.
+            if let Some(url) = &as_snap.avatar_url {
                 img {
                     src: "{url}",
                     class: "server-icon-image",
@@ -825,12 +908,12 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                 div {
                     class: "server-icon-letter",
                     style: "background-color: {color};",
-                    "{icon_label}"
+                    "{as_snap.icon_label}"
                 }
             }
             // Bottom-left: connection status emoji icon (not shown for forum accounts,
             // unless the account needs reauthentication — then always show).
-            if !is_forum_account {
+            if !as_snap.is_forum_account {
                 span {
                     class: "account-conn-icon account-conn-icon--{conn_class}",
                     "{conn_icon}"
@@ -843,29 +926,28 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
                 }
             }
             // Top-left: notification count badge.
-            // Hidden for forum accounts by default (too chatty), but ALWAYS shown
-            // when a reauth prompt is waiting — otherwise the user has no in-sidebar
-            // cue that the 🔑 icon maps to a clickable notification.
-            if (!is_forum_account || needs_reauth_badge) && total_unreads > 0 {
+            if (!as_snap.is_forum_account || needs_reauth_badge) && total_unreads > 0 {
                 span {
                     class: "badge mention-count-badge",
                     "{total_unreads}"
                 }
             }
             // Bottom-right: presence dot (not shown for forum accounts)
-            if !is_forum_account {
+            if !as_snap.is_forum_account {
                 span {
                     class: "status-dot presence-dot {presence_class}",
                 }
             }
             SidebarTooltip {
-                line1: display_name.clone(),
+                line1: display_name,
                 line2: Some(backend_name),
                 line3: None,
             }
         }
     }
 }
+
+// ── FavoriteServerIcon (B.1 — split into sub-components) ─────────────────
 
 /// Single favorited server icon in the favorites bar.
 ///
@@ -874,6 +956,9 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
 /// - Right-click to open the server context menu
 /// - Drag to reorder within Bar 1 or move back (drag is tracked via `DragSource::FavoriteServer`)
 /// - Accept drops from Bar 2 (`DragSource::AccountServer`) for positional insertion
+///
+/// Rendering is split into `FavoriteServerAvatarBlock` and `FavoriteServerBadgeBlock`
+/// sub-components (B.1 — single responsibility per block).
 #[context_menu(inherit)]
 #[rustfmt::skip]
 #[ui_action(inherit)]
@@ -903,9 +988,8 @@ fn FavoriteServerIcon(
     let chat_view_state: BatchedSignal<ChatViewState> = use_context();
 
     // Single render-time read of client_manager — avoid two separate .read()
-    // calls (each subscribes the component to the same signal twice and adds
-    // a hang-class #1 cascade vector). Subscription is intentional for both.
-    let (_account_conn_class, account_presence_class): (&'static str, &'static str) =
+    // calls (hang-class #1/#2). Subscription intentional.
+    let (account_conn_class, account_presence_class): (&'static str, &'static str) =
         client_manager.with(|cm| {
             let conn = cm
                 .connection_statuses
@@ -920,18 +1004,29 @@ fn FavoriteServerIcon(
             (conn, pres)
         });
 
-    // Connection icon emoji for account connection status
-    let conn_icon = match _account_conn_class {
+    let conn_icon: &'static str = match account_conn_class {
         "connected" => "⚡",
         "connecting" => "↺",
         "disconnected" => "—",
         "unauthenticated" => "🔑",
         _ => "⚠",
     };
-    let server_needs_reauth = _account_conn_class == "unauthenticated";
+    let server_needs_reauth = account_conn_class == "unauthenticated";
 
-    let is_selected = nav_state.read().selected_server.as_deref() == Some(&server_id);
-    let is_drag_over = drag_state.read().drag_over_id.as_deref() == Some(server_id.as_str());
+    // B.7 + B.1: Collapse account_sessions.read() (line 940) into .with()
+    // — one subscription, one field extracted.
+    let fs_snap: FavoriteServerIconSnapshot = account_sessions.with(|as_| {
+        let account_avatar_url = as_
+            .account_sessions
+            .get(&account_id)
+            .and_then(|s| s.user.avatar_url.clone());
+        FavoriteServerIconSnapshot { account_avatar_url }
+    });
+
+    let is_selected = nav_state.with(|n| n.selected_server.as_deref() == Some(&server_id));
+    let is_drag_over = drag_state.with(|d| d.drag_over_id.as_deref() == Some(server_id.as_str()));
+
+    // Derived display values — no signal reads.
     let first_letter: String = server_name
         .chars()
         .next()
@@ -939,12 +1034,8 @@ fn FavoriteServerIcon(
         .unwrap_or_default();
     let icon_color = user_color(&server_id);
 
-    // Determine source badge: account's avatar URL
-    let account_avatar_url: Option<String> = account_sessions
-        .read() // poly-lint: allow render-time-read — render snapshot; subscription intentional
-        .account_sessions
-        .get(&account_id)
-        .and_then(|s| s.user.avatar_url.clone());
+    // Capability check — peek only (no reactive subscription needed).
+    let is_forum = client_manager.peek().capabilities_for_slug(&backend_slug).is_forum_layout();
 
     let item_class = match (is_selected, is_drag_over) {
         (true, true) => "server-icon active drag-over-target",
@@ -966,7 +1057,7 @@ fn FavoriteServerIcon(
                 move |_| {
                     let preserve_drawer_context = mobile_left_drawer_open();
                     if let Some(previous_channel_id) = nav_state
-                        .read()
+                        .peek()
                         .selected_channel
                         .cloned()
                     {
@@ -1038,12 +1129,11 @@ fn FavoriteServerIcon(
             ondragleave: {
                 let sid = server_id.clone();
                 move |_| {
-                    let currently_us =
-                        drag_state.read().drag_over_id.as_deref()
-                        == Some(sid.as_str());
-                    if currently_us {
-                        drag_state.batch(|d| d.drag_over_id = None);
-                    }
+                    drag_state.batch(|d| {
+                        if d.drag_over_id.as_deref() == Some(sid.as_str()) {
+                            d.drag_over_id = None;
+                        }
+                    });
                 }
             },
             // Drop on this item — reorder within Bar 1, or insert from Bar 2
@@ -1051,9 +1141,7 @@ fn FavoriteServerIcon(
                 let tid = server_id.clone();
                 move |evt: Event<DragData>| {
                     evt.prevent_default();
-                    // Stop bubbling so the nav's ondrop doesn't double-handle
                     evt.stop_propagation();
-                    // Snapshot and clear drag state first.
                     let (dragging, src) = drag_state.batch(|d| {
                         let dragging = d.dragging_server_id.clone();
                         let src = d.drag_source.clone();
@@ -1070,7 +1158,6 @@ fn FavoriteServerIcon(
                     let new_favorites = account_sessions.batch(|as_| {
                         match src {
                             DragSource::FavoriteServer => {
-                                // Reorder within Bar 1: move drag_id before target_id
                                 if let Some(from) = as_
                                     .favorited_server_ids
                                     .iter()
@@ -1089,7 +1176,6 @@ fn FavoriteServerIcon(
                                 }
                             }
                             DragSource::AccountServer => {
-                                // Insert from Bar 2 before target position
                                 if !as_.favorited_server_ids.contains(&drag_id) {
                                     if let Some(to) = as_
                                         .favorited_server_ids
@@ -1117,54 +1203,24 @@ fn FavoriteServerIcon(
             ondragend: move |_| {
                 drag_state.batch(|d| { *d = DragState::default(); });
             },
-            if let Some(ref url) = icon_url {
-                img {
-                    class: "server-icon-image",
-                    src: "{url}",
-                    alt: "{server_name}",
-                }
-            } else {
-                div {
-                    class: "server-icon-letter",
-                    style: "background-color: {icon_color};",
-                    "{first_letter}"
-                }
+
+            // B.1: Avatar/badge rendering delegated to focused sub-components.
+            FavoriteServerAvatarBlock {
+                icon_url: icon_url.clone(),
+                icon_color,
+                first_letter,
+                server_name: server_name.clone(),
+                account_avatar_url: fs_snap.account_avatar_url,
+                account_display_name: account_display_name.clone(),
             }
-            // Source badge: show account avatar image (or fallback letter) — top-left overlay
-            if let Some(url) = &account_avatar_url {
-                img {
-                    src: "{url}",
-                    class: "source-badge-image",
-                    alt: "{account_display_name}",
-                }
-            } else {
-                span { class: "source-badge", "A" }
-            }
-            // Bottom-left: account connection status emoji icon (not for forum,
-            // unless reauth is needed — forum accounts still surface the 🔑 badge).
-            if !client_manager.peek().capabilities_for_slug(&backend_slug).is_forum_layout() {
-                span {
-                    class: "account-conn-icon account-conn-icon--{_account_conn_class}",
-                    "{conn_icon}"
-                }
-            } else if server_needs_reauth {
-                span {
-                    class: "account-conn-icon account-conn-icon--unauthenticated",
-                    title: "Sign in again",
-                    "🔑"
-                }
-            }
-            // Top-left: mention count badge
-            if mention > 0 {
-                span { class: "badge mention-count-badge", "@{mention}" }
-            } else if unread > 0 {
-                span { class: "badge mention-count-badge", "{unread}" }
-            }
-            // Bottom-right: presence dot (not for forum)
-            if !client_manager.peek().capabilities_for_slug(&backend_slug).is_forum_layout() {
-                span {
-                    class: "status-dot presence-dot {account_presence_class}",
-                }
+            FavoriteServerBadgeBlock {
+                is_forum,
+                conn_class: account_conn_class.to_string(),
+                conn_icon: conn_icon.to_string(),
+                server_needs_reauth,
+                mention,
+                unread,
+                presence_class: account_presence_class.to_string(),
             }
             SidebarTooltip {
                 line1: server_name.clone(),
@@ -1174,6 +1230,8 @@ fn FavoriteServerIcon(
         }
     }
 }
+
+// ── Async server data loaders ─────────────────────────────────────────────
 
 /// Load channels and select the first text channel for a server.
 pub async fn load_server_data(
@@ -1216,8 +1274,6 @@ async fn load_server_data_internal(
         return;
     };
 
-    // Accumulate async-fetched mutations into terminal batches:
-    // one for ChatViewState (view fields) and one for ChatLists (channels list).
     let mut pending_cv = chat_view_state.pending_update();
     let mut pending_cl = chat_lists.pending_update();
 
@@ -1256,12 +1312,6 @@ async fn load_server_data_internal(
         guard.get_channels(&server_id).await.unwrap_or_default()
     };
 
-    // Find the best channel to auto-select:
-    // 1. Backend-designated default channel (Discord system_channel_id, etc.)
-    // 2. First text/forum/HN channel
-    // Read current_server from ChatViewState (already has the pending mutation applied
-    // into a local var if set above, so we need the loaded value — peek from what we
-    // staged; pending not yet applied so fall back to chat_view_state.peek).
     let default_id = chat_view_state.peek().current_server.as_ref().and_then(|s| s.default_channel_id.clone());
     let first_text_channel = default_id
         .and_then(|id| channels.iter().find(|c| c.id == id).cloned())
@@ -1278,10 +1328,6 @@ async fn load_server_data_internal(
 
     pending_cl.set(move |cl| cl.set_channels(channels));
 
-    // Only auto-open the first text channel when the user is already in the
-    // content area workflow. When the mobile left drawer is open and the user
-    // taps a favorites/account-server icon, we keep them at the server shell
-    // so only an explicit channel tap opens content and closes the drawer.
     if auto_select_first_text_channel && let Some(ch) = first_text_channel {
         let ch_id_for_presync = ch.id.clone();
         nav_state.batch(|n| {
@@ -1314,7 +1360,6 @@ async fn load_server_data_internal(
             pending_cv.set(move |cv| cv.set_messages(messages));
             request_restore_scroll_position_or_bottom(&ch.id);
         }
-        // Load members
         if let Ok(members) = guard.get_channel_members(&ch.id).await {
             pending_cv.set(move |cv| cv.members = members);
         }
@@ -1331,91 +1376,9 @@ async fn load_server_data_internal(
         pending_cv.set(|cv| cv.apply(ChatAction::ClearActiveChannel));
     }
     pending_cv.set(|cv| cv.loading = false);
-    // Two terminal cascades: lists first (channels), then view state.
     pending_cl.apply();
     pending_cv.apply();
-    // Apply any user-defined icon/banner overrides from storage.
     apply_server_icon_overrides(chat_lists, chat_view_state).await;
-}
-
-/// Apply user icon and banner overrides from `AppSettings` to all servers in
-/// `chat_data`.
-///
-/// Called after every `load_server_data` and `restore_server_channel` so that
-/// overrides entered in the server settings Overview panel survive across page
-/// navigations and app restarts.
-///
-/// No-ops silently if storage is not yet initialised.
-async fn apply_server_icon_overrides(
-    chat_lists: BatchedSignal<ChatLists>,
-    chat_view_state: BatchedSignal<ChatViewState>,
-) {
-    let Some(storage) = crate::STORAGE.get() else {
-        return;
-    };
-    let Ok(settings) = storage.get_app_settings().await else {
-        return;
-    };
-    if settings.server_icon_overrides.is_empty() && settings.server_banner_overrides.is_empty() {
-        return;
-    }
-    chat_lists.batch(|cl| {
-        for server in &mut cl.servers {
-            if let Some(url) = settings.server_icon_overrides.get(&server.id) {
-                server.icon_url = Some(url.clone());
-            }
-            if let Some(url) = settings.server_banner_overrides.get(&server.id) {
-                server.banner_url = Some(url.clone());
-            }
-        }
-    });
-    chat_view_state.batch(|cv| {
-        if let Some(ref mut current) = cv.current_server {
-            if let Some(url) = settings.server_icon_overrides.get(&current.id) {
-                current.icon_url = Some(url.clone());
-            }
-            if let Some(url) = settings.server_banner_overrides.get(&current.id) {
-                current.banner_url = Some(url.clone());
-            }
-        }
-    });
-}
-///
-/// Called after every mutation of `ChatData.favorited_server_ids` to survive
-/// page reloads, app restarts, and offline periods.
-/// No-ops silently if storage is not yet initialised.
-/// Persist the Bar-1 account icon order to `AppSettings.account_order`.
-///
-/// Called after every drag-drop reorder on account icons so users get a
-/// stable, restorable layout across page reloads and app restarts.
-pub(crate) async fn persist_account_order(order: Vec<String>) {
-    let Some(s) = crate::STORAGE.get() else {
-        return;
-    };
-    match s.get_app_settings().await {
-        Ok(mut settings) => {
-            settings.account_order = order;
-            if let Err(e) = s.set_app_settings(&settings).await {
-                tracing::warn!("Failed to persist account_order: {e}");
-            }
-        }
-        Err(e) => tracing::warn!("Failed to read app_settings for account_order persist: {e}"),
-    }
-}
-
-pub(crate) async fn persist_favorites(ids: Vec<String>) {
-    let Some(s) = crate::STORAGE.get() else {
-        return;
-    };
-    match s.get_app_settings().await {
-        Ok(mut settings) => {
-            settings.favorited_server_ids = ids;
-            if let Err(e) = s.set_app_settings(&settings).await {
-                tracing::warn!("Failed to persist favorites: {e}");
-            }
-        }
-        Err(e) => tracing::warn!("Failed to read app_settings for favorites persist: {e}"),
-    }
 }
 
 /// Restore a specific server channel from a URL (F5 / deep-link navigation).
@@ -1441,11 +1404,6 @@ pub async fn restore_server_channel(
     chat_lists: BatchedSignal<ChatLists>,
     chat_view_state: BatchedSignal<ChatViewState>,
 ) -> Option<String> {
-    // One initial cascade so the UI can paint a loading state while we
-    // fetch. Every other mutation is deferred to a single terminal write
-    // at the end — individual per-field writes were starving the WASM
-    // scheduler on Teams (CLAUDE.md hang #1, same class as AccountIcon
-    // onclick batching fix in commit a761fe01).
     chat_view_state.batch(|cv| cv.loading = true);
 
     let backend_info = client_manager.peek().get_backend_for_server(&server_id);
@@ -1480,25 +1438,13 @@ pub async fn restore_server_channel(
         guard.get_channels(&server_id).await.unwrap_or_default()
     };
 
-    // Locate the requested channel.
     let exact = channels.iter().find(|c| c.id == channel_id).cloned();
 
-    // Fall back to first text/forum channel if URL channel missing — but ONLY
-    // for content rendering, NOT for selected_channel mutation. Pre-mutating
-    // selected_channel here doubled with the caller's nav.replace cascading
-    // through every ChatView use_effect subscriber wedged the WASM scheduler
-    // (same bug class as friend-card hang 2026-04-19). The caller's
-    // nav.replace alone, observed via on_update, is the single source of
-    // truth for the field.
     let fallback = if exact.is_none() {
-        // 1. Backend-designated default channel (Discord system_channel_id, etc.)
-        // Read from the just-loaded server, not from chat_data — chat_data
-        // hasn't been updated yet in this batched flow.
         let default_id = loaded_server
             .as_ref()
             .and_then(|s| s.default_channel_id.clone());
         let by_default = default_id.and_then(|id| channels.iter().find(|c| c.id == id).cloned());
-        // 2. First text/forum/hackernews channel
         by_default.or_else(|| {
             channels
                 .iter()
@@ -1517,12 +1463,8 @@ pub async fn restore_server_channel(
     };
     let _ = &mut app_state;
 
-    // Use the exact match for content load if it exists, otherwise the
-    // fallback. The caller still needs the resolved id to nav.replace.
     let target = exact.or(fallback);
 
-    // Pre-fetch per-channel content. All mutations batched into two terminal
-    // writes below (ChatLists for channels, ChatViewState for view fields).
     let mut loaded_messages: Option<Vec<poly_client::Message>> = None;
     let mut loaded_channel_load_error: Option<String> = None;
     let mut loaded_members: Option<Vec<poly_client::User>> = None;
@@ -1544,8 +1486,6 @@ pub async fn restore_server_channel(
                     return None;
                 }
             };
-            // F-DC-1: handle PermissionDenied explicitly so the UI can render
-            // a styled empty state instead of silently showing 0 messages.
             match guard
                 .get_messages(&ch.id, initial_message_query(ch.unread_count))
                 .await
@@ -1590,7 +1530,6 @@ pub async fn restore_server_channel(
         }
     }
 
-    // Two terminal cascades — ChatLists for channels list, ChatViewState for view fields.
     chat_lists.batch(|cl| cl.set_channels(channels));
     chat_view_state.batch(|cv| {
         if let Some(server) = loaded_server {
@@ -1618,7 +1557,6 @@ pub async fn restore_server_channel(
         request_restore_scroll_position_or_bottom(&ch_id);
     }
 
-    // Apply any user-defined icon/banner overrides from storage.
     apply_server_icon_overrides(chat_lists, chat_view_state).await;
 
     target.map(|channel| channel.id)
