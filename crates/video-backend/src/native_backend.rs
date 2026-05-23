@@ -246,6 +246,7 @@ impl NativeVideoEncoder {
             data_b64,
             force_keyframe,
             session_id: self.session_id.clone(),
+            target_bps: None,
         };
 
         self.client
