@@ -41,6 +41,7 @@
 
 pub mod client_config;
 pub mod http;
+pub mod route;
 
 // Video H.264 encode/decode service — server-side handlers (non-wasm, feature-gated).
 // WASM targets call the endpoint via HTTP; openh264-rs never links into the WASM bundle.

@@ -147,7 +147,7 @@ Verification: `cargo check -p poly-core --all-features` — green, 2m43s.
   event-stream). Backends drop ~40 stub `Err(NotSupported)` overrides.
   **Out of scope for this plan** (file is owned by the per-client agents);
   recorded so the next backend audit can pick it up.
-- [ ] **C.2** **Unify the four voice/codec/aead/udp host-bridge clients
+- [x] **C.2** **Unify the four voice/codec/aead/udp host-bridge clients
   behind a common transport trait.** Each of `voice_client.rs`,
   `codec_opus_client.rs`, `aead_client.rs`, `udp_client.rs` re-implements
   the same `POST → JSON → typed-error` pipeline against different
@@ -155,6 +155,7 @@ Verification: `cargo check -p poly-core --all-features` — green, 2m43s.
   `trait HostRoute { fn endpoint() -> &str; type Req; type Resp; type Err; }`
   and one generic `fn call<R: HostRoute>(req: R::Req) -> Result<R::Resp, R::Err>`.
   Touches ~600 LoC across the four `*_client.rs` files. DIP + DRY win.
+  Shipped in change `mztttyox`.
 - [ ] **C.3** **`AppState` is now nearly empty (2 fields, post-G.5)** —
   consider deleting the struct entirely. `is_setup_complete` belongs on
   `AccountSessions` (it's an identity-init flag), `sidebar_invalidated_tick`

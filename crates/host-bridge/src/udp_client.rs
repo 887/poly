@@ -26,6 +26,8 @@ use futures::Stream;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::route::{self, HostRoute, TransportError};
+
 // ── Route constants ────────────────────────────────────────────────────────────
 
 pub const ROUTE_UDP_BIND: &str = "/host/udp/bind";
@@ -35,6 +37,10 @@ pub const ROUTE_UDP_RECV_STREAM_PATTERN: &str = "/host/udp/recv_stream/{id}";
 pub const ROUTE_UDP_CLOSE: &str = "/host/udp/close";
 
 // ── Wire types ─────────────────────────────────────────────────────────────────
+
+/// Empty request body for `POST /host/udp/bind`.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct UdpBindRequest {}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UdpBindResponse {
@@ -96,16 +102,68 @@ pub struct UdpCloseResponse {
     pub err: Option<String>,
 }
 
+// ── Error type ─────────────────────────────────────────────────────────────────
+
 /// Errors from [`UdpClient`].
 #[derive(Debug, Error)]
 pub enum UdpClientError {
     #[error("UDP client transport: {0}")]
-    Transport(#[from] reqwest::Error),
-    #[error("UDP client JSON: {0}")]
-    Json(#[from] serde_json::Error),
+    Transport(#[from] TransportError),
     #[error("UDP client server error: {0}")]
     Server(String),
 }
+
+// ── Route impls ────────────────────────────────────────────────────────────────
+
+/// Route: `POST /host/udp/bind`
+pub struct UdpBindRoute;
+
+impl HostRoute for UdpBindRoute {
+    type Req = UdpBindRequest;
+    type Resp = UdpBindResponse;
+    type Err = UdpClientError;
+    fn endpoint() -> &'static str {
+        ROUTE_UDP_BIND
+    }
+}
+
+/// Route: `POST /host/udp/connect`
+pub struct UdpConnectRoute;
+
+impl HostRoute for UdpConnectRoute {
+    type Req = UdpConnectRequest;
+    type Resp = UdpConnectResponse;
+    type Err = UdpClientError;
+    fn endpoint() -> &'static str {
+        ROUTE_UDP_CONNECT
+    }
+}
+
+/// Route: `POST /host/udp/send`
+pub struct UdpSendRoute;
+
+impl HostRoute for UdpSendRoute {
+    type Req = UdpSendRequest;
+    type Resp = UdpSendResponse;
+    type Err = UdpClientError;
+    fn endpoint() -> &'static str {
+        ROUTE_UDP_SEND
+    }
+}
+
+/// Route: `POST /host/udp/close`
+pub struct UdpCloseRoute;
+
+impl HostRoute for UdpCloseRoute {
+    type Req = UdpCloseRequest;
+    type Resp = UdpCloseResponse;
+    type Err = UdpClientError;
+    fn endpoint() -> &'static str {
+        ROUTE_UDP_CLOSE
+    }
+}
+
+// ── Client ─────────────────────────────────────────────────────────────────────
 
 /// Typed client for the `/host/udp/*` endpoints.
 #[derive(Clone, Debug)]
@@ -144,8 +202,8 @@ impl UdpClient {
     /// # Errors
     /// Returns [`UdpClientError::Server`] if the native bind fails.
     pub async fn bind(&self) -> Result<UdpBindResponse, UdpClientError> {
-        let url = format!("{}{}", self.base_url, ROUTE_UDP_BIND);
-        let resp: UdpBindResponse = self.post_json(&url, &serde_json::json!({})).await?;
+        let resp =
+            route::call::<UdpBindRoute>(&self.http, &self.base_url, UdpBindRequest {}).await?;
         if resp.ok {
             Ok(resp)
         } else {
@@ -162,12 +220,11 @@ impl UdpClient {
         session_id: &str,
         peer_addr: &str,
     ) -> Result<(), UdpClientError> {
-        let url = format!("{}{}", self.base_url, ROUTE_UDP_CONNECT);
         let req = UdpConnectRequest {
             session_id: session_id.to_string(),
             peer_addr: peer_addr.to_string(),
         };
-        let resp: UdpConnectResponse = self.post_json(&url, &req).await?;
+        let resp = route::call::<UdpConnectRoute>(&self.http, &self.base_url, req).await?;
         if resp.ok {
             Ok(())
         } else {
@@ -187,13 +244,12 @@ impl UdpClient {
         data: &[u8],
         dst: Option<&str>,
     ) -> Result<UdpSendResponse, UdpClientError> {
-        let url = format!("{}{}", self.base_url, ROUTE_UDP_SEND);
         let req = UdpSendRequest {
             session_id: session_id.to_string(),
             data: base64::engine::general_purpose::STANDARD.encode(data),
             dst: dst.map(str::to_string),
         };
-        let resp: UdpSendResponse = self.post_json(&url, &req).await?;
+        let resp = route::call::<UdpSendRoute>(&self.http, &self.base_url, req).await?;
         if resp.ok {
             Ok(resp)
         } else {
@@ -231,26 +287,13 @@ impl UdpClient {
     /// # Errors
     /// Returns [`UdpClientError::Server`] if the session is not found.
     pub async fn close(&self, session_id: &str) -> Result<(), UdpClientError> {
-        let url = format!("{}{}", self.base_url, ROUTE_UDP_CLOSE);
         let req = UdpCloseRequest { session_id: session_id.to_string() };
-        let resp: UdpCloseResponse = self.post_json(&url, &req).await?;
+        let resp = route::call::<UdpCloseRoute>(&self.http, &self.base_url, req).await?;
         if resp.ok {
             Ok(())
         } else {
             Err(UdpClientError::Server(resp.err.unwrap_or_else(|| "udp/close failed".into())))
         }
-    }
-
-    // ── private helper ─────────────────────────────────────────────────────────
-
-    async fn post_json<T, B>(&self, url: &str, body: &B) -> Result<T, UdpClientError>
-    where
-        T: serde::de::DeserializeOwned,
-        B: serde::Serialize,
-    {
-        let text = self.http.post(url).json(body).send().await?.text().await?;
-        let v: T = serde_json::from_str(&text)?;
-        Ok(v)
     }
 }
 

@@ -30,6 +30,8 @@ use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::route::{self, HostRoute, TransportError};
+
 // ── Route constants ────────────────────────────────────────────────────────────
 
 pub const ROUTE_OPUS_ENCODER_CREATE: &str = "/host/codec/opus/encoder/create";
@@ -105,16 +107,80 @@ pub struct OpusCloseResponse {
     pub err: Option<String>,
 }
 
+// ── Error type ─────────────────────────────────────────────────────────────────
+
 /// Errors from [`OpusClient`].
 #[derive(Debug, Error)]
 pub enum OpusClientError {
     #[error("Opus client transport: {0}")]
-    Transport(#[from] reqwest::Error),
-    #[error("Opus client JSON: {0}")]
-    Json(#[from] serde_json::Error),
+    Transport(#[from] TransportError),
     #[error("Opus client server error: {0}")]
     Server(String),
 }
+
+// ── Route impls ────────────────────────────────────────────────────────────────
+
+/// Route: `POST /host/codec/opus/encoder/create`
+pub struct OpusEncoderCreateRoute;
+
+impl HostRoute for OpusEncoderCreateRoute {
+    type Req = OpusEncoderCreateRequest;
+    type Resp = OpusSessionCreateResponse;
+    type Err = OpusClientError;
+    fn endpoint() -> &'static str {
+        ROUTE_OPUS_ENCODER_CREATE
+    }
+}
+
+/// Route: `POST /host/codec/opus/encoder/encode`
+pub struct OpusEncoderEncodeRoute;
+
+impl HostRoute for OpusEncoderEncodeRoute {
+    type Req = OpusEncodeRequest;
+    type Resp = OpusEncodeResponse;
+    type Err = OpusClientError;
+    fn endpoint() -> &'static str {
+        ROUTE_OPUS_ENCODER_ENCODE
+    }
+}
+
+/// Route: `POST /host/codec/opus/decoder/create`
+pub struct OpusDecoderCreateRoute;
+
+impl HostRoute for OpusDecoderCreateRoute {
+    type Req = OpusDecoderCreateRequest;
+    type Resp = OpusSessionCreateResponse;
+    type Err = OpusClientError;
+    fn endpoint() -> &'static str {
+        ROUTE_OPUS_DECODER_CREATE
+    }
+}
+
+/// Route: `POST /host/codec/opus/decoder/decode`
+pub struct OpusDecoderDecodeRoute;
+
+impl HostRoute for OpusDecoderDecodeRoute {
+    type Req = OpusDecodeRequest;
+    type Resp = OpusDecodeResponse;
+    type Err = OpusClientError;
+    fn endpoint() -> &'static str {
+        ROUTE_OPUS_DECODER_DECODE
+    }
+}
+
+/// Route: `POST /host/codec/opus/close`
+pub struct OpusCloseRoute;
+
+impl HostRoute for OpusCloseRoute {
+    type Req = OpusCloseRequest;
+    type Resp = OpusCloseResponse;
+    type Err = OpusClientError;
+    fn endpoint() -> &'static str {
+        ROUTE_OPUS_CLOSE
+    }
+}
+
+// ── Client ─────────────────────────────────────────────────────────────────────
 
 /// Typed client for the `/host/codec/opus/*` endpoints.
 #[derive(Clone, Debug)]
@@ -157,13 +223,13 @@ impl OpusClient {
         channels: u8,
         application: &str,
     ) -> Result<String, OpusClientError> {
-        let url = format!("{}{}", self.base_url, ROUTE_OPUS_ENCODER_CREATE);
         let req = OpusEncoderCreateRequest {
             sample_rate,
             channels,
             application: application.to_string(),
         };
-        let resp: OpusSessionCreateResponse = self.post_json(&url, &req).await?;
+        let resp =
+            route::call::<OpusEncoderCreateRoute>(&self.http, &self.base_url, req).await?;
         if resp.ok {
             Ok(resp.session_id)
         } else {
@@ -184,7 +250,6 @@ impl OpusClient {
         session_id: &str,
         pcm: &[i16],
     ) -> Result<Vec<u8>, OpusClientError> {
-        let url = format!("{}{}", self.base_url, ROUTE_OPUS_ENCODER_ENCODE);
         let mut bytes = Vec::with_capacity(pcm.len() * 2);
         for &s in pcm {
             bytes.extend_from_slice(&s.to_le_bytes());
@@ -193,7 +258,8 @@ impl OpusClient {
             session_id: session_id.to_string(),
             pcm: base64::engine::general_purpose::STANDARD.encode(&bytes),
         };
-        let resp: OpusEncodeResponse = self.post_json(&url, &req).await?;
+        let resp =
+            route::call::<OpusEncoderEncodeRoute>(&self.http, &self.base_url, req).await?;
         if resp.ok {
             base64::engine::general_purpose::STANDARD
                 .decode(resp.encoded.as_bytes())
@@ -214,9 +280,9 @@ impl OpusClient {
         sample_rate: u32,
         channels: u8,
     ) -> Result<String, OpusClientError> {
-        let url = format!("{}{}", self.base_url, ROUTE_OPUS_DECODER_CREATE);
         let req = OpusDecoderCreateRequest { sample_rate, channels };
-        let resp: OpusSessionCreateResponse = self.post_json(&url, &req).await?;
+        let resp =
+            route::call::<OpusDecoderCreateRoute>(&self.http, &self.base_url, req).await?;
         if resp.ok {
             Ok(resp.session_id)
         } else {
@@ -235,12 +301,12 @@ impl OpusClient {
         session_id: &str,
         encoded: &[u8],
     ) -> Result<Vec<i16>, OpusClientError> {
-        let url = format!("{}{}", self.base_url, ROUTE_OPUS_DECODER_DECODE);
         let req = OpusDecodeRequest {
             session_id: session_id.to_string(),
             encoded: base64::engine::general_purpose::STANDARD.encode(encoded),
         };
-        let resp: OpusDecodeResponse = self.post_json(&url, &req).await?;
+        let resp =
+            route::call::<OpusDecoderDecodeRoute>(&self.http, &self.base_url, req).await?;
         if resp.ok {
             let bytes = base64::engine::general_purpose::STANDARD
                 .decode(resp.pcm.as_bytes())
@@ -265,9 +331,8 @@ impl OpusClient {
     /// # Errors
     /// Returns [`OpusClientError::Server`] if the session is not found.
     pub async fn close(&self, session_id: &str) -> Result<(), OpusClientError> {
-        let url = format!("{}{}", self.base_url, ROUTE_OPUS_CLOSE);
         let req = OpusCloseRequest { session_id: session_id.to_string() };
-        let resp: OpusCloseResponse = self.post_json(&url, &req).await?;
+        let resp = route::call::<OpusCloseRoute>(&self.http, &self.base_url, req).await?;
         if resp.ok {
             Ok(())
         } else {
@@ -275,17 +340,5 @@ impl OpusClient {
                 resp.err.unwrap_or_else(|| "opus/close failed".into()),
             ))
         }
-    }
-
-    // ── private helper ─────────────────────────────────────────────────────────
-
-    async fn post_json<T, B>(&self, url: &str, body: &B) -> Result<T, OpusClientError>
-    where
-        T: serde::de::DeserializeOwned,
-        B: serde::Serialize,
-    {
-        let text = self.http.post(url).json(body).send().await?.text().await?;
-        let v: T = serde_json::from_str(&text)?;
-        Ok(v)
     }
 }

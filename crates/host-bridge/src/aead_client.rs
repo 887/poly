@@ -26,6 +26,8 @@ use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::route::{self, HostRoute, TransportError};
+
 // ── Route constants ────────────────────────────────────────────────────────────
 
 pub const ROUTE_AEAD_CREATE: &str = "/host/aead/create";
@@ -98,16 +100,68 @@ pub struct AeadCloseResponse {
     pub err: Option<String>,
 }
 
+// ── Error type ─────────────────────────────────────────────────────────────────
+
 /// Errors from [`AeadClient`].
 #[derive(Debug, Error)]
 pub enum AeadClientError {
     #[error("AEAD client transport: {0}")]
-    Transport(#[from] reqwest::Error),
-    #[error("AEAD client JSON: {0}")]
-    Json(#[from] serde_json::Error),
+    Transport(#[from] TransportError),
     #[error("AEAD client server error: {0}")]
     Server(String),
 }
+
+// ── Route impls ────────────────────────────────────────────────────────────────
+
+/// Route: `POST /host/aead/create`
+pub struct AeadCreateRoute;
+
+impl HostRoute for AeadCreateRoute {
+    type Req = AeadCreateRequest;
+    type Resp = AeadCreateResponse;
+    type Err = AeadClientError;
+    fn endpoint() -> &'static str {
+        ROUTE_AEAD_CREATE
+    }
+}
+
+/// Route: `POST /host/aead/encrypt`
+pub struct AeadEncryptRoute;
+
+impl HostRoute for AeadEncryptRoute {
+    type Req = AeadEncryptRequest;
+    type Resp = AeadEncryptResponse;
+    type Err = AeadClientError;
+    fn endpoint() -> &'static str {
+        ROUTE_AEAD_ENCRYPT
+    }
+}
+
+/// Route: `POST /host/aead/decrypt`
+pub struct AeadDecryptRoute;
+
+impl HostRoute for AeadDecryptRoute {
+    type Req = AeadDecryptRequest;
+    type Resp = AeadDecryptResponse;
+    type Err = AeadClientError;
+    fn endpoint() -> &'static str {
+        ROUTE_AEAD_DECRYPT
+    }
+}
+
+/// Route: `POST /host/aead/close`
+pub struct AeadCloseRoute;
+
+impl HostRoute for AeadCloseRoute {
+    type Req = AeadCloseRequest;
+    type Resp = AeadCloseResponse;
+    type Err = AeadClientError;
+    fn endpoint() -> &'static str {
+        ROUTE_AEAD_CLOSE
+    }
+}
+
+// ── Client ─────────────────────────────────────────────────────────────────────
 
 /// Typed client for the `/host/aead/*` endpoints.
 #[derive(Clone, Debug)]
@@ -150,12 +204,11 @@ impl AeadClient {
         algorithm: &str,
         key: &[u8],
     ) -> Result<String, AeadClientError> {
-        let url = format!("{}{}", self.base_url, ROUTE_AEAD_CREATE);
         let req = AeadCreateRequest {
             algorithm: algorithm.to_string(),
             key: base64::engine::general_purpose::STANDARD.encode(key),
         };
-        let resp: AeadCreateResponse = self.post_json(&url, &req).await?;
+        let resp = route::call::<AeadCreateRoute>(&self.http, &self.base_url, req).await?;
         if resp.ok {
             Ok(resp.session_id)
         } else {
@@ -178,14 +231,13 @@ impl AeadClient {
         plaintext: &[u8],
         aad: Option<&[u8]>,
     ) -> Result<Vec<u8>, AeadClientError> {
-        let url = format!("{}{}", self.base_url, ROUTE_AEAD_ENCRYPT);
         let req = AeadEncryptRequest {
             session_id: session_id.to_string(),
             nonce: base64::engine::general_purpose::STANDARD.encode(nonce),
             plaintext: base64::engine::general_purpose::STANDARD.encode(plaintext),
             aad: aad.map(|b| base64::engine::general_purpose::STANDARD.encode(b)),
         };
-        let resp: AeadEncryptResponse = self.post_json(&url, &req).await?;
+        let resp = route::call::<AeadEncryptRoute>(&self.http, &self.base_url, req).await?;
         if resp.ok {
             base64::engine::general_purpose::STANDARD
                 .decode(resp.ciphertext.as_bytes())
@@ -210,14 +262,13 @@ impl AeadClient {
         ciphertext: &[u8],
         aad: Option<&[u8]>,
     ) -> Result<Vec<u8>, AeadClientError> {
-        let url = format!("{}{}", self.base_url, ROUTE_AEAD_DECRYPT);
         let req = AeadDecryptRequest {
             session_id: session_id.to_string(),
             nonce: base64::engine::general_purpose::STANDARD.encode(nonce),
             ciphertext: base64::engine::general_purpose::STANDARD.encode(ciphertext),
             aad: aad.map(|b| base64::engine::general_purpose::STANDARD.encode(b)),
         };
-        let resp: AeadDecryptResponse = self.post_json(&url, &req).await?;
+        let resp = route::call::<AeadDecryptRoute>(&self.http, &self.base_url, req).await?;
         if resp.ok {
             base64::engine::general_purpose::STANDARD
                 .decode(resp.plaintext.as_bytes())
@@ -234,9 +285,8 @@ impl AeadClient {
     /// # Errors
     /// Returns [`AeadClientError::Server`] if the session is not found.
     pub async fn close(&self, session_id: &str) -> Result<(), AeadClientError> {
-        let url = format!("{}{}", self.base_url, ROUTE_AEAD_CLOSE);
         let req = AeadCloseRequest { session_id: session_id.to_string() };
-        let resp: AeadCloseResponse = self.post_json(&url, &req).await?;
+        let resp = route::call::<AeadCloseRoute>(&self.http, &self.base_url, req).await?;
         if resp.ok {
             Ok(())
         } else {
@@ -244,17 +294,5 @@ impl AeadClient {
                 resp.err.unwrap_or_else(|| "aead/close failed".into()),
             ))
         }
-    }
-
-    // ── private helper ─────────────────────────────────────────────────────────
-
-    async fn post_json<T, B>(&self, url: &str, body: &B) -> Result<T, AeadClientError>
-    where
-        T: serde::de::DeserializeOwned,
-        B: serde::Serialize,
-    {
-        let text = self.http.post(url).json(body).send().await?.text().await?;
-        let v: T = serde_json::from_str(&text)?;
-        Ok(v)
     }
 }
