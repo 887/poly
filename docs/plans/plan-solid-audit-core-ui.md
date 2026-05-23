@@ -116,9 +116,10 @@ Not started in this change — listed for follow-up agents.
   into one `.with()` block (kills 5+ allowlisted reads), then split
   rendering into `FavoritesBarLeft` / `FavoritesBarMain`.
   Shipped in change `rpkxmyorpxxk`.
-- [ ] **B.4** Split `channel_list.rs` `ServerChannelView`
+- [x] **B.4** Split `channel_list.rs` `ServerChannelView`
   (812-1050, ~240 LoC). Inner category/permission filtering is its
   own concern; pull into helper module.
+  Shipped in change `zukynrxyyqsz`: `ServerChannelFilter` struct in `server_view.rs` isolates category/permission filtering.
 - [x] **B.5** Finish the phase-E Action-pattern wiring for the 35+
   `todo!("phase-E: …")` sites. Largest clumps:
   `account/server/settings/{general,notifications,overview}.rs`
@@ -160,12 +161,13 @@ Not started in this change — listed for follow-up agents.
   `overlays.rs` (components: content, attachments, reactions, context
   menu), `composer.rs` (input, send, typing, slash). mod.rs slimmed
   to ~450 LoC. Baseline regenerated for new submodule violations.
-- [ ] **C.2** `channel_list.rs` (1775 LoC, 26 components) — split into
+- [x] **C.2** `channel_list.rs` (1775 LoC, 26 components) — split into
   `channel_list/{server_view, dm_view, friends_view, items}.rs`. Each
   big `#[component]` (ServerChannelView, DMFriendsView,
   ServerBanner, DMChannelItem, GroupChannelItem, FriendItem,
   ChannelsRolesPanel) has its own data-fetching + rendering — clean
   SRP cut.
+  Shipped in change `zukynrxyyqsz`: 1786-line flat file split into 5 modules; mod.rs is ~110 LoC thin shell.
 - [x] **C.3** `favorites_sidebar.rs` (1645 LoC, 9 components) — after
   B.1+B.3 fold splits, the remaining mass is async loaders
   (1222-1500 region: drag drop persistence, server re-order RPC,

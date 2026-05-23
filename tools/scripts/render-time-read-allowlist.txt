@@ -1,26 +1,21 @@
 # render-time-read-allowlist.txt
 #
 # Allowlisted render-time .read() sites in crates/core/src/ui.
-#
 # These are sites where .read() appears at the top-level of a render body
 # or hook-setup function but the subscription IS the intent (MEDIUM/LOW
 # risk). They drive rsx! output, conditional rendering, or child-component
 # props — the component SHOULD re-render when the signal changes.
-#
 # HIGH-risk sites (value drives a use_spawn_once / use_reactive_effect key
 # or a .batch() call in the same body) MUST NOT appear here — migrate to
 # .peek() instead.
-#
 # Migrated HIGH sites (see docs/plans/plan-peek-vs-read.md):
 #   - crates/core/src/ui/account/common/thread_view.rs (two .read() keys -> .peek())
 #   - crates/core/src/ui/account/common/chat_view.rs use_search_messages_effect (-> .peek())
 #   - crates/core/src/ui/account/common/chat_view.rs use_pinned_messages_effect (-> .peek())
-#
 # Format: file:line # reason
 # Inline suppression: // poly-lint: allow render-time-read -- <reason>
 # See: docs/dev/reactive-state.md section .peek() vs .read()
 #      docs/plans/plan-peek-vs-read.md
-#
 # Phase 5 of the plan will tighten this: flip continue-on-error to false
 # and promote the lint to warn-on-allowlist-entry for quarterly review.
 crates/core/src/ui/account/common/emoji_picker.rs:341 # MEDIUM — render-time read drives output or child prop, subscription is intent
@@ -65,65 +60,6 @@ crates/core/src/ui/account/common/user_sidebar.rs:119 # MEDIUM — render-time r
 crates/core/src/ui/account/common/user_sidebar.rs:149 # MEDIUM — rsx! attr binding, subscription is intent
 crates/core/src/ui/account/common/user_sidebar.rs:156 # MEDIUM — render-time read drives output or child prop, subscription is intent
 crates/core/src/ui/account/common/user_sidebar.rs:167 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:83 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:90 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:96 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:103 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:190 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:196 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:264 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:293 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:295 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:299 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:330 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:360 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:436 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:437 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:495 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:501 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:507 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:526 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:553 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:557 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:568 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:582 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:586 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:598 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:609 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:654 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:677 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:680 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:688 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:698 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:704 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:729 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:740 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:754 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:780 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:843 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:844 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:847 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:848 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:876 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:879 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:898 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:899 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:928 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:1049 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:1050 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:1059 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:1062 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:1134 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:1227 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:1324 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:1363 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:1374 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:1376 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:1382 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:1403 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:1462 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:1484 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/channel_list.rs:1486 # MEDIUM — render-time read drives output or child prop, subscription is intent
 crates/core/src/ui/account/common/direct_call.rs:52 # MEDIUM — render-time read drives output or child prop, subscription is intent
 crates/core/src/ui/account/common/direct_call.rs:54 # MEDIUM — render-time read drives output or child prop, subscription is intent
 crates/core/src/ui/account/common/direct_call.rs:58 # MEDIUM — render-time read drives output or child prop, subscription is intent
@@ -1035,7 +971,6 @@ crates/core/src/ui/routes.rs:1755
 crates/core/src/ui/routes.rs:1764
 crates/core/src/ui/routes.rs:2048
 crates/core/src/ui/account/common/draft_banner.rs:185 # MEDIUM — tick.read() inside use_effect body for countdown, subscription is intent
-#
 # ── Wave 2 allowlist refresh (2026-04-27) ──────────────────────────────────────
 # 464 sites re-triaged after line-number drift from code changes.
 # All confirmed MEDIUM/false-positive: render-body subscriptions, async-fn reads,
@@ -1056,64 +991,6 @@ crates/core/src/ui/account/common/account_server_bar.rs:682 # MEDIUM — render-
 crates/core/src/ui/account/common/account_server_bar.rs:688 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
 crates/core/src/ui/account/common/account_server_bar.rs:739 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
 crates/core/src/ui/account/common/account_server_bar.rs:746 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:1005 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:106 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:1086 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:1087 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:1096 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:1099 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:1223 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:1373 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:1477 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:1516 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:1527 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:1529 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:1535 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:1556 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:1615 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:1625 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:1647 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:1649 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:193 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:199 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:267 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:296 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:298 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:302 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:333 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:363 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:439 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:440 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:498 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:504 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:510 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:529 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:556 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:560 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:571 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:585 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:589 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:601 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:612 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:657 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:683 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:691 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:701 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:707 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:732 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:743 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:757 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:783 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:846 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:850 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:851 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:86 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:882 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:901 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:902 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:931 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:93 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
-crates/core/src/ui/account/common/channel_list.rs:99 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
 crates/core/src/ui/account/common/chat_view.rs:1047 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
 crates/core/src/ui/account/common/chat_view.rs:1048 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
 crates/core/src/ui/account/common/chat_view.rs:1049 # MEDIUM — render-time read; subscription or async-body, not a hang-class-7 trigger
@@ -1544,42 +1421,6 @@ crates/core/src/ui/account/common/direct_call.rs:359 # MEDIUM — shifted from H
 crates/core/src/ui/account/common/direct_call.rs:370 # MEDIUM — shifted from H.3.c
 crates/core/src/ui/account/common/direct_call.rs:377 # MEDIUM — shifted from H.3.c
 crates/core/src/ui/account/common/direct_call.rs:446 # MEDIUM — shifted from H.3.c
-crates/core/src/ui/account/common/channel_list.rs:413 # MEDIUM — shifted +5 from H.3.c open_direct_message_channel expansion
-crates/core/src/ui/account/common/channel_list.rs:482 # MEDIUM — shifted from H.3.c
-crates/core/src/ui/account/common/channel_list.rs:500 # MEDIUM — shifted from H.3.c
-crates/core/src/ui/account/common/channel_list.rs:527 # MEDIUM — shifted from H.3.c
-crates/core/src/ui/account/common/channel_list.rs:531 # MEDIUM — shifted from H.3.c
-crates/core/src/ui/account/common/channel_list.rs:542 # MEDIUM — shifted from H.3.c
-crates/core/src/ui/account/common/channel_list.rs:572 # MEDIUM — shifted from H.3.c
-crates/core/src/ui/account/common/channel_list.rs:583 # MEDIUM — shifted from H.3.c
-crates/core/src/ui/account/common/channel_list.rs:628 # MEDIUM — shifted from H.3.c
-crates/core/src/ui/account/common/channel_list.rs:652 # MEDIUM — shifted from H.3.c
-crates/core/src/ui/account/common/channel_list.rs:655 # MEDIUM — shifted from H.3.c
-crates/core/src/ui/account/common/channel_list.rs:663 # MEDIUM — shifted from H.3.c
-crates/core/src/ui/account/common/channel_list.rs:673 # MEDIUM — shifted from H.3.c
-crates/core/src/ui/account/common/channel_list.rs:679 # MEDIUM — shifted from H.3.c
-crates/core/src/ui/account/common/channel_list.rs:715 # MEDIUM — shifted from H.3.c
-crates/core/src/ui/account/common/channel_list.rs:755 # MEDIUM — shifted from H.3.c
-crates/core/src/ui/account/common/channel_list.rs:823 # MEDIUM — shifted from H.3.c
-crates/core/src/ui/account/common/channel_list.rs:824 # MEDIUM — shifted from H.3.c
-crates/core/src/ui/account/common/channel_list.rs:875 # MEDIUM — shifted from H.3.c
-crates/core/src/ui/account/common/channel_list.rs:904 # MEDIUM — shifted from H.3.c
-crates/core/src/ui/account/common/channel_list.rs:983 # MEDIUM — shifted from H.3.c
-crates/core/src/ui/account/common/channel_list.rs:1065 # MEDIUM — shifted from H.3.c
-crates/core/src/ui/account/common/channel_list.rs:1066 # MEDIUM — shifted from H.3.c
-crates/core/src/ui/account/common/channel_list.rs:1075 # MEDIUM — shifted from H.3.c
-crates/core/src/ui/account/common/channel_list.rs:1078 # MEDIUM — shifted from H.3.c
-crates/core/src/ui/account/common/channel_list.rs:1217 # MEDIUM — shifted from H.3.c
-crates/core/src/ui/account/common/channel_list.rs:1378 # MEDIUM — shifted from H.3.c
-crates/core/src/ui/account/common/channel_list.rs:1485 # MEDIUM — shifted from H.3.c
-crates/core/src/ui/account/common/channel_list.rs:1528 # MEDIUM — shifted from H.3.c
-crates/core/src/ui/account/common/channel_list.rs:1541 # MEDIUM — shifted from H.3.c
-crates/core/src/ui/account/common/channel_list.rs:1544 # MEDIUM — shifted from H.3.c
-crates/core/src/ui/account/common/channel_list.rs:1565 # MEDIUM — shifted from H.3.c
-crates/core/src/ui/account/common/channel_list.rs:1633 # MEDIUM — shifted from H.3.c
-crates/core/src/ui/account/common/channel_list.rs:1643 # MEDIUM — shifted from H.3.c
-crates/core/src/ui/account/common/channel_list.rs:1668 # MEDIUM — shifted from H.3.c
-crates/core/src/ui/account/common/channel_list.rs:1670 # MEDIUM — shifted from H.3.c
 crates/core/src/ui/demo.rs:475 # MEDIUM — shifted +3 from H.3.c get_dm_channels/get_groups if-let expansion
 crates/core/src/ui/demo.rs:588 # MEDIUM — shifted from H.3.c
 crates/core/src/ui/demo.rs:604 # MEDIUM — shifted from H.3.c
@@ -1606,3 +1447,52 @@ crates/core/src/ui.rs:1857 # MEDIUM — shifted from H.3.c
 crates/core/src/ui.rs:1866 # MEDIUM — shifted from H.3.c
 crates/core/src/ui.rs:1915 # MEDIUM — shifted from H.3.c
 crates/core/src/ui.rs:1936 # MEDIUM — shifted from H.3.c
+crates/core/src/ui/account/common/channel_list/dm_view.rs:132 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/dm_view.rs:161 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/dm_view.rs:163 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/dm_view.rs:167 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/dm_view.rs:297 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/dm_view.rs:300 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/dm_view.rs:308 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/dm_view.rs:318 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/dm_view.rs:324 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/dm_view.rs:349 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/dm_view.rs:360 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/dm_view.rs:374 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/dm_view.rs:400 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/items.rs:42 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/items.rs:85 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/items.rs:96 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/items.rs:98 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/items.rs:101 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/items.rs:122 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/items.rs:201 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/items.rs:211 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/items.rs:236 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/items.rs:238 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/items.rs:440 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/items.rs:601 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/mod.rs:67 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/server_view.rs:122 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/server_view.rs:240 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/server_view.rs:245 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/server_view.rs:250 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/server_view.rs:268 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/server_view.rs:295 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/server_view.rs:299 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/server_view.rs:310 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/server_view.rs:324 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/server_view.rs:328 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/server_view.rs:340 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/server_view.rs:351 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/server_view.rs:396 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/server_view.rs:430 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/server_view.rs:431 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/server_view.rs:465 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/server_view.rs:466 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/server_view.rs:494 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/server_view.rs:573 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/server_view.rs:655 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/server_view.rs:656 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/server_view.rs:665 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/channel_list/server_view.rs:668 # MEDIUM — render-time read drives output or child prop, subscription is intent
