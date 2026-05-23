@@ -84,6 +84,133 @@ pub mod keys {
     pub const OFFLINE_SERVER_CACHE: &str = "offline_server_cache";
     /// `u64` — schema-version stamp used by `run_migrations`.
     pub const STORAGE_VERSION: &str = "storage_version";
+    /// `NotificationSettings` — global (device-level) notification preferences.
+    pub const NOTIFICATION_SETTINGS: &str = "notification_settings";
+    /// Namespace prefix for per-account notification settings.
+    ///
+    /// Full key: `format!("{}:{account_id}", NOTIFICATION_SETTINGS_PREFIX)`.
+    pub const NOTIFICATION_SETTINGS_PREFIX: &str = "notif";
+    /// `VoiceSettings` — voice/video preferences.
+    pub const VOICE_SETTINGS: &str = "voice_settings";
+}
+
+// ── KvStore trait ─────────────────────────────────────────────────────────────
+
+/// Minimal key-value storage interface.
+///
+/// [`Storage`] implements this trait by delegating to the underlying platform
+/// backend. Test code can supply [`MemoryKvStore`] (available under
+/// `#[cfg(test)]`) for fast, dependency-free unit tests.
+///
+/// # Design (DIP)
+///
+/// Consumers that only need raw KV access should accept `impl KvStore` rather
+/// than a concrete `Storage`, so that persona-MCP shims and integration tests
+/// can inject an in-memory fake without pulling in the full SQLite/IndexedDB
+/// stack.
+pub trait KvStore {
+    /// Get a raw JSON value by `key`. Returns `None` if the key is absent.
+    fn get(
+        &self,
+        key: &str,
+    ) -> impl std::future::Future<Output = Result<Option<serde_json::Value>, StorageError>>;
+
+    /// Upsert a raw JSON value for `key`.
+    fn set(
+        &self,
+        key: &str,
+        value: serde_json::Value,
+    ) -> impl std::future::Future<Output = Result<(), StorageError>>;
+
+    /// Delete `key`. No-op if absent.
+    fn delete(
+        &self,
+        key: &str,
+    ) -> impl std::future::Future<Output = Result<(), StorageError>>;
+
+    /// Clear all keys from the store.
+    fn clear(&self) -> impl std::future::Future<Output = Result<(), StorageError>>;
+}
+
+impl KvStore for Storage {
+    async fn get(&self, key: &str) -> Result<Option<serde_json::Value>, StorageError> {
+        self.0.get(key).await
+    }
+
+    async fn set(&self, key: &str, value: serde_json::Value) -> Result<(), StorageError> {
+        self.0.set(key, value).await
+    }
+
+    async fn delete(&self, key: &str) -> Result<(), StorageError> {
+        self.0.delete(key).await
+    }
+
+    async fn clear(&self) -> Result<(), StorageError> {
+        self.0.clear_all().await
+    }
+}
+
+/// In-memory [`KvStore`] backed by a `HashMap`.
+///
+/// Available only in test builds. Use this as a fast, dependency-free
+/// substitute for [`Storage`] in unit tests and persona-MCP mock harnesses.
+///
+/// ```rust,ignore
+/// #[cfg(test)]
+/// async fn example() {
+///     let store = MemoryKvStore::default();
+///     store.set("foo", serde_json::json!("bar")).await.unwrap();
+///     assert_eq!(store.get("foo").await.unwrap(), Some(serde_json::json!("bar")));
+/// }
+/// ```
+#[cfg(test)]
+pub struct MemoryKvStore {
+    data: std::sync::Mutex<std::collections::HashMap<String, serde_json::Value>>,
+}
+
+#[cfg(test)]
+impl Default for MemoryKvStore {
+    fn default() -> Self {
+        Self {
+            data: std::sync::Mutex::new(std::collections::HashMap::new()),
+        }
+    }
+}
+
+#[cfg(test)]
+impl KvStore for MemoryKvStore {
+    async fn get(&self, key: &str) -> Result<Option<serde_json::Value>, StorageError> {
+        Ok(self
+            .data
+            .lock()
+            .expect("MemoryKvStore mutex poisoned")
+            .get(key)
+            .cloned())
+    }
+
+    async fn set(&self, key: &str, value: serde_json::Value) -> Result<(), StorageError> {
+        self.data
+            .lock()
+            .expect("MemoryKvStore mutex poisoned")
+            .insert(key.to_string(), value);
+        Ok(())
+    }
+
+    async fn delete(&self, key: &str) -> Result<(), StorageError> {
+        self.data
+            .lock()
+            .expect("MemoryKvStore mutex poisoned")
+            .remove(key);
+        Ok(())
+    }
+
+    async fn clear(&self) -> Result<(), StorageError> {
+        self.data
+            .lock()
+            .expect("MemoryKvStore mutex poisoned")
+            .clear();
+        Ok(())
+    }
 }
 
 // ── Platform backends ─────────────────────────────────────────────────────────
@@ -684,7 +811,7 @@ impl Storage {
     /// Read application settings, returning [`AppSettings::default`] if not yet set.
     pub async fn get_app_settings(&self) -> Result<AppSettings, StorageError> {
         Ok(self
-            .get("app_settings")
+            .get(keys::APP_SETTINGS)
             .await?
             .and_then(|v| serde_json::from_value(v).ok())
             .unwrap_or_default())
@@ -692,7 +819,7 @@ impl Storage {
 
     /// Persist application settings.
     pub async fn set_app_settings(&self, settings: &AppSettings) -> Result<(), StorageError> {
-        self.set("app_settings", serde_json::to_value(settings)?)
+        self.set(keys::APP_SETTINGS, serde_json::to_value(settings)?)
             .await
     }
 
@@ -701,7 +828,7 @@ impl Storage {
     /// Read the global (device-level) notification settings, returning defaults if not yet set.
     pub async fn get_notification_settings(&self) -> Result<NotificationSettings, StorageError> {
         Ok(self
-            .get("notification_settings")
+            .get(keys::NOTIFICATION_SETTINGS)
             .await?
             .and_then(|v| serde_json::from_value(v).ok())
             .unwrap_or_default())
@@ -712,20 +839,23 @@ impl Storage {
         &self,
         settings: &NotificationSettings,
     ) -> Result<(), StorageError> {
-        self.set("notification_settings", serde_json::to_value(settings)?)
-            .await
+        self.set(
+            keys::NOTIFICATION_SETTINGS,
+            serde_json::to_value(settings)?,
+        )
+        .await
     }
 
     // ── Typed access — AccountNotificationSettings ────────────────────────────
 
     /// Read per-account notification settings for `account_id`.
     ///
-    /// Storage key: `"notif:{account_id}"`. Returns defaults if not yet saved.
+    /// Storage key: `"{NOTIFICATION_SETTINGS_PREFIX}:{account_id}"`. Returns defaults if not yet saved.
     pub async fn get_account_notification_settings(
         &self,
         account_id: &str,
     ) -> Result<AccountNotificationSettings, StorageError> {
-        let key = format!("notif:{account_id}");
+        let key = format!("{}:{account_id}", keys::NOTIFICATION_SETTINGS_PREFIX);
         Ok(self
             .get(&key)
             .await?
@@ -735,13 +865,13 @@ impl Storage {
 
     /// Persist per-account notification settings for `account_id`.
     ///
-    /// Storage key: `"notif:{account_id}"`.
+    /// Storage key: `"{NOTIFICATION_SETTINGS_PREFIX}:{account_id}"`.
     pub async fn set_account_notification_settings(
         &self,
         account_id: &str,
         settings: &AccountNotificationSettings,
     ) -> Result<(), StorageError> {
-        let key = format!("notif:{account_id}");
+        let key = format!("{}:{account_id}", keys::NOTIFICATION_SETTINGS_PREFIX);
         self.set(&key, serde_json::to_value(settings)?).await
     }
 
@@ -750,7 +880,7 @@ impl Storage {
     /// Read voice/video settings, returning defaults if not yet set.
     pub async fn get_voice_settings(&self) -> Result<VoiceSettings, StorageError> {
         Ok(self
-            .get("voice_settings")
+            .get(keys::VOICE_SETTINGS)
             .await?
             .and_then(|v| serde_json::from_value(v).ok())
             .unwrap_or_default())
@@ -758,7 +888,7 @@ impl Storage {
 
     /// Persist voice/video settings.
     pub async fn set_voice_settings(&self, settings: &VoiceSettings) -> Result<(), StorageError> {
-        self.set("voice_settings", serde_json::to_value(settings)?)
+        self.set(keys::VOICE_SETTINGS, serde_json::to_value(settings)?)
             .await
     }
 
@@ -767,7 +897,7 @@ impl Storage {
     /// List all stored account tokens.
     pub async fn get_account_tokens(&self) -> Result<Vec<AccountToken>, StorageError> {
         Ok(self
-            .get("account_tokens")
+            .get(keys::ACCOUNT_TOKENS)
             .await?
             .and_then(|v| serde_json::from_value::<Vec<AccountToken>>(v).ok())
             .unwrap_or_default())
@@ -778,7 +908,7 @@ impl Storage {
         let mut tokens = self.get_account_tokens().await?;
         tokens.retain(|t| !(t.backend == token.backend && t.account_id == token.account_id));
         tokens.push(token.clone());
-        self.set("account_tokens", serde_json::to_value(&tokens)?)
+        self.set(keys::ACCOUNT_TOKENS, serde_json::to_value(&tokens)?)
             .await
     }
 
@@ -790,7 +920,7 @@ impl Storage {
     ) -> Result<(), StorageError> {
         let mut tokens = self.get_account_tokens().await?;
         tokens.retain(|t| !(t.backend == backend && t.account_id == account_id));
-        self.set("account_tokens", serde_json::to_value(&tokens)?)
+        self.set(keys::ACCOUNT_TOKENS, serde_json::to_value(&tokens)?)
             .await
     }
 
@@ -799,7 +929,7 @@ impl Storage {
     /// List all stored favorites.
     pub async fn get_favorites(&self) -> Result<Vec<FavoriteItem>, StorageError> {
         Ok(self
-            .get("favorites")
+            .get(keys::FAVORITES)
             .await?
             .and_then(|v| serde_json::from_value::<Vec<FavoriteItem>>(v).ok())
             .unwrap_or_default())
@@ -810,7 +940,7 @@ impl Storage {
         let mut favorites = self.get_favorites().await?;
         favorites.retain(|f| !(f.backend == item.backend && f.id == item.id));
         favorites.push(item.clone());
-        self.set("favorites", serde_json::to_value(&favorites)?)
+        self.set(keys::FAVORITES, serde_json::to_value(&favorites)?)
             .await
     }
 
@@ -818,7 +948,7 @@ impl Storage {
     pub async fn remove_favorite(&self, backend: &str, id: &str) -> Result<(), StorageError> {
         let mut favorites = self.get_favorites().await?;
         favorites.retain(|f| !(f.backend == backend && f.id == id));
-        self.set("favorites", serde_json::to_value(&favorites)?)
+        self.set(keys::FAVORITES, serde_json::to_value(&favorites)?)
             .await
     }
 
@@ -829,7 +959,7 @@ impl Storage {
     /// Returns an empty list if the key does not exist yet.
     pub async fn get_offline_server_cache(&self) -> Result<Vec<OfflineServerRecord>, StorageError> {
         Ok(self
-            .get("offline_server_cache")
+            .get(keys::OFFLINE_SERVER_CACHE)
             .await?
             .and_then(|v| serde_json::from_value::<Vec<OfflineServerRecord>>(v).ok())
             .unwrap_or_default())
@@ -848,8 +978,11 @@ impl Storage {
             existing.retain(|r| r.id != record.id);
             existing.push(record.clone());
         }
-        self.set("offline_server_cache", serde_json::to_value(&existing)?)
-            .await
+        self.set(
+            keys::OFFLINE_SERVER_CACHE,
+            serde_json::to_value(&existing)?,
+        )
+        .await
     }
 
     /// Remove all cached server records for a given account.
@@ -862,8 +995,11 @@ impl Storage {
     ) -> Result<(), StorageError> {
         let mut existing = self.get_offline_server_cache().await?;
         existing.retain(|r| r.account_id != account_id);
-        self.set("offline_server_cache", serde_json::to_value(&existing)?)
-            .await
+        self.set(
+            keys::OFFLINE_SERVER_CACHE,
+            serde_json::to_value(&existing)?,
+        )
+        .await
     }
 
     // ── Typed access — ThemeConfig ────────────────────────────────────────────
@@ -873,7 +1009,7 @@ impl Storage {
     /// Returns [`crate::theme::ThemeConfig::default`] (neutral-dark) if not yet set.
     pub async fn get_theme_config(&self) -> Result<crate::theme::ThemeConfig, StorageError> {
         Ok(self
-            .get("theme_config")
+            .get(keys::THEME_CONFIG)
             .await?
             .and_then(|v| serde_json::from_value(v).ok())
             .unwrap_or_default())
@@ -884,7 +1020,7 @@ impl Storage {
         &self,
         config: &crate::theme::ThemeConfig,
     ) -> Result<(), StorageError> {
-        self.set("theme_config", serde_json::to_value(config)?)
+        self.set(keys::THEME_CONFIG, serde_json::to_value(config)?)
             .await
     }
 
@@ -893,7 +1029,7 @@ impl Storage {
     /// List all stored backup server records.
     pub async fn get_backup_servers(&self) -> Result<Vec<BackupServerRecord>, StorageError> {
         Ok(self
-            .get("backup_servers")
+            .get(keys::BACKUP_SERVERS)
             .await?
             .and_then(|v| serde_json::from_value::<Vec<BackupServerRecord>>(v).ok())
             .unwrap_or_default())
@@ -907,7 +1043,7 @@ impl Storage {
         let mut servers = self.get_backup_servers().await?;
         servers.retain(|s| s.url != record.url);
         servers.push(record.clone());
-        self.set("backup_servers", serde_json::to_value(&servers)?)
+        self.set(keys::BACKUP_SERVERS, serde_json::to_value(&servers)?)
             .await
     }
 
@@ -915,7 +1051,7 @@ impl Storage {
     pub async fn remove_backup_server(&self, url: &str) -> Result<(), StorageError> {
         let mut servers = self.get_backup_servers().await?;
         servers.retain(|s| s.url != url);
-        self.set("backup_servers", serde_json::to_value(&servers)?)
+        self.set(keys::BACKUP_SERVERS, serde_json::to_value(&servers)?)
             .await
     }
 
@@ -923,12 +1059,12 @@ impl Storage {
 
     /// Read the persisted per-account last-visited URL map.
     ///
-    /// Storage key: `"account_last_routes"`. Returns empty map if not yet saved.
+    /// Storage key: [`keys::ACCOUNT_LAST_ROUTES`]. Returns empty map if not yet saved.
     pub async fn get_account_last_routes(
         &self,
     ) -> Result<std::collections::HashMap<String, String>, StorageError> {
         Ok(self
-            .get("account_last_routes")
+            .get(keys::ACCOUNT_LAST_ROUTES)
             .await?
             .and_then(|v| serde_json::from_value(v).ok())
             .unwrap_or_default())
@@ -936,23 +1072,23 @@ impl Storage {
 
     /// Persist the per-account last-visited URL map.
     ///
-    /// Storage key: `"account_last_routes"`.
+    /// Storage key: [`keys::ACCOUNT_LAST_ROUTES`].
     pub async fn set_account_last_routes(
         &self,
         routes: &std::collections::HashMap<String, String>,
     ) -> Result<(), StorageError> {
-        self.set("account_last_routes", serde_json::to_value(routes)?)
+        self.set(keys::ACCOUNT_LAST_ROUTES, serde_json::to_value(routes)?)
             .await
     }
 
     /// Read the persisted per-account last-selected DM/group route map.
     ///
-    /// Storage key: `"account_last_dm_routes"`. Returns empty map if not yet saved.
+    /// Storage key: [`keys::ACCOUNT_LAST_DM_ROUTES`]. Returns empty map if not yet saved.
     pub async fn get_account_last_dm_routes(
         &self,
     ) -> Result<std::collections::HashMap<String, String>, StorageError> {
         Ok(self
-            .get("account_last_dm_routes")
+            .get(keys::ACCOUNT_LAST_DM_ROUTES)
             .await?
             .and_then(|v| serde_json::from_value(v).ok())
             .unwrap_or_default())
@@ -960,13 +1096,16 @@ impl Storage {
 
     /// Persist the per-account last-selected DM/group route map.
     ///
-    /// Storage key: `"account_last_dm_routes"`.
+    /// Storage key: [`keys::ACCOUNT_LAST_DM_ROUTES`].
     pub async fn set_account_last_dm_routes(
         &self,
         routes: &std::collections::HashMap<String, String>,
     ) -> Result<(), StorageError> {
-        self.set("account_last_dm_routes", serde_json::to_value(routes)?)
-            .await
+        self.set(
+            keys::ACCOUNT_LAST_DM_ROUTES,
+            serde_json::to_value(routes)?,
+        )
+        .await
     }
 
     // ── Typed access — Identity ───────────────────────────────────────────────
@@ -975,7 +1114,7 @@ impl Storage {
     ///
     /// Returns `None` if the identity has not been generated yet (pre-wizard).
     pub async fn get_identity_key(&self) -> Result<Option<[u8; 32]>, StorageError> {
-        let raw = self.get("identity_key").await?;
+        let raw = self.get(keys::IDENTITY_KEY).await?;
         match raw {
             None => Ok(None),
             Some(v) => {
@@ -995,14 +1134,17 @@ impl Storage {
 
     /// Persist the raw Ed25519 private key bytes.
     pub async fn set_identity_key(&self, key_bytes: &[u8; 32]) -> Result<(), StorageError> {
-        self.set("identity_key", serde_json::to_value(key_bytes.as_slice())?)
-            .await
+        self.set(
+            keys::IDENTITY_KEY,
+            serde_json::to_value(key_bytes.as_slice())?,
+        )
+        .await
     }
 
     /// Delete the identity key from storage. This is irreversible unless you have
     /// the mnemonic backed up.
     pub async fn delete_identity_key(&self) -> Result<(), StorageError> {
-        self.delete("identity_key").await
+        self.delete(keys::IDENTITY_KEY).await
     }
 
     // ── Typed access — LastChannelPerServer ──────────────────────────────────
@@ -1011,13 +1153,13 @@ impl Storage {
     ///
     /// Returns `None` if no channel has been visited for that server yet.
     ///
-    /// Storage key: `"last_channel_per_server"` (a JSON `{ server_id → channel_id }` map).
+    /// Storage key: [`keys::LAST_CHANNEL_PER_SERVER`] (a JSON `{ server_id → channel_id }` map).
     pub async fn get_last_channel_for_server(
         &self,
         server_id: &str,
     ) -> Result<Option<String>, StorageError> {
         Ok(self
-            .get("last_channel_per_server")
+            .get(keys::LAST_CHANNEL_PER_SERVER)
             .await?
             .and_then(|v| {
                 serde_json::from_value::<std::collections::HashMap<String, String>>(v).ok()
@@ -1029,20 +1171,23 @@ impl Storage {
     ///
     /// Other server entries in the map are preserved.
     ///
-    /// Storage key: `"last_channel_per_server"`.
+    /// Storage key: [`keys::LAST_CHANNEL_PER_SERVER`].
     pub async fn set_last_channel_for_server(
         &self,
         server_id: &str,
         channel_id: &str,
     ) -> Result<(), StorageError> {
         let mut map: std::collections::HashMap<String, String> = self
-            .get("last_channel_per_server")
+            .get(keys::LAST_CHANNEL_PER_SERVER)
             .await?
             .and_then(|v| serde_json::from_value(v).ok())
             .unwrap_or_default();
         map.insert(server_id.to_string(), channel_id.to_string());
-        self.set("last_channel_per_server", serde_json::to_value(&map)?)
-            .await
+        self.set(
+            keys::LAST_CHANNEL_PER_SERVER,
+            serde_json::to_value(&map)?,
+        )
+        .await
     }
 
     // ── Migrations ────────────────────────────────────────────────────────────
@@ -1050,14 +1195,67 @@ impl Storage {
     /// Current storage schema version.
     const CURRENT_VERSION: u64 = 1;
 
+    // ── Migration helpers ────────────────────────────────────────────────────
+
+    /// v0 → v1: initial schema stamp — nothing to migrate, just mark the version.
+    async fn migrate_v0_to_v1(&self) -> Result<(), StorageError> {
+        tracing::info!("Applying storage migration: v0 → v1 (initial stamp)");
+        self.set(keys::STORAGE_VERSION, serde_json::json!(1u64))
+            .await
+    }
+
+    // ── Migrations table ─────────────────────────────────────────────────────
+
     /// Run any pending storage schema migrations.
     ///
     /// Call once at startup, after [`Storage::init`], before reading any data.
     ///
     /// Each migration step is idempotent — safe to re-run after a crash.
+    ///
+    /// # Adding a new migration
+    ///
+    /// 1. Write `async fn migrate_vN_to_vN1(&self) -> Result<(), StorageError>`.
+    /// 2. Add a new `(target_version, apply)` entry to `STEPS` below.
+    /// 3. Bump `CURRENT_VERSION` to the new target version.
+    ///
+    /// That is the only required change — `run_migrations` iterates the table
+    /// automatically (OCP: open for extension, closed for modification of the
+    /// dispatch loop).
     pub async fn run_migrations(&self) -> Result<(), StorageError> {
-        let version = self
-            .get("storage_version")
+        /// One migration step: the target version it brings the schema to,
+        /// and an async-compatible apply function.
+        ///
+        /// We use a named struct rather than a bare tuple so future steps can
+        /// carry additional metadata (e.g. a human-readable description) without
+        /// changing the iteration code.
+        struct Step {
+            /// Version this step produces when applied.
+            target: u64,
+            /// Apply the migration on `storage`. The function stamps
+            /// [`keys::STORAGE_VERSION`] itself before returning.
+            apply: fn(&Storage) -> std::pin::Pin<
+                Box<dyn std::future::Future<Output = Result<(), StorageError>> + '_>,
+            >,
+        }
+
+        // ── Add new migration steps here ─────────────────────────────────────
+        // Steps MUST be ordered by ascending `target`. `run_migrations` skips
+        // steps whose `target <= current_version`, so gaps are safe.
+        fn step_v0_to_v1(
+            s: &Storage,
+        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), StorageError>> + '_>>
+        {
+            Box::pin(s.migrate_v0_to_v1())
+        }
+
+        let steps: &[Step] = &[Step {
+            target: 1,
+            apply: step_v0_to_v1,
+        }];
+        // ─────────────────────────────────────────────────────────────────────
+
+        let mut version = self
+            .get(keys::STORAGE_VERSION)
             .await?
             .and_then(|v| v.as_u64())
             .unwrap_or(0);
@@ -1067,11 +1265,11 @@ impl Storage {
             Self::CURRENT_VERSION
         );
 
-        // v0 → v1: initial schema. Nothing to migrate; just stamp the version.
-        if version < 1 {
-            tracing::info!("Applying storage migration: v0 → v1 (initial stamp)");
-            self.set("storage_version", serde_json::json!(Self::CURRENT_VERSION))
-                .await?;
+        for step in steps {
+            if version < step.target {
+                (step.apply)(self).await?;
+                version = step.target;
+            }
         }
 
         Ok(())

@@ -90,7 +90,7 @@ Verification: `cargo check -p poly-core --all-features` — green, 2m43s.
     `presence_statuses`, `disabled_native_backends`
   - `PluginRegistry` — `plugin_settings`, `signup_entries`,
     `test_account_entries`, `demo_active`
-- [ ] **B.2** **Replace remaining magic KV-key string sites** — call sites
+- [x] **B.2** **Replace remaining magic KV-key string sites** — call sites
   on lines 658, 666, 741, 752, 764, 775, 786, 794, 805, 824, 838, 851, 862,
   871, 885, 893, 906, 919, 930, 943, 953, 973, 980, 995, 1014, 1019, 1037,
   1050 still embed string literals. Migrate each to `keys::*` constants
@@ -103,12 +103,12 @@ Verification: `cargo check -p poly-core --all-features` — green, 2m43s.
   test fakes / persona-MCP shims swap in without dragging the full struct.
   Shipped in change `wxsxqwom` — trait + impl in `crates/core/src/client_manager/mod.rs`;
   UI consumer migration is out-of-scope per plan header.
-- [ ] **B.4** **`Storage` trait extraction.** `Storage(StorageInner)` is
+- [x] **B.4** **`Storage` trait extraction.** `Storage(StorageInner)` is
   hard-coded — fine for the app, painful for `chat-mcp` and persona-MCP
   callers that want an in-memory fake. Define
   `trait KvStore { async fn get/set/delete/clear }` and add a
   `pub struct MemoryKvStore` test impl in a `#[cfg(test)]` module.
-- [ ] **B.5** **`run_migrations` extensibility.** The current `if version
+- [x] **B.5** **`run_migrations` extensibility.** The current `if version
   < 1` ladder is a textbook OCP violation in waiting — every new schema
   bump edits the same `match`. Move each step into
   `async fn migrate_v{N}_to_v{N+1}(&self) -> Result<...>` and have
@@ -126,7 +126,7 @@ Verification: `cargo check -p poly-core --all-features` — green, 2m43s.
   already keys other fields by account ID (`account_sessions`,
   `blocked_users`). Promote `content_policy: ContentPolicy` to
   `content_policies: HashMap<String, ContentPolicy>`. LSP win — the field
-  shape matches every other per-account map.
+  shape matches every other per-account map. Shipped in change `<B.7-change-id>` (to be filled after describe).
 - [ ] **B.8** **Voice-noise integration is a real missing impl, not a
   stale comment** (`state/chat_data.rs:27`,
   `TODO(phase-voice-3)`). The toggle is wired in the UI but the
