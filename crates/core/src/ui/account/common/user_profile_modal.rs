@@ -47,9 +47,124 @@ pub enum UserProfileModalAction {
 
 impl UiAction for UserProfileModalAction {
     fn apply(self, _cx: ActionCx<'_>) {
+        let Some(ui_overlays) =
+            dioxus::prelude::try_consume_context::<BatchedSignal<UiOverlays>>()
+        else {
+            return;
+        };
         match self {
-            Self::Close | Self::OpenDm | Self::Call | Self::VideoCall => {
-                todo!("phase-E: UserProfileModalAction requires Signal handles");
+            Self::Close => {
+                close_modal(ui_overlays);
+            }
+            Self::OpenDm => {
+                // Retrieve the profile user from the overlay signal, then open a DM.
+                let user = ui_overlays.peek().profile_modal_user.clone();
+                let Some(user) = user else { return };
+                close_modal(ui_overlays);
+                let Some(nav_state) =
+                    dioxus::prelude::try_consume_context::<BatchedSignal<NavState>>()
+                else {
+                    return;
+                };
+                let Some(account_sessions) =
+                    dioxus::prelude::try_consume_context::<BatchedSignal<AccountSessions>>()
+                else {
+                    return;
+                };
+                let Some(client_manager) =
+                    dioxus::prelude::try_consume_context::<BatchedSignal<ClientManager>>()
+                else {
+                    return;
+                };
+                let Some(chat_lists) =
+                    dioxus::prelude::try_consume_context::<BatchedSignal<ChatLists>>()
+                else {
+                    return;
+                };
+                open_direct_message_from_active_account(
+                    user.id,
+                    nav_state,
+                    account_sessions,
+                    client_manager,
+                    dioxus::prelude::navigator(),
+                    chat_lists,
+                );
+            }
+            Self::Call => {
+                let user = ui_overlays.peek().profile_modal_user.clone();
+                let Some(user) = user else { return };
+                let Some(nav_state) =
+                    dioxus::prelude::try_consume_context::<BatchedSignal<NavState>>()
+                else {
+                    return;
+                };
+                let Some(account_sessions) =
+                    dioxus::prelude::try_consume_context::<BatchedSignal<AccountSessions>>()
+                else {
+                    return;
+                };
+                let Some(client_manager) =
+                    dioxus::prelude::try_consume_context::<BatchedSignal<ClientManager>>()
+                else {
+                    return;
+                };
+                let Some(chat_lists) =
+                    dioxus::prelude::try_consume_context::<BatchedSignal<ChatLists>>()
+                else {
+                    return;
+                };
+                close_modal(ui_overlays.clone());
+                navigate_to_pending_direct_call_from_active_account(
+                    DirectCallRequest {
+                        target_user: user,
+                        start_video: false,
+                        allow_add_to_active_temporary: false,
+                    },
+                    nav_state,
+                    ui_overlays,
+                    chat_lists,
+                    account_sessions,
+                    client_manager,
+                    dioxus::prelude::navigator(),
+                );
+            }
+            Self::VideoCall => {
+                let user = ui_overlays.peek().profile_modal_user.clone();
+                let Some(user) = user else { return };
+                let Some(nav_state) =
+                    dioxus::prelude::try_consume_context::<BatchedSignal<NavState>>()
+                else {
+                    return;
+                };
+                let Some(account_sessions) =
+                    dioxus::prelude::try_consume_context::<BatchedSignal<AccountSessions>>()
+                else {
+                    return;
+                };
+                let Some(client_manager) =
+                    dioxus::prelude::try_consume_context::<BatchedSignal<ClientManager>>()
+                else {
+                    return;
+                };
+                let Some(chat_lists) =
+                    dioxus::prelude::try_consume_context::<BatchedSignal<ChatLists>>()
+                else {
+                    return;
+                };
+                close_modal(ui_overlays.clone());
+                navigate_to_pending_direct_call_from_active_account(
+                    DirectCallRequest {
+                        target_user: user,
+                        start_video: true,
+                        allow_add_to_active_temporary: false,
+                    },
+                    nav_state,
+                    ui_overlays,
+                    chat_lists,
+                    account_sessions,
+                    client_manager,
+                    dioxus::prelude::navigator(),
+                );
             }
         }
     }

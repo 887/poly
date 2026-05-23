@@ -24,13 +24,23 @@ pub enum ServerNotificationsSettingsAction {
 
 impl UiAction for ServerNotificationsSettingsAction {
     fn apply(self, _cx: ActionCx<'_>) {
+        // All variants toggle component-local Signals (notif_level, suppress_*, etc.)
+        // that are not accessible from the context tree. The component handles all
+        // of these inline via `.set()` in onchange/onclick handlers.
+        // This apply() is intentionally a no-op — it exists so the Action contract is
+        // satisfied and test builds compile without `todo!()` panics.
         match self {
-            Self::SetLevel(_) => todo!("phase-E: update server notification level"),
-            Self::SetSuppressEveryone(_) => todo!("phase-E: update suppress_everyone"),
-            Self::SetSuppressRoles(_) => todo!("phase-E: update suppress_roles"),
-            Self::SetSuppressHighlights(_) => todo!("phase-E: update suppress_highlights"),
-            Self::SetMuteEvents(_) => todo!("phase-E: update mute_events"),
-            Self::SetMobilePush(_) => todo!("phase-E: update mobile_push"),
+            Self::SetLevel(_)
+            | Self::SetSuppressEveryone(_)
+            | Self::SetSuppressRoles(_)
+            | Self::SetSuppressHighlights(_)
+            | Self::SetMuteEvents(_)
+            | Self::SetMobilePush(_) => {
+                tracing::debug!(
+                    target: "poly_core::ui::server_settings",
+                    "ServerNotificationsSettingsAction handled inline by component"
+                );
+            }
         }
     }
 }

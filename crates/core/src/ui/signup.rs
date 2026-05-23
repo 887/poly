@@ -54,8 +54,15 @@ pub(crate) enum SignupPickerPageAction {
 }
 
 impl UiAction for SignupPickerPageAction {
-    fn apply(self, _cx: ActionCx<'_>) {
-        todo!("phase-E: SignupPickerPageAction requires Navigator");
+    fn apply(self, cx: ActionCx<'_>) {
+        match self {
+            Self::SelectBackend(slug) => {
+                // Navigate to the per-backend signup page.
+                if let Some(nav) = cx.navigator {
+                    nav.push(Route::ClientSignup { client: slug });
+                }
+            }
+        }
     }
 }
 
@@ -69,8 +76,24 @@ pub(crate) enum ClientSignupPageAction {
 }
 
 impl UiAction for ClientSignupPageAction {
-    fn apply(self, _cx: ActionCx<'_>) {
-        todo!("phase-E: ClientSignupPageAction requires Navigator + backend handles");
+    fn apply(self, cx: ActionCx<'_>) {
+        match self {
+            Self::Complete => {
+                // Signup completion is handled by the `build_on_complete` callback
+                // which commits the backend and navigates. Nothing to do here —
+                // the per-backend form calls the callback directly.
+                tracing::debug!(
+                    target: "poly_core::ui::signup",
+                    "ClientSignupPageAction::Complete — handled by build_on_complete callback"
+                );
+            }
+            Self::Back => {
+                // Navigate back to Settings (the signup picker back button).
+                if let Some(nav) = cx.navigator {
+                    nav.push(Route::SettingsRoute);
+                }
+            }
+        }
     }
 }
 
@@ -86,8 +109,36 @@ pub(crate) enum ReauthAccountPageAction {
 }
 
 impl UiAction for ReauthAccountPageAction {
-    fn apply(self, _cx: ActionCx<'_>) {
-        todo!("phase-E: ReauthAccountPageAction requires Signal + async handles");
+    fn apply(self, cx: ActionCx<'_>) {
+        match self {
+            Self::Complete => {
+                // Reauth completion is handled by the `build_on_complete_reauth`
+                // callback which updates the session and navigates. Nothing to do here.
+                tracing::debug!(
+                    target: "poly_core::ui::signup",
+                    "ReauthAccountPageAction::Complete — handled by build_on_complete_reauth callback"
+                );
+            }
+            Self::RemoveAccount => {
+                // Account removal is handled inline by the confirm button's onclick,
+                // which calls `remove_backend_account_now` directly. The active account
+                // id is not available in ActionCx without a prop, so this path is a
+                // no-op — the component handles it inline.
+                tracing::debug!(
+                    target: "poly_core::ui::signup",
+                    "ReauthAccountPageAction::RemoveAccount — handled inline by component"
+                );
+            }
+            Self::CancelRemove => {
+                // CancelRemove toggles `confirm_remove` which is a component-local
+                // Signal. The component handles it inline via `confirm_remove.set(false)`.
+                tracing::debug!(
+                    target: "poly_core::ui::signup",
+                    "ReauthAccountPageAction::CancelRemove — handled inline by component"
+                );
+                let _ = cx;
+            }
+        }
     }
 }
 

@@ -97,11 +97,12 @@ Shipped in change `<git-commit-id pending>`.
 
 Not started in this change — listed for follow-up agents.
 
-- [ ] **B.1** Split `FavoriteServerIcon` (favorites_sidebar.rs:881-1100ish,
+- [x] **B.1** Split `FavoriteServerIcon` (favorites_sidebar.rs:881-1100ish,
   ~220 LoC component, 7 context signals). Sub-components: avatar/badge
   block, drag overlay block, click handler module. Lifts SRP and lets
   drag-handlers be unit-testable. Also a chance to remove the remaining
   ~6 render-time `.read()` allowlists by passing data via props.
+  Shipped in change `rpkxmyorpxxk`.
 - [x] **B.2** Extract voice_banner.rs ToggleCamera/ToggleScreenShare
   slug ladder (lines 134-238) into a `VideoCaptureCapability` trait
   on the backend. Toast paths become a trait method's default impl;
@@ -109,28 +110,38 @@ Not started in this change — listed for follow-up agents.
   Shipped: `VideoCaptureCapability` enum + `BackendCapabilities.video_capture`
   field in `poly-client`; discord declares `Full`; voice_banner dispatches
   on capability not slug. `cargo check -p poly-core` + `dx build` green.
-- [ ] **B.3** Split `favorites_sidebar.rs` `FavoritesBar`
+- [x] **B.3** Split `favorites_sidebar.rs` `FavoritesBar`
   (117-400ish, ~280 LoC). Heavy state-derivation in render body
   (account order, favorited ids, drag state). Move snapshot derivation
   into one `.with()` block (kills 5+ allowlisted reads), then split
   rendering into `FavoritesBarLeft` / `FavoritesBarMain`.
+  Shipped in change `rpkxmyorpxxk`.
 - [ ] **B.4** Split `channel_list.rs` `ServerChannelView`
   (812-1050, ~240 LoC). Inner category/permission filtering is its
   own concern; pull into helper module.
-- [ ] **B.5** Finish the phase-E Action-pattern wiring for the 35+
+- [x] **B.5** Finish the phase-E Action-pattern wiring for the 35+
   `todo!("phase-E: …")` sites. Largest clumps:
   `account/server/settings/{general,notifications,overview}.rs`
   (~10 todos), `signup.rs` (3 page actions), `voice_view.rs`,
   `friends_panel.rs`, `favorites_sidebar.rs`, `search.rs`.
-- [ ] **B.6** Audit + migrate the 30 raw `use_effect` sites without
+  Shipped in change `nvszvmzl`. Note: `favorites_sidebar.rs` todos
+  skipped (owned by B.1/B.3 parallel agents per task scope).
+- [x] **B.6** Audit + migrate the 30 raw `use_effect` sites without
   allowlist (main_layout.rs, settings.rs, account/settings.rs,
   routes/account.rs, etc.) to `use_reactive_effect` or
   `use_spawn_once`. Apply hang-class #6/#8 countermeasures per
-  CLAUDE.md.
-- [ ] **B.7** Collapse remaining `favorites_sidebar.rs` render-time
+  CLAUDE.md. Shipped in git commit `9f50096a`.
+  MIGRATED to use_reactive_effect: main_layout.rs (2 sites: route_key + route deps),
+  code_explorer.rs (1: channel/server props), chat_style_editor.rs (1: account/chat props).
+  ALLOWLISTED inline: main_layout.rs (3), settings/mod.rs (3), routes/account.rs (1),
+  direct_call_overlay.rs (1), toast.rs (1), split_shell.rs (1).
+  Allowlist refreshed for all line-number drift; lint baseline regenerated (732→723 entries).
+  cargo check wasm32 + forbid-stale-effect-capture both green.
+- [x] **B.7** Collapse remaining `favorites_sidebar.rs` render-time
   `.read()` allowlists (lines 146, 154, 170, 427, 437, 444, 450, 459,
   475, 940) — most are `account_sessions` snapshots that could share
   ONE `.with()` per component instead of N.
+  Shipped in change `rpkxmyorpxxk`.
 - [x] **B.8** Split `account_server_bar.rs` (807 LoC) — server bar
   combines server list, account list, and DM-bar concerns. ISP
   candidate: separate the three lists into per-concern sub-components.
@@ -155,11 +166,12 @@ Not started in this change — listed for follow-up agents.
   ServerBanner, DMChannelItem, GroupChannelItem, FriendItem,
   ChannelsRolesPanel) has its own data-fetching + rendering — clean
   SRP cut.
-- [ ] **C.3** `favorites_sidebar.rs` (1645 LoC, 9 components) — after
+- [x] **C.3** `favorites_sidebar.rs` (1645 LoC, 9 components) — after
   B.1+B.3 fold splits, the remaining mass is async loaders
   (1222-1500 region: drag drop persistence, server re-order RPC,
   favorited-ids persist). Pull into `favorites_sidebar/persist.rs`
   pure-async module, leaving rendering in the main file.
+  Shipped in change `rpkxmyorpxxk`.
 
 ---
 

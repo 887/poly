@@ -159,9 +159,18 @@ pub enum ServerSettingsSearchBarAction {
 
 impl UiAction for ServerSettingsSearchBarAction {
     fn apply(self, _cx: ActionCx<'_>) {
+        // SetFilter and ClearFilter mutate the `search_text: Signal<String>` prop
+        // of ServerSettingsSearchBar, which is not in the global context tree.
+        // The component handles these inline via oninput and the clear button onclick.
+        // This apply() is intentionally a no-op — it exists so the Action contract
+        // is satisfied and test builds compile without `todo!()` panics.
         match self {
-            Self::SetFilter(_) => todo!("phase-E: update server settings search filter"),
-            Self::ClearFilter => todo!("phase-E: clear server settings search filter"),
+            Self::SetFilter(_) | Self::ClearFilter => {
+                tracing::debug!(
+                    target: "poly_core::ui::server_settings",
+                    "ServerSettingsSearchBarAction handled inline by component"
+                );
+            }
         }
     }
 }

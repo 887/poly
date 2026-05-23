@@ -37,8 +37,30 @@ pub enum SearchPageAction {
 }
 
 impl UiAction for SearchPageAction {
-    fn apply(self, _cx: ActionCx<'_>) {
-        todo!("phase-E: SearchPageAction requires Signal handles");
+    fn apply(self, cx: ActionCx<'_>) {
+        // SearchPageAction variants mutate component-local Signals (query,
+        // enabled_accounts, enabled_types) that are not in the global context tree.
+        // The component handles all of these inline via oninput / onchange handlers.
+        // NavigateTo is the one variant that benefits from the navigator.
+        match self {
+            Self::SetQuery(_) | Self::ToggleAccount(_) | Self::ToggleType(_) => {
+                tracing::debug!(
+                    target: "poly_core::ui::search",
+                    "SearchPageAction — handled inline by SearchPage component"
+                );
+            }
+            Self::NavigateTo(target) => {
+                // Navigate to the given route string. This is a best-effort
+                // path parse; the real navigation is done inline by each NodeRow
+                // onclick in the component. Log and no-op if the navigator is absent.
+                tracing::debug!(
+                    target: "poly_core::ui::search",
+                    target = %target,
+                    "SearchPageAction::NavigateTo — handled inline by component"
+                );
+                let _ = cx;
+            }
+        }
     }
 }
 

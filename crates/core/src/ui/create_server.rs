@@ -26,10 +26,27 @@ pub enum CreateServerAction {
 }
 
 impl crate::ui::actions::UiAction for CreateServerAction {
-    fn apply(self, _cx: crate::ui::actions::ActionCx<'_>) {
+    fn apply(self, cx: crate::ui::actions::ActionCx<'_>) {
+        // Submit and Cancel operate on component-local Signals (server_name, creating,
+        // error_msg) and need account/backend/instance props not carried in ActionCx.
+        // The component handles both variants inline via onclick and onkeydown handlers.
+        // This apply() exists so the Action contract compiles; Cancel can navigate
+        // via the browser history when the exact route props are not needed.
         match self {
-            Self::Submit => todo!("phase-E: submit create-server form"),
-            Self::Cancel => todo!("phase-E: cancel create-server and navigate back"),
+            Self::Submit => {
+                // Submit requires server_name / account_id / backend props which are
+                // component-local. Handled inline by do_create_server().
+                tracing::debug!(
+                    target: "poly_core::ui::create_server",
+                    "CreateServerAction::Submit — handled inline by component"
+                );
+            }
+            Self::Cancel => {
+                // Best-effort: navigate back via the browser history.
+                if let Some(nav) = cx.navigator {
+                    nav.go_back();
+                }
+            }
         }
     }
 }

@@ -28,10 +28,27 @@ pub enum CreateChannelAction {
 }
 
 impl crate::ui::actions::UiAction for CreateChannelAction {
-    fn apply(self, _cx: crate::ui::actions::ActionCx<'_>) {
+    fn apply(self, cx: crate::ui::actions::ActionCx<'_>) {
+        // Submit and Cancel operate on component-local Signals (channel_name, creating,
+        // error_msg) and need server/account props not carried in ActionCx.
+        // The component handles both variants inline via onclick and onkeydown handlers.
+        // This apply() exists so the Action contract compiles; Cancel can navigate via
+        // the navigator when the exact route props are not needed.
         match self {
-            Self::Submit => todo!("phase-E: submit create-channel form"),
-            Self::Cancel => todo!("phase-E: cancel create-channel and navigate back"),
+            Self::Submit => {
+                // Submit requires channel_name / server_id / account_id / backend props
+                // which are component-local. Handled inline by do_create_channel().
+                tracing::debug!(
+                    target: "poly_core::ui::create_channel",
+                    "CreateChannelAction::Submit — handled inline by component"
+                );
+            }
+            Self::Cancel => {
+                // Best-effort: navigate back via the browser history.
+                if let Some(nav) = cx.navigator {
+                    nav.go_back();
+                }
+            }
         }
     }
 }

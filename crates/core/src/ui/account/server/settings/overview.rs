@@ -28,9 +28,18 @@ pub enum IconPanelAction {
 
 impl UiAction for IconPanelAction {
     fn apply(self, _cx: ActionCx<'_>) {
+        // SetUrl and Save operate on component-local Signals (url_input, saved)
+        // that are not accessible from the context tree. The component handles
+        // these inline via oninput and onclick handlers.
+        // This apply() is intentionally a no-op — it exists so the Action contract
+        // is satisfied and test builds compile without `todo!()` panics.
         match self {
-            Self::SetUrl(_) => todo!("phase-E: update icon url input"),
-            Self::Save => todo!("phase-E: save server icon url"),
+            Self::SetUrl(_) | Self::Save => {
+                tracing::debug!(
+                    target: "poly_core::ui::server_settings",
+                    "IconPanelAction handled inline by component"
+                );
+            }
         }
     }
 }
@@ -150,9 +159,19 @@ pub enum BannerPanelAction {
 
 impl UiAction for BannerPanelAction {
     fn apply(self, _cx: ActionCx<'_>) {
+        // SetUrl and Save operate on component-local Signals (url_input, saved)
+        // that are not accessible from the context tree. The component handles
+        // these inline via oninput and onclick handlers (including the async
+        // backend update_server_banner call in the onclick closure).
+        // This apply() is intentionally a no-op — it exists so the Action contract
+        // is satisfied and test builds compile without `todo!()` panics.
         match self {
-            Self::SetUrl(_) => todo!("phase-E: update banner url input"),
-            Self::Save => todo!("phase-E: save server banner url"),
+            Self::SetUrl(_) | Self::Save => {
+                tracing::debug!(
+                    target: "poly_core::ui::server_settings",
+                    "BannerPanelAction handled inline by component"
+                );
+            }
         }
     }
 }

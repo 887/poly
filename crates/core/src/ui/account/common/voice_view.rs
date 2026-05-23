@@ -52,7 +52,84 @@ pub enum VoiceChannelViewAction {
 
 impl UiAction for VoiceChannelViewAction {
     fn apply(self, _cx: ActionCx<'_>) {
-        todo!("phase-E: VoiceChannelViewAction requires Signal + async handles");
+        let Some(voice_state) = dioxus::prelude::try_consume_context::<BatchedSignal<VoiceState>>()
+        else {
+            return;
+        };
+        match self {
+            Self::Join => {
+                // Join is handled inline by VoiceJoinButton's onclick via
+                // `join_voice_channel()`, which needs channel/server context
+                // not available through the ActionCx. No-op here; the component
+                // calls join_voice_channel directly.
+                tracing::debug!(
+                    target: "poly_core::ui::voice_view",
+                    "VoiceChannelViewAction::Join — handled inline by VoiceJoinButton"
+                );
+            }
+            Self::Disconnect => {
+                let _ = dioxus::prelude::document::eval(JS_STOP_ALL_STREAMS);
+                disconnect_active_call(voice_state);
+            }
+            Self::ToggleMute => {
+                voice_state.batch(|v| {
+                    if let Some(ref mut vc) = v.voice_connection {
+                        vc.is_muted = !vc.is_muted;
+                    }
+                });
+            }
+            Self::ToggleDeafen => {
+                voice_state.batch(|v| {
+                    if let Some(ref mut vc) = v.voice_connection {
+                        vc.is_deafened = !vc.is_deafened;
+                    }
+                });
+            }
+            Self::ToggleCamera => {
+                // Camera toggle uses JS eval + async; handled inline by VoiceChatBar.
+                // Signal the state change — JS stream start/stop is the component's concern.
+                voice_state.batch(|v| {
+                    if let Some(ref mut vc) = v.voice_connection {
+                        vc.is_video_on = !vc.is_video_on;
+                    }
+                });
+            }
+            Self::ToggleScreenShare => {
+                // Screen share toggle uses JS eval + async; handled inline by VoiceChatBar.
+                // Signal the state change — JS stream start/stop is the component's concern.
+                voice_state.batch(|v| {
+                    if let Some(ref mut vc) = v.voice_connection {
+                        vc.is_streaming = !vc.is_streaming;
+                    }
+                });
+            }
+            Self::ToggleNoiseCancel => {
+                voice_state.batch(|v| {
+                    v.voice_media_settings.noise_cancel_enabled =
+                        !v.voice_media_settings.noise_cancel_enabled;
+                });
+            }
+            Self::OpenParticipantProfile(user_id) => {
+                // Find the user in participants and open their profile modal.
+                let participant = voice_state
+                    .peek()
+                    .voice_connection
+                    .as_ref()
+                    .and_then(|vc| {
+                        voice_state
+                            .peek()
+                            .voice_channel_participants
+                            .get(&vc.channel_id)
+                            .and_then(|parts| parts.iter().find(|p| p.user.id == user_id).cloned())
+                    });
+                if let (Some(p), Some(ui_overlays)) = (
+                    participant,
+                    dioxus::prelude::try_consume_context::<BatchedSignal<UiOverlays>>(),
+                ) {
+                    open_user_profile(ui_overlays, p.user);
+                }
+            }
+        }
     }
 }
 

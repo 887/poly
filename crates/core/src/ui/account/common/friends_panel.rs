@@ -33,7 +33,63 @@ pub enum FriendsPanelAction {
 
 impl UiAction for FriendsPanelAction {
     fn apply(self, _cx: ActionCx<'_>) {
-        todo!("phase-E: FriendsPanelAction requires Signal handles");
+        match self {
+            Self::ShowFriends | Self::ShowIgnored | Self::ShowBlocked => {
+                // Tab selection mutates `active_tab`, a component-local Signal not
+                // accessible from the context tree. The component handles tab changes
+                // inline via SidebarMenuButton onclick handlers.
+                tracing::debug!(
+                    target: "poly_core::ui::friends_panel",
+                    "FriendsPanelAction tab switch — handled inline by component"
+                );
+            }
+            Self::SetSearchFilter(_) => {
+                // SetSearchFilter mutates `search_filter`, a component-local Signal.
+                // The component handles this inline via the FriendsFilterBar oninput handler.
+                tracing::debug!(
+                    target: "poly_core::ui::friends_panel",
+                    "FriendsPanelAction::SetSearchFilter — handled inline by component"
+                );
+            }
+            Self::MessageFriend(friend_id) => {
+                // Open a DM with the friend using the active account context.
+                let Some(nav_state) =
+                    dioxus::prelude::try_consume_context::<BatchedSignal<crate::state::NavState>>()
+                else {
+                    return;
+                };
+                let Some(account_sessions) =
+                    dioxus::prelude::try_consume_context::<BatchedSignal<AccountSessions>>()
+                else {
+                    return;
+                };
+                let Some(client_manager) =
+                    dioxus::prelude::try_consume_context::<BatchedSignal<crate::client_manager::ClientManager>>()
+                else {
+                    return;
+                };
+                let Some(chat_lists) =
+                    dioxus::prelude::try_consume_context::<BatchedSignal<ChatLists>>()
+                else {
+                    return;
+                };
+                // Remember scroll position before navigating away.
+                {
+                    let prev = nav_state.read().selected_channel.cloned(); // poly-lint: allow render-time-read — inside apply() event handler, not a render fn
+                    if let Some(ref id) = prev {
+                        remember_message_list_scroll_position(id);
+                    }
+                }
+                open_direct_message_from_active_account(
+                    friend_id,
+                    nav_state,
+                    account_sessions,
+                    client_manager,
+                    dioxus::prelude::navigator(),
+                    chat_lists,
+                );
+            }
+        }
     }
 }
 

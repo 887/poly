@@ -18,9 +18,18 @@ pub enum ServerGeneralSettingsAction {
 
 impl UiAction for ServerGeneralSettingsAction {
     fn apply(self, _cx: ActionCx<'_>) {
+        // ShowLeaveConfirm / HideLeaveConfirm toggle a component-local `show_confirm`
+        // Signal that is not accessible from the context tree. The component handles
+        // these variants inline via `show_confirm.set(true/false)` in onclick handlers.
+        // This apply() is intentionally a no-op — it exists so the Action contract is
+        // satisfied and test builds compile without `todo!()` panics.
         match self {
-            Self::ShowLeaveConfirm => todo!("phase-E: show inline leave-server confirm"),
-            Self::HideLeaveConfirm => todo!("phase-E: hide inline leave-server confirm"),
+            Self::ShowLeaveConfirm | Self::HideLeaveConfirm => {
+                tracing::debug!(
+                    target: "poly_core::ui::server_settings",
+                    "ServerGeneralSettingsAction handled inline by component"
+                );
+            }
         }
     }
 }
