@@ -1,6 +1,6 @@
 # Plan: SOLID + missing-impl audit — `clients/lemmy/`
 
-## Status: IN PROGRESS — Phase A shipped, B/C documented
+## Status: ✅ DONE — all in-scope phases shipped (changes sqlpzqyv, totxoywu, vpypsowlyrqz, uvmnpumnvsyk). C.2 deferred (out of scope: requires `poly_client` trait surface sweep); C.3 deferred (premise stale post-B.2 split).
 
 Audit pass over `clients/lemmy/src/{api.rs,guest.rs,lib.rs,signup.rs,wit_bindings.rs}`
 (4080 LoC). Identifies SOLID violations and missing implementations; tracks
@@ -59,12 +59,24 @@ Small, low-risk cleanups landed during the audit pass itself.
       `client.rs` (169) `LemmyHttpClient` struct + session/UA helpers,
       `endpoints.rs` (655) REST-endpoint methods,
       `mod.rs` (38) re-exports preserving `crate::api::Foo` paths.
-- [ ] **B.3** `IsBackend::authenticate` (`lib.rs:185-300+`) handles
+- [x] **B.3** `IsBackend::authenticate` (`lib.rs:185-300+`) handles
       three credential variants inline with deeply nested matches and
       duplicated `LemmySession` construction. Extract one private
       `fn finalize_session(person, jwt) -> LemmySession` helper to
       collapse the three arms. _DIP — handler stops knowing how
       `Person` becomes `LemmySession`._
+      — shipped in change `uvmnpumnvsyk`. Two inherent helpers added
+      on `LemmyClient` in `is_backend.rs`:
+      `finalize_session(person, jwt) -> Session` (combines
+      `LemmySession` construction + `set_session` + `Session` projection),
+      and `prime_placeholder_session(jwt)` (zero-fills the session so
+      `fetch_site` has a JWT to send before user_id is known). The
+      `authenticate` body now resolves `(jwt, missing_user_err)` per
+      credential variant and runs a single common tail
+      (`prime_placeholder` → `fetch_site` → `finalize`). 100+ LoC of
+      duplicated `LemmySession { … }` / `Session { … }` literals
+      collapse to one site each. The three early-return arms become
+      one.
 - [x] **B.4** `guest.rs` (494 LoC) duplicates ~30 `NotSupported`/`Ok(vec![])`
       stubs across 6 trait impls. Once Phase C.1 lands (real shared
       logic), these become one-line delegates. Until then, dedup the
@@ -81,7 +93,7 @@ Small, low-risk cleanups landed during the audit pass itself.
 
 ## Phase C — Architectural rewrites (>300 LoC, max 3)
 
-- [ ] **C.1** WASM guest plugin (`guest.rs`, 494 LoC) is a wholesale
+- [x] **C.1** WASM guest plugin (`guest.rs`, 494 LoC) is a wholesale
       stub — every method returns `NotSupported`/`Ok(vec![])`/`NotFound`.
       Native `LemmyClient` (lib.rs) holds all real logic. Either:
       (a) compile the native client to wasm32-wasip2 and wire `guest.rs`
@@ -90,7 +102,31 @@ Small, low-risk cleanups landed during the audit pass itself.
       calls. Both are >300 LoC and need a separate design doc.
       _Liskov violation: `LemmyPlugin as MessengerClientGuest` claims to
       be a backend but obeys none of the documented contract._
-- [ ] **C.2** Trait-fan-out in `lib.rs`. `LemmyClient` implements 8
+      — shipped in change `uvmnpumnvsyk` (path (b) — discord-guest pattern).
+      `guest.rs` 502 → 980 LoC. Real Lemmy v3 REST impl for the read-only
+      surface: `authenticate` (login + `/api/v3/site`), `get_servers`
+      (`/api/v3/community/list?type_=Subscribed`), `get_server`,
+      `get_channels`, `get_channel`, `get_messages` (posts-as-messages
+      for `lemmy-feed-{id}` + comments-as-messages for `lemmy-post-{id}`),
+      and `get_forum_posts` with sort mapping LatestActivity→Active /
+      CreationDate→New. Session state in `thread_local!{ RefCell<Option<LemmyGuestSession>> }`
+      mirrors the discord plugin's pattern; base URL read from host KV
+      `lemmy:base_url` with `https://lemmy.ml` fallback. Wire types are
+      minimal `Wire*` structs in-module (independent of the native
+      `api::types` to avoid pulling reqwest into wasm32-wasip2).
+      Mutating endpoints (send_message, create_forum_post, moderation,
+      DM/voice) remain explicit `NotSupported` — porting writes to
+      WASM-guest is a future plan. Also closed pre-existing
+      compile errors that blocked any wasm32-wasip2 build:
+      added missing `MessengerClientGuest` methods
+      (`join_voice_channel_transport`, `start_dm_call_transport`,
+      `set_voice_mute`, `get_signup_method`),
+      added missing `ClientViewsGuest::get_account_overview_view`,
+      and added the previously-unimplemented `ClientConfigGuest`
+      (`get_client_version`, `set_client_version_override`,
+      `get_client_mechanisms`, `set_client_mechanism` — mirroring the
+      native impl, persisting state via `host_api::storage_*`).
+- [~] **C.2** Trait-fan-out in `lib.rs`. `LemmyClient` implements 8
       poly_client traits — half return `NotSupported` (`SocialGraphBackend`
       14 methods, all err; `DmsAndGroupsBackend` 12 methods, all err).
       Interface Segregation: the host should request only the traits a
@@ -98,11 +134,29 @@ Small, low-risk cleanups landed during the audit pass itself.
       (already exists for some) consistently — and Lemmy should return
       `None` for unsupported capabilities rather than impl-then-err.
       Plan-level: requires a sweep of `poly_client` trait surface.
-- [ ] **C.3** `api.rs` HTTP layer holds raw `serde_json::Value`-shaped
+      — **DEFERRED** (out of scope). The fix necessarily touches
+      `crates/client/src/` (trait declarations + `as_*` plumbing) and
+      every other client crate that currently impls the offending
+      traits unconditionally (matrix, discord, teams, stoat, …). The
+      "edit only clients/lemmy/" scope discipline for this work order
+      prohibits that. Track as its own cross-crate refactor plan
+      (`plan-trait-segregation-sweep.md` — to be authored).
+- [~] **C.3** `api.rs` HTTP layer holds raw `serde_json::Value`-shaped
       response types alongside typed `LemmyPost`. Open/Closed violation:
       adding a new endpoint requires editing the central
       `LemmyHttp::get` match. Replace with a `trait LemmyEndpoint`
       pattern (associated `RESP` type + URL builder).
+      — **DEFERRED** (premise stale post-B.2). After the B.2 split
+      (`api/{client,endpoints,types,mapping}.rs`) there is no central
+      `LemmyHttp::get` match to surgery: each endpoint is a discrete
+      `pub async fn <name>(&self, …)` on `LemmyHttpClient` in
+      `api/endpoints.rs`. Adding a new endpoint = adding a new `pub
+      async fn`, which is already Open/Closed-friendly. The Open/Closed
+      violation the plan diagnosed no longer exists. A `trait
+      LemmyEndpoint { type Resp; fn url(&self) -> String; }` rewrite
+      would be pure ceremony — three async wrappers per endpoint with
+      no observable benefit — and would require a separate justifying
+      ADR.
 
 ---
 

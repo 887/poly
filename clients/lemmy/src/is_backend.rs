@@ -10,98 +10,20 @@ use std::pin::Pin;
 
 use crate::LemmyClient;
 use crate::api::{
-    self, LemmySession, community_to_channel, map_comment_to_message, map_community_to_server,
-    map_person, map_post_to_message,
+    self, LemmyPerson, LemmySession, community_to_channel, map_comment_to_message,
+    map_community_to_server, map_person, map_post_to_message,
 };
 
-#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
-#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-impl IsBackend for LemmyClient {
-    // ── Authentication ──────────────────────────────────────────────────────
-
-    async fn authenticate(&mut self, credentials: AuthCredentials) -> ClientResult<Session> {
-        let (username, password) = match credentials {
-            AuthCredentials::EmailPassword { email, password } => (email, password),
-            AuthCredentials::Token(jwt) => {
-                // Restore from persisted JWT: store it and fetch user from site
-                let placeholder = LemmySession {
-                    jwt: jwt.clone(),
-                    user_id: 0,
-                    user_display_name: String::new(),
-                    user_avatar_url: None,
-                };
-                self.http.set_session(placeholder);
-                let site = self.http.fetch_site().await?;
-                let person = site
-                    .my_user
-                    .ok_or_else(|| {
-                        ClientError::AuthFailed(
-                            "JWT is invalid or expired (no my_user in site response)".to_string(),
-                        )
-                    })?
-                    .local_user_view
-                    .person;
-
-                let session = LemmySession {
-                    jwt,
-                    user_id: person.id,
-                    user_display_name: person
-                        .display_name
-                        .clone()
-                        .unwrap_or_else(|| person.name.clone()),
-                    user_avatar_url: person.avatar.clone(),
-                };
-                self.http.set_session(session.clone());
-
-                let instance_id = self.instance_id();
-                return Ok(Session {
-                    id: format!("lemmy-session-{}", person.id),
-                    user: map_person(&person),
-                    token: session.jwt,
-                    backend: BackendType::from(crate::SLUG),
-                    icon_emoji: None,
-                    instance_id,
-                    backend_url: Some(self.base_url().to_string()),
-                });
-            }
-            other @ (AuthCredentials::OAuth { .. }
-            | AuthCredentials::DeviceCode { .. }
-            | AuthCredentials::PolyServer { .. }) => {
-                return Err(ClientError::AuthFailed(format!(
-                    "Lemmy does not support {:?} credentials",
-                    std::mem::discriminant(&other)
-                )));
-            }
-        };
-
-        let login_resp = self.http.login(&username, &password).await?;
-        let jwt = login_resp.jwt.ok_or_else(|| {
-            ClientError::AuthFailed(
-                "Lemmy login succeeded but no JWT was returned (may require email verification)"
-                    .to_string(),
-            )
-        })?;
-
-        // Store a temporary session so fetch_site can use it
-        let placeholder = LemmySession {
-            jwt: jwt.clone(),
-            user_id: 0,
-            user_display_name: String::new(),
-            user_avatar_url: None,
-        };
-        self.http.set_session(placeholder);
-
-        let site = self.http.fetch_site().await?;
-        let person = site
-            .my_user
-            .ok_or_else(|| {
-                ClientError::AuthFailed(
-                    "Login OK but site returned no user info".to_string(),
-                )
-            })?
-            .local_user_view
-            .person;
-
+impl LemmyClient {
+    /// Resolve `(LemmySession, Session)` for the just-authenticated user.
+    ///
+    /// Side-effect: stores the session on `self.http` so subsequent calls use
+    /// the new JWT. Both `AuthCredentials::EmailPassword` and `Token(...)`
+    /// arms converge here once a `LemmyPerson` has been retrieved — collapses
+    /// the three-arm duplication that previously lived in `authenticate`.
+    ///
+    /// DIP: callers no longer know how `Person → Session` projection works.
+    fn finalize_session(&mut self, person: &LemmyPerson, jwt: String) -> Session {
         let session = LemmySession {
             jwt: jwt.clone(),
             user_id: person.id,
@@ -114,15 +36,74 @@ impl IsBackend for LemmyClient {
         self.http.set_session(session);
 
         let instance_id = self.instance_id();
-        Ok(Session {
+        Session {
             id: format!("lemmy-session-{}", person.id),
-            user: map_person(&person),
+            user: map_person(person),
             token: jwt,
             backend: BackendType::from(crate::SLUG),
             icon_emoji: None,
             instance_id,
             backend_url: Some(self.base_url().to_string()),
-        })
+        }
+    }
+
+    /// Stash a placeholder session so `fetch_site` has a JWT to send.
+    ///
+    /// The user_id / display_name / avatar fields are zeroed and immediately
+    /// overwritten by `finalize_session` once the site response lands.
+    fn prime_placeholder_session(&self, jwt: &str) {
+        self.http.set_session(LemmySession {
+            jwt: jwt.to_string(),
+            user_id: 0,
+            user_display_name: String::new(),
+            user_avatar_url: None,
+        });
+    }
+}
+
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl IsBackend for LemmyClient {
+    // ── Authentication ──────────────────────────────────────────────────────
+
+    async fn authenticate(&mut self, credentials: AuthCredentials) -> ClientResult<Session> {
+        // Resolve `(jwt, missing_user_err)` from the credential variant.
+        let (jwt, missing_user_err) = match credentials {
+            AuthCredentials::EmailPassword { email, password } => {
+                let login_resp = self.http.login(&email, &password).await?;
+                let jwt = login_resp.jwt.ok_or_else(|| {
+                    ClientError::AuthFailed(
+                        "Lemmy login succeeded but no JWT was returned \
+                         (may require email verification)"
+                            .to_string(),
+                    )
+                })?;
+                (jwt, "Login OK but site returned no user info")
+            }
+            AuthCredentials::Token(jwt) => (
+                jwt,
+                "JWT is invalid or expired (no my_user in site response)",
+            ),
+            other @ (AuthCredentials::OAuth { .. }
+            | AuthCredentials::DeviceCode { .. }
+            | AuthCredentials::PolyServer { .. }) => {
+                return Err(ClientError::AuthFailed(format!(
+                    "Lemmy does not support {:?} credentials",
+                    std::mem::discriminant(&other)
+                )));
+            }
+        };
+
+        // Common tail: prime placeholder → fetch_site → finalize.
+        self.prime_placeholder_session(&jwt);
+        let site = self.http.fetch_site().await?;
+        let person = site
+            .my_user
+            .ok_or_else(|| ClientError::AuthFailed(missing_user_err.to_string()))?
+            .local_user_view
+            .person;
+
+        Ok(self.finalize_session(&person, jwt))
     }
 
     async fn logout(&mut self) -> ClientResult<()> {
