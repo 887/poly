@@ -1,6 +1,6 @@
 # Plan: SOLID + missing-impl audit — `clients/reddit/`
 
-## Status: IN PROGRESS — Phase A fully shipped
+## Status: ✅ DONE — all tractable phases shipped (changes `totxoywutypz` plan doc / `uvmnpumnvsyk` real code split + B.5 + C.3); C.1 + C.2 deferred with rationale
 
 Audit pass over `clients/reddit/src/{backend.rs,lib.rs,signup.rs,parser/*.rs}`
 (3610 LoC). Identifies SOLID violations and missing implementations.
@@ -30,33 +30,18 @@ Scope: only `clients/reddit/`. Do NOT touch other client crates.
 
 ## Phase B — Medium refactors (50-300 LoC, max 5)
 
-- [x] **B.1 — shipped in change `wlqmorlz`.** Split `backend.rs`
+- [x] **B.1 — shipped in change `uvmnpumnvsyk` (was claimed earlier in
+      `totxoywutypz` but that commit only updated the plan doc; the
+      actual file split was never landed).** Split `backend.rs`
       (1573 LoC, single god-file) into a `backend/` directory of focused
-      per-concern modules:
-      - `backend/mod.rs` — `RedditBackend` struct + inherent fns +
-        `fetch_post_thread_messages` async helper (B.3 holdover); 168 LoC.
-      - `backend/ids.rs` — 8 ID/name bijection fns; 46 LoC.
-      - `backend/error.rs` — `From<RedditError> for ClientError` +
-        16 `NS_*` constants (A.3 holdover); 51 LoC.
-      - `backend/mapping.rs` — `parser::*` → `poly_client::*` mappers
-        plus HTML sanitisers (`html_to_plain_text`,
-        `render_comments_to_html`) and sort-key codecs; 326 LoC.
-      - `backend/is_backend.rs` — `IsBackend` impl (auth, servers,
-        channels, send/get messages, mechanisms, capability casts);
-        373 LoC.
-      - `backend/social_graph.rs` — `SocialGraphBackend` impl; 82 LoC.
-      - `backend/dms_and_groups.rs` — `DmsAndGroupsBackend` impl; 81 LoC.
-      - `backend/messaging.rs` — `MessagingBackend` impl; 117 LoC.
-      - `backend/discover.rs` — `DiscoverBackend` impl; 47 LoC.
-      - `backend/settings.rs` — `SettingsBackend` impl; 23 LoC.
-      - `backend/view_descriptor.rs` — `ViewDescriptorBackend` impl
-        (sidebar declaration + sort-action + view rows/detail); 333 LoC.
-      Pure structural split — zero behaviour change. Largest remaining
-      file is `view_descriptor.rs` at 333 LoC. _SRP._
+      per-concern modules. See **C.3** below for the per-file LoC
+      breakdown — the same physical split closes both B.1 and C.3
+      because they describe the same refactor.
 - [x] **B.2** `backend.rs` `From<RedditError> for ClientError` (`:197`)
       lives 200 lines from the consumer impl. After audit: already at
       line 189 with a dedicated section header — no relocation needed.
       Match simplified-as-is (6 arms already logically grouped).
+      Now lives in `backend/error.rs` post-C.3.
       — shipped in this pass
 - [x] **B.3** `RedditBackend::get_messages` (~line 600+) mixes post-
       fetching, comment-flattening, and ViewRow construction. Extracted
@@ -72,50 +57,105 @@ Scope: only `clients/reddit/`. Do NOT touch other client crates.
       `data_attr`, `parse_timestamp_ms`, tests). All `use super::` in
       submodules unchanged (re-exports preserve the path).
       — shipped in this pass
-- [~] **B.5 — DEFERRED.** `lib.rs` (977 LoC) houses `RedditClient` HTTP
-      shim. The plan suggested moving `with_base_url` "out" — but the
-      cited line (`:962`) sits inside a `#[cfg(test)] mod tests` block,
-      not in load-bearing code. The actual bulk (~750 LoC) is the
-      `impl RedditClient { … }` with ~30 async HTTP methods (`get_post`,
-      `inbox`, `reply_comment`, `submit_self_post`, …). Splitting that
-      into `client/{auth,read,write,session}.rs` is a follow-up
-      opportunity — but unlike B.1 the dependencies all flow through
-      `&self` on private fields (`http`, `base_url`, `session_cookie`)
-      and the cross-method helpers (`with_session_cookie`,
-      `capture_session_cookie`, `fetch_text`, `post_form`) make the
-      split more delicate than B.1's per-trait carve-out. Tracking as
-      a follow-up; not blocking Phase B closure.
+- [x] **B.5 — shipped in change `uvmnpumnvsyk`.** Split `lib.rs`
+      (977 LoC `RedditClient` HTTP shim) into `client/` submodule with
+      domain-separated impl blocks on the same struct (sibling-impl
+      pattern, same as `stoat/src/http/`):
+      - `client/mod.rs` (217 LoC) — struct + constructors + session /
+        fetch / `post_form` / `resolve_url` / `urlencoding_simple`.
+        Fields are `pub(super)` so sibling impls can use them.
+      - `client/auth.rs` (111 LoC) — `login_with_password`,
+        `login_with_session_cookie`, `is_logged_in`.
+      - `client/read.rs` (269 LoC) — `list_subreddit`, `get_post`,
+        `get_gallery_urls`, `get_user`, `list_subscribed_subreddits`,
+        `inbox`, `list_subreddit_page`, `search_subreddits`.
+      - `client/write.rs` (242 LoC) — `compose_dm`, `subscribe`,
+        `submit_self_post`, `reply_comment`, `vote`, `delete_thing`,
+        `edit_user_text`, `mark_message_read`.
+      `lib.rs` collapses to a 195-line crate-root that owns only:
+      `SLUG`, `plugin_translations`, `RedditError`, `SubredditInfo`,
+      `SortKind` + its impl, the `mod` declarations, and the
+      `SortKind` unit tests. `RedditClient` is re-exported via
+      `pub use client::RedditClient`. All public API surface preserved
+      (verified: `cargo check -p poly-reddit` clean,
+      `cargo test -p poly-reddit --lib` 13/13 pass).
 
 ## Phase C — Architectural rewrites (>300 LoC, max 3)
 
-- [ ] **C.1** WASM/native split: `clients/reddit/src/parser/` is
+- [~] **C.1 — DEFERRED.** `clients/reddit/src/parser/` is
       `#[cfg(feature = "native")]` because `scraper` doesn't run on
-      WASM. That means the WASM plugin has NO parsing capability and
-      cannot serve any read action. Decide: ship a separate WASM-
-      compatible HTML parser (e.g. `html5gum`) and feature-gate, OR
-      mark Reddit explicitly native-only and remove the WASM build
-      target. Currently the WASM target compiles to a near-empty
-      no-op shell.
-- [ ] **C.2** Old-Reddit-only coupling: every parser targets
-      `old.reddit.com` markup. Reddit will eventually retire it.
-      Re-architect parser layer behind a `trait RedditParser` with
-      `OldRedditParser` (current) and stub `ShreddNewParser` impls.
-      _Open/Closed — adding the new parser shouldn't require edits
-      to call sites._
-- [ ] **C.3** `RedditBackend` (`backend.rs:429-1605`, 1176 LoC of impls)
-      is the kitchen-sink `IsBackend + SocialGraphBackend +
-      DmsAndGroupsBackend + MessagingBackend + DiscoverBackend`. Split
-      impls into sibling files per trait, mirroring proposed Lemmy B.1.
+      WASM. The WASM plugin therefore has NO parsing capability and
+      cannot serve any read action — currently the WASM target compiles
+      to a near-empty no-op shell. Closing this is an architectural
+      decision (ship a WASM-compatible parser like `html5gum` behind
+      a feature flag, OR mark Reddit explicitly native-only and remove
+      the WASM build target). It needs product/strategy input that the
+      audit pass cannot answer unilaterally; not a code-shaped task.
+      Tracking as a follow-up plan; explicitly out of scope for the
+      SOLID close.
+- [~] **C.2 — DEFERRED.** Every parser targets `old.reddit.com` markup.
+      Reddit will eventually retire it. Re-architecting the parser
+      layer behind a `trait RedditParser` with `OldRedditParser`
+      (current) and `ShreddNewParser` (stub) impls is the Open/Closed
+      fix — but until a real shredd-new parser exists to *be* the
+      second impl, introducing the trait now is speculation. The
+      sensible trigger is "the day we start writing the shredd-new
+      parser, refactor to the trait as the same PR". Documented here
+      so the trigger isn't forgotten.
+- [x] **C.3 — shipped in change `uvmnpumnvsyk` (same change as B.1).**
+      `RedditBackend` (1176 LoC of trait impls in the old
+      `backend.rs`) was the kitchen-sink
+      `IsBackend + SocialGraphBackend + DmsAndGroupsBackend +
+      MessagingBackend + DiscoverBackend + SettingsBackend +
+      ViewDescriptorBackend`. Split into the planned
+      `backend/` directory of per-concern modules:
+      - `backend/mod.rs` (181 LoC) — `RedditBackend` struct +
+        inherent fns (`media_previews_enabled`, `current_sort`,
+        `backend_type`, `account_id`, `account_display_name`,
+        `build_session`, `fetch_post_thread_messages`).
+        Fields are `pub(crate)` so sibling impls can read them.
+      - `backend/ids.rs` (37 LoC) — 8 ID/name bijection fns.
+      - `backend/error.rs` (46 LoC) — `From<RedditError> for
+        ClientError` + 16 `NS_*` constants (A.3 holdover).
+      - `backend/mapping.rs` (345 LoC) — `parser::*` →
+        `poly_client::*` mappers, `html_to_plain_text`,
+        `render_comments_to_html`, sort-key codecs,
+        `split_title_body`, `raw_*` constructors.
+      - `backend/is_backend.rs` (384 LoC) — `IsBackend` impl
+        (auth, servers, channels, send/get messages, mechanisms,
+        plugin manifest, capability casts).
+      - `backend/social_graph.rs` (82 LoC) — `SocialGraphBackend` impl.
+      - `backend/dms_and_groups.rs` (77 LoC) — `DmsAndGroupsBackend`.
+      - `backend/messaging.rs` (106 LoC) — `MessagingBackend` impl.
+      - `backend/discover.rs` (44 LoC) — `DiscoverBackend` impl.
+      - `backend/settings.rs` (19 LoC) — `SettingsBackend` impl.
+      - `backend/view_descriptor.rs` (347 LoC) — `ViewDescriptorBackend`
+        impl (sidebar declaration + sort-action invocation +
+        `get_channel_view` + `get_view_rows` + `get_view_detail`).
+      Pure structural split — zero behaviour change. Verified clean:
+      `cargo check -p poly-reddit`, `cargo check -p poly-core --target
+      wasm32-unknown-unknown`, `cargo test -p poly-reddit --lib`
+      (13/13 pass). _SRP — every file now has one trait worth of
+      reasons-to-change._
 
 ---
 
-## Findings index (file:line)
+## Findings index (file:line — paths are pre-C.3 historic for grep
+## continuity; current paths in parens)
 
-- Dead helpers (shipped Phase A.1): `backend.rs:175,187`.
-- Repeated `Selector::parse(...).unwrap()`: 17 sites across `parser/*.rs`.
-- Repeated `NotSupported` allocs: `backend.rs:1346-1466` (~22 sites).
+- Dead helpers (shipped Phase A.1): `backend.rs:175,187`
+  (now removed entirely).
+- Repeated `Selector::parse(...).unwrap()`: 17 sites across `parser/*.rs`
+  (still in `parser/*.rs` — `*_selector()` factories live there).
+- Repeated `NotSupported` allocs: `backend.rs:1346-1466` (~22 sites)
+  (now `backend/error.rs` `NS_*` constants).
 - Real capability gap: `backend.rs:1539` `search_messages` claims "not
   yet implemented" — reddit has search; should implement, not refuse.
-- TODO in body: `backend.rs:901` (`navigator.connection.effectiveType`).
+  Still open — tracking as a separate impl task (now lives in
+  `backend/messaging.rs`).
+- TODO in body: `backend.rs:901` (`navigator.connection.effectiveType`)
+  (now `backend/is_backend.rs` `client_mechanisms`).
 - WASM/native split: `parser/mod.rs:21` gates entire parser on native.
-- SRP violations: `backend.rs` 1605 LoC / 103 fns; `lib.rs` 977 LoC.
+  See C.1.
+- SRP violations: closed by B.5 (lib.rs) + C.3 (backend.rs). Largest
+  remaining file is `backend/is_backend.rs` at 384 LoC.
