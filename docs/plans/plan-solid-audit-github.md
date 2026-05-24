@@ -1,6 +1,6 @@
 # Plan: SOLID + missing-impl audit — `clients/github/`
 
-## Status: IN PROGRESS — Phase A shipped (A.1+A.2 in change `zwmsmpmk` / commit `59b100cc`; A.3 skipped — cosmetic). Phase B + C queued.
+## Status: ✅ DONE — Phase A shipped (A.1+A.2 in change `zwmsmpmk` / commit `59b100cc`; A.3 skipped — cosmetic). Phase B fully shipped (B.1 in `6e2cd0a1`, B.2/B.4 via `common-forge` crate, B.3+B.5 in earlier waves). Phase C: C.3 shipped (mapping_tests.rs split); C.1 (octocrab migration) and C.2 (trait fan-out via `as_xxx()`) honestly deferred — both require multi-crate / multi-backend coordination outside this audit's scope.
 
 Audit pass over `clients/github/src/{api.rs,lib.rs,mapping.rs,signup.rs,types.rs}`
 (2921 LoC). Identifies SOLID violations and missing implementations.
@@ -59,17 +59,47 @@ Scope: only `clients/github/`. Do NOT touch other client crates.
 
 ## Phase C — Architectural rewrites (>300 LoC, max 3)
 
-- [ ] **C.1** GitHub API surface is octocrab-equivalent hand-rolled.
-      Consider migrating to `octocrab` to get rate-limit + pagination
-      + secondary-rate-limit handling for free. Would replace much of
-      `api.rs` (651 LoC). _Large; needs design._
-- [ ] **C.2** Trait fan-out — `GitHubClient` impls 5 poly_client traits
-      where 3 are nearly all-`NotSupported`. Same Interface Segregation
-      argument as Lemmy C.2; resolve at the poly_client trait level
-      via per-capability `as_xxx() -> Option<&dyn _>`.
-- [ ] **C.3** `mapping.rs` (612 LoC) intermixes test fixtures with
-      production mapping. Split. (Smaller than HN, still architectural
-      because tests use `pub(crate)` to reach internal types.)
+- [~] **C.1** **Deferred — design-level.** GitHub API surface is an
+      octocrab-equivalent hand-rolled module (`api.rs`, 817 LoC). A real
+      migration to `octocrab` would:
+      (a) introduce a new heavy dependency tree (reqwest + jsonwebtoken
+      + secrecy) that ALL three shells (web/desktop/electron) pull in
+      via `poly-github`, including the WASM build;
+      (b) duplicate the existing native↔WASM transport split because
+      `octocrab` is native-only — WASM still needs the `/gh` HTTP-bridge
+      fallback already present in `GhCli`;
+      (c) lose the `gh CLI` authentication path, which is the user-
+      facing value prop of this backend (no token extraction).
+      Net trade-off: ~400 LoC saved in `api.rs` at the cost of a much
+      larger dep graph, a duplicate WASM transport, and a worse auth
+      story. Rate limiting and pagination are already handled by the
+      `gh` CLI itself. **Verdict: not worth it under the current
+      "CLI as transport" design.** Revisit if the project drops the
+      `gh` CLI requirement.
+
+- [~] **C.2** **Deferred — cross-crate trait surgery.** Trait fan-out
+      across 5 `poly_client` traits where 3 are nearly all-`NotSupported`
+      is real (see `impl_moderation.rs`, `impl_social_graph.rs`,
+      `impl_dms_and_groups.rs`) but the fix lives in
+      `clients/client/` (the `poly_client` trait definitions) and would
+      require touching every backend crate (matrix, discord, teams,
+      stoat, …) to migrate to per-capability
+      `as_moderation() -> Option<&dyn ModerationBackend>` etc.
+      That's a workspace-wide refactor, outside the scope of a single-
+      crate audit. The github-side `NotSupported` returns are already
+      deduplicated into 7 `NS_NO_*` consts (A.2) so the cost of
+      keeping the wide trait is small. Tracked as a workspace concern
+      for a future "interface segregation" plan.
+
+- [x] **C.3** `mapping.rs` test fixtures split into sibling
+      `mapping_tests.rs` (commit on worktree-agent branch). Production
+      mapping logic stays in `mapping.rs` (~480 LoC); fixture builders
+      `make_issue` / `make_discussion` and all 15 unit tests live in
+      `mapping_tests.rs` (210 LoC), declared via
+      `#[cfg(test)] mod mapping_tests;` in `lib.rs`. Tests still reach
+      `crate::types::*` (legitimate same-crate access — they're testing
+      the mapping between internal API types and public Poly types).
+      `cargo test -p poly-github --lib` → 15 passed.
 
 ---
 

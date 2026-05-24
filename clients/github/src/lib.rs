@@ -39,6 +39,8 @@ mod impl_settings;
 mod impl_social_graph;
 mod impl_view_descriptor;
 mod mapping;
+#[cfg(test)]
+mod mapping_tests;
 pub mod signup;
 mod types;
 
