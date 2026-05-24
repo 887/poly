@@ -52,14 +52,19 @@ Small, low-risk cleanups landed during the audit pass itself.
       `fn finalize_session(person, jwt) -> LemmySession` helper to
       collapse the three arms. _DIP — handler stops knowing how
       `Person` becomes `LemmySession`._
-- [ ] **B.4** `guest.rs` (494 LoC) duplicates ~30 `NotSupported`/`Ok(vec![])`
+- [x] **B.4** `guest.rs` (494 LoC) duplicates ~30 `NotSupported`/`Ok(vec![])`
       stubs across 6 trait impls. Once Phase C.1 lands (real shared
       logic), these become one-line delegates. Until then, dedup the
       stub strings via shared `const`s in `guest.rs` top.
-- [ ] **B.5** ForumBackend::get_forum_posts (`lib.rs:1002`) returns
+      — shipped in change `vpypsowlyrqz` (4 consts: NS_GROUP_DMS, NS_CODE_CHANNELS,
+      NS_WASM_NOT_IMPL, NS_FORUM_NOT_IMPL; 9 call sites replaced with const refs)
+- [x] **B.5** ForumBackend::get_forum_posts (`lib.rs:1002`) returns
       `NotSupported` — this is a **capability gap, not a NotSupported-
       by-design**. Lemmy is fundamentally a forum; this method should
       delegate to the existing post-listing code in `api.rs`. Implement.
+      — shipped in change `vpypsowlyrqz` (delegates to `fetch_posts_paged`;
+      maps ForumSortOrder::LatestActivity→"Active", CreationDate→"New";
+      populates starter_message_id + message_count from PostCounts)
 
 ## Phase C — Architectural rewrites (>300 LoC, max 3)
 
