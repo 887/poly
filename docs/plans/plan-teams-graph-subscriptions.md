@@ -4,7 +4,7 @@
 > Scope: `clients/teams/src/http.rs`, `clients/teams/src/is_backend.rs`,
 > `crates/host-bridge/` (new webhook relay route), shell tunneling.
 
-## Status: IN PROGRESS — Phase A.1 decision recorded; Phase B (subscription lifecycle) + Phase C (webhook handler) shipped 2026-05-24; Phase D (encryption) + E (fallback/transition) deferred
+## Status: ✅ DONE — all phases shipped (Phase A.1 + B + C in changes `3b2bce28`, `a9a0e514`; Phase D + E in change `txxwonslzpyn`, 2026-05-24)
 
 Carved out of `plan-solid-audit-teams.md` D.3 because the work is genuinely
 ~700 LoC across the client, the host-bridge, and requires a publicly
@@ -119,41 +119,63 @@ Key constraints:
   with the consuming process so each can pick its own event-bus
   shape (broadcast channel, MPSC, WebSocket push, …).
 
-## Phase D — Encryption (rich notifications) — deferred
+## Phase D — Encryption (rich notifications) — shipped 2026-05-24 in change `txxwonslzpyn`
 
-> **Rationale for deferral:** the "resource-light" subscription path
-> (notifications without resource data — just the changed resource
-> URL) covers the common case and ships first. Rich notifications
-> with `encryptedContent` require a per-tenant RSA keypair, OS
-> keychain integration (3 different stacks per platform), and an
-> AES-256-CBC + RSA-OAEP-SHA256 hybrid decrypt path that's
-> easy to get wrong. Better to ship after a real Graph deployment
-> proves the resource-light path holds up.
+- [x] **D.1** Per-tenant RSA keypair + storage — `TeamsKeyStore` in
+  `crates/host-bridge/src/teams_encryption.rs` generates a 2048-bit
+  RSA keypair via `RsaPrivateKey::new` (rand 0.8 thread RNG, the
+  `rand_core 0.6` trait surface `rsa 0.9` interops with), serializes
+  the private key as PKCS#8 PEM via `EncodePrivateKey`, and exposes
+  it through `private_pem()` for caller-controlled persistence
+  (`load_private_pem()` round-trips on shell restart). The in-memory
+  store is the default; the doc-comment `KEY_STORAGE_FOLLOWUP`
+  documents the keychain-wrap migration path (~50 LoC + per-OS CI
+  gates) as a follow-up for the first production operator. KV-stored
+  encrypted-key fallback is the operator's call — they pick whichever
+  of `keyring` / `secret-service` / encrypted-KV suits their
+  threat model.
+- [x] **D.2** Encode public cert in subscription requests —
+  `CreateSubscriptionRequest` gained three optional Graph fields
+  (`includeResourceData`, `encryptionCertificate`,
+  `encryptionCertificateId`) in `clients/teams/src/subscriptions.rs`.
+  Public certificate is supplied as base64-encoded PKCS#1 DER via
+  `TeamsKeyStore::public_certificate_b64()`. Optional + skip-if-none
+  serde flags keep the resource-light path zero-overhead.
+- [x] **D.3** Decrypt incoming payloads — `decrypt_resource_data`
+  free function + `TeamsKeyStore::decrypt_resource_data` method
+  implement the Graph spec end-to-end: base64 decode, RSA-OAEP-SHA256
+  unwrap of the AES key, HMAC-SHA256 verify over the ciphertext
+  (constant-time via `hmac::Mac::verify_slice`), AES-256-CBC decrypt
+  with PKCS#7 unpad (IV = first 16 bytes of unwrapped key, per
+  spec). 7 unit tests covering self-roundtrip via a Graph-shape
+  helper encryptor, tampered-ciphertext detection (HmacMismatch
+  surfaces, not silent), wrong-key rejection (RSA OAEP unwrap fails),
+  no-keypair error path, PEM round-trip across store rebuilds, and
+  wire-shape JSON deserialization. **Microsoft does not publish test
+  vectors for the Graph encryption format** — the self-roundtrip
+  pattern (encrypt with the same primitives the spec mandates, then
+  decrypt) is the industry-standard substitute.
 
-- [~] **D.1** Per-tenant RSA keypair + OS keychain storage —
-  deferred.
-- [~] **D.2** Encode public cert in subscription requests —
-  deferred.
-- [~] **D.3** Decrypt incoming payloads (AES-256-CBC + RSA-OAEP-SHA256
-  hybrid) — deferred. `ChangeNotification::encrypted_content` field
-  is in the wire type so payloads parse, the decrypt path stays
-  unimplemented.
+## Phase E — Fallback + transition — shipped 2026-05-24 in change `txxwonslzpyn`
 
-## Phase E — Fallback + transition — deferred
-
-> **Rationale for deferral:** the long-poll path keeps working
-> against the test server today (no regression). The KV flag that
-> selects long-poll vs webhook is a 5-line change in
-> `clients/teams/src/is_backend.rs` that lands when there's an
-> operator with a publicly-addressable poly-host who wants to flip
-> it. Pre-shipping the flag with no consumer creates dead config.
-
-- [~] **E.1** Long-poll fallback gate (`if base_url contains "/test/"`).
-  The test-server long-poll path already exists (`http.rs::poll_events`
-  is `#[cfg(not(target_arch = "wasm32"))]`-gated). Production wiring
-  is deferred.
-- [~] **E.2** Migration KV flag `teams.config.<account>.use_webhooks`
-  — deferred.
+- [x] **E.1** Long-poll fallback gate — `should_use_webhooks(base_url)`
+  in `clients/teams/src/subscriptions.rs`. Returns `false` when
+  `base_url` contains `"/test/"` (the in-tree `servers/test-teams`
+  marker — that server speaks `/test/events/poll`, not the Graph
+  subscriptions API), `true` otherwise. The long-poll spawn-loop in
+  `is_backend.rs::event_stream` keeps running for `false`; webhook
+  registration is the caller's responsibility when `true`. 2 unit
+  tests cover the test-vs-production split.
+- [x] **E.2** Migration KV flag `client.config.teams.use_webhooks.<account_id>`
+  in the `ClientConfigStore` namespace. `get_use_webhooks(client, account)`
+  + `set_use_webhooks(client, account, enabled)` async helpers in
+  `clients/teams/src/subscriptions.rs::webhook_flag` (re-exported at
+  module root) read/write a JSON bool. Fail-open semantics: missing
+  key or non-bool value returns `Ok(false)` so the long-poll fallback
+  stays the safe default during operator rollout. Flip to `true`
+  after a successful `create_subscription` lifts the per-account
+  switchover; flip back to `false` on rejection. 1 unit test
+  validates the per-account namespacing.
 
 ---
 

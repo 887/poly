@@ -65,7 +65,7 @@ voice = ["voice-primitives"]
 # (docs/plans/plan-teams-graph-subscriptions.md Phase C). Native-only —
 # the webhook is a server-side relay; WASM callers reach it through their
 # normal /host bridge.
-teams-webhook = ["dep:axum"]
+teams-webhook = ["dep:axum", "dep:rsa", "dep:aes", "dep:cbc", "dep:sha2", "dep:hmac", "dep:rand08"]
 
 [dependencies]
 serde = { workspace = true }
@@ -108,6 +108,21 @@ audiopus = { workspace = true, optional = true }
 chacha20poly1305 = { workspace = true, optional = true }
 aes-gcm = { workspace = true, optional = true }
 uuid = { workspace = true, optional = true, features = ["v4"] }
+
+# Microsoft Graph rich-notification decryption — Phase D of
+# docs/plans/plan-teams-graph-subscriptions.md. All gated to the
+# `teams-webhook` feature so they only link into builds that mount
+# the relay.
+rsa = { workspace = true, optional = true }
+aes = { workspace = true, optional = true }
+cbc = { workspace = true, optional = true, features = ["alloc", "block-padding"] }
+sha2 = { workspace = true, optional = true }
+hmac = { workspace = true, optional = true }
+# `rsa 0.9` + `aes-gcm 0.10` interop on the `rand_core 0.6` trait surface
+# (exposed by `rand 0.8`). The workspace `rand = "0.10"` is `rand_core 0.10`
+# and cannot pass `RngCore` to `RsaPrivateKey::new`. Aliased as `rand08` so
+# the workspace alias stays unambiguous.
+rand08 = { package = "rand", version = "0.8", optional = true }
 
 # tokio-tungstenite was previously required by voice.rs for the Discord WS
 # handshake. That protocol now lives in clients/discord/src/voice_bridge.rs.

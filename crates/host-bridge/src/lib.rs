@@ -92,6 +92,14 @@ pub mod aead_client;
 #[cfg(all(not(target_arch = "wasm32"), feature = "teams-webhook"))]
 pub mod teams_webhook;
 
+// Microsoft Graph rich-notification encryption helpers — Phase D of
+// `docs/plans/plan-teams-graph-subscriptions.md`. Generates the RSA
+// keypair the subscription registers and decrypts incoming
+// `encryptedContent` payloads. Gated behind the same `teams-webhook`
+// feature so it doesn't compile into shells that don't host the relay.
+#[cfg(all(not(target_arch = "wasm32"), feature = "teams-webhook"))]
+pub mod teams_encryption;
+
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
