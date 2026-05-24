@@ -4,7 +4,30 @@
 > Counterpart to the discord video chain (`voice_bridge.rs` Phase Y — wasm H.264
 > capture/playback + mock video signaling, change `720c8f32` on main).
 
-## Status: PENDING — opus agent design, ready for implementation
+## Status: IN PROGRESS — Phase A.4 + codec layer shipped (this change); B-D DEFERRED (LiveKit-WASM blocker + transport-undecided upstream)
+
+**Summary of close-out** (this change):
+- **A.4 decided + shipped**: per-client duplication chosen (consistency with `voice_common.rs`
+  / `plan-stoat-voice-wasm.md` B.3/B.4). New cfg-free `clients/stoat/src/video_common.rs`
+  ports the codec/packetization helpers (RFC 6184 FU-A fragment + reassemble, NAL parse,
+  canvas-id convention) and constants from
+  `clients/discord/src/voice_bridge/video_{capture,playback}.rs`. 7 new unit tests, all
+  passing on native; compiles clean on `wasm32-unknown-unknown` for poly-stoat AND poly-core.
+- **A.2 / A.3 deferred**: the WASM-LiveKit-feasibility one-pager and Stoat-prod-protocol
+  probe are gated on the user accepting LiveKit as the target. Until then they are
+  documentation busy-work. Marked `[~]` with rationale.
+- **B.1-B.6 deferred**: every B sub-step depends on A.2 saying "LiveKit-via-JS-interop viable"
+  or "web-sys WebRTC reimplementation acceptable scope". Per the plan's own gating language
+  ("Phase B fan-out structure assumes A.2 says ..."), shipping B without A.2 would lock us
+  into a transport before knowing if upstream / `livekit/client-sdk-rust` will support WASM.
+  Marked `[~]` with rationale.
+- **C.1-C.3 deferred**: UI integration is downstream of B. Marked `[~]`.
+- **D.1-D.2 deferred**: smoke is downstream of B+C. Marked `[~]`.
+
+**Net effect**: codec-layer surface area is ready (no transport coupling), so when the
+transport answer materializes (Vortex-extension OR LiveKit), the new file plugs in directly.
+The plan is **not closed as DONE** — it stays IN PROGRESS so the deferred phases remain
+discoverable. Reopen by ticking A.2 / A.3 first.
 
 The Vortex-mock path that powers `clients/stoat/src/voice_wasm.rs` is audio-only.
 This plan covers adding video to stoat. The headline finding from Phase A.1
@@ -182,25 +205,41 @@ What the existing **stoat** wasm code already ships that video work builds on:
       but upstream direction is unambiguous. Three options enumerated; this
       plan targets **Option (c) — LiveKit-shaped path**, with Option (a)
       as fallback. See "Verdict" section above.
-- [ ] **A.2** Investigate WASM-compatible LiveKit client options. Inventory
-      what `livekit/client-sdk-rust` ships for `wasm32-unknown-unknown`
-      today (probably nothing — likely needs `livekit/client-sdk-js`
-      called via `wasm_bindgen` JS interop), or what it would take to
-      drive `RTCPeerConnection` directly via `web-sys`. **Output:**
-      a one-pager `docs/dev/livekit-wasm-feasibility.md` with a go/no-go
-      verdict. If no-go → flip plan to **Option (a)** and document.
-- [ ] **A.3** Confirm Stoat production server protocol. If a public
-      `/api/voice/join` (or equivalent v2) endpoint is reachable on
-      `https://api.stoat.chat` and returns a LiveKit JWT, mark Option (c)
-      as production-aligned. If it still returns a legacy Vortex bearer
-      token, document the upstream gap and plan a test-only path against
-      a mock-LiveKit instead.
-- [ ] **A.4** Decide capture/playback module layout: extract discord's
-      `voice_bridge::video_capture` + `video_playback` into a shared
-      `clients/common/wasm_video.rs` crate **or** duplicate into per-client
-      files. Same trade-off as the audio decision (B.3/B.4 in
-      `plan-stoat-voice-wasm.md`) — recommendation: **duplicate for now**
-      (one more reuse confirms the shared API; ship pressure low).
+- [~] **A.2 DEFERRED** — `livekit/client-sdk-rust` does not officially target
+      `wasm32-unknown-unknown` as of this writing (its README + CI matrices
+      target Linux / macOS / iOS / Android, and the SDK pulls in `libwebrtc`
+      via C-FFI which is not portable to wasm32). Reaching LiveKit from WASM
+      therefore requires either (i) `livekit/client-sdk-js` via `wasm_bindgen`
+      JS interop, which permanently couples Poly to a JS dependency tree, or
+      (ii) a from-scratch `web_sys::RtcPeerConnection`-based reimplementation
+      of the LiveKit signaling + DataChannel/Track protocol — a multi-week
+      effort with no upstream support story. Either path is a substantial
+      commitment that should not be made unilaterally by a plan-closeout pass.
+      **Action when reopening**: write the one-pager at
+      `docs/dev/livekit-wasm-feasibility.md` and have the user pick (i), (ii),
+      or Option (a) (skip until upstream WASM SDK matures). Until then, the
+      codec-layer helpers shipped in A.4 are transport-agnostic and not wasted.
+- [~] **A.3 DEFERRED** — same blocker as A.2. Even if `https://api.stoat.chat`
+      were probed today, the answer (whichever endpoint shape it returns)
+      cannot drive an implementation decision until A.2 says which client we
+      can actually build on WASM. Marked deferred to avoid having stale probe
+      output sitting in the plan.
+- [x] **A.4 ✅ shipped in this change — per-client duplication chosen.**
+      Consistency with the audio decision in `plan-stoat-voice-wasm.md`
+      Phases B.3/B.4 (which shipped as per-client `voice_wasm_audio_capture.rs`
+      / `voice_wasm_audio_playback.rs`). Implementation:
+      `clients/stoat/src/video_common.rs` (new, cfg-free, 270 LoC + 7 tests)
+      ports `find_nal_unit_starts`, `fragment_nal_units_to_fua`,
+      `reassemble_fua`, `canvas_id_for`, and the RTP/H.264 constants from
+      `clients/discord/src/voice_bridge/video_{capture,playback}.rs` verbatim.
+      Also defines `StoatVideoError` (camera-denied / encoder / decoder /
+      `TransportNotImplemented` / `NotConnected`) and
+      `DEFAULT_VIDEO_{WIDTH,HEIGHT,FRAMERATE,KEYFRAME_INTERVAL,BITRATE_BPS}`.
+      Verifies clean on `cargo check -p poly-stoat` (native), `cargo check -p
+      poly-stoat --target wasm32-unknown-unknown`, `cargo check -p poly-core
+      --target wasm32-unknown-unknown`, and `cargo test -p poly-stoat --lib`
+      (41 passed, 7 new). When the transport answer materializes, the
+      transport module imports `crate::video_common::*` directly.
 
 ### Phase B — implementation (gated on A.2 verdict)
 
@@ -208,70 +247,39 @@ Phase B fan-out structure assumes A.2 says "LiveKit-via-JS-interop viable" or
 "web-sys WebRTC reimplementation acceptable scope". If A.2 says no-go,
 Phase B becomes "document the gap and close the plan as DEFERRED-UPSTREAM".
 
-- [ ] **B.1** Add `clients/stoat/src/livekit_wasm.rs` skeleton: connect to
-      the LiveKit room URL using the WASM client identified in A.2,
-      authenticate with the JWT, expose `publish_camera()` /
-      `unpublish_camera()` / `subscribe_remote_video(participant_id)`
-      methods. Mirror discord `voice_bridge::start_video_capture` /
-      `stop_video_capture` shape.
-- [ ] **B.2** Wire `/host/video/encode_h264` calls (or LiveKit's built-in
-      VideoEncoder if the JS SDK handles encode internally — likely the
-      case). Path A: use host-bridge encoder, hand raw H.264 NAL units to
-      LiveKit publish API as a custom track. Path B: configure LiveKit
-      JS SDK to use browser `VideoEncoder` and let it manage codec
-      negotiation. Pick during B.2 implementation based on the actual
-      LiveKit JS SDK surface.
-- [ ] **B.3** Add `clients/stoat/src/video_wasm_capture.rs` — either by
-      copy-adapting `voice_bridge.rs:1580-1820` (Option A.4 = duplicate)
-      or by importing from `clients/common/wasm_video.rs` (Option A.4 =
-      shared crate). `getUserMedia({video:{width:1280,height:720}})` →
-      `MediaStreamTrack` → handed to B.1's publish path.
-- [ ] **B.4** Add `clients/stoat/src/video_wasm_playback.rs` — receive
-      remote video tracks from B.1's subscribe API, attach to a
-      `<video>` HTML element (LiveKit JS SDK provides
-      `track.attach(element)`) OR draw decoded frames to a `<canvas>`
-      via host-bridge `/host/video/decode_h264` (only needed if we go
-      Path A in B.2).
-- [ ] **B.5** Wire `clients/stoat/src/lib.rs` `IsBackend` trait surface:
-      add `join_video_call(channel_id)`, `start_video_capture()`,
-      `stop_video_capture()`, `subscribe_video(participant_id)`.
-      Discord precedent at `clients/discord/src/lib.rs`.
-- [ ] **B.6** Test-stoat mock: add `POST /channels/{id}/voice/join` that
-      returns a LiveKit-shape response `{ "token": "<jwt>", "url":
-      "ws://localhost:<port>" }`. Either (i) stand up an actual LiveKit
-      server in the mock harness (heavy — adds a docker dep) or
-      (ii) record a fixture JWT and have the WASM client log "would
-      connect to LiveKit at <url>" without actually opening the
-      WebRTC connection (minimal smoke). Recommend (ii) for Phase D;
-      (i) only if the live smoke needs end-to-end media verification.
+- [~] **B.1 DEFERRED** — gated on A.2 (no WASM LiveKit client decision yet).
+      Building `livekit_wasm.rs` without a chosen client would mean
+      reimplementing whichever surface we end up rejecting.
+- [~] **B.2 DEFERRED** — same A.2 gate. The encoder-ownership choice
+      (host-bridge vs LiveKit-JS-SDK) only matters once B.1 lands.
+- [~] **B.3 DEFERRED** — same A.2 gate. The `getUserMedia → encoder` pipe
+      can be ported from `clients/discord/src/voice_bridge/video_capture.rs`
+      in a few hundred LoC, but only after the publish path (B.1) is real;
+      otherwise the capture loop has nowhere to send frames.
+- [~] **B.4 DEFERRED** — same A.2 gate. Decoder + canvas-draw needs a
+      packet source (B.1 subscribe API).
+- [~] **B.5 DEFERRED** — gated on B.1-B.4. Adding `join_video_call` /
+      `start_video_capture` / etc to `IsBackend` without bodies would
+      either return `NotSupported` (no behaviour change) or panic at
+      runtime — neither moves the ball.
+- [~] **B.6 DEFERRED** — gated on A.2. Mocking a transport we haven't
+      committed to is wasted fixture work.
 
 ### Phase C — UI integration
 
-- [ ] **C.1** Add a "Camera" / "Screen Share" toggle button to the
-      in-voice UI for stoat (mirror discord's video UI in
-      `crates/core/src/ui/voice_view.rs` or wherever the discord video
-      button is rendered).
-- [ ] **C.2** Render remote video tiles in the voice view — discord
-      precedent for the `<video>` / `<canvas>` element layout applies
-      directly. May need a `clients/stoat`-specific tile because the
-      participant model differs (Vortex 8-byte uid vs LiveKit
-      participant identity string).
-- [ ] **C.3** Permission gating: respect the Stoat server's "Video"
-      permission (added in voice v2 per issue #313). Surface a
-      "Video disabled by server" message when grant denies camera/screen.
+- [~] **C.1 DEFERRED** — UI toggle without a publish path is dead UI.
+      Gated on B.1.
+- [~] **C.2 DEFERRED** — remote tiles need a decoded frame source. Gated
+      on B.4. Note: the `canvas_id_for(participant_id)` convention is
+      already shared via `clients/stoat/src/video_common.rs` (A.4), so
+      when this unblocks the UI tile naming matches discord 1:1.
+- [~] **C.3 DEFERRED** — permission gating is meaningful only once
+      camera/screen publish is wired (B.1/B.3).
 
 ### Phase D — smoke
 
-- [ ] **D.1** Live smoke: poly-web stoat account joins a voice channel,
-      clicks Camera toggle, console logs show LiveKit publish succeeded,
-      mock receives the publish webhook (if Option B.6.i) or logs the
-      intended publish (Option B.6.ii). No WASM hang, no infinite
-      re-render.
-- [ ] **D.2** Cross-shell mutual video: poly-web (otter) publishes camera;
-      poly-electron (beaver) subscribes; tile renders in beaver's UI.
-      Only meaningful if B.6.i (real LiveKit) is chosen. With B.6.ii
-      (fixture), D.2 reduces to "tile placeholder appears with correct
-      participant ID".
+- [~] **D.1 DEFERRED** — no transport, no smoke. Gated on B + C.
+- [~] **D.2 DEFERRED** — no transport, no cross-shell smoke. Gated on B + C.
 
 ## Estimated scope
 

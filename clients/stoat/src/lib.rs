@@ -88,6 +88,14 @@ pub mod voice;
 /// import from here. See `docs/plans/plan-stoat-voice-wasm.md` Phase B serial prep.
 pub(crate) mod voice_common;
 
+/// Shared video constants and codec-layer helpers (RFC 6184 FU-A frag/reassembly,
+/// NAL parsing) — cfg-free, compiles on both native and wasm32. Ported from
+/// `clients/discord/src/voice_bridge/video_{capture,playback}.rs` so the
+/// codec layer is ready when a Stoat video transport is chosen (Vortex-extension
+/// vs LiveKit-SFU). See `docs/plans/plan-stoat-video-wasm.md` for the open
+/// transport question.
+pub(crate) mod video_common;
+
 /// RNNoise-based noise-cancellation filter for the Stoat voice pipeline (B.8).
 ///
 /// cfg-free — compiles on both native and wasm32. The nnnoiseless crate is pure
