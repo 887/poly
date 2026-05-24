@@ -171,6 +171,15 @@ pub struct RoomEvent {
     /// Event content (type-dependent).
     #[serde(default)]
     pub content: serde_json::Value,
+
+    /// For `m.room.redaction` events: the event ID being redacted.
+    #[serde(default)]
+    pub redacts: Option<String>,
+
+    /// Unsigned data block — carries `prev_content` for state events, used
+    /// when projecting `m.room.member` transitions into moderation entries.
+    #[serde(default)]
+    pub unsigned: Option<serde_json::Value>,
 }
 
 // ---------------------------------------------------------------------------
@@ -537,5 +546,87 @@ pub struct InitialStateEvent {
 pub struct CreateRoomResponse {
     /// The fully-qualified room ID of the newly created room.
     pub room_id: String,
+}
+
+// ---------------------------------------------------------------------------
+// Presence (D.2 — SOLID audit Phase D)
+// ---------------------------------------------------------------------------
+
+/// Response body for `GET /_matrix/client/v3/presence/{userId}/status`.
+///
+/// Reference: https://spec.matrix.org/v1.11/client-server-api/#get_matrixclientv3presenceuseridstatus
+#[derive(Debug, Deserialize)]
+// lint-allow-unused: protocol-level deserialization fields kept for future readers of presence body
+#[allow(dead_code)]
+pub struct PresenceStatusResponse {
+    /// One of `online`, `unavailable`, `offline`.
+    pub presence: String,
+
+    /// Free-form status message.
+    #[serde(default)]
+    pub status_msg: Option<String>,
+
+    /// Milliseconds since the user was last active (only when `currently_active` is false).
+    #[serde(default)]
+    pub last_active_ago: Option<u64>,
+
+    /// Whether the user is currently active.
+    #[serde(default)]
+    pub currently_active: Option<bool>,
+}
+
+/// Request body for `PUT /_matrix/client/v3/presence/{userId}/status`.
+#[derive(Debug, Serialize)]
+pub struct PutPresenceRequest {
+    /// One of `online`, `unavailable`, `offline`.
+    pub presence: String,
+
+    /// Optional free-form status message.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status_msg: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
+// Member events (D.1 — moderation log synthesis)
+// ---------------------------------------------------------------------------
+
+/// Content of an `m.room.member` state event.
+///
+/// Reference: https://spec.matrix.org/v1.11/client-server-api/#mroommember
+#[derive(Debug, Deserialize)]
+// lint-allow-unused: protocol-level deserialization fields kept for future readers of member content
+#[allow(dead_code)]
+pub struct MemberEventContent {
+    /// Membership transition target: `invite`, `join`, `leave`, `ban`, `knock`.
+    pub membership: String,
+
+    /// Optional display name as set in this membership event.
+    #[serde(default)]
+    pub displayname: Option<String>,
+
+    /// Optional avatar MXC URL as set in this membership event.
+    #[serde(default)]
+    pub avatar_url: Option<String>,
+
+    /// Optional reason for the transition (set on leave/ban/kick).
+    #[serde(default)]
+    pub reason: Option<String>,
+}
+
+/// Optional `unsigned` block for state events, used to recover the previous
+/// membership when projecting m.room.member transitions.
+#[derive(Debug, Deserialize, Default)]
+pub struct UnsignedData {
+    /// Previous content of this state event (key in unsigned block).
+    #[serde(default)]
+    pub prev_content: Option<MemberEventContent>,
+}
+
+/// Content of an `m.room.redaction` event (the redactor's reason).
+#[derive(Debug, Deserialize, Default)]
+pub struct RedactionEventContent {
+    /// Optional reason for the redaction.
+    #[serde(default)]
+    pub reason: Option<String>,
 }
 

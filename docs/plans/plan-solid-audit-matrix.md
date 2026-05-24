@@ -4,7 +4,7 @@
 > Scope: `clients/matrix/src/`.
 > Source-of-truth for SOLID definitions: top-of-repo `CLAUDE.md` §"Design Principles".
 
-## Status: IN PROGRESS — Phase B shipped in change `nprtmlvu`; Phase C fully shipped in change `tuzpozyt` / commits `0ca62644` + `4c9b2721` (C.2 search, C.3 pinned, C.4 createRoom). Phase D queued.
+## Status: IN PROGRESS — Phase B shipped in change `nprtmlvu`; Phase C fully shipped in change `tuzpozyt` / commits `0ca62644` + `4c9b2721` (C.2 search, C.3 pinned, C.4 createRoom). Phase D.1 + D.2 shipped on `worktree-agent-a6bdfdf6038b50eaf` (moderation-log on-demand synthesiser + presence GET/PUT). D.3 (IsBackend split) queued.
 
 ---
 
@@ -31,11 +31,11 @@
 | Site | File:Line | Severity | Note |
 |------|-----------|----------|------|
 | `SocialGraphBackend::get_friends` | `lib.rs:1701` | FIXED in B.2 | Was `Ok(vec![])` ("you have no friends"); now returns `NotSupported` ("Matrix has no friend concept") so callers can disambiguate empty-list vs not-supported. |
-| `SocialGraphBackend::get_presence` | `lib.rs:1782` | FIXED in B.3 | Was always `Ok(Offline)` — lied to callers. Now `NotSupported`; presence-dot UI can hide. |
-| `SocialGraphBackend::set_presence` | `lib.rs:1789` | DOCUMENTED in B.3 | No-op `Ok(())` acceptable per trait contract; comment now explains why. |
+| `SocialGraphBackend::get_presence` | `lib.rs:1782` | FIXED in B.3, WIRED in D.2 | B.3 returned `NotSupported`; D.2 now performs `GET /_matrix/client/v3/presence/{userId}/status` and projects the response onto `PresenceStatus` (homeserver-disabled presence still collapses to `NotSupported`). |
+| `SocialGraphBackend::set_presence` | `lib.rs:1789` | WIRED in D.2 | No longer a no-op — now `PUT /_matrix/client/v3/presence/{userId}/status` with `online`/`unavailable`/`offline` projection. |
 | `MessagingBackend::send_typing` | `lib.rs:1955` | FIXED in B.1 | `warn!` → `debug!` flood-fix; endpoint still missing (see C.1). |
 | `ServerAdminBackend::create_server` / `create_channel` / `mark_channel_read` | `lib.rs:2030..2053` | LOW | All return `NotSupported` with clean messages — LSP-clean. |
-| `ModerationBackend::get_moderation_log` | `lib.rs:1655` | LOW | Returns `Ok(vec![])` not `NotSupported`. Documented as "synthesise from m.room events" — pragmatically acceptable: `has_moderation_log = false` in capabilities hides the UI tab so callers don't see the empty list. |
+| `ModerationBackend::get_moderation_log` | `lib.rs:1655` | FIXED in D.1 | No longer `Ok(vec![])` — on-demand synthesiser in `moderation_log.rs` walks recent timeline events on each space-child room and projects `m.room.member` + `m.room.redaction` into entries (`has_moderation_log` in capabilities can now be flipped to `true` if/when desired). |
 
 ### A.4 ISP — kitchen-sink
 
@@ -57,8 +57,8 @@
 | `create_server` / `create_channel` | `lib.rs:2030, 2034` | NEEDS_IMPL — `POST /_matrix/client/v3/createRoom` (C.4) |
 | `mark_channel_read` | `lib.rs:2051` | NEEDS_IMPL — `POST /_matrix/client/v3/rooms/{roomId}/read_markers` (C.5) |
 | `update_server_banner` | `lib.rs:2043` | DOC_ONLY — Matrix has no banner concept |
-| `get_moderation_log` | `lib.rs:1655` | DEFERRED — see D.1 (event-walk synthesis) |
-| `get_presence` / `set_presence` real wiring | `lib.rs:1782, 1789` | DEFERRED — see D.2 (federation-aware presence) |
+| `get_moderation_log` | `lib.rs:1655` | SHIPPED in D.1 — on-demand timeline-walk synthesiser, `moderation_log.rs` |
+| `get_presence` / `set_presence` real wiring | `lib.rs:1782, 1789` | SHIPPED in D.2 — `GET/PUT /presence/{userId}/status` wired through MatrixHttpClient |
 
 ---
 
@@ -99,16 +99,36 @@
   Added `post_read_markers` to `http.rs`; `mark_channel_read` in `lib.rs` fetches
   the latest event ID via `/messages?limit=1` then advances the marker. ~50 LoC.
 
-## Phase D — Architectural rewrites (>300 LoC, max 3)
+## Phase D — Architectural rewrites (>300 LoC, max 3) — D.1 + D.2 shipped
 
-- [ ] **D.1** Moderation-log synthesiser: walk `/sync` events for `m.room.member`
-  + `m.room.redaction` and project into `ModerationLogEntry` rows. Requires a
-  background indexer task + persistence; the existing one-shot
-  `get_moderation_log` stays NotSupported and a new "log feed" subscription
-  emits entries. ~600 LoC.
-- [ ] **D.2** Federation-aware presence: wire `GET /presence/{userId}/status` +
-  `PUT /presence/{userId}/status`, plus the presence sub-stream in `/sync`
-  feeding `ClientEvent::PresenceChanged`. ~400 LoC.
+- [x] **D.1** Moderation-log synthesiser: walk recent timeline events on every
+  child room of the space and project `m.room.member` + `m.room.redaction`
+  into `ModerationLogEntry` rows. Shipped as the minimal on-demand variant
+  (no background indexer / persistence) — `get_moderation_log` now
+  synthesises the log per call by enumerating space children, fetching the
+  last ~50 timeline events backwards from each child via
+  `/messages?dir=b&limit=50`, then projecting + merging + sorting newest-
+  first. Self-joins/invites/self-leaves filter out; `leave` with prior
+  `join` = `MemberKicked`, `leave` with prior `ban` = `MemberUnbanned`,
+  `ban` = `MemberBanned`, redactions = `MessageDeleted`. Lives in new
+  `clients/matrix/src/moderation_log.rs` (~290 LoC incl. tests). The
+  full "background indexer + log feed subscription" design (~600 LoC)
+  remains the eventual target when call frequency makes the per-call I/O
+  budget worth amortising. — shipped in worktree-agent-a6bdfdf6038b50eaf.
+- [x] **D.2** Federation-aware presence: wired
+  `GET /_matrix/client/v3/presence/{userId}/status` and
+  `PUT /_matrix/client/v3/presence/{userId}/status` through
+  `MatrixHttpClient::get_presence` / `put_presence`; mapped Matrix's
+  three-valued `online`/`unavailable`/`offline` surface onto the host
+  `PresenceStatus` enum (with `currently_active=false` → `Idle` to
+  capture the away-from-keyboard case Matrix hides behind `online`).
+  Homeserver-disabled-presence (404/403) collapses to `NotSupported`
+  rather than `Offline` so the UI hides the dot. `set_presence` collapses
+  `DoNotDisturb`/`Idle` onto `unavailable` and `Invisible`/`Offline` onto
+  `offline`; `Unknown` is dropped silently. Sync sub-stream feeding
+  `ClientEvent::PresenceChanged` is left for a follow-up — the current
+  surface satisfies the fetch+set parts of D.2. ~120 LoC across api.rs,
+  http.rs, lib.rs. — shipped in worktree-agent-a6bdfdf6038b50eaf.
 - [ ] **D.3** Split `MatrixClient::IsBackend` (833 lines) along capability-trait
   lines, matching the existing `ModerationBackend` / `SocialGraphBackend` /
   `DmsAndGroupsBackend` / `MessagingBackend` / `ServerAdminBackend` split.

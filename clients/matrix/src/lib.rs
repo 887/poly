@@ -27,6 +27,9 @@ mod config;
 mod http;
 
 #[cfg(feature = "native")]
+mod moderation_log;
+
+#[cfg(feature = "native")]
 pub mod signup;
 
 /// WIT bindings for the WASM plugin (WASI targets only).
@@ -1294,19 +1297,30 @@ impl poly_client::ModerationBackend for MatrixClient {
         ))
     }
 
-    /// Matrix has no native audit log.
+    /// Synthesise a moderation log by walking recent timeline events on every
+    /// child room of the space.
     ///
-    /// Walking room events to synthesise a log is expensive and not yet
-    /// implemented. Returns an empty list with `has_moderation_log = false`
-    /// ensuring the UI tab is hidden.
+    /// Matrix has no native audit log. The implementation walks each room
+    /// in the space hierarchy (skipping nested spaces) and fetches the most
+    /// recent ~50 timeline events backwards via `/messages?dir=b`. For each
+    /// room we project two event classes onto `ModerationLogEntry`:
+    ///
+    /// - `m.room.member` state events with a non-trivial membership transition
+    ///   (`leave` after `join` = leave-self; `leave` by a different sender =
+    ///   kick; `ban`; `leave` after `ban` = unban). Self-joins/invites are
+    ///   filtered out so the log stays focused on moderation actions.
+    /// - `m.room.redaction` events → `MessageDeleted`.
+    ///
+    /// Entries from all rooms are merged, sorted newest-first, and capped at
+    /// `limit`. Per-room failures are swallowed (the log is best-effort) so a
+    /// single inaccessible room doesn't blank the whole view.
+    /// SOLID-audit-matrix (Phase D.1).
     async fn get_moderation_log(
         &self,
-        _server_id: &str,
-        _limit: usize,
+        server_id: &str,
+        limit: usize,
     ) -> ClientResult<Vec<ModerationLogEntry>> {
-        // TODO(B-MX): Walk room events for m.room.member + m.room.redaction and
-        // synthesise entries. Deferred — see plan-permissions-moderation.md §4 B-MX.
-        Ok(Vec::new())
+        moderation_log::synthesize(&self.http, server_id, limit).await
     }
 
     async fn get_server_roles(
@@ -1433,21 +1447,94 @@ impl poly_client::SocialGraphBackend for MatrixClient {
         self.http.put_ignored_user_list(&me, &list).await
     }
 
-    async fn get_presence(&self, _user_id: &str) -> ClientResult<PresenceStatus> {
-        // LSP: Matrix presence requires a federation-aware implementation that
-        // we don't have. Returning `Ok(Offline)` would lie to callers ("user is
-        // offline"). Use `NotSupported` so the UI can hide the presence dot.
-        // SOLID-audit-matrix (Phase B.3).
-        Err(ClientError::NotSupported(
-            "get_presence: Matrix presence endpoint not wired".to_string(),
-        ))
+    /// Fetch a user's presence via
+    /// `GET /_matrix/client/v3/presence/{userId}/status`.
+    ///
+    /// Maps Matrix `presence` strings (`online`, `unavailable`, `offline`) onto
+    /// the host `PresenceStatus` enum. `unavailable` is treated as `Idle`
+    /// (idle/away in spec language). When the homeserver reports the user as
+    /// `online` but `currently_active = false`, surface `Idle` as well — that
+    /// captures the "still logged in but away from keyboard" case Matrix
+    /// otherwise hides behind a single `online` string.
+    ///
+    /// Federation-aware: the homeserver fetches presence from the user's
+    /// home server when the queried user is remote. Soft-failure: if the
+    /// homeserver has presence disabled (some servers do for privacy) and
+    /// returns 404/403, surface `NotSupported` so the UI hides the dot
+    /// instead of misrepresenting state as `Offline`.
+    /// SOLID-audit-matrix (Phase D.2).
+    async fn get_presence(&self, user_id: &str) -> ClientResult<PresenceStatus> {
+        match self.http.get_presence(user_id).await {
+            Ok(resp) => Ok(map_matrix_presence(&resp)),
+            // Some homeservers return 404 or 403 when presence is disabled
+            // server-wide. Treat these as "not supported on this homeserver"
+            // rather than "offline" so the UI hides the dot.
+            Err(ClientError::NotFound(_)) | Err(ClientError::PermissionDenied(_)) => {
+                Err(ClientError::NotSupported(
+                    "get_presence: homeserver has presence disabled".to_string(),
+                ))
+            }
+            Err(e) => Err(e),
+        }
     }
 
-    async fn set_presence(&self, _status: PresenceStatus) -> ClientResult<()> {
-        // No-op until the presence endpoint is wired through MatrixHttpClient.
-        // Returning Ok here is acceptable per the trait contract (the user's
-        // intent is recorded; server-side synchronisation is best-effort).
-        Ok(())
+    /// Set the authenticated user's presence via
+    /// `PUT /_matrix/client/v3/presence/{userId}/status`.
+    ///
+    /// Maps the host `PresenceStatus` onto Matrix's three-valued surface
+    /// (`online`/`unavailable`/`offline`). DND/Invisible collapse onto
+    /// `unavailable` — Matrix has no first-class equivalent and signalling
+    /// `offline` would silently drop the session from peers' rosters.
+    /// SOLID-audit-matrix (Phase D.2).
+    async fn set_presence(&self, status: PresenceStatus) -> ClientResult<()> {
+        let user_id = self.current_user_id()?;
+        let presence = match status {
+            PresenceStatus::Online => "online",
+            PresenceStatus::Idle | PresenceStatus::DoNotDisturb => "unavailable",
+            PresenceStatus::Offline | PresenceStatus::Invisible => "offline",
+            // Unknown is a host-side sentinel; do not transmit upstream —
+            // skip the call so we don't overwrite a meaningful prior state.
+            PresenceStatus::Unknown => return Ok(()),
+        };
+        let body = api::PutPresenceRequest {
+            presence: presence.to_string(),
+            status_msg: None,
+        };
+        match self.http.put_presence(&user_id, &body).await {
+            Ok(()) => Ok(()),
+            // Homeserver with presence disabled — treat as NotSupported so
+            // the UI can mark the toggle as inert instead of failing loudly.
+            Err(ClientError::NotFound(_)) | Err(ClientError::PermissionDenied(_)) => {
+                Err(ClientError::NotSupported(
+                    "set_presence: homeserver has presence disabled".to_string(),
+                ))
+            }
+            Err(e) => Err(e),
+        }
+    }
+}
+
+/// Project a Matrix presence response onto the host `PresenceStatus` enum.
+///
+/// - `online` + `currently_active = false` → `Idle` (away-from-keyboard).
+/// - `online` (otherwise) → `Online`.
+/// - `unavailable` → `Idle`.
+/// - `offline` → `Offline`.
+/// - Any other / future variant → `Unknown` so the UI can hide the dot
+///   instead of guessing.
+#[cfg(feature = "native")]
+fn map_matrix_presence(resp: &api::PresenceStatusResponse) -> PresenceStatus {
+    match resp.presence.as_str() {
+        "online" => {
+            if matches!(resp.currently_active, Some(false)) {
+                PresenceStatus::Idle
+            } else {
+                PresenceStatus::Online
+            }
+        }
+        "unavailable" => PresenceStatus::Idle,
+        "offline" => PresenceStatus::Offline,
+        _ => PresenceStatus::Unknown,
     }
 }
 

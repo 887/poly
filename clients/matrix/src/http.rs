@@ -1144,6 +1144,58 @@ impl MatrixHttpClient {
     }
 
     // -----------------------------------------------------------------------
+    // Presence (D.2 — SOLID audit Phase D)
+    // -----------------------------------------------------------------------
+
+    /// Fetch a user's presence via
+    /// `GET /_matrix/client/v3/presence/{userId}/status`.
+    ///
+    /// Reference: https://spec.matrix.org/v1.11/client-server-api/#get_matrixclientv3presenceuseridstatus
+    pub async fn get_presence(
+        &self,
+        user_id: &str,
+    ) -> ClientResult<crate::api::PresenceStatusResponse> {
+        let response = self
+            .authenticated_request(
+                Method::GET,
+                &format!("/_matrix/client/v3/presence/{user_id}/status"),
+            )?
+            .send()
+            .await
+            .map_err(|e| Self::network_error(&e))?;
+
+        if !response.status().is_success() {
+            return Err(Self::parse_error(response).await);
+        }
+
+        response.json().await.map_err(|e| Self::network_error(&e))
+    }
+
+    /// Set the calling user's presence via
+    /// `PUT /_matrix/client/v3/presence/{userId}/status`.
+    pub async fn put_presence(
+        &self,
+        user_id: &str,
+        body: &crate::api::PutPresenceRequest,
+    ) -> ClientResult<()> {
+        let response = self
+            .authenticated_request(
+                Method::PUT,
+                &format!("/_matrix/client/v3/presence/{user_id}/status"),
+            )?
+            .json(body)
+            .send()
+            .await
+            .map_err(|e| Self::network_error(&e))?;
+
+        if !response.status().is_success() {
+            return Err(Self::parse_error(response).await);
+        }
+
+        Ok(())
+    }
+
+    // -----------------------------------------------------------------------
     // Error handling
     // -----------------------------------------------------------------------
 
