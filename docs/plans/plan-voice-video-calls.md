@@ -552,8 +552,11 @@ different device IDs from the OS).
 
 ## Phase K — Tests + acceptance bar
 
-- [ ] **K.1** Unit tests for `AudioBackend` trait contracts using a
+- [x] **K.1** Unit tests for `AudioBackend` trait contracts using a
   mock impl (`MockAudioBackend` in `crates/audio-backend/src/test_support.rs`).
+  Shipped — `test_support.rs` has `MockAudioBackend` + `MockEvent` (10 variants);
+  `tests/contract.rs` has 13 contract tests (K.1.1–K.1.10); `lib.rs` has 10 unit
+  tests using `FakeAudioBackend`. Doctest use-import fixed in this change.
 - [x] **K.2** Discord transport CLI smoke (B.12) wired into
   `TEST_HARNESS.md` step 7 (new step). Skip-by-default; opt-in via
   `RUN_VOICE_SMOKE=1` because it requires real Discord credentials. Shipped — `tools/discord-voice-smoke/` exists with `src/`, `Cargo.toml`, `README.md`.
@@ -572,12 +575,16 @@ different device IDs from the OS).
 - [ ] **K.7** Anti-ban regression: try to start two concurrent Discord
   voice connections programmatically, assert the second fails with the
   typed error from B.11 (no second WebSocket opened).
-- [ ] **K.8** Lint gates: extend
+- [x] **K.8** Lint gates: extend
   `tools/scripts/forbid-raw-backend-read.sh` scope (or add a sibling
   lint) so any future voice transport code that calls a backend method
   uses `read_with_timeout` (hang class #4 mitigation — not strictly
   required for native chat-mcp, but the call code runs in WASM via
   `crates/core/src/ui/`, so the rule applies).
+  Shipped — `crates/lint-gate-rules/src/forbid_raw_backend_read.rs` extended
+  with Phase K.8 scope: `clients/discord/src/voice*`, `clients/stoat/src/voice*`,
+  `clients/teams/src/voice*`. 4 unit tests (`voice_paths_are_in_scope`,
+  `non_voice_client_paths_not_in_scope`, flag + allow). All pass.
 
 **Acceptance bar (the "is this done?" checklist)**:
 - A user on `apps/web` can join a real Discord voice channel, hear
