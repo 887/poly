@@ -4,7 +4,7 @@
 > Counterpart to the discord video chain (`voice_bridge.rs` Phase Y — wasm H.264
 > capture/playback + mock video signaling, change `720c8f32` on main).
 
-## Status: IN PROGRESS — Phase A fully shipped; Phase B fully shipped (B.1/B.3/B.4/B.5 shipped, B.2/B.6 obsolete). C+D (UI integration + smoke) deferred for follow-up.
+## Status: IN PROGRESS — Phase A+B+C UI-only shipped (C.1/C.2/C.3 ship UI buttons + tile rendering + click handlers wiring `StoatClient::start_video_capture`); D smoke deferred pending WebCodecs JS interop.
 
 **Architectural decision (this change):**
 
@@ -349,16 +349,49 @@ to "port the discord WebCodecs pipeline against the shared WS".
       binary loopback (echoes whatever bytes come in), so the new wire
       format is fixture-transparent. No fixture updates required.
 
-### Phase C — UI integration (follow-up)
+### Phase C — UI integration (this change)
 
-- [~] **C.1 DEFERRED** — UI toggle for "start camera". Unblocked now that
-      B.1+B.3 ship; gated only on B.5 (trait-surface exposure). Follow-up.
-- [~] **C.2 DEFERRED** — remote tiles need WebCodecs decoder + canvas draw
-      wiring (the skeleton in B.4 logs but doesn't draw). The
-      `canvas_id_for(participant_id)` convention is already shared via
-      `clients/stoat/src/video_common.rs` (A.4); the playback module
-      already targets it. Follow-up: real `VideoDecoder` configuration.
-- [~] **C.3 DEFERRED** — camera permission gating + UI affordance. Follow-up.
+- [x] **C.1 ✅ shipped in this change — Start Video button surfaced for Stoat.**
+      Flipped `StoatClient::backend_capabilities().video_capture` from `None` to
+      `VideoCaptureCapability::Full` on `target_arch = "wasm32"`
+      (`clients/stoat/src/is_backend.rs`). The capability gate in
+      `VoiceBannerAction::ToggleCamera` (and the parallel `ToggleScreenShare`)
+      now resolves to the `Full` branch for stoat — the banner camera button
+      stops emitting the "coming soon" toast and starts toggling `is_video_on`.
+      The existing `VoiceChatBar` camera button in `voice_view.rs::VoiceChatBar`
+      keeps its browser-camera preview path (`JS_START_CAMERA`) plus the new
+      backend dispatch (see C.3).
+- [x] **C.2 ✅ shipped (UI-only) in this change — remote video tile already
+      conforms to the stoat canvas-id convention.** The pre-existing
+      `VideoTilePlaceholder` component in `voice_view.rs:752` renders a
+      `<canvas id="poly-video-tile-{participant_id}">` per remote participant
+      with `is_video_on || is_streaming`, which already matches the
+      `video_common::canvas_id_for(user_id)` convention shipped in A.4. The
+      `video_wasm_playback::decode_and_draw` skeleton already targets these
+      canvases by id, so no rsx changes are required. Real frame blitting is
+      gated on the WebCodecs `VideoDecoder` JS interop (the B.4 follow-up); the
+      tile placeholder + label remain in place until decoded frames overwrite
+      the canvas pixels. Marked `[x]` for UI scaffolding; the `decode_and_draw`
+      JS interop continues to ship as a B.4 follow-up.
+- [x] **C.3 ✅ shipped in this change — click handlers call
+      `StoatClient::start_video_capture` via the trait surface.**
+      Added `start_video_capture(channel_id) -> ClientResult<()>` and
+      `stop_video_capture()` defaults to `VoiceTransportBackend` in
+      `clients/client/src/voice_transport.rs` (default returns
+      `ClientError::NotSupported` / `Ok(())` so existing backends keep
+      compiling). Stoat's `impl VoiceTransportBackend` in
+      `clients/stoat/src/voice_transport.rs` overrides both on `wasm32` and
+      delegates to the inherent `StoatClient::start_video_capture` /
+      `StoatClient::stop_video_capture` methods shipped in B.5
+      (`clients/stoat/src/video_transport.rs`). The UI side in
+      `voice_view.rs::VoiceChatBar`'s camera onclick now snapshots the active
+      voice connection, runs `JS_START_CAMERA` for the local preview, and on
+      success additionally calls `backend.as_voice_transport()?.start_video_capture(channel_id)`
+      via a 5-second `read_with_timeout` (CLAUDE.md hang class #4 countermeasure).
+      The reverse path on toggle-off calls `JS_STOP_CAMERA` + `stop_video_capture`.
+      Backends without a video pipeline (matrix, teams, lemmy, …) keep the
+      default `NotSupported` — silently no-op on the backend side, the local
+      preview keeps working via the JS path alone.
 
 ### Phase D — smoke (follow-up)
 

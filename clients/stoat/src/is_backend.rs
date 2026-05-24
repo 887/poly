@@ -623,6 +623,15 @@ impl IsBackend for StoatClient {
             has_timed_ban: true,
             has_channel_mgmt: true,
             has_moderation_log: false,
+            // Phase C of `plan-stoat-video-wasm.md` — advertise video capture support
+            // on wasm32. The capability gate flips the `VoiceBannerAction::ToggleCamera`
+            // branch from "coming soon toast" to "toggle is_video_on and start capture";
+            // the inherent `StoatClient::start_video_capture` (wired via
+            // `VoiceTransportBackend::start_video_capture`) acquires the camera and
+            // routes encoded H.264 frames over the shared Vortex WS. Native is still
+            // audio-only (the A.5 plan decision).
+            #[cfg(target_arch = "wasm32")]
+            video_capture: VideoCaptureCapability::Full,
             ..BackendCapabilities::FULL_SOCIAL_CHAT
         }
     }

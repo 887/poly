@@ -385,4 +385,24 @@ impl poly_client::VoiceTransportBackend for StoatClient {
             Ok(())
         }
     }
+
+    /// Phase C of `plan-stoat-video-wasm.md` — route the UI camera-toggle through
+    /// the inherent `StoatClient::start_video_capture` (defined in
+    /// `crate::video_transport`) on WASM. Native builds fall through to the
+    /// trait default (`NotSupported`) — the native `voice.rs` path is audio-only
+    /// (see the A.5 architectural decision in the plan).
+    #[cfg(target_arch = "wasm32")]
+    async fn start_video_capture(&self, channel_id: &str) -> ClientResult<()> {
+        // Delegate to the inherent method shipped in `crate::video_transport`.
+        StoatClient::start_video_capture(self, channel_id).await
+    }
+
+    /// Phase C of `plan-stoat-video-wasm.md` — stop the WASM camera capture
+    /// session via the inherent `StoatClient::stop_video_capture`. Native is a
+    /// no-op (the trait default).
+    #[cfg(target_arch = "wasm32")]
+    async fn stop_video_capture(&self) -> ClientResult<()> {
+        StoatClient::stop_video_capture(self);
+        Ok(())
+    }
 }

@@ -885,6 +885,17 @@ fn VoiceChatBar(mut voice_state: BatchedSignal<VoiceState>) -> Element {
                 class: if is_video_on { "voice-chat-btn active" } else { "voice-chat-btn" },
                 title: if is_video_on { t("voice-stop-camera") } else { t("voice-camera") },
                 onclick: move |_| {
+                    // Snapshot the active voice connection for backend dispatch (stoat,
+                    // discord-native, etc.). The backend.start_video_capture call
+                    // routes encoded H.264 over the live voice WS for backends whose
+                    // VoiceTransportBackend impl overrides the default `NotSupported`.
+                    // Phase C of `plan-stoat-video-wasm.md`.
+                    let conn_snapshot = voice_state
+                        .peek()
+                        .voice_connection
+                        .as_ref()
+                        .map(|vc| (vc.server_id.clone(), vc.channel_id.clone()));
+                    let cm_opt = try_consume_context::<BatchedSignal<ClientManager>>();
                     if is_video_on {
                         let _ = document::eval(JS_STOP_CAMERA);
                         voice_state.batch(|v| {
@@ -892,6 +903,22 @@ fn VoiceChatBar(mut voice_state: BatchedSignal<VoiceState>) -> Element {
                                 vc.is_video_on = false;
                             }
                         });
+                        if let (Some((server_id, _)), Some(cm)) = (conn_snapshot, cm_opt) {
+                            spawn(async move {
+                                if let Some((_acct, backend)) =
+                                    cm.peek().get_backend_for_server(&server_id)
+                                {
+                                    if let Ok(guard) = backend
+                                        .read_with_timeout(std::time::Duration::from_secs(5))
+                                        .await
+                                    {
+                                        if let Some(vt) = guard.as_voice_transport() {
+                                            let _ = vt.stop_video_capture().await;
+                                        }
+                                    }
+                                }
+                            });
+                        }
                     } else {
                         spawn(async move {
                             let mut eval = document::eval(JS_START_CAMERA);
@@ -901,6 +928,36 @@ fn VoiceChatBar(mut voice_state: BatchedSignal<VoiceState>) -> Element {
                                         vc.is_video_on = true;
                                     }
                                 });
+                                // Best-effort: drive the backend video transport so
+                                // remote participants actually receive frames. Default
+                                // impl returns NotSupported (silent fail) for backends
+                                // without a video pipeline; the local <video> preview
+                                // already works from the JS getUserMedia call above.
+                                if let (Some((server_id, channel_id)), Some(cm)) =
+                                    (conn_snapshot, cm_opt)
+                                {
+                                    if let Some((_acct, backend)) =
+                                        cm.peek().get_backend_for_server(&server_id)
+                                    {
+                                        if let Ok(guard) = backend
+                                            .read_with_timeout(std::time::Duration::from_secs(5))
+                                            .await
+                                        {
+                                            if let Some(vt) = guard.as_voice_transport() {
+                                                if let Err(e) =
+                                                    vt.start_video_capture(&channel_id).await
+                                                {
+                                                    tracing::debug!(
+                                                        target: "poly_core::voice_view",
+                                                        channel_id = %channel_id,
+                                                        error = ?e,
+                                                        "VoiceChatBar: backend start_video_capture (non-fatal)"
+                                                    );
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         });
                     }

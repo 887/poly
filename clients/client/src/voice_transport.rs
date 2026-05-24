@@ -94,4 +94,25 @@ pub trait VoiceTransportBackend: Send + Sync {
     ) -> ClientResult<()> {
         Ok(())
     }
+
+    /// Start sending the local user's camera over the backend voice transport.
+    ///
+    /// Phase C of `plan-stoat-video-wasm.md`. Backends that own a WASM video
+    /// pipeline (currently only `poly-stoat` on `wasm32-unknown-unknown`) override
+    /// to acquire the camera and route encoded H.264 frames over their voice WS.
+    /// Default `Err(NotSupported)` — caller should fall back to a "coming soon"
+    /// toast or, for Discord on the web shell, to the JS-only `getUserMedia`
+    /// preview path.
+    async fn start_video_capture(&self, _channel_id: &str) -> ClientResult<()> {
+        Err(crate::ClientError::NotSupported(
+            "start_video_capture".into(),
+        ))
+    }
+
+    /// Stop the local camera capture started by [`Self::start_video_capture`].
+    ///
+    /// Default no-op so unrelated backends can safely ignore stop signals.
+    async fn stop_video_capture(&self) -> ClientResult<()> {
+        Ok(())
+    }
 }
