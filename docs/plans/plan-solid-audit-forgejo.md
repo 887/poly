@@ -9,17 +9,19 @@ Scope: only `clients/forgejo/`. Do NOT touch other client crates.
 
 ---
 
-## Phase A — Ship-now wins (≤50 LoC each, max 3)
+## Phase A — Ship-now wins (≤50 LoC each, max 3) — shipped
 
-- [ ] **A.1** Drop "TODO: migrate to" boilerplate from in-memory
+- [x] **A.1** Drop "TODO: migrate to" boilerplate from in-memory
       settings storage doc comment (`lib.rs:62`). _≤5 LoC._
-- [ ] **A.2** Dedup `NotSupported` allocation strings (`lib.rs:923-1023`,
+- [x] **A.2** Dedup `NotSupported` allocation strings (`lib.rs:923-1023`,
       ~24 sites all "Forgejo has no X") into module-level `const` slices.
-      _≈30 LoC removed._
-- [ ] **A.3** Reduce `cfg(feature = "native")` repetition (`lib.rs:1098`,
+      _≈30 LoC removed._ — shipped: added `mod ns { ... }` with 10 consts
+      (one `#[cfg]` gate), replaced 20 literal sites with `ns::*`.
+- [x] **A.3** Reduce `cfg(feature = "native")` repetition (`lib.rs:1098`,
       `1109`, `1116`, etc.) by wrapping the helpers in one
       `#[cfg(feature = "native")] mod native_helpers { ... }` block.
-      _≈10 LoC._
+      _≈10 LoC._ — shipped: 10 separate `#[cfg]` const lines collapsed
+      into one `#[cfg(feature = "native")] mod ns { ... }` block.
 
 ## Phase B — Medium refactors (50-300 LoC, max 5)
 
@@ -35,9 +37,11 @@ Scope: only `clients/forgejo/`. Do NOT touch other client crates.
       returns for channel-mgmt + send-message paths. Some are honest
       capability gaps (read-only backend by design — see `lib.rs:13`),
       some should delegate to `CodeRepoBackend`. Triage individually.
-- [ ] **B.4** `parse_issue_thread_owner_repo` / `repo_owner_name_from_server_id`
+- [x] **B.4** `parse_issue_thread_owner_repo` / `repo_owner_name_from_server_id`
       / `parse_forum_channel` / `split_owner_repo` (`lib.rs:1041-1108`)
-      → group into `channel_ids.rs`.
+      → group into `channel_ids.rs`. — shipped: extracted to new
+      `clients/forgejo/src/channel_ids.rs`; 3 individual `#[cfg]` attrs
+      removed; call sites updated to `channel_ids::*`.
 - [ ] **B.5** `mapping.rs` (364 LoC) hosts both production mapping and
       test fixtures — same split as github B.5 / lemmy B.2.
 

@@ -18,6 +18,8 @@ pub const SLUG: &str = "forgejo";
 #[cfg(feature = "native")]
 mod api;
 #[cfg(feature = "native")]
+mod channel_ids;
+#[cfg(feature = "native")]
 mod mapping;
 #[cfg(feature = "native")]
 pub mod signup;
@@ -42,6 +44,23 @@ use poly_common_forge::{decode_b64, kind_from_string, split_owner_repo};
 #[cfg(feature = "native")]
 use std::pin::Pin;
 
+// ── Not-supported message constants ─────────────────────────────────────────
+// One cfg gate for all constants; the 30+ NotSupported sites don't allocate
+// unique string literals.
+#[cfg(feature = "native")]
+mod ns {
+    pub(super) const FRIEND: &str = "Forgejo has no friend system";
+    pub(super) const USER_NOTE: &str = "Forgejo has no user note system";
+    pub(super) const BLOCK: &str = "Forgejo: block not supported via this interface";
+    pub(super) const UNBLOCK: &str = "Forgejo: unblock not supported via this interface";
+    pub(super) const IGNORE: &str = "Forgejo has no ignore concept";
+    pub(super) const PRESENCE: &str = "Forgejo has no presence model";
+    pub(super) const DM: &str = "Forgejo has no DM concept";
+    pub(super) const SAVED_MSG: &str = "Forgejo has no saved-messages concept";
+    pub(super) const GROUP_DM: &str = "Forgejo has no group DMs";
+    pub(super) const CONV_MUTE: &str = "Forgejo has no conversation mute";
+}
+
 /// Return FTL translation source for the Forgejo client plugin.
 #[must_use] 
 pub fn plugin_translations(locale: &str) -> String {
@@ -61,8 +80,7 @@ pub struct ForgejoClient {
     session: Option<Session>,
     /// Cached repo list — refreshed on `get_servers`.
     repos: tokio::sync::Mutex<Vec<types::ForgejoRepo>>,
-    /// Pack C P18 — in-memory settings storage stub. TODO: migrate to
-    /// `host-api.kv_set` once exposed to plugins for true persistence.
+    /// In-memory settings storage for this client instance.
     settings_storage: SettingsStorageCell,
     /// Stored version override (None = use api::DEFAULT_CLIENT_VERSION).
     version_override: std::sync::Mutex<Option<String>>,
@@ -438,7 +456,7 @@ impl poly_client::ModerationBackend for ForgejoClient {
         server_id: &str,
         _channel_id: Option<&str>,
     ) -> ClientResult<MemberPermissions> {
-        let (owner, repo) = repo_owner_name_from_server_id(self, server_id).await?;
+        let (owner, repo) = channel_ids::repo_owner_name_from_server_id(self, server_id).await?;
         let resp = self.api.get_repo_permissions(&owner, &repo).await?;
         let p = resp.permissions;
         let can_manage = p.admin || p.push;
@@ -543,7 +561,7 @@ impl poly_client::ModerationBackend for ForgejoClient {
         })?;
 
         // Parse owner/repo from the issue thread channel id.
-        let (owner, repo) = parse_issue_thread_owner_repo(channel_id)?;
+        let (owner, repo) = channel_ids::parse_issue_thread_owner_repo(channel_id)?;
         self.api.delete_issue_comment(&owner, &repo, comment_id).await
     }
 
@@ -607,15 +625,15 @@ impl poly_client::SocialGraphBackend for ForgejoClient {
     }
 
     async fn add_friend(&self, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Forgejo has no friend system".to_string()))
+        Err(ClientError::NotSupported(ns::FRIEND.to_string()))
     }
 
     async fn remove_friend(&self, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Forgejo has no friend system".to_string()))
+        Err(ClientError::NotSupported(ns::FRIEND.to_string()))
     }
 
     async fn respond_to_friend_request(&self, _user_id: &str, _accept: bool) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Forgejo has no friend system".to_string()))
+        Err(ClientError::NotSupported(ns::FRIEND.to_string()))
     }
 
     async fn set_friend_nickname(
@@ -623,27 +641,27 @@ impl poly_client::SocialGraphBackend for ForgejoClient {
         _user_id: &str,
         _nickname: Option<&str>,
     ) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Forgejo has no friend system".to_string()))
+        Err(ClientError::NotSupported(ns::FRIEND.to_string()))
     }
 
     async fn set_user_note(&self, _user_id: &str, _note: Option<&str>) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Forgejo has no user note system".to_string()))
+        Err(ClientError::NotSupported(ns::USER_NOTE.to_string()))
     }
 
     async fn block_user(&self, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Forgejo: block not supported via this interface".to_string()))
+        Err(ClientError::NotSupported(ns::BLOCK.to_string()))
     }
 
     async fn unblock_user(&self, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Forgejo: unblock not supported via this interface".to_string()))
+        Err(ClientError::NotSupported(ns::UNBLOCK.to_string()))
     }
 
     async fn ignore_user(&self, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Forgejo has no ignore concept".to_string()))
+        Err(ClientError::NotSupported(ns::IGNORE.to_string()))
     }
 
     async fn unignore_user(&self, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Forgejo has no ignore concept".to_string()))
+        Err(ClientError::NotSupported(ns::IGNORE.to_string()))
     }
 
     async fn get_presence(&self, _user_id: &str) -> ClientResult<PresenceStatus> {
@@ -651,7 +669,7 @@ impl poly_client::SocialGraphBackend for ForgejoClient {
     }
 
     async fn set_presence(&self, _status: PresenceStatus) -> ClientResult<()> {
-        Err(ClientError::NotSupported("forgejo has no presence model".to_string()))
+        Err(ClientError::NotSupported(ns::PRESENCE.to_string()))
     }
 }
 
@@ -671,27 +689,27 @@ impl poly_client::DmsAndGroupsBackend for ForgejoClient {
     }
 
     async fn open_direct_message_channel(&self, _user_id: &str) -> ClientResult<DmChannel> {
-        Err(ClientError::NotSupported("Forgejo has no DM concept".to_string()))
+        Err(ClientError::NotSupported(ns::DM.to_string()))
     }
 
     async fn open_saved_messages_channel(&self) -> ClientResult<DmChannel> {
-        Err(ClientError::NotSupported("Forgejo has no saved-messages concept".to_string()))
+        Err(ClientError::NotSupported(ns::SAVED_MSG.to_string()))
     }
 
     async fn add_group_member(&self, _group_id: &str, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Forgejo has no group DMs".to_string()))
+        Err(ClientError::NotSupported(ns::GROUP_DM.to_string()))
     }
 
     async fn remove_group_member(&self, _group_id: &str, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Forgejo has no group DMs".to_string()))
+        Err(ClientError::NotSupported(ns::GROUP_DM.to_string()))
     }
 
     async fn add_users_to_group_dm(&self, _channel_id: &str, _user_ids: &[String]) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Forgejo has no group DMs".to_string()))
+        Err(ClientError::NotSupported(ns::GROUP_DM.to_string()))
     }
 
     async fn close_dm_channel(&self, _channel_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Forgejo has no DM concept".to_string()))
+        Err(ClientError::NotSupported(ns::DM.to_string()))
     }
 
     async fn mute_conversation(
@@ -699,15 +717,15 @@ impl poly_client::DmsAndGroupsBackend for ForgejoClient {
         _channel_id: &str,
         _until: Option<chrono::DateTime<chrono::Utc>>,
     ) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Forgejo has no conversation mute".to_string()))
+        Err(ClientError::NotSupported(ns::CONV_MUTE.to_string()))
     }
 
     async fn unmute_conversation(&self, _channel_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Forgejo has no conversation mute".to_string()))
+        Err(ClientError::NotSupported(ns::CONV_MUTE.to_string()))
     }
 
     async fn leave_group_dm(&self, _channel_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Forgejo has no group DMs".to_string()))
+        Err(ClientError::NotSupported(ns::GROUP_DM.to_string()))
     }
 
     async fn edit_group_dm(
@@ -716,62 +734,9 @@ impl poly_client::DmsAndGroupsBackend for ForgejoClient {
         _name: Option<&str>,
         _avatar_url: Option<&str>,
     ) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Forgejo has no group DMs".to_string()))
+        Err(ClientError::NotSupported(ns::GROUP_DM.to_string()))
     }
 }
-
-/// Extract `(owner, repo)` from an issue thread channel ID.
-///
-/// Handles `fj-issue-{owner}/{repo}-{number}`.
-/// The `/` separates owner from repo; the trailing `-{number}` is stripped first.
-#[cfg(feature = "native")]
-fn parse_issue_thread_owner_repo(channel_id: &str) -> ClientResult<(String, String)> {
-    // Strip "fj-issue-" prefix, then the remaining has "{owner}/{repo}-{number}".
-    // rsplitn(2, '-') splits off the trailing issue number first (last '-'),
-    // then split_owner_repo splits on '/' to get owner and repo.
-    let rest = channel_id
-        .strip_prefix("fj-issue-")
-        .ok_or_else(|| ClientError::NotFound(format!("not an issue thread channel: {channel_id}")))?;
-    // rsplitn(2, '-') → [number, "owner/repo"]
-    let parts: Vec<&str> = rest.rsplitn(2, '-').collect();
-    match parts.as_slice() {
-        [_, owner_repo] => split_owner_repo(owner_repo),
-        _ => Err(ClientError::NotFound(format!(
-            "malformed issue thread channel: {channel_id}"
-        ))),
-    }
-}
-
-/// Look up `(owner, repo)` strings for a server ID from the in-memory cache.
-#[cfg(feature = "native")]
-async fn repo_owner_name_from_server_id(
-    client: &ForgejoClient,
-    server_id: &str,
-) -> ClientResult<(String, String)> {
-    let cache = client.repos.lock().await;
-    let repo = cache
-        .iter()
-        .find(|r| mapping::server_id_for_repo(r) == server_id)
-        .ok_or_else(|| ClientError::NotFound(format!("repo for server {server_id} not in cache")))?;
-    let (owner, name) = mapping::split_full_name(&repo.full_name);
-    Ok((owner, name))
-}
-
-/// Extract `(owner, repo)` from a forum channel ID.
-///
-/// Handles `fj-issues-{owner}/{repo}`, `fj-pulls-{owner}/{repo}`, and
-/// `fj-discussions-{owner}/{repo}`. The `/` separator is unambiguous
-/// even when owner or repo names contain hyphens.
-#[cfg(feature = "native")]
-fn parse_forum_channel(channel_id: &str) -> ClientResult<(String, String)> {
-    let rest = channel_id
-        .strip_prefix("fj-issues-")
-        .or_else(|| channel_id.strip_prefix("fj-pulls-"))
-        .or_else(|| channel_id.strip_prefix("fj-discussions-"))
-        .ok_or_else(|| ClientError::NotFound(format!("not a forum channel: {channel_id}")))?;
-    split_owner_repo(rest)
-}
-
 
 // ── C.1 — SettingsBackend ────────────────────────────────────────────────────
 
@@ -923,7 +888,7 @@ impl poly_client::ViewDescriptorBackend for ForgejoClient {
             return Ok(ViewRowsPage { rows: Vec::new(), next_cursor: None });
         }
 
-        let (owner, repo) = parse_forum_channel(channel_id)?;
+        let (owner, repo) = channel_ids::parse_forum_channel(channel_id)?;
         let state = filter_id.unwrap_or("open");
 
         let want_pulls = tab_id == Some("pulls") || channel_id.starts_with("fj-pulls-");
@@ -955,7 +920,7 @@ impl poly_client::ViewDescriptorBackend for ForgejoClient {
         channel_id: &str,
         row_id: &str,
     ) -> ClientResult<ViewDetail> {
-        let (owner, repo) = parse_forum_channel(channel_id)?;
+        let (owner, repo) = channel_ids::parse_forum_channel(channel_id)?;
         let index: u64 = row_id
             .parse()
             .map_err(|_err| ClientError::NotFound(format!("row_id must be an issue number: {row_id}")))?;
