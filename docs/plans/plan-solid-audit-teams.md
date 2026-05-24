@@ -111,7 +111,7 @@
   `plan-voice-video-calls.md` Phase I.
 - [x] **D.2** Split `TeamsClient::IsBackend` (756 lines) along capability-trait
   lines, matching the existing `ModerationBackend` / `SocialGraphBackend` /
-  `DmsAndGroupsBackend` split. ~500 LoC. — shipped in change `(see commit below)`
+  `DmsAndGroupsBackend` split. ~500 LoC. — shipped in change `vvqwyqlnpuzl`
 - [ ] **D.3** Long-poll → real Graph change-notification subscription (event
   stream replaces `/test/events/poll`). Requires webhook lifecycle, secret
   validation, server-side relay. ~700 LoC.
