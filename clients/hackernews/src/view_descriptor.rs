@@ -7,8 +7,93 @@ use async_trait::async_trait;
 use poly_client::*;
 
 use crate::HackerNewsClient;
+use crate::api::HnApiClient;
 use crate::mapping::{hn_item_to_overview_row, hn_item_to_view_row};
 use crate::types::HnFeed;
+
+/// B.5 — Open/Closed-friendly classification of incoming `get_view_*` requests.
+///
+/// `get_view_rows` and `get_view_detail` previously dispatched ad-hoc on
+/// `channel_id` shape. Routing through `HnViewKind` keeps the trait impl tiny
+/// and makes adding a new view kind (e.g. a user-profile view) a single
+/// variant + its `fetch_*` arm rather than surgery on a giant `match`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HnViewKind {
+    /// Account-level overview (empty `channel_id`). Renders the Top feed
+    /// with overview-style rows (author · domain).
+    Overview,
+    /// Per-feed channel (e.g. `hn-top`, `hn-best`, …). Renders the feed
+    /// with standard story rows.
+    Feed(HnFeed),
+}
+
+impl HnViewKind {
+    /// Classify an incoming `channel_id` into a `HnViewKind`. Returns
+    /// `ClientError::NotFound` when the channel is neither empty nor a known
+    /// feed channel id.
+    fn from_channel_id(channel_id: &str) -> ClientResult<Self> {
+        if channel_id.is_empty() {
+            Ok(Self::Overview)
+        } else {
+            HnFeed::from_channel_id(channel_id)
+                .map(Self::Feed)
+                .ok_or_else(|| {
+                    ClientError::NotFound(format!("unknown channel: {channel_id}"))
+                })
+        }
+    }
+
+    /// Underlying feed to query against the HN Firebase API.
+    fn feed(self) -> HnFeed {
+        match self {
+            Self::Overview => HnFeed::Top,
+            Self::Feed(f) => f,
+        }
+    }
+
+    /// Map an `HnItem` to a `ViewRow` using the layout appropriate for this
+    /// view kind (overview vs feed).
+    fn map_row(self, item: &crate::types::HnItem) -> ViewRow {
+        match self {
+            Self::Overview => hn_item_to_overview_row(item),
+            Self::Feed(_) => hn_item_to_view_row(item),
+        }
+    }
+}
+
+/// Parse a cursor's offset value, defaulting to 0.
+fn parse_offset(cursor: Option<&Cursor>) -> usize {
+    cursor
+        .and_then(|c| {
+            if c.kind == CursorKind::Offset {
+                c.value.parse().ok()
+            } else {
+                None
+            }
+        })
+        .unwrap_or(0)
+}
+
+/// Fetch one paged slice of IDs from a feed, given offset+page_size.
+async fn fetch_feed_page(
+    api: &HnApiClient,
+    feed: HnFeed,
+    offset: usize,
+    page_size: usize,
+) -> ClientResult<(Vec<u64>, Option<Cursor>)> {
+    let ids = api.get_feed_ids(feed).await?;
+    let slice: Vec<u64> = ids.into_iter().skip(offset).take(page_size).collect();
+
+    let next_cursor = if slice.len() == page_size {
+        Some(Cursor {
+            kind: CursorKind::Offset,
+            value: offset.saturating_add(page_size).to_string(),
+        })
+    } else {
+        None
+    };
+    Ok((slice, next_cursor))
+}
 
 // ── C.1 — ViewDescriptorBackend ──────────────────────────────────────────────
 
@@ -76,56 +161,17 @@ impl poly_client::ViewDescriptorBackend for HackerNewsClient {
         _filter_id: Option<&str>,
         _tab_id: Option<&str>,
     ) -> ClientResult<ViewRowsPage> {
-        let (feed, is_overview) = if channel_id.is_empty() {
-            (HnFeed::Top, true)
-        } else {
-            let f = HnFeed::from_channel_id(channel_id).ok_or_else(|| {
-                ClientError::NotFound(format!("unknown channel: {channel_id}"))
-            })?;
-            (f, false)
-        };
-
-        let offset: usize = cursor
-            .as_ref()
-            .and_then(|c| {
-                if c.kind == CursorKind::Offset {
-                    c.value.parse().ok()
-                } else {
-                    None
-                }
-            })
-            .unwrap_or(0);
-
+        let kind = HnViewKind::from_channel_id(channel_id)?;
+        let offset = parse_offset(cursor.as_ref());
         let page_size: usize = 30;
 
-        let ids = self.api.get_feed_ids(feed).await?;
-        let slice: Vec<u64> = ids
-            .into_iter()
-            .skip(offset)
-            .take(page_size)
-            .collect();
-
-        let next_cursor = if slice.len() == page_size {
-            Some(Cursor {
-                kind: CursorKind::Offset,
-                value: offset.saturating_add(page_size).to_string(),
-            })
-        } else {
-            None
-        };
-
-        let items = self.api.get_items_batch(&slice).await?;
+        let (ids, next_cursor) = fetch_feed_page(&self.api, kind.feed(), offset, page_size).await?;
+        let items = self.api.get_items_batch(&ids).await?;
 
         let rows = items
             .iter()
             .filter(|item| !item.deleted.unwrap_or(false) && !item.dead.unwrap_or(false))
-            .map(|item| {
-                if is_overview {
-                    hn_item_to_overview_row(item)
-                } else {
-                    hn_item_to_view_row(item)
-                }
-            })
+            .map(|item| kind.map_row(item))
             .collect();
 
         Ok(ViewRowsPage { rows, next_cursor })
