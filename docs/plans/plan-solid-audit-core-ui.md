@@ -5,7 +5,7 @@
 > files (`ui.rs`, `event_stream.rs`, `account_restore.rs`) and `clients/*/`.
 > The 5 ship-now wins ALREADY landed in this same change (see Phase A below).
 
-## Status: IN PROGRESS — Phase A shipped, B/C/D queued
+## Status: ✅ DONE — all phases shipped (Phase A — 5 ship-now wins; Phase B — 8 medium refactors including FavoriteServerIcon split, voice_banner actions, FavoritesBar, ServerChannelView, Action wiring, use_effect→use_reactive_effect migration, render-time .read() cleanup, account_server_bar split; Phase C — chat_view/mod.rs split, channel_list.rs split, favorites_sidebar.rs split).
 
 ## Findings overview
 
