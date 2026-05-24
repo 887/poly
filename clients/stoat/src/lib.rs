@@ -179,6 +179,14 @@ pub struct StoatClient {
     /// wiring tracked at crates/core/src/ui/account/settings/voice_settings.rs).
     #[cfg(target_arch = "wasm32")]
     voice_noise_cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    /// H.2/H.5 — transient voice channels created for DM calls.
+    ///
+    /// Maps `dm_channel_id → transient_channel_id` so that H.5 cleanup can
+    /// DELETE the synthetic channel when the call ends.  Present on all build
+    /// targets (native + wasm32) because `start_dm_call_transport` is called
+    /// from both.
+    #[cfg(feature = "native")]
+    transient_dm_channels: std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, String>>>,
 }
 
 #[cfg(feature = "native")]
@@ -210,6 +218,8 @@ impl StoatClient {
             voice_wasm_conn: std::sync::Arc::new(std::sync::Mutex::new(None)),
             #[cfg(target_arch = "wasm32")]
             voice_noise_cancel: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true)),
+            #[cfg(feature = "native")]
+            transient_dm_channels: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
         }
     }
 
@@ -2432,28 +2442,252 @@ impl poly_client::VoiceTransportBackend for StoatClient {
         Ok(())
     }
 
-    /// H.4 — Stoat DM call via synthetic voice channel (Phase H.2).
+    /// H.4 / H.2 — Stoat DM call via synthetic transient voice channel.
     ///
-    /// On "cancel:<dm_id>" prefix, disconnects the active call instead.
+    /// Creates a transient VoiceChannel via `POST /channels/create`, invites the
+    /// DM target, stores the mapping in `transient_dm_channels` for H.5 cleanup,
+    /// then calls `join_voice_channel_transport` to connect.
+    ///
+    /// On `"cancel:<dm_id>"` prefix: disconnect active call AND delete the
+    /// transient channel (H.5 cleanup).
     async fn start_dm_call_transport(&self, dm_channel_id: &str) -> ClientResult<()> {
-        // H.4 cancel path.
+        // H.5 / cancel path — disconnect and clean up the transient channel.
         if let Some(real_dm_id) = dm_channel_id.strip_prefix("cancel:") {
             tracing::info!("Stoat DM call cancel for dm_id={real_dm_id}");
+
+            // H.5 — look up and delete the transient channel (best-effort).
+            #[cfg(feature = "native")]
+            {
+                let transient_id = self
+                    .transient_dm_channels
+                    .lock()
+                    .ok()
+                    .and_then(|mut map| map.remove(real_dm_id));
+
+                if let Some(ch_id) = transient_id {
+                    tracing::info!(
+                        dm_id = real_dm_id,
+                        transient_channel_id = %ch_id,
+                        "H.5: deleting transient voice channel"
+                    );
+                    let delete_result = self
+                        .http
+                        .authenticated_request(Method::DELETE, &format!("/channels/{ch_id}"))
+                        .and_then(|req| Ok(req))
+                        .map(|req| async move { req.send().await });
+
+                    match delete_result {
+                        Ok(fut) => match fut.await {
+                            Ok(resp) if resp.status().as_u16() == 204 || resp.status().is_success() => {
+                                tracing::info!(transient_channel_id = %ch_id, "H.5: transient channel deleted");
+                            }
+                            Ok(resp) => {
+                                tracing::warn!(
+                                    transient_channel_id = %ch_id,
+                                    status = resp.status().as_u16(),
+                                    "H.5: transient channel DELETE returned non-success (ignored)"
+                                );
+                            }
+                            Err(e) => {
+                                tracing::warn!(
+                                    transient_channel_id = %ch_id,
+                                    error = %e,
+                                    "H.5: transient channel DELETE failed (ignored)"
+                                );
+                            }
+                        },
+                        Err(e) => {
+                            tracing::warn!(error = %e, "H.5: could not build DELETE request (ignored)");
+                        }
+                    }
+                }
+            }
+
             #[cfg(feature = "voice")]
             voice::disconnect_voice(std::sync::Arc::clone(&self.voice_guard)).await;
             return Ok(());
         }
 
-        // H.2 — delegate to join_voice_channel_transport using the DM channel id.
-        // Real implementation would create a transient voice channel first.
-        // Phase C.1 — disambiguate: both IsBackend and VoiceTransportBackend
-        // expose this method; call the sub-trait directly.
-        <Self as poly_client::VoiceTransportBackend>::join_voice_channel_transport(
-            self,
-            "",
-            dm_channel_id,
-        )
-        .await
+        // H.2 — create a transient voice channel for the DM call (native only).
+        // WASM fallback: delegate directly with the dm_channel_id (no channel creation).
+        #[cfg(feature = "native")]
+        {
+            // Step 1: look up the DM channel to find the other recipient.
+            let dm_channel_resp = self
+                .http
+                .authenticated_request(Method::GET, &format!("/channels/{dm_channel_id}"))?
+                .send()
+                .await
+                .map_err(|e| ClientError::Network(e.to_string()))?;
+
+            if !dm_channel_resp.status().is_success() {
+                return Err(ClientError::Network(format!(
+                    "GET /channels/{dm_channel_id} failed: HTTP {}",
+                    dm_channel_resp.status()
+                )));
+            }
+
+            let dm_json: serde_json::Value = dm_channel_resp
+                .json()
+                .await
+                .map_err(|e| ClientError::Network(e.to_string()))?;
+
+            // Extract DM recipients; the "other" user is whoever is not the local user.
+            let local_user_id = self
+                .http
+                .session()
+                .and_then(|s| s.user_id)
+                .unwrap_or_default();
+
+            let recipients: Vec<String> = dm_json
+                .get("recipients")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str())
+                        .filter(|id| *id != local_user_id.as_str())
+                        .map(str::to_string)
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            tracing::info!(
+                dm_channel_id,
+                ?recipients,
+                "H.2: creating transient voice channel for DM call"
+            );
+
+            // Step 2: POST /channels/create to make a transient VoiceChannel.
+            let create_body = serde_json::json!({
+                "channel_type": "VoiceChannel",
+                "name": format!("dm-call-{dm_channel_id}"),
+                "transient": true,
+                "recipients": recipients,
+            });
+
+            let create_resp = self
+                .http
+                .authenticated_request(Method::POST, "/channels/create")?
+                .json(&create_body)
+                .send()
+                .await
+                .map_err(|e| ClientError::Network(e.to_string()))?;
+
+            if !create_resp.status().is_success() {
+                return Err(ClientError::Network(format!(
+                    "POST /channels/create failed: HTTP {}",
+                    create_resp.status()
+                )));
+            }
+
+            let create_json: serde_json::Value = create_resp
+                .json()
+                .await
+                .map_err(|e| ClientError::Network(e.to_string()))?;
+
+            let transient_channel_id = create_json
+                .get("_id")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| ClientError::Internal("channels/create: missing _id".into()))?
+                .to_string();
+
+            tracing::info!(
+                dm_channel_id,
+                transient_channel_id = %transient_channel_id,
+                "H.2: transient voice channel created"
+            );
+
+            // Step 3: store the mapping for H.5 cleanup.
+            if let Ok(mut map) = self.transient_dm_channels.lock() {
+                map.insert(dm_channel_id.to_string(), transient_channel_id.clone());
+            }
+
+            // Step 4: join the transient channel via the existing voice transport.
+            return <Self as poly_client::VoiceTransportBackend>::join_voice_channel_transport(
+                self,
+                "",
+                &transient_channel_id,
+            )
+            .await;
+        }
+
+        // Fallback: if neither branch returned above (should be unreachable when
+        // feature = "native" is active since the block above always returns), propagate
+        // a sensible error so the compiler sees a definite return on all paths.
+        #[allow(unreachable_code)]
+        Err(ClientError::Internal(
+            "start_dm_call_transport: unhandled code path".into(),
+        ))
+    }
+
+    /// G.4 — Mute / deafen via Stoat's `PATCH /channels/{id}/voice_state`.
+    ///
+    /// Sends `{ "muted": bool, "deafened": bool }` to the Stoat server.
+    /// Returns silently if not authenticated. Maps non-204 responses to
+    /// `ClientError::Network`. Works on both native and wasm32 (the
+    /// `StoatHttpClient::authenticated_request` helper is cfg-agnostic).
+    #[cfg_attr(not(any(feature = "voice", target_arch = "wasm32")), allow(unused_variables))]
+    async fn set_voice_mute(
+        &self,
+        _server_id: &str,
+        channel_id: &str,
+        self_mute: bool,
+        self_deaf: bool,
+    ) -> ClientResult<()> {
+        // ── WASM arm ─────────────────────────────────────────────────────────────
+        #[cfg(target_arch = "wasm32")]
+        {
+            let base_url = self.http.base_url().to_string();
+            let auth_token = match self.session_token() {
+                Some(t) => t,
+                None => {
+                    tracing::warn!("set_voice_mute: not authenticated, skipping");
+                    return Ok(());
+                }
+            };
+            let url = format!(
+                "{}/channels/{}/voice_state",
+                base_url.trim_end_matches('/'),
+                channel_id
+            );
+            let body = serde_json::json!({ "muted": self_mute, "deafened": self_deaf });
+
+            let resp = gloo_net::http::Request::patch(&url)
+                .header("Authorization", &format!("Bearer {auth_token}"))
+                .json(&body)
+                .map_err(|e| ClientError::Network(format!("set_voice_mute build: {e:?}")))?
+                .send()
+                .await
+                .map_err(|e| ClientError::Network(format!("set_voice_mute send: {e:?}")))?;
+
+            if resp.status() != 204 && !resp.ok() {
+                return Err(ClientError::Network(format!(
+                    "PATCH voice_state failed: HTTP {}",
+                    resp.status()
+                )));
+            }
+            return Ok(());
+        }
+
+        // ── Native arm ───────────────────────────────────────────────────────────
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let response = self
+                .http
+                .authenticated_request(Method::PATCH, &format!("/channels/{channel_id}/voice_state"))?
+                .json(&serde_json::json!({ "muted": self_mute, "deafened": self_deaf }))
+                .send()
+                .await
+                .map_err(|e| ClientError::Network(e.to_string()))?;
+
+            if response.status().as_u16() != 204 && !response.status().is_success() {
+                return Err(ClientError::Network(format!(
+                    "PATCH /channels/{channel_id}/voice_state failed: HTTP {}",
+                    response.status()
+                )));
+            }
+            Ok(())
+        }
     }
 }
 

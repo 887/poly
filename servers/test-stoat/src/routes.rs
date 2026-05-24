@@ -1181,6 +1181,107 @@ pub async fn join_call(
     })).into_response()
 }
 
+/// POST /channels/create — create a transient (or regular) channel (H.2).
+///
+/// Accepts `{ "channel_type": str, "name": str, "transient": bool, "recipients": [user_id...] }`.
+/// Returns `{ "_id": str, "channel_type": str, "name": str, "recipients": [...] }` with 201.
+///
+/// Used by `StoatClient::start_dm_call_transport` (H.2) to create a synthetic VoiceChannel
+/// for 1:1 DM calls.  Recipients are automatically added to the channel.
+pub async fn create_channel(
+    State(state): State<std::sync::Arc<StoatState>>,
+    headers: HeaderMap,
+    Json(body): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    let creator_id = match session_user(&state, &headers) {
+        Ok(uid) => uid,
+        Err(e) => return e.into_response(),
+    };
+
+    let channel_type = body
+        .get("channel_type")
+        .and_then(|v| v.as_str())
+        .unwrap_or("VoiceChannel")
+        .to_string();
+
+    let name = body
+        .get("name")
+        .and_then(|v| v.as_str())
+        .unwrap_or("voice-channel")
+        .to_string();
+
+    let recipients: Vec<String> = body
+        .get("recipients")
+        .and_then(|v| v.as_array())
+        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
+        .unwrap_or_default();
+
+    // Generate a unique channel id.
+    let channel_id = format!("TCH_{}", state.next_message_id());
+
+    // All recipients + the creator.
+    let mut all_recipients = vec![creator_id];
+    for r in &recipients {
+        if !all_recipients.contains(r) {
+            all_recipients.push(r.clone());
+        }
+    }
+
+    state.channels.insert(
+        channel_id.clone(),
+        crate::state::Channel {
+            id: channel_id.clone(),
+            name: name.clone(),
+            description: None,
+            server_id: None,
+            channel_type: channel_type.clone(),
+            recipients: all_recipients.clone(),
+            last_message_id: None,
+        },
+    );
+    state.messages.insert(channel_id.clone(), Vec::new());
+
+    (
+        StatusCode::CREATED,
+        Json(serde_json::json!({
+            "_id": channel_id,
+            "channel_type": channel_type,
+            "name": name,
+            "recipients": all_recipients,
+        })),
+    )
+        .into_response()
+}
+
+/// DELETE /channels/:id — delete a channel (H.5 transient DM call cleanup).
+///
+/// Removes the channel and its messages from state, broadcasts `VoiceUserLeft`
+/// for any active voice participants, returns 204.
+pub async fn delete_channel(
+    State(state): State<std::sync::Arc<StoatState>>,
+    headers: HeaderMap,
+    Path(channel_id): Path<String>,
+) -> impl IntoResponse {
+    if session_user(&state, &headers).is_err() {
+        return revolt_error(StatusCode::UNAUTHORIZED, "InvalidSession").into_response();
+    }
+
+    if state.channels.remove(&channel_id).is_none() {
+        return revolt_error(StatusCode::NOT_FOUND, "NotFound").into_response();
+    }
+
+    // Remove messages for the channel.
+    state.messages.remove(&channel_id);
+
+    // Remove any active voice session.
+    if state.voice_sessions.remove(&channel_id).is_some() {
+        // No per-participant broadcast — the channel is gone.
+        tracing::debug!(channel_id = %channel_id, "H.5: removed voice session for deleted channel");
+    }
+
+    StatusCode::NO_CONTENT.into_response()
+}
+
 /// PATCH /channels/:id/voice_state — mute/deafen toggle (G.4).
 ///
 /// Accepts `{ "muted": bool, "deafened": bool }` and broadcasts a

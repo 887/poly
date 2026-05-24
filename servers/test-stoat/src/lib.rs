@@ -51,7 +51,8 @@ pub fn routes_only(state: Arc<StoatState>) -> Router<Arc<StoatState>> {
         .route("/servers/{server_id}/bans", get(routes::list_bans))
         .route("/servers/{server_id}/bans/{user_id}", put(routes::ban_member).delete(routes::unban_member))
         // Channels
-        .route("/channels/{id}", get(routes::get_channel).patch(routes::update_channel))
+        .route("/channels/create", post(routes::create_channel))
+        .route("/channels/{id}", get(routes::get_channel).patch(routes::update_channel).delete(routes::delete_channel))
         .route("/channels/{id}/members", get(routes::get_channel_members))
         .route("/channels/{id}/messages", get(routes::get_messages).post(routes::send_message))
         .route("/channels/{id}/messages/{message_id}", get(routes::get_message).delete(routes::delete_message))

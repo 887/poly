@@ -457,8 +457,8 @@ once C lands — this is wiring + handling Stoat-specific quirks.
   channel to `test-stoat` seed data if not. — superseded by stoat-voice-wasm Phase C.2 (pending); test-stoat mock already seeds voice channels per A.2 (`POST /channels/{channel_id}/join_call` working against `VoiceChannel` types). (refined scope: see stoat-voice-wasm Phase C.2 for UI navigability confirmation)
 - [x] **G.3** Speaking-indicator integration: ~~LiveKit emits speaking events natively; Janus needs RTCP-based detection.~~ Wire to the same
   `Signal<HashMap<UserId, bool>>` from Phase C.4. — superseded by stoat-voice-wasm Phase B.1+B.5 (shipped in change `oxuznzwv`); Vortex uses `SpeakingUpdate` WS JSON event (not RTCP); wired into the voice event loop's `Signal<HashMap<UserId, bool>>` analogous to Discord Phase C.4. LiveKit/Janus detection methods are moot.
-- [ ] **G.4** Mute / deafen via Stoat's API
-  (`PATCH /channels/{id}/voice_state`). — **STILL PENDING** (refined scope: see stoat-voice-wasm); endpoint documented in A.2 as `PATCH /channels/{channel_id}/voice_state` with `{"muted": bool, "deafened": bool}` body returning `204`. Not yet wired into the UI mute button. Belongs in stoat-voice-wasm Phase C or D.
+- [x] **G.4** Mute / deafen via Stoat's API
+  (`PATCH /channels/{id}/voice_state`). — shipped in change `wzykppkz`; `set_voice_mute` override added to `impl VoiceTransportBackend for StoatClient` with separate WASM (`gloo_net::http::Request::patch`) and native (`Method::PATCH authenticated_request`) arms. Mock endpoint pre-existed at `servers/test-stoat/src/routes.rs:patch_voice_state`.
 - [ ] **G.5** Update the WIT bindings and guest-side stub at
   `clients/stoat/src/guest.rs` to mirror the new methods. — **STILL PENDING** (refined scope: see stoat-voice-wasm); stoat-voice-wasm does not explicitly address WIT guest-side stubs. Needs a dedicated sub-step in stoat-voice-wasm Phase C or a follow-up change.
 
@@ -471,16 +471,16 @@ Goal: real Stoat DM calls extending the existing `TemporaryCall` model.
 - [x] **H.1** Investigate whether Stoat supports DM voice calls
   natively. Revolt historically required a voice channel; DM calls may
   need a synthetic group voice channel created on demand. Shipped — decision recorded in `clients/stoat/src/lib.rs:2435` ("Stoat DM call via synthetic voice channel (Phase H.2)").
-- [ ] **H.2** If synthetic: `StoatClient::start_direct_call(dm_id)`
+- [x] **H.2** If synthetic: `StoatClient::start_direct_call(dm_id)`
   creates a transient voice channel via `POST /channels/create` (or
-  similar), invites the DM target, then connects via Phase F. Partial — `start_dm_call_transport` exists and delegates to `join_voice_channel_transport`, but does not yet create a transient channel (uses the dm_id directly).
+  similar), invites the DM target, then connects via Phase F. — shipped in change `wzykppkz`; `start_dm_call_transport` (native arm) now: (1) GETs the DM channel to find the other recipient, (2) POSTs `/channels/create` with `channel_type: VoiceChannel`, (3) stores mapping in `transient_dm_channels: Mutex<HashMap<dm_id, transient_id>>`, (4) calls `join_voice_channel_transport`. New mock routes `POST /channels/create` and `DELETE /channels/:id` added to test-stoat.
 - [x] **H.3** Incoming call event: emit
   `ClientEvent::IncomingCall { dm_id, caller_user_id, with_video }` from
   Stoat's event stream when a transient voice channel is created with
   the local user as a recipient. Shipped in `clients/stoat/src/voice.rs:429-435` ("F.6 / H.3 — emit IncomingCall from Vortex WS events").
 - [x] **H.4** Hook into the same backend dispatch from Phase D.5. Shipped — `start_dm_call_transport` is exposed on `VoiceTransportBackend` and dispatched through `as_voice_transport()` via the backend-agnostic D.5 path.
-- [ ] **H.5** Cleanup: when the call ends, delete the transient voice
-  channel (avoid leaking server-state). Depends on H.2 — open until transient-channel creation lands.
+- [x] **H.5** Cleanup: when the call ends, delete the transient voice
+  channel (avoid leaking server-state). — shipped in change `wzykppkz`; cancel arm of `start_dm_call_transport` now looks up the transient channel ID from `transient_dm_channels`, fires `DELETE /channels/{ch_id}` (best-effort, logs warn on failure), removes the map entry, then disconnects voice. Mock `DELETE /channels/:id` route added to test-stoat.
 
 **Open question**: if Stoat's underlying server doesn't allow synthetic
 voice channels (permissions / quota), this phase may be reduced to a
