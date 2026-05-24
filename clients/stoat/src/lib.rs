@@ -86,7 +86,7 @@ pub mod voice;
 /// Shared voice constants, types, and utilities — cfg-free, compiles on both
 /// native and wasm32. Both `voice.rs` (native) and `voice_wasm.rs` (WASM, Phase B)
 /// import from here. See `docs/plans/plan-stoat-voice-wasm.md` Phase B serial prep.
-pub(crate) mod voice_common;
+pub mod voice_common;
 
 /// Shared video constants and codec-layer helpers (RFC 6184 FU-A frag/reassembly,
 /// NAL parsing) — cfg-free, compiles on both native and wasm32. Ported from

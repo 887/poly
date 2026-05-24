@@ -60,6 +60,15 @@ async-trait = { workspace = true, optional = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio-tungstenite = { workspace = true, optional = true }
 tokio-stream = { workspace = true, optional = true }
+# Voice transport — NATIVE only (feature = "voice"). F.1.
+# audiopus provides safe Opus FFI via libopus (links against C libopus).
+# poly-audio-backend provides the AudioBackend trait for mic/speaker I/O.
+# Both deps were historically mis-placed under the wasm32 target block where
+# they were never visible to native builds; voice.rs is native-only and was
+# silently broken from `cargo check --workspace`. Moved to the not(wasm32)
+# block where they belong.
+audiopus = { workspace = true, optional = true }
+poly-audio-backend = { workspace = true, optional = true }
 
 # Browser-only deps for the WASM audio playback loop (Phase B.4 of
 # plan-stoat-voice-wasm.md). Mirrors the discord voice-bridge pattern.
@@ -121,12 +130,6 @@ gloo-net = { workspace = true, features = ["websocket", "http"] }
 poly-host-bridge = { workspace = true }
 # futures: StreamExt / SinkExt / channel primitives for voice_wasm.rs.
 futures = { workspace = true }
-
-# Voice transport — native only (feature = "voice"). F.1.
-# audiopus provides safe Opus FFI via libopus.
-# poly-audio-backend provides the AudioBackend trait for mic/speaker I/O.
-audiopus = { workspace = true, optional = true }
-poly-audio-backend = { workspace = true, optional = true }
 
 # WASM plugin guest bindings (WASI targets only)
 [target.'cfg(target_os = "wasi")'.dependencies]

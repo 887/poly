@@ -31,7 +31,8 @@
 use anyhow::Context;
 use poly_audio_backend::fake_backend::FakeAudioBackend;
 use poly_client::{AuthCredentials, ClientEvent, IsBackend};
-use poly_stoat::voice::TransmitMode;
+use poly_stoat::voice_common::TransmitMode;
+
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
