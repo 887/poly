@@ -179,10 +179,23 @@ async fn test_get_server_by_id() {
     assert_eq!(server.name, "The Burrow");
     assert_eq!(server.backend.as_str(), "stoat");
 
-    // The Burrow has one category ("Text Channels") with 3 channels.
-    assert_eq!(server.categories.len(), 1);
-    let cat = &server.categories[0];
-    assert_eq!(cat.channel_ids.len(), 3, "The Burrow category should have 3 channels");
+    // The Burrow has TWO categories now:
+    //   - "Text Channels" (CAT001) with 3 text channels
+    //   - "Voice Channels" (CATVOICE001) with 1 voice channel (burrow-voice,
+    //     added in G.2 for the cross-shell voice E2E path).
+    assert_eq!(server.categories.len(), 2, "expected Text Channels + Voice Channels");
+    let text_cat = server
+        .categories
+        .iter()
+        .find(|c| c.name == "Text Channels")
+        .expect("Text Channels category");
+    assert_eq!(text_cat.channel_ids.len(), 3, "text category should have 3 channels");
+    let voice_cat = server
+        .categories
+        .iter()
+        .find(|c| c.name == "Voice Channels")
+        .expect("Voice Channels category");
+    assert_eq!(voice_cat.channel_ids.len(), 1, "voice category should have 1 channel");
 }
 
 #[tokio::test]
@@ -205,13 +218,16 @@ async fn test_get_channels() {
 
     let channels = client.get_channels("SRV001").await.expect("get_channels SRV001");
 
-    // The Burrow has 3 channels: general (CH001), random (CH002), memes (CH003)
-    assert_eq!(channels.len(), 3, "The Burrow should have 3 channels");
+    // The Burrow has 4 channels: general (CH001), random (CH002), memes (CH003),
+    // and burrow-voice (CHVOICE001 — added in G.2 for cross-shell voice
+    // E2E smoke).
+    assert_eq!(channels.len(), 4, "The Burrow should have 4 channels (3 text + 1 voice)");
 
     let names: Vec<&str> = channels.iter().map(|c| c.name.as_str()).collect();
     assert!(names.contains(&"general"), "expected 'general' channel");
     assert!(names.contains(&"random"), "expected 'random' channel");
     assert!(names.contains(&"memes"), "expected 'memes' channel");
+    assert!(names.contains(&"burrow-voice"), "expected 'burrow-voice' channel");
 
     for ch in &channels {
         assert_eq!(ch.server_id, "SRV001");

@@ -88,23 +88,26 @@ async fn test_event_stream_receives_message_in_server_channel() {
         .error_for_status()
         .expect("REST send message success");
 
-    // Wait for the event with a timeout
-    let event = tokio::time::timeout(Duration::from_secs(3), stream.next())
-        .await
-        .expect("timed out waiting for MessageReceived event")
-        .expect("stream ended unexpectedly");
-
-    match event {
-        poly_client::ClientEvent::MessageReceived { channel_id, message } => {
-            assert_eq!(channel_id, "CH001", "wrong channel_id");
-            match message.content {
-                poly_client::MessageContent::Text(text) => {
-                    assert_eq!(text, "hello from test");
-                }
-                other => panic!("expected Text content, got: {other:?}"),
+    // Skip ConnectionStateChanged emitted on WS auth (C.1).
+    let (channel_id, message) = loop {
+        let event = tokio::time::timeout(Duration::from_secs(3), stream.next())
+            .await
+            .expect("timed out waiting for MessageReceived event")
+            .expect("stream ended unexpectedly");
+        match event {
+            poly_client::ClientEvent::MessageReceived { channel_id, message } => {
+                break (channel_id, message);
             }
+            poly_client::ClientEvent::ConnectionStateChanged { .. } => continue,
+            other => panic!("expected MessageReceived, got: {other:?}"),
         }
-        other => panic!("expected MessageReceived, got: {other:?}"),
+    };
+    assert_eq!(channel_id, "CH001", "wrong channel_id");
+    match message.content {
+        poly_client::MessageContent::Text(text) => {
+            assert_eq!(text, "hello from test");
+        }
+        other => panic!("expected Text content, got: {other:?}"),
     }
 }
 
@@ -131,18 +134,21 @@ async fn test_event_stream_receives_typing_started() {
         .error_for_status()
         .expect("typing POST success");
 
-    // Wait for the event
-    let event = tokio::time::timeout(Duration::from_secs(3), stream.next())
-        .await
-        .expect("timed out waiting for TypingStarted event")
-        .expect("stream ended unexpectedly");
-
-    match event {
-        poly_client::ClientEvent::TypingStarted { channel_id, .. } => {
-            assert_eq!(channel_id, "CH001");
+    // Wait for the TypingStarted event, skipping the initial
+    // ConnectionStateChanged emitted when the WS authenticates (C.1 added
+    // that signal so the UI knows when the channel is open).
+    let channel_id = loop {
+        let event = tokio::time::timeout(Duration::from_secs(3), stream.next())
+            .await
+            .expect("timed out waiting for TypingStarted event")
+            .expect("stream ended unexpectedly");
+        match event {
+            poly_client::ClientEvent::TypingStarted { channel_id, .. } => break channel_id,
+            poly_client::ClientEvent::ConnectionStateChanged { .. } => continue,
+            other => panic!("expected TypingStarted, got: {other:?}"),
         }
-        other => panic!("expected TypingStarted, got: {other:?}"),
-    }
+    };
+    assert_eq!(channel_id, "CH001");
 }
 
 /// Test 3: event_stream receives MessageReceived for a DM channel.
@@ -168,22 +174,26 @@ async fn test_event_stream_receives_message_in_dm_channel() {
         .error_for_status()
         .expect("REST send DM message success");
 
-    let event = tokio::time::timeout(Duration::from_secs(3), stream.next())
-        .await
-        .expect("timed out waiting for MessageReceived event for DM")
-        .expect("stream ended unexpectedly");
-
-    match event {
-        poly_client::ClientEvent::MessageReceived { channel_id, message } => {
-            assert_eq!(channel_id, "CHDM001", "wrong channel_id for DM");
-            match message.content {
-                poly_client::MessageContent::Text(text) => {
-                    assert_eq!(text, "DM test message");
-                }
-                other => panic!("expected Text content, got: {other:?}"),
+    // Skip ConnectionStateChanged emitted on WS auth (C.1).
+    let (channel_id, message) = loop {
+        let event = tokio::time::timeout(Duration::from_secs(3), stream.next())
+            .await
+            .expect("timed out waiting for MessageReceived event for DM")
+            .expect("stream ended unexpectedly");
+        match event {
+            poly_client::ClientEvent::MessageReceived { channel_id, message } => {
+                break (channel_id, message);
             }
+            poly_client::ClientEvent::ConnectionStateChanged { .. } => continue,
+            other => panic!("expected MessageReceived for DM, got: {other:?}"),
         }
-        other => panic!("expected MessageReceived for DM, got: {other:?}"),
+    };
+    assert_eq!(channel_id, "CHDM001", "wrong channel_id for DM");
+    match message.content {
+        poly_client::MessageContent::Text(text) => {
+            assert_eq!(text, "DM test message");
+        }
+        other => panic!("expected Text content, got: {other:?}"),
     }
 }
 
