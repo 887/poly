@@ -11,11 +11,11 @@ Scope: only `clients/hackernews/`. Do NOT touch other client crates.
 
 ## Phase A — Ship-now wins (≤50 LoC each, max 3)
 
-- [ ] **A.1** Drop "TODO: migrate to" boilerplate from in-memory
-      settings storage doc comment (`lib.rs:59`). _≤5 LoC._
-- [ ] **A.2** Dedup `NotSupported` allocation strings (`lib.rs:716-829`,
+- [x] **A.1** Drop "TODO: migrate to" boilerplate from in-memory
+      settings storage doc comment (`lib.rs:59`). _≤5 LoC._ — shipped
+- [x] **A.2** Dedup `NotSupported` allocation strings (`lib.rs:716-829`,
       ~22 sites all "Hacker News has no X") into module-level `const`
-      slices. _≈30 LoC removed._
+      slices. _≈30 LoC removed._ — shipped (10 const + 19 call sites updated)
 - [ ] **A.3** `mapping.rs` test (`:548`) uses `.expect("meta_text must be Some")`
       in a test context that's already inside `#[cfg(test)]`; consistent
       pattern but the panic-message could match the structured assertion

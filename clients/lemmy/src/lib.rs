@@ -45,6 +45,18 @@ use std::collections::HashMap;
 #[cfg(feature = "native")]
 use std::pin::Pin;
 
+// ── NotSupported string constants — avoids repeated heap allocations ──────────
+// Each constant covers one logical "category" of unsupported capability.
+// Use these wherever the same error message would otherwise be duplicated.
+#[cfg(feature = "native")]
+const FRIEND_SYS_UNSUPPORTED: &str = "Lemmy has no friend system";
+#[cfg(feature = "native")]
+const GROUP_DM_UNSUPPORTED: &str = "Lemmy has no group DMs";
+#[cfg(feature = "native")]
+const CONVO_MUTE_UNSUPPORTED: &str = "Lemmy has no conversation mute API";
+#[cfg(feature = "native")]
+const IGNORE_UNSUPPORTED: &str = "Lemmy has no ignore concept";
+
 /// Return the raw FTL translation source for the Lemmy client plugin.
 #[must_use] 
 pub fn plugin_translations(locale: &str) -> String {
@@ -58,8 +70,7 @@ pub fn plugin_translations(locale: &str) -> String {
 #[cfg(feature = "native")]
 pub struct LemmyClient {
     http: LemmyHttpClient,
-    /// Pack C P18 — in-memory settings storage stub. TODO: migrate to
-    /// `host-api.kv_set` once exposed to plugins for true persistence.
+    /// In-memory settings storage (per-account KV).
     settings_storage: SettingsStorageCell,
     /// Stored version override (None = use api::DEFAULT_CLIENT_VERSION).
     version_override: std::sync::Mutex<Option<String>>,
@@ -989,15 +1000,15 @@ impl poly_client::SocialGraphBackend for LemmyClient {
     }
 
     async fn add_friend(&self, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Lemmy has no friend system".to_string()))
+        Err(ClientError::NotSupported(FRIEND_SYS_UNSUPPORTED.to_string()))
     }
 
     async fn remove_friend(&self, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Lemmy has no friend system".to_string()))
+        Err(ClientError::NotSupported(FRIEND_SYS_UNSUPPORTED.to_string()))
     }
 
     async fn respond_to_friend_request(&self, _user_id: &str, _accept: bool) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Lemmy has no friend system".to_string()))
+        Err(ClientError::NotSupported(FRIEND_SYS_UNSUPPORTED.to_string()))
     }
 
     async fn set_friend_nickname(
@@ -1005,7 +1016,7 @@ impl poly_client::SocialGraphBackend for LemmyClient {
         _user_id: &str,
         _nickname: Option<&str>,
     ) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Lemmy has no friend system".to_string()))
+        Err(ClientError::NotSupported(FRIEND_SYS_UNSUPPORTED.to_string()))
     }
 
     async fn set_user_note(&self, _user_id: &str, _note: Option<&str>) -> ClientResult<()> {
@@ -1021,11 +1032,11 @@ impl poly_client::SocialGraphBackend for LemmyClient {
     }
 
     async fn ignore_user(&self, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Lemmy has no ignore concept".to_string()))
+        Err(ClientError::NotSupported(IGNORE_UNSUPPORTED.to_string()))
     }
 
     async fn unignore_user(&self, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Lemmy has no ignore concept".to_string()))
+        Err(ClientError::NotSupported(IGNORE_UNSUPPORTED.to_string()))
     }
 
     async fn get_presence(&self, _user_id: &str) -> ClientResult<PresenceStatus> {
@@ -1091,15 +1102,15 @@ impl poly_client::DmsAndGroupsBackend for LemmyClient {
     }
 
     async fn add_group_member(&self, _group_id: &str, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Lemmy has no group DMs".to_string()))
+        Err(ClientError::NotSupported(GROUP_DM_UNSUPPORTED.to_string()))
     }
 
     async fn remove_group_member(&self, _group_id: &str, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Lemmy has no group DMs".to_string()))
+        Err(ClientError::NotSupported(GROUP_DM_UNSUPPORTED.to_string()))
     }
 
     async fn add_users_to_group_dm(&self, _channel_id: &str, _user_ids: &[String]) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Lemmy has no group DMs".to_string()))
+        Err(ClientError::NotSupported(GROUP_DM_UNSUPPORTED.to_string()))
     }
 
     async fn close_dm_channel(&self, _channel_id: &str) -> ClientResult<()> {
@@ -1113,15 +1124,15 @@ impl poly_client::DmsAndGroupsBackend for LemmyClient {
         _channel_id: &str,
         _until: Option<chrono::DateTime<chrono::Utc>>,
     ) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Lemmy has no conversation mute API".to_string()))
+        Err(ClientError::NotSupported(CONVO_MUTE_UNSUPPORTED.to_string()))
     }
 
     async fn unmute_conversation(&self, _channel_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Lemmy has no conversation mute API".to_string()))
+        Err(ClientError::NotSupported(CONVO_MUTE_UNSUPPORTED.to_string()))
     }
 
     async fn leave_group_dm(&self, _channel_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Lemmy has no group DMs".to_string()))
+        Err(ClientError::NotSupported(GROUP_DM_UNSUPPORTED.to_string()))
     }
 
     async fn edit_group_dm(
@@ -1130,7 +1141,7 @@ impl poly_client::DmsAndGroupsBackend for LemmyClient {
         _name: Option<&str>,
         _avatar_url: Option<&str>,
     ) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Lemmy has no group DMs".to_string()))
+        Err(ClientError::NotSupported(GROUP_DM_UNSUPPORTED.to_string()))
     }
 }
 

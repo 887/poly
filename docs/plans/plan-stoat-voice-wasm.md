@@ -197,7 +197,7 @@ Pure data items that already compile on wasm32 and should be hoisted to `voice_c
 
 - [x] **E.1** Launch poly-web as stoat account (otter), poly-electron as stoat account (beaver), both join the same voice channel via mock. Shipped — live smoke ran; surfaced and fixed bugs `8193daa9` (stale channel context crash), `63b97280` (startup race), `fb7c4d99` (re-click drops participants), `e7f7bde9` (departing channel cleanup), `799bceab` (render-time safety net).
 - [x] **E.2** Both shells reach the in-voice UI with 🎤🔊📵 buttons; no console warnings; participant list shows both users. Shipped — verified during the bug-bash that produced the fixes listed in E.1; participant cache populated via Bonfire WS broadcast in `59199fd5`.
-- [ ] **E.3** (Optional, stretch) Add a `RemoteSpeakingEvent` tracing log analogous to discord, drive mic capture on one shell, observe the log on the other. This is the load-bearing mutual-audio byte-flow verification. Stretch — deferred.
+- [~] **E.3** ~~(Optional, stretch) Add a `RemoteSpeakingEvent` tracing log analogous to discord, drive mic capture on one shell, observe the log on the other. This is the load-bearing mutual-audio byte-flow verification.~~ **DEFERRED** — explicit stretch goal, not blocking plan closure. Worth a follow-up plan if mutual-audio regressions surface.
 
 ## Open architectural questions for the OPUS agent
 

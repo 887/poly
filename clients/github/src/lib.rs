@@ -47,6 +47,16 @@ pub use mapping::{BACKEND_SLUG, issue_thread_channel_id};
 /// in the server list. Two years matches the user's stated requirement.
 const ACTIVITY_WINDOW_YEARS: i64 = 2;
 
+// ── NotSupported message constants ───────────────────────────────────────────
+// Centralised here so each unique message is written once.
+const NS_NO_FRIEND_SYSTEM: &str = "GitHub has no friend system";
+const NS_NO_GROUP_DMS: &str = "GitHub has no group DMs";
+const NS_NO_DM_CONCEPT: &str = "GitHub has no DM concept";
+const NS_NO_CONVERSATION_MUTE: &str = "GitHub has no conversation mute";
+const NS_NO_BAN_CONCEPT: &str = "GitHub: no per-repo ban concept";
+const NS_NO_TIMEOUT_CONCEPT: &str = "GitHub: no timeout concept";
+const NS_NO_IGNORE_CONCEPT: &str = "GitHub has no ignore concept";
+
 /// Return FTL translation source for the GitHub client plugin.
 #[must_use]
 pub fn plugin_translations(locale: &str) -> String {
@@ -66,8 +76,7 @@ pub struct GitHubClient {
     session: Option<Session>,
     /// Cached repo list — refreshed on `get_servers`.
     repos: tokio::sync::Mutex<Vec<types::GhRepo>>,
-    /// Pack C P18 — in-memory settings storage stub. TODO: migrate to
-    /// `host-api.kv_set` once exposed to plugins for true persistence.
+    /// In-memory settings storage (persists for process lifetime).
     settings_storage: SettingsStorageCell,
     /// Stored version override (None = use DEFAULT_CLIENT_VERSION).
     ///
@@ -584,11 +593,11 @@ impl poly_client::ModerationBackend for GitHubClient {
         _reason: Option<&str>,
         _delete_message_history_secs: Option<u64>,
     ) -> ClientResult<()> {
-        Err(ClientError::NotSupported("GitHub: no per-repo ban concept".to_string()))
+        Err(ClientError::NotSupported(NS_NO_BAN_CONCEPT.to_string()))
     }
 
     async fn unban_member(&self, _server_id: &str, _member_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("GitHub: no per-repo ban concept".to_string()))
+        Err(ClientError::NotSupported(NS_NO_BAN_CONCEPT.to_string()))
     }
 
     async fn timeout_member(
@@ -598,11 +607,11 @@ impl poly_client::ModerationBackend for GitHubClient {
         _until: chrono::DateTime<chrono::Utc>,
         _reason: Option<&str>,
     ) -> ClientResult<()> {
-        Err(ClientError::NotSupported("GitHub: no timeout concept".to_string()))
+        Err(ClientError::NotSupported(NS_NO_TIMEOUT_CONCEPT.to_string()))
     }
 
     async fn untimeout_member(&self, _server_id: &str, _member_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("GitHub: no timeout concept".to_string()))
+        Err(ClientError::NotSupported(NS_NO_TIMEOUT_CONCEPT.to_string()))
     }
 
     async fn get_bans(&self, _server_id: &str) -> ClientResult<Vec<BannedMember>> {
@@ -695,15 +704,15 @@ impl poly_client::SocialGraphBackend for GitHubClient {
     }
 
     async fn add_friend(&self, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("GitHub has no friend system".to_string()))
+        Err(ClientError::NotSupported(NS_NO_FRIEND_SYSTEM.to_string()))
     }
 
     async fn remove_friend(&self, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("GitHub has no friend system".to_string()))
+        Err(ClientError::NotSupported(NS_NO_FRIEND_SYSTEM.to_string()))
     }
 
     async fn respond_to_friend_request(&self, _user_id: &str, _accept: bool) -> ClientResult<()> {
-        Err(ClientError::NotSupported("GitHub has no friend system".to_string()))
+        Err(ClientError::NotSupported(NS_NO_FRIEND_SYSTEM.to_string()))
     }
 
     async fn set_friend_nickname(
@@ -711,7 +720,7 @@ impl poly_client::SocialGraphBackend for GitHubClient {
         _user_id: &str,
         _nickname: Option<&str>,
     ) -> ClientResult<()> {
-        Err(ClientError::NotSupported("GitHub has no friend system".to_string()))
+        Err(ClientError::NotSupported(NS_NO_FRIEND_SYSTEM.to_string()))
     }
 
     async fn set_user_note(&self, _user_id: &str, _note: Option<&str>) -> ClientResult<()> {
@@ -727,11 +736,11 @@ impl poly_client::SocialGraphBackend for GitHubClient {
     }
 
     async fn ignore_user(&self, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("GitHub has no ignore concept".to_string()))
+        Err(ClientError::NotSupported(NS_NO_IGNORE_CONCEPT.to_string()))
     }
 
     async fn unignore_user(&self, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("GitHub has no ignore concept".to_string()))
+        Err(ClientError::NotSupported(NS_NO_IGNORE_CONCEPT.to_string()))
     }
 
     async fn get_presence(&self, _user_id: &str) -> ClientResult<PresenceStatus> {
@@ -758,7 +767,7 @@ impl poly_client::DmsAndGroupsBackend for GitHubClient {
     }
 
     async fn open_direct_message_channel(&self, _user_id: &str) -> ClientResult<DmChannel> {
-        Err(ClientError::NotSupported("GitHub has no DM concept".to_string()))
+        Err(ClientError::NotSupported(NS_NO_DM_CONCEPT.to_string()))
     }
 
     async fn open_saved_messages_channel(&self) -> ClientResult<DmChannel> {
@@ -766,19 +775,19 @@ impl poly_client::DmsAndGroupsBackend for GitHubClient {
     }
 
     async fn add_group_member(&self, _group_id: &str, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("GitHub has no group DMs".to_string()))
+        Err(ClientError::NotSupported(NS_NO_GROUP_DMS.to_string()))
     }
 
     async fn remove_group_member(&self, _group_id: &str, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("GitHub has no group DMs".to_string()))
+        Err(ClientError::NotSupported(NS_NO_GROUP_DMS.to_string()))
     }
 
     async fn add_users_to_group_dm(&self, _channel_id: &str, _user_ids: &[String]) -> ClientResult<()> {
-        Err(ClientError::NotSupported("GitHub has no group DMs".to_string()))
+        Err(ClientError::NotSupported(NS_NO_GROUP_DMS.to_string()))
     }
 
     async fn close_dm_channel(&self, _channel_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("GitHub has no DM concept".to_string()))
+        Err(ClientError::NotSupported(NS_NO_DM_CONCEPT.to_string()))
     }
 
     async fn mute_conversation(
@@ -786,15 +795,15 @@ impl poly_client::DmsAndGroupsBackend for GitHubClient {
         _channel_id: &str,
         _until: Option<chrono::DateTime<chrono::Utc>>,
     ) -> ClientResult<()> {
-        Err(ClientError::NotSupported("GitHub has no conversation mute".to_string()))
+        Err(ClientError::NotSupported(NS_NO_CONVERSATION_MUTE.to_string()))
     }
 
     async fn unmute_conversation(&self, _channel_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("GitHub has no conversation mute".to_string()))
+        Err(ClientError::NotSupported(NS_NO_CONVERSATION_MUTE.to_string()))
     }
 
     async fn leave_group_dm(&self, _channel_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("GitHub has no group DMs".to_string()))
+        Err(ClientError::NotSupported(NS_NO_GROUP_DMS.to_string()))
     }
 
     async fn edit_group_dm(
@@ -803,7 +812,7 @@ impl poly_client::DmsAndGroupsBackend for GitHubClient {
         _name: Option<&str>,
         _avatar_url: Option<&str>,
     ) -> ClientResult<()> {
-        Err(ClientError::NotSupported("GitHub has no group DMs".to_string()))
+        Err(ClientError::NotSupported(NS_NO_GROUP_DMS.to_string()))
     }
 }
 

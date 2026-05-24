@@ -7,7 +7,7 @@
 //! # Usage
 //!
 //! ```rust,no_run
-//! # use poly_audio_backend::test_support::MockAudioBackend;
+//! # use poly_audio_backend::test_support::{MockAudioBackend, MockEvent};
 //! let mock = MockAudioBackend::new();
 //! // ...exercise AudioBackend methods...
 //! let events = mock.drain_events();

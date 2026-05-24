@@ -56,8 +56,7 @@ pub fn plugin_translations(locale: &str) -> String {
 pub struct HackerNewsClient {
     api: HnApiClient,
     session: Option<Session>,
-    /// Pack C P18 — in-memory settings storage stub. TODO: migrate to
-    /// `host-api.kv_set` once exposed to plugins for true persistence.
+    /// In-memory settings storage (persists only for the session lifetime).
     settings_storage: SettingsStorageCell,
     /// Stored version override (None = use api::DEFAULT_CLIENT_VERSION).
     version_override: std::sync::Mutex<Option<String>>,
@@ -438,6 +437,32 @@ impl IsBackend for HackerNewsClient {
     }
 }
 
+// ── NotSupported message constants ───────────────────────────────────────────
+// HN legitimately has no social graph, DM, or presence concepts. These
+// constants eliminate per-call heap allocations and keep the error text
+// consistent for i18n searches and snapshot tests.
+
+#[cfg(feature = "native")]
+const ERR_NO_FRIENDS: &str = "Hacker News has no friend system";
+#[cfg(feature = "native")]
+const ERR_NO_USER_NOTES: &str = "Hacker News has no user note system";
+#[cfg(feature = "native")]
+const ERR_NO_BLOCK: &str = "Hacker News: block not supported via this interface";
+#[cfg(feature = "native")]
+const ERR_NO_UNBLOCK: &str = "Hacker News: unblock not supported via this interface";
+#[cfg(feature = "native")]
+const ERR_NO_IGNORE: &str = "Hacker News has no ignore concept";
+#[cfg(feature = "native")]
+const ERR_NO_PRESENCE: &str = "Hacker News has no presence system";
+#[cfg(feature = "native")]
+const ERR_NO_DM: &str = "Hacker News has no DM concept";
+#[cfg(feature = "native")]
+const ERR_NO_SAVED_MESSAGES: &str = "Hacker News has no saved-messages concept";
+#[cfg(feature = "native")]
+const ERR_NO_GROUP_DM: &str = "Hacker News has no group DMs";
+#[cfg(feature = "native")]
+const ERR_NO_CONV_MUTE: &str = "Hacker News has no conversation mute";
+
 // ── H.3.b — SocialGraphBackend ────────────────────────────────────────────────
 
 #[cfg(feature = "native")]
@@ -458,15 +483,15 @@ impl poly_client::SocialGraphBackend for HackerNewsClient {
     }
 
     async fn add_friend(&self, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("HackerNews has no friend system".to_string()))
+        Err(ClientError::NotSupported(ERR_NO_FRIENDS.to_string()))
     }
 
     async fn remove_friend(&self, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("HackerNews has no friend system".to_string()))
+        Err(ClientError::NotSupported(ERR_NO_FRIENDS.to_string()))
     }
 
     async fn respond_to_friend_request(&self, _user_id: &str, _accept: bool) -> ClientResult<()> {
-        Err(ClientError::NotSupported("HackerNews has no friend system".to_string()))
+        Err(ClientError::NotSupported(ERR_NO_FRIENDS.to_string()))
     }
 
     async fn set_friend_nickname(
@@ -474,27 +499,27 @@ impl poly_client::SocialGraphBackend for HackerNewsClient {
         _user_id: &str,
         _nickname: Option<&str>,
     ) -> ClientResult<()> {
-        Err(ClientError::NotSupported("HackerNews has no friend system".to_string()))
+        Err(ClientError::NotSupported(ERR_NO_FRIENDS.to_string()))
     }
 
     async fn set_user_note(&self, _user_id: &str, _note: Option<&str>) -> ClientResult<()> {
-        Err(ClientError::NotSupported("HackerNews has no user note system".to_string()))
+        Err(ClientError::NotSupported(ERR_NO_USER_NOTES.to_string()))
     }
 
     async fn block_user(&self, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("HackerNews: block not supported via this interface".to_string()))
+        Err(ClientError::NotSupported(ERR_NO_BLOCK.to_string()))
     }
 
     async fn unblock_user(&self, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("HackerNews: unblock not supported via this interface".to_string()))
+        Err(ClientError::NotSupported(ERR_NO_UNBLOCK.to_string()))
     }
 
     async fn ignore_user(&self, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("HackerNews has no ignore concept".to_string()))
+        Err(ClientError::NotSupported(ERR_NO_IGNORE.to_string()))
     }
 
     async fn unignore_user(&self, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("HackerNews has no ignore concept".to_string()))
+        Err(ClientError::NotSupported(ERR_NO_IGNORE.to_string()))
     }
 
     async fn get_presence(&self, _user_id: &str) -> ClientResult<PresenceStatus> {
@@ -506,7 +531,7 @@ impl poly_client::SocialGraphBackend for HackerNewsClient {
     }
 
     async fn set_presence(&self, _status: PresenceStatus) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Hacker News has no presence system".to_string()))
+        Err(ClientError::NotSupported(ERR_NO_PRESENCE.to_string()))
     }
 }
 
@@ -526,27 +551,27 @@ impl poly_client::DmsAndGroupsBackend for HackerNewsClient {
     }
 
     async fn open_direct_message_channel(&self, _user_id: &str) -> ClientResult<DmChannel> {
-        Err(ClientError::NotSupported("Hacker News has no DM concept".to_string()))
+        Err(ClientError::NotSupported(ERR_NO_DM.to_string()))
     }
 
     async fn open_saved_messages_channel(&self) -> ClientResult<DmChannel> {
-        Err(ClientError::NotSupported("Hacker News has no saved-messages concept".to_string()))
+        Err(ClientError::NotSupported(ERR_NO_SAVED_MESSAGES.to_string()))
     }
 
     async fn add_group_member(&self, _group_id: &str, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Hacker News has no group DMs".to_string()))
+        Err(ClientError::NotSupported(ERR_NO_GROUP_DM.to_string()))
     }
 
     async fn remove_group_member(&self, _group_id: &str, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Hacker News has no group DMs".to_string()))
+        Err(ClientError::NotSupported(ERR_NO_GROUP_DM.to_string()))
     }
 
     async fn add_users_to_group_dm(&self, _channel_id: &str, _user_ids: &[String]) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Hacker News has no group DMs".to_string()))
+        Err(ClientError::NotSupported(ERR_NO_GROUP_DM.to_string()))
     }
 
     async fn close_dm_channel(&self, _channel_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Hacker News has no DM concept".to_string()))
+        Err(ClientError::NotSupported(ERR_NO_DM.to_string()))
     }
 
     async fn mute_conversation(
@@ -554,15 +579,15 @@ impl poly_client::DmsAndGroupsBackend for HackerNewsClient {
         _channel_id: &str,
         _until: Option<chrono::DateTime<chrono::Utc>>,
     ) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Hacker News has no conversation mute".to_string()))
+        Err(ClientError::NotSupported(ERR_NO_CONV_MUTE.to_string()))
     }
 
     async fn unmute_conversation(&self, _channel_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Hacker News has no conversation mute".to_string()))
+        Err(ClientError::NotSupported(ERR_NO_CONV_MUTE.to_string()))
     }
 
     async fn leave_group_dm(&self, _channel_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Hacker News has no group DMs".to_string()))
+        Err(ClientError::NotSupported(ERR_NO_GROUP_DM.to_string()))
     }
 
     async fn edit_group_dm(
@@ -571,7 +596,7 @@ impl poly_client::DmsAndGroupsBackend for HackerNewsClient {
         _name: Option<&str>,
         _avatar_url: Option<&str>,
     ) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Hacker News has no group DMs".to_string()))
+        Err(ClientError::NotSupported(ERR_NO_GROUP_DM.to_string()))
     }
 }
 

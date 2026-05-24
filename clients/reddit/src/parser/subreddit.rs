@@ -9,6 +9,26 @@ use scraper::{ElementRef, Html, Selector};
 
 use super::{ParseError, RawPost, data_attr, parse_html, parse_timestamp_ms};
 
+// ─── Per-call selector factories ────────────────────────────────────────────
+// `scraper::Selector` holds `Rc` and is therefore `!Sync`; `LazyLock` is not
+// viable. Each call parses a static literal that can never fail.
+
+#[allow(clippy::unwrap_used)] // static selector literal — infallible
+fn title_selector() -> Selector {
+    Selector::parse("a.title").unwrap()
+}
+
+#[allow(clippy::unwrap_used)] // static selector literal — infallible
+fn body_selector() -> Selector {
+    Selector::parse("div.usertext-body div.md").unwrap()
+}
+
+#[allow(clippy::unwrap_used)] // static selector literal — infallible
+fn thumbnail_selector() -> Selector {
+    Selector::parse("a.thumbnail img").unwrap()
+}
+// ────────────────────────────────────────────────────────────────────────────
+
 /// Parse every post container in a subreddit listing into `RawPost`s.
 ///
 /// Empty listings (banned subreddits, subscriber-only quarantines on

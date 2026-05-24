@@ -11,6 +11,33 @@ use scraper::{ElementRef, Selector};
 
 use super::{ParseError, RawDm, data_attr, parse_html, parse_timestamp_ms};
 
+// ─── Per-call selector factories ────────────────────────────────────────────
+// `scraper::Selector` holds `Rc` and is therefore `!Sync`; `LazyLock` is not
+// viable. Each call to these fns parses a static literal that can never fail,
+// so the `.unwrap()` is infallible by construction.
+
+#[allow(clippy::unwrap_used)] // static selector literal — infallible
+fn inbox_row_selector() -> Selector {
+    Selector::parse(r#"div.message[data-fullname^="t4_"]"#).unwrap()
+}
+
+#[allow(clippy::unwrap_used)] // static selector literal — infallible
+fn subject_selector() -> Selector {
+    Selector::parse("a.subject").unwrap()
+}
+
+#[allow(clippy::unwrap_used)] // static selector literal — infallible
+fn body_md_selector() -> Selector {
+    Selector::parse("div.md").unwrap()
+}
+
+#[allow(clippy::unwrap_used)] // static selector literal — infallible
+fn live_timestamp_selector() -> Selector {
+    Selector::parse("time.live-timestamp").unwrap()
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+
 /// Parse every DM thread row from `/message/inbox/`.
 ///
 /// # Errors
@@ -20,9 +47,7 @@ use super::{ParseError, RawDm, data_attr, parse_html, parse_timestamp_ms};
 ///   author / no timestamp).
 pub fn parse_inbox(html: &str) -> Result<Vec<RawDm>, ParseError> {
     let doc = parse_html(html)?;
-    #[allow(clippy::unwrap_used)] // lint-allow-unused: static selector literal infallible
-    let row_sel =
-        Selector::parse(r#"div.message[data-fullname^="t4_"]"#).unwrap();
+    let row_sel = inbox_row_selector();
     let mut dms = Vec::new();
     for el in doc.select(&row_sel) {
         dms.push(parse_dm_row(&el)?);
@@ -39,26 +64,20 @@ fn parse_dm_row(el: &ElementRef<'_>) -> Result<RawDm, ParseError> {
         .ok_or(ParseError::MissingElement("data-author"))?
         .to_string();
 
-    #[allow(clippy::unwrap_used)] // lint-allow-unused: static selector literal infallible
-    let subject_sel = Selector::parse("a.subject").unwrap();
     let subject = el
-        .select(&subject_sel)
+        .select(&subject_selector())
         .next()
         .map(|a| a.text().collect::<String>().trim().to_string())
         .unwrap_or_default();
 
-    #[allow(clippy::unwrap_used)] // lint-allow-unused: static selector literal infallible
-    let body_sel = Selector::parse("div.md").unwrap();
     let body_html = el
-        .select(&body_sel)
+        .select(&body_md_selector())
         .next()
         .map(|d| d.inner_html())
         .unwrap_or_default();
 
-    #[allow(clippy::unwrap_used)] // lint-allow-unused: static selector literal infallible
-    let time_sel = Selector::parse("time.live-timestamp").unwrap();
     let timestamp_raw = el
-        .select(&time_sel)
+        .select(&live_timestamp_selector())
         .next()
         .and_then(|t| t.value().attr("datetime"))
         .ok_or(ParseError::MissingElement("time.live-timestamp"))?;

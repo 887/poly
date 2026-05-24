@@ -17,6 +17,43 @@ use super::{
     subreddit::{parse_post_thing, post_selector},
 };
 
+// ─── Per-call selector factories ────────────────────────────────────────────
+// `scraper::Selector` holds `Rc` and is therefore `!Sync`; `LazyLock` is not
+// viable. Each call parses a static literal that can never fail.
+
+#[allow(clippy::unwrap_used)] // static selector literal — infallible
+fn top_comments_selector() -> Selector {
+    Selector::parse(
+        r#"div.commentarea > div.sitetable > div.thing.comment[data-fullname^="t1_"]"#,
+    )
+    .unwrap()
+}
+
+#[allow(clippy::unwrap_used)] // static selector literal — infallible
+fn score_selector() -> Selector {
+    Selector::parse("span.score.unvoted").unwrap()
+}
+
+#[allow(clippy::unwrap_used)] // static selector literal — infallible
+fn live_timestamp_selector() -> Selector {
+    Selector::parse("time.live-timestamp").unwrap()
+}
+
+#[allow(clippy::unwrap_used)] // static selector literal — infallible
+fn comment_body_selector() -> Selector {
+    Selector::parse(":scope > div.entry > form > div.usertext-body div.md").unwrap()
+}
+
+#[allow(clippy::unwrap_used)] // static selector literal — infallible
+fn comment_reply_selector() -> Selector {
+    Selector::parse(
+        r#":scope > div.child > div.listing > div.thing.comment[data-fullname^="t1_"]"#,
+    )
+    .unwrap()
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+
 /// Parse the OP submission and the full nested comment tree.
 ///
 /// # Errors
@@ -39,10 +76,7 @@ pub fn parse_post_page(html: &str) -> Result<(RawPost, Vec<RawComment>), ParseEr
 
     // Comments live under .commentarea > .sitetable. Each top-level
     // comment is a direct .thing child of that .sitetable.
-    #[allow(clippy::unwrap_used)] // lint-allow-unused: static selector literal infallible
-    let top_comments_sel =
-        Selector::parse(r#"div.commentarea > div.sitetable > div.thing.comment[data-fullname^="t1_"]"#)
-            .unwrap();
+    let top_comments_sel = top_comments_selector();
     let mut comments = Vec::new();
     for el in doc.select(&top_comments_sel) {
         comments.push(parse_comment_node(&el)?);
@@ -65,20 +99,16 @@ fn parse_comment_node(el: &ElementRef<'_>) -> Result<RawComment, ParseError> {
     // Score: <span class="score unvoted" title="N">N points</span>.
     // The `title` attribute is the canonical numeric value; the text
     // includes " points" / " point" pluralisation.
-    #[allow(clippy::unwrap_used)] // lint-allow-unused: static selector literal infallible
-    let score_sel = Selector::parse("span.score.unvoted").unwrap();
     let score = el
-        .select(&score_sel)
+        .select(&score_selector())
         .next()
         .and_then(|s| s.value().attr("title"))
         .and_then(|t| t.parse::<i64>().ok())
         .unwrap_or(0);
 
     // Timestamp: <time class="live-timestamp" datetime="...">.
-    #[allow(clippy::unwrap_used)] // lint-allow-unused: static selector literal infallible
-    let time_sel = Selector::parse("time.live-timestamp").unwrap();
     let timestamp_raw = el
-        .select(&time_sel)
+        .select(&live_timestamp_selector())
         .next()
         .and_then(|t| t.value().attr("datetime"))
         .ok_or(ParseError::MissingElement("time.live-timestamp"))?;
@@ -86,20 +116,15 @@ fn parse_comment_node(el: &ElementRef<'_>) -> Result<RawComment, ParseError> {
 
     // Body: <div class="usertext-body"> <div class="md">…</div></div>.
     // Limit to a child selector so nested comments' bodies don't bleed in.
-    #[allow(clippy::unwrap_used)] // lint-allow-unused: static selector literal infallible
-    let body_sel = Selector::parse(":scope > div.entry > form > div.usertext-body div.md").unwrap();
     let body_html = el
-        .select(&body_sel)
+        .select(&comment_body_selector())
         .next()
         .map(|d| d.inner_html())
         .unwrap_or_default();
 
     // Replies: nested .thing[data-fullname^=t1_] under div.child > div.listing.
     // Limit to direct children to avoid recursing into already-parsed nodes.
-    #[allow(clippy::unwrap_used)] // lint-allow-unused: static selector literal infallible
-    let reply_sel =
-        Selector::parse(r#":scope > div.child > div.listing > div.thing.comment[data-fullname^="t1_"]"#)
-            .unwrap();
+    let reply_sel = comment_reply_selector();
     let mut replies = Vec::new();
     for child in el.select(&reply_sel) {
         replies.push(parse_comment_node(&child)?);
