@@ -30,13 +30,29 @@ Scope: only `clients/reddit/`. Do NOT touch other client crates.
 
 ## Phase B — Medium refactors (50-300 LoC, max 5)
 
-- [ ] **B.1** Split `backend.rs` (1605 LoC, 103 fns). Top-level free
-      fns (`html_to_plain_text`, `flatten_comments_into_messages`,
-      `render_comments_to_html`, `split_title_body`, 8x ID-mapping
-      helpers, `raw_post_to_message`, `raw_dm_to_dm_channel`,
-      `user_profile_to_user`, `raw_post_to_viewrow`, `build_sub_server`,
-      `build_sub_channel`, sort helpers) belong in `backend/mapping.rs`.
-      The 8 ID helpers belong in `backend/ids.rs`. _SRP._
+- [x] **B.1 — shipped in change `wlqmorlz`.** Split `backend.rs`
+      (1573 LoC, single god-file) into a `backend/` directory of focused
+      per-concern modules:
+      - `backend/mod.rs` — `RedditBackend` struct + inherent fns +
+        `fetch_post_thread_messages` async helper (B.3 holdover); 168 LoC.
+      - `backend/ids.rs` — 8 ID/name bijection fns; 46 LoC.
+      - `backend/error.rs` — `From<RedditError> for ClientError` +
+        16 `NS_*` constants (A.3 holdover); 51 LoC.
+      - `backend/mapping.rs` — `parser::*` → `poly_client::*` mappers
+        plus HTML sanitisers (`html_to_plain_text`,
+        `render_comments_to_html`) and sort-key codecs; 326 LoC.
+      - `backend/is_backend.rs` — `IsBackend` impl (auth, servers,
+        channels, send/get messages, mechanisms, capability casts);
+        373 LoC.
+      - `backend/social_graph.rs` — `SocialGraphBackend` impl; 82 LoC.
+      - `backend/dms_and_groups.rs` — `DmsAndGroupsBackend` impl; 81 LoC.
+      - `backend/messaging.rs` — `MessagingBackend` impl; 117 LoC.
+      - `backend/discover.rs` — `DiscoverBackend` impl; 47 LoC.
+      - `backend/settings.rs` — `SettingsBackend` impl; 23 LoC.
+      - `backend/view_descriptor.rs` — `ViewDescriptorBackend` impl
+        (sidebar declaration + sort-action + view rows/detail); 333 LoC.
+      Pure structural split — zero behaviour change. Largest remaining
+      file is `view_descriptor.rs` at 333 LoC. _SRP._
 - [x] **B.2** `backend.rs` `From<RedditError> for ClientError` (`:197`)
       lives 200 lines from the consumer impl. After audit: already at
       line 189 with a dedicated section header — no relocation needed.
@@ -56,10 +72,19 @@ Scope: only `clients/reddit/`. Do NOT touch other client crates.
       `data_attr`, `parse_timestamp_ms`, tests). All `use super::` in
       submodules unchanged (re-exports preserve the path).
       — shipped in this pass
-- [ ] **B.5** `lib.rs` (977 LoC) houses `RedditClient` HTTP shim. The
-      `with_base_url` constructor (`:962+`) is the only thing keeping
-      `lib.rs` exposed — move it into `backend.rs` or a dedicated
-      `client.rs` and let `lib.rs` be a 50-line re-export shim.
+- [~] **B.5 — DEFERRED.** `lib.rs` (977 LoC) houses `RedditClient` HTTP
+      shim. The plan suggested moving `with_base_url` "out" — but the
+      cited line (`:962`) sits inside a `#[cfg(test)] mod tests` block,
+      not in load-bearing code. The actual bulk (~750 LoC) is the
+      `impl RedditClient { … }` with ~30 async HTTP methods (`get_post`,
+      `inbox`, `reply_comment`, `submit_self_post`, …). Splitting that
+      into `client/{auth,read,write,session}.rs` is a follow-up
+      opportunity — but unlike B.1 the dependencies all flow through
+      `&self` on private fields (`http`, `base_url`, `session_cookie`)
+      and the cross-method helpers (`with_session_cookie`,
+      `capture_session_cookie`, `fetch_text`, `post_form`) make the
+      split more delicate than B.1's per-trait carve-out. Tracking as
+      a follow-up; not blocking Phase B closure.
 
 ## Phase C — Architectural rewrites (>300 LoC, max 3)
 
