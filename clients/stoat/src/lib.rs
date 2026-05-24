@@ -119,6 +119,18 @@ pub(crate) mod voice_wasm_audio_capture;
 #[cfg(target_arch = "wasm32")]
 pub(crate) mod voice_wasm_audio_playback;
 
+/// Stoat WASM video capture (Phase B.3 of `plan-stoat-video-wasm.md`).
+/// Camera → WebCodecs H.264 encoder → FU-A fragmentation → Vortex WS with
+/// `FrameKind::Video` discriminator. Shares the WS opened by `voice_wasm`.
+#[cfg(target_arch = "wasm32")]
+pub(crate) mod video_wasm_capture;
+
+/// Stoat WASM video playback (Phase B.4 of `plan-stoat-video-wasm.md`).
+/// Per-user FU-A reassembly → WebCodecs H.264 decoder → canvas draw.
+/// Receives frames dispatched by `voice_wasm` after kind-byte routing.
+#[cfg(target_arch = "wasm32")]
+pub(crate) mod video_wasm_playback;
+
 /// WIT bindings for the WASM plugin (WASI targets only).
 /// This module isolates the `wit-bindgen` macros for FFI.
 #[cfg(target_os = "wasi")]

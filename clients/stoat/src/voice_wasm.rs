@@ -13,10 +13,30 @@
 //! 5. Spawn decode loop: WS binary → strip 8-byte uid → OpusClient decode → push_pcm (B.4).
 //! 6. Spawn event loop: WS text → parse VortexEvent → emit ClientEvent.
 //!
-//! # Frame wire format (Vortex)
+//! # Frame wire format (Vortex — Poly extension A.5)
 //!
-//! Binary WS frame: `[8 bytes user_id, ASCII null-padded][opus bytes]`
-//! Locally-sent frames use 8 NUL bytes for the local user_id (matches native voice.rs:393).
+//! As of A.5 (Vortex protocol extension for video), all WASM-side Vortex binary
+//! WS frames carry a 1-byte stream-kind discriminator BEFORE the 8-byte user_id
+//! prefix:
+//!
+//! ```text
+//! [kind:1][user_id:8 ASCII null-padded][payload:rest]
+//!   ^         ^                              ^
+//!   |         |                              └── opus (audio) or H.264 NAL (video)
+//!   |         └── local sender uses 8 NUL bytes (matches native voice.rs:393)
+//!   └── 0x00 = audio (Opus), 0x01 = video (H.264 NAL)
+//! ```
+//!
+//! Receiver tolerance: legacy frames (no kind byte, 8-byte user_id + opus payload)
+//! are detected when the first byte is ASCII-printable (>= 0x20) — Vortex user_ids
+//! are ULID-shaped ASCII (uppercase letters + digits), so the legacy first byte is
+//! always >= 0x20. New kind bytes are 0x00 or 0x01, never colliding with ASCII.
+//! When ambiguous (first byte == 0x00 AND length >= 9), we assume new-format audio
+//! since legacy locally-loopback'd frames from a mock would also start with 0x00.
+//!
+//! Native voice.rs is NOT modified — it still speaks legacy 8-byte-prefix audio.
+//! test-stoat mock is opaque (echoes binary frames as-is) so the wire change is
+//! transparent to the fixture. See docs/plans/plan-stoat-video-wasm.md A.5.
 //!
 //! # Shutdown
 //!
@@ -50,6 +70,7 @@ use wasm_bindgen_futures::spawn_local;
 use poly_client::{ClientEvent, VoiceParticipant};
 
 use super::voice_common::{
+    build_outbound_frame, parse_inbound_frame, FrameKind,
     StoatVoiceError, TransmitMode, VortexServerInfo, OPUS_FRAME_SAMPLES,
 };
 
@@ -87,6 +108,30 @@ impl StoatVoiceConnection {
         let leave = serde_json::json!({"type": "Leave"}).to_string();
         // Best-effort; the WS write task may have already exited.
         let _ = self.ws_tx.unbounded_send(WsMessage::Text(leave));
+    }
+
+    /// Clone the WS write-channel sender so a sibling subsystem (e.g. video
+    /// capture, A.5) can push frames over the same Vortex WS.
+    ///
+    /// The video frames must be wrapped with [`build_outbound_frame`] using
+    /// [`FrameKind::Video`] before being sent.
+    #[must_use]
+    pub fn ws_sender(&self) -> UnboundedSender<WsMessage> {
+        self.ws_tx.clone()
+    }
+
+    /// Clone the shutdown flag so a sibling subsystem can stop when the voice
+    /// connection tears down.
+    #[must_use]
+    pub fn shutdown_flag(&self) -> Arc<AtomicBool> {
+        Arc::clone(&self.shutdown)
+    }
+
+    /// Channel ID of the connected voice channel — used by sibling subsystems
+    /// for logging / canvas tile naming.
+    #[must_use]
+    pub fn channel_id(&self) -> &str {
+        &self.channel_id
     }
 }
 
@@ -252,45 +297,51 @@ pub async fn connect_voice_wasm(
                         }
                     }
                     Some(Ok(WsMessage::Bytes(bytes))) => {
-                        // Binary frame: 8-byte ASCII user_id (null-padded) + Opus payload.
-                        if bytes.len() <= 8 {
+                        // A.5: parse inbound frame with stream-kind discriminator.
+                        // Tolerates legacy `[uid:8][opus]` format for backward compat.
+                        let Some(parsed) = parse_inbound_frame(&bytes) else {
                             continue;
-                        }
-                        let uid_raw = &bytes[..8];
-                        let user_id = std::str::from_utf8(uid_raw)
-                            .unwrap_or("")
-                            .trim_end_matches('\0')
-                            .to_string();
-                        let opus_bytes = &bytes[8..];
+                        };
+                        let user_id = parsed.user_id;
 
                         if !first_frame_logged {
-                            info!(channel_id = %channel_id_ev, user_id = %user_id, "Stoat WASM voice: first binary frame received");
+                            info!(channel_id = %channel_id_ev, user_id = %user_id, kind = ?parsed.kind, "Stoat WASM voice: first binary frame received");
                             first_frame_logged = true;
                         }
 
-                        // B.5: per-user decoder cache.
-                        let session_id = match decoder_sessions.get(&user_id) {
-                            Some(id) => id.clone(),
-                            None => {
-                                match opus_ev.decoder_create(48_000, 1).await {
-                                    Ok(sid) => {
-                                        decoder_sessions.insert(user_id.clone(), sid.clone());
-                                        sid
+                        match parsed.kind {
+                            FrameKind::Audio => {
+                                // B.5: per-user decoder cache.
+                                let session_id = match decoder_sessions.get(&user_id) {
+                                    Some(id) => id.clone(),
+                                    None => {
+                                        match opus_ev.decoder_create(48_000, 1).await {
+                                            Ok(sid) => {
+                                                decoder_sessions.insert(user_id.clone(), sid.clone());
+                                                sid
+                                            }
+                                            Err(e) => {
+                                                warn!("Stoat WASM voice: decoder_create for user {user_id}: {e}");
+                                                continue;
+                                            }
+                                        }
+                                    }
+                                };
+
+                                match opus_ev.decode(&session_id, parsed.payload).await {
+                                    Ok(pcm) => {
+                                        super::voice_wasm_audio_playback::push_pcm(&user_id, pcm);
                                     }
                                     Err(e) => {
-                                        warn!("Stoat WASM voice: decoder_create for user {user_id}: {e}");
-                                        continue;
+                                        warn!("Stoat WASM voice: decode error for user {user_id}: {e}");
                                     }
                                 }
                             }
-                        };
-
-                        match opus_ev.decode(&session_id, opus_bytes).await {
-                            Ok(pcm) => {
-                                super::voice_wasm_audio_playback::push_pcm(&user_id, pcm);
-                            }
-                            Err(e) => {
-                                warn!("Stoat WASM voice: decode error for user {user_id}: {e}");
+                            FrameKind::Video => {
+                                // A.5: video frame — forward to playback dispatcher.
+                                // The dispatcher does H.264 NAL decode + canvas draw
+                                // (see clients/stoat/src/video_wasm_playback.rs).
+                                super::video_wasm_playback::push_h264(&user_id, parsed.payload.to_vec());
                             }
                         }
                     }
@@ -343,9 +394,8 @@ pub async fn connect_voice_wasm(
                     if transmit.should_transmit(pcm_slice) {
                         match opus_enc.encode(&encoder_session_enc, pcm_slice).await {
                             Ok(opus_bytes) => {
-                                // Wire format: 8 NUL bytes (local user_id) + opus bytes.
-                                let mut frame_bytes = vec![0u8; 8];
-                                frame_bytes.extend_from_slice(&opus_bytes);
+                                // A.5 wire format: [kind=Audio:1][8 NUL bytes][opus].
+                                let frame_bytes = build_outbound_frame(FrameKind::Audio, &opus_bytes);
                                 if ws_tx_enc.unbounded_send(WsMessage::Bytes(frame_bytes)).is_err() {
                                     break;
                                 }
@@ -444,6 +494,8 @@ async fn handle_vortex_event(
 
             // Tear down the per-user AudioContext in the playback pump (B.4).
             super::voice_wasm_audio_playback::drop_user(user_id);
+            // A.5: tear down per-user video pump too.
+            super::video_wasm_playback::drop_user(user_id);
 
             let _ = event_tx.unbounded_send(ClientEvent::VoiceUserLeft {
                 channel_id: channel_id.to_string(),

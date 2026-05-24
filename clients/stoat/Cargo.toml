@@ -93,6 +93,22 @@ web-sys = { workspace = true, features = [
     "AudioDataCopyToOptions",
     "ReadableStream",
     "ReadableStreamDefaultReader",
+    # plan-stoat-video-wasm A.5/B.3/B.4 — video capture + playback via WebCodecs.
+    # The Rust skeleton acquires the camera; full VideoEncoder / VideoDecoder
+    # configuration lands in a follow-up (WebCodecs JS interop) — features are
+    # listed here so the follow-up needs no Cargo.toml churn.
+    "HtmlCanvasElement",
+    "CanvasRenderingContext2d",
+    "VideoEncoder",
+    "VideoEncoderConfig",
+    "VideoEncoderInit",
+    "VideoDecoder",
+    "VideoDecoderConfig",
+    "VideoDecoderInit",
+    "VideoFrame",
+    "EncodedVideoChunk",
+    "EncodedVideoChunkInit",
+    "EncodedVideoChunkType",
 ] }
 js-sys = { workspace = true }
 wasm-bindgen = { workspace = true }

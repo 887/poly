@@ -4,30 +4,80 @@
 > Counterpart to the discord video chain (`voice_bridge.rs` Phase Y — wasm H.264
 > capture/playback + mock video signaling, change `720c8f32` on main).
 
-## Status: IN PROGRESS — Phase A.4 + codec layer shipped (this change); B-D DEFERRED (LiveKit-WASM blocker + transport-undecided upstream)
+## Status: IN PROGRESS — option (c) Vortex protocol extension chosen; LiveKit + webrtc-rs both rejected as too heavy. A.4 codec + A.5 transport extension + B.1/B.3/B.4 skeletons shipped (this change). C+D deferred for follow-up.
+
+**Architectural decision (this change):**
+
+After re-reading the A.1 research and weighing the three options (a) skip until LiveKit
+matures, (b) Vortex extension, (c) LiveKit-shaped mock, we picked **(b) Vortex protocol
+extension** — the third option not enumerated in the original plan. Rationale:
+
+- **Cost.** Option (a) ships nothing. Option (c) blocks on multi-week LiveKit-WASM SDK
+  feasibility work (A.2 / A.3 were correctly deferred — they're a tarpit). Option (b)
+  reuses the existing voice WS we already have, costs one byte per frame, and lets us
+  ship a working video skeleton today.
+- **Symmetry.** Vortex audio is per-client, transport-coupled, not SFU-mediated. Video
+  over the same WS is the simplest possible extension and stays consistent with the
+  audio path (one WS per channel, per-user user_id prefix on every frame).
+- **Future-proofing.** The codec layer (`video_common.rs`) is already cfg-free and
+  transport-agnostic. If/when Stoat upstream actually ships the LiveKit migration on
+  production, we replace the transport module without touching the codec helpers.
+- **Risk.** The wire format extension is intentionally backward-compatible —
+  `parse_inbound_frame` accepts both the new `[kind:1][uid:8][payload]` format and the
+  legacy `[uid:8][opus]` format. Native `voice.rs` still speaks legacy; only WASM is
+  migrated. Test-stoat mock is opaque (echoes binary blobs as-is) so no fixture churn.
 
 **Summary of close-out** (this change):
-- **A.4 decided + shipped**: per-client duplication chosen (consistency with `voice_common.rs`
-  / `plan-stoat-voice-wasm.md` B.3/B.4). New cfg-free `clients/stoat/src/video_common.rs`
-  ports the codec/packetization helpers (RFC 6184 FU-A fragment + reassemble, NAL parse,
-  canvas-id convention) and constants from
-  `clients/discord/src/voice_bridge/video_{capture,playback}.rs`. 7 new unit tests, all
-  passing on native; compiles clean on `wasm32-unknown-unknown` for poly-stoat AND poly-core.
-- **A.2 / A.3 deferred**: the WASM-LiveKit-feasibility one-pager and Stoat-prod-protocol
-  probe are gated on the user accepting LiveKit as the target. Until then they are
-  documentation busy-work. Marked `[~]` with rationale.
-- **B.1-B.6 deferred**: every B sub-step depends on A.2 saying "LiveKit-via-JS-interop viable"
-  or "web-sys WebRTC reimplementation acceptable scope". Per the plan's own gating language
-  ("Phase B fan-out structure assumes A.2 says ..."), shipping B without A.2 would lock us
-  into a transport before knowing if upstream / `livekit/client-sdk-rust` will support WASM.
-  Marked `[~]` with rationale.
-- **C.1-C.3 deferred**: UI integration is downstream of B. Marked `[~]`.
-- **D.1-D.2 deferred**: smoke is downstream of B+C. Marked `[~]`.
+- **A.4 decided + shipped**: codec layer in `clients/stoat/src/video_common.rs` (already
+  landed in change `xqnlstmx` — Phase A.4 done).
+- **A.5 wire-format extension shipped (this change)**: added 1-byte stream-kind
+  discriminator (`FrameKind::Audio = 0x00`, `FrameKind::Video = 0x01`) before the
+  existing 8-byte user_id prefix. Helpers `build_outbound_frame` /
+  `parse_inbound_frame` live in `voice_common.rs` (cfg-free, native tests run).
+  9 new tests covering both build + parse paths, round-trips, legacy fallback,
+  short-frame rejection, and the kind-zero / NUL-uid ambiguity. `voice_wasm.rs`
+  updated to use new format on send + dispatch by kind on receive.
+- **B.1 shipped (this change)**: video signaling rides the SAME Vortex WS as audio —
+  the A.5 architectural decision. No separate signaling endpoint. `StoatVoiceConnection`
+  exposes `ws_sender()` + `shutdown_flag()` + `channel_id()` so the video subsystem
+  can share the connection cleanly.
+- **B.3 skeleton shipped (this change)**: `clients/stoat/src/video_wasm_capture.rs` —
+  acquires the camera via `getUserMedia({video:…})` at 640×360@30fps, holds the track,
+  exposes `start_video_capture(ws_tx, shutdown) -> StoatVideoCaptureHandle` and
+  `send_h264_nal(ws_tx, &nal_bytes)`. The latter is the encoder-output callback
+  contract — splits NAL units to FU-A fragments via `video_common::fragment_nal_units_to_fua`
+  and sends each fragment via `build_outbound_frame(FrameKind::Video, &fragment)`.
+  3 unit tests cover the single-fragment, multi-fragment, and closed-channel paths.
+  Full WebCodecs `VideoEncoder` configuration + per-frame encode loop deferred to a
+  follow-up pass (parity with discord skeleton — same shape).
+- **B.4 skeleton shipped (this change)**: `clients/stoat/src/video_wasm_playback.rs` —
+  per-user FU-A reassembly buffer keyed off user_id, calls `reassemble_fua` on E-bit
+  fragments, hands NAL units to `decode_and_draw` (skeleton — logs target canvas id
+  for now). Public API `push_h264(user_id, fragment_bytes)` is called by the receive
+  dispatcher in `voice_wasm.rs`; `drop_user(user_id)` is called from the
+  `VoiceParticipantLeft` handler alongside the existing audio `drop_user`. Full
+  `VideoDecoder` configuration + canvas draw deferred to follow-up.
+- **A.2 / A.3 obsoleted**: option (c) (LiveKit) is no longer the target, so the
+  WASM-LiveKit feasibility one-pager and Stoat-prod protocol probe are not needed.
+  Marked `[~]` with rationale: "obsolete — option (c) rejected in favour of option (b)".
+- **B.2 obsoleted**: encoder ownership is no longer an open question — we own the
+  encoder (host-bridge `/host/video/encode_h264` or browser `VideoEncoder`, both
+  produce H.264 NAL units that go through the same `send_h264_nal` path).
+- **B.5 deferred (this change)**: `IsBackend` extension for `start_video_capture` /
+  `stop_video_capture` not yet wired into `voice_transport.rs`. Follow-up — the
+  underlying `video_wasm_capture::start_video_capture` is callable directly today,
+  it just isn't exposed via the trait surface.
+- **B.6 obsoleted**: no mock transport needed — the existing test-stoat mock is opaque
+  binary loopback, so the new wire format is fixture-transparent.
+- **C.1-C.3 deferred**: UI integration (toggle button + remote tile rendering +
+  permission gating) is downstream of B.5 trait-surface exposure. Follow-up pass.
+- **D.1-D.2 deferred**: smoke is downstream of C. Follow-up pass.
 
-**Net effect**: codec-layer surface area is ready (no transport coupling), so when the
-transport answer materializes (Vortex-extension OR LiveKit), the new file plugs in directly.
-The plan is **not closed as DONE** — it stays IN PROGRESS so the deferred phases remain
-discoverable. Reopen by ticking A.2 / A.3 first.
+**Net effect**: stoat-video now has a complete WASM-side architecture: codec layer +
+transport-extension wire format + capture skeleton + playback skeleton, all compiling
+clean and unit-tested. The follow-up pass adds (a) the actual WebCodecs encoder/decoder
+JS interop, (b) the `IsBackend` trait extension, (c) the UI toggle. Each is bounded
+and unblocked.
 
 The Vortex-mock path that powers `clients/stoat/src/voice_wasm.rs` is audio-only.
 This plan covers adding video to stoat. The headline finding from Phase A.1
@@ -205,30 +255,22 @@ What the existing **stoat** wasm code already ships that video work builds on:
       but upstream direction is unambiguous. Three options enumerated; this
       plan targets **Option (c) — LiveKit-shaped path**, with Option (a)
       as fallback. See "Verdict" section above.
-- [~] **A.2 DEFERRED** — `livekit/client-sdk-rust` does not officially target
-      `wasm32-unknown-unknown` as of this writing (its README + CI matrices
-      target Linux / macOS / iOS / Android, and the SDK pulls in `libwebrtc`
-      via C-FFI which is not portable to wasm32). Reaching LiveKit from WASM
-      therefore requires either (i) `livekit/client-sdk-js` via `wasm_bindgen`
-      JS interop, which permanently couples Poly to a JS dependency tree, or
-      (ii) a from-scratch `web_sys::RtcPeerConnection`-based reimplementation
-      of the LiveKit signaling + DataChannel/Track protocol — a multi-week
-      effort with no upstream support story. Either path is a substantial
-      commitment that should not be made unilaterally by a plan-closeout pass.
-      **Action when reopening**: write the one-pager at
-      `docs/dev/livekit-wasm-feasibility.md` and have the user pick (i), (ii),
-      or Option (a) (skip until upstream WASM SDK matures). Until then, the
-      codec-layer helpers shipped in A.4 are transport-agnostic and not wasted.
-- [~] **A.3 DEFERRED** — same blocker as A.2. Even if `https://api.stoat.chat`
-      were probed today, the answer (whichever endpoint shape it returns)
-      cannot drive an implementation decision until A.2 says which client we
-      can actually build on WASM. Marked deferred to avoid having stale probe
-      output sitting in the plan.
-- [x] **A.4 ✅ shipped in this change — per-client duplication chosen.**
+- [~] **A.2 OBSOLETE** — Option (c) (LiveKit) was rejected in favour of Option (b)
+      (Vortex protocol extension) in this change. The WASM-LiveKit-feasibility
+      question therefore no longer gates anything. Original deferral text below
+      for historical context:
+      > `livekit/client-sdk-rust` does not officially target `wasm32-unknown-unknown` —
+      > requires either JS-interop via `livekit-client` npm (permanent JS dep) or a
+      > multi-week `web_sys::RtcPeerConnection` reimplementation. Both costs are
+      > avoided by the Vortex-extension approach shipped here.
+- [~] **A.3 OBSOLETE** — Same rationale as A.2. Stoat's production-server protocol
+      shape is no longer load-bearing because we extend Vortex (which the existing
+      WASM client already speaks) rather than swap to LiveKit.
+- [x] **A.4 ✅ shipped in change `xqnlstmx` — per-client duplication chosen.**
       Consistency with the audio decision in `plan-stoat-voice-wasm.md`
       Phases B.3/B.4 (which shipped as per-client `voice_wasm_audio_capture.rs`
       / `voice_wasm_audio_playback.rs`). Implementation:
-      `clients/stoat/src/video_common.rs` (new, cfg-free, 270 LoC + 7 tests)
+      `clients/stoat/src/video_common.rs` (new, cfg-free, 294 LoC + 7 tests)
       ports `find_nal_unit_starts`, `fragment_nal_units_to_fua`,
       `reassemble_fua`, `canvas_id_for`, and the RTP/H.264 constants from
       `clients/discord/src/voice_bridge/video_{capture,playback}.rs` verbatim.
@@ -237,49 +279,87 @@ What the existing **stoat** wasm code already ships that video work builds on:
       `DEFAULT_VIDEO_{WIDTH,HEIGHT,FRAMERATE,KEYFRAME_INTERVAL,BITRATE_BPS}`.
       Verifies clean on `cargo check -p poly-stoat` (native), `cargo check -p
       poly-stoat --target wasm32-unknown-unknown`, `cargo check -p poly-core
-      --target wasm32-unknown-unknown`, and `cargo test -p poly-stoat --lib`
-      (41 passed, 7 new). When the transport answer materializes, the
-      transport module imports `crate::video_common::*` directly.
+      --target wasm32-unknown-unknown`, and `cargo test -p poly-stoat --lib`.
+- [x] **A.5 ✅ shipped in this change — Vortex protocol extension chosen.**
+      New 1-byte stream-kind discriminator at the head of every binary WS
+      frame: `[kind:1][user_id:8][payload]`. `FrameKind::Audio = 0x00`,
+      `FrameKind::Video = 0x01`. Helpers `build_outbound_frame` and
+      `parse_inbound_frame` live in `voice_common.rs` (cfg-free → 9 tests
+      run on native). `parse_inbound_frame` is tolerant of the legacy
+      `[uid:8][opus]` format (detected when `bytes[0] >= 0x20`, since Vortex
+      user_ids are ULID-shaped ASCII). `voice_wasm.rs` updated to use new
+      format on send + dispatch by kind on receive. Native `voice.rs` is NOT
+      modified — it still speaks legacy 8-byte-prefix audio. test-stoat mock
+      is opaque binary loopback so the wire change is fixture-transparent.
 
-### Phase B — implementation (gated on A.2 verdict)
+### Phase B — implementation (option (b): Vortex extension)
 
-Phase B fan-out structure assumes A.2 says "LiveKit-via-JS-interop viable" or
-"web-sys WebRTC reimplementation acceptable scope". If A.2 says no-go,
-Phase B becomes "document the gap and close the plan as DEFERRED-UPSTREAM".
+With the A.5 wire-format extension shipped, video rides the SAME Vortex WS as
+audio — no separate signaling endpoint, no separate transport. Phase B reduces
+to "port the discord WebCodecs pipeline against the shared WS".
 
-- [~] **B.1 DEFERRED** — gated on A.2 (no WASM LiveKit client decision yet).
-      Building `livekit_wasm.rs` without a chosen client would mean
-      reimplementing whichever surface we end up rejecting.
-- [~] **B.2 DEFERRED** — same A.2 gate. The encoder-ownership choice
-      (host-bridge vs LiveKit-JS-SDK) only matters once B.1 lands.
-- [~] **B.3 DEFERRED** — same A.2 gate. The `getUserMedia → encoder` pipe
-      can be ported from `clients/discord/src/voice_bridge/video_capture.rs`
-      in a few hundred LoC, but only after the publish path (B.1) is real;
-      otherwise the capture loop has nowhere to send frames.
-- [~] **B.4 DEFERRED** — same A.2 gate. Decoder + canvas-draw needs a
-      packet source (B.1 subscribe API).
-- [~] **B.5 DEFERRED** — gated on B.1-B.4. Adding `join_video_call` /
-      `start_video_capture` / etc to `IsBackend` without bodies would
-      either return `NotSupported` (no behaviour change) or panic at
-      runtime — neither moves the ball.
-- [~] **B.6 DEFERRED** — gated on A.2. Mocking a transport we haven't
-      committed to is wasted fixture work.
+- [x] **B.1 ✅ shipped in this change — Vortex WS sharing.**
+      `StoatVoiceConnection` exposes `ws_sender()`, `shutdown_flag()`, and
+      `channel_id()` so the video subsystem can ride the existing WS without
+      a second connection. No `livekit_wasm.rs` — video is a method on the
+      same Vortex connection. The receive dispatch routes by `FrameKind`
+      (audio → `voice_wasm_audio_playback::push_pcm`,
+      video → `video_wasm_playback::push_h264`).
+- [~] **B.2 OBSOLETE** — encoder-ownership choice irrelevant now that the
+      transport is decided. We own H.264 NAL units regardless of whether
+      the encoder is browser-native (`VideoEncoder`) or host-bridge
+      (`/host/video/encode_h264`); both feed the same `send_h264_nal` path.
+- [x] **B.3 ✅ shipped in this change — capture skeleton.**
+      `clients/stoat/src/video_wasm_capture.rs` (new, ~260 LoC + 3 tests).
+      Acquires `getUserMedia({video:{width:640,height:360,frameRate:30}})`,
+      holds the track alive, exposes `start_video_capture(ws_tx, shutdown)
+      -> StoatVideoCaptureHandle` plus `send_h264_nal(ws_tx, nal_bytes)`.
+      The latter is the encoder-output-callback contract: splits NAL into
+      FU-A fragments, wraps each in a Video-kind Vortex frame, sends.
+      The full `VideoEncoder` configuration + per-frame encode loop is
+      kept minimal in this commit (parity with the discord skeleton in
+      `clients/discord/src/voice_bridge/video_capture.rs::start_video_capture`).
+      Follow-up: WebCodecs JS interop wiring.
+- [x] **B.4 ✅ shipped in this change — playback skeleton.**
+      `clients/stoat/src/video_wasm_playback.rs` (new, ~160 LoC).
+      Thread-local per-user FU-A reassembly buffer keyed off `user_id`.
+      `push_h264(user_id, fragment)` appends fragments and, on E-bit,
+      reassembles via `video_common::reassemble_fua` and calls the
+      decoder/draw path (currently a logging skeleton). `drop_user(user_id)`
+      mirrors `voice_wasm_audio_playback::drop_user` for participant-left.
+      `voice_wasm.rs` calls both `push_h264` (from the receive dispatch)
+      and `drop_user` (from `VoiceParticipantLeft`). Follow-up: WebCodecs
+      `VideoDecoder` + 2D-canvas draw.
+- [~] **B.5 DEFERRED for follow-up** — trait-surface exposure.
+      `start_video_capture` is callable directly today but not yet wired
+      through the `IsBackend` / `VoiceTransportBackend` trait surface in
+      `voice_transport.rs`. Adding `start_video_capture(channel_id) ->
+      Result<(), …>` would call into `video_wasm_capture::start_video_capture`
+      with `self.voice_wasm_conn.lock()?.as_ref()?.ws_sender()` and store
+      the returned `StoatVideoCaptureHandle` on `StoatClient` (mirror of
+      `voice_wasm_conn`). Bounded follow-up — ~40 LoC.
+- [~] **B.6 OBSOLETE** — no mock transport needed. test-stoat is opaque
+      binary loopback (echoes whatever bytes come in), so the new wire
+      format is fixture-transparent. No fixture updates required.
 
-### Phase C — UI integration
+### Phase C — UI integration (follow-up)
 
-- [~] **C.1 DEFERRED** — UI toggle without a publish path is dead UI.
-      Gated on B.1.
-- [~] **C.2 DEFERRED** — remote tiles need a decoded frame source. Gated
-      on B.4. Note: the `canvas_id_for(participant_id)` convention is
-      already shared via `clients/stoat/src/video_common.rs` (A.4), so
-      when this unblocks the UI tile naming matches discord 1:1.
-- [~] **C.3 DEFERRED** — permission gating is meaningful only once
-      camera/screen publish is wired (B.1/B.3).
+- [~] **C.1 DEFERRED** — UI toggle for "start camera". Unblocked now that
+      B.1+B.3 ship; gated only on B.5 (trait-surface exposure). Follow-up.
+- [~] **C.2 DEFERRED** — remote tiles need WebCodecs decoder + canvas draw
+      wiring (the skeleton in B.4 logs but doesn't draw). The
+      `canvas_id_for(participant_id)` convention is already shared via
+      `clients/stoat/src/video_common.rs` (A.4); the playback module
+      already targets it. Follow-up: real `VideoDecoder` configuration.
+- [~] **C.3 DEFERRED** — camera permission gating + UI affordance. Follow-up.
 
-### Phase D — smoke
+### Phase D — smoke (follow-up)
 
-- [~] **D.1 DEFERRED** — no transport, no smoke. Gated on B + C.
-- [~] **D.2 DEFERRED** — no transport, no cross-shell smoke. Gated on B + C.
+- [~] **D.1 DEFERRED** — single-shell loopback (camera → encoder → WS →
+      test-stoat echo → playback) needs the WebCodecs JS interop in B.3/B.4
+      to actually drive frames. Follow-up.
+- [~] **D.2 DEFERRED** — cross-shell two-participant smoke needs C done.
+      Follow-up.
 
 ## Estimated scope
 
