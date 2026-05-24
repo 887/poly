@@ -16,6 +16,9 @@ use crate::wit_bindings::{
     ClientComposerGuest, ClientMenusGuest, ClientSettingsGuest, ClientSidebarGuest,
     ClientViewsGuest, MessengerClientGuest, PluginMetadataGuest, export, wit,
 };
+use crate::wit_bindings::exports::poly::messenger::client_config::{
+    Guest as ClientConfigGuest, Mechanism,
+};
 
 // ─── State Management ──────────────────────────────────────────────
 // WASM components are single-threaded; use thread_local + RefCell.
@@ -41,6 +44,8 @@ fn to_wit_presence(ps: pc::PresenceStatus) -> wit::PresenceStatus {
         pc::PresenceStatus::DoNotDisturb => wit::PresenceStatus::DoNotDisturb,
         pc::PresenceStatus::Invisible => wit::PresenceStatus::Invisible,
         pc::PresenceStatus::Offline => wit::PresenceStatus::Offline,
+        // WIT wire type has no Unknown variant; map to Offline (same as plugin-host bridge).
+        pc::PresenceStatus::Unknown => wit::PresenceStatus::Offline,
     }
 }
 
@@ -709,6 +714,13 @@ impl MessengerClientGuest for DemoPlugin {
             "create_forum_post not implemented".to_string(),
         ))
     }
+
+    fn get_signup_method(
+        _server_url: Option<String>,
+    ) -> Result<wit::SignupMethod, wit::ClientError> {
+        // Demo is a fake backend with no real signup flow.
+        Ok(wit::SignupMethod::NotSupported)
+    }
 }
 
 // ─── Plugin Metadata Implementation ───────────────────────────────
@@ -848,6 +860,13 @@ impl ClientSidebarGuest for DemoPlugin {
 }
 
 impl ClientViewsGuest for DemoPlugin {
+    fn get_account_overview_view() -> Result<views_exp::ViewDescriptor, views_exp::ClientError> {
+        // Demo backend has no account overview; not supported.
+        Err(views_exp::ClientError::NotSupported(
+            "demo plugin does not support account overview views".to_string(),
+        ))
+    }
+
     fn get_channel_view(
         _channel_id: String,
     ) -> Result<views_exp::ViewDescriptor, views_exp::ClientError> {
@@ -905,6 +924,33 @@ impl ClientComposerGuest for DemoPlugin {
         _message_id: String,
     ) -> Result<composer_exp::ActionOutcome, composer_exp::ClientError> {
         Err(composer_exp::ClientError::NotFound(action_id))
+    }
+}
+
+// ─── ClientConfigGuest ─────────────────────────────────────────────
+
+impl ClientConfigGuest for DemoPlugin {
+    fn get_client_version() -> String {
+        // Demo backend has no real version; return a stable placeholder.
+        "poly-demo/0.0.0".to_string()
+    }
+
+    fn set_client_version_override(
+        _version_override: Option<String>,
+    ) -> Result<(), wit::ClientError> {
+        // Demo backend ignores version overrides — there is no real client to configure.
+        Ok(())
+    }
+
+    fn get_client_mechanisms() -> Result<Vec<Mechanism>, wit::ClientError> {
+        // Demo backend has no configurable mechanisms.
+        Ok(vec![])
+    }
+
+    fn set_client_mechanism(id: String, _enabled: bool) -> Result<(), wit::ClientError> {
+        Err(wit::ClientError::NotFound(format!(
+            "unknown mechanism: {id}"
+        )))
     }
 }
 
