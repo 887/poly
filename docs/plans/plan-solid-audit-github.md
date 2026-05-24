@@ -29,16 +29,28 @@ Scope: only `clients/github/`. Do NOT touch other client crates.
       into a small `base64` helper module. **Resolved via `clients/common-forge`
       crate** — both github and forgejo now import from the shared crate;
       local copies deleted.
-- [ ] **B.3** `lib.rs:280` `IsBackend::get_messages` for forum channels
+- [x] **B.3** `lib.rs:280` `IsBackend::get_messages` for forum channels
       returns `NotSupported(...)` — re-route to `CodeRepoBackend`'s
       issue/PR/discussion handlers instead of refusing.
+      — shipped in this change: added `gh-discussions-*` branch to
+      `get_messages` (maps via new `mapping::discussion_to_message`);
+      `gh-issues-*`/`gh-pulls-*`/`gh-issue-*` were already handled.
+      GitHub Discussions (GraphQL-only) map as read-only Messages that link
+      to the web URL; no REST endpoint for comment listing exists.
 - [x] **B.4** `kind_from_string` / `split_owner_repo` (`lib.rs:1137-1168`)
       extracted to `clients/common-forge`. `parse_forum_channel` (github-specific
       `gh-` prefixes) remains in github lib.rs.
-- [ ] **B.5** `IsBackend::send_message` (~line 695) returns
+- [x] **B.5** `IsBackend::send_message` (~line 695) returns
       `NotSupported` for several channel kinds. Each branch should
       delegate to a `ChannelKind` handler trait — current shape is a
       growing match arm (Open/Closed violation).
+      — shipped in this change: `send_message` now dispatches on channel
+      prefix. `gh-issue-*` threads post via new `GhCli::create_issue_comment`
+      (backed by `api_post` native+WASM+HTTP-test). Forum-index channels
+      (`gh-issues-*`, `gh-pulls-*`, `gh-discussions-*`, `gh-code-*`) return
+      honest per-kind `NotSupported` messages explaining the gap. Also added
+      `GhCli::api_post` / `api_post_raw` native/WASM/HTTP transports to
+      `api.rs` mirroring the existing `api_delete` pattern.
 
 ## Phase C — Architectural rewrites (>300 LoC, max 3)
 

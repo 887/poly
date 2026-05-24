@@ -351,6 +351,53 @@ pub fn issue_to_message(issue: &GhIssue) -> Message {
     }
 }
 
+/// Convert a [`GhDiscussion`] into a Forum-style top-level [`Message`].
+///
+/// GitHub Discussions are read-only via the REST API available through
+/// the `gh` CLI — the GraphQL mutation that creates discussion comments
+/// requires a token scope (`write:discussion`) that `gh` does not expose
+/// in the same way. We therefore map each discussion as a read-only
+/// message and link out to the web URL for interaction.
+#[must_use]
+pub fn discussion_to_message(d: &GhDiscussion) -> Message {
+    let author_login = d
+        .author
+        .as_ref()
+        .map(|a| a.login.as_str())
+        .unwrap_or("[deleted]");
+    let author_avatar = d.author.as_ref().and_then(|a| a.avatar_url.clone());
+    let body = d.body_text.clone().unwrap_or_default();
+    let status = if d.answer_chosen_at.is_some() {
+        "answered"
+    } else if d.closed {
+        "closed"
+    } else {
+        "open"
+    };
+    let text = format!(
+        "**[Discussion #{}] {}** ({}) — {}\n\n{}\n\n{}",
+        d.number, d.title, d.category.name, status, body, d.url
+    );
+    Message {
+        id: format!("gh-discussion-msg-{}", d.number),
+        author: User {
+            id: author_login.to_string(),
+            display_name: author_login.to_string(),
+            avatar_url: author_avatar,
+            presence: PresenceStatus::Offline,
+            backend: BackendType::from(super::SLUG),
+        },
+        content: MessageContent::Text(text),
+        timestamp: parse_ts(&d.created_at),
+        attachments: Vec::new(),
+        reactions: Vec::new(),
+        reply_to: None,
+        edited: false,
+        thread: None,
+        preview_image_url: None,
+    }
+}
+
 /// Convert an issue/PR comment into a [`Message`] inside the thread channel.
 #[must_use]
 pub fn comment_to_message(c: &GhIssueComment) -> Message {

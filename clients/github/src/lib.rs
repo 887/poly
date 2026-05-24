@@ -282,14 +282,70 @@ impl IsBackend for GitHubClient {
 
     // --- Messages ---
 
+    /// Send a message on a GitHub channel.
+    ///
+    /// Only single-issue-thread channels (`gh-issue-{owner}~{repo}-{number}`)
+    /// support posting: the text is submitted as a GitHub issue comment via
+    /// `POST /repos/{owner}/{repo}/issues/{number}/comments`.
+    ///
+    /// Forum-index channels (`gh-issues-*`, `gh-pulls-*`) and the Discussions
+    /// channel (`gh-discussions-*`) return a specific `NotSupported` error
+    /// explaining why: creating a new issue, PR, or Discussion requires a
+    /// form-driven workflow that cannot be expressed as a plain message send.
     async fn send_message(
         &self,
-        _channel_id: &str,
-        _content: MessageContent,
+        channel_id: &str,
+        content: MessageContent,
     ) -> ClientResult<Message> {
-        Err(ClientError::NotSupported(
-            "github backend is read-only — open the GitHub web UI to comment".to_string(),
-        ))
+        // Route by channel kind — each prefix has a different write semantics.
+        if channel_id.starts_with("gh-issues-") {
+            return Err(ClientError::NotSupported(
+                "GitHub: cannot post to the issues forum index — \
+                 use the GitHub web UI to open a new issue"
+                    .to_string(),
+            ));
+        }
+        if channel_id.starts_with("gh-pulls-") {
+            return Err(ClientError::NotSupported(
+                "GitHub: cannot post to the pull-requests forum index — \
+                 use the GitHub web UI or CLI to open a pull request"
+                    .to_string(),
+            ));
+        }
+        if channel_id.starts_with("gh-discussions-") {
+            return Err(ClientError::NotSupported(
+                "GitHub: cannot post to the discussions forum index — \
+                 use the GitHub web UI to start a new discussion"
+                    .to_string(),
+            ));
+        }
+        if channel_id.starts_with("gh-code-") {
+            return Err(ClientError::NotSupported(
+                "GitHub: code explorer channel is read-only".to_string(),
+            ));
+        }
+        // Single issue/PR thread: gh-issue-{owner}~{repo}-{number}
+        if let Some(rest) = channel_id.strip_prefix("gh-issue-") {
+            let parts: Vec<&str> = rest.rsplitn(2, '-').collect();
+            if let [number_str, rest_pair] = parts.as_slice()
+                && let Ok(number) = number_str.parse::<u64>()
+            {
+                let (owner, repo) = split_owner_repo(rest_pair)?;
+                let text = match &content {
+                    MessageContent::Text(t) => t.clone(),
+                    MessageContent::WithAttachments { text, .. } => text.clone(),
+                };
+                let comment = self
+                    .cli
+                    .create_issue_comment(&owner, &repo, number, &text)
+                    .await
+                    .map_err(Self::convert_err)?;
+                return Ok(mapping::comment_to_message(&comment));
+            }
+        }
+        Err(ClientError::NotSupported(format!(
+            "GitHub: unrecognised channel '{channel_id}' — cannot send message"
+        )))
     }
 
     async fn get_messages(
@@ -324,7 +380,24 @@ impl IsBackend for GitHubClient {
                 .map(mapping::issue_to_message)
                 .collect());
         }
-        // Single issue thread (`gh-issue-{owner}-{repo}-{number}`).
+        // Discussions forum: fetch via GraphQL and map each discussion as a message.
+        //
+        // GitHub Discussions require GraphQL (no REST endpoint for listing).
+        // We fetch the first 50 ordered by last-updated and map each to a
+        // read-only Message so the UI can display the discussion index.
+        if let Some(rest) = channel_id.strip_prefix("gh-discussions-") {
+            let (owner, repo) = split_owner_repo(rest)?;
+            let (discussions, _next) = self
+                .cli
+                .list_discussions(&owner, &repo, 50, None)
+                .await
+                .map_err(Self::convert_err)?;
+            return Ok(discussions
+                .iter()
+                .map(mapping::discussion_to_message)
+                .collect());
+        }
+        // Single issue thread (`gh-issue-{owner}~{repo}-{number}`).
         if let Some(rest) = channel_id.strip_prefix("gh-issue-") {
             let parts: Vec<&str> = rest.rsplitn(2, '-').collect();
             if let [number_str, rest_pair] = parts.as_slice()
