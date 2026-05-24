@@ -53,6 +53,11 @@ use poly_host_bridge::{
     codec_opus::{OpusState, router as opus_router},
     udp::{UdpState, router as udp_router},
 };
+#[cfg(feature = "teams-webhook")]
+use poly_host_bridge::teams_webhook::{
+    ChangeNotification, ClientStateStore, NotificationSink, TeamsWebhookState,
+    router as teams_webhook_router,
+};
 use sqlite::{Connection, ConnectionThreadSafe, State as SqlState};
 use tower_http::cors::{Any, CorsLayer};
 
@@ -188,11 +193,75 @@ pub fn router(state: HostState) -> Router {
     let base = {
         let udp_r = udp_router(UdpState::new()).layer(cors.clone());
         let opus_r = opus_router(OpusState::new()).layer(cors.clone());
-        let aead_r = aead_router(AeadState::new()).layer(cors);
+        let aead_r = aead_router(AeadState::new()).layer(cors.clone());
         base.merge(udp_r).merge(opus_r).merge(aead_r)
     };
 
+    // Mount the Teams webhook relay when `teams-webhook` is on. Default
+    // ClientStateStore / NotificationSink are in-memory + tracing-only —
+    // production deployments swap them via direct teams_webhook_router(…)
+    // mount in their own server crate. See
+    // docs/plans/plan-teams-graph-subscriptions.md Phase C.
+    #[cfg(feature = "teams-webhook")]
+    let base = {
+        let webhook_state = TeamsWebhookState::new(
+            std::sync::Arc::new(InMemoryClientStateStore::default()),
+            std::sync::Arc::new(TracingNotificationSink),
+        );
+        let teams_r = teams_webhook_router(webhook_state).layer(cors);
+        base.merge(teams_r)
+    };
+
     base
+}
+
+// ─── Default ClientStateStore / NotificationSink for the daemon ─────────────
+//
+// These are the bare-minimum impls that let the daemon mount the webhook
+// routes out-of-the-box. Real deployments inject SQLite-backed stores +
+// per-account event-channel sinks via a custom Router::merge call in
+// their fullstack server crate. See `plan-teams-graph-subscriptions.md`
+// Phase C and the trait docs on `poly_host_bridge::teams_webhook` for the
+// extension hook.
+
+#[cfg(feature = "teams-webhook")]
+#[derive(Default)]
+struct InMemoryClientStateStore {
+    map: std::sync::Mutex<std::collections::HashMap<String, String>>,
+}
+
+#[cfg(feature = "teams-webhook")]
+impl InMemoryClientStateStore {
+    // lint-allow-unused: Phase C scaffolding — production deployments call this when they create a subscription (via TeamsHttpClient::create_subscription) to register the secret so the webhook handler can verify it. Kept here for API symmetry until the wiring lands.
+    #[allow(dead_code)]
+    fn insert(&self, sub_id: String, client_state: String) {
+        if let Ok(mut map) = self.map.lock() {
+            map.insert(sub_id, client_state);
+        }
+    }
+}
+
+#[cfg(feature = "teams-webhook")]
+impl ClientStateStore for InMemoryClientStateStore {
+    fn get(&self, sub_id: &str) -> Option<String> {
+        self.map.lock().ok()?.get(sub_id).cloned()
+    }
+}
+
+#[cfg(feature = "teams-webhook")]
+struct TracingNotificationSink;
+
+#[cfg(feature = "teams-webhook")]
+impl NotificationSink for TracingNotificationSink {
+    fn dispatch(&self, account_id: &str, n: ChangeNotification) {
+        tracing::info!(
+            account = account_id,
+            subscription_id = %n.subscription_id,
+            change_type = %n.change_type,
+            resource = %n.resource,
+            "teams webhook: notification (default tracing-only sink)"
+        );
+    }
 }
 
 /// ServiceWorker script — main-thread hang detector + auto-reload.

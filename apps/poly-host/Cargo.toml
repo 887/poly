@@ -55,5 +55,15 @@ video = ["poly-host-bridge/video"]
 # See docs/dev/voice-bridge-architecture.md for the design rationale.
 voice = ["poly-host-bridge/voice"]
 
+# Enable the /host/teams/notifications/* Microsoft Graph webhook relay.
+# Self-hosted only — requires a publicly accessible HTTPS endpoint to be
+# usable in production (see docs/plans/plan-teams-graph-subscriptions.md
+# Phase A.1). When enabled, the daemon mounts the relay routes with a
+# default in-memory ClientStateStore + a tracing-only NotificationSink so
+# the routes respond correctly to Graph's validation handshake; a real
+# deployment swaps the store + sink for SQLite-backed + per-account
+# event-channel wiring via the `with_teams_webhook` builder.
+teams-webhook = ["poly-host-bridge/teams-webhook"]
+
 [lints]
 workspace = true

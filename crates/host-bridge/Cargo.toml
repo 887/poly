@@ -60,6 +60,13 @@ voice-primitives = ["udp", "codec-opus", "aead"]
 # that protocol lives in the discord plugin).
 voice = ["voice-primitives"]
 
+# teams-webhook: enables the /host/teams/notifications/* relay route used by
+# Microsoft Graph change-notification subscriptions
+# (docs/plans/plan-teams-graph-subscriptions.md Phase C). Native-only —
+# the webhook is a server-side relay; WASM callers reach it through their
+# normal /host bridge.
+teams-webhook = ["dep:axum"]
+
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }

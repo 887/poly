@@ -544,6 +544,50 @@ impl TeamsHttpClient {
         .await
     }
 
+    // ── Graph change-notification subscriptions ──────────────────────────────
+    //
+    // Phase B of `docs/plans/plan-teams-graph-subscriptions.md`. These thin
+    // wrappers POST / PATCH / DELETE against `/v1.0/subscriptions` so the
+    // client can register, renew, and tear down webhook subscriptions
+    // against production Graph. The test server keeps its long-poll endpoint
+    // (`poll_events` above) — webhooks only fire against real Graph
+    // (Phase E.1 fallback gate).
+
+    /// `POST /v1.0/subscriptions` — register a change-notification
+    /// subscription. Returns the parsed response (id + expiry).
+    // lint-allow-unused: Phase B scaffolding — wired into the renewal scheduler when the webhook relay infrastructure (Phase A.1) lands; until then the method is only reachable from integration tests / external callers.
+    #[allow(dead_code)]
+    pub async fn create_subscription(
+        &self,
+        req: &crate::subscriptions::CreateSubscriptionRequest,
+    ) -> Result<crate::subscriptions::SubscriptionResponse, ClientError> {
+        self.post_json("/v1.0/subscriptions", req).await
+    }
+
+    /// `PATCH /v1.0/subscriptions/{id}` — extend an existing subscription's
+    /// expiry. Call before `expiry - 5min` (Phase B.4 scheduler).
+    // lint-allow-unused: Phase B scaffolding — see create_subscription above for the full rationale.
+    #[allow(dead_code)]
+    pub async fn renew_subscription(
+        &self,
+        id: &crate::subscriptions::SubscriptionId,
+        req: &crate::subscriptions::RenewSubscriptionRequest,
+    ) -> Result<crate::subscriptions::SubscriptionResponse, ClientError> {
+        self.patch_json(&format!("/v1.0/subscriptions/{id}"), req).await
+    }
+
+    /// `DELETE /v1.0/subscriptions/{id}` — cancel a subscription. Always
+    /// call on logout / account-removal to avoid Microsoft sending the
+    /// "removed" lifecycle event to a dead `notificationUrl`.
+    // lint-allow-unused: Phase B scaffolding — see create_subscription above for the full rationale.
+    #[allow(dead_code)]
+    pub async fn delete_subscription(
+        &self,
+        id: &crate::subscriptions::SubscriptionId,
+    ) -> Result<(), ClientError> {
+        self.delete_unit(&format!("/v1.0/subscriptions/{id}")).await
+    }
+
     /// Long-poll the test server's subscription endpoint for change notifications.
     /// Returns the raw JSON events array so the caller can dispatch to `ClientEvent`.
     ///

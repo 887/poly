@@ -23,6 +23,15 @@ pub mod types;
 /// Teams voice stub — see [`voice::TeamsVoiceClient`] and Phase I of
 /// `docs/plans/plan-voice-video-calls.md`.
 pub mod voice;
+/// Teams calling scaffolding — Phase A + B of
+/// `docs/plans/plan-teams-calling.md`. Trait surface + ACS token
+/// acquisition; JS-SDK bridge (Phase C) deferred.
+#[cfg(feature = "native")]
+pub mod calling;
+/// Microsoft Graph change-notification subscription lifecycle —
+/// Phase B of `docs/plans/plan-teams-graph-subscriptions.md`.
+#[cfg(feature = "native")]
+pub mod subscriptions;
 
 /// WIT bindings for the WASM plugin (WASI targets only).
 #[cfg(target_os = "wasi")]

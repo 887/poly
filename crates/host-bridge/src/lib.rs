@@ -83,6 +83,15 @@ pub mod aead;
 // Typed client for /host/aead/* — all targets including wasm32.
 pub mod aead_client;
 
+// Microsoft Graph change-notification webhook relay — server-side handlers.
+// Non-wasm + "teams-webhook" feature only. WASM callers reach the relay via
+// their /host bridge transparently; no typed client needed (the relay's
+// consumers are Microsoft Graph + an injected NotificationSink, not WASM code).
+//
+// Phase C of `docs/plans/plan-teams-graph-subscriptions.md`.
+#[cfg(all(not(target_arch = "wasm32"), feature = "teams-webhook"))]
+pub mod teams_webhook;
+
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
