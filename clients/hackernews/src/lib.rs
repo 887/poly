@@ -18,11 +18,19 @@ pub mod auth;
 #[cfg(feature = "native")]
 mod cache;
 #[cfg(feature = "native")]
+mod dms_and_groups;
+#[cfg(feature = "native")]
 mod mapping;
 #[cfg(feature = "native")]
 pub mod signup;
 #[cfg(feature = "native")]
+mod settings;
+#[cfg(feature = "native")]
+mod social_graph;
+#[cfg(feature = "native")]
 mod types;
+#[cfg(feature = "native")]
+mod view_descriptor;
 
 #[cfg(feature = "native")]
 use api::HnApiClient;
@@ -32,15 +40,15 @@ use async_trait::async_trait;
 use futures::stream::{self, Stream};
 #[cfg(feature = "native")]
 use mapping::{
-    build_channels, build_server, hn_comment_to_message, hn_item_to_message, hn_item_to_overview_row,
-    hn_item_to_view_row, hn_user_to_user, post_id_from_channel,
+    build_channels, build_server, hn_comment_to_message, hn_item_to_message,
+    post_id_from_channel,
 };
 #[cfg(feature = "native")]
 use poly_client::*;
 #[cfg(feature = "native")]
 use std::pin::Pin;
 #[cfg(feature = "native")]
-use types::HnFeed;
+use types::HnItem;
 
 /// Return FTL translation source for the HN client plugin.
 #[must_use]
@@ -54,12 +62,12 @@ pub fn plugin_translations(locale: &str) -> String {
 /// Hacker News read-only client.
 #[cfg(feature = "native")]
 pub struct HackerNewsClient {
-    api: HnApiClient,
-    session: Option<Session>,
+    pub(crate) api: HnApiClient,
+    pub(crate) session: Option<Session>,
     /// In-memory settings storage (persists only for the session lifetime).
-    settings_storage: SettingsStorageCell,
+    pub(crate) settings_storage: SettingsStorageCell,
     /// Stored version override (None = use api::DEFAULT_CLIENT_VERSION).
-    version_override: std::sync::Mutex<Option<String>>,
+    pub(crate) version_override: std::sync::Mutex<Option<String>>,
 }
 
 #[cfg(feature = "native")]
@@ -154,7 +162,7 @@ impl IsBackend for HackerNewsClient {
     async fn authenticate(&mut self, credentials: AuthCredentials) -> ClientResult<Session> {
         match credentials {
             AuthCredentials::EmailPassword { email, password } if !email.is_empty() => {
-                let cookie = auth::login(self.api.http_client(), &self.api.ua(), &email, &password)
+                let cookie: String = auth::login(self.api.http_client(), &self.api.ua(), &email, &password)
                     .await?;
                 let mut session = self.named_session(&email);
                 session.token = cookie.clone();
@@ -274,7 +282,7 @@ impl IsBackend for HackerNewsClient {
         }
 
         // Otherwise it's a story feed channel
-        let feed = HnFeed::from_channel_id(channel_id).ok_or_else(|| {
+        let feed = types::HnFeed::from_channel_id(channel_id).ok_or_else(|| {
             ClientError::NotFound(format!("unknown channel: {channel_id}"))
         })?;
 
@@ -304,7 +312,7 @@ impl IsBackend for HackerNewsClient {
         Ok(messages)
     }
 
-    // ── Social graph (H.3.b — moved to SocialGraphBackend) ──────────────────
+    // ── Social graph (H.3.b — SocialGraphBackend in social_graph.rs) ─────────
 
     fn as_social_graph(&self) -> Option<&dyn poly_client::SocialGraphBackend> {
         Some(self)
@@ -314,7 +322,7 @@ impl IsBackend for HackerNewsClient {
         Ok(Vec::new())
     }
 
-    // ── DMs and groups (H.3.c — moved to DmsAndGroupsBackend) ──────────────
+    // ── DMs and groups (H.3.c — DmsAndGroupsBackend in dms_and_groups.rs) ────
 
     fn as_dms_and_groups(&self) -> Option<&dyn poly_client::DmsAndGroupsBackend> {
         Some(self)
@@ -326,7 +334,7 @@ impl IsBackend for HackerNewsClient {
         Ok(Vec::new())
     }
 
-    // --- Voice / Settings / Views / Context actions: moved to C.1 sub-traits below ---
+    // --- Settings / Views — sub-traits in settings.rs / view_descriptor.rs ---
 
     fn as_settings(&self) -> Option<&dyn poly_client::SettingsBackend> {
         Some(self)
@@ -358,7 +366,7 @@ impl IsBackend for HackerNewsClient {
         BackendCapabilities::READ_ONLY_FEED
     }
 
-    // --- Client-provided UI surface (WP 1.D) — sub-traits below ---
+    // --- Client-provided UI surface (WP 1.D) ---
 
     fn get_signup_method(&self, _server_url: Option<&str>) -> SignupMethod {
         // HN login page serves as registration too
@@ -388,377 +396,14 @@ impl IsBackend for HackerNewsClient {
     }
 }
 
-// ── NotSupported message constants ───────────────────────────────────────────
-// HN legitimately has no social graph, DM, or presence concepts. These
-// constants eliminate per-call heap allocations and keep the error text
-// consistent for i18n searches and snapshot tests.
-
-#[cfg(feature = "native")]
-const ERR_NO_FRIENDS: &str = "Hacker News has no friend system";
-#[cfg(feature = "native")]
-const ERR_NO_USER_NOTES: &str = "Hacker News has no user note system";
-#[cfg(feature = "native")]
-const ERR_NO_BLOCK: &str = "Hacker News: block not supported via this interface";
-#[cfg(feature = "native")]
-const ERR_NO_UNBLOCK: &str = "Hacker News: unblock not supported via this interface";
-#[cfg(feature = "native")]
-const ERR_NO_IGNORE: &str = "Hacker News has no ignore concept";
-#[cfg(feature = "native")]
-const ERR_NO_PRESENCE: &str = "Hacker News has no presence system";
-#[cfg(feature = "native")]
-const ERR_NO_DM: &str = "Hacker News has no DM concept";
-#[cfg(feature = "native")]
-const ERR_NO_SAVED_MESSAGES: &str = "Hacker News has no saved-messages concept";
-#[cfg(feature = "native")]
-const ERR_NO_GROUP_DM: &str = "Hacker News has no group DMs";
-#[cfg(feature = "native")]
-const ERR_NO_CONV_MUTE: &str = "Hacker News has no conversation mute";
-
-// ── H.3.b — SocialGraphBackend ────────────────────────────────────────────────
-
-#[cfg(feature = "native")]
-#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
-#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-impl poly_client::SocialGraphBackend for HackerNewsClient {
-    async fn get_user(&self, id: &str) -> ClientResult<User> {
-        let hn_user = self
-            .api
-            .get_user(id)
-            .await?
-            .ok_or_else(|| ClientError::NotFound(format!("user not found: {id}")))?;
-        Ok(hn_user_to_user(&hn_user))
-    }
-
-    async fn get_friends(&self) -> ClientResult<Vec<User>> {
-        Ok(Vec::new())
-    }
-
-    async fn add_friend(&self, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported(ERR_NO_FRIENDS.to_string()))
-    }
-
-    async fn remove_friend(&self, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported(ERR_NO_FRIENDS.to_string()))
-    }
-
-    async fn respond_to_friend_request(&self, _user_id: &str, _accept: bool) -> ClientResult<()> {
-        Err(ClientError::NotSupported(ERR_NO_FRIENDS.to_string()))
-    }
-
-    async fn set_friend_nickname(
-        &self,
-        _user_id: &str,
-        _nickname: Option<&str>,
-    ) -> ClientResult<()> {
-        Err(ClientError::NotSupported(ERR_NO_FRIENDS.to_string()))
-    }
-
-    async fn set_user_note(&self, _user_id: &str, _note: Option<&str>) -> ClientResult<()> {
-        Err(ClientError::NotSupported(ERR_NO_USER_NOTES.to_string()))
-    }
-
-    async fn block_user(&self, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported(ERR_NO_BLOCK.to_string()))
-    }
-
-    async fn unblock_user(&self, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported(ERR_NO_UNBLOCK.to_string()))
-    }
-
-    async fn ignore_user(&self, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported(ERR_NO_IGNORE.to_string()))
-    }
-
-    async fn unignore_user(&self, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported(ERR_NO_IGNORE.to_string()))
-    }
-
-    async fn get_presence(&self, _user_id: &str) -> ClientResult<PresenceStatus> {
-        // HN has no presence concept. Returning Ok(Offline) used to lie to
-        // the UI (presence dot would show grey "offline" forever); use
-        // Unknown so the dot is suppressed entirely. set_presence already
-        // returns NotSupported below — read/write are now consistent.
-        Ok(PresenceStatus::Unknown)
-    }
-
-    async fn set_presence(&self, _status: PresenceStatus) -> ClientResult<()> {
-        Err(ClientError::NotSupported(ERR_NO_PRESENCE.to_string()))
-    }
-}
-
-// ── H.3.c — DmsAndGroupsBackend ───────────────────────────────────────────────
-// Hacker News has no DM or group DM concept.
-
-#[cfg(feature = "native")]
-#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
-#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-impl poly_client::DmsAndGroupsBackend for HackerNewsClient {
-    async fn get_groups(&self) -> ClientResult<Vec<Group>> {
-        Ok(Vec::new())
-    }
-
-    async fn get_dm_channels(&self) -> ClientResult<Vec<DmChannel>> {
-        Ok(Vec::new())
-    }
-
-    async fn open_direct_message_channel(&self, _user_id: &str) -> ClientResult<DmChannel> {
-        Err(ClientError::NotSupported(ERR_NO_DM.to_string()))
-    }
-
-    async fn open_saved_messages_channel(&self) -> ClientResult<DmChannel> {
-        Err(ClientError::NotSupported(ERR_NO_SAVED_MESSAGES.to_string()))
-    }
-
-    async fn add_group_member(&self, _group_id: &str, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported(ERR_NO_GROUP_DM.to_string()))
-    }
-
-    async fn remove_group_member(&self, _group_id: &str, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported(ERR_NO_GROUP_DM.to_string()))
-    }
-
-    async fn add_users_to_group_dm(&self, _channel_id: &str, _user_ids: &[String]) -> ClientResult<()> {
-        Err(ClientError::NotSupported(ERR_NO_GROUP_DM.to_string()))
-    }
-
-    async fn close_dm_channel(&self, _channel_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported(ERR_NO_DM.to_string()))
-    }
-
-    async fn mute_conversation(
-        &self,
-        _channel_id: &str,
-        _until: Option<chrono::DateTime<chrono::Utc>>,
-    ) -> ClientResult<()> {
-        Err(ClientError::NotSupported(ERR_NO_CONV_MUTE.to_string()))
-    }
-
-    async fn unmute_conversation(&self, _channel_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported(ERR_NO_CONV_MUTE.to_string()))
-    }
-
-    async fn leave_group_dm(&self, _channel_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported(ERR_NO_GROUP_DM.to_string()))
-    }
-
-    async fn edit_group_dm(
-        &self,
-        _channel_id: &str,
-        _name: Option<&str>,
-        _avatar_url: Option<&str>,
-    ) -> ClientResult<()> {
-        Err(ClientError::NotSupported(ERR_NO_GROUP_DM.to_string()))
-    }
-}
-
-// ── C.1 — SettingsBackend ────────────────────────────────────────────────────
-
-#[cfg(feature = "native")]
-#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
-#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-impl poly_client::SettingsBackend for HackerNewsClient {
-    async fn get_settings_sections(&self) -> ClientResult<Vec<SettingsSection>> {
-        Ok(vec![SettingsSection {
-            scope: SettingsScope::AccountGlobal,
-            section_key: "preferences".to_string(),
-            icon: None,
-            fields: vec![
-                SettingDescriptor {
-                    key: "default-feed".to_string(),
-                    kind: SettingKind::Select,
-                    default_value: "\"top\"".to_string(),
-                    extra: "[\"top\",\"new\",\"best\",\"ask\",\"show\",\"jobs\"]".to_string(),
-                },
-                SettingDescriptor {
-                    key: "items-per-page".to_string(),
-                    kind: SettingKind::Slider,
-                    default_value: "30".to_string(),
-                    extra: "{\"min\":10,\"max\":100,\"step\":5}".to_string(),
-                },
-            ],
-            info_block: None,
-        }])
-    }
-
-    fn settings_storage(&self) -> &SettingsStorageCell {
-        &self.settings_storage
-    }
-}
-
-// ── C.1 — ViewDescriptorBackend ──────────────────────────────────────────────
-
-#[cfg(feature = "native")]
-#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
-#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-impl poly_client::ViewDescriptorBackend for HackerNewsClient {
-    async fn get_sidebar_declaration(&self) -> ClientResult<SidebarDeclaration> {
-        Ok(SidebarDeclaration {
-            layout: SidebarLayoutKind::Feed,
-            sections: Vec::new(),
-            header_block: None,
-        })
-    }
-
-    /// HN account overview — show the top stories as a curated welcome view.
-    /// HN has no concept of multiple servers/accounts beyond "the front page",
-    /// so the overview is simply the current Top feed rendered as a ListBody.
-    async fn get_account_overview_view(&self) -> ClientResult<ViewDescriptor> {
-        Ok(ViewDescriptor {
-            kind: ViewKind::FlatList,
-            header: Some(ViewHeader {
-                title_key: Some("plugin-hackernews-overview-title".to_string()),
-                subtitle_key: Some("plugin-hackernews-overview-subtitle".to_string()),
-                info_block: None,
-            }),
-            toolbar: None,
-            body: ViewBody::ListBody(ListSpec {
-                row_template: RowTemplate {
-                    primary_field: "title".to_string(),
-                    secondary_field: Some("author-domain".to_string()),
-                    meta_field: Some("points-comments-age".to_string()),
-                    icon_field: None,
-                },
-                page_size: 30,
-            }),
-        })
-    }
-
-    async fn get_channel_view(&self, _channel_id: &str) -> ClientResult<ViewDescriptor> {
-        Ok(ViewDescriptor {
-            kind: ViewKind::FlatList,
-            header: Some(ViewHeader {
-                title_key: Some("plugin-hackernews-view-stories-title".to_string()),
-                subtitle_key: None,
-                info_block: None,
-            }),
-            toolbar: None,
-            body: ViewBody::ListBody(ListSpec {
-                row_template: RowTemplate {
-                    primary_field: "title".to_string(),
-                    secondary_field: Some("url".to_string()),
-                    meta_field: Some("score-comments-age".to_string()),
-                    icon_field: None,
-                },
-                page_size: 30,
-            }),
-        })
-    }
-
-    async fn get_view_rows(
-        &self,
-        channel_id: &str,
-        cursor: Option<Cursor>,
-        _sort_id: Option<&str>,
-        _filter_id: Option<&str>,
-        _tab_id: Option<&str>,
-    ) -> ClientResult<ViewRowsPage> {
-        let (feed, is_overview) = if channel_id.is_empty() {
-            (HnFeed::Top, true)
-        } else {
-            let f = HnFeed::from_channel_id(channel_id).ok_or_else(|| {
-                ClientError::NotFound(format!("unknown channel: {channel_id}"))
-            })?;
-            (f, false)
-        };
-
-        let offset: usize = cursor
-            .as_ref()
-            .and_then(|c| {
-                if c.kind == CursorKind::Offset {
-                    c.value.parse().ok()
-                } else {
-                    None
-                }
-            })
-            .unwrap_or(0);
-
-        let page_size: usize = 30;
-
-        let ids = self.api.get_feed_ids(feed).await?;
-        let slice: Vec<u64> = ids
-            .into_iter()
-            .skip(offset)
-            .take(page_size)
-            .collect();
-
-        let next_cursor = if slice.len() == page_size {
-            Some(Cursor {
-                kind: CursorKind::Offset,
-                value: offset.saturating_add(page_size).to_string(),
-            })
-        } else {
-            None
-        };
-
-        let items = self.api.get_items_batch(&slice).await?;
-
-        let rows = items
-            .iter()
-            .filter(|item| !item.deleted.unwrap_or(false) && !item.dead.unwrap_or(false))
-            .map(|item| {
-                if is_overview {
-                    hn_item_to_overview_row(item)
-                } else {
-                    hn_item_to_view_row(item)
-                }
-            })
-            .collect();
-
-        Ok(ViewRowsPage { rows, next_cursor })
-    }
-
-    async fn get_view_detail(
-        &self,
-        _channel_id: &str,
-        row_id: &str,
-    ) -> ClientResult<ViewDetail> {
-        let story_id: u64 = row_id.parse().map_err(|_e| {
-            ClientError::NotFound(format!("invalid story id: {row_id}"))
-        })?;
-
-        let story = self
-            .api
-            .get_item(story_id)
-            .await?
-            .ok_or_else(|| ClientError::NotFound(format!("story not found: {story_id}")))?;
-
-        let body_html = if let Some(ref text) = story.text {
-            format!("<p>{text}</p>")
-        } else if let Some(ref url) = story.url {
-            let title = story.title.as_deref().unwrap_or("Link");
-            format!("<p><a href=\"{url}\">{title}</a></p>")
-        } else {
-            let title = story.title.as_deref().unwrap_or("(no title)");
-            format!("<p>{title}</p>")
-        };
-
-        let has_comments = story.kids.as_ref().is_some_and(|k| !k.is_empty());
-        let comments_section = if has_comments {
-            Some(poly_client::TreeSpec {
-                root_page_size: 30,
-                max_depth: 8,
-            })
-        } else {
-            None
-        };
-
-        Ok(ViewDetail {
-            body_block: CustomBlock {
-                sanitized_html: body_html,
-                stylesheet: None,
-                max_height_px: None,
-            },
-            comments_section,
-        })
-    }
-}
+// ── get_comment_thread (BFS over HN comment trees) ───────────────────────────
 
 #[cfg(feature = "native")]
 impl HackerNewsClient {
     /// Fetch the full comment tree for a story using BFS, up to `limit` total
     /// comments. Each fetched comment records its parent ID so the UI can
     /// render nested threads correctly.
-    async fn get_comment_thread(
+    pub(crate) async fn get_comment_thread(
         &self,
         story_id: u64,
         limit: usize,
@@ -784,7 +429,7 @@ impl HackerNewsClient {
         // to 1000 so deep HN threads (which routinely run 500+ items) render
         // fully instead of truncating mid-conversation. Caller's `limit` still
         // wins when it's smaller (host supplies query.limit per page).
-        let mut collected: Vec<(types::HnItem, u64)> = Vec::new();
+        let mut collected: Vec<(HnItem, u64)> = Vec::new();
         let max = limit.clamp(1, 1000);
 
         while !queue.is_empty() && collected.len() < max {
@@ -823,7 +468,7 @@ impl HackerNewsClient {
     }
 }
 
-// ── send_message helpers ──────────────────────────────────────────────────
+// ── send_message helpers ──────────────────────────────────────────────────────
 //
 // These functions decompose the three logical stages of `send_message` so
 // each stage has a single reason to change (SRP) and future channel types
