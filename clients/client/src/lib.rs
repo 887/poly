@@ -23,7 +23,10 @@ pub mod types;
 pub mod ui_surface;
 pub mod view_descriptor;
 pub mod voice_transport;
+pub mod writable_dms_and_groups;
 pub mod writable_messaging;
+pub mod writable_moderation;
+pub mod writable_server_admin;
 pub mod writable_social_graph;
 
 pub use code_repo::CodeRepoBackend;
@@ -43,7 +46,10 @@ pub use types::*;
 pub use ui_surface::*;
 pub use view_descriptor::ViewDescriptorBackend;
 pub use voice_transport::VoiceTransportBackend;
+pub use writable_dms_and_groups::WritableDmsAndGroupsBackend;
 pub use writable_messaging::WritableMessagingBackend;
+pub use writable_moderation::WritableModerationBackend;
+pub use writable_server_admin::WritableServerAdminBackend;
 pub use writable_social_graph::WritableSocialGraphBackend;
 
 use async_trait::async_trait;
@@ -305,6 +311,44 @@ pub trait IsBackend: Send + Sync {
     /// Plan: `plan-trait-split-readable-vs-writable.md` Phase B.2.
     fn as_writable_messaging(&self) -> Option<&dyn WritableMessagingBackend> {
         None
+    }
+
+    /// Returns `Some(self)` if this backend implements
+    /// [`WritableDmsAndGroupsBackend`].
+    ///
+    /// Default: delegates through [`Self::as_dms_and_groups`] +
+    /// [`DmsAndGroupsBackend::as_writable_dms_and_groups`].
+    ///
+    /// Plan: `plan-trait-split-readable-vs-writable.md` Tier 2.
+    fn as_writable_dms_and_groups(&self) -> Option<&dyn WritableDmsAndGroupsBackend> {
+        self.as_dms_and_groups()
+            .and_then(|dg| dg.as_writable_dms_and_groups())
+    }
+
+    /// Returns `Some(self)` if this backend implements
+    /// [`WritableModerationBackend`].
+    ///
+    /// Default: delegates through [`Self::as_moderation`] +
+    /// [`ModerationBackend::as_writable_moderation`]. Backends should
+    /// override [`ModerationBackend::as_writable_moderation`] on their
+    /// impl block rather than this accessor.
+    ///
+    /// Plan: `plan-trait-split-readable-vs-writable.md` Tier 2.
+    fn as_writable_moderation(&self) -> Option<&dyn WritableModerationBackend> {
+        self.as_moderation()
+            .and_then(|m| m.as_writable_moderation())
+    }
+
+    /// Returns `Some(self)` if this backend implements
+    /// [`WritableServerAdminBackend`].
+    ///
+    /// Default: delegates through [`Self::as_server_admin`] +
+    /// [`ServerAdminBackend::as_writable_server_admin`].
+    ///
+    /// Plan: `plan-trait-split-readable-vs-writable.md` Tier 2.
+    fn as_writable_server_admin(&self) -> Option<&dyn WritableServerAdminBackend> {
+        self.as_server_admin()
+            .and_then(|sa| sa.as_writable_server_admin())
     }
 
     /// Returns `Some(self)` if this backend implements

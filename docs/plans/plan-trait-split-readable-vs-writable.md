@@ -1,6 +1,16 @@
 # Plan — Trait split: readable vs writable sibling traits
 
-## Status: IN PROGRESS — `MessagingBackend.send_message` round-tripped end-to-end via `WritableMessagingBackend` sub-trait + `as_writable_messaging()`. Other writable methods (`create_server`, `add_friend`, `set_message_pinned`, …) queued for follow-up.
+## Status: ✅ DONE — all 5 writable sub-traits shipped.
+##   - Tier 1: `WritableMessagingBackend` (commit `7078cddc`)
+##   - Tier 2: `WritableSocialGraphBackend`, `WritableModerationBackend`,
+##     `WritableServerAdminBackend`, `WritableDmsAndGroupsBackend`
+##     (Tier 2 commits, this branch)
+##   - Per-backend migration of trait method impls into the new
+##     writable impl blocks is OPPORTUNISTIC: the architecture +
+##     default-delegating shims are in place; concrete migrations
+##     landed for the backends most likely to surface SOLID gains
+##     (read-only forge/news backends drop write stubs; matrix/discord/
+##     stoat/etc migrate writes into the writable trait when next touched).
 
 ## Goal
 
@@ -149,18 +159,70 @@ a new `impl WritableMessagingBackend for X` block, and override
 - [~] **E.2** `mcp/chat-mcp/src/main.rs`, `tools/chat.rs`,
   `tools/drafts.rs` — same deal, opportunistic.
 
-## Tier 2 — Follow-up writable sub-traits (NOT in this plan's scope)
+## Tier 2 — Follow-up writable sub-traits
 
-- `WritableSocialGraphBackend` — `add_friend`, `remove_friend`,
-  `block_user`, `unblock_user`, `ignore_user`, `unignore_user`,
-  `respond_to_friend_request`, `set_friend_nickname`, `set_user_note`,
-  `set_presence`. Highest-impact follow-up: 4 read-only backends
-  (forgejo, hackernews, github, lemmy) each have 10× `NotSupported`
-  stubs collapsible to "no impl".
-- `WritablePinningBackend` (or fold into `WritableMessagingBackend`) —
+Phase F — `WritableSocialGraphBackend` (shipped in tier-2 commit)
+
+- [x] **F.1** Define `clients/client/src/writable_social_graph.rs`
+  carrying `add_friend`, `remove_friend`, `respond_to_friend_request`,
+  `set_friend_nickname`, `set_user_note`, `block_user`, `unblock_user`,
+  `ignore_user`, `unignore_user`, `set_presence`.
+- [x] **F.2** `SocialGraphBackend::as_writable_social_graph` accessor +
+  default-delegating shims for the writes.
+- [x] **F.3** `IsBackend::as_writable_social_graph` accessor delegating
+  through `as_social_graph()`.
+- [x] **F.4** Read-only backends drop write stubs: `forgejo`,
+  `hackernews`, `github`, `lemmy`, `reddit`.
+- [x] **F.5** Writable backends opt in via `as_writable_social_graph()
+  -> Some(self)`: `matrix`, `discord`, `teams`, `stoat`, `demo`,
+  `server-client`.
+
+Phase G — `WritableModerationBackend` (shipped in tier-2 commit)
+
+- [x] **G.1** Define `clients/client/src/writable_moderation.rs`
+  carrying `kick_member`, `ban_member`, `unban_member`,
+  `timeout_member`, `untimeout_member`, `delete_message`,
+  `update_channel`, `reorder_channels`.
+- [x] **G.2** `ModerationBackend::as_writable_moderation` accessor +
+  default-delegating shims for the writes.
+- [x] **G.3** `IsBackend::as_writable_moderation` accessor.
+- [x] **G.4** Migrated backends: `forgejo`, `github`, `matrix`.
+- [~] **G.5** `stoat`, `discord`, `lemmy`, `teams` — DEFERRED.
+  Existing `impl ModerationBackend` blocks satisfy the (now-default-
+  bearing) trait via overrides; capability dispatch via
+  `as_writable_moderation()` returns `None` until each backend is
+  touched and opts in. No functional regression.
+
+Phase H — `WritableServerAdminBackend` (shipped in tier-2 commit)
+
+- [x] **H.1** Define `clients/client/src/writable_server_admin.rs`
+  carrying `create_server`, `create_channel`, `update_server_banner`.
+- [x] **H.2** `ServerAdminBackend::as_writable_server_admin` accessor +
+  default-delegating shims for the writes.
+- [x] **H.3** `IsBackend::as_writable_server_admin` accessor.
+- [x] **H.4** Migrated backends: `lemmy`, `matrix`, `stoat`, `discord`,
+  `server-client`.
+- [x] **H.5** Demo drops the stubs entirely (no writable opt-in).
+
+Phase I — `WritableDmsAndGroupsBackend` (shipped in tier-2 commit)
+
+- [x] **I.1** Define `clients/client/src/writable_dms_and_groups.rs`
+  carrying `add_group_member`, `remove_group_member`,
+  `add_users_to_group_dm`, `edit_group_dm`, `close_dm_channel`.
+- [x] **I.2** `DmsAndGroupsBackend::as_writable_dms_and_groups`
+  accessor + default-delegating shims for the writes.
+- [x] **I.3** `IsBackend::as_writable_dms_and_groups` accessor.
+- [~] **I.4** Per-backend `impl WritableDmsAndGroupsBackend` migrations
+  — DEFERRED. Existing `impl DmsAndGroupsBackend` blocks satisfy the
+  (now-default-bearing) trait via overrides; opportunistic migration
+  when each backend file is next touched. No functional regression.
+
+Phase J — Remaining follow-ups
+
+- [ ] `WritablePinningBackend` (or fold into `WritableMessagingBackend`) —
   `set_message_pinned`.
-- `ServerAdminBackend` enforcement — already opt-in; just need a lint
-  banning `Err(NotSupported)` returns inside opt-in capability impls.
+- [ ] `ServerAdminBackend` enforcement — lint banning
+  `Err(NotSupported)` returns inside opt-in capability impls.
 
 ## Verification
 

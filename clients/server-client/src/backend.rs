@@ -1269,11 +1269,48 @@ impl poly_client::MessagingBackend for PolyServerBackend {
     }
 }
 
-// ── H.4.b — ServerAdminBackend ───────────────────────────────────────────────
+// ── H.4.b — ServerAdminBackend (reads + Tier 2 writable accessor) ────────────
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl poly_client::ServerAdminBackend for PolyServerBackend {
+    async fn mark_channel_read(&self, _channel_id: &str) -> ClientResult<()> {
+        Err(ClientError::NotSupported(
+            "server-client: mark_channel_read not implemented".to_string(),
+        ))
+    }
+
+    async fn respond_to_server_invite(
+        &self,
+        _server_id: &str,
+        _accept: bool,
+    ) -> ClientResult<()> {
+        Err(ClientError::NotSupported(
+            "server-client: respond_to_server_invite not implemented".to_string(),
+        ))
+    }
+
+    async fn invite_user_to_server(
+        &self,
+        server_id: &str,
+        user_id: &str,
+    ) -> ClientResult<()> {
+        self.http
+            .invite_user_to_server(server_id, user_id)
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))
+    }
+
+    fn as_writable_server_admin(
+        &self,
+    ) -> Option<&dyn poly_client::WritableServerAdminBackend> {
+        Some(self)
+    }
+}
+
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::WritableServerAdminBackend for PolyServerBackend {
     async fn create_server(&self, name: &str) -> ClientResult<Server> {
         let wire = self
             .http
@@ -1315,25 +1352,6 @@ impl poly_client::ServerAdminBackend for PolyServerBackend {
             .update_server_banner(server_id, banner_url)
             .await
             .map(|_| ())
-            .map_err(|e| ClientError::Network(e.to_string()))
-    }
-
-    async fn mark_channel_read(&self, _channel_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("server-client: mark_channel_read not implemented".to_string()))
-    }
-
-    async fn respond_to_server_invite(&self, _server_id: &str, _accept: bool) -> ClientResult<()> {
-        Err(ClientError::NotSupported("server-client: respond_to_server_invite not implemented".to_string()))
-    }
-
-    async fn invite_user_to_server(
-        &self,
-        server_id: &str,
-        user_id: &str,
-    ) -> ClientResult<()> {
-        self.http
-            .invite_user_to_server(server_id, user_id)
-            .await
             .map_err(|e| ClientError::Network(e.to_string()))
     }
 }

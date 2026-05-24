@@ -1,56 +1,29 @@
 //! `ServerAdminBackend` capability sub-trait (Phase H.4.b).
 //!
-//! Carved out of [`ClientBackend`] in Phase H.4.b.  Groups server and channel
-//! management operations that are only available on backends that support
-//! modifiable server state.
-//!
-//! # Capability dispatch
-//!
-//! ```rust,ignore
-//! if let Some(sa) = backend.as_server_admin() {
-//!     sa.create_server(&name).await?;
-//! }
-//! ```
-//!
-//! WIT note: `create-server`, `create-channel`, `update-server-banner`,
-//! `mark-channel-read`, `invite-user-to-server`, and `respond-to-server-invite`
-//! are all in `poly:messenger/messenger-client`.  Only backends that have
-//! real server-management capability opt in (server-client, discord, lemmy,
-//! demo).
+//! Tier 2 of `plan-trait-split-readable-vs-writable.md`:
+//! `create_server`, `create_channel`, `update_server_banner` are now
+//! default-delegating shims that consult
+//! [`Self::as_writable_server_admin`] and forward to
+//! [`WritableServerAdminBackend`] when `Some`, else return
+//! `Err(NotSupported)`.
 //!
 //! [`ClientBackend`]: crate::ClientBackend
+//! [`WritableServerAdminBackend`]: crate::WritableServerAdminBackend
 
 use async_trait::async_trait;
 
-use crate::{Channel, ChannelType, ClientResult, Server};
+use crate::{
+    Channel, ChannelType, ClientError, ClientResult, Server, WritableServerAdminBackend,
+};
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 pub trait ServerAdminBackend: Send + Sync {
-    /// Create a new server/guild in this backend.
-    async fn create_server(&self, name: &str) -> ClientResult<Server>;
-
-    /// Create a new channel inside a server.
-    async fn create_channel(
-        &self,
-        server_id: &str,
-        name: &str,
-        channel_type: ChannelType,
-    ) -> ClientResult<Channel>;
-
-    /// Update the banner image URL for a server.
-    async fn update_server_banner(
-        &self,
-        server_id: &str,
-        banner_url: Option<&str>,
-    ) -> ClientResult<()>;
-
     /// Mark a channel (server channel or DM) as read on the backend.
     ///
     /// Backends that do not support server-side read markers may return
     /// `Ok(())` silently — this is a best-effort notification, not a
-    /// required acknowledgement.  Backends that actively reject it may
-    /// return `Err(NotSupported)`.
+    /// required acknowledgement.
     async fn mark_channel_read(&self, channel_id: &str) -> ClientResult<()>;
 
     /// Accept or decline a pending server invite.
@@ -66,4 +39,49 @@ pub trait ServerAdminBackend: Send + Sync {
         server_id: &str,
         user_id: &str,
     ) -> ClientResult<()>;
+
+    /// Returns `Some(self)` if this backend implements
+    /// [`WritableServerAdminBackend`].
+    ///
+    /// Default: `None`. Override in writable backends.
+    fn as_writable_server_admin(&self) -> Option<&dyn WritableServerAdminBackend> {
+        None
+    }
+
+    // ── Write methods — default-delegating shims (Tier 2) ──────────────────
+
+    /// Create a new server/guild in this backend.
+    async fn create_server(&self, name: &str) -> ClientResult<Server> {
+        match self.as_writable_server_admin() {
+            Some(w) => w.create_server(name).await,
+            None => Err(ClientError::NotSupported("create_server".to_string())),
+        }
+    }
+
+    /// Create a new channel inside a server.
+    async fn create_channel(
+        &self,
+        server_id: &str,
+        name: &str,
+        channel_type: ChannelType,
+    ) -> ClientResult<Channel> {
+        match self.as_writable_server_admin() {
+            Some(w) => w.create_channel(server_id, name, channel_type).await,
+            None => Err(ClientError::NotSupported("create_channel".to_string())),
+        }
+    }
+
+    /// Update the banner image URL for a server.
+    async fn update_server_banner(
+        &self,
+        server_id: &str,
+        banner_url: Option<&str>,
+    ) -> ClientResult<()> {
+        match self.as_writable_server_admin() {
+            Some(w) => w.update_server_banner(server_id, banner_url).await,
+            None => Err(ClientError::NotSupported(
+                "update_server_banner".to_string(),
+            )),
+        }
+    }
 }

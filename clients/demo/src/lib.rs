@@ -278,43 +278,37 @@ impl<F: DemoFlavour> IsBackend for DemoClientGeneric<F> {
 }
 
 // ── H.4.b — ServerAdminBackend ────────────────────────────────────────────────
+//
+// Tier 2 (plan-trait-split-readable-vs-writable): demo has no real
+// writable server-admin capability; the create_server / create_channel
+// / update_server_banner stubs were dropped — the read-trait shim
+// returns NotSupported via the missing as_writable_server_admin()
+// accessor. Only the mark-read + invite stubs remain on the read
+// trait.
 
 #[cfg(feature = "native")]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl<F: DemoFlavour> poly_client::ServerAdminBackend for DemoClientGeneric<F> {
-    async fn create_server(&self, _name: &str) -> ClientResult<Server> {
-        Err(ClientError::NotSupported("demo: create_server".to_string()))
-    }
-
-    async fn create_channel(
-        &self,
-        _server_id: &str,
-        _name: &str,
-        _channel_type: ChannelType,
-    ) -> ClientResult<Channel> {
-        Err(ClientError::NotSupported("demo: create_channel".to_string()))
-    }
-
-    async fn update_server_banner(
-        &self,
-        _server_id: &str,
-        _banner_url: Option<&str>,
-    ) -> ClientResult<()> {
-        Err(ClientError::NotSupported("demo: update_server_banner".to_string()))
-    }
-
     async fn mark_channel_read(&self, channel_id: &str) -> ClientResult<()> {
         data::mark_channel_read_local(channel_id);
         Ok(())
     }
 
     async fn respond_to_server_invite(&self, _server_id: &str, _accept: bool) -> ClientResult<()> {
-        Err(ClientError::NotSupported("demo: respond_to_server_invite".to_string()))
+        Err(ClientError::NotSupported(
+            "demo: respond_to_server_invite".to_string(),
+        ))
     }
 
-    async fn invite_user_to_server(&self, _server_id: &str, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("demo: invite_user_to_server".to_string()))
+    async fn invite_user_to_server(
+        &self,
+        _server_id: &str,
+        _user_id: &str,
+    ) -> ClientResult<()> {
+        Err(ClientError::NotSupported(
+            "demo: invite_user_to_server".to_string(),
+        ))
     }
 }
 

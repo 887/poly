@@ -1,21 +1,25 @@
+//! `ModerationBackend` + `WritableModerationBackend` for `GitHubClient`.
+//!
+//! GitHub has no kick/ban/timeout/role concept; the one real writable
+//! capability is `delete_message` (issue/PR comment delete).
+//!
+//! Tier 2 (`plan-trait-split-readable-vs-writable.md`): the read trait
+//! keeps `get_my_permissions` (real) and the no-data getters
+//! (`get_bans`, `get_moderation_log`, `get_server_roles`). The
+//! writable trait carries `delete_message` (real) and stubs the rest.
+
 use async_trait::async_trait;
 use poly_client::*;
 
-use crate::{GitHubClient, NS_NO_BAN_CONCEPT, NS_NO_TIMEOUT_CONCEPT};
 use crate::forum::parse_forum_channel;
+use crate::{GitHubClient, NS_NO_BAN_CONCEPT, NS_NO_TIMEOUT_CONCEPT};
 
-// ── H.3.a — ModerationBackend ────────────────────────────────────────────────
+// ── H.3.a — ModerationBackend (reads + writable accessor) ────────────────────
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl poly_client::ModerationBackend for GitHubClient {
     /// Get the calling user's effective permissions in a repo.
-    ///
-    /// Calls `GET /repos/{owner}/{repo}` and maps the `permissions` sub-object
-    /// to [`MemberPermissions`]. GitHub vocabulary:
-    /// - `admin` → manage server + manage channels + ban + kick + manage messages
-    /// - `maintain` → manage channels + manage messages
-    /// - `push` → manage messages (can delete comments in issues/PRs)
     async fn get_my_permissions(
         &self,
         server_id: &str,
@@ -51,19 +55,53 @@ impl poly_client::ModerationBackend for GitHubClient {
             kick_members: perms.admin,
             ban_members: perms.admin,
             manage_messages: perms.admin || perms.maintain || perms.push,
-            timeout_members: false, // GitHub has no timeout concept
+            timeout_members: false,
             display_role,
             power_level: None,
         })
     }
 
+    async fn get_bans(&self, _server_id: &str) -> ClientResult<Vec<BannedMember>> {
+        Err(ClientError::NotSupported(
+            "GitHub: no per-repo ban list".to_string(),
+        ))
+    }
+
+    async fn get_moderation_log(
+        &self,
+        _server_id: &str,
+        _limit: usize,
+    ) -> ClientResult<Vec<ModerationLogEntry>> {
+        Err(ClientError::NotSupported(
+            "GitHub: no moderation log".to_string(),
+        ))
+    }
+
+    async fn get_server_roles(&self, _server_id: &str) -> ClientResult<Vec<Role>> {
+        Err(ClientError::NotSupported(
+            "GitHub: no role concept".to_string(),
+        ))
+    }
+
+    fn as_writable_moderation(
+        &self,
+    ) -> Option<&dyn poly_client::WritableModerationBackend> {
+        Some(self)
+    }
+}
+
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::WritableModerationBackend for GitHubClient {
     async fn kick_member(
         &self,
         _server_id: &str,
         _member_id: &str,
         _reason: Option<&str>,
     ) -> ClientResult<()> {
-        Err(ClientError::NotSupported("GitHub: no kick concept".to_string()))
+        Err(ClientError::NotSupported(
+            "GitHub: no kick concept".to_string(),
+        ))
     }
 
     async fn ban_member(
@@ -94,18 +132,7 @@ impl poly_client::ModerationBackend for GitHubClient {
         Err(ClientError::NotSupported(NS_NO_TIMEOUT_CONCEPT.to_string()))
     }
 
-    async fn get_bans(&self, _server_id: &str) -> ClientResult<Vec<BannedMember>> {
-        Err(ClientError::NotSupported("GitHub: no per-repo ban list".to_string()))
-    }
-
     /// Delete a comment by ID.
-    ///
-    /// `message_id` prefix determines the endpoint:
-    /// - `"comment:{id}"` → `DELETE /repos/{owner}/{repo}/issues/comments/{id}`
-    /// - `"pr-comment:{id}"` → `DELETE /repos/{owner}/{repo}/pulls/comments/{id}`
-    ///
-    /// The `channel_id` must be an issues/pulls forum channel so that
-    /// `(owner, repo)` can be resolved.
     async fn delete_message(
         &self,
         channel_id: &str,
@@ -114,19 +141,23 @@ impl poly_client::ModerationBackend for GitHubClient {
         let (owner, repo) = parse_forum_channel(channel_id)?;
 
         if let Some(id_str) = message_id.strip_prefix("comment:") {
-            let comment_id: u64 = id_str.parse().map_err(|_e| {
-                ClientError::NotFound(format!("invalid comment id: {id_str}"))
-            })?;
-            let endpoint =
-                format!("/repos/{owner}/{repo}/issues/comments/{comment_id}");
-            self.cli.api_delete(&endpoint).await.map_err(Self::convert_err)
+            let comment_id: u64 = id_str
+                .parse()
+                .map_err(|_e| ClientError::NotFound(format!("invalid comment id: {id_str}")))?;
+            let endpoint = format!("/repos/{owner}/{repo}/issues/comments/{comment_id}");
+            self.cli
+                .api_delete(&endpoint)
+                .await
+                .map_err(Self::convert_err)
         } else if let Some(id_str) = message_id.strip_prefix("pr-comment:") {
-            let comment_id: u64 = id_str.parse().map_err(|_e| {
-                ClientError::NotFound(format!("invalid pr-comment id: {id_str}"))
-            })?;
-            let endpoint =
-                format!("/repos/{owner}/{repo}/pulls/comments/{comment_id}");
-            self.cli.api_delete(&endpoint).await.map_err(Self::convert_err)
+            let comment_id: u64 = id_str
+                .parse()
+                .map_err(|_e| ClientError::NotFound(format!("invalid pr-comment id: {id_str}")))?;
+            let endpoint = format!("/repos/{owner}/{repo}/pulls/comments/{comment_id}");
+            self.cli
+                .api_delete(&endpoint)
+                .await
+                .map_err(Self::convert_err)
         } else {
             Err(ClientError::NotSupported(format!(
                 "GitHub: cannot delete message with unknown prefix in id '{message_id}'. \
@@ -140,7 +171,9 @@ impl poly_client::ModerationBackend for GitHubClient {
         _channel_id: &str,
         _update: UpdateChannelParams,
     ) -> ClientResult<()> {
-        Err(ClientError::NotSupported("GitHub: channel update not supported".to_string()))
+        Err(ClientError::NotSupported(
+            "GitHub: channel update not supported".to_string(),
+        ))
     }
 
     async fn reorder_channels(
@@ -148,18 +181,8 @@ impl poly_client::ModerationBackend for GitHubClient {
         _server_id: &str,
         _ordering: Vec<String>,
     ) -> ClientResult<()> {
-        Err(ClientError::NotSupported("GitHub: channel reordering not supported".to_string()))
-    }
-
-    async fn get_moderation_log(
-        &self,
-        _server_id: &str,
-        _limit: usize,
-    ) -> ClientResult<Vec<ModerationLogEntry>> {
-        Err(ClientError::NotSupported("GitHub: no moderation log".to_string()))
-    }
-
-    async fn get_server_roles(&self, _server_id: &str) -> ClientResult<Vec<Role>> {
-        Err(ClientError::NotSupported("GitHub: no role concept".to_string()))
+        Err(ClientError::NotSupported(
+            "GitHub: channel reordering not supported".to_string(),
+        ))
     }
 }
