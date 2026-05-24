@@ -109,9 +109,9 @@
   SDK. Requires ACS token acquisition, WebRTC bridge to `voice_bridge`.
   ~800 LoC + Cargo dependency surface. Currently stub-only per
   `plan-voice-video-calls.md` Phase I.
-- [ ] **D.2** Split `TeamsClient::IsBackend` (756 lines) along capability-trait
+- [x] **D.2** Split `TeamsClient::IsBackend` (756 lines) along capability-trait
   lines, matching the existing `ModerationBackend` / `SocialGraphBackend` /
-  `DmsAndGroupsBackend` split. ~500 LoC.
+  `DmsAndGroupsBackend` split. ~500 LoC. — shipped in change `(see commit below)`
 - [ ] **D.3** Long-poll → real Graph change-notification subscription (event
   stream replaces `/test/events/poll`). Requires webhook lifecycle, secret
   validation, server-side relay. ~700 LoC.
