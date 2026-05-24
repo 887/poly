@@ -266,7 +266,7 @@ pub struct StoatClient {
     /// The callback is `Send + Sync` so it can be called from any async context.
     /// An unbounded-channel sender is used internally so the call never blocks.
     /// Set to `None` until `event_stream` establishes the WS connection.
-    #[cfg(feature = "native")]
+    #[cfg(all(feature = "native", not(target_arch = "wasm32")))]
     pub(crate) ws_write_tx: std::sync::Mutex<Option<Box<dyn Fn(String) + Send + Sync + 'static>>>,
 }
 
@@ -303,7 +303,7 @@ impl StoatClient {
             video_wasm_conn: std::sync::Arc::new(std::sync::Mutex::new(None)),
             #[cfg(feature = "native")]
             transient_dm_channels: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
-            #[cfg(feature = "native")]
+            #[cfg(all(feature = "native", not(target_arch = "wasm32")))]
             ws_write_tx: std::sync::Mutex::new(None),
         }
     }

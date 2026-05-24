@@ -7,10 +7,12 @@
 //!
 //! ## Scope
 
-// lint-allow-unused: video primitives live in this cfg-free module but their
-// only call sites are in the wasm32-gated video_wasm_capture.rs /
-// video_wasm_playback.rs files; native builds see them as unused.
-#![cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+// Video primitives — most call sites land with the WebCodecs JS interop in
+// Phase B.3/B.4 follow-up (encoder output callback + decoder input callback).
+// Until then, native sees them as unused (no wasm32-gated callers) and wasm32
+// sees the chain die at `send_h264_nal` stub awaiting the encoder.
+// lint-allow-unused: video codec primitives — encoder/decoder callback wiring deferred to Phase B.3/B.4 follow-up
+#![allow(dead_code)]
 
 //!
 //! The transport question for Stoat video (Vortex-extension vs LiveKit-SFU vs

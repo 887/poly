@@ -54,7 +54,8 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
 };
-use super::voice_noise_filter::{apply_rnnoise, NoiseFilter};
+// voice_noise_filter is consumed in voice_wasm_audio_capture.rs; not needed
+// directly in voice_wasm.rs (the signaling layer).
 
 use futures::{
     channel::mpsc::{self, UnboundedSender},

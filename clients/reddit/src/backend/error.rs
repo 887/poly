@@ -28,12 +28,11 @@ impl From<RedditError> for ClientError {
 // Each `ClientError::NotSupported(NS_FOO.to_string())` call still allocates
 // at the call site, but the source string lives here once, not 18 times.
 
-pub(crate) const NS_FRIEND_SYSTEM: &str = "Reddit has no friend system";
-pub(crate) const NS_USER_NOTE: &str = "Reddit has no user note system";
-pub(crate) const NS_BLOCK: &str = "Reddit: block not supported via this interface";
-pub(crate) const NS_UNBLOCK: &str = "Reddit: unblock not supported via this interface";
-pub(crate) const NS_IGNORE: &str = "Reddit has no ignore concept";
-pub(crate) const NS_PRESENCE: &str = "Reddit has no presence system";
+// (NS_FRIEND_SYSTEM / NS_USER_NOTE / NS_BLOCK / NS_UNBLOCK / NS_IGNORE /
+// NS_PRESENCE — removed: their call sites in `SocialGraphBackend` were
+// deleted when the readable/writable trait split landed
+// (`plan-trait-split-readable-vs-writable.md` tier 2 — Reddit no longer
+// impls `WritableSocialGraphBackend`, so the stubs ceased to exist.)
 pub(crate) const NS_GROUP_DM: &str = "Reddit has no group DMs";
 pub(crate) const NS_OPEN_DM: &str = "open_direct_message_channel: not yet implemented for Reddit";
 pub(crate) const NS_SAVED_MSG: &str = "open_saved_messages_channel: Reddit has no saved-messages concept";

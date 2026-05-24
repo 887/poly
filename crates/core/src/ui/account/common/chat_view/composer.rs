@@ -740,6 +740,9 @@ fn render_send_button(ctx: ChatViewMarkupCtx) -> Element {
 // lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
 #[allow(clippy::needless_pass_by_value)]
 pub(super) fn render_hidden_file_input(ctx: ChatViewMarkupCtx) -> Element {
+    // Only read from inside the wasm32-gated onchange handler below; on native
+    // the file input renders without a handler attached.
+    #[cfg_attr(not(target_arch = "wasm32"), allow(unused_variables))]
     let pending_attachments = ctx.pending_attachments;
     rsx! {
         input {
