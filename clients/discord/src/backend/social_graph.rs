@@ -15,8 +15,16 @@ impl poly_client::SocialGraphBackend for DiscordClient {
         Ok(self.discord_user_to_poly(u))
     }
 
+    /// C.3 — `GET /users/@me/relationships` filtered to accepted friends
+    /// (`type == 1`).  Blocked / incoming / outgoing requests are intentionally
+    /// excluded here; expose them via dedicated methods if the UI grows the surface.
     async fn get_friends(&self) -> ClientResult<Vec<User>> {
-        Ok(vec![])
+        let rels = self.http.get_relationships().await?;
+        Ok(rels
+            .into_iter()
+            .filter(|r| r.relationship_type == 1)
+            .map(|r| self.discord_user_to_poly(r.user))
+            .collect())
     }
 
     async fn add_friend(&self, user_id: &str) -> ClientResult<()> {

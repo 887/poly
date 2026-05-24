@@ -235,6 +235,12 @@ impl IsBackend for DiscordClient {
         Some(self)
     }
 
+    /// C.3 — DEFERRED missing impl. Discord exposes guild members via
+    /// `GET /guilds/{guild_id}/members?limit={n}&after={user_id}` which is
+    /// rate-limit-sensitive (the gateway-side GUILD_MEMBERS_CHUNK opcode is
+    /// the production path; HTTP is fallback only). Gated on rate-limit
+    /// guardrails — implement when `MemberFetchGuard` ships. For now we
+    /// return an empty list so the UI falls back to message-author scraping.
     async fn get_channel_members(&self, _channel_id: &str) -> ClientResult<Vec<User>> {
         Ok(vec![])
     }
@@ -245,6 +251,11 @@ impl IsBackend for DiscordClient {
         Some(self)
     }
 
+    /// C.3 — BY DESIGN empty. Discord has no "list notifications" endpoint;
+    /// notifications must be synthesised from `MESSAGE_CREATE` + mention parsing
+    /// on the gateway side. The UI already builds its own notification feed from
+    /// per-channel unread counts and stored mention events — exposing a list
+    /// here would duplicate that surface. Returning empty is the contract.
     async fn get_notifications(&self) -> ClientResult<Vec<Notification>> {
         Ok(vec![])
     }

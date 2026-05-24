@@ -201,6 +201,18 @@ pub struct DiscordGuildMember {
     pub communication_disabled_until: Option<String>,
 }
 
+/// A single entry from `GET /users/@me/relationships`.
+///
+/// `type` codes (Discord):
+///   1 = friend, 2 = block, 3 = incoming request, 4 = outgoing request.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct DiscordRelationship {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub relationship_type: u8,
+    pub user: DiscordUser,
+}
+
 /// A banned member entry from `GET /guilds/{id}/bans`.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct DiscordBan {

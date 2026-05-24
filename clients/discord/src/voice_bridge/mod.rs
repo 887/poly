@@ -62,10 +62,8 @@ use tokio::sync::Mutex;
 pub use voice_protocol::WsHandle;
 
 // Phase X.3 — wasm-only audio playback loop (UDP recv → AEAD decrypt → Opus
-// decode → per-SSRC AudioContext). Path-attribute lets the submodule live at
-// `src/voice_bridge/audio_playback.rs` without converting this file into a
-// `mod.rs`. Module is `#[cfg(target_arch = "wasm32")]` internally.
-#[path = "voice_bridge/audio_playback.rs"]
+// decode → per-SSRC AudioContext). Module is `#[cfg(target_arch = "wasm32")]`
+// internally. (Path attribute removed post-B.2 — file is a sibling now.)
 pub mod audio_playback;
 
 // ── Error type ────────────────────────────────────────────────────────────────

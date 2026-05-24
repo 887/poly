@@ -232,5 +232,4 @@ use super::*;
             assert_eq!(total, nal.len() - 1, "FU-A payloads reassemble to NAL body");
         }
     }
-}
 

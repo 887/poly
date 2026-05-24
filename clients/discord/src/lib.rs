@@ -351,12 +351,12 @@ impl DiscordClient {
 
     #[must_use]
     pub fn new() -> Self {
-        Self::build("https://discord.com".to_string(), None)
+        DiscordClientBuilder::new().build()
     }
 
     #[must_use]
     pub fn with_base_url(base_url: String) -> Self {
-        Self::build(base_url, None)
+        DiscordClientBuilder::new().base_url(base_url).build()
     }
 
     /// Create a client with a REST base URL and a WS gateway URL.
@@ -365,7 +365,10 @@ impl DiscordClient {
     /// `event_stream()`.  Example: `"ws://127.0.0.1:9999/gateway/ws"`.
     #[must_use]
     pub fn with_base_url_and_gateway(base_url: String, gateway_ws_url: String) -> Self {
-        Self::build(base_url, Some(gateway_ws_url))
+        DiscordClientBuilder::new()
+            .base_url(base_url)
+            .gateway_url(gateway_ws_url)
+            .build()
     }
 
     fn account_id(&self) -> String {
@@ -1438,6 +1441,54 @@ impl DiscordClient {
 #[cfg(feature = "native")]
 impl Default for DiscordClient {
     fn default() -> Self { Self::new() }
+}
+
+/// Builder for `DiscordClient`. (SOLID B.5 — OCP win: future config knobs
+/// add a `.with_x(_)` method instead of forking the constructor.)
+///
+/// Example:
+/// ```ignore
+/// let client = DiscordClientBuilder::new()
+///     .base_url("https://discord.com".to_string())
+///     .gateway_url("wss://gateway.discord.gg".to_string())
+///     .build();
+/// ```
+#[cfg(feature = "native")]
+#[derive(Default)]
+pub struct DiscordClientBuilder {
+    base_url: Option<String>,
+    gateway_url: Option<String>,
+}
+
+#[cfg(feature = "native")]
+impl DiscordClientBuilder {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Override the REST base URL.  Defaults to `https://discord.com`.
+    #[must_use]
+    pub fn base_url(mut self, base_url: String) -> Self {
+        self.base_url = Some(base_url);
+        self
+    }
+
+    /// Override the gateway WS URL.  When unset, `event_stream()` returns
+    /// an empty stream (no real-time events).
+    #[must_use]
+    pub fn gateway_url(mut self, gateway_url: String) -> Self {
+        self.gateway_url = Some(gateway_url);
+        self
+    }
+
+    #[must_use]
+    pub fn build(self) -> DiscordClient {
+        DiscordClient::build(
+            self.base_url.unwrap_or_else(|| "https://discord.com".to_string()),
+            self.gateway_url,
+        )
+    }
 }
 
 // ── Gateway-bridge helpers ────────────────────────────────────────────────────

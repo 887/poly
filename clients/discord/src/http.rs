@@ -7,7 +7,8 @@ use poly_host_bridge::http::HttpClient;
 
 use crate::api::{
     DiscordActiveThreadsResponse, DiscordArchivedThreadsResponse, DiscordAuditLogResponse,
-    DiscordBan, DiscordChannel, DiscordGuild, DiscordGuildMember, DiscordMessage, DiscordRole,
+    DiscordBan, DiscordChannel, DiscordGuild, DiscordGuildMember, DiscordMessage,
+    DiscordRelationship, DiscordRole,
     DiscordUser,
 };
 use crate::super_properties::SuperProperties;
@@ -713,6 +714,13 @@ impl DiscordHttpClient {
     }
 
     // ── Social / Relationship operations ─────────────────────────────────────
+
+    /// `GET /users/@me/relationships` — list all relationships (friends, blocks,
+    /// incoming/outgoing requests). Caller filters by `type`:
+    ///   1 = accepted friend, 2 = blocked, 3 = incoming request, 4 = outgoing request.
+    pub async fn get_relationships(&self) -> Result<Vec<DiscordRelationship>, ClientError> {
+        self.get("/api/v10/users/@me/relationships").await
+    }
 
     /// `PUT /users/@me/relationships/{user_id}` with `{"type": relationship_type}`.
     ///

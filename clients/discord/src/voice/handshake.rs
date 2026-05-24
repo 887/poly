@@ -7,15 +7,15 @@ use super::*;
 
 /// Data from op 2 Ready.
 pub(super) struct VoiceReady {
-    ssrc: u32,
-    ip: String,
-    port: u16,
-    modes: Vec<String>,
+    pub(super) ssrc: u32,
+    pub(super) ip: String,
+    pub(super) port: u16,
+    pub(super) modes: Vec<String>,
 }
 
 /// Data from op 4 Session Description.
 pub(super) struct SessionDesc {
-    secret_key: Vec<u8>,
+    pub(super) secret_key: Vec<u8>,
 }
 
 pub(super) type WsWrite = futures::stream::SplitSink<

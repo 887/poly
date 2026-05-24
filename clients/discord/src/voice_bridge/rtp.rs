@@ -5,7 +5,7 @@
 
 use super::*;
 
-fn build_rtp_header(sequence: u16, timestamp: u32, ssrc: u32) -> [u8; RTP_HEADER_SIZE] {
+pub(super) fn build_rtp_header(sequence: u16, timestamp: u32, ssrc: u32) -> [u8; RTP_HEADER_SIZE] {
     let mut h = [0u8; RTP_HEADER_SIZE];
     h[0] = 0x80;
     h[1] = RTP_PAYLOAD_TYPE_OPUS;
@@ -22,7 +22,7 @@ fn build_rtp_header(sequence: u16, timestamp: u32, ssrc: u32) -> [u8; RTP_HEADER
     h
 }
 
-fn parse_rtp_header(packet: &[u8]) -> Option<(u32, usize)> {
+pub(super) fn parse_rtp_header(packet: &[u8]) -> Option<(u32, usize)> {
     if packet.len() < RTP_HEADER_SIZE {
         return None;
     }
@@ -52,7 +52,7 @@ fn parse_rtp_header(packet: &[u8]) -> Option<(u32, usize)> {
 /// Derive a 24-byte XChaCha20 nonce from the RTP header.
 /// The Discord `aead_xchacha20_poly1305_rtpsize` mode uses the first 24 bytes
 /// of the RTP header (zero-padded) as the nonce.
-fn xchacha_nonce_from_rtp(rtp_header: &[u8]) -> Vec<u8> {
+pub(super) fn xchacha_nonce_from_rtp(rtp_header: &[u8]) -> Vec<u8> {
     let mut nonce = [0u8; 24];
     let len = rtp_header.len().min(24);
     nonce[..len].copy_from_slice(&rtp_header[..len]);

@@ -88,5 +88,4 @@ use super::*;
             assert_eq!(canvas_id_for("U001"), "poly-video-tile-U001");
         }
     }
-}
 

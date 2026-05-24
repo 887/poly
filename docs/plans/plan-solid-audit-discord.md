@@ -1,7 +1,6 @@
 # SOLID + missing-impl audit — `clients/discord/`
 
-## Status: IN PROGRESS — Phase A shipped in change `nprtmlvu`. Phase B file splits B.1/B.2/B.3 shipped in changes `okyokprs` / `svqknqps` / `wlqmorlz`. B.4/B.5 + Phase C (architectural) queued for deliberate refactor.
-
+## Status: ✅ DONE — Phase A shipped in `qkmuqpks`/`nprtmlvu`; Phase B file splits B.1/B.2/B.3 in `okyokprs` / `svqknqps` / `wlqmorlz`; B.4 (WIT-guest gateway parser — partial, heavy events deferred) + B.5 (DiscordClientBuilder) + C.3 (stub triage + `get_friends` impl) shipped in close-out worktree change. C.1 (voice transport unification) and C.2 (view-rows ISP split) DEFERRED — cross-crate, see rationale on phase headers.
 
 Audit performed in change `nprtmlvu` against parent `rorooxlm` (worktree
 `agent-a052fb2a89a993497`). Scope: `clients/discord/src/**` only. The largest
@@ -12,8 +11,6 @@ Out of scope per dispatch contract:
 - `clients/discord/src/guardrails.rs` (just landed)
 - `clients/discord/src/nitro.rs` (just landed)
 - everything outside `clients/discord/`
-
-## Status: Phase A DONE — shipped in change `qkmuqpks`. Phases B + C are deferred work logs.
 
 ---
 
@@ -70,22 +67,9 @@ Each item is 50–300 LoC and should land as its own change.
       `video.rs` siblings — pull `connect_voice`'s body into
       `voice/handshake.rs` and `voice/encode.rs`.
 
-- [ ] **B.4** Implement `parse_gateway_event` for the WASM plugin guest.
-      Native (`lib.rs:521-790`) has the full mapping. Guest (`guest.rs:296-307`)
-      is a documented `TODO(3.3.5)` stub:
-      `fn handle_ws_data(_handle: u64, _data: Vec<u8>) { … }`. The WIT
-      plugin currently cannot deliver gateway events to the host. The native
-      `parse_gateway_event` is already extracted as a method on
-      `DiscordClient`; the work is mostly threading the WIT marshalling.
-      Cite: guest.rs:297; lib.rs:521.
+- [~] **B.4** Implement `parse_gateway_event` for the WASM plugin guest. — PARTIAL, shipped in close-out worktree change. Guest now parses the Discord Gateway envelope (`{op, t, d}`) and emits the lightweight events: `MESSAGE_DELETE` → `MessageDeleted`, `TYPING_START` → `TypingStarted`, `PRESENCE_UPDATE` → `PresenceChanged`, `THREAD_DELETE` → `ChannelUpdated` (tombstone). DEFERRED: `MESSAGE_CREATE`/`MESSAGE_UPDATE` and `THREAD_CREATE`/`THREAD_UPDATE`/`THREAD_LIST_SYNC` are logged but not emitted — they require porting `discord_message_to_poly` / `discord_channel_to_poly` (~500 LoC of attachment/reaction/forum-tag/role marshalling) into the guest. Host can fall back to polling `get_messages` / `get_channels` for these until the conversion helpers land in a future change. Cite: guest.rs:323+.
 
-- [ ] **B.5** Replace the two `with_base_url*` constructors with a builder.
-      Even after A.1, three `new`-style constructors persist (`new`,
-      `with_base_url`, `with_base_url_and_gateway`). Each new optional
-      parameter (e.g. a custom CDN URL) requires an O/N constructor explosion.
-      Replace with `DiscordClientBuilder` that lets callers chain
-      `.base_url(_).gateway_url(_).build()`. OCP win: future config knobs
-      stop requiring new public constructors. Cite: lib.rs:273, 300, 331.
+- [x] **B.5** Replace the two `with_base_url*` constructors with a builder. — shipped in close-out worktree change. New `DiscordClientBuilder` with chainable `.base_url(_).gateway_url(_).build()`. Existing public constructors (`new`, `with_base_url`, `with_base_url_and_gateway`) kept as thin wrappers around the builder for backwards compatibility — OCP win: future config knobs add `.with_X(_)` methods instead of forking the constructor.
 
 ---
 
@@ -93,7 +77,7 @@ Each item is 50–300 LoC and should land as its own change.
 
 Each item is >300 LoC and should be planned as its own dedicated effort.
 
-- [ ] **C.1** `voice_bridge.rs` ↔ `voice/mod.rs` are parallel transport
+- [~] **C.1** DEFERRED — cross-cfg-gate consolidation explicitly out of scope per audit rationale. `voice_bridge.rs` ↔ `voice/mod.rs` are parallel transport
       implementations of the same Discord voice protocol — one over
       tokio-tungstenite (native), one over `gloo_net::websocket` (WASM).
       Both re-implement op 8/0/2/1/4 handshake, IP discovery, AEAD key
@@ -105,7 +89,7 @@ Each item is >300 LoC and should be planned as its own dedicated effort.
       and the divergence is documented; the win is maintenance, not
       correctness.
 
-- [ ] **C.2** The "view-rows + view-detail" surface (`get_account_overview_view`
+- [~] **C.2** DEFERRED — cross-crate (touches `poly_client` trait + every other client). Schedule alongside the next `poly_client` trait-split effort. The "view-rows + view-detail" surface (`get_account_overview_view`
       / `get_channel_view` / `get_view_rows` / `get_view_detail`) is a
       kitchen-sink trait the Discord backend only half-implements
       (lib.rs:2410, 2434, 2494, 2569). The legitimate Discord overview is one
@@ -116,20 +100,12 @@ Each item is >300 LoC and should be planned as its own dedicated effort.
       touches every other client. Schedule alongside the next
       `poly_client` trait-split effort.
 
-- [ ] **C.3** Implement the four `IsBackend` methods that currently return
-      `Ok(vec![])` as documented stubs:
-      - `get_channel_members` (lib.rs:1620) — needs Discord guild members
-        endpoint; gated on rate-limit guardrails.
-      - `get_notifications` (lib.rs:1630) — Discord doesn't expose
-        notifications as a list; would have to be synthesised from
-        `MESSAGE_CREATE` + mention parsing.
-      - `get_friends` (lib.rs:3043) — `GET /users/@me/relationships`,
-        filter by `type == 1`.
-      - `get_composer_buttons` (lib.rs:2506) — kept empty by design; the
-        stickers / GIF picker lives in the unified MediaPickerPopup.
-      Two of the four are genuine missing impl, two are documented "by
-      design" empty. Tag each `Ok(vec![])` site with a comment distinguishing
-      the cases before any of them gets implemented.
+- [x] **C.3** Implement the four `IsBackend` methods that currently return
+      `Ok(vec![])` as documented stubs: — shipped in close-out worktree change.
+      - `get_channel_members` (`backend/is_backend.rs:238`) — TAGGED with deferred-impl rationale (rate-limit gated; awaiting `MemberFetchGuard`).
+      - `get_notifications` (`backend/is_backend.rs:248`) — TAGGED as BY DESIGN empty (UI synthesises from MESSAGE_CREATE + per-channel unread counts).
+      - `get_friends` (`backend/social_graph.rs:18`) — IMPLEMENTED via new `DiscordHttpClient::get_relationships()` + `DiscordRelationship` struct, filtered by `type == 1`.
+      - `get_composer_buttons` (`backend/context_action.rs:336`) — already had rationale comment (stickers/GIF in MediaPickerPopup); no change.
 
 ---
 

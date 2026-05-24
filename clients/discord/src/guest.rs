@@ -320,17 +320,162 @@ impl Guest for DiscordPlugin {
         Ok(())
     }
 
-    fn handle_ws_data(_handle: u64, _data: Vec<u8>) {
-        // TODO(3.3.5): Parse Discord Gateway WebSocket events, call emit-event.
+    fn handle_ws_data(_handle: u64, data: Vec<u8>) {
+        // B.4 — WIT-guest gateway event parser. Mirrors the subset of
+        // `DiscordClient::parse_gateway_event` that does not need the full
+        // native `discord_message_to_poly` / `discord_channel_to_poly`
+        // conversion surface (which would require porting ~500 LoC of
+        // attachment / reaction / forum-tag / role marshalling into the
+        // guest). Heavy-payload events (MESSAGE_CREATE/UPDATE, THREAD_CREATE/
+        // UPDATE, THREAD_LIST_SYNC) are logged but not emitted — the host
+        // can fall back to polling for messages, and the gateway already
+        // serves the lightweight TYPING / PRESENCE / DELETE notifications
+        // that matter for UI snappiness.
         //
-        // Mapping (mirrors native DiscordClient::parse_gateway_event):
-        //   THREAD_CREATE     → emit ChannelUpdated(thread_channel)
-        //   THREAD_UPDATE     → emit ChannelUpdated(thread_channel) for metadata/archived-state changes
-        //   THREAD_DELETE     → emit ChannelUpdated(tombstone_channel) — no separate ChannelDeleted in WIT
-        //   THREAD_LIST_SYNC  → emit ChannelUpdated for each thread in the bulk payload
-        //
-        // Decision (matches native impl): re-use ChannelUpdated for all thread lifecycle events
-        // rather than adding new WIT variants. The WIT schema does not need to change.
+        // Discord Gateway frame envelope: `{ "op": <int>, "t": <event>, "d": <payload>, "s": <seq> }`
+        // Only op=0 (DISPATCH) frames have a `t` and contain real events.
+        #[derive(serde::Deserialize)]
+        struct GwEnvelope {
+            #[serde(default)]
+            op: u8,
+            #[serde(default)]
+            t: Option<String>,
+            #[serde(default)]
+            d: serde_json::Value,
+        }
+        let env: GwEnvelope = match serde_json::from_slice(&data) {
+            Ok(e) => e,
+            Err(e) => {
+                host_api::log(
+                    host_api::LogLevel::Debug,
+                    &format!("discord-guest: gateway frame parse error: {e}"),
+                );
+                return;
+            }
+        };
+        if env.op != 0 {
+            // Non-dispatch (HELLO, HEARTBEAT_ACK, etc.) — nothing to emit.
+            return;
+        }
+        let Some(event_name) = env.t.as_deref() else { return };
+        let d = &env.d;
+
+        match event_name {
+            // ── MESSAGE_DELETE — channel-id + message-id, no marshalling needed.
+            "MESSAGE_DELETE" => {
+                let channel_id = d.get("channel_id").and_then(|v| v.as_str()).unwrap_or_default();
+                let message_id = d.get("id").and_then(|v| v.as_str()).unwrap_or_default();
+                if channel_id.is_empty() || message_id.is_empty() {
+                    return;
+                }
+                host_api::emit_event(&wit::ClientEvent::MessageDeleted(
+                    wit::MessageDeletedEvent {
+                        channel_id: channel_id.to_string(),
+                        message_id: message_id.to_string(),
+                    },
+                ));
+            }
+
+            // ── TYPING_START — channel-id + user-id + current time.
+            "TYPING_START" => {
+                let channel_id = d.get("channel_id").and_then(|v| v.as_str()).unwrap_or_default();
+                let user_id = d.get("user_id").and_then(|v| v.as_str()).unwrap_or_default();
+                if channel_id.is_empty() || user_id.is_empty() {
+                    return;
+                }
+                let timestamp = host_api::get_current_time();
+                host_api::emit_event(&wit::ClientEvent::TypingStarted(
+                    wit::TypingStartedEvent {
+                        channel_id: channel_id.to_string(),
+                        user_id: user_id.to_string(),
+                        timestamp,
+                    },
+                ));
+            }
+
+            // ── PRESENCE_UPDATE — user-id + status enum.
+            "PRESENCE_UPDATE" => {
+                let user_id = d
+                    .get("user")
+                    .and_then(|u| u.get("id"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default();
+                let status_str = d.get("status").and_then(|v| v.as_str()).unwrap_or("offline");
+                if user_id.is_empty() {
+                    return;
+                }
+                let status = match status_str {
+                    "online" => wit::PresenceStatus::Online,
+                    "idle" => wit::PresenceStatus::Idle,
+                    "dnd" => wit::PresenceStatus::DoNotDisturb,
+                    _ => wit::PresenceStatus::Offline,
+                };
+                host_api::emit_event(&wit::ClientEvent::PresenceChanged(
+                    wit::PresenceChangedEvent {
+                        user_id: user_id.to_string(),
+                        status,
+                    },
+                ));
+            }
+
+            // ── THREAD_DELETE — emit a tombstone Channel via ChannelUpdated.
+            // Native impl writes a synthetic archived+locked Thread channel
+            // so subscribers can drop the entry from their caches.
+            "THREAD_DELETE" => {
+                let thread_id = d.get("id").and_then(|v| v.as_str()).unwrap_or_default();
+                if thread_id.is_empty() {
+                    return;
+                }
+                let server_id = d.get("guild_id").and_then(|v| v.as_str()).unwrap_or_default();
+                let parent_channel_id = d
+                    .get("parent_id")
+                    .and_then(|v| v.as_str())
+                    .map(std::string::ToString::to_string);
+                let tombstone = wit::Channel {
+                    id: thread_id.to_string(),
+                    name: String::new(),
+                    channel_type: wit::ChannelType::Thread,
+                    server_id: server_id.to_string(),
+                    unread_count: 0,
+                    mention_count: 0,
+                    last_message_id: None,
+                    forum_tags: None,
+                    parent_channel_id,
+                    thread_metadata: Some(wit::ThreadMetadata {
+                        archived: true,
+                        locked: true,
+                        auto_archive_minutes: 0,
+                        archived_at: None,
+                        created_at: host_api::get_current_time(),
+                    }),
+                };
+                host_api::emit_event(&wit::ClientEvent::ChannelUpdated(tombstone));
+            }
+
+            // ── Heavy-payload events — deferred. See header comment.
+            //
+            // MESSAGE_CREATE / MESSAGE_UPDATE need a full wit::Message which
+            // requires marshalling User (with avatar URL CDN formatting),
+            // attachments, reactions, reply-preview, and thread-info — the
+            // native path uses `discord_message_to_poly` (~80 LoC of mapping).
+            //
+            // THREAD_CREATE / THREAD_UPDATE / THREAD_LIST_SYNC need a full
+            // wit::Channel built from the Discord channel payload including
+            // forum-tag enumeration and thread-metadata field threading.
+            //
+            // The host can poll `get_messages` / `get_channels` to recover
+            // these. When the conversion helpers land in the guest (3.3.6+),
+            // this match should be extended to emit them too.
+            "MESSAGE_CREATE" | "MESSAGE_UPDATE" | "THREAD_CREATE" | "THREAD_UPDATE"
+            | "THREAD_LIST_SYNC" => {
+                host_api::log(
+                    host_api::LogLevel::Debug,
+                    &format!("discord-guest: heavy gateway event {event_name} not yet marshalled"),
+                );
+            }
+
+            _ => {}
+        }
     }
 
     fn get_backend_type() -> String {
