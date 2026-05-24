@@ -174,3 +174,33 @@ impl poly_client::MessagingBackend for MatrixClient {
         Ok(Vec::new())
     }
 }
+
+// ── WritableMessagingBackend (plan-trait-split-readable-vs-writable) ─────────
+
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::WritableMessagingBackend for MatrixClient {
+    async fn send_message(
+        &self,
+        channel_id: &str,
+        content: MessageContent,
+    ) -> ClientResult<Message> {
+        let txn_id = uuid::Uuid::new_v4().to_string();
+        let body = Self::extract_body(&content);
+
+        let send_req = api::SendMessageRequest {
+            msgtype: "m.text".to_string(),
+            body: body.clone(),
+            formatted_body: None,
+            format: None,
+            relates_to: None,
+        };
+
+        let result = self
+            .http
+            .send_message(channel_id, &txn_id, &send_req)
+            .await?;
+
+        self.build_message_from_send(result.event_id, body)
+    }
+}

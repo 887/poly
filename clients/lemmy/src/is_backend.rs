@@ -172,31 +172,15 @@ impl IsBackend for LemmyClient {
         Err(ClientError::NotFound(format!("channel not found: {id}")))
     }
 
-    // ── Messages ────────────────────────────────────────────────────────────
-
-    async fn send_message(
-        &self,
-        channel_id: &str,
-        content: MessageContent,
-    ) -> ClientResult<Message> {
-        let text = match content {
-            MessageContent::Text(t) => t,
-            MessageContent::WithAttachments { text, .. } => text,
-        };
-
-        if let Some(post_id) = Self::parse_post_channel(channel_id) {
-            let view = self.http.create_comment(post_id, &text, None).await?;
-            return Ok(map_comment_to_message(&view));
-        }
-
-        Err(ClientError::NotSupported(
-            "send_message: channel must be a lemmy-post-{id} thread channel".to_string(),
-        ))
-    }
-
     // ── Messaging extras (H.4.a — moved to MessagingBackend) ────────────────
 
     fn as_messaging(&self) -> Option<&dyn poly_client::MessagingBackend> {
+        Some(self)
+    }
+
+    // ── Writable messaging (plan-trait-split-readable-vs-writable) ──────────
+
+    fn as_writable_messaging(&self) -> Option<&dyn poly_client::WritableMessagingBackend> {
         Some(self)
     }
 

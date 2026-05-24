@@ -113,95 +113,15 @@ impl IsBackend for RedditBackend {
         Ok(build_sub_channel(sub))
     }
 
-    // ── Messages ─────────────────────────────────────────────────────────────
-
-    async fn send_message(
-        &self,
-        channel_id: &str,
-        content: MessageContent,
-    ) -> ClientResult<Message> {
-        let text = match &content {
-            MessageContent::Text(s) => s.clone(),
-            MessageContent::WithAttachments { text, .. } => text.clone(),
-        };
-
-        // Three channel-id shapes (mirrors get_messages):
-        //   c_posts_<sub> — top-level submit (kind=self, title = first
-        //                   non-empty line, body = remainder)
-        //   hn-post-<id>  — top-level comment on the post (parent t3_<id>)
-        //   dm_<dm_id>    — reply within an existing DM thread (Reddit
-        //                   uses /api/comment with parent t4_<id>)
-        let (placeholder_id, placeholder_prefix) =
-            if let Some(sub) = sub_from_channel_id(channel_id) {
-                let (title, body) = split_title_body(&text);
-                let name = self
-                    .client
-                    .submit_self_post(sub, &title, body)
-                    .await
-                    .map_err(ClientError::from)?;
-                let id = if name.is_empty() {
-                    format!("t3_pending-{}", chrono::Utc::now().timestamp_millis())
-                } else {
-                    name
-                };
-                (id, "t3")
-            } else if let Some(post_id) = channel_id.strip_prefix("hn-post-") {
-                let bare = post_id.strip_prefix("t3_").unwrap_or(post_id);
-                let parent = format!("t3_{bare}");
-                self.client
-                    .reply_comment(&parent, &text)
-                    .await
-                    .map_err(ClientError::from)?;
-                (
-                    format!("t1_pending-{}", chrono::Utc::now().timestamp_millis()),
-                    "t1",
-                )
-            } else if let Some(dm_id) = channel_id.strip_prefix("dm_") {
-                let parent = format!("t4_{dm_id}");
-                self.client
-                    .reply_comment(&parent, &text)
-                    .await
-                    .map_err(ClientError::from)?;
-                (
-                    format!("t4_pending-{}", chrono::Utc::now().timestamp_millis()),
-                    "t4",
-                )
-            } else {
-                return Err(ClientError::NotSupported(format!(
-                    "send_message: unrecognised channel id `{channel_id}`"
-                )));
-            };
-        let _ = placeholder_prefix; // documentation only
-
-        let now = chrono::Utc::now();
-        let account_display = self.account_display_name().to_string();
-        let bt = Self::backend_type();
-        Ok(Message {
-            id: placeholder_id,
-            author: User {
-                id: self
-                    .session
-                    .as_ref()
-                    .map_or("u_me".to_string(), |s| s.user.id.clone()),
-                display_name: account_display,
-                avatar_url: None,
-                presence: PresenceStatus::Offline,
-                backend: bt,
-            },
-            content,
-            timestamp: now,
-            attachments: Vec::new(),
-            reactions: Vec::new(),
-            reply_to: None,
-            edited: false,
-            thread: None,
-            preview_image_url: None,
-        })
-    }
-
     // ── Messaging extras (H.4.a — moved to MessagingBackend) ────────────────
 
     fn as_messaging(&self) -> Option<&dyn poly_client::MessagingBackend> {
+        Some(self)
+    }
+
+    // ── Writable messaging (plan-trait-split-readable-vs-writable) ──────────
+
+    fn as_writable_messaging(&self) -> Option<&dyn poly_client::WritableMessagingBackend> {
         Some(self)
     }
 
@@ -380,5 +300,95 @@ impl IsBackend for RedditBackend {
 
     fn as_discover(&self) -> Option<&dyn poly_client::DiscoverBackend> {
         Some(self)
+    }
+}
+
+// ── WritableMessagingBackend (plan-trait-split-readable-vs-writable) ─────────
+
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::WritableMessagingBackend for RedditBackend {
+    async fn send_message(
+        &self,
+        channel_id: &str,
+        content: MessageContent,
+    ) -> ClientResult<Message> {
+        let text = match &content {
+            MessageContent::Text(s) => s.clone(),
+            MessageContent::WithAttachments { text, .. } => text.clone(),
+        };
+
+        // Three channel-id shapes (mirrors get_messages):
+        //   c_posts_<sub> — top-level submit (kind=self, title = first
+        //                   non-empty line, body = remainder)
+        //   hn-post-<id>  — top-level comment on the post (parent t3_<id>)
+        //   dm_<dm_id>    — reply within an existing DM thread (Reddit
+        //                   uses /api/comment with parent t4_<id>)
+        let (placeholder_id, placeholder_prefix) =
+            if let Some(sub) = sub_from_channel_id(channel_id) {
+                let (title, body) = split_title_body(&text);
+                let name = self
+                    .client
+                    .submit_self_post(sub, &title, body)
+                    .await
+                    .map_err(ClientError::from)?;
+                let id = if name.is_empty() {
+                    format!("t3_pending-{}", chrono::Utc::now().timestamp_millis())
+                } else {
+                    name
+                };
+                (id, "t3")
+            } else if let Some(post_id) = channel_id.strip_prefix("hn-post-") {
+                let bare = post_id.strip_prefix("t3_").unwrap_or(post_id);
+                let parent = format!("t3_{bare}");
+                self.client
+                    .reply_comment(&parent, &text)
+                    .await
+                    .map_err(ClientError::from)?;
+                (
+                    format!("t1_pending-{}", chrono::Utc::now().timestamp_millis()),
+                    "t1",
+                )
+            } else if let Some(dm_id) = channel_id.strip_prefix("dm_") {
+                let parent = format!("t4_{dm_id}");
+                self.client
+                    .reply_comment(&parent, &text)
+                    .await
+                    .map_err(ClientError::from)?;
+                (
+                    format!("t4_pending-{}", chrono::Utc::now().timestamp_millis()),
+                    "t4",
+                )
+            } else {
+                return Err(ClientError::NotSupported(format!(
+                    "send_message: unrecognised channel id `{channel_id}`"
+                )));
+            };
+        let _ = placeholder_prefix; // documentation only
+
+        let now = chrono::Utc::now();
+        let account_display = self.account_display_name().to_string();
+        let bt = Self::backend_type();
+        Ok(Message {
+            id: placeholder_id,
+            author: User {
+                id: self
+                    .session
+                    .as_ref()
+                    .map_or("u_me".to_string(), |s| s.user.id.clone()),
+                display_name: account_display,
+                avatar_url: None,
+                presence: PresenceStatus::Offline,
+                backend: bt,
+            },
+            content,
+            timestamp: now,
+            attachments: Vec::new(),
+            reactions: Vec::new(),
+            reply_to: None,
+            edited: false,
+            thread: None,
+            preview_image_url: None,
+        })
     }
 }

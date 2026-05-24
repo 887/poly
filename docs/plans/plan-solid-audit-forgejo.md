@@ -95,36 +95,23 @@ Scope: only `clients/forgejo/`. Do NOT touch other client crates.
       the prefix isn't. `FileKind` lives in `poly_client::FileKind`
       (already shared via the trait crate, so common-forge re-uses it
       without re-exporting).
-- [~] **C.2** Read-only-by-design framing (`lib.rs:13`) means
-      `send_message`/`create_channel`/etc are correct as `NotSupported`,
-      but the trait surface should NOT include those methods. Resolve
-      via `poly_client` trait split (writable-vs-readable backends).
-      Same as Lemmy C.2 / GitHub C.2.
-      — **DEFERRED**: requires editing `crates/client/src/lib.rs`
-      (or wherever the `IsBackend`/`ModerationBackend` traits live) to
-      split write-capable methods into a sibling trait like
-      `WritableMessagingBackend`. This is a cross-cutting change that
-      touches every backend (matrix, discord, teams, stoat, demo,
-      poly-server, lemmy, github, hackernews) simultaneously and the
-      poly_client trait crate, which is out of scope for the forgejo
-      worktree. Tracking: this should land as one workspace-wide
-      `plan-trait-split-readable-vs-writable.md` covering all
-      read-only backends (lemmy, github, forgejo, hackernews) at
-      once. Until then, the `NotSupported` stubs are the contract,
-      documented in `lib.rs:13`.
-- [~] **C.3** Trait fan-out — `ForgejoClient` impls 5 poly_client
-      traits where 3 are nearly all-`NotSupported`. Split into
-      sibling modules (B.1 prerequisite) then aim for per-capability
-      `as_xxx()` registration.
-      — **DEFERRED (B.1 part shipped)**: the sibling-module split
-      shipped under B.1 — `is_backend.rs`, `code_repo.rs`,
-      `moderation.rs`, `social_graph.rs`, `dms_and_groups.rs`,
-      `context_action.rs`, `view_descriptor.rs`, `settings.rs` each
-      hold one trait impl. The remaining `as_xxx()` capability-
-      registration part requires the same cross-crate trait surgery
-      as C.2 (the `Backend` enum / dyn dispatch glue lives in
-      poly_client + every other client crate); deferred under the
-      same `plan-trait-split-readable-vs-writable.md` umbrella.
+- [x] **C.2** Read-only-by-design framing (`lib.rs:13`) — `send_message`
+      stub DROPPED via `plan-trait-split-readable-vs-writable.md`
+      Phase D.11. `WritableMessagingBackend` is now a sibling capability
+      sub-trait; forgejo no longer implements `send_message` at all
+      (no impl block, no stub). The trait method ceases to exist on
+      `ForgejoClient`'s capability surface; callers using
+      `as_writable_messaging()` get `None`. Legacy
+      `backend.send_message(...)` calls hit the parent shim's
+      `NotSupported` branch. Remaining write-shaped stubs
+      (`create_channel`, friend ops on `SocialGraphBackend`, etc.) are
+      Tier 2 follow-up on the same plan.
+- [~] **C.3** Trait fan-out — sibling-module split (B.1 part) shipped.
+      `WritableMessagingBackend` opt-in via `as_writable_messaging()`
+      → `None` for forgejo shipped via
+      `plan-trait-split-readable-vs-writable.md` Phase D.11. Full Tier
+      2 capability-registration (writable social-graph, writable
+      pinning, etc.) is queued on the same plan.
 
 ---
 

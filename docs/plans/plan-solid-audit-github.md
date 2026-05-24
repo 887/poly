@@ -77,19 +77,17 @@ Scope: only `clients/github/`. Do NOT touch other client crates.
       "CLI as transport" design.** Revisit if the project drops the
       `gh` CLI requirement.
 
-- [~] **C.2** **Deferred — cross-crate trait surgery.** Trait fan-out
-      across 5 `poly_client` traits where 3 are nearly all-`NotSupported`
-      is real (see `impl_moderation.rs`, `impl_social_graph.rs`,
-      `impl_dms_and_groups.rs`) but the fix lives in
-      `clients/client/` (the `poly_client` trait definitions) and would
-      require touching every backend crate (matrix, discord, teams,
-      stoat, …) to migrate to per-capability
-      `as_moderation() -> Option<&dyn ModerationBackend>` etc.
-      That's a workspace-wide refactor, outside the scope of a single-
-      crate audit. The github-side `NotSupported` returns are already
-      deduplicated into 7 `NS_NO_*` consts (A.2) so the cost of
-      keeping the wide trait is small. Tracked as a workspace concern
-      for a future "interface segregation" plan.
+- [~] **C.2** Partial — `send_message` migrated via
+      `plan-trait-split-readable-vs-writable.md` Phase D.8. The
+      per-channel-kind routing (issue threads writable; forum indexes
+      / discussions / code channels NotSupported) moved into a
+      dedicated `impl_writable_messaging.rs` implementing
+      `WritableMessagingBackend`; `IsBackend::send_message` is gone
+      from `impl_is_backend.rs` and the parent shim consults
+      `as_writable_messaging()`. Remaining all-`NotSupported`
+      `impl_moderation.rs` / `impl_social_graph.rs` /
+      `impl_dms_and_groups.rs` surfaces stay queued as Tier 2 on the
+      same plan.
 
 - [x] **C.3** `mapping.rs` test fixtures split into sibling
       `mapping_tests.rs` (commit on worktree-agent branch). Production

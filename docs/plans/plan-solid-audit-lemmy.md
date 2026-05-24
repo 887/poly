@@ -126,21 +126,17 @@ Small, low-risk cleanups landed during the audit pass itself.
       (`get_client_version`, `set_client_version_override`,
       `get_client_mechanisms`, `set_client_mechanism` — mirroring the
       native impl, persisting state via `host_api::storage_*`).
-- [~] **C.2** Trait-fan-out in `lib.rs`. `LemmyClient` implements 8
-      poly_client traits — half return `NotSupported` (`SocialGraphBackend`
-      14 methods, all err; `DmsAndGroupsBackend` 12 methods, all err).
-      Interface Segregation: the host should request only the traits a
-      backend actually implements via `as_social_graph() -> Option<&dyn _>`
-      (already exists for some) consistently — and Lemmy should return
-      `None` for unsupported capabilities rather than impl-then-err.
-      Plan-level: requires a sweep of `poly_client` trait surface.
-      — **DEFERRED** (out of scope). The fix necessarily touches
-      `crates/client/src/` (trait declarations + `as_*` plumbing) and
-      every other client crate that currently impls the offending
-      traits unconditionally (matrix, discord, teams, stoat, …). The
-      "edit only clients/lemmy/" scope discipline for this work order
-      prohibits that. Track as its own cross-crate refactor plan
-      (`plan-trait-segregation-sweep.md` — to be authored).
+- [~] **C.2** Trait-fan-out — `send_message` partially migrated via
+      `plan-trait-split-readable-vs-writable.md` Phase D.7. Lemmy now
+      implements `WritableMessagingBackend` (the comment-write surface)
+      and exposes it via `as_writable_messaging()`. The
+      `IsBackend::send_message` body moved to a sibling
+      `WritableMessagingBackend` impl in `messaging.rs`. Remaining
+      large-surface fan-out (the all-`NotSupported`
+      `SocialGraphBackend` / `DmsAndGroupsBackend` write methods)
+      stays queued as Tier 2 follow-up on the same
+      `plan-trait-split-readable-vs-writable.md` (writable social
+      graph + writable DMs sub-traits).
 - [~] **C.3** `api.rs` HTTP layer holds raw `serde_json::Value`-shaped
       response types alongside typed `LemmyPost`. Open/Closed violation:
       adding a new endpoint requires editing the central

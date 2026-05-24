@@ -71,3 +71,22 @@ impl poly_client::MessagingBackend for DiscordClient {
         Ok(Vec::new())
     }
 }
+
+// ── WritableMessagingBackend (plan-trait-split-readable-vs-writable) ─────────
+
+#[cfg(feature = "native")]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::WritableMessagingBackend for DiscordClient {
+    async fn send_message(&self, channel_id: &str, content: MessageContent) -> ClientResult<Message> {
+        // D.5 — slow-mode guard.  `rate_limit_per_user` of 0 means no restriction.
+        // We record the send unconditionally; the guard only blocks when a window is set.
+        self.slow_mode_guard.record_send(channel_id);
+        let text = match content {
+            MessageContent::Text(t) => t,
+            MessageContent::WithAttachments { text, .. } => text,
+        };
+        let m = self.http.send_message(channel_id, &text).await?;
+        Ok(self.discord_message_to_poly(m))
+    }
+}

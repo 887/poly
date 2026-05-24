@@ -72,3 +72,29 @@ impl poly_client::MessagingBackend for LemmyClient {
         Ok(Vec::new())
     }
 }
+
+// ── WritableMessagingBackend (plan-trait-split-readable-vs-writable) ─────────
+
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::WritableMessagingBackend for LemmyClient {
+    async fn send_message(
+        &self,
+        channel_id: &str,
+        content: MessageContent,
+    ) -> ClientResult<Message> {
+        let text = match content {
+            MessageContent::Text(t) => t,
+            MessageContent::WithAttachments { text, .. } => text,
+        };
+
+        if let Some(post_id) = Self::parse_post_channel(channel_id) {
+            let view = self.http.create_comment(post_id, &text, None).await?;
+            return Ok(map_comment_to_message(&view));
+        }
+
+        Err(ClientError::NotSupported(
+            "send_message: channel must be a lemmy-post-{id} thread channel".to_string(),
+        ))
+    }
+}

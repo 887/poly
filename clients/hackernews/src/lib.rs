@@ -244,23 +244,10 @@ impl IsBackend for HackerNewsClient {
 
     // --- Messages ---
 
-    async fn send_message(
-        &self,
-        channel_id: &str,
-        content: MessageContent,
-    ) -> ClientResult<Message> {
-        let session = require_write_session(self.session.as_ref())?;
-        let parent_id = require_post_channel(channel_id)?;
-        let text = require_text_content(content)?;
+    // ── Writable messaging (plan-trait-split-readable-vs-writable) ──────────
 
-        let http = self.api.http_client();
-        let ua = self.api.ua();
-        let cookie = &session.token;
-
-        let hmac = auth::fetch_reply_hmac(http, &ua, parent_id, cookie).await?;
-        auth::post_comment(http, &ua, parent_id, &text, cookie, &hmac).await?;
-
-        Ok(build_pending_message(session, text))
+    fn as_writable_messaging(&self) -> Option<&dyn poly_client::WritableMessagingBackend> {
+        Some(self)
     }
 
     async fn get_messages(
@@ -541,5 +528,31 @@ fn build_pending_message(session: &Session, text: String) -> Message {
         edited: false,
         thread: None,
         preview_image_url: None,
+    }
+}
+
+// ── WritableMessagingBackend (plan-trait-split-readable-vs-writable) ─────────
+
+#[cfg(feature = "native")]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::WritableMessagingBackend for HackerNewsClient {
+    async fn send_message(
+        &self,
+        channel_id: &str,
+        content: MessageContent,
+    ) -> ClientResult<Message> {
+        let session = require_write_session(self.session.as_ref())?;
+        let parent_id = require_post_channel(channel_id)?;
+        let text = require_text_content(content)?;
+
+        let http = self.api.http_client();
+        let ua = self.api.ua();
+        let cookie = &session.token;
+
+        let hmac = auth::fetch_reply_hmac(http, &ua, parent_id, cookie).await?;
+        auth::post_comment(http, &ua, parent_id, &text, cookie, &hmac).await?;
+
+        Ok(build_pending_message(session, text))
     }
 }

@@ -194,6 +194,12 @@ impl IsBackend for DiscordClient {
         Some(self)
     }
 
+    // ── Writable messaging (plan-trait-split-readable-vs-writable) ──────────
+
+    fn as_writable_messaging(&self) -> Option<&dyn poly_client::WritableMessagingBackend> {
+        Some(self)
+    }
+
     // ── C.1 — moved to sub-traits at the bottom of this file ────────────────
 
     fn as_voice_transport(&self) -> Option<&dyn poly_client::VoiceTransportBackend> {
@@ -210,18 +216,6 @@ impl IsBackend for DiscordClient {
 
     fn as_context_action(&self) -> Option<&dyn poly_client::ContextActionBackend> {
         Some(self)
-    }
-
-    async fn send_message(&self, channel_id: &str, content: MessageContent) -> ClientResult<Message> {
-        // D.5 — slow-mode guard.  `rate_limit_per_user` of 0 means no restriction.
-        // We record the send unconditionally; the guard only blocks when a window is set.
-        self.slow_mode_guard.record_send(channel_id);
-        let text = match content {
-            MessageContent::Text(t) => t,
-            MessageContent::WithAttachments { text, .. } => text,
-        };
-        let m = self.http.send_message(channel_id, &text).await?;
-        Ok(self.discord_message_to_poly(m))
     }
 
     async fn get_messages(&self, channel_id: &str, query: MessageQuery) -> ClientResult<Vec<Message>> {

@@ -38,6 +38,7 @@ mod impl_moderation;
 mod impl_settings;
 mod impl_social_graph;
 mod impl_view_descriptor;
+mod impl_writable_messaging;
 mod mapping;
 #[cfg(test)]
 mod mapping_tests;

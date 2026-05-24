@@ -248,18 +248,10 @@ impl IsBackend for TeamsClient {
             .ok_or_else(|| ClientError::NotFound(format!("Channel {id}")))
     }
 
-    async fn send_message(&self, channel_id: &str, content: MessageContent) -> ClientResult<Message> {
-        let text = match content {
-            MessageContent::Text(t) => t,
-            MessageContent::WithAttachments { text, .. } => text,
-        };
-        // Channel IDs are "team_id/channel_id"; chat IDs have no slash.
-        let m = if let Some((team_id, ch_id)) = channel_id.split_once('/') {
-            self.http.send_channel_message(team_id, ch_id, &text).await?
-        } else {
-            self.http.send_chat_message(channel_id, &text).await?
-        };
-        Ok(self.graph_message_to_poly(m))
+    // ── Writable messaging (plan-trait-split-readable-vs-writable) ──────────
+
+    fn as_writable_messaging(&self) -> Option<&dyn poly_client::WritableMessagingBackend> {
+        Some(self)
     }
 
     async fn get_messages(&self, channel_id: &str, query: MessageQuery) -> ClientResult<Vec<Message>> {
@@ -426,5 +418,26 @@ impl IsBackend for TeamsClient {
         }
         self.http.set_user_agent(new_ua);
         Ok(())
+    }
+}
+
+// ── WritableMessagingBackend (plan-trait-split-readable-vs-writable) ─────────
+
+#[cfg(feature = "native")]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::WritableMessagingBackend for TeamsClient {
+    async fn send_message(&self, channel_id: &str, content: MessageContent) -> ClientResult<Message> {
+        let text = match content {
+            MessageContent::Text(t) => t,
+            MessageContent::WithAttachments { text, .. } => text,
+        };
+        // Channel IDs are "team_id/channel_id"; chat IDs have no slash.
+        let m = if let Some((team_id, ch_id)) = channel_id.split_once('/') {
+            self.http.send_channel_message(team_id, ch_id, &text).await?
+        } else {
+            self.http.send_chat_message(channel_id, &text).await?
+        };
+        Ok(self.graph_message_to_poly(m))
     }
 }

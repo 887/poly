@@ -176,14 +176,6 @@ impl<F: DemoFlavour> IsBackend for DemoClientGeneric<F> {
         Err(ClientError::NotFound(format!("Channel {id}")))
     }
 
-    async fn send_message(
-        &self,
-        channel_id: &str,
-        content: MessageContent,
-    ) -> ClientResult<Message> {
-        Ok(F::send_message_for(channel_id, content))
-    }
-
     async fn get_messages(
         &self,
         channel_id: &str,
@@ -195,6 +187,12 @@ impl<F: DemoFlavour> IsBackend for DemoClientGeneric<F> {
     // ── Messaging extras (H.4.a — moved to MessagingBackend) ────────────────
 
     fn as_messaging(&self) -> Option<&dyn poly_client::MessagingBackend> {
+        Some(self)
+    }
+
+    // ── Writable messaging (trait-split — plan-trait-split-readable-vs-writable) ─
+
+    fn as_writable_messaging(&self) -> Option<&dyn poly_client::WritableMessagingBackend> {
         Some(self)
     }
 
@@ -484,6 +482,18 @@ impl<F: DemoFlavour> poly_client::DmsAndGroupsBackend for DemoClientGeneric<F> {
 // ── H.4.a — MessagingBackend ──────────────────────────────────────────────────
 
 #[cfg(feature = "native")]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
+impl<F: DemoFlavour> poly_client::WritableMessagingBackend for DemoClientGeneric<F> {
+    async fn send_message(
+        &self,
+        channel_id: &str,
+        content: MessageContent,
+    ) -> ClientResult<Message> {
+        Ok(F::send_message_for(channel_id, content))
+    }
+}
+
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 impl<F: DemoFlavour> poly_client::MessagingBackend for DemoClientGeneric<F> {

@@ -75,8 +75,9 @@ mod ns {
     pub(super) const SAVED_MSG: &str = "Forgejo has no saved-messages concept";
     pub(super) const GROUP_DM: &str = "Forgejo has no group DMs";
     pub(super) const CONV_MUTE: &str = "Forgejo has no conversation mute";
-    pub(super) const READ_ONLY_SEND: &str =
-        "forgejo backend is read-only — open the instance web UI to comment";
+    // READ_ONLY_SEND removed (plan-trait-split-readable-vs-writable Phase D.11):
+    // forgejo no longer implements `send_message`; the parent shim's
+    // generic `NotSupported("send_message")` suffices.
 }
 
 /// Return FTL translation source for the Forgejo client plugin.

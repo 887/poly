@@ -250,17 +250,15 @@ impl IsBackend for StoatClient {
         channel.into_poly_server_channel(unread_count, mention_count)
     }
 
-    async fn send_message(
-        &self,
-        channel_id: &str,
-        content: MessageContent,
-    ) -> ClientResult<Message> {
-        self.send_message_internal(channel_id, content, None).await
-    }
-
     // ── Messaging extras (H.4.a — moved to MessagingBackend) ────────────────
 
     fn as_messaging(&self) -> Option<&dyn poly_client::MessagingBackend> {
+        Some(self)
+    }
+
+    // ── Writable messaging (plan-trait-split-readable-vs-writable) ──────────
+
+    fn as_writable_messaging(&self) -> Option<&dyn poly_client::WritableMessagingBackend> {
         Some(self)
     }
 
@@ -760,5 +758,19 @@ pub(crate) fn parse_bonfire_event(json: &serde_json::Value) -> Option<ClientEven
         }),
 
         _ => None,
+    }
+}
+
+// ── WritableMessagingBackend (plan-trait-split-readable-vs-writable) ─────────
+
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::WritableMessagingBackend for StoatClient {
+    async fn send_message(
+        &self,
+        channel_id: &str,
+        content: MessageContent,
+    ) -> ClientResult<Message> {
+        self.send_message_internal(channel_id, content, None).await
     }
 }

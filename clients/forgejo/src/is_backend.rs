@@ -115,14 +115,13 @@ impl IsBackend for ForgejoClient {
     }
 
     // --- Messages ---
-
-    async fn send_message(
-        &self,
-        _channel_id: &str,
-        _content: MessageContent,
-    ) -> ClientResult<Message> {
-        Err(ClientError::NotSupported(ns::READ_ONLY_SEND.to_string()))
-    }
+    //
+    // plan-trait-split-readable-vs-writable: Forgejo is read-only; we DROP
+    // the `send_message` stub entirely.  Callers using the legacy
+    // `backend.send_message(...)` form now hit the `IsBackend` default shim
+    // which returns `Err(NotSupported)` because `as_writable_messaging`
+    // returns `None`.  Direct callers using `as_writable_messaging()` will
+    // get `None` and can surface a clearer "read-only backend" message.
 
     async fn get_messages(
         &self,

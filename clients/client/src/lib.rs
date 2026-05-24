@@ -23,6 +23,7 @@ pub mod types;
 pub mod ui_surface;
 pub mod view_descriptor;
 pub mod voice_transport;
+pub mod writable_messaging;
 
 pub use code_repo::CodeRepoBackend;
 pub use content_policy::ContentPolicyBackend;
@@ -41,6 +42,7 @@ pub use types::*;
 pub use ui_surface::*;
 pub use view_descriptor::ViewDescriptorBackend;
 pub use voice_transport::VoiceTransportBackend;
+pub use writable_messaging::WritableMessagingBackend;
 
 use async_trait::async_trait;
 use futures::stream::Stream;
@@ -290,6 +292,19 @@ pub trait IsBackend: Send + Sync {
         None
     }
 
+    /// Returns `Some(self)` if this backend implements
+    /// [`WritableMessagingBackend`] (i.e. accepts outbound
+    /// `send_message` calls on at least some channels).
+    ///
+    /// Default: `None`.  Override in writable backends.  Read-only
+    /// feeds (`poly-forgejo`, future read-only news backends) leave
+    /// this as `None` and `send_message` returns `NotSupported`.
+    ///
+    /// Plan: `plan-trait-split-readable-vs-writable.md` Phase B.2.
+    fn as_writable_messaging(&self) -> Option<&dyn WritableMessagingBackend> {
+        None
+    }
+
     /// Returns `Some(self)` if this backend implements [`ServerAdminBackend`].
     ///
     /// Default: `None`.  Override in backends that support server management
@@ -381,13 +396,23 @@ pub trait IsBackend: Send + Sync {
 
     /// Send a message to a channel.
     ///
-    /// Default: `Err(NotSupported)`.
+    /// Plan-trait-split: this method is now a default-delegating shim
+    /// that consults [`Self::as_writable_messaging`] and forwards to
+    /// [`WritableMessagingBackend::send_message`] when `Some`,
+    /// otherwise returns `Err(NotSupported)`.  Existing call sites
+    /// (`crates/core/`, `mcp/chat-mcp/`) continue to compile through
+    /// this shim; new code should prefer the capability-dispatch form
+    /// `if let Some(wm) = backend.as_writable_messaging() { ... }`
+    /// for clearer error UX.
     async fn send_message(
         &self,
-        _channel_id: &str,
-        _content: MessageContent,
+        channel_id: &str,
+        content: MessageContent,
     ) -> ClientResult<Message> {
-        Err(ClientError::NotSupported("send_message".to_string()))
+        match self.as_writable_messaging() {
+            Some(wm) => wm.send_message(channel_id, content).await,
+            None => Err(ClientError::NotSupported("send_message".to_string())),
+        }
     }
 
     /// Get messages from a channel with query options.

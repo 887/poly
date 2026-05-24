@@ -399,30 +399,15 @@ impl IsBackend for PolyServerBackend {
         Err(ClientError::NotFound(format!("channel {id}")))
     }
 
-    // ── Messages ─────────────────────────────────────────────────────────────
-
-    async fn send_message(
-        &self,
-        channel_id: &str,
-        content: MessageContent,
-    ) -> ClientResult<Message> {
-        let text = match &content {
-            MessageContent::Text(t) => t.clone(),
-            MessageContent::WithAttachments { text, .. } => text.clone(),
-        };
-
-        let msg = self
-            .http
-            .send_message(channel_id, &text, None, None)
-            .await
-            .map_err(|e| ClientError::Network(e.to_string()))?;
-
-        Ok(Self::map_message(&msg, &self.base_url))
-    }
-
     // ── Messaging extras (H.4.a — moved to MessagingBackend) ────────────────
 
     fn as_messaging(&self) -> Option<&dyn poly_client::MessagingBackend> {
+        Some(self)
+    }
+
+    // ── Writable messaging (plan-trait-split-readable-vs-writable) ──────────
+
+    fn as_writable_messaging(&self) -> Option<&dyn poly_client::WritableMessagingBackend> {
         Some(self)
     }
 
@@ -1613,5 +1598,30 @@ impl poly_client::ContextActionBackend for PolyServerBackend {
         _message_id: &str,
     ) -> ClientResult<ActionOutcome> {
         Err(ClientError::NotFound(format!("unknown message action: {action_id}")))
+    }
+}
+
+// ── WritableMessagingBackend (plan-trait-split-readable-vs-writable) ─────────
+
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::WritableMessagingBackend for PolyServerBackend {
+    async fn send_message(
+        &self,
+        channel_id: &str,
+        content: MessageContent,
+    ) -> ClientResult<Message> {
+        let text = match &content {
+            MessageContent::Text(t) => t.clone(),
+            MessageContent::WithAttachments { text, .. } => text.clone(),
+        };
+
+        let msg = self
+            .http
+            .send_message(channel_id, &text, None, None)
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+
+        Ok(Self::map_message(&msg, &self.base_url))
     }
 }

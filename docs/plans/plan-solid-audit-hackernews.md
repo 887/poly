@@ -77,6 +77,11 @@ Scope: only `clients/hackernews/`. Do NOT touch other client crates.
       auth-flow and error-mapping redesigns (the scraper-side errors
       have different recovery semantics than Firebase 4xx/5xx).
       Architectural rewrite — file separate plan-doc.
+      _Note 2026-05-24: orthogonal_ trait-side write isolation
+      (lift `send_message` to `WritableMessagingBackend`) shipped via
+      `plan-trait-split-readable-vs-writable.md` Phase D.9. The
+      api-client split below is still outstanding and is the meatier
+      piece.
 - [~] **C.3** DEFERRED — WASM target: `clients/hackernews` builds for
       WASM but the `scraper`-using auth/post path is native-only via
       feature gate. Same as Reddit C.1 — needs a project-wide decision

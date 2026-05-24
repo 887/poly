@@ -173,33 +173,15 @@ impl IsBackend for MatrixClient {
         })
     }
 
-    async fn send_message(
-        &self,
-        channel_id: &str,
-        content: MessageContent,
-    ) -> ClientResult<Message> {
-        let txn_id = uuid::Uuid::new_v4().to_string();
-        let body = Self::extract_body(&content);
-
-        let send_req = api::SendMessageRequest {
-            msgtype: "m.text".to_string(),
-            body: body.clone(),
-            formatted_body: None,
-            format: None,
-            relates_to: None,
-        };
-
-        let result = self
-            .http
-            .send_message(channel_id, &txn_id, &send_req)
-            .await?;
-
-        self.build_message_from_send(result.event_id, body)
-    }
-
     // ── Messaging extras (H.4.a — moved to MessagingBackend) ────────────────
 
     fn as_messaging(&self) -> Option<&dyn poly_client::MessagingBackend> {
+        Some(self)
+    }
+
+    // ── Writable messaging (plan-trait-split-readable-vs-writable) ──────────
+
+    fn as_writable_messaging(&self) -> Option<&dyn poly_client::WritableMessagingBackend> {
         Some(self)
     }
 
