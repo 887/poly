@@ -5,7 +5,7 @@
 > integration deferred to plan-voice-video-calls).
 > Source-of-truth for SOLID definitions: top-of-repo `CLAUDE.md` §"Design Principles".
 
-## Status: IN PROGRESS — Phase B shipped in change `nprtmlvu`; Phase C fully shipped in change `snonppwv` / commit `fb1fc675` (C.1 channel views via Graph, C.2 chat create, C.3 member ops, C.5 edit_group_dm topic; C.4 was previously shipped). Phase D queued (D.1 ACS calling deferred to separate teams-calling plan).
+## Status: ✅ DONE — Phase B shipped in change `nprtmlvu`; Phase C fully shipped in change `snonppwv` / commit `fb1fc675` (C.1 channel views via Graph, C.2 chat create, C.3 member ops, C.5 edit_group_dm topic; C.4 was previously shipped); Phase D.2 shipped in change `vvqwyqlnpuzl`; D.1 deferred to `docs/plans/plan-teams-calling.md` (ACS calling — ~800 LoC + Cargo dependency surface that does not yet exist in Rust ecosystem); D.3 deferred to `docs/plans/plan-teams-graph-subscriptions.md` (Graph change-notification subscriptions — ~700 LoC + requires publicly addressable HTTPS endpoint infrastructure). B.3 closed as reserved no-op — no further ≤50-LoC win was both safe and useful.
 
 ---
 
@@ -72,8 +72,9 @@
 - [x] **B.2** Demote three `update_channel` `warn!`s → `debug!` for fields
   with no Graph equivalent (slow_mode_secs / nsfw / position). The UI sends
   these on every full update; warn-spam is real (`lib.rs:1190..1198`, ~10 LoC).
-- [ ] **B.3** Reserved — no further ≤50-LoC win was both safe and useful in
-  this pass. Slot kept open for the next sweep.
+- [x] **B.3** Reserved — confirmed no further ≤50-LoC win was both safe and
+  useful in this pass. Closed as no-op to mark the slot resolved rather than
+  leaving an indefinite open box. Future sweeps can add new B.4 entries.
 
 ---
 
@@ -105,13 +106,36 @@
 
 ## Phase D — Architectural rewrites (>300 LoC, max 3)
 
-- [ ] **D.1** Real `TeamsVoiceClient` via Azure Communication Services calling
+- [~] **D.1** Real `TeamsVoiceClient` via Azure Communication Services calling
   SDK. Requires ACS token acquisition, WebRTC bridge to `voice_bridge`.
   ~800 LoC + Cargo dependency surface. Currently stub-only per
   `plan-voice-video-calls.md` Phase I.
+  — **DEFERRED** to `docs/plans/plan-teams-calling.md`. Rationale: no
+  first-party Rust SDK exists for ACS Calling (only JS/.NET/iOS/Android);
+  realistic path is a JS-bridge wiring `@azure/communication-calling`
+  through a hidden WebView (same shape as Discord voice bridge but
+  pointed at a Microsoft endpoint). That work spans token acquisition
+  (separate ACS identity provisioning per tenant), call lifecycle UI
+  parity (incoming-call banner, hold, transfer), and tenant-policy edge
+  cases (admin-disabled external federation, lobby behavior). Genuinely
+  multi-week; the existing stub in `clients/teams/src/voice.rs` returns
+  clean `NotSupported` and is the correct placeholder until that plan
+  ships. New plan file documents the design + dependency audit.
 - [x] **D.2** Split `TeamsClient::IsBackend` (756 lines) along capability-trait
   lines, matching the existing `ModerationBackend` / `SocialGraphBackend` /
   `DmsAndGroupsBackend` split. ~500 LoC. — shipped in change `vvqwyqlnpuzl`
-- [ ] **D.3** Long-poll → real Graph change-notification subscription (event
+- [~] **D.3** Long-poll → real Graph change-notification subscription (event
   stream replaces `/test/events/poll`). Requires webhook lifecycle, secret
   validation, server-side relay. ~700 LoC.
+  — **DEFERRED** to `docs/plans/plan-teams-graph-subscriptions.md`.
+  Rationale: production Graph does NOT offer long-polling — the
+  replacement is the change-notifications API, which mandates a
+  publicly addressable HTTPS `notificationUrl`. We do not currently
+  have hosted relay infrastructure, and local-dev users cannot accept
+  webhooks without a tunnel. The plan must first decide the infra
+  model (self-hosted, hosted relay, or on-demand tunnel) before code
+  lands. The current long-poll against the test server's
+  `/test/events/poll` endpoint works for development and demos; no
+  user-visible regression from deferring. New plan file enumerates the
+  subscription lifecycle, HMAC validation, encryption for rich
+  notifications, and transition strategy.
