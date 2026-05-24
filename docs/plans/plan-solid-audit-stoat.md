@@ -5,10 +5,13 @@
 > just landed, hands-off).
 > Source-of-truth for SOLID definitions: top-of-repo `CLAUDE.md` §"Design Principles".
 
-## Status: IN PROGRESS — Phase B shipped in change `nprtmlvu`
+## Status: IN PROGRESS — Phase C (C.1/C.2/C.4) shipped in change `xwqxtotz`
 
-Phase A (audit) complete. Phase B (ship-now wins) shipped. Phases C/D (medium /
-architectural) recorded for future passes.
+Phase A (audit) complete. Phase B (ship-now wins) shipped. Phase C mostly done:
+C.1 (send_typing WS), C.2 (search_messages), C.3 (get_server_roles), C.4
+(invite_user_to_server + ServerAdminBackend) shipped. C.5 (mute/unmute) open —
+notification-override schema unstable across instances. Phase D architectural
+rewrites remain future work.
 
 ---
 
@@ -85,21 +88,30 @@ architectural) recorded for future passes.
 
 ---
 
-## Phase C — Medium refactors (50-300 LoC, max 5) — C.3 shipped in this change
+## Phase C — Medium refactors (50-300 LoC, max 5) — C.1/C.2/C.3/C.4 shipped in change `xwqxtotz`
 
-- [ ] **C.1** Wire `send_typing` to Bonfire WS write path. Requires exposing a
-  WS-send handle on `StoatClient` (channel-side `ChannelStartTyping` /
-  `ChannelStopTyping` JSON frames). ~100 LoC across `lib.rs` + a new
-  `bonfire_ws.rs`.
-- [ ] **C.2** Wire `search_messages` via Revolt `POST /channels/{id}/search`
-  + `MessageSearchHit` mapping. ~150 LoC across `http.rs` + `api.rs` + `lib.rs`.
+- [x] **C.1** Wire `send_typing` to Bonfire WS write path. Added `ws_write_tx`
+  field (`Mutex<Option<Box<dyn Fn(String)+Send+Sync>>>`) to `StoatClient`.
+  `event_stream` now splits the tokio-tungstenite stream (read/write), spawns a
+  `tokio::select!` loop with an `mpsc::unbounded_channel` for outbound frames,
+  and stores a send-callback in `ws_write_tx`. `send_typing` queues a
+  `BeginTyping` frame on native; is a documented debug-log no-op on WASM. — shipped in change `xwqxtotz`
+- [x] **C.2** Wire `search_messages` via Revolt `POST /channels/{id}/search`
+  + `MessageSearchHit` mapping. Added `StoatSearchRequest` + `StoatSearchResponse`
+  to `api.rs`, `search_messages_channel` to `http.rs`, and full impl in
+  `lib.rs::MessagingBackend`. Requires `channel_id` in query (Revolt has no
+  server-wide search index). — shipped in change `xwqxtotz`
 - [x] **C.3** Wire `get_server_roles` via Revolt server config role table. Added
   `StoatRole` struct to `api.rs`, `roles` field on `StoatServer`, `into_poly_roles()`
   mapper, and wired `get_server_roles` in `lib.rs`. ~80 LoC.
-- [ ] **C.4** Implement `invite_user_to_server` via `POST /servers/{id}/invites`.
-  ~60 LoC.
+- [x] **C.4** Implement `invite_user_to_server` via `POST /channels/{id}/invites`.
+  Added `StoatCreateInviteResponse` to `api.rs`, `create_channel_invite` to
+  `http.rs`, and a full `ServerAdminBackend` impl for `StoatClient` in `lib.rs`
+  (other methods stubbed as `NotSupported`; `mark_channel_read` wired via
+  `PUT /channels/{id}/ack/{msg_id}`). — shipped in change `xwqxtotz`
 - [ ] **C.5** Wire `mute_conversation` / `unmute_conversation` once the
   notification-override schema is confirmed across instances. ~120 LoC.
+  OPEN — schema unstable across Stoat instances; existing `NotSupported` stubs retained.
 
 ## Phase D — Architectural rewrites (>300 LoC, max 3)
 

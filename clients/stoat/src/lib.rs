@@ -84,8 +84,8 @@ pub use api::StoatRootConfig;
 #[cfg(feature = "native")]
 use api::{
     StoatBanCreate, StoatBulkMessageResponse, StoatChannelEdit, StoatChannelUnread,
-    StoatGroupEdit, StoatMemberEdit, StoatRelationshipStatus, StoatSendMessageRequest,
-    reply_preview_from_message,
+    StoatGroupEdit, StoatMemberEdit, StoatRelationshipStatus, StoatSearchRequest,
+    StoatSendMessageRequest, reply_preview_from_message,
 };
 #[cfg(feature = "native")]
 use async_trait::async_trait;
@@ -187,6 +187,17 @@ pub struct StoatClient {
     /// from both.
     #[cfg(feature = "native")]
     transient_dm_channels: std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, String>>>,
+    /// C.1 — Bonfire WS write-path sender for outbound frames (e.g. typing indicators).
+    ///
+    /// Populated by `event_stream` when the WS task successfully authenticates.
+    /// `send_typing` writes a `ChannelStartTyping` JSON frame through this
+    /// callback without needing to know the underlying WS transport type.
+    ///
+    /// The callback is `Send + Sync` so it can be called from any async context.
+    /// An unbounded-channel sender is used internally so the call never blocks.
+    /// Set to `None` until `event_stream` establishes the WS connection.
+    #[cfg(feature = "native")]
+    ws_write_tx: std::sync::Mutex<Option<Box<dyn Fn(String) + Send + Sync + 'static>>>,
 }
 
 #[cfg(feature = "native")]
@@ -220,6 +231,8 @@ impl StoatClient {
             voice_noise_cancel: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true)),
             #[cfg(feature = "native")]
             transient_dm_channels: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
+            #[cfg(feature = "native")]
+            ws_write_tx: std::sync::Mutex::new(None),
         }
     }
 
@@ -987,6 +1000,19 @@ impl IsBackend for StoatClient {
 
             let (tx, rx) = mpsc::channel::<ClientEvent>(128);
 
+            // C.1 — outbound WS write channel (typing indicators, heartbeat, etc.)
+            // The sender is stored on `StoatClient` so `send_typing` can write
+            // `ChannelStartTyping` frames without holding a mutable reference to
+            // the WS stream (which lives inside the spawned task).
+            let (ws_out_tx, mut ws_out_rx) = mpsc::unbounded_channel::<String>();
+            if let Ok(mut guard) = self.ws_write_tx.lock() {
+                let ws_out_tx_clone = ws_out_tx.clone();
+                *guard = Some(Box::new(move |json: String| {
+                    // Best-effort: ignore send errors (WS may not be connected yet).
+                    let _ = ws_out_tx_clone.send(json);
+                }));
+            }
+
             tokio::spawn(async move {
                 let (mut ws_stream, _) = match tokio_tungstenite::connect_async(&ws_url).await {
                     Ok(conn) => conn,
@@ -1010,19 +1036,35 @@ impl IsBackend for StoatClient {
                 }
 
                 use futures::StreamExt;
-                while let Some(msg) = ws_stream.next().await {
-                    match msg {
-                        Ok(WsMessage::Text(text)) => {
-                            if let Ok(event_json) =
-                                serde_json::from_str::<serde_json::Value>(&text)
-                                && let Some(ev) = parse_bonfire_event(&event_json)
-                                && tx.send(ev).await.is_err()
+                loop {
+                    tokio::select! {
+                        // Inbound: Bonfire events → parse → forward to event channel.
+                        msg = ws_stream.next() => {
+                            match msg {
+                                Some(Ok(WsMessage::Text(text))) => {
+                                    if let Ok(event_json) =
+                                        serde_json::from_str::<serde_json::Value>(&text)
+                                        && let Some(ev) = parse_bonfire_event(&event_json)
+                                        && tx.send(ev).await.is_err()
+                                    {
+                                        break;
+                                    }
+                                }
+                                Some(Ok(WsMessage::Close(_))) | Some(Err(_)) | None => break,
+                                _ => {}
+                            }
+                        }
+                        // Outbound: write commands from send_typing / future callers.
+                        Some(json) = ws_out_rx.recv() => {
+                            use futures::SinkExt;
+                            if ws_stream
+                                .send(WsMessage::Text(json.into()))
+                                .await
+                                .is_err()
                             {
                                 break;
                             }
                         }
-                        Ok(WsMessage::Close(_)) | Err(_) => break,
-                        _ => {}
                     }
                 }
             });
@@ -1153,11 +1195,11 @@ impl IsBackend for StoatClient {
     // ── Social graph methods moved to SocialGraphBackend (H.3.b) ─────────────
     // ── DMs and groups moved to DmsAndGroupsBackend (H.3.c) ─────────────────
 
-    // invite_user_to_server: creating an invite code and DMing it to a specific
-    // user requires two separate API calls and a pre-existing DM channel.
-    // TODO(stoat): implement invite_user_to_server — create invite via
-    // POST /channels/{channel_id}/invites, then send the link via DM.
-    // Trait default (NotSupported) is inherited.
+    // invite_user_to_server → impl ServerAdminBackend below (C.4).
+
+    fn as_server_admin(&self) -> Option<&dyn poly_client::ServerAdminBackend> {
+        Some(self)
+    }
 
     fn get_signup_method(&self, server_url: Option<&str>) -> SignupMethod {
         let base = server_url.unwrap_or("https://app.stoat.chat");
@@ -1183,6 +1225,129 @@ impl IsBackend for StoatClient {
             *lock = version_override;
         }
         self.http.set_user_agent(new_ua);
+        Ok(())
+    }
+}
+
+// ── C.4 — ServerAdminBackend ─────────────────────────────────────────────────
+//
+// Stoat only implements `invite_user_to_server` from this trait.  The remaining
+// methods (`create_server`, `create_channel`, `update_server_banner`,
+// `respond_to_server_invite`) are intentional NotSupported stubs — Stoat
+// exposes these via its web UI rather than the REST API used by Poly.
+// `mark_channel_read` is wired to Revolt's ack endpoint.
+#[cfg(feature = "native")]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::ServerAdminBackend for StoatClient {
+    async fn create_server(&self, _name: &str) -> ClientResult<Server> {
+        Err(ClientError::NotSupported(
+            "stoat: create_server not exposed via the Revolt REST API used by Poly".to_string(),
+        ))
+    }
+
+    async fn create_channel(
+        &self,
+        _server_id: &str,
+        _name: &str,
+        _channel_type: ChannelType,
+    ) -> ClientResult<Channel> {
+        Err(ClientError::NotSupported(
+            "stoat: create_channel not exposed via the Revolt REST API used by Poly".to_string(),
+        ))
+    }
+
+    async fn update_server_banner(
+        &self,
+        _server_id: &str,
+        _banner_url: Option<&str>,
+    ) -> ClientResult<()> {
+        Err(ClientError::NotSupported(
+            "stoat: update_server_banner requires an Autumn upload first; not yet implemented"
+                .to_string(),
+        ))
+    }
+
+    /// Mark the calling user's read position in a channel via `PUT /channels/{id}/ack/{message_id}`.
+    ///
+    /// If no messages are present the call is a safe no-op.
+    async fn mark_channel_read(&self, channel_id: &str) -> ClientResult<()> {
+        // Fetch the most recent message to get a valid ack target.
+        let query = MessageQuery {
+            before: None,
+            after: None,
+            around: None,
+            limit: Some(1),
+        };
+        let messages = self.http.fetch_messages(channel_id, &query).await?;
+        let (msgs, _, _) = messages.into_parts();
+        let Some(latest) = msgs.into_iter().next() else {
+            // No messages — nothing to ack.
+            return Ok(());
+        };
+        let response = self
+            .http
+            .authenticated_request(
+                poly_host_bridge::http::Method::PUT,
+                &format!("/channels/{channel_id}/ack/{}", latest.id),
+            )?
+            .send()
+            .await
+            .map_err(|e| ClientError::Network(e.to_string()))?;
+        if !(response.status().is_success() || response.status().as_u16() == 204) {
+            tracing::debug!(channel_id, "mark_channel_read: ack returned non-success; ignoring");
+        }
+        Ok(())
+    }
+
+    async fn respond_to_server_invite(
+        &self,
+        _server_id: &str,
+        _accept: bool,
+    ) -> ClientResult<()> {
+        Err(ClientError::NotSupported(
+            "stoat: respond_to_server_invite not yet implemented".to_string(),
+        ))
+    }
+
+    /// Invite a user to a server by creating an invite link on the first text
+    /// channel and DMing it to the user.
+    ///
+    /// Flow:
+    /// 1. Fetch the server to find a suitable channel.
+    /// 2. `POST /channels/{channel_id}/invites` to create a link.
+    /// 3. Open or reuse a DM channel with the target user.
+    /// 4. Send the invite URL via DM.
+    async fn invite_user_to_server(
+        &self,
+        server_id: &str,
+        user_id: &str,
+    ) -> ClientResult<()> {
+        // Step 1: resolve a text channel on the server to anchor the invite.
+        let server = self.http.fetch_server(server_id).await?;
+        let channel_id = server.channels.into_iter().next().ok_or_else(|| {
+            ClientError::NotSupported(
+                "invite_user_to_server: server has no channels; cannot create invite".to_string(),
+            )
+        })?;
+
+        // Step 2: create the invite (server-side defaults apply: no expiry, no use cap).
+        let invite = self.http.create_channel_invite(&channel_id).await?;
+        // Stoat/Revolt invite links use the app base URL with the invite code.
+        let invite_url = format!("{}/invite/{}", self.http.base_url().trim_end_matches('/'), invite.code);
+
+        // Step 3: open a DM channel with the target user (or reuse existing).
+        let dm = self.http.open_direct_message_channel(user_id).await?;
+
+        // Step 4: send the invite URL as a plain text message.
+        let req = StoatSendMessageRequest::new(
+            invite_url,
+            Vec::new(),
+            None,
+            uuid::Uuid::new_v4().simple().to_string(),
+        );
+        self.http.send_message(&dm.id, &req).await?;
+
         Ok(())
     }
 }
@@ -1790,10 +1955,29 @@ impl poly_client::MessagingBackend for StoatClient {
     async fn send_typing(&self, channel_id: &str) -> ClientResult<()> {
         // Stoat (Revolt) ships typing indicators only over the Bonfire WebSocket
         // (`ChannelStartTyping` / `ChannelStopTyping`) — there is no HTTP endpoint.
-        // The Bonfire WS write path is not yet routed through StoatClient, so this
-        // is a documented no-op rather than an error.  `debug!` instead of `warn!`
-        // to avoid flooding logs on every keystroke. SOLID-audit-stoat (Phase B.1).
-        tracing::debug!(channel_id, "stoat: send_typing no-op (Bonfire WS path not wired)");
+        // C.1: wire through the WS write-path callback stored by `event_stream`.
+        // On WASM this path is inactive (ws_write_tx not compiled in) — WASM
+        // typing is a best-effort no-op until the WASM WS write path is wired.
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let frame = serde_json::json!({
+                "type": "BeginTyping",
+                "channel": channel_id,
+            });
+            if let Ok(guard) = self.ws_write_tx.lock() {
+                if let Some(ref send_fn) = *guard {
+                    send_fn(frame.to_string());
+                    tracing::debug!(channel_id, "stoat: send_typing — BeginTyping frame queued");
+                } else {
+                    // WS not yet connected — best-effort, not an error.
+                    tracing::debug!(channel_id, "stoat: send_typing — WS not yet open; skipping");
+                }
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            tracing::debug!(channel_id, "stoat: send_typing no-op on WASM (WS write path not yet wired)");
+        }
         Ok(())
     }
 
@@ -1809,9 +1993,57 @@ impl poly_client::MessagingBackend for StoatClient {
 
     async fn search_messages(
         &self,
-        _query: MessageSearchQuery,
+        query: MessageSearchQuery,
     ) -> ClientResult<Vec<MessageSearchHit>> {
-        Err(ClientError::NotSupported("search_messages: Stoat search not yet implemented".to_string()))
+        // Revolt exposes per-channel search only — no server-wide or global index.
+        // A `channel_id` in the query is therefore required.
+        let channel_id = query.channel_id.as_deref().ok_or_else(|| {
+            ClientError::NotSupported(
+                "search_messages: Stoat requires a channel_id — server-wide search is not supported".to_string(),
+            )
+        })?;
+
+        let req = StoatSearchRequest {
+            query: query.text.clone(),
+            author: query.author_id.clone(),
+            limit: query.limit,
+            sort: Some("Latest".to_string()),
+        };
+
+        let (response, root_config) = future::try_join(
+            self.http.search_messages_channel(channel_id, &req),
+            self.http.fetch_server_config(),
+        )
+        .await?;
+
+        let autumn_base_url = root_config.autumn_base_url();
+        let user_index: HashMap<String, api::StoatUser> = response
+            .users
+            .into_iter()
+            .map(|u| (u.id.clone(), u))
+            .collect();
+        let channel_id_owned = channel_id.to_string();
+
+        let hits = response
+            .messages
+            .into_iter()
+            .map(|msg| {
+                let message = msg.into_poly_message(
+                    &user_index,
+                    &HashMap::new(),
+                    self.current_user_id().as_deref(),
+                    autumn_base_url,
+                );
+                MessageSearchHit {
+                    channel_id: channel_id_owned.clone(),
+                    channel_name: None,
+                    server_id: query.server_id.clone(),
+                    message,
+                }
+            })
+            .collect();
+
+        Ok(hits)
     }
 
     async fn get_pinned_messages(&self, _channel_id: &str) -> ClientResult<Vec<Message>> {

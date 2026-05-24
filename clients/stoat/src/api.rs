@@ -858,6 +858,57 @@ pub struct StoatMessageWebhook {
     pub avatar: Option<StoatFile>,
 }
 
+/// Search request payload for `POST /channels/{channel_id}/search`.
+///
+/// Revolt exposes per-channel message search with optional author and a
+/// maximum-result cap.  The `query` field is the free-text term.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct StoatSearchRequest {
+    /// Free-text search query.
+    pub query: String,
+    /// Restrict results to a specific author user ID.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub author: Option<String>,
+    /// Maximum number of results (1-100, default 50 on server side).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u32>,
+    /// Sort order — `"Latest"` (default) or `"Oldest"`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sort: Option<String>,
+}
+
+/// Response shape for `POST /channels/{channel_id}/search`.
+///
+/// Revolt returns an expanded envelope mirroring the bulk-fetch shape.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct StoatSearchResponse {
+    /// Matching messages.
+    pub messages: Vec<StoatMessage>,
+    /// Bundled user objects for rapid avatar/display-name resolution.
+    #[serde(default)]
+    pub users: Vec<StoatUser>,
+}
+
+/// Invite creation response from `POST /channels/{channel_id}/invites`.
+///
+/// Only the invite code is needed to form a sharable link; remaining fields
+/// are informational.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct StoatCreateInviteResponse {
+    /// Invite type tag (e.g. `"Server"`).
+    #[serde(rename = "type")]
+    pub kind: Option<String>,
+    /// The generated invite code used to build the join URL.
+    #[serde(rename = "_id")]
+    pub code: String,
+    /// Server ID the invite grants access to.
+    #[serde(default)]
+    pub server: Option<String>,
+    /// Channel ID the invite links to.
+    #[serde(default)]
+    pub channel: Option<String>,
+}
+
 impl StoatUser {
     /// Convert the Stoat user model into Poly's backend-agnostic user shape.
     #[must_use]

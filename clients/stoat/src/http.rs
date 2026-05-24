@@ -930,6 +930,59 @@ impl StoatHttpClient {
         Ok(())
     }
 
+    /// Search messages in a channel (`POST /channels/{channel_id}/search`).
+    ///
+    /// Returns an expanded response containing matching messages and bundled
+    /// user records for display-name / avatar resolution without a follow-up
+    /// round-trip.  Revolt caps results at 100 per request.
+    pub async fn search_messages_channel(
+        &self,
+        channel_id: &str,
+        req: &crate::api::StoatSearchRequest,
+    ) -> ClientResult<crate::api::StoatSearchResponse> {
+        let response = self
+            .authenticated_request(
+                Method::POST,
+                &format!("/channels/{channel_id}/search"),
+            )?
+            .json(req)
+            .send()
+            .await
+            .map_err(|e| Self::network_error(&e))?;
+
+        if !response.status().is_success() {
+            return Err(Self::parse_error(response).await);
+        }
+
+        response.json().await.map_err(|e| Self::network_error(&e))
+    }
+
+    /// Create a server invite via the first available channel
+    /// (`POST /channels/{channel_id}/invites`).
+    ///
+    /// Revolt's invite model is channel-scoped (not server-scoped), so the
+    /// caller must resolve a suitable channel ID first.
+    pub async fn create_channel_invite(
+        &self,
+        channel_id: &str,
+    ) -> ClientResult<crate::api::StoatCreateInviteResponse> {
+        let response = self
+            .authenticated_request(
+                Method::POST,
+                &format!("/channels/{channel_id}/invites"),
+            )?
+            .json(&serde_json::json!({}))
+            .send()
+            .await
+            .map_err(|e| Self::network_error(&e))?;
+
+        if !response.status().is_success() {
+            return Err(Self::parse_error(response).await);
+        }
+
+        response.json().await.map_err(|e| Self::network_error(&e))
+    }
+
     async fn fetch_self_with_token(&self, token: &str) -> ClientResult<StoatUser> {
         let response = self
             .request(Method::GET, "/users/@me")
