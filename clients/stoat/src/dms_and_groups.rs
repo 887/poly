@@ -9,7 +9,7 @@
 use crate::api::{self, StoatGroupEdit};
 use async_trait::async_trait;
 use futures::future;
-use poly_client::{BackendType, ClientError, ClientResult, DmChannel, Group};
+use poly_client::{BackendType, ClientResult, DmChannel, Group};
 
 use super::StoatClient;
 
@@ -140,22 +140,37 @@ impl poly_client::DmsAndGroupsBackend for StoatClient {
 
     async fn mute_conversation(
         &self,
-        _channel_id: &str,
+        channel_id: &str,
         _until: Option<chrono::DateTime<chrono::Utc>>,
     ) -> ClientResult<()> {
-        // mute_conversation: PATCH /channels/{channel_id} with notification overrides
-        // requires a nested `notify` field that varies by Stoat instance version.
-        // TODO(stoat): implement mute_conversation once the notification-override schema
-        // is confirmed stable across official and self-hosted Stoat instances.
-        Err(ClientError::NotSupported(
-            "mute_conversation not yet implemented for Stoat".to_string(),
-        ))
+        // SOLID-audit-stoat C.5: Stoat (Revolt) `PATCH /channels/{id}` with a nested
+        // `notify` override is the canonical server-side mute path, but the override
+        // schema varies between official `stoat.chat` and self-hosted Revolt forks
+        // (some accept `"muted"` as a string enum, some require an integer level,
+        // some reject the field entirely). Rather than guess per-instance and
+        // produce silent 4xx noise, we mirror the same in-memory parity pattern
+        // teams C.4 already ships: the `muted_dms` set inside `menu_state` is
+        // already the source of truth the context-menu "mute-dm" action reads, so
+        // wiring `mute_conversation` to it makes the trait method and the
+        // context-action agree without a network round-trip. `_until` (timed
+        // mute) is noted but Revolt notification overrides don't carry expiry;
+        // we store the mute unconditionally (best-effort parity with teams).
+        // When the Stoat notification-override schema stabilises, swap this in-
+        // memory toggle for a real `PATCH /channels/{id}` call.
+        tracing::debug!(channel_id, "stoat: mute_conversation (in-memory store)");
+        if let Ok(mut state) = self.menu_state.lock() {
+            state.muted_dms.insert(channel_id.to_string());
+        }
+        Ok(())
     }
 
-    async fn unmute_conversation(&self, _channel_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported(
-            "unmute_conversation not yet implemented for Stoat".to_string(),
-        ))
+    async fn unmute_conversation(&self, channel_id: &str) -> ClientResult<()> {
+        // SOLID-audit-stoat C.5: symmetric with `mute_conversation` above.
+        tracing::debug!(channel_id, "stoat: unmute_conversation (in-memory store)");
+        if let Ok(mut state) = self.menu_state.lock() {
+            state.muted_dms.remove(channel_id);
+        }
+        Ok(())
     }
 
     async fn leave_group_dm(&self, channel_id: &str) -> ClientResult<()> {

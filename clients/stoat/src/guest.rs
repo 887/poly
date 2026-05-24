@@ -610,8 +610,37 @@ impl Guest for StoatPlugin {
         Ok(())
     }
 
-    fn handle_ws_data(_handle: u64, _data: Vec<u8>) {
-        // TODO(3.1.5): Parse Bonfire WebSocket events, call emit-event
+    fn handle_ws_data(_handle: u64, data: Vec<u8>) {
+        // SOLID-audit-stoat D.1 — Bonfire WebSocket event parser for the WIT
+        // guest. Mirrors the native parser in `is_backend.rs::parse_bonfire_event`
+        // (same event variants, same field shapes) but maps into `wit::ClientEvent`
+        // instead of `poly_client::ClientEvent` and pushes each event back to the
+        // host through `host_api::emit_event`. Bonfire frames are JSON text; we
+        // accept either single-event payloads or arrays (the test-stoat mock
+        // sometimes batches events for replay scenarios).
+        let Ok(text) = std::str::from_utf8(&data) else {
+            host_api::log(
+                wit::LogLevel::Warn,
+                "stoat handle_ws_data: payload is not valid UTF-8",
+            );
+            return;
+        };
+        let Ok(json) = serde_json::from_str::<serde_json::Value>(text) else {
+            host_api::log(
+                wit::LogLevel::Warn,
+                "stoat handle_ws_data: payload is not valid JSON",
+            );
+            return;
+        };
+        if let Some(arr) = json.as_array() {
+            for ev in arr {
+                if let Some(client_event) = bonfire_event_to_wit(ev) {
+                    host_api::emit_event(&client_event);
+                }
+            }
+        } else if let Some(client_event) = bonfire_event_to_wit(&json) {
+            host_api::emit_event(&client_event);
+        }
     }
 
     fn get_backend_type() -> String {
@@ -1106,6 +1135,119 @@ impl ClientComposerGuest for StoatPlugin {
         _message_id: String,
     ) -> Result<ActionOutcome, wit::ClientError> {
         Err(wit::ClientError::NotFound(action_id))
+    }
+}
+
+// ─── Bonfire WebSocket event parser ─────────────────────────────────
+//
+// SOLID-audit-stoat D.1 — WIT-guest counterpart to the native
+// `is_backend.rs::parse_bonfire_event`. The native parser maps Bonfire JSON
+// into `poly_client::ClientEvent`; this one maps the same shapes into
+// `wit::ClientEvent` so the WASM plugin can call `host_api::emit_event` and
+// reach the host's event_stream consumers. Variant coverage is intentionally
+// identical to the native parser — keep them in sync when adding new Bonfire
+// frame types (e.g. `MessageUpdate`, `MessageDelete` once Stoat ships them
+// reliably across instances).
+
+fn bonfire_event_to_wit(json: &serde_json::Value) -> Option<wit::ClientEvent> {
+    let ty = json.get("type")?.as_str()?;
+    match ty {
+        "Message" => {
+            let channel_id = json.get("channel")?.as_str()?.to_string();
+            let msg_json = json.get("message")?;
+            let id = msg_json.get("_id")?.as_str()?.to_string();
+            let content = msg_json.get("content")?.as_str()?.to_string();
+            let author_id = msg_json.get("author")?.as_str()?.to_string();
+            // Bonfire `Message` frames don't carry the author's display name or
+            // avatar inline; the UI resolves these from the channel member
+            // cache. Match the native parser's choice to ship empty strings
+            // here rather than block on an extra `/users/{id}` round-trip.
+            let author = wit::User {
+                id: author_id,
+                display_name: String::new(),
+                avatar_url: None,
+                presence: wit::PresenceStatus::Online,
+                backend: "stoat".to_string(),
+            };
+            let message = wit::Message {
+                id,
+                author,
+                content: wit::MessageContent::Text(content),
+                // host-api uses RFC3339 strings; `get-current-time` is the
+                // host's monotonic clock — wall-clock now is a best-effort
+                // stand-in matching native parser semantics.
+                timestamp: host_api::get_current_time(),
+                attachments: vec![],
+                reactions: vec![],
+                reply_to: None,
+                edited: false,
+                thread: None,
+            };
+            Some(wit::ClientEvent::MessageReceived(
+                wit::MessageReceivedEvent { channel_id, message },
+            ))
+        }
+        "ChannelStartTyping" => {
+            let channel_id = json.get("id")?.as_str()?.to_string();
+            let user_id = json.get("user")?.as_str()?.to_string();
+            Some(wit::ClientEvent::TypingStarted(wit::TypingStartedEvent {
+                channel_id,
+                user_id,
+                timestamp: host_api::get_current_time(),
+            }))
+        }
+        // F.6 — Bonfire voice events (emitted by test-stoat mock; piggy-back on
+        // the Bonfire WS instead of needing a separate Vortex subscription).
+        "VoiceUserJoined" => {
+            let channel_id = json.get("channel_id")?.as_str()?.to_string();
+            let user_id = json.get("user_id")?.as_str()?.to_string();
+            let display_name = json
+                .get("display_name")
+                .and_then(|v| v.as_str())
+                .unwrap_or(&user_id)
+                .to_string();
+            let avatar_url = json
+                .get("avatar_url")
+                .and_then(|v| v.as_str())
+                .map(str::to_string);
+            let participant = wit::VoiceParticipant {
+                user: wit::User {
+                    id: user_id,
+                    display_name,
+                    avatar_url,
+                    presence: wit::PresenceStatus::Online,
+                    backend: "stoat".to_string(),
+                },
+                is_muted: json
+                    .get("is_muted")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false),
+                is_deafened: false,
+                is_streaming: false,
+                is_video_on: false,
+                is_speaking: false,
+            };
+            Some(wit::ClientEvent::VoiceUserJoined(wit::VoiceChannelEvent {
+                channel_id,
+                participant,
+            }))
+        }
+        "VoiceUserLeft" => {
+            let channel_id = json.get("channel_id")?.as_str()?.to_string();
+            let user_id = json.get("user_id")?.as_str()?.to_string();
+            Some(wit::ClientEvent::VoiceUserLeft(wit::VoiceUserLeftEvent {
+                channel_id,
+                user_id,
+            }))
+        }
+        // Bonfire's first message after token-validation success.
+        "Authenticated" => Some(wit::ClientEvent::ConnectionStateChanged(
+            wit::ConnectionStateChangedEvent {
+                backend: "stoat".to_string(),
+                connected: true,
+            },
+        )),
+        _ => None,
     }
 }
 

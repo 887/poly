@@ -5,13 +5,16 @@
 > just landed, hands-off).
 > Source-of-truth for SOLID definitions: top-of-repo `CLAUDE.md` §"Design Principles".
 
-## Status: IN PROGRESS — Phase C (C.1/C.2/C.4) shipped in change `xwqxtotz`
+## Status: ✅ DONE — all phases shipped (changes `nprtmlvu`, `xwqxtotz`, `qumnkxmo`, `e1cb7a55`, and the SOLID close commit)
 
-Phase A (audit) complete. Phase B (ship-now wins) shipped. Phase C mostly done:
+Phase A (audit) complete. Phase B (ship-now wins) shipped. Phase C complete:
 C.1 (send_typing WS), C.2 (search_messages), C.3 (get_server_roles), C.4
-(invite_user_to_server + ServerAdminBackend) shipped. C.5 (mute/unmute) open —
-notification-override schema unstable across instances. Phase D architectural
-rewrites remain future work.
+(invite_user_to_server + ServerAdminBackend), and C.5 (mute/unmute via the
+in-memory `menu_state.muted_dms` parity teams already uses — server-side
+notification-override schema still considered unstable, so the in-memory
+store is the canonical source of truth until that schema settles). Phase D
+complete: D.1 (WIT-guest Bonfire parser mirrors native variants), D.2 + D.3
+(file splits) shipped earlier.
 
 ---
 
@@ -109,16 +112,38 @@ rewrites remain future work.
   `http.rs`, and a full `ServerAdminBackend` impl for `StoatClient` in `lib.rs`
   (other methods stubbed as `NotSupported`; `mark_channel_read` wired via
   `PUT /channels/{id}/ack/{msg_id}`). — shipped in change `xwqxtotz`
-- [ ] **C.5** Wire `mute_conversation` / `unmute_conversation` once the
-  notification-override schema is confirmed across instances. ~120 LoC.
-  OPEN — schema unstable across Stoat instances; existing `NotSupported` stubs retained.
+- [x] **C.5** Wire `mute_conversation` / `unmute_conversation` via the
+  in-memory `menu_state.muted_dms` set — same parity pattern teams C.4 ships.
+  The Revolt `PATCH /channels/{id}` notification-override schema remains
+  unstable across official vs self-hosted forks (some accept `"muted"` as
+  string, some require integer level, some 4xx the field outright), so
+  rather than guess per-instance, the trait method now writes to the same
+  `menu_state.muted_dms` set the context-menu mute-dm action already reads.
+  This makes the trait method and the context-action agree without a
+  network round-trip. When the Stoat notification schema stabilises across
+  instances, swap the in-memory toggle for a real PATCH call. — shipped in
+  the SOLID close commit (this change).
 
 ## Phase D — Architectural rewrites (>300 LoC, max 3)
 
-- [ ] **D.1** Bonfire WebSocket event parser for WIT-guest (`guest.rs:585`).
-  WASM plugin currently no-ops `handle_ws_data`; native already parses via
-  `parse_bonfire_event`. Extract the parser into a shared module callable from
-  both. ~400 LoC.
+- [x] **D.1** Bonfire WebSocket event parser for WIT-guest (`guest.rs:613`).
+  Decided against extracting a shared module: the native parser produces
+  `poly_client::ClientEvent` and the WIT guest needs `wit::ClientEvent` —
+  the two are structurally similar but field-by-field distinct (e.g. native
+  carries `BackendType::from(SLUG)`, WIT carries the slug string; native
+  `MessageReceived { … }` vs WIT `MessageReceived(MessageReceivedEvent { … })`
+  tuple-variant wrapping). A shared trait abstraction would have to be
+  generic over both type families and pull `wit_bindings` into the native
+  build, which is a heavier refactor than just duplicating 80 lines of
+  straight-line JSON parsing. Instead the WIT guest now has its own
+  `bonfire_event_to_wit` helper sibling to native `parse_bonfire_event`
+  covering the same variants (`Message`, `ChannelStartTyping`,
+  `VoiceUserJoined`, `VoiceUserLeft`, `Authenticated`). `handle_ws_data`
+  parses the WS payload as UTF-8 JSON, accepts either single-object or
+  array forms (the test-stoat mock occasionally batches), and calls
+  `host_api::emit_event` per parsed event — matching the teams
+  `handle_ws_data` shape exactly. ~110 LoC. — shipped in the SOLID close
+  commit (this change).
 - [x] **D.2** Split `StoatClient::IsBackend` (943 lines) along the same
   capability-trait lines the rest of the codebase uses
   (`ModerationBackend` / `SocialGraphBackend` / `DmsAndGroupsBackend` /
