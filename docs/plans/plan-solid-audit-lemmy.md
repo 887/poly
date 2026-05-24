@@ -14,20 +14,22 @@ Scope: only `clients/lemmy/`. Do NOT touch other client crates.
 
 Small, low-risk cleanups landed during the audit pass itself.
 
-- [ ] **A.1** Drop `// TODO: migrate to` boilerplate from the in-memory
+- [x] **A.1** Drop `// TODO: migrate to` boilerplate from the in-memory
       settings storage doc-comment (`clients/lemmy/src/lib.rs:61`). The
       "Pack C P18" stub note is repeated identically in 4 plugins and
       now obscures live API docs; either reference the parent plan or
-      delete. _≤5 LoC._
-- [ ] **A.2** Tighten `Err(ClientError::NotSupported(...))` strings into
+      delete. _≤5 LoC._ — shipped in change `sqlpzqyv`
+- [x] **A.2** Tighten `Err(ClientError::NotSupported(...))` strings into
       one constant per category (`FRIEND_SYS_UNSUPPORTED`, `GROUP_DM_UNSUPPORTED`)
       at the top of the impl block. `lib.rs` currently re-allocates the
       same string in 12+ sites (`:1427-1568`). Pure dedup, no behaviour
-      change. _≈30 LoC removed._
-- [ ] **A.3** Move the literal selector `"a.title"`-style parser
+      change. _≈30 LoC removed._ — shipped in change `sqlpzqyv`
+      (4 consts: FRIEND_SYS, GROUP_DM, CONVO_MUTE, IGNORE; 13 call sites replaced)
+- [x] **A.3** Move the literal selector `"a.title"`-style parser
       helpers out of `lib.rs::get_messages` handler bodies into top-of-
       file factory `fn`s. (N/A for lemmy — no scraper; placeholder for
       audit symmetry.) **Drop this checkbox if no parser usage exists.**
+      — N/A confirmed: no scraper/parser in lemmy client
 
 ## Phase B — Medium refactors (50-300 LoC, max 5)
 
