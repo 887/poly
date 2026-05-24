@@ -1,12 +1,15 @@
-//! `impl SocialGraphBackend for LemmyClient` — friends/blocks/presence stubs (H.3.b).
+//! `impl SocialGraphBackend for LemmyClient` — user lookup + presence.
 //!
-//! Lemmy has no friends system; most methods return `NotSupported`.
-//! Split out of `lib.rs` for Single Responsibility (B.1).
+//! Lemmy has no friends concept and no presence model.  Tier 2
+//! (`plan-trait-split-readable-vs-writable.md`): all friend / block /
+//! ignore / presence-set stubs dropped — Lemmy does NOT implement
+//! [`WritableSocialGraphBackend`], so the read-trait shims return
+//! `NotSupported` automatically.
 
 use async_trait::async_trait;
 use poly_client::*;
 
-use crate::{FRIEND_SYS_UNSUPPORTED, IGNORE_UNSUPPORTED, LemmyClient};
+use crate::LemmyClient;
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
@@ -34,51 +37,7 @@ impl poly_client::SocialGraphBackend for LemmyClient {
         Ok(vec![])
     }
 
-    async fn add_friend(&self, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported(FRIEND_SYS_UNSUPPORTED.to_string()))
-    }
-
-    async fn remove_friend(&self, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported(FRIEND_SYS_UNSUPPORTED.to_string()))
-    }
-
-    async fn respond_to_friend_request(&self, _user_id: &str, _accept: bool) -> ClientResult<()> {
-        Err(ClientError::NotSupported(FRIEND_SYS_UNSUPPORTED.to_string()))
-    }
-
-    async fn set_friend_nickname(
-        &self,
-        _user_id: &str,
-        _nickname: Option<&str>,
-    ) -> ClientResult<()> {
-        Err(ClientError::NotSupported(FRIEND_SYS_UNSUPPORTED.to_string()))
-    }
-
-    async fn set_user_note(&self, _user_id: &str, _note: Option<&str>) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Lemmy has no user note system".to_string()))
-    }
-
-    async fn block_user(&self, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Lemmy: block not supported via this interface".to_string()))
-    }
-
-    async fn unblock_user(&self, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Lemmy: unblock not supported via this interface".to_string()))
-    }
-
-    async fn ignore_user(&self, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported(IGNORE_UNSUPPORTED.to_string()))
-    }
-
-    async fn unignore_user(&self, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported(IGNORE_UNSUPPORTED.to_string()))
-    }
-
     async fn get_presence(&self, _user_id: &str) -> ClientResult<PresenceStatus> {
         Ok(PresenceStatus::Offline)
-    }
-
-    async fn set_presence(&self, _status: PresenceStatus) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Lemmy has no presence system".to_string()))
     }
 }

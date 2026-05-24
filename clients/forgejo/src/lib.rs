@@ -65,19 +65,15 @@ use std::pin::Pin;
 // unique string literals.
 #[cfg(feature = "native")]
 mod ns {
-    pub(super) const FRIEND: &str = "Forgejo has no friend system";
-    pub(super) const USER_NOTE: &str = "Forgejo has no user note system";
-    pub(super) const BLOCK: &str = "Forgejo: block not supported via this interface";
-    pub(super) const UNBLOCK: &str = "Forgejo: unblock not supported via this interface";
-    pub(super) const IGNORE: &str = "Forgejo has no ignore concept";
-    pub(super) const PRESENCE: &str = "Forgejo has no presence model";
     pub(super) const DM: &str = "Forgejo has no DM concept";
     pub(super) const SAVED_MSG: &str = "Forgejo has no saved-messages concept";
     pub(super) const GROUP_DM: &str = "Forgejo has no group DMs";
     pub(super) const CONV_MUTE: &str = "Forgejo has no conversation mute";
-    // READ_ONLY_SEND removed (plan-trait-split-readable-vs-writable Phase D.11):
-    // forgejo no longer implements `send_message`; the parent shim's
-    // generic `NotSupported("send_message")` suffices.
+    // Tier 2 (plan-trait-split-readable-vs-writable): FRIEND / USER_NOTE
+    // / BLOCK / UNBLOCK / IGNORE / PRESENCE removed — forgejo no longer
+    // implements those write methods; the read trait's shim returns
+    // `NotSupported` automatically.
+    // READ_ONLY_SEND removed (Phase D.11): same reasoning.
 }
 
 /// Return FTL translation source for the Forgejo client plugin.

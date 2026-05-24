@@ -1,5 +1,12 @@
-//! `impl SocialGraphBackend for TeamsClient` — presence, friends stubs.
-//! H.3.b: all social-graph-surface methods live here.
+//! `SocialGraphBackend` + `WritableSocialGraphBackend` for `TeamsClient`.
+//!
+//! Teams has no friends concept and no per-user block/ignore API.  The
+//! only writable surface is `set_presence` (Microsoft Graph
+//! `/me/presence/setUserPreferredPresence`).
+//!
+//! Tier 2 (`plan-trait-split-readable-vs-writable.md`):
+//! `WritableSocialGraphBackend` carries the real `set_presence` and
+//! stubs every other mutator with `NotSupported`.
 
 use crate::TeamsClient;
 #[cfg(feature = "native")]
@@ -7,7 +14,7 @@ use async_trait::async_trait;
 #[cfg(feature = "native")]
 use poly_client::*;
 
-// ── H.3.b — SocialGraphBackend ────────────────────────────────────────────────
+// ── H.3.b — SocialGraphBackend (reads + writable accessor) ───────────────────
 
 #[cfg(feature = "native")]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
@@ -22,15 +29,29 @@ impl poly_client::SocialGraphBackend for TeamsClient {
     }
 
     async fn get_friends(&self) -> ClientResult<Vec<User>> {
-        // LSP: Teams has no friend concept (`add_friend` etc. below return
-        // `NotSupported`). Returning `Ok(vec![])` lies to callers ("you have
-        // no friends in Teams") instead of disclosing "no such API".
-        // SOLID-audit-teams (Phase B.1).
+        // LSP: Teams has no friend concept. SOLID-audit-teams (Phase B.1).
         Err(ClientError::NotSupported(
             "get_friends: Teams has no friend system".into(),
         ))
     }
 
+    async fn get_presence(&self, _user_id: &str) -> ClientResult<PresenceStatus> {
+        Ok(PresenceStatus::Offline)
+    }
+
+    fn as_writable_social_graph(
+        &self,
+    ) -> Option<&dyn poly_client::WritableSocialGraphBackend> {
+        Some(self)
+    }
+}
+
+// ── Tier 2 — WritableSocialGraphBackend (set_presence only) ─────────────────
+
+#[cfg(feature = "native")]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::WritableSocialGraphBackend for TeamsClient {
     async fn add_friend(&self, _user_id: &str) -> ClientResult<()> {
         Err(ClientError::NotSupported("Teams has no friend system".into()))
     }
@@ -69,10 +90,6 @@ impl poly_client::SocialGraphBackend for TeamsClient {
 
     async fn unignore_user(&self, _user_id: &str) -> ClientResult<()> {
         Err(ClientError::NotSupported("Teams has no ignore concept".into()))
-    }
-
-    async fn get_presence(&self, _user_id: &str) -> ClientResult<PresenceStatus> {
-        Ok(PresenceStatus::Offline)
     }
 
     async fn set_presence(&self, status: PresenceStatus) -> ClientResult<()> {

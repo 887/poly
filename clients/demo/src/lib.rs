@@ -356,6 +356,23 @@ impl<F: DemoFlavour> poly_client::SocialGraphBackend for DemoClientGeneric<F> {
         Ok(F::friends())
     }
 
+    async fn get_presence(&self, _user_id: &str) -> ClientResult<PresenceStatus> {
+        Ok(PresenceStatus::Online)
+    }
+
+    fn as_writable_social_graph(
+        &self,
+    ) -> Option<&dyn poly_client::WritableSocialGraphBackend> {
+        Some(self)
+    }
+}
+
+// Tier 2 (plan-trait-split-readable-vs-writable): writable social-graph
+// stubs return Ok(()) so demo flavours can exercise notification UI.
+#[cfg(feature = "native")]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl<F: DemoFlavour> poly_client::WritableSocialGraphBackend for DemoClientGeneric<F> {
     async fn add_friend(&self, _user_id: &str) -> ClientResult<()> {
         Ok(())
     }
@@ -365,8 +382,6 @@ impl<F: DemoFlavour> poly_client::SocialGraphBackend for DemoClientGeneric<F> {
     }
 
     async fn respond_to_friend_request(&self, _user_id: &str, _accept: bool) -> ClientResult<()> {
-        // Demo client: accept/deny is handled by host-side state updates after a successful
-        // backend response. Return success so the notifications UI can exercise that flow.
         Ok(())
     }
 
@@ -396,10 +411,6 @@ impl<F: DemoFlavour> poly_client::SocialGraphBackend for DemoClientGeneric<F> {
 
     async fn unignore_user(&self, _user_id: &str) -> ClientResult<()> {
         Ok(())
-    }
-
-    async fn get_presence(&self, _user_id: &str) -> ClientResult<PresenceStatus> {
-        Ok(PresenceStatus::Online)
     }
 
     async fn set_presence(&self, _status: PresenceStatus) -> ClientResult<()> {

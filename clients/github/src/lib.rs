@@ -56,13 +56,11 @@ const ACTIVITY_WINDOW_YEARS: i64 = 2;
 
 // ── NotSupported message constants ───────────────────────────────────────────
 // Centralised here so each unique message is written once.
-const NS_NO_FRIEND_SYSTEM: &str = "GitHub has no friend system";
 const NS_NO_GROUP_DMS: &str = "GitHub has no group DMs";
 const NS_NO_DM_CONCEPT: &str = "GitHub has no DM concept";
 const NS_NO_CONVERSATION_MUTE: &str = "GitHub has no conversation mute";
 const NS_NO_BAN_CONCEPT: &str = "GitHub: no per-repo ban concept";
 const NS_NO_TIMEOUT_CONCEPT: &str = "GitHub: no timeout concept";
-const NS_NO_IGNORE_CONCEPT: &str = "GitHub has no ignore concept";
 
 /// Return FTL translation source for the GitHub client plugin.
 #[must_use]

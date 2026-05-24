@@ -24,6 +24,7 @@ pub mod ui_surface;
 pub mod view_descriptor;
 pub mod voice_transport;
 pub mod writable_messaging;
+pub mod writable_social_graph;
 
 pub use code_repo::CodeRepoBackend;
 pub use content_policy::ContentPolicyBackend;
@@ -43,6 +44,7 @@ pub use ui_surface::*;
 pub use view_descriptor::ViewDescriptorBackend;
 pub use voice_transport::VoiceTransportBackend;
 pub use writable_messaging::WritableMessagingBackend;
+pub use writable_social_graph::WritableSocialGraphBackend;
 
 use async_trait::async_trait;
 use futures::stream::Stream;
@@ -303,6 +305,23 @@ pub trait IsBackend: Send + Sync {
     /// Plan: `plan-trait-split-readable-vs-writable.md` Phase B.2.
     fn as_writable_messaging(&self) -> Option<&dyn WritableMessagingBackend> {
         None
+    }
+
+    /// Returns `Some(self)` if this backend implements
+    /// [`WritableSocialGraphBackend`] (i.e. supports friend / block /
+    /// ignore / presence-set mutations).
+    ///
+    /// Default: delegates through [`Self::as_social_graph`] +
+    /// [`SocialGraphBackend::as_writable_social_graph`]. Backends that
+    /// implement [`SocialGraphBackend`] and want to opt in to writable
+    /// social-graph operations should override
+    /// [`SocialGraphBackend::as_writable_social_graph`] on their impl
+    /// block rather than this accessor.
+    ///
+    /// Plan: `plan-trait-split-readable-vs-writable.md` Tier 2.
+    fn as_writable_social_graph(&self) -> Option<&dyn WritableSocialGraphBackend> {
+        self.as_social_graph()
+            .and_then(|sg| sg.as_writable_social_graph())
     }
 
     /// Returns `Some(self)` if this backend implements [`ServerAdminBackend`].

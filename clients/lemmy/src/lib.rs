@@ -69,13 +69,9 @@ use poly_client::{ClientError, ClientResult, SettingsScope, SettingsStorageCell}
 // Use these wherever the same error message would otherwise be duplicated.
 // `pub(crate)` because sibling trait-impl modules consume them.
 #[cfg(feature = "native")]
-pub(crate) const FRIEND_SYS_UNSUPPORTED: &str = "Lemmy has no friend system";
-#[cfg(feature = "native")]
 pub(crate) const GROUP_DM_UNSUPPORTED: &str = "Lemmy has no group DMs";
 #[cfg(feature = "native")]
 pub(crate) const CONVO_MUTE_UNSUPPORTED: &str = "Lemmy has no conversation mute API";
-#[cfg(feature = "native")]
-pub(crate) const IGNORE_UNSUPPORTED: &str = "Lemmy has no ignore concept";
 
 /// Return the raw FTL translation source for the Lemmy client plugin.
 #[must_use]

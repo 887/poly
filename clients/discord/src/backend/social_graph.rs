@@ -1,6 +1,11 @@
-//! Extracted from lib.rs as part of SOLID B.1 split.
+//! `SocialGraphBackend` + `WritableSocialGraphBackend` for `DiscordClient`.
 //!
-//! Pure structural move — no behaviour change.
+//! Discord has friend / block / note / presence support via the public
+//! `/users/@me/relationships` API.
+//!
+//! Tier 2 (`plan-trait-split-readable-vs-writable.md`):
+//! `WritableSocialGraphBackend` carries every mutator; reads stay on
+//! `SocialGraphBackend`.
 
 use super::super::*;
 use async_trait::async_trait;
@@ -27,6 +32,21 @@ impl poly_client::SocialGraphBackend for DiscordClient {
             .collect())
     }
 
+    async fn get_presence(&self, _user_id: &str) -> ClientResult<PresenceStatus> {
+        Ok(PresenceStatus::Offline)
+    }
+
+    fn as_writable_social_graph(
+        &self,
+    ) -> Option<&dyn poly_client::WritableSocialGraphBackend> {
+        Some(self)
+    }
+}
+
+#[cfg(feature = "native")]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::WritableSocialGraphBackend for DiscordClient {
     async fn add_friend(&self, user_id: &str) -> ClientResult<()> {
         self.http.put_relationship(user_id, 1).await
     }
@@ -83,10 +103,6 @@ impl poly_client::SocialGraphBackend for DiscordClient {
     async fn unignore_user(&self, user_id: &str) -> ClientResult<()> {
         // TODO(discord): mirroring unblock since ignore maps to block above.
         self.http.delete_relationship(user_id).await
-    }
-
-    async fn get_presence(&self, _user_id: &str) -> ClientResult<PresenceStatus> {
-        Ok(PresenceStatus::Offline)
     }
 
     async fn set_presence(&self, _status: PresenceStatus) -> ClientResult<()> {

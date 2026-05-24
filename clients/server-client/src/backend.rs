@@ -773,7 +773,7 @@ impl poly_client::ModerationBackend for PolyServerBackend {
     }
 }
 
-// ── H.3.b — SocialGraphBackend ────────────────────────────────────────────────
+// ── H.3.b — SocialGraphBackend (reads) + Tier 2 WritableSocialGraphBackend ───
 //
 // Poly-server has a full social graph: user lookup, friends list, block/ignore,
 // friend requests, per-friend nicknames, and user notes.
@@ -799,6 +799,20 @@ impl poly_client::SocialGraphBackend for PolyServerBackend {
         Ok(profiles.iter().map(Self::map_user).collect())
     }
 
+    async fn get_presence(&self, _user_id: &str) -> ClientResult<PresenceStatus> {
+        Ok(PresenceStatus::Offline)
+    }
+
+    fn as_writable_social_graph(
+        &self,
+    ) -> Option<&dyn poly_client::WritableSocialGraphBackend> {
+        Some(self)
+    }
+}
+
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::WritableSocialGraphBackend for PolyServerBackend {
     async fn add_friend(&self, user_id: &str) -> ClientResult<()> {
         self.http
             .add_friend_by_id(user_id)
@@ -863,10 +877,6 @@ impl poly_client::SocialGraphBackend for PolyServerBackend {
             .unignore_user(user_id)
             .await
             .map_err(|e| ClientError::Network(e.to_string()))
-    }
-
-    async fn get_presence(&self, _user_id: &str) -> ClientResult<PresenceStatus> {
-        Ok(PresenceStatus::Offline)
     }
 
     async fn set_presence(&self, _status: PresenceStatus) -> ClientResult<()> {

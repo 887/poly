@@ -1,9 +1,12 @@
-//! `impl SocialGraphBackend for StoatClient` — friends, blocks, presence.
+//! `SocialGraphBackend` + `WritableSocialGraphBackend` for `StoatClient`.
 //!
-//! Split out from `lib.rs` in SOLID-audit-stoat D.2 (H.3.b).
+//! Stoat (Revolt) has a native friend / relationship system, block
+//! support, and per-user presence. It has no per-friend-nickname or
+//! user-note endpoint.
 //!
-//! Stoat (Revolt) has a native friend / relationship system, block support,
-//! and per-user presence. It has no per-friend-nickname or user-note endpoint.
+//! Tier 2 (`plan-trait-split-readable-vs-writable.md`):
+//! `WritableSocialGraphBackend` carries every mutator; reads stay on
+//! `SocialGraphBackend`.
 
 use crate::api::StoatRelationshipStatus;
 use async_trait::async_trait;
@@ -47,6 +50,21 @@ impl poly_client::SocialGraphBackend for StoatClient {
         Ok(friends)
     }
 
+    async fn get_presence(&self, user_id: &str) -> ClientResult<PresenceStatus> {
+        let user = self.http.fetch_user(user_id).await?;
+        Ok(user.into_poly_user().presence)
+    }
+
+    fn as_writable_social_graph(
+        &self,
+    ) -> Option<&dyn poly_client::WritableSocialGraphBackend> {
+        Some(self)
+    }
+}
+
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl poly_client::WritableSocialGraphBackend for StoatClient {
     async fn add_friend(&self, user_id: &str) -> ClientResult<()> {
         self.http.add_friend(user_id).await
     }
@@ -103,11 +121,6 @@ impl poly_client::SocialGraphBackend for StoatClient {
     async fn unignore_user(&self, user_id: &str) -> ClientResult<()> {
         // TODO(stoat): Stoat has no separate ignore tier; mapped to unblock.
         self.http.unblock_user(user_id).await
-    }
-
-    async fn get_presence(&self, user_id: &str) -> ClientResult<PresenceStatus> {
-        let user = self.http.fetch_user(user_id).await?;
-        Ok(user.into_poly_user().presence)
     }
 
     async fn set_presence(&self, _status: PresenceStatus) -> ClientResult<()> {
