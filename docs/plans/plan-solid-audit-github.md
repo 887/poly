@@ -21,10 +21,15 @@ Scope: only `clients/github/`. Do NOT touch other client crates.
 
 ## Phase B — Medium refactors (50-300 LoC, max 5)
 
-- [ ] **B.1** Split `lib.rs` (1220 LoC, 89 fns) — `IsBackend` impl
+- [x] **B.1** Split `lib.rs` (1220 LoC, 89 fns) — `IsBackend` impl
       (line 190) + `CodeRepoBackend` (line 793) + `ModerationBackend`
       (line 849) + `SocialGraphBackend` (line 1009) +
       `DmsAndGroupsBackend` (line 1078) into sibling modules. SRP/ISP.
+      — shipped in commit `6e2cd0a1`; 9 new files, lib.rs reduced from
+      1195 LoC to 183 LoC (85% reduction). New modules: `impl_is_backend`,
+      `impl_code_repo`, `impl_moderation`, `impl_social_graph`,
+      `impl_dms_and_groups`, `impl_settings`, `impl_view_descriptor`,
+      `impl_context_action`, `forum` (parse_forum_channel helper).
 - [x] **B.2** Extract `decode_b64` / `decode_b64_simple` (`lib.rs:1170-1220`)
       into a small `base64` helper module. **Resolved via `clients/common-forge`
       crate** — both github and forgejo now import from the shared crate;
