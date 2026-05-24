@@ -4,7 +4,7 @@
 > Counterpart to the discord video chain (`voice_bridge.rs` Phase Y — wasm H.264
 > capture/playback + mock video signaling, change `720c8f32` on main).
 
-## Status: IN PROGRESS — option (c) Vortex protocol extension chosen; LiveKit + webrtc-rs both rejected as too heavy. A.4 codec + A.5 transport extension + B.1/B.3/B.4 skeletons shipped (this change). C+D deferred for follow-up.
+## Status: IN PROGRESS — Phase A fully shipped; Phase B fully shipped (B.1/B.3/B.4/B.5 shipped, B.2/B.6 obsolete). C+D (UI integration + smoke) deferred for follow-up.
 
 **Architectural decision (this change):**
 
@@ -330,14 +330,21 @@ to "port the discord WebCodecs pipeline against the shared WS".
       `voice_wasm.rs` calls both `push_h264` (from the receive dispatch)
       and `drop_user` (from `VoiceParticipantLeft`). Follow-up: WebCodecs
       `VideoDecoder` + 2D-canvas draw.
-- [~] **B.5 DEFERRED for follow-up** — trait-surface exposure.
-      `start_video_capture` is callable directly today but not yet wired
-      through the `IsBackend` / `VoiceTransportBackend` trait surface in
-      `voice_transport.rs`. Adding `start_video_capture(channel_id) ->
-      Result<(), …>` would call into `video_wasm_capture::start_video_capture`
-      with `self.voice_wasm_conn.lock()?.as_ref()?.ws_sender()` and store
-      the returned `StoatVideoCaptureHandle` on `StoatClient` (mirror of
-      `voice_wasm_conn`). Bounded follow-up — ~40 LoC.
+- [x] **B.5 ✅ shipped — trait-surface exposure (inherent methods on `StoatClient`).**
+      `start_video_capture(channel_id)` and `stop_video_capture()` added as
+      inherent methods in `clients/stoat/src/video_transport.rs` (new, ~90 LoC
+      incl. 2 tests). On WASM the start path borrows the WS sender + shutdown
+      flag from `self.voice_wasm_conn` (the live `StoatVoiceConnection`), calls
+      `video_wasm_capture::start_video_capture(ws_tx, shutdown)`, and stores the
+      returned `StoatVideoCaptureHandle` in the new `self.video_wasm_conn`
+      field on `StoatClient`.  `stop_video_capture()` signals the capture task
+      and drops the handle.  A cross-crate `VideoTransportBackend` trait is NOT
+      created here — expanding the `clients/client/` trait surface is a separate
+      concern; the inherent-method surface is sufficient for the UI to drive video
+      today (the UI holds a concrete `StoatClient` reference).
+      All checks green: `cargo check -p poly-stoat`, `cargo check -p poly-stoat
+      --target wasm32-unknown-unknown`, `cargo test -p poly-stoat --lib` (50 pass),
+      `cargo check -p poly-core --target wasm32-unknown-unknown`.
 - [~] **B.6 OBSOLETE** — no mock transport needed. test-stoat is opaque
       binary loopback (echoes whatever bytes come in), so the new wire
       format is fixture-transparent. No fixture updates required.

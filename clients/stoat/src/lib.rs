@@ -131,6 +131,18 @@ pub(crate) mod video_wasm_capture;
 #[cfg(target_arch = "wasm32")]
 pub(crate) mod video_wasm_playback;
 
+/// Stoat WASM video transport surface (Phase B.5 of `plan-stoat-video-wasm.md`).
+///
+/// Exposes `start_video_capture` and `stop_video_capture` as inherent methods on
+/// [`StoatClient`] so the UI can drive the camera without reaching into
+/// `video_wasm_capture` directly. On WASM the methods call into
+/// [`video_wasm_capture::start_video_capture`], borrowing the shared WS sender
+/// from the live [`voice_wasm::StoatVoiceConnection`]. The returned
+/// [`video_wasm_capture::StoatVideoCaptureHandle`] is stored in `self.video_wasm_conn`
+/// so the camera stays open for the session lifetime.
+#[cfg(target_arch = "wasm32")]
+mod video_transport;
+
 /// WIT bindings for the WASM plugin (WASI targets only).
 /// This module isolates the `wit-bindgen` macros for FFI.
 #[cfg(target_os = "wasi")]
@@ -229,6 +241,14 @@ pub struct StoatClient {
     /// wiring tracked at crates/core/src/ui/account/settings/voice_settings.rs).
     #[cfg(target_arch = "wasm32")]
     pub(crate) voice_noise_cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    /// B.5 — live WASM video capture handle.
+    ///
+    /// Holds `Some` while a WASM video capture session is active.
+    /// Set by `start_video_capture`; cleared by `stop_video_capture` or when
+    /// the voice connection is torn down.  The `StoatVideoCaptureHandle` must
+    /// be stored here (not dropped) or the camera is released immediately.
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) video_wasm_conn: std::sync::Arc<std::sync::Mutex<Option<video_wasm_capture::StoatVideoCaptureHandle>>>,
     /// H.2/H.5 — transient voice channels created for DM calls.
     ///
     /// Maps `dm_channel_id → transient_channel_id` so that H.5 cleanup can
@@ -279,6 +299,8 @@ impl StoatClient {
             voice_wasm_conn: std::sync::Arc::new(std::sync::Mutex::new(None)),
             #[cfg(target_arch = "wasm32")]
             voice_noise_cancel: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true)),
+            #[cfg(target_arch = "wasm32")]
+            video_wasm_conn: std::sync::Arc::new(std::sync::Mutex::new(None)),
             #[cfg(feature = "native")]
             transient_dm_channels: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
             #[cfg(feature = "native")]
