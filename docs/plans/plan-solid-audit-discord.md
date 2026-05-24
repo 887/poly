@@ -1,5 +1,8 @@
 # SOLID + missing-impl audit — `clients/discord/`
 
+## Status: IN PROGRESS — Phase A shipped in change `nprtmlvu`. Phase B (file splits — 3 542 / 1 976 / 1 241 LoC) + Phase C (architectural) queued for deliberate refactor.
+
+
 Audit performed in change `nprtmlvu` against parent `rorooxlm` (worktree
 `agent-a052fb2a89a993497`). Scope: `clients/discord/src/**` only. The largest
 plugin in the repo (~13 071 LoC across 17 files); 38 hits for stub markers

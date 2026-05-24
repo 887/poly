@@ -1,6 +1,6 @@
 # Plan: SOLID + missing-impl audit — `clients/github/`
 
-## Status: IN PROGRESS — Phase A documented, B/C documented
+## Status: IN PROGRESS — Phase A shipped (A.1+A.2 in change `zwmsmpmk` / commit `59b100cc`; A.3 skipped — cosmetic). Phase B + C queued.
 
 Audit pass over `clients/github/src/{api.rs,lib.rs,mapping.rs,signup.rs,types.rs}`
 (2921 LoC). Identifies SOLID violations and missing implementations.
@@ -11,13 +11,13 @@ Scope: only `clients/github/`. Do NOT touch other client crates.
 
 ## Phase A — Ship-now wins (≤50 LoC each, max 3)
 
-- [ ] **A.1** Drop "TODO: migrate to" boilerplate from in-memory
-      settings storage doc comment (`lib.rs:68`). _≤5 LoC._
-- [ ] **A.2** Dedup `NotSupported` allocation strings (`lib.rs:1025-1133`,
+- [x] **A.1** Drop "TODO: migrate to" boilerplate from in-memory
+      settings storage doc comment (`lib.rs:68`). — shipped in change `zwmsmpmk` / `59b100cc`.
+- [x] **A.2** Dedup `NotSupported` allocation strings (`lib.rs:1025-1133`,
       ~24 sites all "GitHub has no X") into module-level `const` slices.
-      _≈30 LoC removed._
-- [ ] **A.3** `mapping.rs:421,552` (test `meta_text.unwrap()`) — cosmetic
-      tighten. Skip if test churn not desired.
+      — shipped in change `zwmsmpmk` / `59b100cc`; 7 `NS_NO_*` consts replace 20 inline allocations.
+- [~] **A.3** ~~`mapping.rs:421,552` (test `meta_text.unwrap()`) — cosmetic
+      tighten.~~ **SKIPPED** — test module already has `#![allow(clippy::unwrap_used)]`; no change needed.
 
 ## Phase B — Medium refactors (50-300 LoC, max 5)
 

@@ -1,6 +1,6 @@
 # Plan: SOLID + missing-impl audit — `clients/hackernews/`
 
-## Status: IN PROGRESS — Phase A documented, B/C documented
+## Status: IN PROGRESS — Phase A shipped (A.1+A.2 in change `llvrkmlt` / commit `f5edc830`; A.3 skipped — cosmetic). Phase B + C queued.
 
 Audit pass over `clients/hackernews/src/{api.rs,auth.rs,cache.rs,lib.rs,mapping.rs,signup.rs,types.rs}`
 (2245 LoC). Identifies SOLID violations and missing implementations.

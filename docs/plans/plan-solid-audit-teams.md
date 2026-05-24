@@ -5,7 +5,7 @@
 > integration deferred to plan-voice-video-calls).
 > Source-of-truth for SOLID definitions: top-of-repo `CLAUDE.md` §"Design Principles".
 
-## Status: IN PROGRESS — Phase B shipped in change `nprtmlvu`
+## Status: IN PROGRESS — Phase B shipped in change `nprtmlvu`; Phase C fully shipped in change `snonppwv` / commit `fb1fc675` (C.1 channel views via Graph, C.2 chat create, C.3 member ops, C.5 edit_group_dm topic; C.4 was previously shipped). Phase D queued (D.1 ACS calling deferred to separate teams-calling plan).
 
 ---
 

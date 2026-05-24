@@ -1,6 +1,6 @@
 # Plan: SOLID + missing-impl audit — `clients/forgejo/`
 
-## Status: IN PROGRESS — Phase A documented, B/C documented
+## Status: IN PROGRESS — Phase A shipped (A.1+A.2+A.3 + B.4 in change `qmykutwl` / commit `5833a421`); Phase B remaining + C queued.
 
 Audit pass over `clients/forgejo/src/{api.rs,lib.rs,mapping.rs,signup.rs,types.rs}`
 (2137 LoC). Identifies SOLID violations and missing implementations.

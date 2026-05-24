@@ -4,7 +4,7 @@
 > Scope: `clients/matrix/src/`.
 > Source-of-truth for SOLID definitions: top-of-repo `CLAUDE.md` §"Design Principles".
 
-## Status: IN PROGRESS — Phase B shipped in change `nprtmlvu`
+## Status: IN PROGRESS — Phase B shipped in change `nprtmlvu`; Phase C fully shipped in change `tuzpozyt` / commits `0ca62644` + `4c9b2721` (C.2 search, C.3 pinned, C.4 createRoom). Phase D queued.
 
 ---
 
