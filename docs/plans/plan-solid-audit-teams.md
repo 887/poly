@@ -77,22 +77,31 @@
 
 ---
 
-## Phase C — Medium refactors (50-300 LoC, max 5) — C.4 shipped in this change
+## Phase C — Medium refactors (50-300 LoC, max 5) — C.1/C.2/C.3/C.4/C.5 shipped in this change
 
-- [ ] **C.1** Implement channel `get_channel_view` / `get_view_rows` /
+- [x] **C.1** Implement channel `get_channel_view` / `get_view_rows` /
   `get_view_detail` for team channels — render message list rows like Stoat
   does. ~250 LoC across `lib.rs` + view-mapping helpers.
-- [ ] **C.2** Implement `open_direct_message_channel` via Graph
+  — `get_channel_view` returns `ViewKind::FlatList` descriptor for non-empty channel IDs.
+  — `get_view_rows` (channel branch): fetches messages via Graph, maps to ViewRow with author/timestamp meta.
+  — `get_view_detail`: best-effort message lookup in the 50-message page; returns `CustomBlock` HTML with author + HTML-escaped body.
+- [x] **C.2** Implement `open_direct_message_channel` via Graph
   `POST /chats` with `chatType: oneOnOne` + member array. ~80 LoC.
-- [ ] **C.3** Implement `add_group_member` / `remove_group_member` /
+  — New `TeamsHttpClient::create_chat` method. Graph is idempotent (returns existing chat if one already exists).
+- [x] **C.3** Implement `add_group_member` / `remove_group_member` /
   `add_users_to_group_dm` via `POST /chats/{id}/members` +
   `DELETE /chats/{id}/members/{membershipId}`. ~120 LoC.
+  — New `add_chat_member`, `get_chat_members`, `remove_chat_member` HTTP helpers.
+  — `remove_group_member` resolves membership ID via GET members before DELETE.
+  — `add_users_to_group_dm` is sequential O(n); Graph has no batch-add endpoint.
 - [x] **C.4** Implement `mute_conversation` / `unmute_conversation`. Wired to the
   in-memory `muted_dms` store (same source of truth the sidebar and context-menu
   "mute-dm" action use). Graph `notificationSettings` PATCH requires per-chat
   membership ID lookup — noted in code comment, deferred; in-memory parity ships
   now. ~30 LoC.
-- [ ] **C.5** Implement `edit_group_dm` (chat topic / photo). ~100 LoC.
+- [x] **C.5** Implement `edit_group_dm` (chat topic / photo). ~100 LoC.
+  — New `TeamsHttpClient::patch_chat_topic` (PATCH /v1.0/chats/{id} with `topic`).
+  — `avatar_url` is accepted but silently ignored: Graph has no chat-photo endpoint.
 
 ## Phase D — Architectural rewrites (>300 LoC, max 3)
 

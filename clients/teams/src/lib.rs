@@ -940,10 +940,49 @@ impl poly_client::DmsAndGroupsBackend for TeamsClient {
         }).collect())
     }
 
-    async fn open_direct_message_channel(&self, _user_id: &str) -> ClientResult<DmChannel> {
-        Err(ClientError::NotSupported(
-            "open_direct_message_channel: not yet implemented for Teams".to_string(),
-        ))
+    async fn open_direct_message_channel(&self, user_id: &str) -> ClientResult<DmChannel> {
+        // C.2: POST /v1.0/chats with chatType=oneOnOne and a two-entry member list
+        // (caller + target user). Graph returns the existing chat if one already
+        // exists between these two users, so this is idempotent.
+        let account_id = self.account_id();
+        let members = vec![
+            serde_json::json!({
+                "@odata.type": "#microsoft.graph.aadUserConversationMember",
+                "user@odata.bind": format!("https://graph.microsoft.com/v1.0/users('{account_id}')"),
+                "roles": ["owner"],
+            }),
+            serde_json::json!({
+                "@odata.type": "#microsoft.graph.aadUserConversationMember",
+                "user@odata.bind": format!("https://graph.microsoft.com/v1.0/users('{user_id}')"),
+                "roles": [],
+            }),
+        ];
+        let chat = self.http.create_chat("oneOnOne", &members).await?;
+        // Build a contact User from chat members; pick the non-self member.
+        let contact = chat.members.iter()
+            .find(|m| m.user_id.as_deref() != Some(account_id.as_str()))
+            .map(|m| User {
+                id: m.user_id.clone().unwrap_or_else(|| user_id.to_string()),
+                display_name: m.display_name.clone().unwrap_or_else(|| user_id.to_string()),
+                avatar_url: None,
+                presence: PresenceStatus::Offline,
+                backend: BackendType::from(crate::SLUG),
+            })
+            .unwrap_or_else(|| User {
+                id: user_id.to_string(),
+                display_name: user_id.to_string(),
+                avatar_url: None,
+                presence: PresenceStatus::Offline,
+                backend: BackendType::from(crate::SLUG),
+            });
+        Ok(DmChannel {
+            id: chat.id,
+            user: contact,
+            last_message: None,
+            unread_count: 0,
+            backend: BackendType::from(crate::SLUG),
+            account_id,
+        })
     }
 
     async fn open_saved_messages_channel(&self) -> ClientResult<DmChannel> {
@@ -952,22 +991,37 @@ impl poly_client::DmsAndGroupsBackend for TeamsClient {
         ))
     }
 
-    async fn add_group_member(&self, _group_id: &str, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported(
-            "add_group_member: not yet implemented for Teams".to_string(),
-        ))
+    async fn add_group_member(&self, group_id: &str, user_id: &str) -> ClientResult<()> {
+        // C.3: POST /v1.0/chats/{group_id}/members
+        self.http.add_chat_member(group_id, user_id).await
     }
 
-    async fn remove_group_member(&self, _group_id: &str, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported(
-            "remove_group_member: not yet implemented for Teams".to_string(),
-        ))
+    async fn remove_group_member(&self, group_id: &str, user_id: &str) -> ClientResult<()> {
+        // C.3: Resolve the membership ID for `user_id` then
+        // DELETE /v1.0/chats/{group_id}/members/{membership_id}.
+        // Graph requires the membership ID (base64-encoded composite), not the OID.
+        let members = self.http.get_chat_members(group_id).await?;
+        let membership_id = members
+            .iter()
+            .find(|m| m.user_id.as_deref() == Some(user_id) || m.id == user_id)
+            .map(|m| m.id.clone())
+            .ok_or_else(|| {
+                ClientError::NotFound(format!(
+                    "user {user_id} is not a member of chat {group_id}"
+                ))
+            })?;
+        self.http.remove_chat_member(group_id, &membership_id).await
     }
 
-    async fn add_users_to_group_dm(&self, _channel_id: &str, _user_ids: &[String]) -> ClientResult<()> {
-        Err(ClientError::NotSupported(
-            "add_users_to_group_dm: not yet implemented for Teams".to_string(),
-        ))
+    async fn add_users_to_group_dm(&self, channel_id: &str, user_ids: &[String]) -> ClientResult<()> {
+        // C.3: Add each user sequentially. Graph does not expose a batch-add endpoint
+        // for chat members, so this is O(n) round-trips. On the first error we
+        // surface it immediately; partial success is left as-is (members already
+        // added are not rolled back — Graph add is idempotent if the user is already in).
+        for uid in user_ids {
+            self.http.add_chat_member(channel_id, uid).await?;
+        }
+        Ok(())
     }
 
     async fn close_dm_channel(&self, _channel_id: &str) -> ClientResult<()> {
@@ -1014,13 +1068,19 @@ impl poly_client::DmsAndGroupsBackend for TeamsClient {
 
     async fn edit_group_dm(
         &self,
-        _channel_id: &str,
-        _name: Option<&str>,
-        _avatar_url: Option<&str>,
+        channel_id: &str,
+        name: Option<&str>,
+        avatar_url: Option<&str>,
     ) -> ClientResult<()> {
-        Err(ClientError::NotSupported(
-            "edit_group_dm: not yet implemented for Teams".to_string(),
-        ))
+        // C.5: PATCH /v1.0/chats/{channel_id} with `topic` (display name).
+        // Graph does not support a photo/avatar URL for chats — the `avatar_url`
+        // field is accepted from the caller but silently ignored, matching the
+        // "no endpoint exists" note in the plan.
+        let _ = avatar_url; // Graph has no chat-photo endpoint; ignore gracefully.
+        if let Some(topic) = name {
+            self.http.patch_chat_topic(channel_id, topic).await?;
+        }
+        Ok(())
     }
 }
 
@@ -1091,8 +1151,26 @@ impl poly_client::ViewDescriptorBackend for TeamsClient {
         })
     }
 
-    async fn get_channel_view(&self, _channel_id: &str) -> ClientResult<ViewDescriptor> {
-        Err(ClientError::NotSupported("channel-view not yet implemented".into()))
+    async fn get_channel_view(&self, channel_id: &str) -> ClientResult<ViewDescriptor> {
+        // C.1: team channels render as a flat message list.
+        // Empty channel_id is the account-overview sentinel — not a channel view.
+        if channel_id.is_empty() {
+            return Err(ClientError::NotSupported("get_channel_view: empty channel_id is not a channel".into()));
+        }
+        Ok(ViewDescriptor {
+            kind: ViewKind::FlatList,
+            header: None,
+            toolbar: None,
+            body: ViewBody::ListBody(ListSpec {
+                row_template: RowTemplate {
+                    primary_field: "content".to_string(),
+                    secondary_field: Some("author".to_string()),
+                    meta_field: Some("timestamp".to_string()),
+                    icon_field: None,
+                },
+                page_size: 50,
+            }),
+        })
     }
 
     async fn get_view_rows(
@@ -1105,7 +1183,43 @@ impl poly_client::ViewDescriptorBackend for TeamsClient {
     ) -> ClientResult<ViewRowsPage> {
         // Empty channel_id signals the account overview — return one card per team.
         if !channel_id.is_empty() {
-            return Err(ClientError::NotSupported("view-rows not yet implemented for team channels".into()));
+            // C.1: Fetch messages for the team channel and map to ViewRows.
+            // channel_id is "team_id/channel_id" per plugin contract.
+            let msgs = if let Some((team_id, ch_id)) = channel_id.split_once('/') {
+                self.http.get_channel_messages(team_id, ch_id, Some(50)).await?
+            } else {
+                // Plain chat ID (DM) — use chats endpoint.
+                self.http.get_chat_messages(channel_id, Some(50)).await?
+            };
+
+            let rows = msgs
+                .into_iter()
+                .map(|m| {
+                    let author_name = m
+                        .from
+                        .as_ref()
+                        .and_then(|f| f.user.as_ref())
+                        .and_then(|u| u.display_name.as_deref())
+                        .unwrap_or("Unknown")
+                        .to_string();
+                    let timestamp = chrono::DateTime::parse_from_rfc3339(&m.created_date_time)
+                        .map(|dt| dt.format("%H:%M").to_string())
+                        .unwrap_or_default();
+                    ViewRow {
+                        id: m.id,
+                        primary_text: m.body.content,
+                        secondary_text: Some(author_name),
+                        meta_text: Some(timestamp),
+                        icon: None,
+                        badge: None,
+                        context_menu_target_kind: MenuTargetKind::Message,
+                        preview_image_url: None,
+                        is_video: false,
+                    }
+                })
+                .collect();
+
+            return Ok(ViewRowsPage { rows, next_cursor: None });
         }
 
         let servers = self.get_servers().await?;
@@ -1151,10 +1265,57 @@ impl poly_client::ViewDescriptorBackend for TeamsClient {
 
     async fn get_view_detail(
         &self,
-        _channel_id: &str,
-        _row_id: &str,
+        channel_id: &str,
+        row_id: &str,
     ) -> ClientResult<ViewDetail> {
-        Err(ClientError::NotSupported("view-detail not yet implemented".into()))
+        // C.1: Fetch a single message and return its body as a detail block.
+        // Graph has no single-message GET endpoint for channels; fall back to
+        // the message list and find the row by id. This is a best-effort impl —
+        // the message may have scrolled out of the default page. A paginated
+        // search is deferred to a future pass (D.*).
+        let msgs = if let Some((team_id, ch_id)) = channel_id.split_once('/') {
+            self.http.get_channel_messages(team_id, ch_id, Some(50)).await?
+        } else {
+            self.http.get_chat_messages(channel_id, Some(50)).await?
+        };
+
+        let msg = msgs
+            .into_iter()
+            .find(|m| m.id == row_id)
+            .ok_or_else(|| ClientError::NotFound(format!("message {row_id} not found in channel {channel_id}")))?;
+
+        let author_name = msg
+            .from
+            .as_ref()
+            .and_then(|f| f.user.as_ref())
+            .and_then(|u| u.display_name.as_deref())
+            .unwrap_or("Unknown")
+            .to_string();
+
+        // Teams Graph returns `body.content` as HTML when `contentType == "html"`,
+        // or plain text otherwise. Wrap plain-text content in a <p> so the host
+        // sanitizer treats it consistently.
+        let body_html = if msg.body.content_type.as_deref() == Some("html") {
+            format!("<p><strong>{author_name}:</strong></p>{}", msg.body.content)
+        } else {
+            // Inline-escape the three dangerous chars present in plain-text messages.
+            let escaped = msg
+                .body
+                .content
+                .replace('&', "&amp;")
+                .replace('<', "&lt;")
+                .replace('>', "&gt;");
+            format!("<p><strong>{author_name}:</strong> {escaped}</p>")
+        };
+
+        Ok(ViewDetail {
+            body_block: CustomBlock {
+                sanitized_html: body_html,
+                stylesheet: None,
+                max_height_px: None,
+            },
+            comments_section: None,
+        })
     }
 }
 

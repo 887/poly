@@ -16,7 +16,7 @@ use std::time::Duration;
 use poly_client::ClientError;
 use poly_host_bridge::http::{HttpClient, RequestBuilder, Response};
 
-use crate::types::{GraphChannel, GraphChat, GraphCollection, GraphMember, GraphMessage, GraphTeam, GraphUser};
+use crate::types::{GraphChannel, GraphChat, GraphChatMember, GraphCollection, GraphMember, GraphMessage, GraphTeam, GraphUser};
 
 /// Max HTTP attempts per logical request (initial + 2 retries).
 const MAX_ATTEMPTS: u32 = 3;
@@ -471,6 +471,75 @@ impl TeamsHttpClient {
         self.patch_json_unit(
             &format!("/v1.0/teams/{team_id}/channels/{channel_id}"),
             &serde_json::Value::Object(body),
+        )
+        .await
+    }
+
+    // ── DM / Chat management ──────────────────────────────────────────────────
+
+    /// POST /v1.0/chats — create a 1:1 or group chat.
+    ///
+    /// `chat_type` is `"oneOnOne"` for DMs or `"group"` for group chats.
+    /// `members` is a list of OData-typed member objects:
+    /// `{ "@odata.type": "#microsoft.graph.aadUserConversationMember", "user@odata.bind": "…", "roles": ["owner"|""] }`.
+    pub async fn create_chat(
+        &self,
+        chat_type: &str,
+        members: &[serde_json::Value],
+    ) -> Result<GraphChat, ClientError> {
+        self.post_json(
+            "/v1.0/chats",
+            &serde_json::json!({
+                "chatType": chat_type,
+                "members": members,
+            }),
+        )
+        .await
+    }
+
+    /// POST /v1.0/chats/{chat_id}/members — add a member to a group chat.
+    pub async fn add_chat_member(
+        &self,
+        chat_id: &str,
+        user_id: &str,
+    ) -> Result<(), ClientError> {
+        self.post_json_unit(
+            &format!("/v1.0/chats/{chat_id}/members"),
+            &serde_json::json!({
+                "@odata.type": "#microsoft.graph.aadUserConversationMember",
+                "user@odata.bind": format!("https://graph.microsoft.com/v1.0/users('{user_id}')"),
+                "roles": [],
+            }),
+        )
+        .await
+    }
+
+    /// GET /v1.0/chats/{chat_id}/members — list members of a chat.
+    pub async fn get_chat_members(&self, chat_id: &str) -> Result<Vec<GraphChatMember>, ClientError> {
+        let col: GraphCollection<GraphChatMember> =
+            self.get(&format!("/v1.0/chats/{chat_id}/members")).await?;
+        Ok(col.value)
+    }
+
+    /// DELETE /v1.0/chats/{chat_id}/members/{membership_id} — remove a member from a group chat.
+    pub async fn remove_chat_member(
+        &self,
+        chat_id: &str,
+        membership_id: &str,
+    ) -> Result<(), ClientError> {
+        self.delete_unit(&format!("/v1.0/chats/{chat_id}/members/{membership_id}"))
+            .await
+    }
+
+    /// PATCH /v1.0/chats/{chat_id} — update topic (display name) of a group chat.
+    pub async fn patch_chat_topic(
+        &self,
+        chat_id: &str,
+        topic: &str,
+    ) -> Result<(), ClientError> {
+        self.patch_json_unit(
+            &format!("/v1.0/chats/{chat_id}"),
+            &serde_json::json!({ "topic": topic }),
         )
         .await
     }
