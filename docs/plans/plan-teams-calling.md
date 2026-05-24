@@ -4,7 +4,7 @@
 > Scope: `clients/teams/src/voice.rs`, `voice_bridge`, native shell entitlements.
 > Source-of-truth for SOLID definitions: top-of-repo `CLAUDE.md`.
 
-## Status: IN PROGRESS — Phase A + B shipped as Rust scaffolding in `clients/teams/src/calling/`; Phase C (JS bridge) + D (UI parity) deferred pending shell-side bundling + tenant infrastructure
+## Status: IN PROGRESS — Phase A + B + Phase-C Rust scaffolding shipped in `clients/teams/src/calling/` (changes `a9a0e514` for A+B, then a follow-up Phase-C-Rust commit); Phase C JS bridge (`@azure/communication-calling` integration) + Phase D (UI parity) still deferred pending shell-side bundling + tenant infrastructure
 
 Carved out of `plan-solid-audit-teams.md` D.1 because the work is genuinely a
 multi-week integration (~800 LoC of Rust + ~200 LoC of shell glue + a Cargo
@@ -93,26 +93,52 @@ Option (1) is the only realistic path. Even then the scope is substantial:
   3-line `host_bridge::plugin_kv::set` call that lands with the Phase
   C JS-bridge code (writing without a reader is dead state).
 
-## Phase C — Calling bridge — deferred
+## Phase C — Calling bridge
 
-> **Rationale for deferral:** requires the WebView shell to host a
-> hidden frame loading `@azure/communication-calling`, postMessage
-> RPC wiring on both sides (Rust ↔ JS), and a tenant with a
-> provisioned ACS resource for end-to-end testing. None of these are
-> tractable in a single-pass scaffolding session — they need real
-> Microsoft tenant credentials and shell-side asset bundling work.
-> The trait surface ([`TeamsCallingClient`]) and stub default impl
-> ([`StubCallingClient`]) ship today so this work can land as a
-> focused swap-the-impl change without touching call sites.
+> **Rationale for the Rust-side split:** the full bridge requires a
+> WebView shell hosting a hidden frame loading
+> `@azure/communication-calling`, postMessage RPC wiring on both
+> sides, and a tenant with a provisioned ACS resource for E2E testing.
+> None of those land in a single pass. But the Rust-side scaffolding
+> (trait surface, IPC types, transport abstraction, mock-transport
+> test harness, and a `TeamsClient::start_calling_session` entry
+> point) is self-contained — it ships today so the JS bridge can land
+> as a focused TS file + transport-impl swap without touching call
+> sites or wire types.
 
-- [~] **C.1** JS-side `connectVoice` / `disconnectVoice` / `setMute` /
-  `getParticipants` over postMessage — needs shell-side bundling
-  (Phase A.2 decision recorded; implementation gated on real tenant
-  for E2E test).
-- [~] **C.2** Rust-side real `TeamsCallingClient` impl — needs C.1.
-  Trait + stub already shipped (see Phase A/B), so the implementation
-  is a swap rather than a refactor.
-- [~] **C.3** Test against Microsoft interop / lobby behavior — needs
+### Rust-side scaffolding — shipped 2026-05-24
+
+- [x] **C.1** `TeamsCallingClient` trait extended with
+  `set_mute`/`start_video`/`stop_video`/`share_screen`/
+  `stop_screen_share`/`hold_call`/`resume_call` (defaults return
+  [`CallingError::NotImplemented`]). New
+  `WebViewBridgeCallingClient` struct holds an
+  `Arc<dyn CallingTransport>` and stubs every method to
+  `NotImplemented` pending the JS bridge.
+  See `clients/teams/src/calling/client.rs`.
+- [x] **C.2** IPC wire shapes — `CallingCommand` (Rust → JS,
+  14 variants) + `CallingEvent` (JS → Rust, 11 variants), serde
+  internally-tagged with `{"kind":"..."}` discriminant + camelCase
+  fields. `CallingTransport` trait (object-safe) +
+  `MockCallingTransport` for unit tests. Documented JS-side mirror
+  types in a comment block at the top of `ipc.rs`.
+  See `clients/teams/src/calling/ipc.rs`.
+- [x] **C.3** `TeamsClient::start_calling_session(account_id)` returns
+  a `WebViewBridgeCallingClient` over a `MockCallingTransport`. No-op
+  on the JS half — existing `voice.rs` stub remains the user-visible
+  call path. When the JS bridge ships, this method swaps the mock
+  transport for a real one and the trait methods plug in.
+  See `clients/teams/src/lib.rs::TeamsClient::start_calling_session`.
+
+### JS-side + tenant work — deferred
+
+- [~] **C.4** JS file (`@azure/communication-calling` wrapper) consuming
+  `CallingCommand` and emitting `CallingEvent` over postMessage —
+  needs shell-side bundling (Phase A.2 decision recorded; gated on
+  real tenant for E2E test).
+- [~] **C.5** Real `CallingTransport` impl wrapping `postMessage` +
+  JS event listener — drop-in replacement for `MockCallingTransport`.
+- [~] **C.6** Test against Microsoft interop / lobby behavior — needs
   a real tenant.
 
 ## Phase D — UI parity — deferred
@@ -149,9 +175,41 @@ New module `clients/teams/src/calling/`:
 Total: 22 new unit tests, all passing on native. No call-site changes
 in `crates/core` — the existing `TeamsVoiceClient` stub in
 `clients/teams/src/voice.rs` remains the one consumed by voice UI.
-When Phase C lands, `voice.rs` becomes a thin delegation to a
-constructed `TeamsCallingClient` impl chosen at backend-construction
-time.
+
+## What shipped (Phase C Rust scaffolding, 2026-05-24)
+
+Extended `clients/teams/src/calling/`:
+
+- `types.rs` — added `CallingError::NotImplemented` variant (maps to
+  `ClientError::NotSupported`) + 1 new unit test.
+- `client.rs` — extended `TeamsCallingClient` trait with 7 new methods
+  (`set_mute`, `start_video`, `stop_video`, `share_screen`,
+  `stop_screen_share`, `hold_call`, `resume_call`); added
+  `WebViewBridgeCallingClient` struct with full trait impl returning
+  `NotImplemented` everywhere; 11 new unit tests.
+- `ipc.rs` — NEW. `CallingCommand` (14 variants, Rust → JS) +
+  `CallingEvent` (11 variants, JS → Rust), serde
+  internally-tagged with camelCase fields. `CallingTransport`
+  object-safe trait + `MockCallingTransport` test transport
+  (`send`/`recv`/`inject_event`/`sent_commands`). 14 new unit tests
+  covering round-trip serialization for representative variants and
+  mock-transport happy paths. JS-side mirror types documented at the
+  top of the module as a comment block (per the prompt — no .ts file
+  yet, that's separate work).
+
+Plus `clients/teams/src/lib.rs`:
+
+- New `TeamsClient::start_calling_session(account_id) ->
+  WebViewBridgeCallingClient` entry point. Constructs the bridge over
+  a `MockCallingTransport` (no JS side wired). User-visible call path
+  remains `voice.rs::TeamsVoiceClient` until Phase D.
+
+Total new tests this phase: 26. Cumulative module test count: 63 (was 37+
+before Phase C scaffolding). Native + WASM checks remain clean.
+
+When Phase C JS-side (C.4/C.5/C.6) lands, `voice.rs` becomes a thin
+delegation that constructs a `WebViewBridgeCallingClient` over a real
+postMessage-backed transport instead of the mock.
 
 ## Acceptance
 

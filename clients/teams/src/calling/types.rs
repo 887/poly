@@ -99,6 +99,15 @@ pub enum CallingError {
     #[error("calling not supported: {0}")]
     NotSupported(String),
 
+    /// The bridge is wired but the JS-side `@azure/communication-calling`
+    /// integration has not been written yet. Distinct from
+    /// [`Self::NotSupported`] — `NotSupported` means "this platform will
+    /// never have calling"; `NotImplemented` means "this code path is
+    /// scaffolded and will work once the JS bridge ships in Phase C of
+    /// `docs/plans/plan-teams-calling.md`."
+    #[error("calling not implemented: {0}")]
+    NotImplemented(String),
+
     /// Tenant has no ACS resource provisioned, or the user has no ACS
     /// identity mapping yet. Phase B.3 setup-screen prompt.
     #[error("ACS identity not provisioned: {0}")]
@@ -126,6 +135,7 @@ impl From<CallingError> for ClientError {
     fn from(e: CallingError) -> Self {
         match e {
             CallingError::NotSupported(msg) => Self::NotSupported(msg),
+            CallingError::NotImplemented(msg) => Self::NotSupported(msg),
             CallingError::AcsNotProvisioned(msg) => Self::AuthFailed(msg),
             CallingError::TokenAcquisition(msg) => Self::AuthFailed(msg),
             CallingError::Network(msg) => Self::Network(msg),
@@ -150,6 +160,13 @@ mod tests {
     #[test]
     fn calling_error_maps_to_client_error_not_supported() {
         let e = CallingError::NotSupported("nope".into());
+        let ce: ClientError = e.into();
+        assert!(matches!(ce, ClientError::NotSupported(_)));
+    }
+
+    #[test]
+    fn calling_error_not_implemented_maps_to_not_supported() {
+        let e = CallingError::NotImplemented("phase C".into());
         let ce: ClientError = e.into();
         assert!(matches!(ce, ClientError::NotSupported(_)));
     }

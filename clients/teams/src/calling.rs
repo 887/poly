@@ -35,7 +35,9 @@
 pub mod types;
 pub mod token;
 pub mod client;
+pub mod ipc;
 
-pub use client::{StubCallingClient, TeamsCallingClient};
+pub use client::{StubCallingClient, TeamsCallingClient, WebViewBridgeCallingClient};
+pub use ipc::{CallingCommand, CallingEvent, CallingTransport, MockCallingTransport};
 pub use token::{AcsTokenAcquirer, TokenAcquisitionConfig};
 pub use types::{AcsAccessToken, AcsIdentity, CallId, CallState, CallingError};

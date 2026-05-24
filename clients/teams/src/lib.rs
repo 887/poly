@@ -215,6 +215,24 @@ impl TeamsClient {
         self.http.unset_channel_reaction(team_id, ch_id, message_id, reaction_type).await
     }
 
+    /// Phase C.3 of `docs/plans/plan-teams-calling.md`: scaffolding
+    /// entry point. Constructs a [`calling::WebViewBridgeCallingClient`]
+    /// over a [`calling::MockCallingTransport`] (no JS side yet) and
+    /// returns it ready to plug into the voice UI.
+    ///
+    /// **No-op on the JS half today** — every method on the returned
+    /// client returns [`calling::CallingError::NotImplemented`]. The
+    /// existing [`crate::voice::TeamsVoiceClient`] stub remains the
+    /// user-visible call path until the JS bridge ships, so this
+    /// method is currently called only by tests + future
+    /// integration code. Wiring it into the voice UI is Phase D.
+    #[must_use]
+    pub fn start_calling_session(&self, _account_id: &str) -> calling::WebViewBridgeCallingClient {
+        let transport: std::sync::Arc<dyn calling::CallingTransport> =
+            std::sync::Arc::new(calling::MockCallingTransport::new());
+        calling::WebViewBridgeCallingClient::new(transport)
+    }
+
     pub(crate) fn unknown_user(&self) -> User {
         User {
             id: String::new(),
