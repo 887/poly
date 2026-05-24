@@ -16,33 +16,35 @@ use crate::{
 };
 
 pub fn router() -> Router<AppState> {
+    // axum 0.7+ path capture syntax: `{capture}` (the old `:capture`
+    // syntax now panics at router-build time).
     Router::new()
         // Blocks
         .route("/api/v1/relationships/block", post(block_user))
-        .route("/api/v1/relationships/block/:user_id", delete(unblock_user))
+        .route("/api/v1/relationships/block/{user_id}", delete(unblock_user))
         // Ignores
         .route("/api/v1/relationships/ignore", post(ignore_user))
-        .route("/api/v1/relationships/ignore/:user_id", delete(unignore_user))
+        .route("/api/v1/relationships/ignore/{user_id}", delete(unignore_user))
         // Friends (by user ID, complementing the existing username-based flow)
         .route("/api/v1/relationships/friend", post(add_friend))
-        .route("/api/v1/relationships/friend/:user_id", delete(remove_friend))
+        .route("/api/v1/relationships/friend/{user_id}", delete(remove_friend))
         // Relationship metadata
-        .route("/api/v1/relationships/:user_id/nickname", patch(set_nickname))
-        .route("/api/v1/relationships/:user_id/note", patch(set_note))
+        .route("/api/v1/relationships/{user_id}/nickname", patch(set_nickname))
+        .route("/api/v1/relationships/{user_id}/note", patch(set_note))
         // DM close (hide from list)
-        .route("/api/v1/dm/:channel_id/close", post(close_dm))
+        .route("/api/v1/dm/{channel_id}/close", post(close_dm))
         // Conversation mute
-        .route("/api/v1/conversation/:channel_id/mute", post(mute_conversation))
+        .route("/api/v1/conversation/{channel_id}/mute", post(mute_conversation))
         .route(
-            "/api/v1/conversation/:channel_id/mute",
+            "/api/v1/conversation/{channel_id}/mute",
             delete(unmute_conversation),
         )
         // Group DM
-        .route("/api/v1/group-dm/:channel_id/leave", post(leave_group_dm))
-        .route("/api/v1/group-dm/:channel_id", patch(edit_group_dm))
-        .route("/api/v1/group-dm/:channel_id/members", post(add_group_dm_members))
+        .route("/api/v1/group-dm/{channel_id}/leave", post(leave_group_dm))
+        .route("/api/v1/group-dm/{channel_id}", patch(edit_group_dm))
+        .route("/api/v1/group-dm/{channel_id}/members", post(add_group_dm_members))
         // Server invite (targeted)
-        .route("/api/v1/server/:server_id/invite-user", post(invite_user_to_server))
+        .route("/api/v1/server/{server_id}/invite-user", post(invite_user_to_server))
 }
 
 // ── Request types ──────────────────────────────────────────────────────────────

@@ -1088,10 +1088,17 @@ async fn composer_buttons_via_mcp() {
     })).await;
     assert_ok(&result);
     let btns: Vec<Value> = parse_text(&result);
-    // Discord declares a stickers button.
-    assert!(!btns.is_empty(), "discord declares at least one composer button");
-    let ids: Vec<&str> = btns.iter().filter_map(|b| b["id"].as_str()).collect();
-    assert!(ids.contains(&"stickers"), "expected 'stickers' button, got: {ids:?}");
+    // Discord's get_composer_buttons intentionally returns an empty list:
+    // stickers + GIF picker were unified into the host-side MediaPickerPopup
+    // (one emoji button → tabs for emoji/GIF/stickers), so the per-plugin
+    // composer button was retired. See `clients/discord/src/backend/
+    // context_action.rs::get_composer_buttons` for the rationale.
+    // What this test verifies is that the MCP surface still wires the
+    // call cleanly (no error) and returns a list (possibly empty).
+    assert!(
+        btns.is_empty(),
+        "discord composer buttons retired post-unified-MediaPickerPopup, got: {btns:?}"
+    );
 }
 
 #[tokio::test]

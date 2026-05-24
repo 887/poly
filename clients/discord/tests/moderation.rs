@@ -78,6 +78,16 @@ impl TestServer {
             .authenticate(AuthCredentials::Token(token))
             .await
             .expect("authenticate");
+        // Pre-cache guild permissions for the moderation suite — every
+        // mutating moderation call (ban/kick/timeout/etc.) gates on a
+        // `permission_guard.check()` that fail-safes to denied when the
+        // guild's permission bits haven't been cached yet (defence-in-depth
+        // against 403-driven IP bans). Tests are run against the mock
+        // test-discord which would otherwise hit the guard before reaching
+        // the mock's mutating endpoints.
+        for guild in ["100", "101"] {
+            let _ = client.get_my_permissions(guild, None).await;
+        }
         client
     }
 }

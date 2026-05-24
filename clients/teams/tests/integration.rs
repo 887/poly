@@ -238,8 +238,15 @@ async fn test_presence_stubs() {
     let client = srv.authenticated_client("Sheep").await;
     let presence = client.get_presence("U001").await.expect("get_presence");
     assert_eq!(presence, PresenceStatus::Offline);
-    let friends = client.get_friends().await.expect("get_friends");
-    assert!(friends.is_empty());
+    // Teams trait-split tier 2 (WritableSocialGraphBackend): Teams has no
+    // friend system, and `get_friends` now returns NotSupported instead of
+    // an empty list.
+    let friends_result = client.get_friends().await;
+    match friends_result {
+        Ok(friends) => assert!(friends.is_empty(), "expected empty"),
+        Err(poly_client::ClientError::NotSupported(_)) => {} // Teams: no friend system
+        Err(e) => panic!("get_friends: unexpected error {e:?}"),
+    }
 }
 
 #[tokio::test]

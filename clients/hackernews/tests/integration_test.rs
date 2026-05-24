@@ -257,11 +257,19 @@ async fn test_send_message_not_supported() {
         .send_message("hn-top", poly_client::MessageContent::Text("hello".to_string()))
         .await;
 
-    assert!(result.is_err(), "send_message should fail for HN (read-only)");
+    assert!(result.is_err(), "send_message should fail for HN anon session");
     let err_str = format!("{:?}", result.unwrap_err());
+    // hackernews B.3 refactored send_message: anonymous sessions now fail
+    // with AuthFailed (must sign in to post comments), while signed-in
+    // sessions can post comments to story threads (`hn-post-*` channels)
+    // but get NotSupported for other channel types (`hn-top` etc.).
+    // Either error wording is correct.
     assert!(
-        err_str.contains("read-only") || err_str.contains("NotSupported"),
-        "error message should mention read-only: {err_str}"
+        err_str.contains("read-only")
+            || err_str.contains("NotSupported")
+            || err_str.contains("anonymous")
+            || err_str.contains("AuthFailed"),
+        "error should be auth/read-only/anonymous: {err_str}"
     );
 }
 

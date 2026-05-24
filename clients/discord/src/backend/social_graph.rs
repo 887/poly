@@ -23,8 +23,15 @@ impl poly_client::SocialGraphBackend for DiscordClient {
     /// C.3 — `GET /users/@me/relationships` filtered to accepted friends
     /// (`type == 1`).  Blocked / incoming / outgoing requests are intentionally
     /// excluded here; expose them via dedicated methods if the UI grows the surface.
+    ///
+    /// 404 → empty list: test-discord mock and minimal Discord servers may not
+    /// expose `/users/@me/relationships` at all; treat that as "no friends".
     async fn get_friends(&self) -> ClientResult<Vec<User>> {
-        let rels = self.http.get_relationships().await?;
+        let rels = match self.http.get_relationships().await {
+            Ok(rels) => rels,
+            Err(ClientError::NotFound(_)) => return Ok(Vec::new()),
+            Err(e) => return Err(e),
+        };
         Ok(rels
             .into_iter()
             .filter(|r| r.relationship_type == 1)

@@ -177,13 +177,17 @@ async fn test_get_channels() {
     assert!(names.contains(&"general"), "general channel expected");
     assert!(names.contains(&"random"), "random channel expected");
     for ch in &channels {
-        // Guild 100 contains text channels, a forum channel, and a wildlife-news
-        // text channel. All channel types returned by get_channels are valid
-        // text-like types — no voice/thread-only types should appear.
+        // Guild 100 contains text channels, a forum channel, a wildlife-news
+        // announcement channel, AND a voice channel (`voice-general`, added
+        // for the cross-shell voice E2E path). Thread-only types must not
+        // appear in `get_channels`.
         assert!(
             matches!(
                 ch.channel_type,
-                ChannelType::Text | ChannelType::Forum | ChannelType::Announcement
+                ChannelType::Text
+                    | ChannelType::Forum
+                    | ChannelType::Announcement
+                    | ChannelType::Voice
             ),
             "unexpected channel type {:?} for channel {}",
             ch.channel_type,
