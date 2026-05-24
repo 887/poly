@@ -27,7 +27,14 @@ use poly_client::ClientError;
 /// | 3              | Nitro Basic       |
 ///
 /// Source: discord-api-types v10 `UserPremiumType` enum.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
+// PartialOrd/Ord are MANUALLY implemented (not derived) because Discord's
+// `premium_type` discriminants don't reflect capability hierarchy:
+// None=0, Classic=1, Full=2, Basic=3. A derived Ord would sort by
+// discriminant — making `Basic >= Classic` return true, which is wrong
+// (Basic is the WEAKEST paid tier — only animated-emoji privileges,
+// strictly less than Classic). We keep the on-wire discriminants and map
+// to a capability rank in the Ord impl below.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum NitroTier {
     #[default]
     None = 0,
@@ -39,6 +46,32 @@ pub enum NitroTier {
     Full = 2,
     /// Nitro Basic — animated emoji use only; no upload bump, no boosts.
     Basic = 3,
+}
+
+impl NitroTier {
+    /// Capability rank used by Ord — higher == more privileges.
+    /// Distinct from Discord's `premium_type` discriminant on the wire.
+    #[must_use]
+    pub fn capability_rank(self) -> u8 {
+        match self {
+            Self::None => 0,
+            Self::Basic => 1,
+            Self::Classic => 2,
+            Self::Full => 3,
+        }
+    }
+}
+
+impl PartialOrd for NitroTier {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for NitroTier {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.capability_rank().cmp(&other.capability_rank())
+    }
 }
 
 impl From<u8> for NitroTier {

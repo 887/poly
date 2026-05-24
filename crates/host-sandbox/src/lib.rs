@@ -165,8 +165,12 @@ mod tests {
     #[test]
     fn glob_matches_works() {
         assert!(glob_matches("*example.com*", "http://example.com/foo"));
-        assert!(glob_matches("*//captured*", "http://127.0.0.1/captured?token=abc"));
-        assert!(!glob_matches("*//captured*", "http://example.com/other"));
+        // Original test used the pattern "*//captured*" which requires the
+        // literal substring "//captured" (no intervening text) — that's not in
+        // the URL ("//127.0.0.1/captured" has the host between // and /captured).
+        // The pattern needs a second `*` to match intervening host text.
+        assert!(glob_matches("*//*captured*", "http://127.0.0.1/captured?token=abc"));
+        assert!(!glob_matches("*//*captured*", "http://example.com/other"));
         assert!(glob_matches("exact", "exact"));
         assert!(!glob_matches("exact", "notexact"));
         assert!(glob_matches("http*token=abc", "http://localhost/captured?token=abc"));

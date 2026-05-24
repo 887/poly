@@ -98,8 +98,12 @@ pub fn is_rtcp_packet(buf: &[u8]) -> bool {
     if version != 2 {
         return false;
     }
-    // Byte 1: payload type (no marker bit in RTCP — that bit is padding flag instead).
-    let pt = buf[1] & 0x7F;
+    // Byte 1: full 8-bit payload type. Unlike RTP (where byte 1 is M(1) PT(7)),
+    // RTCP packets per RFC 3550 §6.1 give all 8 bits to PT. The previous mask
+    // `& 0x7F` was incorrect — it stripped bit 7, turning PT=206 (PSFB) into
+    // 0x4E (78), which is OUTSIDE the RTCP range and caused is_rtcp_packet to
+    // reject all RTCP packets ≥128 (everything Discord actually sends).
+    let pt = buf[1];
     // RTCP payload types: 192–223 (RFC 5761 / IANA).
     if !(192..=223).contains(&pt) {
         return false;
@@ -121,7 +125,9 @@ pub fn is_rtcp_packet(buf: &[u8]) -> bool {
 pub fn parse_rtcp_feedback(buf: &[u8], current_bps: u32) -> Option<RtcpFeedback> {
     let mut offset = 0;
     while offset + RTCP_HEADER_SIZE <= buf.len() {
-        let pt = buf[offset + 1] & 0x7F;
+        // RTCP PT is 8 bits (RFC 3550 §6.1), not 7 bits like RTP.
+        // The `& 0x7F` mask was a copy-paste bug from RTP parsing.
+        let pt = buf[offset + 1];
         let fmt = (buf[offset] & 0x1F) as u8;
         let len_words = u16::from_be_bytes([buf[offset + 2], buf[offset + 3]]) as usize;
         let pkt_bytes = (len_words + 1) * 4;
