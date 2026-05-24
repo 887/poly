@@ -83,7 +83,7 @@ async fn canary_human_shaped_session_no_429_no_401() {
     let guild_id = require_env("DISCORD_CANARY_GUILD");
     let chan_id   = require_env("DISCORD_CANARY_CHANNEL");
 
-    use poly_client::AuthCredentials;
+    use poly_client::{AuthCredentials, IsBackend};
     use poly_discord::DiscordClient;
 
     // ── Step 1: Login ──────────────────────────────────────────────────────
@@ -123,15 +123,16 @@ async fn canary_human_shaped_session_no_429_no_401() {
     ];
     let delays_ms = [2_000u64, 3_000u64];
 
+    use poly_client::MessageContent;
     client
-        .send_message(&chan_id, messages[0])
+        .send_message(&chan_id, MessageContent::Text(messages[0].to_string()))
         .await
         .expect("canary: send_message #1 must succeed");
 
     for (i, (&msg, delay_ms)) in messages[1..].iter().zip(delays_ms.iter()).enumerate() {
         tokio::time::sleep(std::time::Duration::from_millis(*delay_ms)).await;
         client
-            .send_message(&chan_id, msg)
+            .send_message(&chan_id, MessageContent::Text(msg.to_string()))
             .await
             .unwrap_or_else(|e| panic!("canary: send_message #{} failed: {e}", i + 2));
     }

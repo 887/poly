@@ -4,6 +4,7 @@
 
 
 
+use poly_client::{BackendType, IsBackend};
 use super::harness;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;

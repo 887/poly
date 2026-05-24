@@ -10,6 +10,10 @@
 use std::sync::Arc;
 
 
+use poly_client::{
+    AuthCredentials, BackendType, DmsAndGroupsBackend, IsBackend, MessageContent, MessageQuery,
+    SocialGraphBackend,
+};
 use poly_plugin_host::{
     InMemoryPluginStorage, PluginStorageBackend,
     host_impl::PluginHostState,
