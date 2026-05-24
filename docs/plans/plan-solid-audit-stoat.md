@@ -123,7 +123,7 @@ rewrites remain future work.
   capability-trait lines the rest of the codebase uses
   (`ModerationBackend` / `SocialGraphBackend` / `DmsAndGroupsBackend` /
   `MessagingBackend`). Re-export from a thin `IsBackend` facade. ~600 LoC.
-  — shipped in change `rstmuupo`: each capability-trait impl lives in its
+  — shipped in change `qumnkxmo`: each capability-trait impl lives in its
   own sibling file (`is_backend.rs`, `messaging.rs`, `moderation.rs`,
   `social_graph.rs`, `dms_and_groups.rs`, `server_admin.rs`,
   `voice_transport.rs`, `settings.rs`, `view_descriptor.rs`,
@@ -131,6 +131,6 @@ rewrites remain future work.
   tests. `parse_bonfire_event` colocated with `is_backend.rs`.
 - [x] **D.3** Split `StoatHttpClient` (1148 lines) by domain — auth, channels,
   messages, social, moderation. ~500 LoC.
-  — shipped in change `rstmuupo`: `http.rs` becomes `http/{mod,auth,channels,messages,moderation,social}.rs`.
+  — shipped in change `qumnkxmo`: `http.rs` becomes `http/{mod,auth,channels,messages,moderation,social}.rs`.
   Struct + session/UA/request plumbing + tests in `http/mod.rs`; each
   domain attaches additional inherent `impl StoatHttpClient` blocks.
