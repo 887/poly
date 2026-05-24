@@ -74,19 +74,27 @@
 
 ---
 
-## Phase C — Medium refactors (50-300 LoC, max 5) — C.1 + C.5 shipped in this change
+## Phase C — Medium refactors (50-300 LoC, max 5) — C.1 + C.2 + C.3 + C.4 + C.5 shipped
 
 - [x] **C.1** Wire `send_typing` to `PUT /_matrix/client/v3/rooms/{roomId}/typing/{userId}`
   with a 4-second `timeout` on the body `{ typing: true, timeout: 4000 }`. Added
   `put_room_typing` to `http.rs` and wired `send_typing` in `lib.rs` (reads user_id
   from session, best-effort errors). ~60 LoC.
-- [ ] **C.2** Implement `search_messages` via `POST /_matrix/client/v3/search`.
-  Search categories: `room_events`. Mapping into `MessageSearchHit`. ~150 LoC.
-- [ ] **C.3** Implement `get_pinned_messages` / `set_message_pinned` via
-  `m.room.pinned_events` state event. ~120 LoC.
-- [ ] **C.4** Implement `create_server` (`POST /createRoom` with `preset:
-  trusted_private_chat`) and `create_channel` (room with parent space).
-  ~200 LoC.
+- [x] **C.2** Implement `search_messages` via `POST /_matrix/client/v3/search`.
+  Search categories: `room_events`. API types `SearchRequest/Response/Categories/Filter`
+  added to `api.rs`; `post_search` in `http.rs`; `search_messages` in `lib.rs` maps
+  `SearchResult` → `MessageSearchHit`. ~150 LoC. — shipped in change `c489a4619898`
+- [x] **C.3** Implement `get_pinned_messages` / `set_message_pinned` via
+  `m.room.pinned_events` state event. Added `PinnedEventsContent` to `api.rs`;
+  `get_room_pinned_event_ids`, `get_room_event`, `put_room_pinned_events` in `http.rs`;
+  both methods wired in `lib.rs` (read-modify-write for set_message_pinned,
+  parallel event fetch + hydration for get_pinned_messages). ~150 LoC.
+  — shipped in change `c489a4619898`
+- [x] **C.4** Implement `create_server` (`POST /createRoom` with `preset: public_chat`
+  + `room_type: m.space`) and `create_channel` (room with `m.space.parent` initial state
+  + best-effort `m.space.child` write). Added `CreateRoomRequest/Response/InitialStateEvent`
+  to `api.rs`; `create_room` + `put_space_child` in `http.rs`; both methods wired in
+  `lib.rs`. ~220 LoC. — shipped in change `c489a4619898`
 - [x] **C.5** Implement `mark_channel_read` via `POST /rooms/{id}/read_markers`.
   Added `post_read_markers` to `http.rs`; `mark_channel_read` in `lib.rs` fetches
   the latest event ID via `/messages?limit=1` then advances the marker. ~50 LoC.
