@@ -467,7 +467,7 @@ pub async fn connect_voice(
 mod handshake;
 use handshake::{
     wait_for_hello, send_identify, wait_for_ready, wait_for_session_description,
-    select_encryption_mode, send_select_protocol, VoiceReady, SessionDesc,
+    select_encryption_mode, send_select_protocol,
     WsRead, WsWrite,
 };
 

@@ -108,6 +108,7 @@ async fn encode_bgra_produces_nal_units() {
         data_b64: b64_encode(&frame),
         force_keyframe: true,
         session_id: "test-encode-basic".into(),
+        target_bps: None,
     };
     let (status, resp): (StatusCode, EncodeH264Response) =
         post_json(&router, "/host/video/encode_h264", &req).await;
@@ -142,6 +143,7 @@ async fn round_trip_encode_decode() {
             data_b64: b64_encode(&frame),
             force_keyframe: i == 0,
             session_id: session.into(),
+            target_bps: None,
         };
         let (status, resp): (StatusCode, EncodeH264Response) =
             post_json(&router, "/host/video/encode_h264", &req).await;
@@ -206,6 +208,7 @@ async fn encode_bad_format_returns_error() {
         data_b64: b64_encode(&[0u8; 64 * 64 * 4]),
         force_keyframe: false,
         session_id: "bad-format".into(),
+        target_bps: None,
     };
     let (status, resp): (StatusCode, EncodeH264Response) =
         post_json(&router, "/host/video/encode_h264", &req).await;
@@ -237,6 +240,7 @@ async fn close_session_is_idempotent() {
         data_b64: b64_encode(&make_bgra_frame(64, 64, 0)),
         force_keyframe: true,
         session_id: "close-me".into(),
+        target_bps: None,
     };
     let (_, enc_resp): (_, EncodeH264Response) =
         post_json(&router, "/host/video/encode_h264", &enc_req).await;

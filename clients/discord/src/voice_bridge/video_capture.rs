@@ -3,6 +3,7 @@
 //! H.264 video capture (WebCodecs) + RFC 6184 NAL fragmentation helpers.
 //! Pure structural move — no behaviour change.
 
+#[cfg(target_arch = "wasm32")]
 use super::*;
 
 

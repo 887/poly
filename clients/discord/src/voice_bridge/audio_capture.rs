@@ -345,6 +345,8 @@ fn copy_plane_f32(
 /// interleaved L/R; output is the same layout. Good enough for a voice path —
 /// production-grade audio would use a polyphase filter, but Opus tolerates
 /// linear resampling fine at the source.
+// lint-allow-unused: pure DSP helper; called only on wasm32 and in #[cfg(test)]
+#[allow(dead_code)]
 pub(crate) fn resample_stereo_linear(
     input: &[f32],
     src_rate: u32,
@@ -375,6 +377,8 @@ pub(crate) fn resample_stereo_linear(
 
 /// Convert f32 samples in [-1.0, 1.0] to i16 LE PCM. Out-of-range values
 /// are clamped before scaling.
+// lint-allow-unused: pure DSP helper; called only on wasm32 and in #[cfg(test)]
+#[allow(dead_code)]
 pub(crate) fn float32_to_i16(input: &[f32]) -> Vec<i16> {
     input
         .iter()

@@ -905,7 +905,7 @@ fn spawn_ws_event_listener(
 // ── RTP helpers — moved to voice_bridge/rtp.rs (SOLID B.2) ────────────────────────
 
 pub mod rtp;
-pub use rtp::*;
+use rtp::*;
 
 
 // ── Discord voice protocol helpers ────────────────────────────────────────────

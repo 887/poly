@@ -53,9 +53,6 @@ const VIDEO_MTU: usize = 1100;
 /// Keyframe interval: send a forced IDR every 60 frames (~2s at 30fps).
 const KEYFRAME_INTERVAL_FRAMES: u32 = 60;
 
-/// Broadcast channel capacity for decoded remote frames (per user).
-const FRAME_BROADCAST_CAP: usize = 4;
-
 /// Video SSRC offset from audio SSRC (Discord convention: video_ssrc = audio_ssrc + 1).
 const VIDEO_SSRC_OFFSET: u32 = 1;
 
@@ -124,7 +121,7 @@ impl DiscordVideoTransport {
         encryption_mode: String,
         ws_out_tx: mpsc::Sender<serde_json::Value>,
         bridge_base_url: String,
-        mut frame_rx: mpsc::Receiver<VideoFrame>,
+        frame_rx: mpsc::Receiver<VideoFrame>,
     ) -> Result<Self, VideoTransportError> {
         Self::start_with_bandwidth_ctrl(
             audio_ssrc,

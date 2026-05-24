@@ -5,8 +5,6 @@
 
 use super::*;
 
-    use super::*;
-
     /// Reassemble a single complete NAL unit from a sequence of FU-A
     /// fragments. Returns `None` if the fragments are malformed or do not
     /// terminate with an E-bit fragment.
