@@ -8004,6 +8004,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "poly-voice-ui-smoke"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "futures-util",
+ "reqwest 0.13.2",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-tungstenite 0.26.2",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "poly-web"
 version = "0.1.0"
 dependencies = [

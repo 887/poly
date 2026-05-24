@@ -1,6 +1,6 @@
 # Voice & Video Calls — Discord (full) + Stoat (full) + Teams (stub)
 
-## Status: ✅ DONE — Phase K complete (K.1+K.2+K.3+K.5+K.6+K.7+K.8 shipped; K.4 deferred — needs Playwright UI test harness, tracked for follow-up plan-voice-ui-playwright.md). Phases A + B + C + D + E (E.1–E.9 shipped) + I + J shipped. Phase F (Stoat voice gateway) shipped via plan-stoat-voice-wasm.md (A+B.1+B.2+B.5+B.6). Phase G fully shipped (G.1–G.5; G.4 + G.5 in changes `wzykppkz` + this change). Phase H fully shipped (H.1–H.5).
+## Status: ✅ DONE — Phase K complete (K.1+K.2+K.3+K.4+K.5+K.6+K.7+K.8 shipped). K.4 closed via `plan-voice-ui-playwright.md` Phase A — Rust CDP harness in `tools/voice-ui-smoke/`. Phases A + B + C + D + E (E.1–E.9 shipped) + I + J shipped. Phase F (Stoat voice gateway) shipped via plan-stoat-voice-wasm.md (A+B.1+B.2+B.5+B.6). Phase G fully shipped (G.1–G.5; G.4 + G.5 in changes `wzykppkz` + this change). Phase H fully shipped (H.1–H.5).
 
 _Last updated: 2026-05-17_
 
@@ -562,23 +562,23 @@ different device IDs from the OS).
   `RUN_VOICE_SMOKE=1` because it requires real Discord credentials. Shipped — `tools/discord-voice-smoke/` exists with `src/`, `Cargo.toml`, `README.md`.
 - [x] **K.3** Stoat transport CLI smoke against `test-stoat` fixture —
   always-on (no external network). Shipped — `tools/stoat-voice-smoke/` exists with `src/`, `Cargo.toml`.
-- [~] **K.4** UI integration test (Playwright via `mcp__poly-web`):
+- [x] **K.4** UI integration test (Rust CDP harness, not Playwright):
   navigate to a test-stoat voice channel, click connect, assert the
   voice banner appears, assert the participant list updates, click
   disconnect, assert the banner clears.
-  — **Deferred**: requires a Playwright-driven UI test harness that
-  doesn't exist in this repo yet. `crates/core/` is a Dioxus library
-  crate with no headless-rendering test path; the only browser-MCP
-  smoke runs today are interactive (`mcp__poly-web`) and not wired
-  into `cargo test` or CI. Shipping a hand-rolled Playwright spec
-  would require: (1) a new `tests/playwright/` workspace member with
-  Playwright bindings (Node side-channel), (2) a `poly-test-runner`
-  startup hook that boots test-stoat + apps/web together on a known
-  port, (3) MCP-vs-test isolation so the dev MCP doesn't fight the
-  test harness for `/dev/dri/*`. Tracked as a follow-up under a new
-  `plan-voice-ui-playwright.md` (not yet written). Phase H + I land
-  the prerequisites (test-stoat voice fixture + Teams stub UI) so the
-  spec content is known; only the harness is missing.
+  Shipped via `plan-voice-ui-playwright.md` Phase A — new workspace
+  member `tools/voice-ui-smoke/` (`poly-voice-ui-smoke` binary). Drives
+  Chromium via raw CDP using the same `tokio-tungstenite` plumbing as
+  `mcp/web-devtools-mcp/`; no Node/Playwright toolchain needed.
+  Skip-by-default via `RUN_VOICE_UI_SMOKE=1` + `POLY_VOICE_UI_URL`
+  (matches the env-gate pattern of K.2 / K.3). Asserts on
+  `.btn-voice-join` → `.voice-banner` → `.voice-banner-avatars`
+  populated → `.voice-ctrl-btn.disconnect` → `.voice-banner` gone.
+  Each assertion uses a 12 s `wait_for_predicate` deadline so the test
+  tolerates render latency. Full live run still requires a hand-set-up
+  `dx serve` + Chromium + signed-in test-stoat account (per the
+  follow-up plan Phase B.2 — wiring `test-runner` into the harness so
+  `cargo test` is self-contained is the next refinement).
 - [x] **K.5** Held-call swap test: start a Discord voice channel call,
   start a Stoat DM call, assert the Discord call moves to
   `held_voice_connections`, click swap, assert it returns to active.

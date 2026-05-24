@@ -55,6 +55,7 @@ members = [
     "tools/poly-cli",
     "tools/discord-voice-smoke",
     "tools/stoat-voice-smoke",
+    "tools/voice-ui-smoke",
     "mcp/chat-mcp",
     "crates/host-sandbox",
 ]

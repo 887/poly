@@ -1,0 +1,27 @@
+[package]
+name = "poly-voice-ui-smoke"
+description = "CDP-driven UI smoke test for the voice banner connect/disconnect flow (K.4 of plan-voice-video-calls.md)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+# Always-on compile (no external credentials), but actual run is gated by
+# RUN_VOICE_UI_SMOKE=1 and requires a running `dx serve` apps/web on port 3000
+# plus a Chromium with --remote-debugging-port=9222. See README for invocation.
+
+[[bin]]
+name = "voice-ui-smoke"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time", "net"] }
+tokio-tungstenite = { workspace = true }
+futures-util = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[lints]
+workspace = true
