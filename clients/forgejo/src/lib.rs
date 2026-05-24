@@ -75,6 +75,8 @@ mod ns {
     pub(super) const SAVED_MSG: &str = "Forgejo has no saved-messages concept";
     pub(super) const GROUP_DM: &str = "Forgejo has no group DMs";
     pub(super) const CONV_MUTE: &str = "Forgejo has no conversation mute";
+    pub(super) const READ_ONLY_SEND: &str =
+        "forgejo backend is read-only — open the instance web UI to comment";
 }
 
 /// Return FTL translation source for the Forgejo client plugin.

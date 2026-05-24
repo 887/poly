@@ -121,9 +121,7 @@ impl IsBackend for ForgejoClient {
         _channel_id: &str,
         _content: MessageContent,
     ) -> ClientResult<Message> {
-        Err(ClientError::NotSupported(
-            "forgejo backend is read-only — open the instance web UI to comment".to_string(),
-        ))
+        Err(ClientError::NotSupported(ns::READ_ONLY_SEND.to_string()))
     }
 
     async fn get_messages(

@@ -1,7 +1,27 @@
 //! `impl ModerationBackend for ForgejoClient` — permissions, delete_message,
 //! and not-supported stubs for kick/ban/role management.
+//!
+//! Forgejo is a forge, not a chat — kick/ban/role/timeout/audit-log have no
+//! analog. These methods return [`ClientError::NotSupported`] with a
+//! human-readable explanation. Messages live in `mod_ns` so the strings are
+//! deduplicated and the trait surface stays scannable.
 
 use crate::*;
+
+mod mod_ns {
+    pub(super) const KICK: &str =
+        "Forgejo: collaborators have no kick concept; use the org settings to remove access";
+    pub(super) const BAN: &str =
+        "Forgejo: no per-repo ban; site admins can suspend users via the admin panel only";
+    pub(super) const UNBAN: &str = "Forgejo: no per-repo ban/unban";
+    pub(super) const TIMEOUT: &str = "Forgejo: no timeout concept";
+    pub(super) const BAN_LIST: &str = "Forgejo: no per-repo ban list";
+    pub(super) const CHANNEL_UPDATE: &str =
+        "Forgejo: channel concept maps to issue/PR sections; renaming/reordering not exposed";
+    pub(super) const CHANNEL_REORDER: &str = "Forgejo: channel reordering not supported";
+    pub(super) const MOD_LOG: &str = "Forgejo: admin audit log is not available via the REST API";
+    pub(super) const ROLES: &str = "Forgejo: no role concept";
+}
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
@@ -47,10 +67,7 @@ impl poly_client::ModerationBackend for ForgejoClient {
         _member_id: &str,
         _reason: Option<&str>,
     ) -> ClientResult<()> {
-        Err(ClientError::NotSupported(
-            "Forgejo: collaborators have no kick concept; use the org settings to remove access"
-                .to_string(),
-        ))
+        Err(ClientError::NotSupported(mod_ns::KICK.to_string()))
     }
 
     /// Forgejo has no per-repo ban concept.
@@ -61,16 +78,11 @@ impl poly_client::ModerationBackend for ForgejoClient {
         _reason: Option<&str>,
         _delete_message_history_secs: Option<u64>,
     ) -> ClientResult<()> {
-        Err(ClientError::NotSupported(
-            "Forgejo: no per-repo ban; site admins can suspend users via the admin panel only"
-                .to_string(),
-        ))
+        Err(ClientError::NotSupported(mod_ns::BAN.to_string()))
     }
 
     async fn unban_member(&self, _server_id: &str, _member_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported(
-            "Forgejo: no per-repo ban/unban".to_string(),
-        ))
+        Err(ClientError::NotSupported(mod_ns::UNBAN.to_string()))
     }
 
     async fn timeout_member(
@@ -80,21 +92,15 @@ impl poly_client::ModerationBackend for ForgejoClient {
         _until: chrono::DateTime<chrono::Utc>,
         _reason: Option<&str>,
     ) -> ClientResult<()> {
-        Err(ClientError::NotSupported(
-            "Forgejo: no timeout concept".to_string(),
-        ))
+        Err(ClientError::NotSupported(mod_ns::TIMEOUT.to_string()))
     }
 
     async fn untimeout_member(&self, _server_id: &str, _member_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported(
-            "Forgejo: no timeout concept".to_string(),
-        ))
+        Err(ClientError::NotSupported(mod_ns::TIMEOUT.to_string()))
     }
 
     async fn get_bans(&self, _server_id: &str) -> ClientResult<Vec<BannedMember>> {
-        Err(ClientError::NotSupported(
-            "Forgejo: no per-repo ban list".to_string(),
-        ))
+        Err(ClientError::NotSupported(mod_ns::BAN_LIST.to_string()))
     }
 
     /// Delete an issue comment.
@@ -131,10 +137,7 @@ impl poly_client::ModerationBackend for ForgejoClient {
         _channel_id: &str,
         _update: UpdateChannelParams,
     ) -> ClientResult<()> {
-        Err(ClientError::NotSupported(
-            "Forgejo: channel concept maps to issue/PR sections; renaming/reordering not exposed"
-                .to_string(),
-        ))
+        Err(ClientError::NotSupported(mod_ns::CHANNEL_UPDATE.to_string()))
     }
 
     async fn reorder_channels(
@@ -142,9 +145,7 @@ impl poly_client::ModerationBackend for ForgejoClient {
         _server_id: &str,
         _ordering: Vec<String>,
     ) -> ClientResult<()> {
-        Err(ClientError::NotSupported(
-            "Forgejo: channel reordering not supported".to_string(),
-        ))
+        Err(ClientError::NotSupported(mod_ns::CHANNEL_REORDER.to_string()))
     }
 
     async fn get_moderation_log(
@@ -152,14 +153,10 @@ impl poly_client::ModerationBackend for ForgejoClient {
         _server_id: &str,
         _limit: usize,
     ) -> ClientResult<Vec<ModerationLogEntry>> {
-        Err(ClientError::NotSupported(
-            "Forgejo: admin audit log is not available via the REST API".to_string(),
-        ))
+        Err(ClientError::NotSupported(mod_ns::MOD_LOG.to_string()))
     }
 
     async fn get_server_roles(&self, _server_id: &str) -> ClientResult<Vec<Role>> {
-        Err(ClientError::NotSupported(
-            "Forgejo: no role concept".to_string(),
-        ))
+        Err(ClientError::NotSupported(mod_ns::ROLES.to_string()))
     }
 }
