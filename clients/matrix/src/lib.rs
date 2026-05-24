@@ -41,23 +41,46 @@ mod wit_bindings;
 #[cfg(target_os = "wasi")]
 mod guest;
 
+// ── SOLID D.3 — per-trait sibling modules ────────────────────────────────────
+
+#[cfg(feature = "native")]
+mod is_backend;
+
+#[cfg(feature = "native")]
+mod moderation;
+
+#[cfg(feature = "native")]
+mod social_graph;
+
+#[cfg(feature = "native")]
+mod dms_groups;
+
+#[cfg(feature = "native")]
+mod messaging;
+
+#[cfg(feature = "native")]
+mod server_admin;
+
+#[cfg(feature = "native")]
+mod settings;
+
+#[cfg(feature = "native")]
+mod view_descriptor;
+
+#[cfg(feature = "native")]
+mod context_action;
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 #[cfg(feature = "native")]
 pub use config::{DEFAULT_HOMESERVER_URL, MatrixAuthInput, MatrixConfig, MatrixConfigError};
 
-#[cfg(feature = "native")]
-use async_trait::async_trait;
-#[cfg(feature = "native")]
-use futures::stream::Stream;
-#[cfg(all(feature = "native", target_arch = "wasm32"))]
-use futures::stream;
 #[cfg(feature = "native")]
 use http::{MatrixHttpClient, MatrixSessionState};
 #[cfg(feature = "native")]
 use poly_client::*;
 #[cfg(feature = "native")]
 use std::collections::HashSet;
-#[cfg(feature = "native")]
-use std::pin::Pin;
 
 /// Return Fluent translations for the given locale.
 #[must_use]
@@ -91,18 +114,18 @@ pub(crate) fn mxc_to_http_thumbnail(mxc_uri: &str, homeserver_url: &str) -> Stri
 /// Matrix messenger client.
 #[cfg(feature = "native")]
 pub struct MatrixClient {
-    http: MatrixHttpClient,
+    pub(crate) http: MatrixHttpClient,
     /// Pack C P18 — in-memory settings storage stub. TODO: migrate to
     /// `host-api.kv_set` once exposed to plugins for true persistence.
-    settings_storage: SettingsStorageCell,
+    pub(crate) settings_storage: SettingsStorageCell,
     /// F10 — in-memory muted room ids. Persistent storage is F9 — out of scope.
-    muted_rooms: std::sync::RwLock<HashSet<String>>,
+    pub(crate) muted_rooms: std::sync::RwLock<HashSet<String>>,
     /// F10 — in-memory ignored user ids.
-    ignored_users: std::sync::RwLock<HashSet<String>>,
+    pub(crate) ignored_users: std::sync::RwLock<HashSet<String>>,
     /// F10 — rooms the user has explicitly marked read via the context menu.
-    marked_read: std::sync::RwLock<HashSet<String>>,
+    pub(crate) marked_read: std::sync::RwLock<HashSet<String>>,
     /// Stored version override (None = use http::DEFAULT_CLIENT_VERSION).
-    version_override: std::sync::Mutex<Option<String>>,
+    pub(crate) version_override: std::sync::Mutex<Option<String>>,
 }
 
 #[cfg(feature = "native")]
@@ -155,7 +178,7 @@ impl MatrixClient {
         self.http.instance_id()
     }
 
-    fn build_session(
+    pub(crate) fn build_session(
         &self,
         session_state: &MatrixSessionState,
         profile: &api::ProfileResponse,
@@ -186,7 +209,7 @@ impl MatrixClient {
         }
     }
 
-    fn current_user_id(&self) -> ClientResult<String> {
+    pub(crate) fn current_user_id(&self) -> ClientResult<String> {
         self.http
             .session()
             .map(|s| s.user_id)
@@ -196,14 +219,14 @@ impl MatrixClient {
     /// The session/device ID used as the account key in the app.
     /// Must match `Session::id` (= `device_id`) so sidebar lookups find the
     /// right session.
-    fn current_account_id(&self) -> ClientResult<String> {
+    pub(crate) fn current_account_id(&self) -> ClientResult<String> {
         self.http
             .session()
             .map(|s| s.device_id)
             .ok_or_else(|| ClientError::AuthFailed("not logged in".into()))
     }
 
-    fn room_event_to_message(event: &api::RoomEvent) -> Option<Message> {
+    pub(crate) fn room_event_to_message(event: &api::RoomEvent) -> Option<Message> {
         if event.event_type != "m.room.message" {
             return None;
         }
@@ -241,7 +264,7 @@ impl MatrixClient {
         })
     }
 
-    fn extract_room_name(state: &[api::RoomEvent], fallback: &str) -> String {
+    pub(crate) fn extract_room_name(state: &[api::RoomEvent], fallback: &str) -> String {
         state
             .iter()
             .find(|ev| ev.event_type == "m.room.name")
@@ -259,7 +282,7 @@ impl MatrixClient {
     ///
     /// Non-`mxc://` values (e.g. direct HTTP URLs in test data) are returned
     /// as-is so the test suite works without a media endpoint.
-    fn extract_avatar_url(state: &[api::RoomEvent], homeserver_url: &str) -> Option<String> {
+    pub(crate) fn extract_avatar_url(state: &[api::RoomEvent], homeserver_url: &str) -> Option<String> {
         let raw = state
             .iter()
             .find(|ev| ev.event_type == "m.room.avatar")
@@ -273,7 +296,7 @@ impl MatrixClient {
     /// MXID — without this the chat shows `@user:server` text and a blank
     /// avatar for every author. Profiles are fetched in parallel and
     /// deduplicated per unique sender to avoid N requests for N messages.
-    async fn hydrate_message_authors(&self, mut messages: Vec<Message>) -> Vec<Message> {
+    pub(crate) async fn hydrate_message_authors(&self, mut messages: Vec<Message>) -> Vec<Message> {
         use std::collections::{HashMap, HashSet};
         let unique_senders: Vec<String> = {
             let mut seen = HashSet::new();
@@ -315,7 +338,7 @@ impl MatrixClient {
         messages
     }
 
-    fn is_space_room(state: &[api::RoomEvent]) -> bool {
+    pub(crate) fn is_space_room(state: &[api::RoomEvent]) -> bool {
         state.iter().any(|ev| {
             ev.event_type == "m.room.create"
                 && ev
@@ -330,7 +353,7 @@ impl MatrixClient {
     /// onto the session state so `build_message_from_send` can populate the
     /// message author block without re-fetching `/profile/{userId}` for
     /// every send.
-    fn cache_session_profile(&self, profile: &api::ProfileResponse) {
+    pub(crate) fn cache_session_profile(&self, profile: &api::ProfileResponse) {
         let display_name = profile.displayname.clone();
         let avatar_url = profile
             .avatar_url
@@ -339,7 +362,7 @@ impl MatrixClient {
         drop(self.http.update_session_profile(display_name, avatar_url));
     }
 
-    fn build_message_from_send(
+    pub(crate) fn build_message_from_send(
         &self,
         event_id: String,
         body: String,
@@ -371,7 +394,7 @@ impl MatrixClient {
         })
     }
 
-    fn extract_body(content: &MessageContent) -> String {
+    pub(crate) fn extract_body(content: &MessageContent) -> String {
         match content {
             MessageContent::Text(text)
             | MessageContent::WithAttachments { text, .. } => text.clone(),
@@ -379,7 +402,7 @@ impl MatrixClient {
     }
 
     /// Extract the room topic from state events (`m.room.topic`).
-    fn extract_room_topic(state: &[api::RoomEvent]) -> Option<String> {
+    pub(crate) fn extract_room_topic(state: &[api::RoomEvent]) -> Option<String> {
         state
             .iter()
             .find(|ev| ev.event_type == "m.room.topic")
@@ -389,7 +412,7 @@ impl MatrixClient {
     }
 
     /// Extract the canonical alias from state events (`m.room.canonical_alias`).
-    fn extract_canonical_alias(state: &[api::RoomEvent]) -> Option<String> {
+    pub(crate) fn extract_canonical_alias(state: &[api::RoomEvent]) -> Option<String> {
         state
             .iter()
             .find(|ev| ev.event_type == "m.room.canonical_alias")
@@ -400,7 +423,7 @@ impl MatrixClient {
 
     /// Count joined members from state events (`m.room.member` with
     /// `membership == "join"`).
-    fn count_joined_members(state: &[api::RoomEvent]) -> usize {
+    pub(crate) fn count_joined_members(state: &[api::RoomEvent]) -> usize {
         state
             .iter()
             .filter(|ev| {
@@ -492,7 +515,7 @@ pub fn build_sidebar_items(entries: Vec<SpaceTreeEntry>) -> Vec<SidebarItem> {
 /// `visited` set.
 #[cfg(feature = "native")]
 impl MatrixClient {
-    async fn fetch_space_tree(&self) -> ClientResult<Vec<SpaceTreeEntry>> {
+    pub(crate) async fn fetch_space_tree(&self) -> ClientResult<Vec<SpaceTreeEntry>> {
         use std::collections::HashSet;
 
         let joined = self.http.fetch_joined_rooms().await?;
@@ -603,10 +626,10 @@ impl MatrixClient {
     }
 }
 
-/// F10 — shared menu-item builder (also used inside the trait impl).
+/// F10 — shared menu-item builder (used by ContextActionBackend impl).
 #[cfg(feature = "native")]
 impl MatrixClient {
-    fn simple_item(
+    pub(crate) fn simple_item(
         id: &str,
         slot: MenuSlot,
         label_key: &str,
@@ -621,1431 +644,6 @@ impl MatrixClient {
             item_variant,
             shortcut: None,
             block: None,
-        }
-    }
-}
-
-#[cfg(feature = "native")]
-#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
-#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-impl IsBackend for MatrixClient {
-    async fn authenticate(&mut self, credentials: AuthCredentials) -> ClientResult<Session> {
-        let auth_input = MatrixAuthInput::try_from(credentials)?;
-
-        match auth_input {
-            MatrixAuthInput::AccessToken(token) => {
-                let whoami = self.http.authenticate_with_token(token).await?;
-                let profile = self.http.fetch_profile(&whoami.user_id).await.unwrap_or(
-                    api::ProfileResponse {
-                        displayname: None,
-                        avatar_url: None,
-                    },
-                );
-                self.cache_session_profile(&profile);
-                let session_state = self.http.session().ok_or_else(|| {
-                    ClientError::Internal("session not set after token auth".into())
-                })?;
-                Ok(self.build_session(&session_state, &profile))
-            }
-            MatrixAuthInput::UsernamePassword { username, password } => {
-                let login = self.http.login_with_password(&username, &password).await?;
-                let profile = self
-                    .http
-                    .fetch_profile(&login.user_id)
-                    .await
-                    .unwrap_or(api::ProfileResponse {
-                        displayname: None,
-                        avatar_url: None,
-                    });
-                self.cache_session_profile(&profile);
-                let session_state = self.http.session().ok_or_else(|| {
-                    ClientError::Internal("session not set after password auth".into())
-                })?;
-                Ok(self.build_session(&session_state, &profile))
-            }
-        }
-    }
-
-    async fn logout(&mut self) -> ClientResult<()> {
-        self.http.logout().await
-    }
-
-    fn is_authenticated(&self) -> bool {
-        self.http.is_authenticated()
-    }
-
-    fn plugin_manifest(&self) -> PluginManifest {
-        PluginManifest {
-            exec_programs: vec![],
-            http_hosts: vec!["<homeserver from account>".to_string()],
-            description: "Matrix backend. Federated, end-to-end-encrypted \
-                          messaging via the client-server API. Connects to \
-                          whichever homeserver each signed-in account specifies \
-                          (matrix.org, your own, or any compliant server)."
-                .to_string(),
-            homepage: Some("https://matrix.org".to_string()),
-        }
-    }
-
-    async fn get_servers(&self) -> ClientResult<Vec<Server>> {
-        let joined = self.http.fetch_joined_rooms().await?;
-        let account_id = self.current_account_id()?;
-        let display_name = self.current_user_id().unwrap_or_else(|_| account_id.clone());
-        let mut servers = Vec::new();
-
-        let homeserver_url = self.homeserver_url().to_string();
-        for room_id in &joined.joined_rooms {
-            let state = self.http.fetch_room_state(room_id).await.unwrap_or_default();
-            if Self::is_space_room(&state) {
-                servers.push(Server {
-                    id: room_id.clone(),
-                    name: Self::extract_room_name(&state, "Unnamed Space"),
-                    icon_url: Self::extract_avatar_url(&state, &homeserver_url),
-                    banner_url: None,
-                    unread_count: 0,
-                    mention_count: 0,
-                    categories: vec![],
-                    backend: BackendType::from(crate::SLUG),
-                    account_id: account_id.clone(),
-                    account_display_name: display_name.clone(),
-                    default_channel_id: None,
-                    description: None,
-                    star_count: None,
-                    language: None,
-                    forks_count: None,
-                    open_issues_count: None,
-                });
-            }
-        }
-
-        Ok(servers)
-    }
-
-    async fn get_server(&self, id: &str) -> ClientResult<Server> {
-        let state = self.http.fetch_room_state(id).await?;
-        let account_id = self.current_account_id()?;
-        let display_name = self.current_user_id().unwrap_or_else(|_| account_id.clone());
-        let homeserver_url = self.homeserver_url().to_string();
-
-        Ok(Server {
-            id: id.to_string(),
-            name: Self::extract_room_name(&state, "Unnamed Space"),
-            icon_url: Self::extract_avatar_url(&state, &homeserver_url),
-            banner_url: None,
-            unread_count: 0,
-            mention_count: 0,
-            categories: vec![],
-            backend: BackendType::from(crate::SLUG),
-            account_id: account_id.clone(),
-            default_channel_id: None,
-            description: None,
-            star_count: None,
-            language: None,
-            forks_count: None,
-            open_issues_count: None,
-            account_display_name: display_name,
-        })
-    }
-
-    async fn get_channels(&self, server_id: &str) -> ClientResult<Vec<Channel>> {
-        let hierarchy = self.http.fetch_space_hierarchy(server_id).await?;
-        let channels: Vec<Channel> = hierarchy
-            .rooms
-            .iter()
-            .filter(|room| room.room_type.as_deref() != Some("m.space"))
-            .map(|room| Channel {
-                id: room.room_id.clone(),
-                name: room.name.clone().unwrap_or_else(|| room.room_id.clone()),
-                server_id: server_id.to_string(),
-                channel_type: ChannelType::Text,
-                unread_count: 0,
-                mention_count: 0,
-                last_message_id: None,
-                forum_tags: None,
-                parent_channel_id: None,
-                thread_metadata: None,
-            })
-            .collect();
-
-        Ok(channels)
-    }
-
-    async fn get_channel(&self, id: &str) -> ClientResult<Channel> {
-        let state = self.http.fetch_room_state(id).await?;
-
-        Ok(Channel {
-            id: id.to_string(),
-            name: Self::extract_room_name(&state, id),
-            server_id: String::new(),
-            channel_type: ChannelType::Text,
-            unread_count: 0,
-            mention_count: 0,
-            last_message_id: None,
-            forum_tags: None,
-            parent_channel_id: None,
-            thread_metadata: None,
-        })
-    }
-
-    async fn send_message(
-        &self,
-        channel_id: &str,
-        content: MessageContent,
-    ) -> ClientResult<Message> {
-        let txn_id = uuid::Uuid::new_v4().to_string();
-        let body = Self::extract_body(&content);
-
-        let send_req = api::SendMessageRequest {
-            msgtype: "m.text".to_string(),
-            body: body.clone(),
-            formatted_body: None,
-            format: None,
-            relates_to: None,
-        };
-
-        let result = self
-            .http
-            .send_message(channel_id, &txn_id, &send_req)
-            .await?;
-
-        self.build_message_from_send(result.event_id, body)
-    }
-
-    // ── Messaging extras (H.4.a — moved to MessagingBackend) ────────────────
-
-    fn as_messaging(&self) -> Option<&dyn poly_client::MessagingBackend> {
-        Some(self)
-    }
-
-    async fn get_messages(
-        &self,
-        channel_id: &str,
-        query: MessageQuery,
-    ) -> ClientResult<Vec<Message>> {
-        let from = if let Some(before) = &query.before {
-            before.clone()
-        } else {
-            let session = self.http.session().ok_or_else(|| {
-                ClientError::AuthFailed("not logged in".into())
-            })?;
-            session.sync_next_batch.unwrap_or_default()
-        };
-
-        let messages = if from.is_empty() {
-            // No pagination token; do an initial sync to get one
-            let sync = self.http.sync(None, Some(0)).await?;
-            let prev_batch = sync
-                .rooms
-                .as_ref()
-                .and_then(|rooms| rooms.join.as_ref())
-                .and_then(|join| join.get(channel_id))
-                .and_then(|room| room.timeline.as_ref())
-                .and_then(|tl| tl.prev_batch.clone())
-                .unwrap_or(sync.next_batch);
-
-            let limit = u64::from(query.limit.unwrap_or(50));
-            let response = self
-                .http
-                .fetch_messages(channel_id, &prev_batch, "b", Some(limit))
-                .await?;
-
-            response
-                .chunk
-                .iter()
-                .filter_map(Self::room_event_to_message)
-                .collect::<Vec<_>>()
-        } else {
-            let dir = if query.after.is_some() { "f" } else { "b" };
-            let limit = u64::from(query.limit.unwrap_or(50));
-            let response = self
-                .http
-                .fetch_messages(channel_id, &from, dir, Some(limit))
-                .await?;
-
-            response
-                .chunk
-                .iter()
-                .filter_map(Self::room_event_to_message)
-                .collect::<Vec<_>>()
-        };
-
-        Ok(self.hydrate_message_authors(messages).await)
-    }
-
-    // ── Social graph (H.3.b — moved to SocialGraphBackend) ──────────────────
-
-    fn as_social_graph(&self) -> Option<&dyn poly_client::SocialGraphBackend> {
-        Some(self)
-    }
-
-    async fn get_channel_members(&self, channel_id: &str) -> ClientResult<Vec<User>> {
-        let members = self.http.fetch_room_members(channel_id).await?;
-        let users: Vec<User> = members
-            .chunk
-            .iter()
-            .filter(|ev| {
-                ev.event_type == "m.room.member"
-                    && ev
-                        .content
-                        .get("membership")
-                        .and_then(serde_json::Value::as_str)
-                        == Some("join")
-            })
-            .filter_map(|ev| {
-                let user_id = ev.state_key.as_deref()?;
-                let display_name = ev
-                    .content
-                    .get("displayname")
-                    .and_then(serde_json::Value::as_str)
-                    .unwrap_or(user_id)
-                    .to_string();
-                let avatar_url = ev
-                    .content
-                    .get("avatar_url")
-                    .and_then(serde_json::Value::as_str)
-                    .map(str::to_string);
-
-                Some(User {
-                    id: user_id.to_string(),
-                    display_name,
-                    avatar_url,
-                    presence: PresenceStatus::Offline,
-                    backend: BackendType::from(crate::SLUG),
-                })
-            })
-            .collect();
-
-        Ok(users)
-    }
-
-    // ── DMs and groups (H.3.c — moved to DmsAndGroupsBackend) ──────────────
-
-    fn as_dms_and_groups(&self) -> Option<&dyn poly_client::DmsAndGroupsBackend> {
-        Some(self)
-    }
-
-    async fn get_notifications(&self) -> ClientResult<Vec<Notification>> {
-        Ok(vec![])
-    }
-
-    // --- C.1 — UI surface / settings / views / context-actions moved below ---
-
-    fn as_settings(&self) -> Option<&dyn poly_client::SettingsBackend> {
-        Some(self)
-    }
-
-    fn as_view_descriptor(&self) -> Option<&dyn poly_client::ViewDescriptorBackend> {
-        Some(self)
-    }
-
-    fn as_context_action(&self) -> Option<&dyn poly_client::ContextActionBackend> {
-        Some(self)
-    }
-
-    // --- Moderation (H.3.a — moved to ModerationBackend) ---
-
-    fn as_moderation(&self) -> Option<&dyn poly_client::ModerationBackend> {
-        Some(self)
-    }
-
-    fn event_stream(&self) -> Pin<Box<dyn Stream<Item = ClientEvent> + Send>> {
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            use tokio::sync::mpsc;
-            let http = self.http.clone();
-            let (tx, rx) = mpsc::channel::<ClientEvent>(128);
-
-            tokio::spawn(async move {
-                let mut since = http.sync_next_batch();
-                loop {
-                    match http.sync(since.as_deref(), Some(30000)).await {
-                        Ok(response) => {
-                            // Update the batch token
-                            since = Some(response.next_batch.clone());
-                            http.set_sync_next_batch(response.next_batch);
-
-                            // Process joined rooms
-                            if let Some(rooms) = &response.rooms
-                                && let Some(joined) = &rooms.join {
-                                    for (room_id, room) in joined {
-                                        // Timeline events → MessageReceived
-                                        if let Some(timeline) = &room.timeline {
-                                            for event in &timeline.events {
-                                                if let Some(msg) =
-                                                    MatrixClient::room_event_to_message(event)
-                                                {
-                                                    drop(
-                                                        tx.send(ClientEvent::MessageReceived {
-                                                            channel_id: room_id.clone(),
-                                                            message: msg,
-                                                        })
-                                                        .await,
-                                                    );
-                                                }
-                                            }
-                                        }
-                                        // Ephemeral events → typing
-                                        if let Some(ephemeral) = &room.ephemeral {
-                                            for ev in &ephemeral.events {
-                                                if ev
-                                                    .get("type")
-                                                    .and_then(|t| t.as_str())
-                                                    == Some("m.typing")
-                                                    && let Some(user_ids) = ev
-                                                        .get("content")
-                                                        .and_then(|c| c.get("user_ids"))
-                                                        .and_then(|u| u.as_array())
-                                                {
-                                                    for uid in user_ids {
-                                                        if let Some(user_id) = uid.as_str() {
-                                                            drop(
-                                                                tx.send(
-                                                                    ClientEvent::TypingStarted {
-                                                                        channel_id: room_id
-                                                                            .clone(),
-                                                                        user_id: user_id
-                                                                            .to_string(),
-                                                                        timestamp: chrono::Utc::now(),
-                                                                    },
-                                                                )
-                                                                .await,
-                                                            );
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                            }
-                        }
-                        Err(e) => {
-                            tracing::warn!("Matrix sync error: {e:?}");
-                            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-                        }
-                    }
-                }
-            });
-
-            Box::pin(tokio_stream::wrappers::ReceiverStream::new(rx))
-        }
-        #[cfg(target_arch = "wasm32")]
-        {
-            Box::pin(stream::empty())
-        }
-    }
-
-    // ── Moderation methods moved to ModerationBackend (H.3.a) ────────────────
-    // ── Social graph methods moved to SocialGraphBackend (H.3.b) ─────────────
-    // ── DMs and groups moved to DmsAndGroupsBackend (H.3.c) ─────────────────
-
-    /// Invite a user to a server (Matrix Space).
-    ///
-    fn as_server_admin(&self) -> Option<&dyn poly_client::ServerAdminBackend> {
-        Some(self)
-    }
-
-    // ── Server admin methods moved to ServerAdminBackend (H.4.b) ─────────────
-    // invite_user_to_server → impl ServerAdminBackend below
-
-    fn backend_type(&self) -> BackendType {
-        BackendType::from(crate::SLUG)
-    }
-
-    fn backend_name(&self) -> &str {
-        "Matrix"
-    }
-
-    fn backend_capabilities(&self) -> BackendCapabilities {
-        BackendCapabilities {
-            voice: VoiceSupport::None,
-            landing: poly_client::LandingPage::Overview,
-            // Moderation flags (B-MX)
-            has_roles: false,        // Power levels are different; expose differently in UI
-            has_kick: true,
-            has_ban: true,
-            has_timed_ban: false,    // No native timeout primitive
-            has_channel_mgmt: true,  // Name + topic only
-            has_moderation_log: false, // Expensive synthesis deferred
-            ..BackendCapabilities::FULL_SOCIAL_CHAT
-        }
-    }
-
-    // --- Client-provided UI surface (WP 1 / plan-client-ui-surface) ---
-
-
-
-
-
-    fn get_signup_method(&self, server_url: Option<&str>) -> SignupMethod {
-        let base = server_url.unwrap_or("https://matrix.org");
-        SignupMethod::External(format!("{}/_matrix/client/v3/register", base.trim_end_matches('/')))
-    }
-
-    fn client_version(&self) -> String {
-        self.version_override
-            .lock()
-            .ok()
-            .and_then(|g| g.clone())
-            .unwrap_or_else(|| http::DEFAULT_CLIENT_VERSION.to_string())
-    }
-
-    async fn set_client_version_override(
-        &self,
-        version_override: Option<String>,
-    ) -> ClientResult<()> {
-        let new_ua = version_override
-            .clone()
-            .unwrap_or_else(|| http::DEFAULT_CLIENT_VERSION.to_string());
-        if let Ok(mut lock) = self.version_override.lock() {
-            *lock = version_override;
-        }
-        self.http.set_user_agent(new_ua);
-        Ok(())
-    }
-}
-
-// ── H.3.a — ModerationBackend ────────────────────────────────────────────────
-
-#[cfg(feature = "native")]
-#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
-#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-impl poly_client::ModerationBackend for MatrixClient {
-    async fn get_my_permissions(
-        &self,
-        server_id: &str,
-        _channel_id: Option<&str>,
-    ) -> ClientResult<MemberPermissions> {
-        let user_id = self.current_user_id()?;
-        let pl = self.http.fetch_power_levels(server_id).await?;
-        let level = pl.user_level(&user_id);
-
-        // Matrix rule: level ≥ required threshold means the action is allowed.
-        // `state_default` gates room-setting state events (name, topic, power_levels).
-        let display_role = if level >= 100 {
-            "Admin".to_string()
-        } else if level >= 50 {
-            "Moderator".to_string()
-        } else {
-            "Member".to_string()
-        };
-
-        Ok(MemberPermissions {
-            manage_server: level >= pl.state_default,
-            manage_channels: level >= pl.state_default,
-            manage_roles: level >= pl.state_default,
-            kick_members: level >= pl.kick,
-            ban_members: level >= pl.ban,
-            manage_messages: level >= pl.redact,
-            // Matrix has no timeout concept — always false.
-            timeout_members: false,
-            display_role,
-            power_level: Some(level),
-        })
-    }
-
-    async fn kick_member(
-        &self,
-        server_id: &str,
-        member_id: &str,
-        reason: Option<&str>,
-    ) -> ClientResult<()> {
-        // In Matrix, server_id is the room_id. Kick = remove membership.
-        self.http.kick_member(server_id, member_id, reason).await
-    }
-
-    async fn ban_member(
-        &self,
-        server_id: &str,
-        member_id: &str,
-        reason: Option<&str>,
-        _delete_message_history_secs: Option<u64>,
-    ) -> ClientResult<()> {
-        // Matrix bans are permanent and have no message-history deletion parameter.
-        // `_delete_message_history_secs` is silently ignored.
-        self.http.ban_member(server_id, member_id, reason).await
-    }
-
-    async fn unban_member(&self, server_id: &str, member_id: &str) -> ClientResult<()> {
-        self.http.unban_member(server_id, member_id).await
-    }
-
-    /// Matrix has no native timeout primitive.
-    ///
-    /// Temporary mutes require modifying the user's power level for a period,
-    /// which cannot be expressed as a single atomic timed operation in the spec.
-    /// `has_timed_ban = false` in `backend_capabilities()` ensures the Timeout
-    /// button is hidden in the UI before this method is ever called.
-    async fn timeout_member(
-        &self,
-        _server_id: &str,
-        _member_id: &str,
-        _until: chrono::DateTime<chrono::Utc>,
-        _reason: Option<&str>,
-    ) -> ClientResult<()> {
-        Err(ClientError::NotSupported(
-            "timeout: Matrix has no timeout primitive; use power level changes for moderation"
-                .to_string(),
-        ))
-    }
-
-    async fn untimeout_member(
-        &self,
-        _server_id: &str,
-        _member_id: &str,
-    ) -> ClientResult<()> {
-        Err(ClientError::NotSupported(
-            "untimeout: Matrix has no timeout primitive".to_string(),
-        ))
-    }
-
-    async fn get_bans(&self, server_id: &str) -> ClientResult<Vec<BannedMember>> {
-        let members_resp = self.http.fetch_banned_members(server_id).await?;
-
-        let banned: Vec<BannedMember> = members_resp
-            .chunk
-            .iter()
-            .filter(|ev| {
-                ev.event_type == "m.room.member"
-                    && ev
-                        .content
-                        .get("membership")
-                        .and_then(serde_json::Value::as_str)
-                        == Some("ban")
-            })
-            .filter_map(|ev| {
-                let user_id = ev.state_key.as_deref()?;
-                let display_name = ev
-                    .content
-                    .get("displayname")
-                    .and_then(serde_json::Value::as_str)
-                    .unwrap_or(user_id)
-                    .to_string();
-                let avatar_url = ev
-                    .content
-                    .get("avatar_url")
-                    .and_then(serde_json::Value::as_str)
-                    .map(str::to_string);
-                let reason = ev
-                    .content
-                    .get("reason")
-                    .and_then(serde_json::Value::as_str)
-                    .map(str::to_string);
-                Some(BannedMember {
-                    user_id: user_id.to_string(),
-                    display_name,
-                    avatar_url,
-                    reason,
-                    // Matrix bans have no expiry.
-                    expires_at: None,
-                    banned_at: None,
-                })
-            })
-            .collect();
-
-        Ok(banned)
-    }
-
-    async fn delete_message(&self, channel_id: &str, message_id: &str) -> ClientResult<()> {
-        // Matrix uses "redact" terminology. The txn_id is a UUID for idempotency.
-        let txn_id = uuid::Uuid::new_v4().to_string();
-        self.http
-            .redact_event(channel_id, message_id, &txn_id, None)
-            .await
-    }
-
-    async fn update_channel(
-        &self,
-        channel_id: &str,
-        update: UpdateChannelParams,
-    ) -> ClientResult<()> {
-        // Matrix supports name and topic only. position, slow_mode_secs, and nsfw
-        // have no Matrix equivalent — log a warning and ignore those fields.
-        if update.position.is_some() {
-            tracing::warn!(
-                "update_channel(matrix): `position` has no Matrix equivalent — ignored"
-            );
-        }
-        if update.slow_mode_secs.is_some() {
-            tracing::warn!(
-                "update_channel(matrix): `slow_mode_secs` has no Matrix equivalent — ignored"
-            );
-        }
-        if update.nsfw.is_some() {
-            tracing::warn!(
-                "update_channel(matrix): `nsfw` has no Matrix equivalent — ignored"
-            );
-        }
-
-        if let Some(name) = &update.name {
-            self.http.set_room_name(channel_id, name).await?;
-        }
-        if let Some(topic) = &update.topic {
-            self.http.set_room_topic(channel_id, topic).await?;
-        }
-
-        Ok(())
-    }
-
-    async fn reorder_channels(
-        &self,
-        _server_id: &str,
-        _ordering: Vec<String>,
-    ) -> ClientResult<()> {
-        Err(ClientError::NotSupported(
-            "Matrix spaces order via space hierarchy state events; reorder not exposed in trait shape"
-                .to_string(),
-        ))
-    }
-
-    /// Synthesise a moderation log by walking recent timeline events on every
-    /// child room of the space.
-    ///
-    /// Matrix has no native audit log. The implementation walks each room
-    /// in the space hierarchy (skipping nested spaces) and fetches the most
-    /// recent ~50 timeline events backwards via `/messages?dir=b`. For each
-    /// room we project two event classes onto `ModerationLogEntry`:
-    ///
-    /// - `m.room.member` state events with a non-trivial membership transition
-    ///   (`leave` after `join` = leave-self; `leave` by a different sender =
-    ///   kick; `ban`; `leave` after `ban` = unban). Self-joins/invites are
-    ///   filtered out so the log stays focused on moderation actions.
-    /// - `m.room.redaction` events → `MessageDeleted`.
-    ///
-    /// Entries from all rooms are merged, sorted newest-first, and capped at
-    /// `limit`. Per-room failures are swallowed (the log is best-effort) so a
-    /// single inaccessible room doesn't blank the whole view.
-    /// SOLID-audit-matrix (Phase D.1).
-    async fn get_moderation_log(
-        &self,
-        server_id: &str,
-        limit: usize,
-    ) -> ClientResult<Vec<ModerationLogEntry>> {
-        moderation_log::synthesize(&self.http, server_id, limit).await
-    }
-
-    async fn get_server_roles(
-        &self,
-        _server_id: &str,
-    ) -> ClientResult<Vec<Role>> {
-        Err(ClientError::NotSupported(
-            "Matrix: no server roles concept; power levels serve this function".to_string(),
-        ))
-    }
-}
-
-// ── H.3.b — SocialGraphBackend ────────────────────────────────────────────────
-//
-// Matrix has partial social-graph support: block/ignore map to
-// `m.ignored_user_list` account data; the friend concept does not exist.
-// `get_user` uses the profile endpoint. Presence is fixed Offline (the Matrix
-// presence API requires a separate federation-aware implementation).
-
-#[cfg(feature = "native")]
-#[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
-#[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
-impl poly_client::SocialGraphBackend for MatrixClient {
-    async fn get_user(&self, id: &str) -> ClientResult<User> {
-        let profile = self.http.fetch_profile(id).await?;
-        let avatar_url = profile
-            .avatar_url
-            .as_deref()
-            .map(|url| mxc_to_http_thumbnail(url, self.homeserver_url()));
-        Ok(User {
-            id: id.to_string(),
-            display_name: profile.displayname.unwrap_or_else(|| id.to_string()),
-            avatar_url,
-            presence: PresenceStatus::Offline,
-            backend: BackendType::from(crate::SLUG),
-        })
-    }
-
-    async fn get_friends(&self) -> ClientResult<Vec<User>> {
-        // LSP: Matrix has no friend concept.  Returning `Ok(vec![])` lies to
-        // callers ("you have no friends here") versus surfacing the truth
-        // ("this backend doesn't have friends at all").  Every other method in
-        // this impl returns `NotSupported`; align with that contract.
-        // SOLID-audit-matrix (Phase B.2).
-        Err(ClientError::NotSupported(
-            "get_friends: Matrix has no native friend concept".to_string(),
-        ))
-    }
-
-    async fn add_friend(&self, _user_id: &str) -> ClientResult<()> {
-        // TODO(matrix): no native friend concept
-        Err(ClientError::NotSupported(
-            "add_friend: Matrix has no native friend concept".to_string(),
-        ))
-    }
-
-    async fn remove_friend(&self, _user_id: &str) -> ClientResult<()> {
-        // TODO(matrix): no native friend concept
-        Err(ClientError::NotSupported(
-            "remove_friend: Matrix has no native friend concept".to_string(),
-        ))
-    }
-
-    async fn respond_to_friend_request(&self, _user_id: &str, _accept: bool) -> ClientResult<()> {
-        Err(ClientError::NotSupported(
-            "respond_to_friend_request: Matrix has no native friend concept".to_string(),
-        ))
-    }
-
-    async fn set_friend_nickname(
-        &self,
-        _user_id: &str,
-        _nickname: Option<&str>,
-    ) -> ClientResult<()> {
-        // TODO(matrix): no native friend concept
-        Err(ClientError::NotSupported(
-            "set_friend_nickname: Matrix has no native friend concept".to_string(),
-        ))
-    }
-
-    async fn set_user_note(&self, _user_id: &str, _note: Option<&str>) -> ClientResult<()> {
-        // TODO(matrix): no native user-note storage; could store in account_data
-        Err(ClientError::NotSupported(
-            "set_user_note: Matrix has no native user note system".to_string(),
-        ))
-    }
-
-    /// Block a user. Matrix conflates block and ignore via `m.ignored_user_list`.
-    ///
-    /// Fetches the current ignore list, adds `user_id`, and writes it back via
-    /// `PUT /_matrix/client/v3/user/:user_id/account_data/m.ignored_user_list`.
-    async fn block_user(&self, user_id: &str) -> ClientResult<()> {
-        let me = self.current_user_id()?;
-        let mut list = self.http.fetch_ignored_user_list(&me).await?;
-        list.ignored_users
-            .entry(user_id.to_string())
-            .or_insert(serde_json::Value::Object(serde_json::Map::new()));
-        self.http.put_ignored_user_list(&me, &list).await
-    }
-
-    async fn unblock_user(&self, user_id: &str) -> ClientResult<()> {
-        let me = self.current_user_id()?;
-        let mut list = self.http.fetch_ignored_user_list(&me).await?;
-        list.ignored_users.remove(user_id);
-        self.http.put_ignored_user_list(&me, &list).await
-    }
-
-    /// Ignore a user — Matrix conflates block and ignore via `m.ignored_user_list`.
-    async fn ignore_user(&self, user_id: &str) -> ClientResult<()> {
-        // Same operation as block_user — Matrix uses m.ignored_user_list for both.
-        let me = self.current_user_id()?;
-        let mut list = self.http.fetch_ignored_user_list(&me).await?;
-        list.ignored_users
-            .entry(user_id.to_string())
-            .or_insert(serde_json::Value::Object(serde_json::Map::new()));
-        self.http.put_ignored_user_list(&me, &list).await
-    }
-
-    async fn unignore_user(&self, user_id: &str) -> ClientResult<()> {
-        // Same operation as unblock_user — Matrix uses m.ignored_user_list for both.
-        let me = self.current_user_id()?;
-        let mut list = self.http.fetch_ignored_user_list(&me).await?;
-        list.ignored_users.remove(user_id);
-        self.http.put_ignored_user_list(&me, &list).await
-    }
-
-    /// Fetch a user's presence via
-    /// `GET /_matrix/client/v3/presence/{userId}/status`.
-    ///
-    /// Maps Matrix `presence` strings (`online`, `unavailable`, `offline`) onto
-    /// the host `PresenceStatus` enum. `unavailable` is treated as `Idle`
-    /// (idle/away in spec language). When the homeserver reports the user as
-    /// `online` but `currently_active = false`, surface `Idle` as well — that
-    /// captures the "still logged in but away from keyboard" case Matrix
-    /// otherwise hides behind a single `online` string.
-    ///
-    /// Federation-aware: the homeserver fetches presence from the user's
-    /// home server when the queried user is remote. Soft-failure: if the
-    /// homeserver has presence disabled (some servers do for privacy) and
-    /// returns 404/403, surface `NotSupported` so the UI hides the dot
-    /// instead of misrepresenting state as `Offline`.
-    /// SOLID-audit-matrix (Phase D.2).
-    async fn get_presence(&self, user_id: &str) -> ClientResult<PresenceStatus> {
-        match self.http.get_presence(user_id).await {
-            Ok(resp) => Ok(map_matrix_presence(&resp)),
-            // Some homeservers return 404 or 403 when presence is disabled
-            // server-wide. Treat these as "not supported on this homeserver"
-            // rather than "offline" so the UI hides the dot.
-            Err(ClientError::NotFound(_)) | Err(ClientError::PermissionDenied(_)) => {
-                Err(ClientError::NotSupported(
-                    "get_presence: homeserver has presence disabled".to_string(),
-                ))
-            }
-            Err(e) => Err(e),
-        }
-    }
-
-    /// Set the authenticated user's presence via
-    /// `PUT /_matrix/client/v3/presence/{userId}/status`.
-    ///
-    /// Maps the host `PresenceStatus` onto Matrix's three-valued surface
-    /// (`online`/`unavailable`/`offline`). DND/Invisible collapse onto
-    /// `unavailable` — Matrix has no first-class equivalent and signalling
-    /// `offline` would silently drop the session from peers' rosters.
-    /// SOLID-audit-matrix (Phase D.2).
-    async fn set_presence(&self, status: PresenceStatus) -> ClientResult<()> {
-        let user_id = self.current_user_id()?;
-        let presence = match status {
-            PresenceStatus::Online => "online",
-            PresenceStatus::Idle | PresenceStatus::DoNotDisturb => "unavailable",
-            PresenceStatus::Offline | PresenceStatus::Invisible => "offline",
-            // Unknown is a host-side sentinel; do not transmit upstream —
-            // skip the call so we don't overwrite a meaningful prior state.
-            PresenceStatus::Unknown => return Ok(()),
-        };
-        let body = api::PutPresenceRequest {
-            presence: presence.to_string(),
-            status_msg: None,
-        };
-        match self.http.put_presence(&user_id, &body).await {
-            Ok(()) => Ok(()),
-            // Homeserver with presence disabled — treat as NotSupported so
-            // the UI can mark the toggle as inert instead of failing loudly.
-            Err(ClientError::NotFound(_)) | Err(ClientError::PermissionDenied(_)) => {
-                Err(ClientError::NotSupported(
-                    "set_presence: homeserver has presence disabled".to_string(),
-                ))
-            }
-            Err(e) => Err(e),
-        }
-    }
-}
-
-/// Project a Matrix presence response onto the host `PresenceStatus` enum.
-///
-/// - `online` + `currently_active = false` → `Idle` (away-from-keyboard).
-/// - `online` (otherwise) → `Online`.
-/// - `unavailable` → `Idle`.
-/// - `offline` → `Offline`.
-/// - Any other / future variant → `Unknown` so the UI can hide the dot
-///   instead of guessing.
-#[cfg(feature = "native")]
-fn map_matrix_presence(resp: &api::PresenceStatusResponse) -> PresenceStatus {
-    match resp.presence.as_str() {
-        "online" => {
-            if matches!(resp.currently_active, Some(false)) {
-                PresenceStatus::Idle
-            } else {
-                PresenceStatus::Online
-            }
-        }
-        "unavailable" => PresenceStatus::Idle,
-        "offline" => PresenceStatus::Offline,
-        _ => PresenceStatus::Unknown,
-    }
-}
-
-// Matrix supports DM channels (via m.direct account data) and group rooms.
-// No native saved-messages or add_group_member concept; those return NotSupported.
-
-#[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
-#[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
-impl poly_client::DmsAndGroupsBackend for MatrixClient {
-    async fn get_groups(&self) -> ClientResult<Vec<Group>> {
-        Ok(vec![])
-    }
-
-    async fn get_dm_channels(&self) -> ClientResult<Vec<DmChannel>> {
-        let user_id = self.current_user_id()?;
-        let m_direct = self
-            .http
-            .fetch_account_data(&user_id, "m.direct")
-            .await
-            .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
-
-        // F-MX-1: collect (room_id, user_id) pairs first, then fetch profiles concurrently.
-        let mut pairs: Vec<(String, String)> = Vec::new();
-        if let Some(obj) = m_direct.as_object() {
-            for (other_user_id, room_ids) in obj {
-                if let Some(room_id) = room_ids
-                    .as_array()
-                    .and_then(|arr| arr.first())
-                    .and_then(serde_json::Value::as_str)
-                {
-                    pairs.push((room_id.to_string(), other_user_id.clone()));
-                }
-            }
-        }
-
-        // Fetch profiles in parallel; fall back to MXID on any error.
-        let profile_futures: Vec<_> = pairs
-            .iter()
-            .map(|(_, uid)| self.http.fetch_profile(uid))
-            .collect();
-        let profiles = futures::future::join_all(profile_futures).await;
-
-        let mut dms = Vec::new();
-        for ((room_id, other_user_id), profile_result) in pairs.into_iter().zip(profiles) {
-            let (display_name, avatar_url) = match profile_result {
-                Ok(p) => (
-                    p.displayname.unwrap_or_else(|| other_user_id.clone()),
-                    p.avatar_url,
-                ),
-                Err(_) => (other_user_id.clone(), None),
-            };
-            dms.push(DmChannel {
-                id: room_id,
-                user: User {
-                    id: other_user_id,
-                    display_name,
-                    avatar_url,
-                    presence: PresenceStatus::Offline,
-                    backend: BackendType::from(crate::SLUG),
-                },
-                last_message: None,
-                unread_count: 0,
-                backend: BackendType::from(crate::SLUG),
-                account_id: user_id.clone(),
-            });
-        }
-
-        Ok(dms)
-    }
-
-    async fn open_direct_message_channel(&self, _user_id: &str) -> ClientResult<DmChannel> {
-        Err(ClientError::NotSupported(
-            "open_direct_message_channel: Matrix DM creation not yet implemented".to_string(),
-        ))
-    }
-
-    async fn open_saved_messages_channel(&self) -> ClientResult<DmChannel> {
-        Err(ClientError::NotSupported(
-            "open_saved_messages_channel: Matrix has no saved-messages concept".to_string(),
-        ))
-    }
-
-    async fn add_group_member(&self, _group_id: &str, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported(
-            "add_group_member: use add_users_to_group_dm for Matrix".to_string(),
-        ))
-    }
-
-    async fn remove_group_member(&self, _group_id: &str, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported(
-            "remove_group_member: Matrix room membership management not yet implemented"
-                .to_string(),
-        ))
-    }
-
-    async fn add_users_to_group_dm(
-        &self,
-        channel_id: &str,
-        user_ids: &[String],
-    ) -> ClientResult<()> {
-        for uid in user_ids {
-            self.http.invite_to_room(channel_id, uid).await?;
-        }
-        Ok(())
-    }
-
-    /// Close a DM channel: leave the room, forget it, and remove from `m.direct`.
-    async fn close_dm_channel(&self, channel_id: &str) -> ClientResult<()> {
-        self.http.leave_room(channel_id).await?;
-        self.http.forget_room(channel_id).await?;
-        let me = self.current_user_id()?;
-        let mut m_direct = self.http.fetch_m_direct(&me).await?;
-        if let Some(obj) = m_direct.as_object_mut() {
-            for rooms in obj.values_mut() {
-                if let Some(arr) = rooms.as_array_mut() {
-                    arr.retain(|v| v.as_str() != Some(channel_id));
-                }
-            }
-            obj.retain(|_, v| v.as_array().is_none_or(|a| !a.is_empty()));
-        }
-        self.http.put_m_direct(&me, &m_direct).await?;
-        Ok(())
-    }
-
-    async fn mute_conversation(
-        &self,
-        channel_id: &str,
-        _until: Option<chrono::DateTime<chrono::Utc>>,
-    ) -> ClientResult<()> {
-        self.http.put_room_push_rule_mute(channel_id).await
-    }
-
-    async fn unmute_conversation(&self, channel_id: &str) -> ClientResult<()> {
-        self.http.delete_room_push_rule(channel_id).await
-    }
-
-    async fn leave_group_dm(&self, channel_id: &str) -> ClientResult<()> {
-        self.http.leave_room(channel_id).await
-    }
-
-    async fn edit_group_dm(
-        &self,
-        channel_id: &str,
-        name: Option<&str>,
-        avatar_url: Option<&str>,
-    ) -> ClientResult<()> {
-        if let Some(n) = name {
-            self.http.set_room_name(channel_id, n).await?;
-        }
-        if let Some(url) = avatar_url {
-            if url.starts_with("mxc://") {
-                self.http.set_room_avatar(channel_id, url).await?;
-            } else {
-                tracing::warn!(
-                    "edit_group_dm(matrix): avatar_url {url:?} is not an mxc:// URI — skipped"
-                );
-            }
-        }
-        Ok(())
-    }
-}
-
-// ── H.4.a — MessagingBackend ─────────────────────────────────────────────────
-
-#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
-#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-impl poly_client::MessagingBackend for MatrixClient {
-    async fn send_typing(&self, channel_id: &str) -> ClientResult<()> {
-        // SOLID-audit-matrix C.1: wire `PUT /_matrix/client/v3/rooms/{roomId}/typing/{userId}`
-        // with a 4-second timeout.  Errors are best-effort and logged at debug level only —
-        // typing indicators are non-critical and should never surface in the UI as errors.
-        let user_id = match self.http.session().map(|s| s.user_id) {
-            Some(id) => id,
-            None => {
-                tracing::debug!(channel_id, "matrix: send_typing skipped (not authenticated)");
-                return Ok(());
-            }
-        };
-        if let Err(err) = self.http.put_room_typing(channel_id, &user_id, 4000).await {
-            tracing::debug!(channel_id, %err, "matrix: send_typing failed (best-effort)");
-        }
-        Ok(())
-    }
-
-    async fn send_reply_message(
-        &self,
-        channel_id: &str,
-        reply_to_message_id: &str,
-        content: MessageContent,
-    ) -> ClientResult<Message> {
-        let txn_id = uuid::Uuid::new_v4().to_string();
-        let body = Self::extract_body(&content);
-
-        let send_req = api::SendMessageRequest {
-            msgtype: "m.text".to_string(),
-            body: body.clone(),
-            formatted_body: None,
-            format: None,
-            relates_to: Some(api::RelatesTo {
-                in_reply_to: Some(api::InReplyTo {
-                    event_id: reply_to_message_id.to_string(),
-                }),
-            }),
-        };
-
-        let result = self
-            .http
-            .send_message(channel_id, &txn_id, &send_req)
-            .await?;
-
-        self.build_message_from_send(result.event_id, body)
-    }
-
-    async fn search_messages(
-        &self,
-        query: MessageSearchQuery,
-    ) -> ClientResult<Vec<MessageSearchHit>> {
-        // SOLID-audit-matrix C.2: POST /_matrix/client/v3/search → room_events category.
-        let room_id = query.channel_id.as_deref();
-        let limit = query.limit;
-
-        let resp = self
-            .http
-            .post_search(&query.text, room_id, limit)
-            .await?;
-
-        let results = resp.search_categories.room_events.results;
-        let homeserver_url = self.homeserver_url().to_string();
-
-        let hits: Vec<MessageSearchHit> = results
-            .into_iter()
-            .filter_map(|r| {
-                let event = r.result;
-                // Only surface m.room.message events; search may return state events.
-                if event.event_type != "m.room.message" {
-                    return None;
-                }
-                let room_id_str = event.event_id.as_deref()
-                    .map(|_| room_id.map(str::to_string))
-                    .unwrap_or(None)
-                    .unwrap_or_default();
-
-                // Extract the room ID the event belongs to from the event itself.
-                // The Matrix search response attaches `room_id` directly on the event
-                // but our `RoomEvent` struct doesn't decode it yet — use the filter
-                // room_id when available, otherwise fall back to an empty string.
-                // TODO: add `room_id` field to `RoomEvent` and remove this fallback.
-                let _ = &homeserver_url; // used for future avatar hydration
-                let msg = Self::room_event_to_message(&event)?;
-                Some(MessageSearchHit {
-                    channel_id: room_id_str,
-                    channel_name: None,
-                    server_id: query.server_id.clone(),
-                    message: msg,
-                })
-            })
-            .collect();
-
-        Ok(hits)
-    }
-
-    async fn get_pinned_messages(&self, channel_id: &str) -> ClientResult<Vec<Message>> {
-        // SOLID-audit-matrix C.3: GET m.room.pinned_events state event, then fetch each event.
-        let event_ids = self.http.get_room_pinned_event_ids(channel_id).await?;
-
-        if event_ids.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        // Fetch each pinned event individually and map to Message.
-        // Errors on individual events are silently skipped (pin may have been
-        // redacted or the event ID may be stale).
-        let mut messages = Vec::with_capacity(event_ids.len());
-        for event_id in &event_ids {
-            match self.http.get_room_event(channel_id, event_id).await {
-                Ok(ev) => {
-                    if let Some(msg) = Self::room_event_to_message(&ev) {
-                        messages.push(msg);
-                    }
-                }
-                Err(err) => {
-                    tracing::debug!(
-                        channel_id,
-                        event_id,
-                        %err,
-                        "matrix: get_pinned_messages — skipping stale/redacted event"
-                    );
-                }
-            }
-        }
-
-        let messages = self.hydrate_message_authors(messages).await;
-        Ok(messages)
-    }
-
-    async fn set_message_pinned(
-        &self,
-        channel_id: &str,
-        message_id: &str,
-        pinned: bool,
-    ) -> ClientResult<()> {
-        // SOLID-audit-matrix C.3: read-modify-write on m.room.pinned_events.
-        // Requires the caller to have state=50 power level in the room.
-        let mut ids = self.http.get_room_pinned_event_ids(channel_id).await?;
-
-        if pinned {
-            // Add if not already present.
-            if !ids.contains(&message_id.to_string()) {
-                ids.push(message_id.to_string());
-            }
-        } else {
-            // Remove all occurrences.
-            ids.retain(|id| id != message_id);
-        }
-
-        self.http.put_room_pinned_events(channel_id, ids).await
-    }
-
-    async fn get_channel_commands(&self, _channel_id: &str) -> ClientResult<Vec<ChatCommand>> {
-        Ok(Vec::new())
-    }
-
-    async fn get_available_emojis(&self, _channel_id: &str) -> ClientResult<Vec<CustomEmoji>> {
-        Ok(Vec::new())
-    }
-
-    async fn get_available_stickers(&self, _channel_id: &str) -> ClientResult<Vec<StickerItem>> {
-        Ok(Vec::new())
-    }
-}
-
-// ── H.4.b — ServerAdminBackend ───────────────────────────────────────────────
-
-#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
-#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-impl poly_client::ServerAdminBackend for MatrixClient {
-    async fn create_server(&self, name: &str) -> ClientResult<Server> {
-        // SOLID-audit-matrix C.4: POST /createRoom with preset:public_chat + type:m.space.
-        // Creates a Matrix Space (a room with room_type "m.space") and maps it
-        // to a Poly Server.
-        let req = api::CreateRoomRequest {
-            preset: Some("public_chat".to_string()),
-            name: Some(name.to_string()),
-            room_type: Some("m.space".to_string()),
-            ..Default::default()
-        };
-        let resp = self.http.create_room(&req).await?;
-        let room_id = resp.room_id;
-
-        let account_id = self
-            .http
-            .session()
-            .map(|s| s.user_id)
-            .unwrap_or_default();
-
-        Ok(Server {
-            id: room_id,
-            name: name.to_string(),
-            icon_url: None,
-            banner_url: None,
-            categories: Vec::new(),
-            backend: BackendType::from(crate::SLUG),
-            unread_count: 0,
-            mention_count: 0,
-            account_id: account_id.clone(),
-            account_display_name: account_id,
-            default_channel_id: None,
-            description: None,
-            star_count: None,
-            language: None,
-            forks_count: None,
-            open_issues_count: None,
-        })
-    }
-
-    async fn create_channel(
-        &self,
-        server_id: &str,
-        name: &str,
-        channel_type: ChannelType,
-    ) -> ClientResult<Channel> {
-        // SOLID-audit-matrix C.4: POST /createRoom for a plain room, then link
-        // it to the parent Space via an `m.space.child` state event on the Space.
-        // Only Text channels are supported; Voice/Video are not native Matrix concepts.
-        match channel_type {
-            ChannelType::Text => {}
-            _ => {
-                return Err(ClientError::NotSupported(
-                    "matrix: create_channel only supports Text channels; \
-                     Matrix has no native Voice/Video room type"
-                        .to_string(),
-                ));
-            }
-        }
-
-        // The m.space.child event is written onto the *Space* room (server_id)
-        // with the state_key = the new child room ID.  We create the room first,
-        // then add the child link.
-        let req = api::CreateRoomRequest {
-            preset: Some("public_chat".to_string()),
-            name: Some(name.to_string()),
-            // Attach the parent Space via an initial state event so the child
-            // is immediately discoverable in the hierarchy.
-            initial_state: vec![api::InitialStateEvent {
-                event_type: "m.space.parent".to_string(),
-                state_key: server_id.to_string(),
-                content: serde_json::json!({
-                    "via": [self.http.homeserver_url().trim_start_matches("https://").trim_start_matches("http://")],
-                    "canonical": true
-                }),
-            }],
-            ..Default::default()
-        };
-        let resp = self.http.create_room(&req).await?;
-        let room_id = resp.room_id;
-
-        // Now write m.space.child on the Space room to advertise the new channel.
-        // Best-effort: if this fails we still return the created room (callers
-        // can manually add it later via `add-room-to-space`).
-        if let Err(err) = self
-            .http
-            .put_space_child(server_id, &room_id)
-            .await
-        {
-            tracing::debug!(
-                server_id,
-                room_id,
-                %err,
-                "matrix: create_channel — m.space.child write failed (best-effort)"
-            );
-        }
-
-        Ok(Channel {
-            id: room_id,
-            name: name.to_string(),
-            channel_type: ChannelType::Text,
-            server_id: server_id.to_string(),
-            unread_count: 0,
-            mention_count: 0,
-            last_message_id: None,
-            forum_tags: None,
-            parent_channel_id: None,
-            thread_metadata: None,
-        })
-    }
-
-    async fn update_server_banner(
-        &self,
-        _server_id: &str,
-        _banner_url: Option<&str>,
-    ) -> ClientResult<()> {
-        Err(ClientError::NotSupported("matrix: update_server_banner not implemented".to_string()))
-    }
-
-    async fn mark_channel_read(&self, channel_id: &str) -> ClientResult<()> {
-        // SOLID-audit-matrix C.5: POST /rooms/{roomId}/read_markers.
-        // We need the latest event ID in the room to advance the marker.
-        // Fetch the most recent timeline page (dir="b" from the sync token)
-        // and use the first returned event ID (most recent in backward order).
-        let from = self
-            .http
-            .session()
-            .and_then(|s| s.sync_next_batch)
-            .unwrap_or_default();
-
-        // Fetch just 1 message to get the latest event ID cheaply.
-        let response = self
-            .http
-            .fetch_messages(channel_id, &from, "b", Some(1))
-            .await;
-
-        let event_id = match response {
-            Ok(page) => page
-                .chunk
-                .into_iter()
-                .find_map(|ev| ev.event_id),
-            Err(err) => {
-                tracing::debug!(channel_id, %err, "matrix: mark_channel_read could not fetch latest event");
-                return Ok(());
-            }
-        };
-
-        let Some(event_id) = event_id else {
-            tracing::debug!(channel_id, "matrix: mark_channel_read skipped (no events found)");
-            return Ok(());
-        };
-
-        self.http.post_read_markers(channel_id, &event_id).await
-    }
-
-    async fn respond_to_server_invite(&self, _server_id: &str, _accept: bool) -> ClientResult<()> {
-        Err(ClientError::NotSupported("matrix: respond_to_server_invite not implemented".to_string()))
-    }
-
-    /// Matrix has no "server invite" concept equivalent to Discord. The closest
-    /// mapping is inviting to the Space room directly. If `server_id` looks like
-    /// a Matrix room ID (`!...`) the invite is sent; otherwise `NotSupported` is
-    /// returned.
-    async fn invite_user_to_server(
-        &self,
-        server_id: &str,
-        user_id: &str,
-    ) -> ClientResult<()> {
-        if server_id.starts_with('!') {
-            self.http.invite_to_room(server_id, user_id).await
-        } else {
-            Err(ClientError::NotSupported(
-                "invite_user_to_server: server_id is not a Matrix room ID; \
-                 Matrix has no invite-link concept — pass the Space room ID instead"
-                    .to_string(),
-            ))
         }
     }
 }
@@ -2216,389 +814,5 @@ mod tests {
             ftl.contains("plugin-matrix-sidebar-spaces-section"),
             "FTL must contain the sidebar section header key"
         );
-    }
-}
-
-// ── C.1 — SettingsBackend ────────────────────────────────────────────────────
-
-#[cfg(feature = "native")]
-#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
-#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-impl poly_client::SettingsBackend for MatrixClient {
-    async fn get_settings_sections(&self) -> ClientResult<Vec<SettingsSection>> {
-        Ok(vec![
-            SettingsSection {
-                scope: SettingsScope::PerServer,
-                section_key: "space-settings".to_string(),
-                icon: None,
-                fields: vec![
-                    SettingDescriptor {
-                        key: "display-name".to_string(),
-                        kind: SettingKind::TextInput,
-                        default_value: "\"\"".to_string(),
-                        extra: String::new(),
-                    },
-                    SettingDescriptor {
-                        key: "topic".to_string(),
-                        kind: SettingKind::TextInput,
-                        default_value: "\"\"".to_string(),
-                        extra: String::new(),
-                    },
-                ],
-                info_block: None,
-            },
-            SettingsSection {
-                scope: SettingsScope::PerServer,
-                section_key: "privacy".to_string(),
-                icon: None,
-                fields: vec![SettingDescriptor {
-                    key: "allow-guests".to_string(),
-                    kind: SettingKind::Toggle,
-                    default_value: "false".to_string(),
-                    extra: String::new(),
-                }],
-                info_block: None,
-            },
-        ])
-    }
-
-    fn settings_storage(&self) -> &SettingsStorageCell {
-        &self.settings_storage
-    }
-}
-
-// ── C.1 — ViewDescriptorBackend ──────────────────────────────────────────────
-
-#[cfg(feature = "native")]
-#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
-#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-impl poly_client::ViewDescriptorBackend for MatrixClient {
-    async fn get_sidebar_declaration(&self) -> ClientResult<SidebarDeclaration> {
-        // F4: Switch to Custom layout so the host renders our full space tree.
-        let entries = self.fetch_space_tree().await.unwrap_or_default();
-        let items = build_sidebar_items(entries);
-        Ok(SidebarDeclaration {
-            layout: SidebarLayoutKind::Custom,
-            sections: vec![SidebarSection {
-                header_key: Some("plugin-matrix-sidebar-spaces-section".to_string()),
-                collapsible: false,
-                default_collapsed: false,
-                items,
-            }],
-            header_block: None,
-        })
-    }
-
-    async fn invoke_sidebar_action(&self, action_id: &str) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound(format!("unknown sidebar action: {action_id}")))
-    }
-
-    async fn get_account_overview_view(&self) -> ClientResult<ViewDescriptor> {
-        Ok(ViewDescriptor {
-            kind: ViewKind::CardGrid,
-            header: Some(ViewHeader {
-                title_key: Some("plugin-matrix-overview-title".to_string()),
-                subtitle_key: Some("plugin-matrix-overview-subtitle".to_string()),
-                info_block: None,
-            }),
-            toolbar: None,
-            body: ViewBody::CardBody(CardSpec {
-                primary_field: "name".to_string(),
-            }),
-        })
-    }
-
-    async fn get_channel_view(&self, _channel_id: &str) -> ClientResult<ViewDescriptor> {
-        Err(ClientError::NotSupported("channel-view not yet implemented".into()))
-    }
-
-    async fn get_view_rows(
-        &self,
-        channel_id: &str,
-        _cursor: Option<Cursor>,
-        _sort_id: Option<&str>,
-        _filter_id: Option<&str>,
-        _tab_id: Option<&str>,
-    ) -> ClientResult<ViewRowsPage> {
-        if !channel_id.is_empty() && channel_id != "account-overview" {
-            return Err(ClientError::NotSupported("view-rows not yet implemented".into()));
-        }
-
-        let joined = self.http.fetch_joined_rooms().await?;
-        let homeserver_url = self.homeserver_url().to_string();
-
-        let mut rows = Vec::new();
-        for room_id in &joined.joined_rooms {
-            let state = self.http.fetch_room_state(room_id).await.unwrap_or_default();
-
-            let name = Self::extract_canonical_alias(&state)
-                .unwrap_or_else(|| Self::extract_room_name(&state, room_id));
-            let topic = Self::extract_room_topic(&state);
-            let member_count = Self::count_joined_members(&state);
-            let icon = Self::extract_avatar_url(&state, &homeserver_url);
-
-            // Unread / mention counts are not tracked in-memory by this backend
-            // (no persistent sync state). They default to 0.
-            let unread: u32 = 0;
-            let mentions: u32 = 0;
-
-            let meta_text = format!(
-                "{member_count} members · {unread} unread · @{mentions} mentions"
-            );
-
-            let is_space = Self::is_space_room(&state);
-            rows.push(ViewRow {
-                id: room_id.clone(),
-                primary_text: name,
-                secondary_text: topic,
-                meta_text: Some(meta_text),
-                icon,
-                badge: None,
-                preview_image_url: None,
-                is_video: false,
-                context_menu_target_kind: if is_space {
-                    MenuTargetKind::Server
-                } else {
-                    MenuTargetKind::Channel
-                },
-            });
-        }
-
-        Ok(ViewRowsPage { rows, next_cursor: None })
-    }
-
-    async fn get_view_detail(
-        &self,
-        _channel_id: &str,
-        _row_id: &str,
-    ) -> ClientResult<ViewDetail> {
-        Err(ClientError::NotSupported("view-detail not yet implemented".into()))
-    }
-}
-
-// ── C.1 — ContextActionBackend ───────────────────────────────────────────────
-
-#[cfg(feature = "native")]
-#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
-#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-impl poly_client::ContextActionBackend for MatrixClient {
-    async fn get_context_menu_items(
-        &self,
-        target: MenuTargetKind,
-        target_id: &str,
-    ) -> ClientResult<Vec<MenuItem>> {
-        match target {
-            // ── Server / Space ─────────────────────────────────────────────
-            MenuTargetKind::Server => Ok(vec![
-                Self::simple_item("space-settings", MenuSlot::AfterFavorites, "plugin-matrix-menu-space-settings-label", MenuItemVariant::Normal),
-                Self::simple_item("edit-per-space-profile", MenuSlot::AfterFavorites, "plugin-matrix-menu-edit-per-space-profile-label", MenuItemVariant::Normal),
-                Self::simple_item("e2ee-verification", MenuSlot::AfterFavorites, "plugin-matrix-menu-e2ee-verification-label", MenuItemVariant::Normal),
-                // F10 additions
-                Self::simple_item("browse-rooms-in-space", MenuSlot::AfterFavorites, "plugin-matrix-menu-browse-rooms-in-space-label", MenuItemVariant::Normal),
-                Self::simple_item("add-room-to-space", MenuSlot::AfterFavorites, "plugin-matrix-menu-add-room-to-space-label", MenuItemVariant::Normal),
-                Self::simple_item("leave-space", MenuSlot::BeforeLeave, "plugin-matrix-menu-leave-space-label", MenuItemVariant::Destructive),
-            ]),
-
-            // ── Channel / Room ─────────────────────────────────────────────
-            MenuTargetKind::Channel => {
-                // Distinct id per state: mark-read-room / mark-unread-room
-                // Poisoned lock treated as "not read" — safe default.
-                let is_read = self.marked_read.read()
-                    .map(|g| g.contains(target_id))
-                    .unwrap_or(false);
-                let read_item = if is_read {
-                    Self::simple_item("mark-unread-room", MenuSlot::Top, "plugin-matrix-menu-mark-unread-room-label", MenuItemVariant::Normal)
-                } else {
-                    Self::simple_item("mark-read-room", MenuSlot::Top, "plugin-matrix-menu-mark-read-room-label", MenuItemVariant::Normal)
-                };
-
-                // Distinct id per state: mute-room / unmute-room
-                let is_muted = self.muted_rooms.read()
-                    .map(|g| g.contains(target_id))
-                    .unwrap_or(false);
-                let mute_item = if is_muted {
-                    Self::simple_item("unmute-room", MenuSlot::AfterFavorites, "plugin-matrix-menu-unmute-room-label", MenuItemVariant::Normal)
-                } else {
-                    Self::simple_item("mute-room", MenuSlot::AfterFavorites, "plugin-matrix-menu-mute-room-label", MenuItemVariant::Normal)
-                };
-
-                Ok(vec![
-                    read_item,
-                    mute_item,
-                    Self::simple_item("leave-room", MenuSlot::BeforeLeave, "plugin-matrix-menu-leave-room-label", MenuItemVariant::Destructive),
-                ])
-            }
-
-            // ── DM Channel ─────────────────────────────────────────────────
-            MenuTargetKind::Dm => {
-                let is_read = self.marked_read.read()
-                    .map(|g| g.contains(target_id))
-                    .unwrap_or(false);
-                let read_item = if is_read {
-                    Self::simple_item("mark-unread-room", MenuSlot::Top, "plugin-matrix-menu-mark-unread-room-label", MenuItemVariant::Normal)
-                } else {
-                    Self::simple_item("mark-read-room", MenuSlot::Top, "plugin-matrix-menu-mark-read-room-label", MenuItemVariant::Normal)
-                };
-
-                Ok(vec![
-                    read_item,
-                    Self::simple_item("leave-dm", MenuSlot::BeforeLeave, "plugin-matrix-menu-leave-dm-label", MenuItemVariant::Destructive),
-                ])
-            }
-
-            // ── User ───────────────────────────────────────────────────────
-            MenuTargetKind::User => {
-                // Distinct id per state: ignore-user / unignore-user
-                let is_ignored = self.ignored_users.read()
-                    .map(|g| g.contains(target_id))
-                    .unwrap_or(false);
-                let ignore_item = if is_ignored {
-                    Self::simple_item("unignore-user", MenuSlot::AfterFavorites, "plugin-matrix-menu-unignore-user-label", MenuItemVariant::Normal)
-                } else {
-                    Self::simple_item("ignore-user", MenuSlot::AfterFavorites, "plugin-matrix-menu-ignore-user-label", MenuItemVariant::Normal)
-                };
-
-                Ok(vec![
-                    Self::simple_item("open-dm", MenuSlot::Top, "plugin-matrix-menu-open-dm-label", MenuItemVariant::Normal),
-                    Self::simple_item("view-profile", MenuSlot::Top, "plugin-matrix-menu-view-profile-label", MenuItemVariant::Normal),
-                    // Cross-signing stub
-                    Self::simple_item("verify-user", MenuSlot::AfterFavorites, "plugin-matrix-menu-verify-user-label", MenuItemVariant::Normal),
-                    ignore_item,
-                ])
-            }
-
-            // ── Message ────────────────────────────────────────────────────
-            MenuTargetKind::Message => Ok(vec![
-                Self::simple_item("react-message", MenuSlot::Top, "plugin-matrix-menu-react-message-label", MenuItemVariant::Normal),
-                Self::simple_item("reply-in-thread", MenuSlot::Top, "plugin-matrix-menu-reply-in-thread-label", MenuItemVariant::Normal),
-                Self::simple_item("copy-permalink", MenuSlot::AfterFavorites, "plugin-matrix-menu-copy-permalink-label", MenuItemVariant::Normal),
-                // Destructive — author or admin only
-                Self::simple_item("redact-message", MenuSlot::BeforeLeave, "plugin-matrix-menu-redact-message-label", MenuItemVariant::Destructive),
-            ]),
-
-            MenuTargetKind::Category => Ok(Vec::new()),
-        }
-    }
-
-    async fn invoke_context_action(
-        &self,
-        action_id: &str,
-        _target: MenuTargetKind,
-        target_id: &str,
-    ) -> ClientResult<ActionOutcome> {
-        match action_id {
-            // ── Noop actions (Server/Space, leave-room/dm, message ops, profile views)
-            // All return Ok(Noop); merged into one arm to satisfy
-            // clippy::match_same_arms.
-            "space-settings"
-            | "edit-per-space-profile"
-            | "e2ee-verification"
-            | "browse-rooms-in-space"
-            | "add-room-to-space"
-            | "leave-space"
-            | "leave-room"
-            | "leave-dm"
-            | "open-dm"
-            | "view-profile"
-            | "verify-user"
-            | "react-message"
-            | "reply-in-thread"
-            | "copy-permalink"
-            | "redact-message" => Ok(ActionOutcome::Noop),
-
-            // ── Channel / Room — state mutations ────────────────────────────
-            // Poisoned lock treated as a no-op write — silent, non-panicking.
-            "mark-read-room" => {
-                if let Ok(mut g) = self.marked_read.write() {
-                    g.insert(target_id.to_string());
-                }
-                Ok(ActionOutcome::Noop)
-            }
-            "mark-unread-room" => {
-                if let Ok(mut g) = self.marked_read.write() {
-                    g.remove(target_id);
-                }
-                Ok(ActionOutcome::Noop)
-            }
-            "mute-room" => {
-                if let Ok(mut g) = self.muted_rooms.write() {
-                    g.insert(target_id.to_string());
-                }
-                Ok(ActionOutcome::Noop)
-            }
-            "unmute-room" => {
-                if let Ok(mut g) = self.muted_rooms.write() {
-                    g.remove(target_id);
-                }
-                Ok(ActionOutcome::Noop)
-            }
-            // ── User — state mutations ───────────────────────────────────────
-            "ignore-user" => {
-                if let Ok(mut g) = self.ignored_users.write() {
-                    g.insert(target_id.to_string());
-                }
-                Ok(ActionOutcome::Noop)
-            }
-            "unignore-user" => {
-                if let Ok(mut g) = self.ignored_users.write() {
-                    g.remove(target_id);
-                }
-                Ok(ActionOutcome::Noop)
-            }
-
-            _ => Err(ClientError::NotFound(format!("unknown action: {action_id}"))),
-        }
-    }
-
-    async fn poll_action(&self, _handle: PendingHandle) -> ClientResult<ActionOutcome> {
-        Err(ClientError::NotFound("no pending actions".into()))
-    }
-    async fn get_composer_buttons(&self, _channel_id: &str) -> ClientResult<Vec<ComposerButton>> {
-        Ok(vec![ComposerButton {
-            id: "me-action".to_string(),
-            label_key: "plugin-matrix-composer-me-label".to_string(),
-            icon: "🎭".to_string(),
-            position: ComposerSlot::LeftOfInput,
-        }])
-    }
-
-    async fn get_message_actions(
-        &self,
-        _channel_id: &str,
-        _message_id: &str,
-    ) -> ClientResult<Vec<MenuItem>> {
-        Ok(vec![MenuItem {
-            id: "verify-sender".to_string(),
-            parent_id: None,
-            slot: MenuSlot::AfterFavorites,
-            label_key: "plugin-matrix-message-action-verify-sender-label".to_string(),
-            icon: None,
-            item_variant: MenuItemVariant::Normal,
-            shortcut: None,
-            block: None,
-        }])
-    }
-
-    async fn invoke_composer_action(
-        &self,
-        action_id: &str,
-        _channel_id: &str,
-    ) -> ClientResult<ActionOutcome> {
-        match action_id {
-            "me-action" => Ok(ActionOutcome::Noop),
-            other => Err(ClientError::NotFound(format!("unknown composer action: {other}"))),
-        }
-    }
-
-    async fn invoke_message_action(
-        &self,
-        action_id: &str,
-        _channel_id: &str,
-        _message_id: &str,
-    ) -> ClientResult<ActionOutcome> {
-        match action_id {
-            "verify-sender" => Ok(ActionOutcome::Noop),
-            other => Err(ClientError::NotFound(format!("unknown message action: {other}"))),
-        }
     }
 }

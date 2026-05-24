@@ -4,7 +4,7 @@
 > Scope: `clients/matrix/src/`.
 > Source-of-truth for SOLID definitions: top-of-repo `CLAUDE.md` §"Design Principles".
 
-## Status: IN PROGRESS — Phase B shipped in change `nprtmlvu`; Phase C fully shipped in change `tuzpozyt` / commits `0ca62644` + `4c9b2721` (C.2 search, C.3 pinned, C.4 createRoom). Phase D.1 + D.2 shipped on `worktree-agent-a6bdfdf6038b50eaf` (moderation-log on-demand synthesiser + presence GET/PUT). D.3 (IsBackend split) queued.
+## Status: ✅ DONE — Phase B shipped (`nprtmlvu`); Phase C fully shipped (`tuzpozyt` / `0ca62644`+`4c9b2721`); Phase D.1+D.2 shipped on `worktree-agent-a6bdfdf6038b50eaf`; Phase D.3 shipped via rescue from `worktree-agent-ad241956221c6261f` (concurrent-worktree contamination prevented direct commit, but the work landed clean).
 
 ---
 
@@ -129,7 +129,7 @@
   `ClientEvent::PresenceChanged` is left for a follow-up — the current
   surface satisfies the fetch+set parts of D.2. ~120 LoC across api.rs,
   http.rs, lib.rs. — shipped in worktree-agent-a6bdfdf6038b50eaf.
-- [ ] **D.3** Split `MatrixClient::IsBackend` (833 lines) along capability-trait
+- [x] **D.3** Split `MatrixClient::IsBackend` (833 lines) along capability-trait
   lines, matching the existing `ModerationBackend` / `SocialGraphBackend` /
   `DmsAndGroupsBackend` / `MessagingBackend` / `ServerAdminBackend` split.
-  ~500 LoC.
+  ~500 LoC. — shipped (rescued from worktree-agent-ad241956221c6261f after worktree contamination prevented direct commit): `lib.rs` 2604→818 LoC (-68%); 9 sibling files (`is_backend.rs`, `moderation.rs`, `social_graph.rs`, `dms_groups.rs`, `messaging.rs`, `server_admin.rs`, `settings.rs`, `view_descriptor.rs`, `context_action.rs`). All 27 unit tests pass. Pure structural move.
