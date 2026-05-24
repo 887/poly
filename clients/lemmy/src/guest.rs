@@ -28,6 +28,14 @@ use crate::wit_bindings::exports;
 /// Zero-sized marker struct for the Lemmy WASM plugin component.
 pub struct LemmyPlugin;
 
+// ── NotSupported / stub string constants — avoids repeated heap allocations ───
+// Each constant covers one logical unsupported-capability category.
+// Use these wherever the same error message would otherwise be duplicated.
+const NS_GROUP_DMS: &str = "Lemmy has no group DMs";
+const NS_CODE_CHANNELS: &str = "Lemmy has no code channels";
+const NS_WASM_NOT_IMPL: &str = "not yet implemented in WASM plugin";
+const NS_FORUM_NOT_IMPL: &str = "not implemented in WASM plugin";
+
 // ─── MessengerClientGuest ──────────────────────────────────────────
 
 impl MessengerClientGuest for LemmyPlugin {
@@ -68,7 +76,7 @@ impl MessengerClientGuest for LemmyPlugin {
         _content: wit::MessageContent,
     ) -> Result<wit::Message, wit::ClientError> {
         Err(wit::ClientError::NotSupported(
-            "send_message not yet implemented in WASM plugin".to_string(),
+            format!("send_message {NS_WASM_NOT_IMPL}"),
         ))
     }
 
@@ -78,7 +86,7 @@ impl MessengerClientGuest for LemmyPlugin {
         _content: wit::MessageContent,
     ) -> Result<wit::Message, wit::ClientError> {
         Err(wit::ClientError::NotSupported(
-            "send_reply_message not yet implemented in WASM plugin".to_string(),
+            format!("send_reply_message {NS_WASM_NOT_IMPL}"),
         ))
     }
 
@@ -146,7 +154,7 @@ impl MessengerClientGuest for LemmyPlugin {
         _user_id: String,
     ) -> Result<(), wit::ClientError> {
         Err(wit::ClientError::NotSupported(
-            "Lemmy has no group DMs".to_string(),
+            NS_GROUP_DMS.to_string(),
         ))
     }
 
@@ -155,7 +163,7 @@ impl MessengerClientGuest for LemmyPlugin {
         _user_id: String,
     ) -> Result<(), wit::ClientError> {
         Err(wit::ClientError::NotSupported(
-            "Lemmy has no group DMs".to_string(),
+            NS_GROUP_DMS.to_string(),
         ))
     }
 
@@ -230,7 +238,7 @@ impl MessengerClientGuest for LemmyPlugin {
         _path: String,
     ) -> Result<Vec<wit::FileEntry>, wit::ClientError> {
         Err(wit::ClientError::NotSupported(
-            "Lemmy has no code channels".to_string(),
+            NS_CODE_CHANNELS.to_string(),
         ))
     }
 
@@ -239,7 +247,7 @@ impl MessengerClientGuest for LemmyPlugin {
         _path: String,
     ) -> Result<wit::FileContent, wit::ClientError> {
         Err(wit::ClientError::NotSupported(
-            "Lemmy has no code channels".to_string(),
+            NS_CODE_CHANNELS.to_string(),
         ))
     }
 
@@ -249,7 +257,7 @@ impl MessengerClientGuest for LemmyPlugin {
         _limit: Option<u32>,
     ) -> Result<Vec<wit::ForumPost>, wit::ClientError> {
         Err(wit::ClientError::NotSupported(
-            "get_forum_posts not implemented".to_string(),
+            format!("get_forum_posts {NS_FORUM_NOT_IMPL}"),
         ))
     }
 
@@ -257,7 +265,7 @@ impl MessengerClientGuest for LemmyPlugin {
         _server_id: String,
     ) -> Result<Vec<wit::ThreadInfo>, wit::ClientError> {
         Err(wit::ClientError::NotSupported(
-            "get_active_threads not implemented".to_string(),
+            format!("get_active_threads {NS_FORUM_NOT_IMPL}"),
         ))
     }
 
@@ -266,7 +274,7 @@ impl MessengerClientGuest for LemmyPlugin {
         _limit: Option<u32>,
     ) -> Result<Vec<wit::ThreadInfo>, wit::ClientError> {
         Err(wit::ClientError::NotSupported(
-            "get_archived_threads not implemented".to_string(),
+            format!("get_archived_threads {NS_FORUM_NOT_IMPL}"),
         ))
     }
 
@@ -277,7 +285,7 @@ impl MessengerClientGuest for LemmyPlugin {
         _tags: Vec<String>,
     ) -> Result<wit::ForumPost, wit::ClientError> {
         Err(wit::ClientError::NotSupported(
-            "create_forum_post not implemented".to_string(),
+            format!("create_forum_post {NS_FORUM_NOT_IMPL}"),
         ))
     }
 }
@@ -427,7 +435,7 @@ impl ClientViewsGuest for LemmyPlugin {
         _channel_id: String,
     ) -> Result<ViewDescriptor, wit::ClientError> {
         Err(wit::ClientError::NotSupported(
-            "get_channel_view not yet implemented in WASM plugin".to_string(),
+            format!("get_channel_view {NS_WASM_NOT_IMPL}"),
         ))
     }
 
@@ -439,7 +447,7 @@ impl ClientViewsGuest for LemmyPlugin {
         _tab_id: Option<String>,
     ) -> Result<ViewRowsPage, wit::ClientError> {
         Err(wit::ClientError::NotSupported(
-            "get_view_rows not yet implemented in WASM plugin".to_string(),
+            format!("get_view_rows {NS_WASM_NOT_IMPL}"),
         ))
     }
 
@@ -448,7 +456,7 @@ impl ClientViewsGuest for LemmyPlugin {
         _row_id: String,
     ) -> Result<ViewDetail, wit::ClientError> {
         Err(wit::ClientError::NotSupported(
-            "get_view_detail not yet implemented in WASM plugin".to_string(),
+            format!("get_view_detail {NS_WASM_NOT_IMPL}"),
         ))
     }
 }

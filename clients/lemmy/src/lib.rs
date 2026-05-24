@@ -571,11 +571,45 @@ impl IsBackend for LemmyClient {
 impl poly_client::ForumBackend for LemmyClient {
     async fn get_forum_posts(
         &self,
-        _forum_channel_id: &str,
-        _sort: ForumSortOrder,
-        _limit: Option<u32>,
+        forum_channel_id: &str,
+        sort: ForumSortOrder,
+        limit: Option<u32>,
     ) -> ClientResult<Vec<ForumPost>> {
-        Err(ClientError::NotSupported("get_forum_posts".to_string()))
+        let community_id = Self::parse_feed_channel(forum_channel_id).ok_or_else(|| {
+            ClientError::NotFound(format!(
+                "get_forum_posts: expected lemmy-feed-<id>, got: {forum_channel_id}"
+            ))
+        })?;
+
+        // Map Poly's ForumSortOrder to a Lemmy sort string.
+        let sort_str = match sort {
+            ForumSortOrder::LatestActivity => "Active",
+            ForumSortOrder::CreationDate => "New",
+        };
+
+        let cap = limit.unwrap_or(20).min(50);
+        let resp = self
+            .http
+            .fetch_posts_paged(community_id, sort_str, 1, cap)
+            .await?;
+
+        let posts = resp
+            .posts
+            .iter()
+            .map(|view| ForumPost {
+                thread: poly_client::ThreadInfo {
+                    thread_id: format!("lemmy-post-{}", view.post.id),
+                    parent_channel_id: forum_channel_id.to_string(),
+                    message_count: u32::try_from(view.counts.comments.max(0))
+                        .unwrap_or(u32::MAX),
+                    member_count: 0,
+                },
+                applied_tags: vec![],
+                starter_message_id: Some(format!("lemmy-post-{}", view.post.id)),
+            })
+            .collect();
+
+        Ok(posts)
     }
 
     /// C.7 — wire `create_forum_post` for Lemmy via `POST /api/v3/post`.
