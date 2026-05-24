@@ -37,16 +37,25 @@ Scope: only `clients/reddit/`. Do NOT touch other client crates.
       `user_profile_to_user`, `raw_post_to_viewrow`, `build_sub_server`,
       `build_sub_channel`, sort helpers) belong in `backend/mapping.rs`.
       The 8 ID helpers belong in `backend/ids.rs`. _SRP._
-- [ ] **B.2** `backend.rs` `From<RedditError> for ClientError` (`:197`)
-      lives 200 lines from the consumer impl. Move to top of file or
-      its own `errors.rs`.
-- [ ] **B.3** `RedditBackend::get_messages` (~line 600+) mixes post-
-      fetching, comment-flattening, and ViewRow construction. Extract
-      the comment-flatten pipeline.
-- [ ] **B.4** `parser/mod.rs` (247 LoC) bundles `ParseError`, `RawPost`,
+- [x] **B.2** `backend.rs` `From<RedditError> for ClientError` (`:197`)
+      lives 200 lines from the consumer impl. After audit: already at
+      line 189 with a dedicated section header — no relocation needed.
+      Match simplified-as-is (6 arms already logically grouped).
+      — shipped in this pass
+- [x] **B.3** `RedditBackend::get_messages` (~line 600+) mixes post-
+      fetching, comment-flattening, and ViewRow construction. Extracted
+      `fetch_post_thread_messages(bare_id, &bt)` helper that owns the
+      gallery fetch + OP enrichment + comment flatten pipeline. Call
+      site in `get_messages` is now 2 lines. — shipped in this pass
+- [x] **B.4** `parser/mod.rs` (247 LoC) bundles `ParseError`, `RawPost`,
       `RawComment`, `RawDm`, `UserProfile`, `parse_timestamp_ms`, AND
-      the LoggedOut detector. Split into `parser/types.rs`,
-      `parser/error.rs`, `parser/time.rs`, `parser/auth.rs`.
+      the LoggedOut detector. Split into `parser/error.rs` (`ParseError`
+      only), `parser/types.rs` (`RawPost`, `RawComment`, `RawDm`,
+      `UserProfile`, `UserOverviewItem`), `parser/mod.rs` kept as
+      re-export + glue only (`detect_logged_out`, `parse_html`,
+      `data_attr`, `parse_timestamp_ms`, tests). All `use super::` in
+      submodules unchanged (re-exports preserve the path).
+      — shipped in this pass
 - [ ] **B.5** `lib.rs` (977 LoC) houses `RedditClient` HTTP shim. The
       `with_base_url` constructor (`:962+`) is the only thing keeping
       `lib.rs` exposed — move it into `backend.rs` or a dedicated

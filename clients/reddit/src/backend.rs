@@ -509,6 +509,58 @@ impl RedditBackend {
             backend_url: Some(self.client.base_url().to_string()),
         }
     }
+
+    /// Fetch a post plus its full comment tree and return them as a flat
+    /// `Vec<Message>` (OP first, then depth-first comments).
+    ///
+    /// Extracted from `get_messages` (B.3) to separate the three concerns:
+    /// post fetch, gallery-url enrichment, and comment flattening.
+    ///
+    /// `bare_id` is the Reddit post ID **without** any `t3_` prefix.
+    async fn fetch_post_thread_messages(
+        &self,
+        bare_id: &str,
+        bt: &BackendType,
+    ) -> ClientResult<Vec<Message>> {
+        let (post, comments) = self
+            .client
+            .get_post(bare_id)
+            .await
+            .map_err(ClientError::from)?;
+
+        // Always attempt the gallery JSON fetch — for a non-gallery post it
+        // returns Ok(empty) cheaply; for a gallery post it gives us the full
+        // ordered list of source URLs that the HTML scrape doesn't expose.
+        // Append each as an Attachment on the OP message so
+        // ForumThreadView renders the carousel.
+        let gallery_urls: Vec<String> = if self.media_previews_enabled() {
+            self.client.get_gallery_urls(bare_id).await.unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+
+        let mut op_msg = raw_post_to_message(&post, bt);
+        if gallery_urls.len() >= 2 {
+            op_msg.attachments.clear();
+            for (i, url) in gallery_urls.iter().enumerate() {
+                op_msg.attachments.push(Attachment::remote(
+                    format!("reddit-gallery-{bare_id}-{i}"),
+                    format!("gallery_{i}.jpg"),
+                    "image/jpeg".to_string(),
+                    url.clone(),
+                    0,
+                ));
+            }
+            if op_msg.preview_image_url.is_none() {
+                op_msg.preview_image_url = gallery_urls.first().cloned();
+            }
+        }
+
+        let mut messages = Vec::new();
+        messages.push(op_msg);
+        flatten_comments_into_messages(&comments, bt, &mut messages);
+        Ok(messages)
+    }
 }
 
 // ─── ClientBackend impl ───────────────────────────────────────────────────────
@@ -732,44 +784,7 @@ impl IsBackend for RedditBackend {
             // Forum URLs carry the `t3_`-prefixed message id; the
             // RedditClient API expects a bare id, so strip if present.
             let bare_id = post_id.strip_prefix("t3_").unwrap_or(post_id);
-            let (post, comments) = self
-                .client
-                .get_post(bare_id)
-                .await
-                .map_err(ClientError::from)?;
-
-            // Always attempt the gallery JSON fetch — for a non-gallery
-            // post it returns Ok(empty) cheaply; for a gallery post it
-            // gives us the full ordered list of source URLs that the
-            // HTML scrape doesn't expose. Append each as an Attachment
-            // on the OP message so ForumThreadView renders the carousel.
-            let gallery_urls: Vec<String> = if self.media_previews_enabled() {
-                self.client.get_gallery_urls(bare_id).await.unwrap_or_default()
-            } else {
-                Vec::new()
-            };
-
-            let mut op_msg = raw_post_to_message(&post, &bt);
-            if gallery_urls.len() >= 2 {
-                op_msg.attachments.clear();
-                for (i, url) in gallery_urls.iter().enumerate() {
-                    op_msg.attachments.push(Attachment::remote(
-                        format!("reddit-gallery-{bare_id}-{i}"),
-                        format!("gallery_{i}.jpg"),
-                        "image/jpeg".to_string(),
-                        url.clone(),
-                        0,
-                    ));
-                }
-                if op_msg.preview_image_url.is_none() {
-                    op_msg.preview_image_url = gallery_urls.first().cloned();
-                }
-            }
-
-            let mut messages = Vec::new();
-            messages.push(op_msg);
-            flatten_comments_into_messages(&comments, &bt, &mut messages);
-            return Ok(messages);
+            return self.fetch_post_thread_messages(bare_id, &bt).await;
         }
 
         // 3. `dm_<dm_id>` — single-message DM "thread" (Reddit DMs are
