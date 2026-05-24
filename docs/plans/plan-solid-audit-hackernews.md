@@ -20,10 +20,14 @@ Scope: only `clients/hackernews/`. Do NOT touch other client crates.
 
 ## Phase B — Medium refactors (50-300 LoC, max 5)
 
-- [ ] **B.1** Split `lib.rs` (901 LoC, 64 fns) `IsBackend` impl from
+- [x] **B.1** Split `lib.rs` (901 LoC, 64 fns) `IsBackend` impl from
       sibling trait impls (`SocialGraphBackend` line 701,
       `DmsAndGroupsBackend` line 774, plus 6 trait methods returning
       `NotSupported` each). Move trait impls to sibling modules. SRP.
+      — shipped in change `6067edd2`; `lib.rs` reduced to ~370 LoC;
+      new files: `social_graph.rs`, `dms_and_groups.rs`, `settings.rs`,
+      `view_descriptor.rs`; also removed stale `auth.rs` duplicate
+      (B.4 had created `auth/mod.rs` but left the old file).
 - [ ] **B.2** `mapping.rs` (591 LoC) has both production mapping fns
       AND 200+ lines of test fixtures (`:540+`). Split fixtures into
       `mapping/tests.rs`.
