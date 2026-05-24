@@ -403,3 +403,139 @@ pub struct RoomAvatarRequest {
     pub url: String,
 }
 
+// ---------------------------------------------------------------------------
+// Message search (C.2 — SOLID audit Phase C)
+// ---------------------------------------------------------------------------
+
+/// Room-events search category body.
+///
+/// Reference: https://spec.matrix.org/v1.11/client-server-api/#post_matrixclientv3search
+#[derive(Debug, Serialize)]
+pub struct RoomEventsFilter {
+    /// Free-text search string.
+    pub search_term: String,
+
+    /// Restrict results to a specific room ID (optional).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub filter: Option<SearchFilter>,
+
+    /// Maximum number of results to return.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u32>,
+}
+
+/// Optional filter to narrow down search results.
+#[derive(Debug, Serialize)]
+pub struct SearchFilter {
+    /// Room IDs to restrict the search to.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rooms: Option<Vec<String>>,
+}
+
+/// Outer request body for `POST /_matrix/client/v3/search`.
+#[derive(Debug, Serialize)]
+pub struct SearchRequest {
+    pub search_categories: SearchCategories,
+}
+
+/// The search categories container (only room_events is used).
+#[derive(Debug, Serialize)]
+pub struct SearchCategories {
+    pub room_events: RoomEventsFilter,
+}
+
+/// A single result item from the search endpoint.
+#[derive(Debug, Deserialize)]
+pub struct SearchResult {
+    /// The matching event.
+    pub result: RoomEvent,
+}
+
+/// Results for the `room_events` category.
+#[derive(Debug, Deserialize)]
+pub struct RoomEventsSearchResult {
+    /// The list of results.
+    #[serde(default)]
+    pub results: Vec<SearchResult>,
+}
+
+/// Outer response body for `POST /_matrix/client/v3/search`.
+#[derive(Debug, Deserialize)]
+pub struct SearchResponse {
+    pub search_categories: SearchCategoriesResponse,
+}
+
+/// The search categories response container.
+#[derive(Debug, Deserialize)]
+pub struct SearchCategoriesResponse {
+    pub room_events: RoomEventsSearchResult,
+}
+
+// ---------------------------------------------------------------------------
+// Pinned events (C.3 — SOLID audit Phase C)
+// ---------------------------------------------------------------------------
+
+/// Content of the `m.room.pinned_events` state event.
+///
+/// Reference: https://spec.matrix.org/v1.11/client-server-api/#mroompinned_events
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct PinnedEventsContent {
+    /// Ordered list of pinned event IDs (oldest first).
+    #[serde(default)]
+    pub pinned: Vec<String>,
+}
+
+// ---------------------------------------------------------------------------
+// Room creation (C.4 — SOLID audit Phase C)
+// ---------------------------------------------------------------------------
+
+/// Request body for `POST /_matrix/client/v3/createRoom`.
+///
+/// Reference: https://spec.matrix.org/v1.11/client-server-api/#post_matrixclientv3createroom
+#[derive(Debug, Default, Serialize)]
+pub struct CreateRoomRequest {
+    /// Room preset governing default power levels and join rules.
+    ///
+    /// `"public_chat"` — open join, world-readable history.
+    /// `"private_chat"` — invite-only.
+    /// `"trusted_private_chat"` — invite-only, all invitees are admins.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub preset: Option<String>,
+
+    /// Display name for the room.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+
+    /// Optional machine-readable local alias (without `#` or server suffix).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub room_alias_name: Option<String>,
+
+    /// Room type: `None` for plain rooms, `"m.space"` for Spaces.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub room_type: Option<String>,
+
+    /// Initial state events to send (e.g. setting the parent Space).
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub initial_state: Vec<InitialStateEvent>,
+}
+
+/// A state event to include in the initial room state during `createRoom`.
+#[derive(Debug, Serialize)]
+pub struct InitialStateEvent {
+    /// Event type, e.g. `"m.space.child"`.
+    #[serde(rename = "type")]
+    pub event_type: String,
+    /// State key (empty string for most events).
+    #[serde(default)]
+    pub state_key: String,
+    /// Event content.
+    pub content: serde_json::Value,
+}
+
+/// Response body for `POST /_matrix/client/v3/createRoom`.
+#[derive(Debug, Deserialize)]
+pub struct CreateRoomResponse {
+    /// The fully-qualified room ID of the newly created room.
+    pub room_id: String,
+}
+

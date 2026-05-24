@@ -5,11 +5,12 @@
 //! resume after interruptions.
 
 use crate::api::{
-    BanRequest, IgnoredUserListContent, InviteRequest, JoinedRoomsResponse, KickRequest,
-    LoginIdentifier, LoginRequest, LoginResponse, MessagesResponse, PowerLevelsContent,
-    ProfileResponse, PushRuleRequest, RedactRequest, RoomAvatarRequest, RoomEvent,
-    RoomMembersResponse, RoomNameRequest, RoomTopicRequest, SendEventResponse, SendMessageRequest,
-    SpaceHierarchyResponse, SyncResponse, UnbanRequest, WhoAmIResponse,
+    BanRequest, CreateRoomRequest, CreateRoomResponse, IgnoredUserListContent, InviteRequest,
+    JoinedRoomsResponse, KickRequest, LoginIdentifier, LoginRequest, LoginResponse,
+    MessagesResponse, PinnedEventsContent, PowerLevelsContent, ProfileResponse, PushRuleRequest,
+    RedactRequest, RoomAvatarRequest, RoomEvent, RoomMembersResponse, RoomNameRequest,
+    RoomTopicRequest, SearchCategories, SearchRequest, SearchResponse, SendEventResponse,
+    SendMessageRequest, SpaceHierarchyResponse, SyncResponse, UnbanRequest, WhoAmIResponse,
 };
 use crate::config::MatrixConfig;
 use poly_client::{ClientError, ClientResult};
@@ -767,6 +768,185 @@ impl MatrixHttpClient {
         let response = self
             .authenticated_request(Method::POST, &path)?
             .json(&body)
+            .send()
+            .await
+            .map_err(|e| Self::network_error(&e))?;
+
+        if !response.status().is_success() {
+            return Err(Self::parse_error(response).await);
+        }
+        Ok(())
+    }
+
+    // -----------------------------------------------------------------------
+    // Message search (C.2)
+    // -----------------------------------------------------------------------
+
+    /// Search room events via `POST /_matrix/client/v3/search`.
+    ///
+    /// Sends a `room_events` search category request. Results are the raw
+    /// `SearchResponse`; the caller is responsible for mapping into
+    /// `MessageSearchHit` values.
+    ///
+    /// `room_id` — if `Some`, restricts results to that room.
+    /// `limit`   — maximum number of results (homeserver may cap lower).
+    pub async fn post_search(
+        &self,
+        search_term: &str,
+        room_id: Option<&str>,
+        limit: Option<u32>,
+    ) -> ClientResult<SearchResponse> {
+        let filter = room_id.map(|id| crate::api::SearchFilter {
+            rooms: Some(vec![id.to_string()]),
+        });
+        let body = SearchRequest {
+            search_categories: SearchCategories {
+                room_events: crate::api::RoomEventsFilter {
+                    search_term: search_term.to_string(),
+                    filter,
+                    limit,
+                },
+            },
+        };
+        let response = self
+            .authenticated_request(Method::POST, "/_matrix/client/v3/search")?
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| Self::network_error(&e))?;
+
+        if !response.status().is_success() {
+            return Err(Self::parse_error(response).await);
+        }
+        response.json().await.map_err(|e| Self::network_error(&e))
+    }
+
+    // -----------------------------------------------------------------------
+    // Pinned events (C.3)
+    // -----------------------------------------------------------------------
+
+    /// Fetch the `m.room.pinned_events` state event content for a room.
+    ///
+    /// Returns the pinned event ID list, or an empty list when the state event
+    /// does not exist (404 is treated as no pins, not an error).
+    pub async fn get_room_pinned_event_ids(
+        &self,
+        room_id: &str,
+    ) -> ClientResult<Vec<String>> {
+        let path = format!(
+            "/_matrix/client/v3/rooms/{room_id}/state/m.room.pinned_events/"
+        );
+        let response = self
+            .authenticated_request(Method::GET, &path)?
+            .send()
+            .await
+            .map_err(|e| Self::network_error(&e))?;
+
+        // 404 → no pinned events state event yet — return empty list.
+        if response.status().as_u16() == 404 {
+            return Ok(Vec::new());
+        }
+        if !response.status().is_success() {
+            return Err(Self::parse_error(response).await);
+        }
+        let content: PinnedEventsContent =
+            response.json().await.map_err(|e| Self::network_error(&e))?;
+        Ok(content.pinned)
+    }
+
+    /// Fetch a single room event by its event ID.
+    ///
+    /// Used by `get_pinned_messages` to hydrate individual pinned events.
+    pub async fn get_room_event(&self, room_id: &str, event_id: &str) -> ClientResult<RoomEvent> {
+        let path = format!("/_matrix/client/v3/rooms/{room_id}/event/{event_id}");
+        let response = self
+            .authenticated_request(Method::GET, &path)?
+            .send()
+            .await
+            .map_err(|e| Self::network_error(&e))?;
+
+        if !response.status().is_success() {
+            return Err(Self::parse_error(response).await);
+        }
+        response.json().await.map_err(|e| Self::network_error(&e))
+    }
+
+    /// Write the `m.room.pinned_events` state event for a room.
+    ///
+    /// Overwrites the full pin list — the caller must provide the complete
+    /// desired set of pinned event IDs.
+    pub async fn put_room_pinned_events(
+        &self,
+        room_id: &str,
+        pinned: Vec<String>,
+    ) -> ClientResult<()> {
+        let path = format!(
+            "/_matrix/client/v3/rooms/{room_id}/state/m.room.pinned_events/"
+        );
+        let content = PinnedEventsContent { pinned };
+        let response = self
+            .authenticated_request(Method::PUT, &path)?
+            .json(&content)
+            .send()
+            .await
+            .map_err(|e| Self::network_error(&e))?;
+
+        if !response.status().is_success() {
+            return Err(Self::parse_error(response).await);
+        }
+        Ok(())
+    }
+
+    // -----------------------------------------------------------------------
+    // Room creation (C.4)
+    // -----------------------------------------------------------------------
+
+    /// Create a Matrix room via `POST /_matrix/client/v3/createRoom`.
+    ///
+    /// Returns the new room's ID on success.
+    pub async fn create_room(&self, req: &CreateRoomRequest) -> ClientResult<CreateRoomResponse> {
+        let response = self
+            .authenticated_request(Method::POST, "/_matrix/client/v3/createRoom")?
+            .json(req)
+            .send()
+            .await
+            .map_err(|e| Self::network_error(&e))?;
+
+        if !response.status().is_success() {
+            return Err(Self::parse_error(response).await);
+        }
+        response.json().await.map_err(|e| Self::network_error(&e))
+    }
+
+    /// Write an `m.space.child` state event on `space_room_id` pointing to
+    /// `child_room_id`.
+    ///
+    /// This links the child room into the Space's hierarchy so it shows up in
+    /// `GET /hierarchy`. Best-effort: callers that don't care about the result
+    /// should log and continue on error.
+    pub async fn put_space_child(
+        &self,
+        space_room_id: &str,
+        child_room_id: &str,
+    ) -> ClientResult<()> {
+        // Extract the bare server name from the homeserver URL for the `via` field.
+        let via = self
+            .homeserver_url()
+            .trim_start_matches("https://")
+            .trim_start_matches("http://")
+            .trim_end_matches('/');
+
+        let content = serde_json::json!({
+            "via": [via],
+            "suggested": false,
+            "order": ""
+        });
+        let path = format!(
+            "/_matrix/client/v3/rooms/{space_room_id}/state/m.space.child/{child_room_id}"
+        );
+        let response = self
+            .authenticated_request(Method::PUT, &path)?
+            .json(&content)
             .send()
             .await
             .map_err(|e| Self::network_error(&e))?;

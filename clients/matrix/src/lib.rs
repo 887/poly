@@ -1663,22 +1663,107 @@ impl poly_client::MessagingBackend for MatrixClient {
 
     async fn search_messages(
         &self,
-        _query: MessageSearchQuery,
+        query: MessageSearchQuery,
     ) -> ClientResult<Vec<MessageSearchHit>> {
-        Err(ClientError::NotSupported("search_messages: Matrix search not yet implemented".to_string()))
+        // SOLID-audit-matrix C.2: POST /_matrix/client/v3/search → room_events category.
+        let room_id = query.channel_id.as_deref();
+        let limit = query.limit;
+
+        let resp = self
+            .http
+            .post_search(&query.text, room_id, limit)
+            .await?;
+
+        let results = resp.search_categories.room_events.results;
+        let homeserver_url = self.homeserver_url().to_string();
+
+        let hits: Vec<MessageSearchHit> = results
+            .into_iter()
+            .filter_map(|r| {
+                let event = r.result;
+                // Only surface m.room.message events; search may return state events.
+                if event.event_type != "m.room.message" {
+                    return None;
+                }
+                let room_id_str = event.event_id.as_deref()
+                    .map(|_| room_id.map(str::to_string))
+                    .unwrap_or(None)
+                    .unwrap_or_default();
+
+                // Extract the room ID the event belongs to from the event itself.
+                // The Matrix search response attaches `room_id` directly on the event
+                // but our `RoomEvent` struct doesn't decode it yet — use the filter
+                // room_id when available, otherwise fall back to an empty string.
+                // TODO: add `room_id` field to `RoomEvent` and remove this fallback.
+                let _ = &homeserver_url; // used for future avatar hydration
+                let msg = Self::room_event_to_message(&event)?;
+                Some(MessageSearchHit {
+                    channel_id: room_id_str,
+                    channel_name: None,
+                    server_id: query.server_id.clone(),
+                    message: msg,
+                })
+            })
+            .collect();
+
+        Ok(hits)
     }
 
-    async fn get_pinned_messages(&self, _channel_id: &str) -> ClientResult<Vec<Message>> {
-        Err(ClientError::NotSupported("get_pinned_messages: not yet implemented for Matrix".to_string()))
+    async fn get_pinned_messages(&self, channel_id: &str) -> ClientResult<Vec<Message>> {
+        // SOLID-audit-matrix C.3: GET m.room.pinned_events state event, then fetch each event.
+        let event_ids = self.http.get_room_pinned_event_ids(channel_id).await?;
+
+        if event_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Fetch each pinned event individually and map to Message.
+        // Errors on individual events are silently skipped (pin may have been
+        // redacted or the event ID may be stale).
+        let mut messages = Vec::with_capacity(event_ids.len());
+        for event_id in &event_ids {
+            match self.http.get_room_event(channel_id, event_id).await {
+                Ok(ev) => {
+                    if let Some(msg) = Self::room_event_to_message(&ev) {
+                        messages.push(msg);
+                    }
+                }
+                Err(err) => {
+                    tracing::debug!(
+                        channel_id,
+                        event_id,
+                        %err,
+                        "matrix: get_pinned_messages — skipping stale/redacted event"
+                    );
+                }
+            }
+        }
+
+        let messages = self.hydrate_message_authors(messages).await;
+        Ok(messages)
     }
 
     async fn set_message_pinned(
         &self,
-        _channel_id: &str,
-        _message_id: &str,
-        _pinned: bool,
+        channel_id: &str,
+        message_id: &str,
+        pinned: bool,
     ) -> ClientResult<()> {
-        Err(ClientError::NotSupported("set_message_pinned: not yet implemented for Matrix".to_string()))
+        // SOLID-audit-matrix C.3: read-modify-write on m.room.pinned_events.
+        // Requires the caller to have state=50 power level in the room.
+        let mut ids = self.http.get_room_pinned_event_ids(channel_id).await?;
+
+        if pinned {
+            // Add if not already present.
+            if !ids.contains(&message_id.to_string()) {
+                ids.push(message_id.to_string());
+            }
+        } else {
+            // Remove all occurrences.
+            ids.retain(|id| id != message_id);
+        }
+
+        self.http.put_room_pinned_events(channel_id, ids).await
     }
 
     async fn get_channel_commands(&self, _channel_id: &str) -> ClientResult<Vec<ChatCommand>> {
@@ -1699,17 +1784,114 @@ impl poly_client::MessagingBackend for MatrixClient {
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl poly_client::ServerAdminBackend for MatrixClient {
-    async fn create_server(&self, _name: &str) -> ClientResult<Server> {
-        Err(ClientError::NotSupported("matrix: create_server not implemented".to_string()))
+    async fn create_server(&self, name: &str) -> ClientResult<Server> {
+        // SOLID-audit-matrix C.4: POST /createRoom with preset:public_chat + type:m.space.
+        // Creates a Matrix Space (a room with room_type "m.space") and maps it
+        // to a Poly Server.
+        let req = api::CreateRoomRequest {
+            preset: Some("public_chat".to_string()),
+            name: Some(name.to_string()),
+            room_type: Some("m.space".to_string()),
+            ..Default::default()
+        };
+        let resp = self.http.create_room(&req).await?;
+        let room_id = resp.room_id;
+
+        let account_id = self
+            .http
+            .session()
+            .map(|s| s.user_id)
+            .unwrap_or_default();
+
+        Ok(Server {
+            id: room_id,
+            name: name.to_string(),
+            icon_url: None,
+            banner_url: None,
+            categories: Vec::new(),
+            backend: BackendType::from(crate::SLUG),
+            unread_count: 0,
+            mention_count: 0,
+            account_id: account_id.clone(),
+            account_display_name: account_id,
+            default_channel_id: None,
+            description: None,
+            star_count: None,
+            language: None,
+            forks_count: None,
+            open_issues_count: None,
+        })
     }
 
     async fn create_channel(
         &self,
-        _server_id: &str,
-        _name: &str,
-        _channel_type: ChannelType,
+        server_id: &str,
+        name: &str,
+        channel_type: ChannelType,
     ) -> ClientResult<Channel> {
-        Err(ClientError::NotSupported("matrix: create_channel not implemented".to_string()))
+        // SOLID-audit-matrix C.4: POST /createRoom for a plain room, then link
+        // it to the parent Space via an `m.space.child` state event on the Space.
+        // Only Text channels are supported; Voice/Video are not native Matrix concepts.
+        match channel_type {
+            ChannelType::Text => {}
+            _ => {
+                return Err(ClientError::NotSupported(
+                    "matrix: create_channel only supports Text channels; \
+                     Matrix has no native Voice/Video room type"
+                        .to_string(),
+                ));
+            }
+        }
+
+        // The m.space.child event is written onto the *Space* room (server_id)
+        // with the state_key = the new child room ID.  We create the room first,
+        // then add the child link.
+        let req = api::CreateRoomRequest {
+            preset: Some("public_chat".to_string()),
+            name: Some(name.to_string()),
+            // Attach the parent Space via an initial state event so the child
+            // is immediately discoverable in the hierarchy.
+            initial_state: vec![api::InitialStateEvent {
+                event_type: "m.space.parent".to_string(),
+                state_key: server_id.to_string(),
+                content: serde_json::json!({
+                    "via": [self.http.homeserver_url().trim_start_matches("https://").trim_start_matches("http://")],
+                    "canonical": true
+                }),
+            }],
+            ..Default::default()
+        };
+        let resp = self.http.create_room(&req).await?;
+        let room_id = resp.room_id;
+
+        // Now write m.space.child on the Space room to advertise the new channel.
+        // Best-effort: if this fails we still return the created room (callers
+        // can manually add it later via `add-room-to-space`).
+        if let Err(err) = self
+            .http
+            .put_space_child(server_id, &room_id)
+            .await
+        {
+            tracing::debug!(
+                server_id,
+                room_id,
+                %err,
+                "matrix: create_channel — m.space.child write failed (best-effort)"
+            );
+        }
+
+        Ok(Channel {
+            id: room_id,
+            name: name.to_string(),
+            channel_type: ChannelType::Text,
+            server_id: server_id.to_string(),
+            unread_count: 0,
+            mention_count: 0,
+            last_message_id: None,
+            forum_tags: None,
+            parent_channel_id: None,
+            thread_metadata: None,
+        })
     }
 
     async fn update_server_banner(
