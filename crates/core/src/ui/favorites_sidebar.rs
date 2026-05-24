@@ -262,7 +262,7 @@ pub fn FavoritesBar() -> Element {
     // lines 146, 154, 170 (account_sessions) and the client_manager reads.
     let snap = {
         let live: Vec<String> = client_manager.with(|cm| cm.active_account_ids());
-        let (account_ids, favorited_ids, demo_active) = account_sessions.with(|as_| {
+        let (account_ids, favorited_ids, _) = account_sessions.with(|as_| {
             // Collect distinct active account IDs applying user-saved order.
             // Accounts not in saved order appended by priority fallback:
             //   0. demo messenger accounts (Cat, Dog)

@@ -75,8 +75,6 @@ pub fn plugin_translations(locale: &str) -> String {
 }
 
 #[cfg(feature = "native")]
-use async_trait::async_trait;
-#[cfg(feature = "native")]
 use futures::stream::{self, Stream};
 #[cfg(feature = "native")]
 use http::DiscordHttpClient;
