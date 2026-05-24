@@ -1,6 +1,6 @@
 # SOLID + missing-impl audit — `clients/discord/`
 
-## Status: IN PROGRESS — Phase A shipped in change `nprtmlvu`. Phase B (file splits — 3 542 / 1 976 / 1 241 LoC) + Phase C (architectural) queued for deliberate refactor.
+## Status: IN PROGRESS — Phase A shipped in change `nprtmlvu`. Phase B file splits B.1/B.2/B.3 shipped in changes `okyokprs` / `svqknqps` / `wlqmorlz`. B.4/B.5 + Phase C (architectural) queued for deliberate refactor.
 
 
 Audit performed in change `nprtmlvu` against parent `rorooxlm` (worktree
@@ -41,7 +41,7 @@ Out of scope per dispatch contract:
 
 Each item is 50–300 LoC and should land as its own change.
 
-- [ ] **B.1** Split `lib.rs` (3 542 LoC) into per-trait files.
+- [x] **B.1** Split `lib.rs` (3 542 LoC) into per-trait files. — shipped in change `okyokprs`. Each `impl Trait for DiscordClient` block now lives under `clients/discord/src/backend/{is_backend,forum,threads,moderation,social_graph,dms_groups,messaging,server_admin,voice_transport,settings,view_descriptor,context_action}.rs`. `lib.rs` keeps struct + constructors + mappers + native gateway loop; trimmed to ~1 580 LoC.
       `DiscordClient` implements **9** distinct traits in one file:
       `IsBackend`, `ForumBackend`, `ThreadsBackend`, `ModerationBackend`,
       `SocialGraphBackend`, `DmsAndGroupsBackend`, `MessagingBackend`,
@@ -52,7 +52,7 @@ Each item is 50–300 LoC and should land as its own change.
       done in `poly_client` — this is purely physical reorganisation.
       Cite: lib.rs:1482, 2586, 2686, 2707, 3036, 3119, 3229, 3288.
 
-- [ ] **B.2** Split `voice_bridge.rs` (1 976 LoC).
+- [x] **B.2** Split `voice_bridge.rs` (1 976 LoC). — shipped in change `svqknqps`. Existing `voice_bridge/{audio_capture,audio_playback}.rs` pattern extended with `voice_bridge/{rtp,voice_protocol,video_capture,video_playback}.rs`. `voice_bridge.rs` → `voice_bridge/mod.rs` (~999 LoC: error type, transmit mode, session state, struct + main impl, WS event listener, tests).
       `DiscordVoiceBridgeClient` is one type with seven responsibilities:
       WS handshake, IP discovery, AEAD session, RTP packing, video NAL
       fragmentation/reassembly (lib.rs:1625-1862 — `find_nal_unit_starts`,
@@ -63,7 +63,7 @@ Each item is 50–300 LoC and should land as its own change.
       Cite: voice_bridge.rs:215 (struct), 1128 (`parse_session_description`),
       1625 (`find_nal_unit_starts`).
 
-- [ ] **B.3** Split `voice/mod.rs` (1 241 LoC).
+- [x] **B.3** Split `voice/mod.rs` (1 241 LoC). — shipped in change `wlqmorlz`. New sibling files `voice/{handshake,ip_discovery,ws_loop,encode,decode,rtp,aead}.rs` extract the protocol helpers, IP discovery, encode/decode loops, RTP framing, and AEAD encrypt/decrypt. `voice/mod.rs` (~630 LoC) keeps constants, error type, transmit mode, `DiscordVoiceConnection` struct/impl, per-account voice mutex, `VoiceServerInfo`, and `connect_voice` entrypoint.
       Same SRP smell as B.2 on the native path. `connect_voice` at line 276
       is one function that runs WS handshake, IP discovery, key derivation,
       and spawns the encode + decode loops. Already has `rtcp.rs` and
