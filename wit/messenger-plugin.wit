@@ -1507,6 +1507,40 @@ interface messenger-client {
     /// Get voice participants in a channel.
     get-voice-participants: func(channel-id: string) -> result<list<voice-participant>, client-error>;
 
+    /// Signal the backend that the local user is joining a voice channel.
+    ///
+    /// Mirrors `VoiceTransportBackend::join_voice_channel_transport` on the
+    /// native trait. Pseudo-backend fallback is `Ok(())`; backends with
+    /// gateway signaling (Discord op 4, Stoat Vortex) do real work in their
+    /// native `lib.rs` impl. The WIT-side stub exists for ABI completeness
+    /// — WASM-sandboxed plugins cannot reach real voice transport.
+    join-voice-channel-transport: func(
+        server-id: string,
+        channel-id: string,
+    ) -> result<_, client-error>;
+
+    /// Initiate a DM call via backend transport (real signaling).
+    ///
+    /// Mirrors `VoiceTransportBackend::start_dm_call_transport`. Default
+    /// returns `not-supported` — caller falls back to the pseudo-backend
+    /// `TemporaryCall` model. Stoat's native impl creates a synthetic
+    /// transient voice channel (see Phase H.2).
+    start-dm-call-transport: func(
+        dm-channel-id: string,
+    ) -> result<_, client-error>;
+
+    /// Toggle the local user's mute / deafen state on the backend.
+    ///
+    /// Mirrors `VoiceTransportBackend::set_voice_mute`. Pseudo-backend
+    /// fallback is `Ok(())`; Discord uses gateway op 4, Stoat uses
+    /// `PATCH /channels/{id}/voice_state` (see Phase G.4).
+    set-voice-mute: func(
+        server-id: string,
+        channel-id: string,
+        self-mute: bool,
+        self-deaf: bool,
+    ) -> result<_, client-error>;
+
     /// Get a user's online presence status.
     get-presence: func(user-id: string) -> result<presence-status, client-error>;
 

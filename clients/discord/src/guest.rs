@@ -285,6 +285,33 @@ impl Guest for DiscordPlugin {
         Ok(vec![])
     }
 
+    // G.5 — voice-transport WIT stubs (mirrors VoiceTransportBackend defaults).
+    // Real Discord voice work lives in native lib.rs (gateway op 4); this
+    // sandboxed WIT-plugin variant returns the documented defaults.
+    fn join_voice_channel_transport(
+        _server_id: String,
+        _channel_id: String,
+    ) -> Result<(), wit::ClientError> {
+        Ok(())
+    }
+
+    fn start_dm_call_transport(
+        _dm_channel_id: String,
+    ) -> Result<(), wit::ClientError> {
+        Err(wit::ClientError::NotSupported(
+            "start_dm_call_transport (WIT stub)".into(),
+        ))
+    }
+
+    fn set_voice_mute(
+        _server_id: String,
+        _channel_id: String,
+        _self_mute: bool,
+        _self_deaf: bool,
+    ) -> Result<(), wit::ClientError> {
+        Ok(())
+    }
+
     fn get_presence(_user_id: String) -> Result<wit::PresenceStatus, wit::ClientError> {
         Ok(wit::PresenceStatus::Offline)
     }

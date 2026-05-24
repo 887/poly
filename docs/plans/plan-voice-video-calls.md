@@ -1,6 +1,6 @@
 # Voice & Video Calls — Discord (full) + Stoat (full) + Teams (stub)
 
-## Status: Phases A + B + C + D + E (E.1–E.9 shipped) + I + J shipped. Phase F (Stoat voice gateway) shipped via plan-stoat-voice-wasm.md (A+B.1+B.2+B.5+B.6). Phase G partially shipped via stoat-voice-wasm (C.1+C.2 in progress; G.4 mute/deafen + G.5 WIT bindings still pending). Phase H–K still pending.
+## Status: Phases A + B + C + D + E (E.1–E.9 shipped) + I + J shipped. Phase F (Stoat voice gateway) shipped via plan-stoat-voice-wasm.md (A+B.1+B.2+B.5+B.6). Phase G fully shipped (G.1–G.5; G.4 + G.5 in changes `wzykppkz` + this change). Phase H fully shipped (H.1–H.5). Phase K still pending (test scaffolding).
 
 _Last updated: 2026-05-17_
 
@@ -459,8 +459,8 @@ once C lands — this is wiring + handling Stoat-specific quirks.
   `Signal<HashMap<UserId, bool>>` from Phase C.4. — superseded by stoat-voice-wasm Phase B.1+B.5 (shipped in change `oxuznzwv`); Vortex uses `SpeakingUpdate` WS JSON event (not RTCP); wired into the voice event loop's `Signal<HashMap<UserId, bool>>` analogous to Discord Phase C.4. LiveKit/Janus detection methods are moot.
 - [x] **G.4** Mute / deafen via Stoat's API
   (`PATCH /channels/{id}/voice_state`). — shipped in change `wzykppkz`; `set_voice_mute` override added to `impl VoiceTransportBackend for StoatClient` with separate WASM (`gloo_net::http::Request::patch`) and native (`Method::PATCH authenticated_request`) arms. Mock endpoint pre-existed at `servers/test-stoat/src/routes.rs:patch_voice_state`.
-- [ ] **G.5** Update the WIT bindings and guest-side stub at
-  `clients/stoat/src/guest.rs` to mirror the new methods. — **STILL PENDING** (refined scope: see stoat-voice-wasm); stoat-voice-wasm does not explicitly address WIT guest-side stubs. Needs a dedicated sub-step in stoat-voice-wasm Phase C or a follow-up change.
+- [x] **G.5** Update the WIT bindings and guest-side stub at
+  `clients/stoat/src/guest.rs` to mirror the new methods. — shipped; `wit/messenger-plugin.wit` `messenger-client` interface gained 3 new methods (`join-voice-channel-transport`, `start-dm-call-transport`, `set-voice-mute`) mirroring `VoiceTransportBackend`'s default-impl shapes. Stubs added to all 5 plugin `guest.rs` files (`stoat`, `discord`, `matrix`, `teams`, `demo`) — `Ok(())` for join/mute (pseudo fallback), `Err(NotSupported)` for `start_dm_call_transport`. Real voice transport stays on the native `StoatClient` / `DiscordClient` impls; the WIT-plugin variants cannot reach real transport from inside the WASM sandbox. WIT round-trips clean via `wasm-tools component wit`. Plugin-host bridge (`crates/plugin-host/src/registry.rs`) unchanged — `WasmPluginBackend` continues to opt out of `VoiceTransportBackend`; only the native trait impls carry real signaling.
 
 ---
 

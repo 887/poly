@@ -613,6 +613,34 @@ impl Guest for TeamsPlugin {
         Ok(vec![])
     }
 
+    // G.5 — voice-transport WIT stubs. Teams calling is "not yet
+    // supported" (Phase I stub) — return `NotSupported` for the DM-call
+    // initiator and `Ok(())` for the cheap join/mute fire-and-forget
+    // signals to match `VoiceTransportBackend` defaults.
+    fn join_voice_channel_transport(
+        _server_id: String,
+        _channel_id: String,
+    ) -> Result<(), wit::ClientError> {
+        Ok(())
+    }
+
+    fn start_dm_call_transport(
+        _dm_channel_id: String,
+    ) -> Result<(), wit::ClientError> {
+        Err(wit::ClientError::NotSupported(
+            "Teams calling is not yet supported".into(),
+        ))
+    }
+
+    fn set_voice_mute(
+        _server_id: String,
+        _channel_id: String,
+        _self_mute: bool,
+        _self_deaf: bool,
+    ) -> Result<(), wit::ClientError> {
+        Ok(())
+    }
+
     fn get_presence(_user_id: String) -> Result<wit::PresenceStatus, wit::ClientError> {
         Ok(wit::PresenceStatus::Offline)
     }
