@@ -1,6 +1,6 @@
 # Plan: SOLID + missing-impl audit — `clients/hackernews/`
 
-## Status: IN PROGRESS — Phase A shipped (A.1+A.2 in change `llvrkmlt` / commit `f5edc830`; A.3 skipped — cosmetic). Phase B + C queued.
+## Status: IN PROGRESS — Phase A shipped (A.1+A.2 in change `llvrkmlt`; A.3 skipped — already covered). B.3+B.4 shipped in this change. B.1, B.2, B.5, C.* queued.
 
 Audit pass over `clients/hackernews/src/{api.rs,auth.rs,cache.rs,lib.rs,mapping.rs,signup.rs,types.rs}`
 (2245 LoC). Identifies SOLID violations and missing implementations.
@@ -16,11 +16,7 @@ Scope: only `clients/hackernews/`. Do NOT touch other client crates.
 - [x] **A.2** Dedup `NotSupported` allocation strings (`lib.rs:716-829`,
       ~22 sites all "Hacker News has no X") into module-level `const`
       slices. _≈30 LoC removed._ — shipped (10 const + 19 call sites updated)
-- [ ] **A.3** `mapping.rs` test (`:548`) uses `.expect("meta_text must be Some")`
-      in a test context that's already inside `#[cfg(test)]`; consistent
-      pattern but the panic-message could match the structured assertion
-      style used at `:549-550`. Cosmetic — skip if test churn isn't
-      desired.
+- [~] **A.3** SKIPPED — `mapping.rs:473` already has `#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]`; the `.expect()` at `:548` is covered. No change needed.
 
 ## Phase B — Medium refactors (50-300 LoC, max 5)
 
@@ -31,14 +27,18 @@ Scope: only `clients/hackernews/`. Do NOT touch other client crates.
 - [ ] **B.2** `mapping.rs` (591 LoC) has both production mapping fns
       AND 200+ lines of test fixtures (`:540+`). Split fixtures into
       `mapping/tests.rs`.
-- [ ] **B.3** `IsBackend::send_message` (`lib.rs:240-307`) does
+- [x] **B.3** `IsBackend::send_message` (`lib.rs:240-307`) does
       channel-id dispatch via a string `match` AND constructs the
       typed payload AND calls auth-gated `submit` AND maps the
       response. Split into smaller helpers. The current shape forces
       future channel additions to edit one giant function (Open/Closed).
-- [ ] **B.4** `auth.rs` (261 LoC) bundles cookie extraction, login
+      — shipped: extracted `require_write_session`, `require_post_channel`,
+      `require_text_content`, `build_pending_message`; body collapsed to ~10 lines.
+- [x] **B.4** `auth.rs` (261 LoC) bundles cookie extraction, login
       form parsing, AND submit logic. Split cookie module out — it's
       reusable (the test at `:222` would migrate cleanly).
+      — shipped: `auth.rs` → `auth/mod.rs` + `auth/cookies.rs`; cookie tests
+      migrated to `cookies.rs`; `extract_user_cookie` is `pub(super)` in submodule.
 - [ ] **B.5** `IsBackend::get_view_rows` (`lib.rs:519+`) and
       `get_view_detail` (`:587+`) are large dispatchers on view-id
       patterns. Extract a `ViewKind` enum + `kind.fetch(...)` to make

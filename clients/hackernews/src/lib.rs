@@ -241,36 +241,9 @@ impl IsBackend for HackerNewsClient {
         channel_id: &str,
         content: MessageContent,
     ) -> ClientResult<Message> {
-        // Need a logged-in session: guest sessions have an empty token.
-        let session = self.session.as_ref().ok_or_else(|| {
-            ClientError::AuthFailed(
-                "Sign in with your news.ycombinator.com account to post comments.".to_string(),
-            )
-        })?;
-        if session.token.is_empty() {
-            return Err(ClientError::AuthFailed(
-                "This is an anonymous Hacker News session — sign in with a \
-                 news.ycombinator.com account to post comments."
-                    .to_string(),
-            ));
-        }
-
-        // Channel must be a post comment thread (`hn-post-{id}`); replying
-        // to a specific comment is a future enhancement.
-        let parent_id = post_id_from_channel(channel_id).ok_or_else(|| {
-            ClientError::NotSupported(format!(
-                "Posting from this channel is not supported yet (channel: {channel_id})"
-            ))
-        })?;
-
-        let text = match content {
-            MessageContent::Text(s) => s,
-            // HN comments are plain text + URLs; markdown / attachments are
-            // not supported by the site form.
-            other => return Err(ClientError::NotSupported(format!(
-                "Hacker News comments only accept plain text (got: {other:?})"
-            ))),
-        };
+        let session = require_write_session(self.session.as_ref())?;
+        let parent_id = require_post_channel(channel_id)?;
+        let text = require_text_content(content)?;
 
         let http = self.api.http_client();
         let ua = self.api.ua();
@@ -279,29 +252,7 @@ impl IsBackend for HackerNewsClient {
         let hmac = auth::fetch_reply_hmac(http, &ua, parent_id, cookie).await?;
         auth::post_comment(http, &ua, parent_id, &text, cookie, &hmac).await?;
 
-        // HN doesn't return the new item ID. Fabricate a placeholder so the
-        // host can render a "sent" optimistic message; the real comment
-        // will surface on the next channel reload.
-        let now = chrono::Utc::now();
-        let _ = channel_id; // referenced via parent_id; kept to clarify intent
-        Ok(Message {
-            id: format!("hn-pending-{}", now.timestamp_millis()),
-            author: User {
-                id: session.user.id.clone(),
-                display_name: session.user.display_name.clone(),
-                avatar_url: session.user.avatar_url.clone(),
-                presence: session.user.presence,
-                backend: session.user.backend.clone(),
-            },
-            content: MessageContent::Text(text),
-            timestamp: now,
-            attachments: Vec::new(),
-            reactions: Vec::new(),
-            reply_to: None,
-            edited: false,
-            thread: None,
-            preview_image_url: None,
-        })
+        Ok(build_pending_message(session, text))
     }
 
     async fn get_messages(
@@ -869,5 +820,81 @@ impl HackerNewsClient {
             })
             .collect();
         Ok(messages)
+    }
+}
+
+// ── send_message helpers ──────────────────────────────────────────────────
+//
+// These functions decompose the three logical stages of `send_message` so
+// each stage has a single reason to change (SRP) and future channel types
+// only need to extend `require_post_channel` (Open/Closed).
+
+#[cfg(feature = "native")]
+/// Validate that a write-capable (non-empty token) session exists.
+fn require_write_session(session: Option<&Session>) -> ClientResult<&Session> {
+    let session = session.ok_or_else(|| {
+        ClientError::AuthFailed(
+            "Sign in with your news.ycombinator.com account to post comments.".to_string(),
+        )
+    })?;
+    if session.token.is_empty() {
+        return Err(ClientError::AuthFailed(
+            "This is an anonymous Hacker News session — sign in with a \
+             news.ycombinator.com account to post comments."
+                .to_string(),
+        ));
+    }
+    Ok(session)
+}
+
+#[cfg(feature = "native")]
+/// Map a channel ID to the numeric HN item ID it wraps, or return a
+/// `NotSupported` error for channels that don't accept comments yet.
+fn require_post_channel(channel_id: &str) -> ClientResult<u64> {
+    post_id_from_channel(channel_id).ok_or_else(|| {
+        ClientError::NotSupported(format!(
+            "Posting from this channel is not supported yet (channel: {channel_id})"
+        ))
+    })
+}
+
+#[cfg(feature = "native")]
+/// Accept plain-text content, reject everything else with `NotSupported`.
+///
+/// HN comments are plain text + URLs; markdown / attachments are not
+/// supported by the site form.
+fn require_text_content(content: MessageContent) -> ClientResult<String> {
+    match content {
+        MessageContent::Text(s) => Ok(s),
+        other => Err(ClientError::NotSupported(format!(
+            "Hacker News comments only accept plain text (got: {other:?})"
+        ))),
+    }
+}
+
+#[cfg(feature = "native")]
+/// Build an optimistic placeholder `Message` for a just-posted comment.
+///
+/// HN doesn't return the new item ID. The placeholder is surfaced in the
+/// UI immediately; the real comment appears on the next channel reload.
+fn build_pending_message(session: &Session, text: String) -> Message {
+    let now = chrono::Utc::now();
+    Message {
+        id: format!("hn-pending-{}", now.timestamp_millis()),
+        author: User {
+            id: session.user.id.clone(),
+            display_name: session.user.display_name.clone(),
+            avatar_url: session.user.avatar_url.clone(),
+            presence: session.user.presence,
+            backend: session.user.backend.clone(),
+        },
+        content: MessageContent::Text(text),
+        timestamp: now,
+        attachments: Vec::new(),
+        reactions: Vec::new(),
+        reply_to: None,
+        edited: false,
+        thread: None,
+        preview_image_url: None,
     }
 }
