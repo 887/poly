@@ -13,17 +13,20 @@ use super::{ParseError, RawPost, data_attr, parse_html, parse_timestamp_ms};
 // `scraper::Selector` holds `Rc` and is therefore `!Sync`; `LazyLock` is not
 // viable. Each call parses a static literal that can never fail.
 
-#[allow(clippy::unwrap_used)] // static selector literal — infallible
+// lint-allow-unused: static selector literal — infallible
+#[allow(clippy::unwrap_used)]
 fn title_selector() -> Selector {
     Selector::parse("a.title").unwrap()
 }
 
-#[allow(clippy::unwrap_used)] // static selector literal — infallible
+// lint-allow-unused: static selector literal — infallible
+#[allow(clippy::unwrap_used)]
 fn body_selector() -> Selector {
     Selector::parse("div.usertext-body div.md").unwrap()
 }
 
-#[allow(clippy::unwrap_used)] // static selector literal — infallible
+// lint-allow-unused: static selector literal — infallible
+#[allow(clippy::unwrap_used)]
 fn thumbnail_selector() -> Selector {
     Selector::parse("a.thumbnail img").unwrap()
 }
@@ -120,21 +123,16 @@ pub(crate) fn parse_post_thing(el: &ElementRef<'_>) -> Result<RawPost, ParseErro
     let url = data_attr(el, "data-url").map(str::to_owned);
 
     // Title is in <a class="title may-blank ..."> inside <p class="title">.
-    // Selector::parse is infallible on a static literal.
-    #[allow(clippy::unwrap_used)] // lint-allow-unused: static selector literal infallible
-    let title_sel = Selector::parse("a.title").unwrap();
     let title = el
-        .select(&title_sel)
+        .select(&title_selector())
         .next()
         .map(|a| a.text().collect::<String>().trim().to_string())
         .ok_or(ParseError::MissingElement("a.title"))?;
 
     // Self-post body is in <div class="md"> when present (link posts
     // don't have one).
-    #[allow(clippy::unwrap_used)] // lint-allow-unused: static selector literal infallible
-    let body_sel = Selector::parse("div.usertext-body div.md").unwrap();
     let body = el
-        .select(&body_sel)
+        .select(&body_selector())
         .next()
         .map(|d| d.inner_html().trim().to_string())
         .filter(|s| !s.is_empty());
@@ -179,9 +177,7 @@ pub(crate) fn parse_post_thing(el: &ElementRef<'_>) -> Result<RawPost, ParseErro
         url.clone()
     } else if is_video || is_gallery {
         // Try the listing thumbnail link: `<a class="thumbnail ..."><img src="..."></a>`
-        #[allow(clippy::unwrap_used)] // lint-allow-unused: static selector literal infallible
-        let thumb_sel = Selector::parse("a.thumbnail img").unwrap();
-        el.select(&thumb_sel)
+        el.select(&thumbnail_selector())
             .next()
             .and_then(|img| img.value().attr("src"))
             .filter(|s| !s.is_empty() && !s.contains("//www.redditstatic.com/icon"))

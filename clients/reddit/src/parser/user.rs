@@ -14,6 +14,50 @@ use super::{
     parse_timestamp_ms, subreddit::parse_post_thing,
 };
 
+// ─── Per-call selector factories ────────────────────────────────────────────
+// `scraper::Selector` holds `Rc` and is therefore `!Sync`; `LazyLock` is not
+// viable. Each call parses a static literal that can never fail.
+
+// lint-allow-unused: static selector literal — infallible
+#[allow(clippy::unwrap_used)]
+fn page_title_selector() -> Selector {
+    Selector::parse("title").unwrap()
+}
+
+// lint-allow-unused: static selector literal — infallible
+#[allow(clippy::unwrap_used)]
+fn avatar_selector() -> Selector {
+    Selector::parse("img.profile-img").unwrap()
+}
+
+// lint-allow-unused: static selector literal — infallible
+#[allow(clippy::unwrap_used)]
+fn user_thing_selector() -> Selector {
+    Selector::parse(
+        r#"div.thing[data-fullname^="t3_"], div.thing.comment[data-fullname^="t1_"]"#,
+    )
+    .unwrap()
+}
+
+// lint-allow-unused: static selector literal — infallible
+#[allow(clippy::unwrap_used)]
+fn score_selector() -> Selector {
+    Selector::parse("span.score.unvoted").unwrap()
+}
+
+// lint-allow-unused: static selector literal — infallible
+#[allow(clippy::unwrap_used)]
+fn live_timestamp_selector() -> Selector {
+    Selector::parse("time.live-timestamp").unwrap()
+}
+
+// lint-allow-unused: static selector literal — infallible
+#[allow(clippy::unwrap_used)]
+fn comment_body_selector() -> Selector {
+    Selector::parse("div.usertext-body div.md").unwrap()
+}
+// ────────────────────────────────────────────────────────────────────────────
+
 /// Parse a user overview page into the profile + interleaved items.
 ///
 /// # Errors
@@ -26,10 +70,8 @@ pub fn parse_user_overview(html: &str) -> Result<UserProfile, ParseError> {
 
     // Username: <span class="user"><a href="/user/<name>">name</a></span>
     // OR <span class="pagename">u/name</span> — fall back to <title>.
-    #[allow(clippy::unwrap_used)] // lint-allow-unused: static selector literal infallible
-    let title_sel = Selector::parse("title").unwrap();
     let title = doc
-        .select(&title_sel)
+        .select(&page_title_selector())
         .next()
         .map(|t| t.text().collect::<String>())
         .unwrap_or_default();
@@ -42,21 +84,15 @@ pub fn parse_user_overview(html: &str) -> Result<UserProfile, ParseError> {
         .to_string();
 
     // Avatar: <img class="profile-img" src="..."> in the sidebar.
-    #[allow(clippy::unwrap_used)] // lint-allow-unused: static selector literal infallible
-    let avatar_sel = Selector::parse("img.profile-img").unwrap();
     let avatar_url = doc
-        .select(&avatar_sel)
+        .select(&avatar_selector())
         .next()
         .and_then(|img| img.value().attr("src"))
         .map(str::to_owned);
 
     // Items: every .thing on the page, classified by data-type or by
     // the data-fullname prefix.
-    #[allow(clippy::unwrap_used)] // lint-allow-unused: static selector literal infallible
-    let thing_sel = Selector::parse(
-        r#"div.thing[data-fullname^="t3_"], div.thing.comment[data-fullname^="t1_"]"#,
-    )
-    .unwrap();
+    let thing_sel = user_thing_selector();
     let mut recent_items = Vec::new();
     for el in doc.select(&thing_sel) {
         let fullname = el
@@ -92,28 +128,22 @@ fn parse_user_comment(el: &scraper::ElementRef<'_>) -> Result<RawComment, ParseE
         .unwrap_or("")
         .to_string();
 
-    #[allow(clippy::unwrap_used)] // lint-allow-unused: static selector literal infallible
-    let score_sel = Selector::parse("span.score.unvoted").unwrap();
     let score = el
-        .select(&score_sel)
+        .select(&score_selector())
         .next()
         .and_then(|s| s.value().attr("title"))
         .and_then(|t| t.parse::<i64>().ok())
         .unwrap_or(0);
 
-    #[allow(clippy::unwrap_used)] // lint-allow-unused: static selector literal infallible
-    let time_sel = Selector::parse("time.live-timestamp").unwrap();
     let timestamp_raw = el
-        .select(&time_sel)
+        .select(&live_timestamp_selector())
         .next()
         .and_then(|t| t.value().attr("datetime"))
         .ok_or(ParseError::MissingElement("time.live-timestamp"))?;
     let timestamp = parse_timestamp_ms(timestamp_raw)?;
 
-    #[allow(clippy::unwrap_used)] // lint-allow-unused: static selector literal infallible
-    let body_sel = Selector::parse("div.usertext-body div.md").unwrap();
     let body_html = el
-        .select(&body_sel)
+        .select(&comment_body_selector())
         .next()
         .map(|d| d.inner_html())
         .unwrap_or_default();

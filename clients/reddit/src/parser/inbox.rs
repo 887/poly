@@ -16,22 +16,26 @@ use super::{ParseError, RawDm, data_attr, parse_html, parse_timestamp_ms};
 // viable. Each call to these fns parses a static literal that can never fail,
 // so the `.unwrap()` is infallible by construction.
 
-#[allow(clippy::unwrap_used)] // static selector literal — infallible
+// lint-allow-unused: static selector literal — infallible
+#[allow(clippy::unwrap_used)]
 fn inbox_row_selector() -> Selector {
     Selector::parse(r#"div.message[data-fullname^="t4_"]"#).unwrap()
 }
 
-#[allow(clippy::unwrap_used)] // static selector literal — infallible
+// lint-allow-unused: static selector literal — infallible
+#[allow(clippy::unwrap_used)]
 fn subject_selector() -> Selector {
     Selector::parse("a.subject").unwrap()
 }
 
-#[allow(clippy::unwrap_used)] // static selector literal — infallible
+// lint-allow-unused: static selector literal — infallible
+#[allow(clippy::unwrap_used)]
 fn body_md_selector() -> Selector {
     Selector::parse("div.md").unwrap()
 }
 
-#[allow(clippy::unwrap_used)] // static selector literal — infallible
+// lint-allow-unused: static selector literal — infallible
+#[allow(clippy::unwrap_used)]
 fn live_timestamp_selector() -> Selector {
     Selector::parse("time.live-timestamp").unwrap()
 }

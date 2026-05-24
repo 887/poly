@@ -1,6 +1,6 @@
 # Plan: SOLID + missing-impl audit — `clients/reddit/`
 
-## Status: IN PROGRESS — Phase A.1 shipped, rest documented
+## Status: IN PROGRESS — Phase A fully shipped
 
 Audit pass over `clients/reddit/src/{backend.rs,lib.rs,signup.rs,parser/*.rs}`
 (3610 LoC). Identifies SOLID violations and missing implementations.
@@ -16,17 +16,17 @@ Scope: only `clients/reddit/`. Do NOT touch other client crates.
       `_dm_id_from_channel_id` (`backend.rs:187`). Both are prefixed
       with `_` to silence dead-code warnings — neither is called
       anywhere in-crate (verified via `grep -rn`). 8 LoC removed.
-- [ ] **A.2** Lift the repeated `Selector::parse(LITERAL).unwrap()`
+- [x] **A.2** Lift the repeated `Selector::parse(LITERAL).unwrap()`
       sites (`parser/inbox.rs:25,43,51,59`; `parser/post.rs:45,69,79,90,102`;
       `parser/subreddit.rs:71,105,115,163`; `parser/user.rs:30,46,59,96,105,114`)
       into named factory `fn post_selector() -> Selector` helpers per
       module. **Note: `scraper::Selector` is `!Sync` (holds `Rc`), so
       `LazyLock` is NOT viable — use a per-call factory or
       `thread_local!`.** Pure de-duplication, no allocation change for
-      the per-call form. _≈40 LoC._
-- [ ] **A.3** Tighten `NotSupported` error strings into module-level
+      the per-call form. _≈40 LoC._ — shipped in this pass
+- [x] **A.3** Tighten `NotSupported` error strings into module-level
       `const`s (`backend.rs:1346-1466` — 18 sites all allocating
-      identical "Reddit has no X" strings).
+      identical "Reddit has no X" strings). — shipped in this pass
 
 ## Phase B — Medium refactors (50-300 LoC, max 5)
 

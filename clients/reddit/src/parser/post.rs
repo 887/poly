@@ -21,7 +21,8 @@ use super::{
 // `scraper::Selector` holds `Rc` and is therefore `!Sync`; `LazyLock` is not
 // viable. Each call parses a static literal that can never fail.
 
-#[allow(clippy::unwrap_used)] // static selector literal — infallible
+// lint-allow-unused: static selector literal — infallible
+#[allow(clippy::unwrap_used)]
 fn top_comments_selector() -> Selector {
     Selector::parse(
         r#"div.commentarea > div.sitetable > div.thing.comment[data-fullname^="t1_"]"#,
@@ -29,22 +30,26 @@ fn top_comments_selector() -> Selector {
     .unwrap()
 }
 
-#[allow(clippy::unwrap_used)] // static selector literal — infallible
+// lint-allow-unused: static selector literal — infallible
+#[allow(clippy::unwrap_used)]
 fn score_selector() -> Selector {
     Selector::parse("span.score.unvoted").unwrap()
 }
 
-#[allow(clippy::unwrap_used)] // static selector literal — infallible
+// lint-allow-unused: static selector literal — infallible
+#[allow(clippy::unwrap_used)]
 fn live_timestamp_selector() -> Selector {
     Selector::parse("time.live-timestamp").unwrap()
 }
 
-#[allow(clippy::unwrap_used)] // static selector literal — infallible
+// lint-allow-unused: static selector literal — infallible
+#[allow(clippy::unwrap_used)]
 fn comment_body_selector() -> Selector {
     Selector::parse(":scope > div.entry > form > div.usertext-body div.md").unwrap()
 }
 
-#[allow(clippy::unwrap_used)] // static selector literal — infallible
+// lint-allow-unused: static selector literal — infallible
+#[allow(clippy::unwrap_used)]
 fn comment_reply_selector() -> Selector {
     Selector::parse(
         r#":scope > div.child > div.listing > div.thing.comment[data-fullname^="t1_"]"#,

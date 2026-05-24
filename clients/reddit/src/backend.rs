@@ -203,6 +203,28 @@ impl From<RedditError> for ClientError {
     }
 }
 
+// ─── NotSupported message constants ─────────────────────────────────────────
+// 18+ identical string allocations collapsed to named constants (A.3).
+// Each `ClientError::NotSupported(NS_FOO.to_string())` call still allocates
+// at the call site, but the source string lives here once, not 18 times.
+
+const NS_FRIEND_SYSTEM: &str = "Reddit has no friend system";
+const NS_USER_NOTE: &str = "Reddit has no user note system";
+const NS_BLOCK: &str = "Reddit: block not supported via this interface";
+const NS_UNBLOCK: &str = "Reddit: unblock not supported via this interface";
+const NS_IGNORE: &str = "Reddit has no ignore concept";
+const NS_PRESENCE: &str = "Reddit has no presence system";
+const NS_GROUP_DM: &str = "Reddit has no group DMs";
+const NS_OPEN_DM: &str = "open_direct_message_channel: not yet implemented for Reddit";
+const NS_SAVED_MSG: &str = "open_saved_messages_channel: Reddit has no saved-messages concept";
+const NS_CLOSE_DM: &str = "close_dm_channel: not yet implemented for Reddit";
+const NS_CONV_MUTE: &str = "Reddit has no conversation mute API";
+const NS_TYPING: &str = "Reddit has no typing indicators";
+const NS_SEARCH_MSG: &str = "search_messages: Reddit search not yet implemented";
+const NS_PINNED_GET: &str = "get_pinned_messages: not supported by Reddit";
+const NS_PINNED_SET: &str = "set_message_pinned: not supported by Reddit";
+const NS_CREDS: &str = "Reddit only supports EmailPassword and Token credentials";
+
 // ─── Mapping helpers ─────────────────────────────────────────────────────────
 
 fn raw_post_to_message(post: &RawPost, backend: &BackendType) -> Message {
@@ -526,7 +548,7 @@ impl IsBackend for RedditBackend {
             AuthCredentials::OAuth { .. }
             | AuthCredentials::DeviceCode { .. }
             | AuthCredentials::PolyServer { .. } => Err(ClientError::NotSupported(
-                "Reddit only supports EmailPassword and Token credentials".to_string(),
+                NS_CREDS.to_string(),
             )),
         }
     }
@@ -928,15 +950,15 @@ impl poly_client::SocialGraphBackend for RedditBackend {
     }
 
     async fn add_friend(&self, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Reddit has no friend system".to_string()))
+        Err(ClientError::NotSupported(NS_FRIEND_SYSTEM.to_string()))
     }
 
     async fn remove_friend(&self, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Reddit has no friend system".to_string()))
+        Err(ClientError::NotSupported(NS_FRIEND_SYSTEM.to_string()))
     }
 
     async fn respond_to_friend_request(&self, _user_id: &str, _accept: bool) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Reddit has no friend system".to_string()))
+        Err(ClientError::NotSupported(NS_FRIEND_SYSTEM.to_string()))
     }
 
     async fn set_friend_nickname(
@@ -944,27 +966,27 @@ impl poly_client::SocialGraphBackend for RedditBackend {
         _user_id: &str,
         _nickname: Option<&str>,
     ) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Reddit has no friend system".to_string()))
+        Err(ClientError::NotSupported(NS_FRIEND_SYSTEM.to_string()))
     }
 
     async fn set_user_note(&self, _user_id: &str, _note: Option<&str>) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Reddit has no user note system".to_string()))
+        Err(ClientError::NotSupported(NS_USER_NOTE.to_string()))
     }
 
     async fn block_user(&self, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Reddit: block not supported via this interface".to_string()))
+        Err(ClientError::NotSupported(NS_BLOCK.to_string()))
     }
 
     async fn unblock_user(&self, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Reddit: unblock not supported via this interface".to_string()))
+        Err(ClientError::NotSupported(NS_UNBLOCK.to_string()))
     }
 
     async fn ignore_user(&self, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Reddit has no ignore concept".to_string()))
+        Err(ClientError::NotSupported(NS_IGNORE.to_string()))
     }
 
     async fn unignore_user(&self, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Reddit has no ignore concept".to_string()))
+        Err(ClientError::NotSupported(NS_IGNORE.to_string()))
     }
 
     async fn get_presence(&self, _user_id: &str) -> ClientResult<PresenceStatus> {
@@ -972,7 +994,7 @@ impl poly_client::SocialGraphBackend for RedditBackend {
     }
 
     async fn set_presence(&self, _status: PresenceStatus) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Reddit has no presence system".to_string()))
+        Err(ClientError::NotSupported(NS_PRESENCE.to_string()))
     }
 }
 
@@ -997,33 +1019,27 @@ impl poly_client::DmsAndGroupsBackend for RedditBackend {
     }
 
     async fn open_direct_message_channel(&self, _user_id: &str) -> ClientResult<DmChannel> {
-        Err(ClientError::NotSupported(
-            "open_direct_message_channel: not yet implemented for Reddit".to_string(),
-        ))
+        Err(ClientError::NotSupported(NS_OPEN_DM.to_string()))
     }
 
     async fn open_saved_messages_channel(&self) -> ClientResult<DmChannel> {
-        Err(ClientError::NotSupported(
-            "open_saved_messages_channel: Reddit has no saved-messages concept".to_string(),
-        ))
+        Err(ClientError::NotSupported(NS_SAVED_MSG.to_string()))
     }
 
     async fn add_group_member(&self, _group_id: &str, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Reddit has no group DMs".to_string()))
+        Err(ClientError::NotSupported(NS_GROUP_DM.to_string()))
     }
 
     async fn remove_group_member(&self, _group_id: &str, _user_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Reddit has no group DMs".to_string()))
+        Err(ClientError::NotSupported(NS_GROUP_DM.to_string()))
     }
 
     async fn add_users_to_group_dm(&self, _channel_id: &str, _user_ids: &[String]) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Reddit has no group DMs".to_string()))
+        Err(ClientError::NotSupported(NS_GROUP_DM.to_string()))
     }
 
     async fn close_dm_channel(&self, _channel_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported(
-            "close_dm_channel: not yet implemented for Reddit".to_string(),
-        ))
+        Err(ClientError::NotSupported(NS_CLOSE_DM.to_string()))
     }
 
     async fn mute_conversation(
@@ -1031,15 +1047,15 @@ impl poly_client::DmsAndGroupsBackend for RedditBackend {
         _channel_id: &str,
         _until: Option<chrono::DateTime<chrono::Utc>>,
     ) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Reddit has no conversation mute API".to_string()))
+        Err(ClientError::NotSupported(NS_CONV_MUTE.to_string()))
     }
 
     async fn unmute_conversation(&self, _channel_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Reddit has no conversation mute API".to_string()))
+        Err(ClientError::NotSupported(NS_CONV_MUTE.to_string()))
     }
 
     async fn leave_group_dm(&self, _channel_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Reddit has no group DMs".to_string()))
+        Err(ClientError::NotSupported(NS_GROUP_DM.to_string()))
     }
 
     async fn edit_group_dm(
@@ -1048,7 +1064,7 @@ impl poly_client::DmsAndGroupsBackend for RedditBackend {
         _name: Option<&str>,
         _avatar_url: Option<&str>,
     ) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Reddit has no group DMs".to_string()))
+        Err(ClientError::NotSupported(NS_GROUP_DM.to_string()))
     }
 }
 
@@ -1058,7 +1074,7 @@ impl poly_client::DmsAndGroupsBackend for RedditBackend {
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl poly_client::MessagingBackend for RedditBackend {
     async fn send_typing(&self, _channel_id: &str) -> ClientResult<()> {
-        Err(ClientError::NotSupported("Reddit has no typing indicators".to_string()))
+        Err(ClientError::NotSupported(NS_TYPING.to_string()))
     }
 
     async fn send_reply_message(
@@ -1121,11 +1137,11 @@ impl poly_client::MessagingBackend for RedditBackend {
         &self,
         _query: MessageSearchQuery,
     ) -> ClientResult<Vec<MessageSearchHit>> {
-        Err(ClientError::NotSupported("search_messages: Reddit search not yet implemented".to_string()))
+        Err(ClientError::NotSupported(NS_SEARCH_MSG.to_string()))
     }
 
     async fn get_pinned_messages(&self, _channel_id: &str) -> ClientResult<Vec<Message>> {
-        Err(ClientError::NotSupported("get_pinned_messages: not supported by Reddit".to_string()))
+        Err(ClientError::NotSupported(NS_PINNED_GET.to_string()))
     }
 
     async fn set_message_pinned(
@@ -1134,7 +1150,7 @@ impl poly_client::MessagingBackend for RedditBackend {
         _message_id: &str,
         _pinned: bool,
     ) -> ClientResult<()> {
-        Err(ClientError::NotSupported("set_message_pinned: not supported by Reddit".to_string()))
+        Err(ClientError::NotSupported(NS_PINNED_SET.to_string()))
     }
 
     async fn get_channel_commands(&self, _channel_id: &str) -> ClientResult<Vec<ChatCommand>> {
