@@ -14,6 +14,8 @@ impl poly_client::MessagingBackend for DiscordClient {
         // D.6 — client-side 8 s typing-fire-rate cap.
         if !self.typing_cap.should_send(channel_id) {
             // Silently drop re-triggers inside the window — no error to the UI.
+            // F.1 — record the suppressed re-trigger in telemetry.
+            self.http.counters.inc_typing_cap_drop(channel_id);
             return Ok(());
         }
         self.http.trigger_typing(channel_id).await
@@ -30,6 +32,10 @@ impl poly_client::MessagingBackend for DiscordClient {
         // D.5 — slow-mode guard (rate_limit_per_user=0 → no slow mode).
         // We don't have the cached channel here, so we check with 0 (permissive);
         // the SlowModeGuard only records sends when rate_limit_per_user > 0.
+        if let Err(e) = self.slow_mode_guard.check(channel_id, 0) {
+            self.http.counters.inc_slow_mode_trip(channel_id);
+            return Err(e);
+        }
         self.slow_mode_guard.record_send(channel_id);
         let text = match content {
             MessageContent::Text(t) => t,
@@ -81,6 +87,10 @@ impl poly_client::WritableMessagingBackend for DiscordClient {
     async fn send_message(&self, channel_id: &str, content: MessageContent) -> ClientResult<Message> {
         // D.5 — slow-mode guard.  `rate_limit_per_user` of 0 means no restriction.
         // We record the send unconditionally; the guard only blocks when a window is set.
+        if let Err(e) = self.slow_mode_guard.check(channel_id, 0) {
+            self.http.counters.inc_slow_mode_trip(channel_id);
+            return Err(e);
+        }
         self.slow_mode_guard.record_send(channel_id);
         let text = match content {
             MessageContent::Text(t) => t,

@@ -26,11 +26,12 @@ use web_time::Instant;
 use poly_client::ClientError;
 
 // ── Permission bitfield constants (Discord API v10) ────────────────────────
+//
+// Only the constants actually consumed by `permission_guard.check()` call sites
+// live here.  The MANAGE_* / lib-internal bits are defined in
+// `lib.rs::permission_bits` (used by `get_my_permissions`).
 pub const PERM_KICK_MEMBERS: i64 = 1 << 1;
 pub const PERM_BAN_MEMBERS: i64 = 1 << 2;
-pub const PERM_MANAGE_CHANNELS: i64 = 1 << 4;
-pub const PERM_MANAGE_GUILD: i64 = 1 << 5;
-pub const PERM_MANAGE_MESSAGES: i64 = 1 << 13;
 pub const PERM_MODERATE_MEMBERS: i64 = 1 << 40;
 pub const PERM_ADMINISTRATOR: i64 = 1 << 3;
 
@@ -348,16 +349,21 @@ impl TypingRateCap {
 
 /// Minimal guard that enforces at most one active voice session per account.
 ///
-/// A real `VoiceSession` type lives in `clients/discord/src/voice/`; this
-/// sketch holds an `Option<VoiceSessionHandle>` (a simple string token for
-/// now) and returns `Err(ClientError::Network("AlreadyConnected"))` on a
-/// second concurrent `connect()` call.
+/// **Status:** speculative Phase D infrastructure.  The real voice session
+/// guard ships as `voice::VoiceSessionGuard` (B.11) and `DiscordClient` uses
+/// that one — this struct is retained only so its tests document the intended
+/// contract for a possible second-line guard if the per-account anti-ban
+/// surface grows.  Tests exercise the API; production code does not call it.
+// lint-allow-unused: Phase D speculative; superseded by `voice::VoiceSessionGuard`.
+#[allow(dead_code)]
 #[derive(Clone, Default)]
 pub struct VoiceManager {
     inner: Arc<Mutex<Option<VoiceSessionHandle>>>,
 }
 
 /// Opaque handle identifying the active voice session.
+// lint-allow-unused: Phase D speculative; superseded by `voice::VoiceSessionGuard`.
+#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct VoiceSessionHandle {
     pub channel_id: String,
@@ -365,6 +371,8 @@ pub struct VoiceSessionHandle {
     pub connected_at: Instant,
 }
 
+// lint-allow-unused: Phase D speculative; superseded by `voice::VoiceSessionGuard`.
+#[allow(dead_code)]
 impl VoiceManager {
     #[must_use]
     pub fn new() -> Self {
@@ -520,6 +528,13 @@ impl GuardrailCounters {
     }
 
     /// Record a scraper failure (fell back to floor constant or stale cache).
+    ///
+    /// Not yet wired: the scraper in `build_info::load_or_refresh` does not
+    /// hold a `GuardrailCounters` reference (it runs before `DiscordClient`
+    /// construction).  Wiring requires plumbing counters into the scrape
+    /// pipeline — deferred until a Phase A.6 background-refresh task lands.
+    // lint-allow-unused: counter API ready; scrape pipeline not yet plumbed (Phase A.6 deferred).
+    #[allow(dead_code)]
     pub fn inc_scrape_fail(&self, reason: &str) {
         if let Ok(mut s) = self.inner.lock() {
             s.scrape_fail = s.scrape_fail.saturating_add(1);
@@ -531,6 +546,12 @@ impl GuardrailCounters {
     }
 
     /// Record a successful gateway READY after IDENTIFY.
+    ///
+    /// Not yet wired into `gateway_bridge::run_loop` (the wasm gateway path);
+    /// the native gateway loop in `event_stream` also lacks a counters handle.
+    /// Plumbing deferred — see lib.rs deprecated `counters()` accessor history.
+    // lint-allow-unused: gateway loops do not hold a counters handle yet.
+    #[allow(dead_code)]
     pub fn inc_gateway_identify_success(&self, build_number: u32) {
         if let Ok(mut s) = self.inner.lock() {
             s.gateway_identify_success = s.gateway_identify_success.saturating_add(1);
@@ -542,6 +563,10 @@ impl GuardrailCounters {
     }
 
     /// Record an Invalid Session gateway event.
+    ///
+    /// Not yet wired into `gateway_bridge::run_loop` op 9 handler.
+    // lint-allow-unused: gateway loops do not hold a counters handle yet.
+    #[allow(dead_code)]
     pub fn inc_gateway_invalid_session(&self) {
         if let Ok(mut s) = self.inner.lock() {
             s.gateway_invalid_session = s.gateway_invalid_session.saturating_add(1);
@@ -553,6 +578,13 @@ impl GuardrailCounters {
     }
 
     /// Record a rate-guard trip (outbound request blocked by token bucket).
+    ///
+    /// Not yet wired: `RateGuard::check` is never called on the outbound HTTP
+    /// path (the `DiscordClient::rate_guard` field exists for `health_snapshot`
+    /// only — gating outbound requests would require wrapping every helper in
+    /// `http.rs`).  Deferred until the gate-vs-just-observe policy lands.
+    // lint-allow-unused: RateGuard::check not yet called on outbound HTTP path.
+    #[allow(dead_code)]
     pub fn inc_rate_guard_trip(&self) {
         if let Ok(mut s) = self.inner.lock() {
             s.rate_guard_trips = s.rate_guard_trips.saturating_add(1);

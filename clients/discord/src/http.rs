@@ -58,6 +58,12 @@ impl DiscordHttpClient {
     }
 
     /// Construct with a pre-scraped `BuildInfo` (Phase A.5).
+    ///
+    /// Speculative: kept for the planned `DiscordClientBuilder::scrape_first()`
+    /// path that pre-scrapes before constructing the HTTP client.  The current
+    /// builder path scrapes lazily inside `set_token`, so this is unused today.
+    // lint-allow-unused: Phase A.5 hot-swap constructor — kept for the planned scrape-first builder path.
+    #[allow(dead_code)]
     #[must_use]
     pub fn with_build_info(
         base_url: String,
@@ -147,6 +153,10 @@ impl DiscordHttpClient {
     }
 
     /// Get a snapshot of the current `SuperProperties` (for gateway IDENTIFY).
+    ///
+    /// Only used on the gateway path; gated to avoid a dead-code warning when
+    /// the gateway feature is off (default `native`-only build).
+    #[cfg(feature = "gateway")]
     pub fn super_properties(&self) -> SuperProperties {
         self.super_props
             .lock()
@@ -159,6 +169,12 @@ impl DiscordHttpClient {
     }
 
     /// Hot-swap the `SuperProperties` (e.g. after a background build refresh).
+    ///
+    /// Speculative: the background-refresh task that would call this lives in
+    /// the deferred Phase A.6 plan (periodic re-scrape).  Kept so the refresh
+    /// loop can land without re-introducing a private helper.
+    // lint-allow-unused: Phase A.6 background-refresh hook — not wired yet.
+    #[allow(dead_code)]
     pub fn update_super_properties(&self, new_props: SuperProperties) {
         if let Ok(mut lock) = self.super_props.lock() {
             *lock = new_props;
@@ -193,6 +209,11 @@ impl DiscordHttpClient {
     }
 
     /// Return the current auth token, if any.
+    ///
+    /// Used by the gateway IDENTIFY paths (native gateway + wasm32 gateway-bridge)
+    /// to forward the same bearer token to the WS handshake; gated to keep the
+    /// default `native`-only build clean.
+    #[cfg(any(feature = "voice", all(feature = "gateway-bridge", target_arch = "wasm32")))]
     pub fn token(&self) -> Option<String> {
         self.token.lock().ok().and_then(|lock| lock.clone())
     }
@@ -899,7 +920,9 @@ impl DiscordHttpClient {
     /// POST to `path` (full path including `/api/v10/…`) with an empty body.
     ///
     /// Used for one-shot REST calls that carry no request body, e.g.
-    /// `POST /api/v10/channels/{id}/call/ring/stop` (D.4).
+    /// `POST /api/v10/channels/{id}/call/ring/stop` (D.4) on the gateway path.
+    /// Gated to keep the default `native`-only build clean.
+    #[cfg(feature = "gateway")]
     pub async fn post_empty(&self, path: &str) -> Result<(), ClientError> {
         let resp = self
             .apply_version_headers(self.http.post(self.api_url(path)))

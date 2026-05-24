@@ -221,8 +221,6 @@ pub struct DiscordClient {
     permission_guard: guardrails::PermissionGuard,
     /// Phase D — per-channel typing fire-rate cap (D.6).
     typing_cap: guardrails::TypingRateCap,
-    /// Phase D — voice-session single-occupancy guard (D.3).
-    voice_manager: guardrails::VoiceManager,
     /// Phase D — soft-warning health surface (D.8).
     discord_health: Mutex<guardrails::DiscordHealth>,
     /// Phase E — cached Nitro tier for the authenticated account (E.3).
@@ -327,7 +325,6 @@ impl DiscordClient {
             slow_mode_guard: guardrails::SlowModeGuard::new(),
             permission_guard: guardrails::PermissionGuard::new(),
             typing_cap: guardrails::TypingRateCap::new(),
-            voice_manager: guardrails::VoiceManager::new(),
             discord_health: Mutex::new(guardrails::DiscordHealth::default()),
             account_info: Mutex::new(nitro::DiscordAccountInfo::default()),
             #[cfg(feature = "voice")]
@@ -414,15 +411,6 @@ impl DiscordClient {
     /// Grep `discord-anti-ban` in logs to correlate events with these counts.
     pub fn guardrail_stats(&self) -> guardrails::GuardrailStats {
         self.http.counters.snapshot()
-    }
-
-    /// F.1 — Return a clone of the shared `GuardrailCounters` so gateway /
-    /// guardrail code can increment counters without going through `DiscordClient`.
-    ///
-    /// The gateway loop uses this to call `inc_gateway_identify_success` and
-    /// `inc_gateway_invalid_session`.
-    pub(crate) fn counters(&self) -> guardrails::GuardrailCounters {
-        self.http.counters.clone()
     }
 
     /// E.3 — Return the cached Nitro tier for the authenticated account.

@@ -72,8 +72,18 @@ impl NitroTier {
 /// tier is sufficient.  The corresponding `check_*` methods return
 /// `Err(ClientError::PermissionDenied("Nitro required"))` for use in HTTP
 /// client-layer defence-in-depth.
+///
+/// **Status:** speculative Phase E.4/E.5 infrastructure.  No call site in
+/// `clients/discord/src/` exercises these helpers today — the Discord client
+/// has no file-upload, avatar-set, or sticker/emoji-send paths that would
+/// trigger them.  Tests cover the API contract so wiring them when those
+/// paths land is a one-line change.
+// lint-allow-unused: Phase E.4/E.5 defence-in-depth; no upload/avatar/emoji path wired.
+#[allow(dead_code)]
 pub struct NitroGate;
 
+// lint-allow-unused: Phase E.4/E.5 defence-in-depth; no upload/avatar/emoji path wired.
+#[allow(dead_code)]
 impl NitroGate {
     // ── E.4 helpers ────────────────────────────────────────────────────────
 

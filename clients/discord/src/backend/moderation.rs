@@ -106,11 +106,14 @@ impl poly_client::ModerationBackend for DiscordClient {
         reason: Option<&str>,
     ) -> ClientResult<()> {
         // D.4 — pre-flight permission guard (fail-safe: denies when not cached).
-        self.permission_guard.check(
+        if let Err(e) = self.permission_guard.check(
             server_id,
             guardrails::PERM_KICK_MEMBERS,
             "kick_member",
-        )?;
+        ) {
+            self.http.counters.inc_permission_trip("kick_member", server_id);
+            return Err(e);
+        }
         self.http.kick_member(server_id, member_id, reason).await
     }
 
@@ -126,11 +129,14 @@ impl poly_client::ModerationBackend for DiscordClient {
         delete_message_history_secs: Option<u64>,
     ) -> ClientResult<()> {
         // D.4 — pre-flight permission guard.
-        self.permission_guard.check(
+        if let Err(e) = self.permission_guard.check(
             server_id,
             guardrails::PERM_BAN_MEMBERS,
             "ban_member",
-        )?;
+        ) {
+            self.http.counters.inc_permission_trip("ban_member", server_id);
+            return Err(e);
+        }
         self.http
             .ban_member(server_id, member_id, reason, delete_message_history_secs)
             .await
@@ -139,11 +145,14 @@ impl poly_client::ModerationBackend for DiscordClient {
     /// B-DS-4: Unban a member.
     async fn unban_member(&self, server_id: &str, member_id: &str) -> ClientResult<()> {
         // D.4 — unban requires BAN_MEMBERS permission.
-        self.permission_guard.check(
+        if let Err(e) = self.permission_guard.check(
             server_id,
             guardrails::PERM_BAN_MEMBERS,
             "unban_member",
-        )?;
+        ) {
+            self.http.counters.inc_permission_trip("unban_member", server_id);
+            return Err(e);
+        }
         self.http.unban_member(server_id, member_id).await
     }
 
@@ -172,11 +181,14 @@ impl poly_client::ModerationBackend for DiscordClient {
         _reason: Option<&str>,
     ) -> ClientResult<()> {
         // D.4 — MODERATE_MEMBERS permission guard.
-        self.permission_guard.check(
+        if let Err(e) = self.permission_guard.check(
             server_id,
             guardrails::PERM_MODERATE_MEMBERS,
             "timeout_member",
-        )?;
+        ) {
+            self.http.counters.inc_permission_trip("timeout_member", server_id);
+            return Err(e);
+        }
         let iso = until.to_rfc3339();
         self.http
             .set_member_timeout(server_id, member_id, Some(&iso))
@@ -186,11 +198,14 @@ impl poly_client::ModerationBackend for DiscordClient {
     /// B-DS (untimeout): Clear an active timeout.
     async fn untimeout_member(&self, server_id: &str, member_id: &str) -> ClientResult<()> {
         // D.4 — MODERATE_MEMBERS permission guard.
-        self.permission_guard.check(
+        if let Err(e) = self.permission_guard.check(
             server_id,
             guardrails::PERM_MODERATE_MEMBERS,
             "untimeout_member",
-        )?;
+        ) {
+            self.http.counters.inc_permission_trip("untimeout_member", server_id);
+            return Err(e);
+        }
         self.http.set_member_timeout(server_id, member_id, None).await
     }
 
