@@ -6,6 +6,11 @@
 //!
 //! # Integration point
 //!
+
+// lint-allow-unused: noise filter is wired in voice_wasm_audio_capture.rs
+// and voice_wasm.rs (both wasm32-only); native builds see it as unused.
+#![cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+
 //! The filter sits between the raw mic samples (Float32 planar, 48 kHz mono,
 //! values already in [-32768, 32767] scale) and the final i16 conversion in
 //! `voice_wasm_audio_capture::process_audio_data`.

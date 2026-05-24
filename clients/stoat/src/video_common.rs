@@ -6,6 +6,12 @@
 //! no `tokio` runtime, no LiveKit SDK).
 //!
 //! ## Scope
+
+// lint-allow-unused: video primitives live in this cfg-free module but their
+// only call sites are in the wasm32-gated video_wasm_capture.rs /
+// video_wasm_playback.rs files; native builds see them as unused.
+#![cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+
 //!
 //! The transport question for Stoat video (Vortex-extension vs LiveKit-SFU vs
 //! deferred) is unresolved — see `docs/plans/plan-stoat-video-wasm.md` Phase A.
