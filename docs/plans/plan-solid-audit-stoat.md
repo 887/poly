@@ -119,9 +119,18 @@ rewrites remain future work.
   WASM plugin currently no-ops `handle_ws_data`; native already parses via
   `parse_bonfire_event`. Extract the parser into a shared module callable from
   both. ~400 LoC.
-- [ ] **D.2** Split `StoatClient::IsBackend` (943 lines) along the same
+- [x] **D.2** Split `StoatClient::IsBackend` (943 lines) along the same
   capability-trait lines the rest of the codebase uses
   (`ModerationBackend` / `SocialGraphBackend` / `DmsAndGroupsBackend` /
   `MessagingBackend`). Re-export from a thin `IsBackend` facade. ~600 LoC.
-- [ ] **D.3** Split `StoatHttpClient` (1148 lines) by domain — auth, channels,
+  — shipped in change `rstmuupo`: each capability-trait impl lives in its
+  own sibling file (`is_backend.rs`, `messaging.rs`, `moderation.rs`,
+  `social_graph.rs`, `dms_and_groups.rs`, `server_admin.rs`,
+  `voice_transport.rs`, `settings.rs`, `view_descriptor.rs`,
+  `context_action.rs`). `lib.rs` keeps only struct + inherent helpers +
+  tests. `parse_bonfire_event` colocated with `is_backend.rs`.
+- [x] **D.3** Split `StoatHttpClient` (1148 lines) by domain — auth, channels,
   messages, social, moderation. ~500 LoC.
+  — shipped in change `rstmuupo`: `http.rs` becomes `http/{mod,auth,channels,messages,moderation,social}.rs`.
+  Struct + session/UA/request plumbing + tests in `http/mod.rs`; each
+  domain attaches additional inherent `impl StoatHttpClient` blocks.
