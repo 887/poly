@@ -33,7 +33,7 @@ Small, low-risk cleanups landed during the audit pass itself.
 
 ## Phase B — Medium refactors (50-300 LoC, max 5)
 
-- [ ] **B.1** Split `clients/lemmy/src/lib.rs` (1729 LoC, 108 fns).
+- [x] **B.1** Split `clients/lemmy/src/lib.rs` (1729 LoC, 108 fns).
       Single Responsibility violation — one file impls
       `IsBackend`, `ForumBackend`, `ModerationBackend`, `SocialGraphBackend`,
       `DmsAndGroupsBackend`, `MessagingBackend`, `ServerAdminBackend`,
@@ -41,11 +41,24 @@ Small, low-risk cleanups landed during the audit pass itself.
       (`mod forum;`, `mod moderation;` …). Mechanical, ~200 LoC of
       module headers + reorg. _Interface Segregation gain: the
       compile-error blast radius of changing one trait shrinks._
-- [ ] **B.2** Split `clients/lemmy/src/api.rs` (1664 LoC). Single file
+      — shipped in change `totxoywu`. 11 trait impls moved to siblings
+      (`is_backend.rs`, `forum.rs`, `moderation.rs`, `social_graph.rs`,
+      `dms_groups.rs`, `messaging.rs`, `server_admin.rs`, `discover.rs`,
+      `settings.rs`, `view_descriptor.rs`, `context_action.rs`).
+      lib.rs: 1729 → 208 LoC (struct + inherent helpers only).
+      Inherent helpers promoted to `pub(crate)` for sibling access;
+      struct fields likewise `pub(crate)`.
+- [x] **B.2** Split `clients/lemmy/src/api.rs` (1664 LoC). Single file
       hosts HTTP shim, request types, response types, mapping logic,
       AND fixture tests. Suggest: `api/mod.rs`, `api/http.rs`,
       `api/types.rs`, `api/mapping.rs`, keep tests beside the unit they
       cover. _SRP — currently any DTO change recompiles the HTTP layer._
+      — shipped in change `totxoywu`. Split into `api/{mod,types,mapping,client,endpoints}.rs`:
+      `types.rs` (378) DTOs + `DEFAULT_CLIENT_VERSION`,
+      `mapping.rs` (516) pure mappers + tests,
+      `client.rs` (169) `LemmyHttpClient` struct + session/UA helpers,
+      `endpoints.rs` (655) REST-endpoint methods,
+      `mod.rs` (38) re-exports preserving `crate::api::Foo` paths.
 - [ ] **B.3** `IsBackend::authenticate` (`lib.rs:185-300+`) handles
       three credential variants inline with deeply nested matches and
       duplicated `LemmySession` construction. Extract one private
