@@ -243,7 +243,7 @@ fn render_full_message_body(
                     style: "color: {color};",
                     "{msg.author.display_name}"
                 }
-                span { class: "message-time", "{time_str}" }
+                span { class: "message-timestamp", "{time_str}" }
             }
             {render_message_content_stack(ctx, msg, is_editing)}
         }
@@ -300,25 +300,9 @@ fn render_message_content_stack(ctx: ChatViewMarkupCtx, msg: Message, is_editing
     }
 }
 
-/// Format a timestamp for display.
-///
-/// If today: "12:34 PM"
-/// If yesterday: "Yesterday 12:34 PM"
-/// Otherwise: "02/28/2026 12:34 PM"
+/// Format a timestamp for display: "DD/MM/YYYY, HH:MM" in local time, 24h.
 fn format_timestamp(ts: chrono::DateTime<chrono::Utc>) -> String {
-    let local = ts.with_timezone(&chrono::Local);
-    let now = chrono::Local::now();
-
-    if local.date_naive() == now.date_naive() {
-        local.format("%I:%M %p").to_string()
-    } else if local.date_naive()
-        == now
-            .checked_sub_signed(chrono::Duration::days(1))
-            .unwrap_or(now)
-            .date_naive()
-    {
-        format!("Yesterday {}", local.format("%I:%M %p"))
-    } else {
-        local.format("%m/%d/%Y %I:%M %p").to_string()
-    }
+    ts.with_timezone(&chrono::Local)
+        .format("%d/%m/%Y, %H:%M")
+        .to_string()
 }

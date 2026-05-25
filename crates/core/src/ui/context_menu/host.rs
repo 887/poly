@@ -59,8 +59,16 @@ fn lookup(menu_type: &str) -> Option<RenderFn> {
 #[context_menu(None)]
 #[component]
 pub fn ContextMenuStack() -> Element {
+    // Wire the menu-type → render-fn registry once per process. Without
+    // this, every `register_all_menus()` entry is dead and the host's
+    // `lookup(menu_type)` returns `None` for every right-click — clicks
+    // push onto the stack, but no overlay ever renders.
+    use_hook(|| {
+        super::menus::register_all_menus();
+    });
+
     let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
-    let stack = ui_overlays.read().context_menu_stack.clone();
+    let stack = ui_overlays.read().context_menu_stack.clone(); // poly-lint: allow render-time-read — subscription IS the intent; the host MUST re-render when entries are pushed/popped
 
     if stack.is_empty() {
         return rsx! {};
