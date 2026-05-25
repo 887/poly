@@ -259,6 +259,20 @@ settings-reset-error-no-storage = Storage is not ready yet
 settings-reset-error-failed = Failed to reset app data
 settings-nuke-error-failed = Failed to nuke app state
 settings-reset-error-reload = Reset succeeded, but reload failed
+settings-reset-confirm-title = Reset app data?
+settings-reset-confirm-body = This logs every account out and clears your local cache. Your identity key stays. You'll land back on the setup wizard.
+settings-nuke-confirm-title = Nuke ALL local state?
+settings-nuke-confirm-body = This deletes every account, every cached message, every KV setting, AND your identity key. There is no undo. To proceed, type DELETE below.
+settings-nuke-confirm-phrase = DELETE
+settings-nuke-confirm-input-label = Type DELETE to confirm:
+settings-confirm-cancel = Cancel
+settings-confirm-execute = Yes, do it
+
+# Persona data-exposure badge (rendered under each persona row in the list)
+persona-exposure-no-sources = No sources selected
+persona-exposure-label = Reads
+persona-exposure-channels = channels
+persona-exposure-accounts = accounts
 
 # Diagnostics Settings
 settings-diagnostics = Diagnostics

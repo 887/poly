@@ -1,42 +1,46 @@
-//! Agent-panel route adapter components.
+//! Agent-panel route adapters.
 //!
-//! Covers the agent page, persona management, and global search.
+//! All three `/agent*` routes render the same `AgentPage`, only differing in
+//! which section is pre-selected. That keeps the agent sub-nav (Integrations
+//! / Profile / Personas) visible on every URL — bookmarking
+//! `/agent/personas` no longer drops the user into a chromeless page.
 
-use crate::ui::agent::{AgentPage, PersonaManagementRoute as PersonaManagementRouteComponent};
+use crate::ui::agent::{AgentPage, AgentSection};
 use dioxus::prelude::*;
 use poly_ui_macros::{context_menu, ui_action};
 
-/// Agent page — app-level, not account-scoped.
+/// `/agent` — default section (Integrations).
 #[context_menu(None)]
 #[rustfmt::skip]
 #[ui_action(inherit)]
 #[component]
 pub(super) fn AgentRoute() -> Element {
     rsx! {
-        AgentPage {}
+        AgentPage { initial_section: None }
     }
 }
 
-/// Agent page with a specific section pre-selected via URL.
+/// `/agent/:section` — opens AgentPage with `section` pre-selected.
 #[context_menu(None)]
 #[rustfmt::skip]
 #[ui_action(inherit)]
 #[component]
 pub(super) fn AgentSectionRoute(section: String) -> Element {
-    let _ = section; // consumed by router; AgentPage reads section from its own state
+    let initial = AgentSection::from_slug(&section);
     rsx! {
-        AgentPage {}
+        AgentPage { initial_section: Some(initial) }
     }
 }
 
-/// Persona management page at `/agent/personas`.
+/// `/agent/personas` — kept as an explicit route so bookmarks resolve to the
+/// expected section. Renders the same shell as the other agent URLs.
 #[context_menu(None)]
 #[rustfmt::skip]
 #[ui_action(inherit)]
 #[component]
 pub(super) fn PersonasRoute() -> Element {
     rsx! {
-        PersonaManagementRouteComponent {}
+        AgentPage { initial_section: Some(AgentSection::Personas) }
     }
 }
 

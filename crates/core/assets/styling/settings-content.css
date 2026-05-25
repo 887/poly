@@ -1137,3 +1137,104 @@
 .settings-input-short {
     width: 100px;
 }
+
+/* Persona list rows (rendered inside the agent settings page).
+   Without these the name span and the data-exposure span sit on the same
+   inline run with no separator — reads as `Koala the BrokerNo sources
+   selected`. Stack them so the exposure subtitle gets its own line. */
+.persona-list-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 0;
+}
+
+.persona-row-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.persona-row-name {
+    font-weight: 600;
+}
+
+.persona-data-exposure-summary {
+    display: block;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.persona-row-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+/* Confirmation modal — used by ResetButton (nuke / reset confirm) and the
+   persona delete/forget flows. Render as a true overlay so destructive
+   actions don't blend into the page underneath. */
+.persona-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: rgba(0, 0, 0, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+
+.persona-modal {
+    background: var(--surface, #1e1e3a);
+    border: 1px solid var(--border, #27273f);
+    border-radius: 8px;
+    width: min(480px, 100%);
+    max-height: 90vh;
+    overflow: auto;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+}
+
+.persona-modal-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border, #27273f);
+}
+
+.persona-modal-title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.persona-modal-title.persona-danger-title {
+    color: #f87171;
+}
+
+.persona-modal-body {
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.persona-confirm-description {
+    margin: 0;
+    color: var(--text, #e4e4e7);
+    line-height: 1.5;
+}
+
+.persona-modal-footer {
+    padding: 12px 20px 16px;
+    border-top: 1px solid var(--border, #27273f);
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.persona-confirm-input {
+    width: 100%;
+}

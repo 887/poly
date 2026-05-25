@@ -14,7 +14,7 @@ pub mod persona;
 mod profile;
 
 pub use chat_style_editor::ChatStyleEditor;
-pub use persona::PersonaManagementRoute;
+pub use persona::PersonasSection;
 
 use crate::i18n::t;
 use crate::ui::routes::Route;
@@ -27,9 +27,10 @@ use integrations::Integrations;
 use profile::AgentProfile;
 
 /// Navigation sections for the agent page sidebar.
-const NAV_SECTIONS: [(&str, AgentSection); 2] = [
+const NAV_SECTIONS: [(&str, AgentSection); 3] = [
     ("agent-section-integrations", AgentSection::Integrations),
     ("agent-section-profile", AgentSection::Profile),
+    ("persona-panel-title", AgentSection::Personas),
 ];
 
 /// All searchable nodes in the agent settings tree.
@@ -49,6 +50,9 @@ pub const AGENT_NODES: &[(&str, AgentSection)] = &[
     // Profile
     ("agent-section-profile", AgentSection::Profile),
     ("agent-profile-textarea-label", AgentSection::Profile),
+    // Personas
+    ("persona-panel-title", AgentSection::Personas),
+    ("persona-management-desc", AgentSection::Personas),
 ];
 
 /// The sections of the agent page.
@@ -58,6 +62,8 @@ pub enum AgentSection {
     Integrations,
     /// Shareable agent handshake card.
     Profile,
+    /// Named AI lenses with their own memory and system prompts.
+    Personas,
 }
 
 impl AgentSection {
@@ -65,12 +71,14 @@ impl AgentSection {
         match self {
             Self::Integrations => "integrations",
             Self::Profile => "profile",
+            Self::Personas => "personas",
         }
     }
 
     pub fn from_slug(slug: &str) -> Self {
         match slug {
             "profile" => Self::Profile,
+            "personas" => Self::Personas,
             _ => Self::Integrations,
         }
     }
@@ -114,7 +122,7 @@ fn scroll_to_section_anchor(slug: &str) {
 #[ui_action(inherit)]
 #[component]
 fn AgentSearchBar(search_text: Signal<String>) -> Element {
-    let current = search_text.read().clone();
+    let current = search_text.read().clone(); // poly-lint: allow render-time-read — subscription IS the intent; the input must re-render on every keystroke
     let total = total_match_count(&current.to_lowercase());
 
     rsx! {
@@ -162,8 +170,7 @@ fn AgentNavigation(
     search_text: Signal<String>,
     on_select: EventHandler<AgentSection>,
 ) -> Element {
-    let filter = search_text.read().to_lowercase();
-    let nav_for_personas = use_navigator();
+    let filter = search_text.read().to_lowercase(); // poly-lint: allow render-time-read — subscription IS the intent; nav match-counts must re-render when the filter changes
 
     rsx! {
         nav { class: "settings-nav",
@@ -197,14 +204,6 @@ fn AgentNavigation(
                     }
                 }
             }
-            // Personas — full-page management route.
-            div {
-                class: "settings-nav-item",
-                onclick: move |_| {
-                    nav_for_personas.push(Route::PersonasRoute);
-                },
-                {t("persona-panel-title")}
-            }
         }
     }
 }
@@ -232,6 +231,7 @@ fn AgentAllSections(search_query: String) -> Element {
                         match section {
                             AgentSection::Integrations => rsx! { Integrations {} },
                             AgentSection::Profile => rsx! { AgentProfile {} },
+                            AgentSection::Personas => rsx! { PersonasSection {} },
                         }
                     }
                 }
@@ -249,10 +249,10 @@ fn AgentAllSections(search_query: String) -> Element {
 #[rustfmt::skip]
 #[ui_action(inherit)]
 #[component]
-pub fn AgentPage() -> Element {
+pub fn AgentPage(initial_section: Option<AgentSection>) -> Element {
     let locale_key = crate::i18n::use_locale().read().clone();
     let mut search_text = use_signal(String::new);
-    let mut active_section = use_signal(|| AgentSection::Integrations);
+    let mut active_section = use_signal(|| initial_section.unwrap_or(AgentSection::Integrations));
     let nav = use_navigator();
 
     use_effect(move || { // poly-lint: allow stale-effect-capture — body reads search_text via signal.read(), no captured local

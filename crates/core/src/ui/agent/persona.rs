@@ -7,7 +7,7 @@
 //! - `edit_modal.rs`                — PersonaEditModal (create/edit, collapsible sections)
 //! - `sources_editor.rs`            — PersonaSourcesEditor (per-account tree, 3-state pill)
 //! - `tool_whitelist_editor.rs`     — PersonaToolWhitelistEditor (checkbox grid by category)
-//! - `route.rs`                     — PersonaManagementRoute (/agent/personas)
+//! - `route.rs`                     — PersonasSection (inline persona panel rendered inside AgentPage)
 //! - `talk_to_overlay.rs`           — PersonaTalkToOverlay + TalkSession (Phase E)
 //! - `outbound_allowlist_editor.rs` — G.1+G.2+G.4+G.6 outbound UI
 //! - `audit_panel.rs`               — H.1+H.2+H.4 audit log panel
@@ -29,6 +29,6 @@ mod types;
 
 pub use edit_modal::PersonaEditModal;
 pub use list_panel::PersonaListPanel;
-pub use route::PersonaManagementRoute;
+pub use route::PersonasSection;
 pub use talk_to_overlay::{PersonaTalkToOverlay, TalkSession};
 pub use types::PersonaSummary;

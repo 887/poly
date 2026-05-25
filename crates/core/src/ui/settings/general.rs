@@ -324,6 +324,10 @@ async fn run_reset_flow(
 }
 
 /// Reset button component.
+///
+/// Click opens a confirmation modal — neither button fires the destructive
+/// flow on a single click. Nuke additionally requires typing the literal
+/// word DELETE before the execute button enables.
 #[rustfmt::skip]
 #[ui_action(inherit)]
 #[context_menu(inherit)]
@@ -332,7 +336,8 @@ fn ResetButton(kind: ResetKind, busy: Signal<bool>, on_error: EventHandler<Strin
     let client_manager: BatchedSignal<crate::client_manager::ClientManager> = use_context();
     let chat_lists: BatchedSignal<crate::state::ChatLists> = use_context();
     let account_sessions: BatchedSignal<crate::state::AccountSessions> = use_context();
-    let mut busy_signal = use_signal(|| *busy.read());
+    let mut busy_signal = use_signal(|| *busy.read()); // poly-lint: allow render-time-read — initial value snapshot from the parent's busy signal
+    let mut confirm_open = use_signal(|| false);
 
     let (label, class_name) = match kind {
         ResetKind::User => (t("settings-reset-app"), "btn btn-danger"),
@@ -345,22 +350,110 @@ fn ResetButton(kind: ResetKind, busy: Signal<bool>, on_error: EventHandler<Strin
     rsx! {
         button {
             class: "{class_name}",
-            disabled: *busy_signal.read(),
+            disabled: *busy_signal.read(), // poly-lint: allow render-time-read — subscription IS the intent; button must redraw when busy flips
             onclick: move |_| {
-                if *busy_signal.read() {
+                if *busy_signal.peek() {
                     return;
                 }
-                busy_signal.set(true);
-                spawn(async move {
-                    if let Err(err) = run_reset_flow(kind, client_manager, chat_lists, account_sessions)
-                        .await
-                    {
-                        on_error.call(err);
-                        busy_signal.set(false);
-                    }
-                });
+                confirm_open.set(true);
             },
             "{label}"
+        }
+        if *confirm_open.read() { // poly-lint: allow render-time-read — modal visibility must re-render on toggle
+            ResetConfirmModal {
+                kind,
+                on_cancel: move |_| confirm_open.set(false),
+                on_confirm: move |_| {
+                    confirm_open.set(false);
+                    busy_signal.set(true);
+                    spawn(async move {
+                        if let Err(err) = run_reset_flow(kind, client_manager, chat_lists, account_sessions)
+                            .await
+                        {
+                            on_error.call(err);
+                            busy_signal.set(false);
+                        }
+                    });
+                },
+            }
+        }
+    }
+}
+
+/// Confirmation modal for the reset / nuke buttons. The Reset variant is a
+/// soft Yes/Cancel; the Nuke variant requires typing the literal word DELETE
+/// before the execute button enables.
+#[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(inherit)]
+#[component]
+fn ResetConfirmModal(
+    kind: ResetKind,
+    on_confirm: EventHandler<()>,
+    on_cancel: EventHandler<()>,
+) -> Element {
+    let mut typed = use_signal(String::new);
+    let phrase = t("settings-nuke-confirm-phrase");
+    let typed_matches = typed.read().as_str() == phrase.as_str(); // poly-lint: allow render-time-read — typed input drives the execute button's enabled state every keystroke
+    let requires_typing = matches!(kind, ResetKind::Nuke);
+    let execute_enabled = !requires_typing || typed_matches;
+
+    let (title_key, body_key, execute_class) = match kind {
+        ResetKind::User => (
+            "settings-reset-confirm-title",
+            "settings-reset-confirm-body",
+            "btn btn-danger",
+        ),
+        ResetKind::Nuke => (
+            "settings-nuke-confirm-title",
+            "settings-nuke-confirm-body",
+            "btn btn-warning btn-nuke",
+        ),
+    };
+
+    rsx! {
+        div {
+            class: "persona-modal-overlay",
+            onclick: move |_| on_cancel.call(()),
+            div {
+                class: "persona-modal persona-confirm-modal",
+                onclick: move |evt| evt.stop_propagation(),
+                div { class: "persona-modal-header",
+                    h3 { class: "persona-modal-title persona-danger-title", "{t(title_key)}" }
+                }
+                div { class: "persona-modal-body",
+                    p { class: "persona-confirm-description", "{t(body_key)}" }
+                    if requires_typing {
+                        div { class: "settings-field",
+                            label { class: "settings-label", "{t(\"settings-nuke-confirm-input-label\")}" }
+                            input {
+                                r#type: "text",
+                                class: "settings-input persona-confirm-input",
+                                placeholder: "{phrase}",
+                                value: "{typed.read()}", // poly-lint: allow render-time-read — input value must follow the typed signal every keystroke
+                                oninput: move |e| typed.set(e.value()),
+                            }
+                        }
+                    }
+                }
+                div { class: "persona-modal-footer",
+                    button {
+                        class: "btn btn-secondary",
+                        onclick: move |_| on_cancel.call(()),
+                        "{t(\"settings-confirm-cancel\")}"
+                    }
+                    button {
+                        class: "{execute_class}",
+                        disabled: !execute_enabled,
+                        onclick: move |_| {
+                            if execute_enabled {
+                                on_confirm.call(());
+                            }
+                        },
+                        "{t(\"settings-confirm-execute\")}"
+                    }
+                }
+            }
         }
     }
 }
@@ -372,8 +465,8 @@ fn ResetButton(kind: ResetKind, busy: Signal<bool>, on_error: EventHandler<Strin
 #[component]
 fn ResetError(error: Signal<String>) -> Element {
     rsx! {
-        if !error.read().is_empty() {
-            p { class: "general-reset-error", "{error.read()}" }
+        if !error.read().is_empty() { // poly-lint: allow render-time-read — subscription IS the intent; error display must re-render when set
+            p { class: "general-reset-error", "{error.read()}" } // poly-lint: allow render-time-read — same signal, text body
         }
     }
 }

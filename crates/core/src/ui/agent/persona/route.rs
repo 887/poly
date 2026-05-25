@@ -1,10 +1,8 @@
-//! PersonaManagementRoute — full-page persona management UI at `/agent/personas`.
+//! PersonasSection — persona management UI rendered inline inside `AgentPage`.
 //!
-//! Lists all personas in a full-page layout with a prominent "Create" button.
-//! Opens PersonaEditModal inline.
-//!
-//! Phase E: the full-page route also wires a local TalkSession signal so the
-//! "Talk to" button works when accessed from the management route directly.
+//! Lists all personas with a "+ New persona" button and wires the per-row
+//! "Talk to" overlay. No outer page chrome — fits inside the agent settings
+//! section stack (AgentPage's `AgentAllSections`).
 
 use super::list_panel::PersonaListPanel;
 use super::talk_to_overlay::{PersonaTalkToOverlay, TalkSession};
@@ -13,8 +11,8 @@ use crate::i18n::t;
 use dioxus::prelude::*;
 use poly_ui_macros::{context_menu, ui_action};
 
-/// Generate a simple session ID for the management route.
-fn route_session_id() -> String {
+/// Generate a simple session ID for the talk-to overlay.
+fn session_id() -> String {
     #[cfg(not(target_arch = "wasm32"))]
     {
         use std::time::{SystemTime, UNIX_EPOCH};
@@ -34,40 +32,36 @@ fn route_session_id() -> String {
     }
 }
 
-/// Full-page persona management component.
+/// Persona management section. Renders inline inside `AgentPage` — sits in
+/// the same section stack as Integrations and Profile, so the agent sub-nav
+/// (Integrations / Profile / Personas) stays visible.
 #[rustfmt::skip]
 #[ui_action(inherit)]
 #[context_menu(inherit)]
 #[component]
-pub fn PersonaManagementRoute() -> Element {
+pub fn PersonasSection() -> Element {
     let mut talk_session: Signal<Option<TalkSession>> = use_signal(|| None);
-    // Peek to avoid subscribing the whole route to talk_session (hang class #7).
+    // Peek to avoid subscribing the whole section to talk_session (hang class #7).
     let current_talk = talk_session.peek().clone();
 
     rsx! {
-        div { class: "persona-management-page",
-            div { class: "special-page-header",
-                h2 { class: "special-page-title", {t("persona-management-title")} }
-            }
-            div { class: "persona-management-body",
-                p { class: "settings-description", {t("persona-management-desc")} }
-                PersonaListPanel {
-                    on_talk: move |summary: PersonaSummary| {
-                        let session = TalkSession {
-                            persona_slug: summary.slug.clone(),
-                            persona_name: summary.name.clone(),
-                            persona_avatar: summary.avatar_emoji.clone(),
-                            session_id: route_session_id(),
-                        };
-                        talk_session.set(Some(session));
-                    },
-                }
-            }
-            if let Some(session) = current_talk {
-                PersonaTalkToOverlay {
-                    session,
-                    on_close: move |_| talk_session.set(None),
-                }
+        h2 { id: "agent-section-personas", "{t(\"persona-panel-title\")}" }
+        p { class: "settings-description", "{t(\"persona-management-desc\")}" }
+        PersonaListPanel {
+            on_talk: move |summary: PersonaSummary| {
+                let session = TalkSession {
+                    persona_slug: summary.slug.clone(),
+                    persona_name: summary.name.clone(),
+                    persona_avatar: summary.avatar_emoji.clone(),
+                    session_id: session_id(),
+                };
+                talk_session.set(Some(session));
+            },
+        }
+        if let Some(session) = current_talk {
+            PersonaTalkToOverlay {
+                session,
+                on_close: move |_| talk_session.set(None),
             }
         }
     }
