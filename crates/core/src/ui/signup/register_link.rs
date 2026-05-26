@@ -20,7 +20,7 @@
 //! Phase E Playwright specs can locate links without relying on translated text.
 
 use crate::client_manager::ClientManager;
-use crate::i18n::t;
+use crate::i18n::{t, t_args};
 use crate::state::BatchedSignal;
 use crate::ui::routes::Route;
 use dioxus::prelude::*;
@@ -62,8 +62,7 @@ pub(crate) fn RegisterLink(backend_slug: String, server_url: Option<String>) -> 
         SignupMethod::External(url) => {
             let testid = format!("register-link-{backend_slug}");
             let host = extract_host(&url);
-            let label = t("signup-register-link-action")
-                .replace("{$service}", &host);
+            let label = t_args("signup-register-link-action", &[("service", host.as_str())]);
             let js_url = serde_json::to_string(&url).unwrap_or_else(|_| "\"\"".into());
             rsx! {
                 a {

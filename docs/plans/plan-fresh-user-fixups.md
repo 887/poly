@@ -636,15 +636,23 @@ selected backend's form.
   Microsoft Teams, Reddit, Test Accounts. No Matrix. Either Matrix
   signup is gated behind a feature flag (then say so) or it's silently
   excluded (then bug).
-- [ ] **X.2** Stale i18n key visible: the bottom of the Stoat signup
+- [x] **X.2** Stale i18n key visible: the bottom of the Stoat signup
   form reads `Don't have an account? **Signup Register Link Action**
-  →`. That second part is the literal i18n key
-  `signup-register-link-action` Title-Cased — the key exists in
-  `locales/en/main.ftl` with placeholder `{$service}`, so either the
-  service substitution is failing or the lookup isn't hitting the
-  right key. Either way: a real user sees gibberish copy at the
-  account-creation handoff. Same class as Q.2 (fixed). Sweep for other
-  Title-Cased-key strings while we're at it.
+  →`. **Root cause:** `t("signup-register-link-action")` called with
+  no args — but the FTL value references `{$service}`. fluent's
+  `format_pattern` emits a "missing argument" error, `t()`'s
+  `errors.is_empty()` guard fails, and on the default locale (`en`)
+  the function drops through to the title-case fallback. The
+  `.replace("{$service}", &host)` chained after never sees the
+  placeholder. **Fix shipped** in `register_link.rs:65-66`: use
+  `t_args("signup-register-link-action", &[("service", host)])`.
+  **Sibling sites (NOT fixed — error-path only, file as X.2b):** the
+  same `t("…").replace("{$…}", …)` smell exists in 6 other call sites
+  (`bans.rs:127`, `ban_member.rs:118`, `kick_member.rs:106`,
+  `timeout_member.rs:138`, `edit_channel.rs:155`,
+  `overlays.rs:785-786`). Only `overlays.rs` is visible without
+  triggering an error; the rest only render on failure. Sweep when
+  next touching dialogs/.
 - [ ] **X.3** Backend descriptions are truncated with `…` in the
   left column. Either the column should be wider, or hover should
   show the full text in a tooltip.
