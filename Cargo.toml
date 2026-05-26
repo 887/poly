@@ -362,3 +362,62 @@ integer_division         = "deny"  # silent floor — usually a bug
 print_stdout      = "deny"
 print_stderr      = "deny"
 mod_module_files  = "deny"
+
+# ── Profiles ─────────────────────────────────────────────────────────
+#
+# Three intended profiles for agentic development:
+#
+#   - `dev` (DEFAULT)   — lean. Keeps stack traces via line-tables only;
+#                         drops full DWARF. Cuts ~60-80% off target/ disk.
+#                         Use for: `cargo build`, `cargo check`, `cargo test`,
+#                         all agent runs, every interactive session that is
+#                         NOT a debugger step-through.
+#   - `dev-symbols`     — opt-in full debug info. Use for: actual gdb/lldb
+#                         step-through, or when an error needs source-level
+#                         variable inspection. Invoke with
+#                         `cargo build --profile dev-symbols`.
+#   - `release`         — production. Optimized, no debug, stripped.
+#
+# Rationale: full DWARF (the cargo default for dev) bloats
+# `target/debug/deps/` by an order of magnitude — multi-GB per worktree.
+# `debug = "line-tables-only"` preserves stack-trace addresses (so panics
+# + backtraces still work) without storing variable / type / file-line
+# metadata for every monomorphization.
+
+[profile.dev]
+opt-level       = 0
+debug           = "line-tables-only"
+incremental     = true
+split-debuginfo = "unpacked"
+strip           = "debuginfo"
+
+[profile.dev.package."*"]
+opt-level = 1
+
+[profile.dev-symbols]
+inherits        = "dev"
+debug           = "full"
+strip           = "none"
+split-debuginfo = "unpacked"
+
+[profile.release]
+opt-level     = 3
+lto           = "thin"
+codegen-units = 1
+strip         = "symbols"
+debug         = false
+panic         = "abort"
+
+[profile.release-full]
+inherits      = "release"
+lto           = "fat"
+codegen-units = 1
+
+[profile.bench]
+inherits = "release"
+debug    = "line-tables-only"
+strip    = "none"
+
+[profile.test]
+inherits  = "dev"
+opt-level = 1
