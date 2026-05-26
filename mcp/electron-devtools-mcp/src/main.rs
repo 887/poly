@@ -44,6 +44,14 @@ const CDP_PORT: u16 = 9224;
 /// Port that `dx serve --platform web` listens on for the Electron WASM build.
 /// Electron loads from `http://127.0.0.1:DX_SERVE_PORT/` in dev mode.
 const DX_SERVE_PORT: u16 = 3001;
+/// Path the dx-serve fullstack server uses to serve the compiled WASM loader.
+/// 200 here = the wasm half actually finished; the server half (which serves
+/// `/host/status`) often comes up many seconds before wasm is ready, and
+/// sometimes the wasm half silently fails to compile at all.
+const WASM_BUNDLE_PATH: &str = "/assets/dioxus/poly-desktop-electron.js";
+/// Once the server is responding but the bundle is still 404 for >this many
+/// seconds, treat it as a silent-hang and abort with actionable guidance.
+const SILENT_HANG_THRESHOLD_SECS: u64 = 60;
 
 /// Rebuild counter file — incremented by `launch_app` and `rebuild_app`.
 /// Separate from desktop (`…rebuild-counter`) and web (`…web-rebuild-counter`).
@@ -540,27 +548,56 @@ impl ElectronCdpBackend {
 
     // ── Port / process helpers ──────────────────────────────────────────────
 
-    /// Poll `http://127.0.0.1:<port>/` until it returns any HTTP response,
-    /// detecting early dx-serve crashes via the build log.
-    async fn wait_for_port(&self, port: u16, max_seconds: u64) -> anyhow::Result<()> {
-        let url = format!("http://127.0.0.1:{port}/");
-        let polls = max_seconds.saturating_mul(2); // 500 ms intervals
+    /// Poll the dx-serve fullstack endpoint for the actual WASM bundle
+    /// (not just port-up). Detects the silent-hang case where the server
+    /// half binds and answers `/host/status` for many seconds but the wasm
+    /// half never compiles. Returns Ok on first 200 from the bundle path.
+    async fn wait_for_wasm_bundle(&self, port: u16, max_seconds: u64) -> anyhow::Result<()> {
+        let bundle_url = format!("http://127.0.0.1:{port}{WASM_BUNDLE_PATH}");
+        let port_url = format!("http://127.0.0.1:{port}/host/status");
+        let polls = max_seconds.saturating_mul(2);
+        let mut port_up_since: Option<std::time::Instant> = None;
         for _ in 0..polls {
-            let ok = self
+            let bundle_status = self
                 .client
-                .get(&url)
+                .get(&bundle_url)
                 .timeout(Duration::from_secs(2))
                 .send()
                 .await
-                .map(|r| r.status().as_u16() < 500)
-                .unwrap_or(false);
-            if ok {
+                .map(|r| r.status().as_u16())
+                .unwrap_or(0);
+            if bundle_status == 200 {
                 return Ok(());
+            }
+            let port_up = self
+                .client
+                .get(&port_url)
+                .timeout(Duration::from_secs(2))
+                .send()
+                .await
+                .map(|r| r.status().is_success())
+                .unwrap_or(false);
+            if port_up && port_up_since.is_none() {
+                port_up_since = Some(std::time::Instant::now());
+            }
+            if let Some(t0) = port_up_since {
+                if t0.elapsed().as_secs() > SILENT_HANG_THRESHOLD_SECS && bundle_status == 404 {
+                    anyhow::bail!(
+                        "dx serve appears wedged: server on port {port} has been answering \
+                         for >{SILENT_HANG_THRESHOLD_SECS}s but {WASM_BUNDLE_PATH} is still \
+                         404. The wasm half of dx serve sometimes silently fails to invoke \
+                         cargo build.\n\n\
+                         Fix: run\n  \
+                         cd apps/desktop-electron && cargo build \
+                         --target wasm32-unknown-unknown\n\
+                         to surface the real compile error, then retry launch_app."
+                    );
+                }
             }
             tokio::time::sleep(Duration::from_millis(500)).await;
         }
         anyhow::bail!(
-            "dx serve did not become ready on port {port} within {max_seconds}s. \
+            "WASM bundle {WASM_BUNDLE_PATH} not served by port {port} within {max_seconds}s. \
              Call get_last_build_log to inspect the build output."
         )
     }
@@ -681,13 +718,16 @@ impl ElectronCdpBackend {
 
         Self::increment_rebuild_counter();
 
-        // ── Wait for dx serve to come up ──────────────────────────────────
-        match self.wait_for_port(DX_SERVE_PORT, 120).await {
-            Ok(()) => tracing::info!("[bg] dx serve is ready on port {DX_SERVE_PORT}"),
+        // ── Wait for dx serve to actually serve the WASM bundle ───────────
+        // Up to 600 s for cold builds. wait_for_wasm_bundle polls the bundle
+        // path (not just port-up) and bails early when the server binds but
+        // wasm silently never compiles.
+        match self.wait_for_wasm_bundle(DX_SERVE_PORT, 600).await {
+            Ok(()) => tracing::info!("[bg] dx serve WASM bundle is live on port {DX_SERVE_PORT}"),
             Err(e) => {
                 self.finish_build_record(
                     BuildLifecycleState::Failed,
-                    "dx serve did not become ready.",
+                    "dx serve did not serve the WASM bundle.",
                     format!("{e}"),
                     None,
                 )
@@ -874,13 +914,13 @@ impl ElectronCdpBackend {
             *pid_ref.lock().await = None;
         });
 
-        // ── Wait for port to come back ────────────────────────────────────
-        match self.wait_for_port(DX_SERVE_PORT, 120).await {
-            Ok(()) => tracing::info!("[bg] dx serve ready on port {DX_SERVE_PORT} after rebuild"),
+        // ── Wait for the WASM bundle to come back ─────────────────────────
+        match self.wait_for_wasm_bundle(DX_SERVE_PORT, 600).await {
+            Ok(()) => tracing::info!("[bg] dx serve WASM bundle live on port {DX_SERVE_PORT} after rebuild"),
             Err(e) => {
                 self.finish_build_record(
                     BuildLifecycleState::Failed,
-                    "dx serve did not become ready after rebuild.",
+                    "dx serve did not serve the WASM bundle after rebuild.",
                     format!("{e}"),
                     None,
                 )

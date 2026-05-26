@@ -42,6 +42,14 @@ const WEB_SHELL_PATTERN: &str = "poly-desktop-web($|[^-])";
 
 /// Web-shell dev server port (dx serve --platform web --port 3002).
 const WEB_SERVE_PORT: u16 = 3002;
+/// Path the dx-serve fullstack server uses to serve the compiled WASM loader.
+/// 200 here = the wasm half actually finished. The server half (`/host/*`)
+/// often binds well before wasm is ready, and sometimes the wasm half
+/// silently fails to compile at all.
+const WASM_BUNDLE_PATH: &str = "/assets/dioxus/poly-desktop.js";
+/// Once the server is responding but the bundle is still 404 for >this many
+/// seconds, treat it as a silent-hang and abort with actionable guidance.
+const SILENT_HANG_THRESHOLD_SECS: u64 = 60;
 
 /// Check if legacy hotpatch mode is enabled.
 fn is_legacy_mode() -> bool {
@@ -442,30 +450,58 @@ impl DesktopHttpBackend {
         Ok(())
     }
 
-    /// Poll `http://127.0.0.1:<port>/` until it returns any HTTP response.
-    async fn wait_for_port(&self, port: u16, max_seconds: u64) -> anyhow::Result<()> {
-        let url = format!("http://127.0.0.1:{port}/");
-        let polls = max_seconds.saturating_mul(2); // 500 ms intervals
+    /// Poll the dx-serve fullstack endpoint for the actual WASM bundle
+    /// (not just port-up). Detects the silent-hang case where the server
+    /// half binds and answers `/host/status` for many seconds but the wasm
+    /// half never compiles. Returns Ok on first 200 from the bundle path.
+    async fn wait_for_wasm_bundle(&self, port: u16, max_seconds: u64) -> anyhow::Result<()> {
+        let bundle_url = format!("http://127.0.0.1:{port}{WASM_BUNDLE_PATH}");
+        let port_url = format!("http://127.0.0.1:{port}/host/status");
+        let polls = max_seconds.saturating_mul(2);
+        let mut port_up_since: Option<std::time::Instant> = None;
         for _ in 0..polls {
-            let ok = self
+            let bundle_status = self
                 .client
-                .get(&url)
+                .get(&bundle_url)
                 .timeout(std::time::Duration::from_secs(2))
                 .send()
                 .await
-                .map(|r| r.status().as_u16() < 500)
-                .unwrap_or(false);
-            if ok {
+                .map(|r| r.status().as_u16())
+                .unwrap_or(0);
+            if bundle_status == 200 {
                 return Ok(());
             }
-            // Early abort: check if dx serve crashed.
+            let port_up = self
+                .client
+                .get(&port_url)
+                .timeout(std::time::Duration::from_secs(2))
+                .send()
+                .await
+                .map(|r| r.status().is_success())
+                .unwrap_or(false);
+            if port_up && port_up_since.is_none() {
+                port_up_since = Some(std::time::Instant::now());
+            }
+            if let Some(t0) = port_up_since {
+                if t0.elapsed().as_secs() > SILENT_HANG_THRESHOLD_SECS && bundle_status == 404 {
+                    anyhow::bail!(
+                        "dx serve appears wedged: server on port {port} has been answering \
+                         for >{SILENT_HANG_THRESHOLD_SECS}s but {WASM_BUNDLE_PATH} is still \
+                         404. The wasm half of dx serve sometimes silently fails to invoke \
+                         cargo build.\n\n\
+                         Fix: run\n  \
+                         cd apps/desktop && cargo build --target wasm32-unknown-unknown\n\
+                         to surface the real compile error, then retry launch_app."
+                    );
+                }
+            }
             if let Some(crash_line) = self.build_log.lock().await.check_for_app_crash() {
                 anyhow::bail!("dx serve crashed: {crash_line}");
             }
             tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         }
         anyhow::bail!(
-            "dx serve did not become ready on port {port} within {max_seconds}s. \
+            "WASM bundle {WASM_BUNDLE_PATH} not served by port {port} within {max_seconds}s. \
              Call get_last_build_log for errors."
         )
     }
@@ -583,13 +619,13 @@ impl DesktopHttpBackend {
 
         drop(Self::increment_rebuild_counter().await);
 
-        // ── Wait for dx serve port ────────────────────────────────────────────
-        match self.wait_for_port(WEB_SERVE_PORT, 120).await {
-            Ok(()) => tracing::info!("[bg] dx serve ready on port {WEB_SERVE_PORT}"),
+        // ── Wait for dx serve to actually serve the WASM bundle ───────────────
+        match self.wait_for_wasm_bundle(WEB_SERVE_PORT, 600).await {
+            Ok(()) => tracing::info!("[bg] dx serve WASM bundle live on port {WEB_SERVE_PORT}"),
             Err(e) => {
                 self.finish_build_record(
                     BuildLifecycleState::Failed,
-                    "dx serve --platform web did not become ready.",
+                    "dx serve --platform web did not serve the WASM bundle.",
                     format!("{e}"),
                     None,
                 )
@@ -748,12 +784,12 @@ impl DesktopHttpBackend {
             *pid_ref.lock().await = None;
         });
 
-        match self.wait_for_port(WEB_SERVE_PORT, 120).await {
-            Ok(()) => tracing::info!("[bg] dx serve ready on port {WEB_SERVE_PORT} after rebuild"),
+        match self.wait_for_wasm_bundle(WEB_SERVE_PORT, 600).await {
+            Ok(()) => tracing::info!("[bg] dx serve WASM bundle live on port {WEB_SERVE_PORT} after rebuild"),
             Err(e) => {
                 self.finish_build_record(
                     BuildLifecycleState::Failed,
-                    "dx serve did not become ready after rebuild.",
+                    "dx serve did not serve the WASM bundle after rebuild.",
                     format!("{e}"),
                     None,
                 )

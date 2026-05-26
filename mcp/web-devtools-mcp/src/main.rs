@@ -49,6 +49,16 @@ use tokio_tungstenite::tungstenite::Message;
 /// asset server, so we use 3000 here to avoid the conflict when both MCPs run
 /// simultaneously.
 const WEB_SERVER_PORT: u16 = 3000;
+/// Path the dx-serve fullstack server uses to serve the compiled WASM loader.
+/// A 200 here is the load-bearing "wasm bundle is actually ready" signal —
+/// the server half (port 3000) can bind and start replying to `/host/status`
+/// long before the wasm half finishes (or sometimes ever) compiling.
+const WASM_BUNDLE_PATH: &str = "/assets/dioxus/poly-web.js";
+/// How long the port can be reachable while the bundle is still 404 before
+/// we treat it as a silent-hang (dx serve sometimes spawns the server half
+/// but silently fails to invoke the wasm build at all). 60s is well past
+/// any normal first-paint window.
+const SILENT_HANG_THRESHOLD_SECS: u64 = 60;
 /// Chrome DevTools Protocol debugging port.
 const CDP_PORT: u16 = 9222;
 const BUILD_LOG_EXCERPT_LINES: usize = 60;
@@ -220,19 +230,60 @@ impl ChromeCdpBackend {
     /// undefined symbol, missing `.so`, etc.). Aborts immediately instead of
     /// blocking for 120 s when the build already failed.
     async fn wait_for_web_server(&self, max_seconds: u64) -> anyhow::Result<()> {
+        let bundle_url = format!("http://127.0.0.1:{WEB_SERVER_PORT}{WASM_BUNDLE_PATH}");
+        let port_url = format!("http://127.0.0.1:{WEB_SERVER_PORT}/host/status");
         let polls = max_seconds.saturating_mul(2);
+        let mut port_up_since: Option<std::time::Instant> = None;
         for _ in 0..polls {
-            let ok = self
+            // Primary readiness signal: bundle returns 200. dx serve serves a
+            // 404 on the bundle path while wasm is still compiling (or never
+            // compiled), and a 200 once the artifact lands.
+            let bundle_status = self
                 .client
-                .get(format!("http://127.0.0.1:{WEB_SERVER_PORT}"))
+                .get(&bundle_url)
                 .timeout(std::time::Duration::from_secs(2))
                 .send()
                 .await
-                .map(|resp| resp.status().is_success())
-                .unwrap_or(false);
-            if ok {
+                .map(|r| r.status().as_u16())
+                .unwrap_or(0);
+            if bundle_status == 200 {
                 return Ok(());
             }
+
+            // Track when the server half first came up. /host/status is
+            // mounted by the fullstack server alongside the wasm bundle, so a
+            // 200 here = "server bound, just waiting on wasm".
+            let port_up = self
+                .client
+                .get(&port_url)
+                .timeout(std::time::Duration::from_secs(2))
+                .send()
+                .await
+                .map(|r| r.status().is_success())
+                .unwrap_or(false);
+            if port_up && port_up_since.is_none() {
+                port_up_since = Some(std::time::Instant::now());
+            }
+
+            // Silent-hang signal: server has been up for >SILENT_HANG_THRESHOLD_SECS
+            // but bundle is still 404. dx serve never invoked the wasm build,
+            // or rustc died without surfacing. Abort early with actionable
+            // guidance rather than burning the full timeout.
+            if let Some(t0) = port_up_since {
+                if t0.elapsed().as_secs() > SILENT_HANG_THRESHOLD_SECS && bundle_status == 404 {
+                    anyhow::bail!(
+                        "dx serve appears wedged: server on port {WEB_SERVER_PORT} has been \
+                         answering for >{SILENT_HANG_THRESHOLD_SECS}s but {WASM_BUNDLE_PATH} \
+                         is still 404. The wasm half of dx serve sometimes silently fails to \
+                         invoke the cargo build.\n\n\
+                         Fix: run\n  \
+                         cd apps/web && cargo build --target wasm32-unknown-unknown \
+                         --no-default-features --features \"dev-plugins,web\"\n\
+                         to surface the real compile error, then retry launch_app."
+                    );
+                }
+            }
+
             // Early abort: check if the build/app crashed.
             if let Some(crash_line) = self.build_log.lock().await.check_for_app_crash() {
                 anyhow::bail!(
@@ -245,7 +296,7 @@ impl ChromeCdpBackend {
             tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         }
         anyhow::bail!(
-            "Static file server did not become reachable on port {WEB_SERVER_PORT} within {max_seconds}s"
+            "WASM bundle {WASM_BUNDLE_PATH} not served by port {WEB_SERVER_PORT} within {max_seconds}s"
         )
     }
 
@@ -855,16 +906,16 @@ impl ChromeCdpBackend {
 
         Self::increment_rebuild_counter();
 
-        // ── Wait for dx serve's HTTP server ───────────────────────────────────
-        // Allow up to 120 s: dx serve must compile the WASM bundle before serving.
-        if let Err(e) = self.wait_for_web_server(120).await {
+        // ── Wait for dx serve to actually serve the WASM bundle ───────────────
+        // Up to 600 s for cold builds on fresh disks. wait_for_web_server now
+        // polls the bundle path (not just port-up), and bails early with
+        // actionable guidance when the server binds but wasm silently never
+        // compiles — see SILENT_HANG_THRESHOLD_SECS.
+        if let Err(e) = self.wait_for_web_server(600).await {
             self.finish_build_record(
                 BuildLifecycleState::Failed,
-                "dx serve started but HTTP server did not respond within 120 s.",
-                format!(
-                    "Port {WEB_SERVER_PORT} not reachable: {e}. \
-                     Check get_last_build_log for dx serve / cargo errors."
-                ),
+                "dx serve started but the WASM bundle was never served.",
+                format!("{e}"),
                 None,
             )
             .await;
@@ -997,12 +1048,12 @@ impl ChromeCdpBackend {
             *pid_ref.lock().await = None;
         });
 
-        // ── Wait for dx serve to recompile and come up ────────────────────────
-        if let Err(e) = self.wait_for_web_server(120).await {
+        // ── Wait for dx serve to recompile and serve the bundle ───────────────
+        if let Err(e) = self.wait_for_web_server(600).await {
             self.finish_build_record(
                 BuildLifecycleState::Failed,
-                "Fresh dx serve did not become ready within 120 s.",
-                format!("Port {WEB_SERVER_PORT} not reachable after restart: {e}."),
+                "Fresh dx serve did not serve the WASM bundle in time.",
+                format!("{e}"),
                 None,
             )
             .await;
