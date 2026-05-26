@@ -46,7 +46,7 @@ const WEB_SERVE_PORT: u16 = 3002;
 /// 200 here = the wasm half actually finished. The server half (`/host/*`)
 /// often binds well before wasm is ready, and sometimes the wasm half
 /// silently fails to compile at all.
-const WASM_BUNDLE_PATH: &str = "/assets/dioxus/poly-desktop.js";
+const WASM_BUNDLE_PATH: &str = "/wasm/poly-desktop.js";
 /// Once the server is responding but the bundle is still 404 for >this many
 /// seconds, treat it as a silent-hang and abort with actionable guidance.
 const SILENT_HANG_THRESHOLD_SECS: u64 = 60;

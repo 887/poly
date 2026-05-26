@@ -53,7 +53,7 @@ const WEB_SERVER_PORT: u16 = 3000;
 /// A 200 here is the load-bearing "wasm bundle is actually ready" signal —
 /// the server half (port 3000) can bind and start replying to `/host/status`
 /// long before the wasm half finishes (or sometimes ever) compiling.
-const WASM_BUNDLE_PATH: &str = "/assets/dioxus/poly-web.js";
+const WASM_BUNDLE_PATH: &str = "/wasm/poly-web.js";
 /// How long the port can be reachable while the bundle is still 404 before
 /// we treat it as a silent-hang (dx serve sometimes spawns the server half
 /// but silently fails to invoke the wasm build at all). 60s is well past

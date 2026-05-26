@@ -48,7 +48,7 @@ const DX_SERVE_PORT: u16 = 3001;
 /// 200 here = the wasm half actually finished; the server half (which serves
 /// `/host/status`) often comes up many seconds before wasm is ready, and
 /// sometimes the wasm half silently fails to compile at all.
-const WASM_BUNDLE_PATH: &str = "/assets/dioxus/poly-desktop-electron.js";
+const WASM_BUNDLE_PATH: &str = "/wasm/poly-desktop-electron.js";
 /// Once the server is responding but the bundle is still 404 for >this many
 /// seconds, treat it as a silent-hang and abort with actionable guidance.
 const SILENT_HANG_THRESHOLD_SECS: u64 = 60;
