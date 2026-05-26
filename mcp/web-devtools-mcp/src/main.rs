@@ -1250,6 +1250,31 @@ impl DevtoolsBackend for ChromeCdpBackend {
         // can race with subsequent cdp_send reads. Individual commands (captureScreenshot,
         // Runtime.evaluate, etc.) work without domain-level enables.
 
+        // Install the console-capture prelude (a) in the CURRENT document via
+        // Runtime.evaluate so already-loaded pages start buffering immediately,
+        // and (b) as a pre-document script via Page.addScriptToEvaluateOnNewDocument
+        // so EVERY future navigation/reload runs the install before any app JS —
+        // capturing early-boot panics that the lazy install would miss. Best-effort:
+        // a failure here must not break connect_cdp. See plan-mcp-console-early-capture.md.
+        drop(
+            self.cdp_send(
+                "Page.addScriptToEvaluateOnNewDocument",
+                json!({ "source": poly_devtools_protocol::backend::CONSOLE_CAPTURE_PRELUDE }),
+            )
+            .await,
+        );
+        drop(
+            self.cdp_send(
+                "Runtime.evaluate",
+                json!({
+                    "expression": poly_devtools_protocol::backend::CONSOLE_CAPTURE_PRELUDE,
+                    "awaitPromise": false,
+                    "returnByValue": true,
+                }),
+            )
+            .await,
+        );
+
         // Close any extra tabs — only keep the first page target so we don't
         // accumulate phantom tabs from previous launch_app calls.
         if let Ok(resp) = self

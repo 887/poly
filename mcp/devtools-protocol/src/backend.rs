@@ -325,7 +325,57 @@ const SNAPSHOT_VERBOSE_JS: &str = r#"(function(){
   return '[page] '+(document.title||'')+'\n'+w(document.body,1);
 })()"#;
 
-/// JS to install console capture hook and retrieve buffered messages.
+/// JS that installs the `console.*` capture monkeypatch.
+///
+/// Idempotent — checks `window.__polyConsoleLogs` before patching. Used as
+/// both (a) the body of [`CONSOLE_CAPTURE_PRELUDE`], evaluated very early in
+/// every new document by CDP backends, and (b) the lazy install path inside
+/// [`CONSOLE_CAPTURE_JS`] for backends that don't have a pre-document hook.
+pub const CONSOLE_CAPTURE_INSTALL: &str = r#"(function(){
+  if(window.__polyConsoleLogs)return;
+  window.__polyConsoleLogs=[];
+  window.__polyConsoleErrors=[];
+  var orig={};
+  ['log','warn','error','info','debug'].forEach(function(lvl){
+    orig[lvl]=console[lvl];
+    console[lvl]=function(){
+      try{
+        var args=Array.from(arguments).map(function(a){
+          try{return typeof a==='string'?a:JSON.stringify(a);}catch(e){return String(a);}
+        });
+        window.__polyConsoleLogs.push({level:lvl,text:args.join(' '),timestamp:Date.now()});
+        if(window.__polyConsoleLogs.length>500)window.__polyConsoleLogs.shift();
+      }catch(_){}
+      orig[lvl].apply(console,arguments);
+    };
+  });
+  // Also capture uncaught errors / unhandled rejections — wasm-bindgen panic
+  // rethrows surface here when the Rust panic_hook can't write to localStorage
+  // (e.g. RefCell BorrowMutError inside Dioxus hooks → unreachable trap).
+  window.addEventListener('error',function(e){
+    try{
+      window.__polyConsoleLogs.push({level:'error',text:'[window.error] '+(e.message||String(e))+' @ '+(e.filename||'?')+':'+(e.lineno||0),timestamp:Date.now()});
+      if(window.__polyConsoleLogs.length>500)window.__polyConsoleLogs.shift();
+    }catch(_){}
+  },true);
+  window.addEventListener('unhandledrejection',function(e){
+    try{
+      var r=e.reason;var msg=(r&&r.message)?r.message:String(r);
+      window.__polyConsoleLogs.push({level:'error',text:'[unhandledrejection] '+msg,timestamp:Date.now()});
+      if(window.__polyConsoleLogs.length>500)window.__polyConsoleLogs.shift();
+    }catch(_){}
+  },true);
+})()"#;
+
+/// JS pre-document script — installed via `Page.addScriptToEvaluateOnNewDocument`
+/// in CDP backends at `connect_cdp` time. Runs before any page script (incl.
+/// the WASM loader) so early-boot panics are captured.
+pub const CONSOLE_CAPTURE_PRELUDE: &str = CONSOLE_CAPTURE_INSTALL;
+
+/// JS to (lazily) install the console capture hook and retrieve buffered messages.
+/// Used by backends without a pre-document hook (e.g. HTTP-eval/Wry desktop).
+/// CDP backends install via [`CONSOLE_CAPTURE_PRELUDE`] at connect time, so by
+/// the time this runs the buffer already exists and the install is a no-op.
 const CONSOLE_CAPTURE_JS: &str = r#"(function(){
   if(!window.__polyConsoleLogs){
     window.__polyConsoleLogs=[];
