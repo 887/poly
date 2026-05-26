@@ -294,21 +294,54 @@ Three profiles are declared in `Cargo.toml` for agentic development:
 
 ### Build artifacts off `/home`
 
-Each worktree's `target/` is a symlink to `/media/b/build/<worktree-basename>/`.
-`/home` is the user's encrypted home volume and fills up under
-agent-driven parallel-worktree patterns; `/media/b` has multi-TB
-headroom. When creating a new jj workspace:
+Each worktree's `target/` is a **symlink** into
+`/media/games/<worktree-basename>/target/`. The main worktree
+(`/home/laragana/workspcacemsg`) maps to
+`/media/games/workspacemsg/target`. `/home` is the user's
+encrypted home volume that fills under agent-driven
+parallel-worktree patterns; `/media/games` is the SSD with
+hundreds of GB of headroom.
+
+When creating a new jj workspace:
 
 ```bash
 jj workspace add ../poly-feature-foo
 cd ../poly-feature-foo
-mkdir -p /media/b/build/poly-feature-foo
-ln -s /media/b/build/poly-feature-foo target
+mkdir -p /media/games/poly-feature-foo/target
+ln -s /media/games/poly-feature-foo/target target
 ```
 
-Idempotent. Poly does NOT currently have a `just` recipe for this
-(no `justfile` in the repo); contrast with foundlings which has
-`just worktree-link`.
+Idempotent. Poly has no `justfile`, so it's a manual two-liner
+(contrast foundlings, which ships `just worktree-link`).
+
+### ⚠ `cargo clean` deletes the symlink
+
+`cargo clean` does `rm -rf target` which removes the symlink
+itself (not the contents) — leaving the `/media/games/...`
+directory intact but the worktree's `target/` symlink gone. The
+next `cargo build` then creates a fresh real `target/` directory
+back on `/home`, defeating the whole point.
+
+**Don't run `cargo clean` casually.** If you do, immediately
+re-create the symlink:
+
+```bash
+ln -snf /media/games/$(basename "$PWD")/target target
+```
+
+(For the main worktree the dest is
+`/media/games/workspacemsg/target`, not by basename — the dir
+name predates this convention.)
+
+**Better: clear the contents in-place** when you actually want
+to drop the cache:
+
+```bash
+rm -rf /media/games/<worktree>/target/*
+```
+
+That preserves the directory + the worktree's symlink, and the
+next `cargo build` repopulates.
 
 ## Test-server Avatar URL Conventions
 
