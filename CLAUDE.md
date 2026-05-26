@@ -279,6 +279,37 @@ cargo build -p poly-desktop-web
 cd apps/desktop && dx build --platform web
 ```
 
+### Cargo profiles (lean by default)
+
+Three profiles are declared in `Cargo.toml` for agentic development:
+
+- **`dev` (DEFAULT)** — `debug = "line-tables-only"`. Stack traces work
+  (panics / backtraces still show file:line), but no full DWARF. Cuts
+  ~60-80% off `target/` disk per worktree. Use for every `cargo build`
+  / `check` / `test` / agent run that isn't a debugger step-through.
+- **`dev-symbols`** — opt-in full `debug = "full"`, `strip = "none"`.
+  Use only when you're actually about to attach gdb/lldb. Invoke with
+  `cargo build --profile dev-symbols`.
+- **`release`** — production. Optimized, no debug, stripped.
+
+### Build artifacts off `/home`
+
+Each worktree's `target/` is a symlink to `/media/b/build/<worktree-basename>/`.
+`/home` is the user's encrypted home volume and fills up under
+agent-driven parallel-worktree patterns; `/media/b` has multi-TB
+headroom. When creating a new jj workspace:
+
+```bash
+jj workspace add ../poly-feature-foo
+cd ../poly-feature-foo
+mkdir -p /media/b/build/poly-feature-foo
+ln -s /media/b/build/poly-feature-foo target
+```
+
+Idempotent. Poly does NOT currently have a `just` recipe for this
+(no `justfile` in the repo); contrast with foundlings which has
+`just worktree-link`.
+
 ## Test-server Avatar URL Conventions
 
 Each mock backend serves avatar images via its own URL convention. These are the
