@@ -7550,6 +7550,7 @@ dependencies = [
  "poly-host-bridge",
  "poly-test-common",
  "poly-test-matrix",
+ "poly-ui-macros",
  "reqwest 0.13.2",
  "serde",
  "serde_json",

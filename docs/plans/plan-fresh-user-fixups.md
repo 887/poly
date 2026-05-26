@@ -629,13 +629,14 @@ Sidebar "+ New Conversation" opens a friends-picker pane.
 Navigated to `/signup`. Left column lists backends, right pane shows
 selected backend's form.
 
-- [ ] **X.1** **Matrix is missing from the picker.** The Accounts
-  settings page shows Owl + Axolotl on the Matrix backend, and the
-  Plugins page confirms Matrix is enabled — but the Add Account list
-  has Stoat, Poly Server, Lemmy, Hacker News, GitHub, Forgejo, Discord,
-  Microsoft Teams, Reddit, Test Accounts. No Matrix. Either Matrix
-  signup is gated behind a feature flag (then say so) or it's silently
-  excluded (then bug).
+- [x] **X.1** **Matrix is missing from the picker.** Root cause: Matrix
+  had FTL keys, an `authenticate()` helper, and a feature gate, but no
+  `signup_render_fn` and no `register_signup_entry` call — so it was
+  silently excluded from the picker. Added a `MatrixSignupPage` component
+  (~80 lines, mirroring Stoat's URL+username+password form, defaults to
+  `https://matrix.org`) and registered it in
+  `register_native_signup_entries`. Added `poly-ui-macros` to
+  `clients/matrix/Cargo.toml`. Shipped in change `koztuuqv` (with X.3+X.4).
 - [x] **X.2** Stale i18n key visible: the bottom of the Stoat signup
   form reads `Don't have an account? **Signup Register Link Action**
   →`. **Root cause:** `t("signup-register-link-action")` called with
@@ -669,12 +670,20 @@ selected backend's form.
   visible the moment a moderator opens the dialog, not just on error.
   Verified with `cargo check -p poly-core --target wasm32-unknown-unknown`
   (EXIT=0); lint-gate baseline regen'd for line-number shifts.
-- [ ] **X.3** Backend descriptions are truncated with `…` in the
-  left column. Either the column should be wider, or hover should
-  show the full text in a tooltip.
-- [ ] **X.4** Backend ordering between Add Account picker and the
+- [x] **X.3** Backend descriptions are truncated with `…` in the
+  left column. Fix: `.signup-nav-item-desc` was `white-space: nowrap;
+  text-overflow: ellipsis` (single-line). Swapped to a 2-line clamp via
+  `display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient:
+  vertical; word-break: break-word`. Descriptions now wrap to a second
+  line before being truncated. Shipped in change `koztuuqv` (with X.1+X.4).
+- [x] **X.4** Backend ordering between Add Account picker and the
   Plugins settings list differs (Stoat first here, Demo first there).
-  Pick one canonical order.
+  Fix: reordered `register_native_signup_entries` to match the canonical
+  order in `BUILTIN_BACKENDS` (`client_manager/mod.rs`) — Stoat → Matrix →
+  Lemmy → GitHub → Forgejo → Hacker News → Poly Server. Demo isn't a
+  signup entry (the picker doesn't include it; it's enabled-by-default).
+  Bundled plugins (Discord/Teams/Reddit) still come after natives via
+  `sync_bundled_signup_entries`. Shipped in change `koztuuqv` (with X.1+X.3).
 
 ---
 

@@ -625,18 +625,25 @@ fn register_native_signup_entries(client_manager: &mut BatchedSignal<ClientManag
             },
         });
 
-        // Register the Poly Server backend when compiled with the `server` feature.
-        // The render fn lives in poly-server-client — core has no knowledge of the form.
-        #[cfg(feature = "server")]
+        #[cfg(feature = "matrix")]
         cm.register_signup_entry(SignupEntry {
-            slug: "poly",
-            icon: "🔷",
-            name_key: "plugin-poly-signup-name",
-            desc_key: "plugin-poly-signup-desc",
-            render: poly_server_client::signup::signup_render_fn,
-            signup_method: |_| poly_client::SignupMethod::InApp("/signup/poly".to_string()),
+            slug: "matrix",
+            icon: "🟩",
+            name_key: "plugin-matrix-signup-name",
+            desc_key: "plugin-matrix-signup-desc",
+            render: poly_matrix::signup::signup_render_fn,
+            signup_method: |server_url| {
+                poly_client::SignupMethod::External(
+                    server_url.unwrap_or("https://matrix.org").to_string(),
+                )
+            },
         });
 
+        // X.4: signup_entries are registered in the same order as
+        // `BUILTIN_BACKENDS` (in client_manager/mod.rs) so the Add Account
+        // picker and the Settings → Plugins page show backends in the same
+        // canonical sequence. Demo isn't a signup entry; bundled plugins
+        // (Discord/Teams/Reddit) get appended later via sync_bundled_signup_entries.
         #[cfg(feature = "lemmy")]
         cm.register_signup_entry(SignupEntry {
             slug: "lemmy",
@@ -648,18 +655,6 @@ fn register_native_signup_entries(client_manager: &mut BatchedSignal<ClientManag
                 poly_client::SignupMethod::External(
                     server_url.unwrap_or("https://join-lemmy.org/instances").to_string(),
                 )
-            },
-        });
-
-        #[cfg(feature = "hackernews")]
-        cm.register_signup_entry(SignupEntry {
-            slug: "hackernews",
-            icon: "📰",
-            name_key: "plugin-hackernews-signup-name",
-            desc_key: "plugin-hackernews-signup-desc",
-            render: poly_hackernews::signup::signup_render_fn,
-            signup_method: |_| {
-                poly_client::SignupMethod::External("https://news.ycombinator.com/login".to_string())
             },
         });
 
@@ -687,6 +682,30 @@ fn register_native_signup_entries(client_manager: &mut BatchedSignal<ClientManag
                     server_url.unwrap_or("https://codeberg.org/user/sign_up").to_string(),
                 )
             },
+        });
+
+        #[cfg(feature = "hackernews")]
+        cm.register_signup_entry(SignupEntry {
+            slug: "hackernews",
+            icon: "📰",
+            name_key: "plugin-hackernews-signup-name",
+            desc_key: "plugin-hackernews-signup-desc",
+            render: poly_hackernews::signup::signup_render_fn,
+            signup_method: |_| {
+                poly_client::SignupMethod::External("https://news.ycombinator.com/login".to_string())
+            },
+        });
+
+        // Register the Poly Server backend when compiled with the `server` feature.
+        // The render fn lives in poly-server-client — core has no knowledge of the form.
+        #[cfg(feature = "server")]
+        cm.register_signup_entry(SignupEntry {
+            slug: "poly",
+            icon: "🔷",
+            name_key: "plugin-poly-signup-name",
+            desc_key: "plugin-poly-signup-desc",
+            render: poly_server_client::signup::signup_render_fn,
+            signup_method: |_| poly_client::SignupMethod::InApp("/signup/poly".to_string()),
         });
     });
 }

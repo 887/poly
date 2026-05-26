@@ -28,6 +28,7 @@ native = [
 [dependencies]
 poly-client = { workspace = true }
 poly-host-bridge = { workspace = true, optional = true }
+poly-ui-macros = { workspace = true }
 dioxus = { workspace = true, optional = true }
 
 # Native-only dependencies (feature-gated)
