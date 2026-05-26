@@ -156,13 +156,16 @@ pub(crate) fn build_on_complete(
 
 /// Variant that skips the terminal `navigator().push(landing)`. Needed by
 /// the debug-mode auto-signin path in `crate::ui::mod`, which runs from a
-/// `use_effect` above the Router — no navigator in scope → panic → WASM
-/// `unreachable`. Auto-signin doesn't need a route change anyway; the user
-/// is already on whatever route they restored to at startup.
+/// `use_hook` callback — calling `use_context()` inside another hook trips
+/// Dioxus's "hook list already borrowed" guard → WASM `unreachable`.
+/// Caller must capture `chat_lists` + `account_sessions` from the App body
+/// (where context calls are legal) and pass them in.
 pub(crate) fn build_on_complete_no_nav(
     client_manager: BatchedSignal<ClientManager>,
+    chat_lists: BatchedSignal<ChatLists>,
+    account_sessions: BatchedSignal<AccountSessions>,
 ) -> Callback<SignupCompleted> {
-    build_on_complete_inner(client_manager, false)
+    build_on_complete_inner_with(client_manager, chat_lists, account_sessions, false)
 }
 
 fn build_on_complete_inner(
@@ -173,6 +176,15 @@ fn build_on_complete_inner(
     // These are always provided at the App level alongside chat_data.
     let chat_lists: BatchedSignal<ChatLists> = use_context();
     let account_sessions: BatchedSignal<AccountSessions> = use_context();
+    build_on_complete_inner_with(client_manager, chat_lists, account_sessions, nav_on_complete)
+}
+
+fn build_on_complete_inner_with(
+    client_manager: BatchedSignal<ClientManager>,
+    chat_lists: BatchedSignal<ChatLists>,
+    account_sessions: BatchedSignal<AccountSessions>,
+    nav_on_complete: bool,
+) -> Callback<SignupCompleted> {
     Callback::new(move |completed: SignupCompleted| {
         let backend_handle: BackendHandle =
             Arc::new(tokio::sync::RwLock::new(completed.backend));
