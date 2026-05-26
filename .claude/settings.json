@@ -24,23 +24,12 @@
     ]
   },
   "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Agent",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "for d in .claude/worktrees/agent-*/; do [ -d \"$d\" ] && [ ! -e \"${d}target\" ] && id=$(basename \"$d\") && mkdir -p /media/games/workspacemsg-worktree-targets/\"$id\" && ln -s /media/games/workspacemsg-worktree-targets/\"$id\" \"${d}target\"; done 2>/dev/null; exit 0"
-          }
-        ]
-      }
-    ],
     "Stop": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "find .claude/worktrees -maxdepth 1 -name 'agent-*' -mtime +1 2>/dev/null | while read wt; do id=$(basename \"$wt\"); branch=\"worktree-${id}\"; ahead=$(jj log -r \"${branch} ~ ::main\" --no-graph -T 'commit_id' 2>/dev/null | head -c1); if [ -n \"$ahead\" ]; then echo \"SKIP ${id} — branch ${branch} has unmerged commits (run \\\"jj rebase -s ${branch} -d main\\\" to integrate, then re-run cleanup)\" >&2; continue; fi; rm -rf \"$wt\" \"/media/games/workspacemsg-worktree-targets/$id\"; done; git worktree prune 2>/dev/null; exit 0"
+            "command": "find .claude/worktrees -maxdepth 1 -name 'agent-*' -mtime +1 2>/dev/null | while read wt; do id=$(basename \"$wt\"); branch=\"worktree-${id}\"; ahead=$(jj log -r \"${branch} ~ ::main\" --no-graph -T 'commit_id' 2>/dev/null | head -c1); if [ -n \"$ahead\" ]; then echo \"SKIP ${id} — branch ${branch} has unmerged commits (run \\\"jj rebase -s ${branch} -d main\\\" to integrate, then re-run cleanup)\" >&2; continue; fi; rm -rf \"$wt\"; done; git worktree prune 2>/dev/null; exit 0"
           }
         ]
       }
