@@ -313,13 +313,33 @@ async fn run_reset_flow(
             .reset_user_data()
             .await
             .map_err(|e| format!("{}: {e}", t("settings-reset-error-failed")))?,
-        ResetKind::Nuke => storage
-            .nuke_all_data()
-            .await
-            .map_err(|e| format!("{}: {e}", t("settings-nuke-error-failed")))?,
+        ResetKind::Nuke => {
+            storage
+                .nuke_all_data()
+                .await
+                .map_err(|e| format!("{}: {e}", t("settings-nuke-error-failed")))?;
+            // A3.2: write the autoseed-disabled marker AFTER nuke_all_data
+            // wipes the KV table, so it persists across the next boot. Without
+            // this, dev-plugins re-seeds 25 demo accounts on the next boot
+            // and the user can never reach a truly-empty state.
+            if let Err(e) = storage
+                .set(crate::storage::keys::DEV_AUTOSEED_DISABLED, serde_json::json!(true))
+                .await
+            {
+                tracing::warn!("Failed to write DEV_AUTOSEED_DISABLED marker post-nuke: {e}");
+            }
+        }
     }
 
-    document::eval("window.location.reload();");
+    // A3.1: For a Nuke we navigate to `/` so the no-account branch lands at
+    // the Welcome wizard. A plain `reload()` keeps the user on whatever URL
+    // they were on when they clicked the button (e.g. /settings/general),
+    // which the wizard then bounces off of when "Get Started" is clicked.
+    // For a soft User reset we keep `reload()` so the user stays in context.
+    match kind {
+        ResetKind::Nuke => document::eval("window.location.href = '/';"),
+        ResetKind::User => document::eval("window.location.reload();"),
+    };
     Ok(())
 }
 
@@ -338,6 +358,10 @@ fn ResetButton(kind: ResetKind, busy: Signal<bool>, on_error: EventHandler<Strin
     let account_sessions: BatchedSignal<crate::state::AccountSessions> = use_context();
     let mut busy_signal = use_signal(|| *busy.read()); // poly-lint: allow render-time-read — initial value snapshot from the parent's busy signal
     let mut confirm_open = use_signal(|| false);
+    // A2.3: countdown for the soft User reset. None = inactive, Some(n) = n
+    // seconds remaining before the reset fires. User reset path only — Nuke
+    // is immediate (irreversible by definition; no useful undo window).
+    let mut undo_countdown: Signal<Option<u8>> = use_signal(|| None);
 
     let (label, class_name) = match kind {
         ResetKind::User => (t("settings-reset-app"), "btn btn-danger"),
@@ -348,16 +372,37 @@ fn ResetButton(kind: ResetKind, busy: Signal<bool>, on_error: EventHandler<Strin
     };
 
     rsx! {
-        button {
-            class: "{class_name}",
-            disabled: *busy_signal.read(), // poly-lint: allow render-time-read — subscription IS the intent; button must redraw when busy flips
-            onclick: move |_| {
-                if *busy_signal.peek() {
-                    return;
+        // Hide the trigger button while a countdown is in flight; show the
+        // undo row instead. Avoids the user re-clicking the same button.
+        if undo_countdown.read().is_none() { // poly-lint: allow render-time-read — toggles visibility of trigger vs undo row
+            button {
+                class: "{class_name}",
+                disabled: *busy_signal.read(), // poly-lint: allow render-time-read — subscription IS the intent; button must redraw when busy flips
+                onclick: move |_| {
+                    if *busy_signal.peek() {
+                        return;
+                    }
+                    confirm_open.set(true);
+                },
+                "{label}"
+            }
+        }
+        if let Some(secs) = *undo_countdown.read() { // poly-lint: allow render-time-read — countdown must re-render each tick
+            div { class: "reset-undo-row",
+                span { class: "reset-undo-text",
+                    "Resetting in {secs}s…"
                 }
-                confirm_open.set(true);
-            },
-            "{label}"
+                button {
+                    class: "btn btn-secondary btn-sm",
+                    onclick: move |_| {
+                        // A2.3 undo: set the countdown to None; the in-flight
+                        // tick loop checks this each iteration and aborts.
+                        undo_countdown.set(None);
+                        busy_signal.set(false);
+                    },
+                    "Undo"
+                }
+            }
         }
         if *confirm_open.read() { // poly-lint: allow render-time-read — modal visibility must re-render on toggle
             ResetConfirmModal {
@@ -366,14 +411,53 @@ fn ResetButton(kind: ResetKind, busy: Signal<bool>, on_error: EventHandler<Strin
                 on_confirm: move |_| {
                     confirm_open.set(false);
                     busy_signal.set(true);
-                    spawn(async move {
-                        if let Err(err) = run_reset_flow(kind, client_manager, chat_lists, account_sessions)
-                            .await
-                        {
-                            on_error.call(err);
-                            busy_signal.set(false);
+                    match kind {
+                        ResetKind::Nuke => {
+                            // Nuke executes immediately — no undo window.
+                            spawn(async move {
+                                if let Err(err) = run_reset_flow(kind, client_manager, chat_lists, account_sessions)
+                                    .await
+                                {
+                                    on_error.call(err);
+                                    busy_signal.set(false);
+                                }
+                            });
                         }
-                    });
+                        ResetKind::User => {
+                            // A2.3 soft Reset: start a 10-second undo window.
+                            undo_countdown.set(Some(10));
+                            spawn(async move {
+                                for n in (0..10).rev() {
+                                    #[cfg(target_arch = "wasm32")]
+                                    {
+                                        // lint-allow-unused: fire-and-forget JS timer; recv() ignored.
+                                        #[allow(clippy::let_underscore_must_use)]
+                                        let _ = dioxus::document::eval(
+                                            "setTimeout(() => dioxus.send(true), 1000);",
+                                        ).recv::<bool>().await;
+                                    }
+                                    #[cfg(not(target_arch = "wasm32"))]
+                                    {
+                                        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                                    }
+                                    // Undo guard: if user cancelled, abort.
+                                    if undo_countdown.peek().is_none() {
+                                        tracing::info!("Reset undone by user within 10s window");
+                                        return;
+                                    }
+                                    undo_countdown.set(Some(n));
+                                }
+                                // Countdown expired — execute the reset.
+                                undo_countdown.set(None);
+                                if let Err(err) = run_reset_flow(kind, client_manager, chat_lists, account_sessions)
+                                    .await
+                                {
+                                    on_error.call(err);
+                                    busy_signal.set(false);
+                                }
+                            });
+                        }
+                    }
                 },
             }
         }
@@ -480,6 +564,8 @@ fn ResetSection() -> Element {
     let mut error = use_signal(String::new);
     let mut busy = use_signal(|| false);
 
+    let mut danger_open = use_signal(|| false);
+
     rsx! {
         div { class: "general-reset-actions",
             p { class: "settings-description", "{t(\"settings-reset-description\")}" }
@@ -491,17 +577,82 @@ fn ResetSection() -> Element {
                     busy.set(false);
                 },
             }
-            ResetButton {
-                kind: ResetKind::Nuke,
-                busy,
-                on_error: move |err: String| {
-                    error.set(err);
-                    busy.set(false);
-                },
-            }
             ResetError { error }
+            LoadDemoButton {}
+
+            // A2.2: the Nuke button now lives behind a collapsed "Danger Zone"
+            // disclosure so a stray click on the everyday Reset row can't
+            // destroy the user's whole install. Confirm modal (A2.1) still
+            // gates the actual nuke; this just adds a second visual barrier.
+            div { class: "danger-zone",
+                button {
+                    class: "danger-zone-toggle",
+                    onclick: move |_| {
+                        let cur = *danger_open.peek();
+                        danger_open.set(!cur);
+                    },
+                    if *danger_open.read() { // poly-lint: allow render-time-read — subscription IS the intent; chevron must redraw when open flips
+                        "▾ Danger Zone"
+                    } else {
+                        "▸ Danger Zone"
+                    }
+                }
+                if *danger_open.read() { // poly-lint: allow render-time-read — same signal, controls visibility of the inner block
+                    div { class: "danger-zone-body",
+                        p { class: "settings-description",
+                            "Irreversible destructive actions. Wipes every account, every cached message, every setting. Type DELETE in the confirm modal to proceed."
+                        }
+                        ResetButton {
+                            kind: ResetKind::Nuke,
+                            busy,
+                            on_error: move |err: String| {
+                                error.set(err);
+                                busy.set(false);
+                            },
+                        }
+                    }
+                }
+            }
         }
     }
+}
+
+/// A3.3: dev-only button. After a Nuke (or a reset_app MCP call) the
+/// `dev.autoseed_disabled` marker stays in KV, so the test-account auto-signin
+/// loop skips on every subsequent boot. Click to clear the marker and reload —
+/// the next boot will re-seed all dev test accounts. Only rendered in debug
+/// builds since the autoseed flow itself is `cfg(debug_assertions)`.
+#[cfg(debug_assertions)]
+#[rustfmt::skip]
+#[ui_action(inherit)]
+#[context_menu(allow_default)]
+#[component]
+fn LoadDemoButton() -> Element {
+    rsx! {
+        button {
+            class: "btn btn-secondary",
+            title: "Clears the dev.autoseed_disabled marker and reloads. Next boot re-seeds dev test accounts.",
+            onclick: move |_| {
+                spawn(async move {
+                    if let Some(storage) = crate::STORAGE.get() {
+                        if let Err(e) = storage.delete(crate::storage::keys::DEV_AUTOSEED_DISABLED).await {
+                            tracing::warn!("Failed to clear DEV_AUTOSEED_DISABLED: {e}");
+                        }
+                    }
+                    document::eval("window.location.reload();");
+                });
+            },
+            "Load demo accounts"
+        }
+    }
+}
+
+#[cfg(not(debug_assertions))]
+#[ui_action(None)]
+#[context_menu(inherit)]
+#[component]
+fn LoadDemoButton() -> Element {
+    rsx! {}
 }
 
 /// General settings section.

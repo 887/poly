@@ -92,6 +92,12 @@ pub mod keys {
     pub const NOTIFICATION_SETTINGS_PREFIX: &str = "notif";
     /// `VoiceSettings` — voice/video preferences.
     pub const VOICE_SETTINGS: &str = "voice_settings";
+    /// A3.2: set to `true` when the user (or reset_app MCP) wipes app state
+    /// via Nuke. While present, dev-build auto-signin of test accounts is
+    /// skipped on boot — so a wiped dev install stays empty until the user
+    /// explicitly opts back in via Settings → "Load demo accounts" (A3.3).
+    /// Cleared by that button.
+    pub const DEV_AUTOSEED_DISABLED: &str = "dev.autoseed_disabled";
 }
 
 // ── KvStore trait ─────────────────────────────────────────────────────────────

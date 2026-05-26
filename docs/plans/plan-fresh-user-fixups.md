@@ -24,21 +24,26 @@ The in-app `☢️ NUKE App State` button (settings → General) DOES
 actually wipe state (Welcome wizard appears) — but see Phase A2
 below for its own problems.
 
-- [ ] **A.1** Decide the contract: should `reset_app` (a) wipe the
-  SQLite file too, (b) only wipe `poly_kv` rows but keep the schema,
-  or (c) flip a "wizard-pending" flag that the boot path honors
-  regardless of stored accounts? Document the choice in
-  `mcp/web-devtools-mcp/src/main.rs`.
-- [ ] **A.2** Implement the chosen contract. If (a), the MCP needs to
-  resolve `POLY_DATA_DIR` / the platform default and unlink the
-  sqlite3 file before reload. If (b)/(c), the host bridge needs a
-  `/host/reset` route the MCP can POST to.
-- [ ] **A.3** Simplest implementation: have the MCP hit the same
-  `client_manager.nuke_all_data()` path the in-app button uses
-  (`crates/core/src/ui/settings/general.rs:317`). Then both surfaces
-  share behavior.
-- [ ] **A.4** Update the MCP tool description so it no longer
-  promises the wizard if it doesn't actually deliver it.
+- [x] **A.1** Contract chosen: option (b) — wipe `poly_kv` rows
+  via the existing `/host/kv/clear` host-bridge route. No new route
+  needed; `Storage::nuke_all_data` already maps to `clear_all` which
+  the route handler exposes. Documented inline in the MCP `reset_app`
+  fn comment. Shipped with A.3.
+- [x] **A.2** Implementation per A.1: MCP POSTs to
+  `http://127.0.0.1:3000/host/kv/clear` (no new host-bridge code
+  needed). Then writes the `dev.autoseed_disabled` marker (A3.2),
+  clears browser-side storage as belt-and-suspenders, and reloads.
+  Shipped with A.3.
+- [x] **A.3** ✅ MCP `reset_app` now calls `/host/kv/clear` (same path
+  the in-app Nuke uses via `Storage::nuke_all_data` → `clear_all`).
+  Both surfaces share behavior. Browser-side localStorage / IndexedDB
+  clears kept as a belt-and-suspenders. Page reloads at the Welcome
+  wizard.
+- [x] **A.4** ✅ Tool description in `mcp/devtools-protocol/src/mcp.rs`
+  now reads "Wipe the host-bridge SQLite poly_kv table (the canonical
+  app store), clear browser localStorage/sessionStorage/IndexedDB,
+  then reload the page. Restarts the app at the Welcome wizard.
+  Equivalent to the in-app ☢️ NUKE App State button."
 - [ ] **A.5** Add a smoke test (haiku-tier subagent + `TEST_HARNESS.md`
   pattern): `reset_app` → page reload → assert the setup-wizard
   marker text is visible, NOT a populated DM list.
@@ -62,13 +67,19 @@ Code site: `crates/core/src/ui/settings/general.rs:317` calls
   settings. Type DELETE to confirm." with a primary danger button
   that stays disabled until the input matches. (Reset button also
   gets a soft Yes/Cancel confirm — no typing required.)
-- [ ] **A2.2** Move the button visually further from the everyday
-  controls. Currently sits right next to "Reset App Data" with no
-  visual separation — they share a row. Use a collapsed "Danger
-  Zone" section that the user has to expand.
-- [ ] **A2.3** Wire an "undo within 10s" toast for the gentler
-  "Reset App Data" path (the one that just logs out backends — not
-  the nuke). Nuke itself can't reasonably be undone.
+- [x] **A2.2** ✅ Nuke button now lives inside a collapsed `▸ Danger
+  Zone` disclosure in `ResetSection`. Soft Reset stays in the everyday
+  area. Toggle button + body styled in `theme-utils.css` with a
+  danger-red left border on the expanded body. Confirm modal (A2.1)
+  still gates the actual destructive action — the disclosure is a
+  second visual barrier.
+- [x] **A2.3** ✅ Soft Reset now shows an inline 10-second countdown
+  row instead of firing immediately on confirm. Click "Undo" to abort
+  during the window. Implemented inline in `ResetButton` (no toast
+  system extension needed). Nuke unchanged — still immediate after
+  confirm, no undo (irreversible by definition). Tick loop uses
+  `setTimeout` via `dioxus::document::eval` on WASM, `tokio::sleep`
+  on native.
 
 ---
 
@@ -89,16 +100,20 @@ Two issues compounded:
    "user-nuked" marker — if the user explicitly wiped, don't re-seed
    without explicit consent.
 
-- [ ] **A3.1** After-nuke navigation: clear the in-memory router
-  state on nuke success and push the user to `/` (which the
-  no-account branch routes to Welcome). Don't preserve the URL the
-  user was on when they pressed the button.
-- [ ] **A3.2** dev-plugins auto-seed: gate behind an env knob
-  (`POLY_AUTOSEED_DEMO=1`, default `0` after a confirmed nuke). Or
-  store a `wiped_at` timestamp in KV and skip seed if it exists.
-- [ ] **A3.3** Add a "Load demo accounts" button somewhere in
-  settings (visible only when `dev-plugins` is on) so the developer
-  can opt back into the seed when they want it.
+- [x] **A3.1** ✅ ResetKind::Nuke now navigates to `/` via
+  `window.location.href = '/'` instead of `reload()` — the no-account
+  branch routes to Welcome. Soft User reset keeps `reload()` so the
+  user stays in URL context after the lighter wipe.
+- [x] **A3.2** ✅ Added `keys::DEV_AUTOSEED_DISABLED` KV marker. On
+  Nuke (in-app AND MCP `reset_app`) we write `dev.autoseed_disabled =
+  true` AFTER the KV clear. `auto_signin_test_accounts` awaits
+  STORAGE init then reads the marker — if set, logs and returns
+  without seeding. Persists across reloads.
+- [x] **A3.3** ✅ Added `LoadDemoButton` (cfg(debug_assertions) only)
+  inside the soft-reset block in `ResetSection`. Click clears
+  `DEV_AUTOSEED_DISABLED` and reloads; next boot re-runs the
+  test-account seed loop. Non-debug builds get an empty no-op stub
+  via `#[cfg(not(debug_assertions))]` so the call site stays clean.
 
 ---
 

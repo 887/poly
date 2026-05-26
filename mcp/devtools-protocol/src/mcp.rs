@@ -136,7 +136,7 @@ pub fn standard_tool_list() -> Vec<Value> {
         }),
         json!({
             "name": "reset_app",
-            "description": "Delete local database and restart the app at the setup wizard. Useful for testing first-launch flows.",
+            "description": "Wipe the host-bridge SQLite poly_kv table (the canonical app store), clear browser localStorage/sessionStorage/IndexedDB, then reload the page. Restarts the app at the Welcome wizard. Equivalent to the in-app ☢️ NUKE App State button.",
             "annotations": { "title": "Reset App", "category": "lifecycle", "readOnlyHint": false },
             "inputSchema": { "type": "object", "properties": {} }
         }),

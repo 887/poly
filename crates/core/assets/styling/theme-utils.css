@@ -357,6 +357,55 @@
     margin-top: 4px;
 }
 
+/* A2.2 — Danger Zone disclosure around the Nuke button */
+.danger-zone {
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-subtle, rgba(255, 0, 0, 0.15));
+}
+
+.danger-zone-toggle {
+    background: none;
+    border: none;
+    color: var(--accent-danger);
+    font-size: 13px;
+    font-weight: 500;
+    padding: 4px 0;
+    cursor: pointer;
+    text-align: left;
+}
+
+.danger-zone-toggle:hover {
+    text-decoration: underline;
+}
+
+.danger-zone-body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px 0 4px 12px;
+    border-left: 2px solid var(--accent-danger);
+    margin-top: 8px;
+}
+
+/* A2.3 — 10s undo countdown row for the soft Reset button */
+.reset-undo-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    background: var(--surface-muted, rgba(255, 255, 255, 0.04));
+    border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+    border-radius: 6px;
+    width: fit-content;
+}
+
+.reset-undo-text {
+    font-size: 13px;
+    color: var(--text-secondary, #999);
+    font-variant-numeric: tabular-nums;
+}
+
 /* ===========================
  * Scrollbar
  * =========================== */

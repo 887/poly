@@ -964,6 +964,36 @@ fn auto_signin_test_accounts(
     let client_manager_w = client_manager;
     let on_complete = crate::ui::signup::build_on_complete_no_nav(client_manager);
     spawn(async move {
+        // A3.2: skip the seed loop entirely if the user explicitly nuked.
+        // Wait briefly for STORAGE to initialize (init_storage runs in a
+        // sibling use_future on the same mount) then read the marker.
+        for _ in 0..60_u8 {
+            if crate::STORAGE.get().is_some() { break; }
+            // lint-allow-unused: fire-and-forget JS timer; recv() ignored.
+            #[cfg(target_arch = "wasm32")]
+            {
+                #[allow(clippy::let_underscore_must_use)]
+                let _ = dioxus::document::eval(
+                    "setTimeout(() => dioxus.send(true), 50);",
+                ).recv::<bool>().await;
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            }
+        }
+        if let Some(storage) = crate::STORAGE.get() {
+            if let Ok(Some(v)) = storage.get(crate::storage::keys::DEV_AUTOSEED_DISABLED).await {
+                if v.as_bool().unwrap_or(false) {
+                    tracing::info!(
+                        "auto-signin: skipped — DEV_AUTOSEED_DISABLED marker set (user nuked; \
+                         clear via Settings → Load demo accounts)"
+                    );
+                    AUTO_SIGNIN_DONE.store(true, std::sync::atomic::Ordering::SeqCst);
+                    return;
+                }
+            }
+        }
         for entry in entries {
             let auth_fn = entry.authenticate;
             let label = entry.label.to_string();

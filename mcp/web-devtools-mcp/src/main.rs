@@ -1449,7 +1449,43 @@ impl DevtoolsBackend for ChromeCdpBackend {
     }
 
     async fn reset_app(&self) -> anyhow::Result<String> {
-        // For web, clear all storage and reload
+        // A.3 fix: the previous impl cleared localStorage / sessionStorage /
+        // IndexedDB, but the canonical store is SQLite at the OS data dir,
+        // accessed via the /host/kv/* routes. The boot path rehydrated from
+        // SQLite on reload, so the reset never reached the setup wizard.
+        //
+        // POST /host/kv/clear is the same code path the in-app `☢️ NUKE` button
+        // ends up calling (Storage::nuke_all_data → clear_all → kv_clear handler
+        // in apps/poly-host/src/lib.rs). Both surfaces now share behavior.
+        //
+        // Keep the legacy localStorage/sessionStorage/IndexedDB clears as
+        // belt-and-suspenders in case any shell mode lands data there.
+        let resp = self
+            .client
+            .post(format!("http://127.0.0.1:{WEB_SERVER_PORT}/host/kv/clear"))
+            .header("Content-Type", "application/json")
+            .body("{}")
+            .timeout(std::time::Duration::from_secs(10))
+            .send()
+            .await
+            .map_err(|e| anyhow::anyhow!("POST /host/kv/clear failed: {e}"))?;
+        if !resp.status().is_success() {
+            anyhow::bail!(
+                "POST /host/kv/clear returned HTTP {}. Reset aborted to avoid a half-wiped state.",
+                resp.status()
+            );
+        }
+        // A3.2: write the dev.autoseed_disabled marker so the next boot does
+        // not re-seed demo accounts. Mirrors the in-app Nuke flow in
+        // crates/core/src/ui/settings/general.rs.
+        let _ = self
+            .client
+            .post(format!("http://127.0.0.1:{WEB_SERVER_PORT}/host/kv/set"))
+            .header("Content-Type", "application/json")
+            .body(r#"{"key":"dev.autoseed_disabled","value":true}"#)
+            .timeout(std::time::Duration::from_secs(5))
+            .send()
+            .await;
         self.js_eval(
             r#"(function(){
                 localStorage.clear();
@@ -1457,14 +1493,15 @@ impl DevtoolsBackend for ChromeCdpBackend {
                 indexedDB.databases().then(function(dbs){
                     dbs.forEach(function(db){ indexedDB.deleteDatabase(db.name); });
                 });
-                return 'Storage cleared';
+                return 'Browser-side storage cleared';
             })()"#,
         )
         .await?;
         self.cdp_send("Page.reload", json!({ "ignoreCache": true }))
             .await?;
         Ok(
-            "Cleared all web storage and reloaded page. App should restart at setup wizard."
+            "Wiped poly_kv (SQLite) via /host/kv/clear, cleared browser storage, \
+             reloaded page. App will restart at the Welcome wizard."
                 .to_string(),
         )
     }
