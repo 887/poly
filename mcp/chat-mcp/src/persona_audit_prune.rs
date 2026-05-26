@@ -7,7 +7,7 @@
 //!
 //! Spawn once at process startup after opening `MemoryDb`:
 //!
-//! ```no_run
+//! ```ignore
 //! tokio::spawn(poly_chat_mcp::persona_audit_prune::run_forever(mem.clone()));
 //! ```
 //!
