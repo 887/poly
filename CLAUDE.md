@@ -294,54 +294,25 @@ Three profiles are declared in `Cargo.toml` for agentic development:
 
 ### Build artifacts off `/home`
 
-Each worktree's `target/` is a **symlink** into
-`/media/games/<worktree-basename>/target/`. The main worktree
-(`/home/laragana/workspcacemsg`) maps to
-`/media/games/workspacemsg/target`. `/home` is the user's
-encrypted home volume that fills under agent-driven
-parallel-worktree patterns; `/media/games` is the SSD with
-hundreds of GB of headroom.
+The repo lives at `/media/games/code/workspacemsg/` (SSD, plenty
+of headroom). `/home/laragana/workspcacemsg` is a **convenience
+symlink** to that real location. `/home` is the user's encrypted
+volume that fills up under agent-driven parallel-worktree
+patterns; routing the repo to `/media/games` eliminates the
+disk-pressure footgun.
 
-When creating a new jj workspace:
+`target/` is a real directory inside the repo. `cargo clean` is
+safe — it just empties `target/` in place, nothing to break.
 
-```bash
-jj workspace add ../poly-feature-foo
-cd ../poly-feature-foo
-mkdir -p /media/games/poly-feature-foo/target
-ln -s /media/games/poly-feature-foo/target target
-```
-
-Idempotent. Poly has no `justfile`, so it's a manual two-liner
-(contrast foundlings, which ships `just worktree-link`).
-
-### ⚠ `cargo clean` deletes the symlink
-
-`cargo clean` does `rm -rf target` which removes the symlink
-itself (not the contents) — leaving the `/media/games/...`
-directory intact but the worktree's `target/` symlink gone. The
-next `cargo build` then creates a fresh real `target/` directory
-back on `/home`, defeating the whole point.
-
-**Don't run `cargo clean` casually.** If you do, immediately
-re-create the symlink:
+New worktrees nest inside `.claude/worktrees/` (gitignored):
 
 ```bash
-ln -snf /media/games/$(basename "$PWD")/target target
+cd /home/laragana/workspcacemsg   # or /media/games/code/workspacemsg
+jj workspace add .claude/worktrees/agent-<id> --name agent-<id>
 ```
 
-(For the main worktree the dest is
-`/media/games/workspacemsg/target`, not by basename — the dir
-name predates this convention.)
-
-**Better: clear the contents in-place** when you actually want
-to drop the cache:
-
-```bash
-rm -rf /media/games/<worktree>/target/*
-```
-
-That preserves the directory + the worktree's symlink, and the
-next `cargo build` repopulates.
+(Poly has no `justfile`; contrast foundlings, which ships
+`just worktree-new <name>` for this.)
 
 ## Test-server Avatar URL Conventions
 
