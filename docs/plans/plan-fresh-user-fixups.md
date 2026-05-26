@@ -636,7 +636,7 @@ selected backend's form.
   (~80 lines, mirroring Stoat's URL+username+password form, defaults to
   `https://matrix.org`) and registered it in
   `register_native_signup_entries`. Added `poly-ui-macros` to
-  `clients/matrix/Cargo.toml`. Shipped in change `koztuuqv` (with X.3+X.4).
+  `clients/matrix/Cargo.toml`. Shipped in change `klqpyxuk` (with X.3+X.4).
 - [x] **X.2** Stale i18n key visible: the bottom of the Stoat signup
   form reads `Don't have an account? **Signup Register Link Action**
   →`. **Root cause:** `t("signup-register-link-action")` called with
@@ -675,7 +675,7 @@ selected backend's form.
   text-overflow: ellipsis` (single-line). Swapped to a 2-line clamp via
   `display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient:
   vertical; word-break: break-word`. Descriptions now wrap to a second
-  line before being truncated. Shipped in change `koztuuqv` (with X.1+X.4).
+  line before being truncated. Shipped in change `klqpyxuk` (with X.1+X.4).
 - [x] **X.4** Backend ordering between Add Account picker and the
   Plugins settings list differs (Stoat first here, Demo first there).
   Fix: reordered `register_native_signup_entries` to match the canonical
@@ -683,7 +683,7 @@ selected backend's form.
   Lemmy → GitHub → Forgejo → Hacker News → Poly Server. Demo isn't a
   signup entry (the picker doesn't include it; it's enabled-by-default).
   Bundled plugins (Discord/Teams/Reddit) still come after natives via
-  `sync_bundled_signup_entries`. Shipped in change `koztuuqv` (with X.1+X.3).
+  `sync_bundled_signup_entries`. Shipped in change `klqpyxuk` (with X.1+X.3).
 
 ---
 
