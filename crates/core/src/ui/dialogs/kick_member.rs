@@ -5,7 +5,7 @@
 //! Gated by `BackendCapabilities::has_kick`.
 
 use crate::client_manager::ClientManager;
-use crate::i18n::t;
+use crate::i18n::{t, t_args};
 use crate::state::{BatchedSignal};
 use dioxus::prelude::*;
 use poly_ui_macros::{context_menu, ui_action};
@@ -30,9 +30,7 @@ pub fn KickMemberDialog(
     let client_manager: BatchedSignal<ClientManager> = use_context();
     let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
 
-    let title = t("dialog-kick-title")
-        .replace("{ $user }", &member_name)
-        .replace("{$user}", &member_name);
+    let title = t_args("dialog-kick-title", &[("user", member_name.as_str())]);
 
     rsx! {
         div { class: "modal-backdrop",
@@ -103,7 +101,8 @@ pub fn KickMemberDialog(
                                         }
                                         Err(e) => {
                                             submitting.set(false);
-                                            let msg = t("dialog-kick-error").replace("{ $error }", &e.to_string()).replace("{$error}", &e.to_string());
+                                            let err_str = e.to_string();
+                                            let msg = t_args("dialog-kick-error", &[("error", err_str.as_str())]);
                                             error_msg.set(msg);
                                         }
                                     }

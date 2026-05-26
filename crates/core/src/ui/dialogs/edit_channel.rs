@@ -5,7 +5,7 @@
 //! Gated by `BackendCapabilities::has_channel_mgmt`.
 
 use crate::client_manager::ClientManager;
-use crate::i18n::t;
+use crate::i18n::{t, t_args};
 use crate::state::{BatchedSignal};
 use dioxus::prelude::*;
 use poly_client::UpdateChannelParams;
@@ -152,7 +152,8 @@ pub fn EditChannelDialog(
                                         }
                                         Err(e) => {
                                             submitting.set(false);
-                                            let msg = t("dialog-edit-channel-error").replace("{ $error }", &e.to_string()).replace("{$error}", &e.to_string());
+                                            let err_str = e.to_string();
+                                            let msg = t_args("dialog-edit-channel-error", &[("error", err_str.as_str())]);
                                             error_msg.set(msg);
                                         }
                                     }

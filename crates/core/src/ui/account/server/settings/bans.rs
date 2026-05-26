@@ -5,7 +5,7 @@
 
 use crate::client_manager::ClientManager;
 use crate::state::BatchedSignal;
-use crate::i18n::t;
+use crate::i18n::{t, t_args};
 use crate::ui::client_ui::use_view_resource::{use_view_resource, ViewQuery};
 use dioxus::prelude::*;
 use poly_client::{BannedMember, ClientError, ClientResult, IsBackend};
@@ -124,7 +124,8 @@ fn render_ban_row(
                                         bans_resource.restart();
                                     }
                                     Err(e) => {
-                                        let msg = t("bans-tab-unban-error").replace("{ $error }", &e.to_string()).replace("{$error}", &e.to_string());
+                                        let err_str = e.to_string();
+                                        let msg = t_args("bans-tab-unban-error", &[("error", err_str.as_str())]);
                                         unban_error.set(msg);
                                     }
                                 }

@@ -782,8 +782,14 @@ pub(super) fn TypingIndicator() -> Element {
     }
 
     let text = match typing.len() {
-        1 => t("chat-typing").replace("{$user}", typing.first().map_or("", |s| s.as_str())),
-        n => t("chat-typing-multiple").replace("{$count}", &n.to_string()),
+        1 => t_args(
+            "chat-typing",
+            &[("user", typing.first().map_or("", |s| s.as_str()))],
+        ),
+        n => {
+            let count_str = n.to_string();
+            t_args("chat-typing-multiple", &[("count", count_str.as_str())])
+        }
     };
 
     rsx! {

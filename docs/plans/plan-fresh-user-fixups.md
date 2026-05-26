@@ -653,6 +653,22 @@ selected backend's form.
   `overlays.rs:785-786`). Only `overlays.rs` is visible without
   triggering an error; the rest only render on failure. Sweep when
   next touching dialogs/.
+- [x] **X.2b** Sweep `t("…").replace("{$…}", …)` siblings. Same root
+  cause as X.2: on the `en` default locale, fluent's missing-`$arg`
+  error makes `t()` drop through to the title-case fallback before
+  `.replace()` can substitute, so the user would see e.g. "Dialog Ban
+  Error" instead of `Failed to ban: …`. Swapped all 10 occurrences
+  across 6 files to `t_args(key, &[(name, val)])`:
+  `ban_member.rs` (title L35 + error L118), `kick_member.rs` (title
+  L33 + error L106), `timeout_member.rs` (title L44 + error L138),
+  `edit_channel.rs` (error L155), `bans.rs` (error L127),
+  `overlays.rs` (chat-typing L785 + chat-typing-multiple L786 — the
+  one visible everyday). The three dialog titles
+  (`Kick/Ban/Timeout {$user}?`) were also buggy — they would have
+  rendered "Dialog Ban Title" instead of "Ban Alice?" — those are
+  visible the moment a moderator opens the dialog, not just on error.
+  Verified with `cargo check -p poly-core --target wasm32-unknown-unknown`
+  (EXIT=0); lint-gate baseline regen'd for line-number shifts.
 - [ ] **X.3** Backend descriptions are truncated with `…` in the
   left column. Either the column should be wider, or hover should
   show the full text in a tooltip.
