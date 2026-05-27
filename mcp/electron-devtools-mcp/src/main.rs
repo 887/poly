@@ -1212,13 +1212,19 @@ impl DevtoolsBackend for ElectronCdpBackend {
         // Install console-capture prelude pre-document + in current document so
         // boot panics are buffered before any list_console_messages call. See
         // plan-mcp-console-early-capture.md. Best-effort — don't fail on errors.
-        drop(
-            self.cdp_send(
-                "Page.addScriptToEvaluateOnNewDocument",
-                json!({ "source": poly_devtools_protocol::backend::CONSOLE_CAPTURE_PRELUDE }),
-            )
-            .await,
-        );
+        // Page.enable is required before addScriptToEvaluateOnNewDocument registers.
+        let add_script = match self.cdp_send("Page.enable", json!({})).await {
+            Ok(_) => self
+                .cdp_send(
+                    "Page.addScriptToEvaluateOnNewDocument",
+                    json!({ "source": poly_devtools_protocol::backend::CONSOLE_CAPTURE_PRELUDE }),
+                )
+                .await,
+            Err(e) => Err(e),
+        };
+        if let Err(e) = &add_script {
+            tracing::warn!("Page.addScriptToEvaluateOnNewDocument failed: {e}");
+        }
         drop(
             self.cdp_send(
                 "Runtime.evaluate",

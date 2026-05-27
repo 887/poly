@@ -1256,13 +1256,24 @@ impl DevtoolsBackend for ChromeCdpBackend {
         // so EVERY future navigation/reload runs the install before any app JS —
         // capturing early-boot panics that the lazy install would miss. Best-effort:
         // a failure here must not break connect_cdp. See plan-mcp-console-early-capture.md.
-        drop(
-            self.cdp_send(
-                "Page.addScriptToEvaluateOnNewDocument",
-                json!({ "source": poly_devtools_protocol::backend::CONSOLE_CAPTURE_PRELUDE }),
-            )
-            .await,
-        );
+        //
+        // Page.enable is REQUIRED before addScriptToEvaluateOnNewDocument can
+        // register — without it the call silently no-ops on most CDP versions.
+        // Page-domain unsolicited events (frameNavigated etc.) get dropped by
+        // our cdp_send response-correlator since they have no `id` field, so
+        // this doesn't break message correlation.
+        let add_script_result = match self.cdp_send("Page.enable", json!({})).await {
+            Ok(_) => self
+                .cdp_send(
+                    "Page.addScriptToEvaluateOnNewDocument",
+                    json!({ "source": poly_devtools_protocol::backend::CONSOLE_CAPTURE_PRELUDE }),
+                )
+                .await,
+            Err(e) => Err(e),
+        };
+        if let Err(e) = &add_script_result {
+            tracing::warn!("Page.addScriptToEvaluateOnNewDocument failed: {e}");
+        }
         drop(
             self.cdp_send(
                 "Runtime.evaluate",
