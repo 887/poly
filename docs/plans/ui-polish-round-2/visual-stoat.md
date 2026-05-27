@@ -74,7 +74,7 @@ Revolt-fork REST: `POST /auth/session/login` with email+password. Token in `X-Se
 ### Messaging
 `send_message`, `send_reply_message`, `delete_message` all implemented. Attachments uploaded to Autumn CDN. `send_typing` not overridden (trait default NotSupported). `search_messages` not overridden.
 
-### 14 New Backend Ops (commit 5b142e67)
+### 14 New Backend Ops (commit 2041f112)
 `block_user` via `PUT /users/{id}/block`. `add_friend`/`remove_friend` via Revolt friend API. `close_dm_channel`, `leave_group_dm`, `edit_group_dm`, `add_users_to_group_dm` via Revolt channel API. `ignore_user`/`unignore_user`, `set_friend_nickname`, `set_user_note`, `mute_conversation`/`unmute_conversation`, `invite_user_to_server` all use trait defaults (NotSupported).
 
 ### Moderation Ops

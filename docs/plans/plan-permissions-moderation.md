@@ -4,10 +4,10 @@
 > **Last updated:** 2026-04-24
 > **Status:** ✅ DONE — implementation shipped across 4 waves:
 >
-> - Wave 0 (verification): commit `1ffcf5bb46df` — Stoat + Lemmy endpoint verification, plan deltas applied, `permissions-moderation-verification.md` written.
-> - Wave 1 (shared scaffolding): commit `4d5f90a58f7c` — `ClientBackend` trait gains 11 moderation methods + `get_server_roles` (added later in Wave 2); new types (`MemberPermissions`, `BannedMember`, `UpdateChannelParams`, `ModerationLogEntry`, `ModerationAction`, `Role`); 6 capability flags (`has_roles/kick/ban/timed_ban/channel_mgmt/moderation_log`) + 6 `should_show_*` predicates; UI shells for `RolesTab` / `BansTab` / `ModLogTab` / `EditChannelDialog` / `KickMemberDialog` / `BanMemberDialog` / `TimeoutMemberDialog`; FTL keys in en/de/es/fr; `MessageContextMenu` Delete + `UserRowContextMenu` Kick/Ban/Timeout wired.
-> - Wave 2 (Discord + Matrix + Lemmy + Forgejo + GitHub): commit `8c9367bc20d7` — superset (concurrent worktree auto-rebase converged 5 agents into one). Discord: full mod surface incl. native timeout via `communication_disabled_until`. Matrix: power-level-based redact/kick/ban (no native timeout). Lemmy: ban with native `expires` (`timeout_member` = thin wrapper). Forgejo + GitHub: minimal — `delete_message` + `get_my_permissions` only, rest `NotSupported`. Dialogs + tabs populated; `ModerationDialog` enum + `active_moderation_dialog` AppState field + `ModerationDialogOverlay` in MainLayout.
-> - Wave 3 (Stoat + Teams + poly-server): commit `c23018d42755` — superset with same converged-rebase pattern. Stoat: native timeout via `DataMemberEdit.timeout` (Wave-0-verified) + slow-mode field rename `slow_mode_secs` → `slowmode`. Teams: `kick_member` via `DELETE /teams/{t}/members/{m}` + `softDelete` for messages + `update_channel` (name + description only); `ban_member` / `reorder_channels` / `get_moderation_log` `NotSupported`; `EditChannelDialog` gates slow-mode and NSFW fields when `backend_slug == "teams"`. poly-server: server-side SQLite migration adds `role` column + `server_bans` + `server_modlog` tables; `RoleTier` middleware (Owner=3 / Admin=2 / Mod=1 / Member=0) gates 11 new REST endpoints; client trait impls + `WirePermissions` / `WireBanRecord` / `WireModlogEntry`. SurrealDB parity flagged TODO.
+> - Wave 0 (verification): commit `dff9dda474d4` — Stoat + Lemmy endpoint verification, plan deltas applied, `permissions-moderation-verification.md` written.
+> - Wave 1 (shared scaffolding): commit `7f56a0c0a7b0` — `ClientBackend` trait gains 11 moderation methods + `get_server_roles` (added later in Wave 2); new types (`MemberPermissions`, `BannedMember`, `UpdateChannelParams`, `ModerationLogEntry`, `ModerationAction`, `Role`); 6 capability flags (`has_roles/kick/ban/timed_ban/channel_mgmt/moderation_log`) + 6 `should_show_*` predicates; UI shells for `RolesTab` / `BansTab` / `ModLogTab` / `EditChannelDialog` / `KickMemberDialog` / `BanMemberDialog` / `TimeoutMemberDialog`; FTL keys in en/de/es/fr; `MessageContextMenu` Delete + `UserRowContextMenu` Kick/Ban/Timeout wired.
+> - Wave 2 (Discord + Matrix + Lemmy + Forgejo + GitHub): commit `2edd2a70c151` — superset (concurrent worktree auto-rebase converged 5 agents into one). Discord: full mod surface incl. native timeout via `communication_disabled_until`. Matrix: power-level-based redact/kick/ban (no native timeout). Lemmy: ban with native `expires` (`timeout_member` = thin wrapper). Forgejo + GitHub: minimal — `delete_message` + `get_my_permissions` only, rest `NotSupported`. Dialogs + tabs populated; `ModerationDialog` enum + `active_moderation_dialog` AppState field + `ModerationDialogOverlay` in MainLayout.
+> - Wave 3 (Stoat + Teams + poly-server): commit `c1c75b589a57` — superset with same converged-rebase pattern. Stoat: native timeout via `DataMemberEdit.timeout` (Wave-0-verified) + slow-mode field rename `slow_mode_secs` → `slowmode`. Teams: `kick_member` via `DELETE /teams/{t}/members/{m}` + `softDelete` for messages + `update_channel` (name + description only); `ban_member` / `reorder_channels` / `get_moderation_log` `NotSupported`; `EditChannelDialog` gates slow-mode and NSFW fields when `backend_slug == "teams"`. poly-server: server-side SQLite migration adds `role` column + `server_bans` + `server_modlog` tables; `RoleTier` middleware (Owner=3 / Admin=2 / Mod=1 / Member=0) gates 11 new REST endpoints; client trait impls + `WirePermissions` / `WireBanRecord` / `WireModlogEntry`. SurrealDB parity flagged TODO.
 >
 > Test counts (final): poly-stoat 24, poly-teams 28 (+12), poly-server-client 21 (+19), poly-discord +11 mod, poly-matrix +9 mod, poly-lemmy 30 (+10), poly-forgejo 25 (+3), poly-github 45 (+4), poly-server +15 (server-side mod), poly-client capability matrix updated. Verification report: `docs/plans/permissions-moderation-verification.md`.
 >
@@ -954,7 +954,7 @@ The following backends have special cases that do NOT fit the shared abstraction
 
 ## Section 4 Per-Backend Implementation Plan
 
-### Phase B-DS: Discord — ✅ DONE (Wave 2, `8c9367bc20d7`)
+### Phase B-DS: Discord — ✅ DONE (Wave 2, `2edd2a70c151`)
 
 > Files primarily touched: `clients/discord/src/lib.rs`, `clients/discord/src/api.rs`
 
@@ -1042,7 +1042,7 @@ The following backends have special cases that do NOT fit the shared abstraction
 
 ---
 
-### Phase B-MX: Matrix — ✅ DONE (Wave 2, `8c9367bc20d7`)
+### Phase B-MX: Matrix — ✅ DONE (Wave 2, `2edd2a70c151`)
 
 > Files primarily touched: `clients/matrix/src/lib.rs`, `clients/matrix/src/api.rs`
 
@@ -1110,7 +1110,7 @@ The following backends have special cases that do NOT fit the shared abstraction
 
 ---
 
-### Phase B-ST: Stoat — ✅ DONE (Wave 3, `c23018d42755`)
+### Phase B-ST: Stoat — ✅ DONE (Wave 3, `c1c75b589a57`)
 
 > Files primarily touched: `clients/stoat/src/lib.rs`, `clients/stoat/src/api.rs`
 
@@ -1160,7 +1160,7 @@ confirmed from documentation during research.
 
 ---
 
-### Phase B-TE: Teams — ✅ DONE (Wave 3, `c23018d42755`)
+### Phase B-TE: Teams — ✅ DONE (Wave 3, `c1c75b589a57`)
 
 > Files primarily touched: `clients/teams/src/lib.rs`, `clients/teams/src/http.rs`
 
@@ -1213,7 +1213,7 @@ confirmed from documentation during research.
 
 ---
 
-### Phase B-LE: Lemmy — ✅ DONE (Wave 2, `8c9367bc20d7`)
+### Phase B-LE: Lemmy — ✅ DONE (Wave 2, `2edd2a70c151`)
 
 > Files primarily touched: `clients/lemmy/src/lib.rs`, `clients/lemmy/src/api.rs`
 
@@ -1276,7 +1276,7 @@ confirmed from documentation during research.
 
 ---
 
-### Phase B-FJ: Forgejo — ✅ DONE (Wave 2, `8c9367bc20d7`)
+### Phase B-FJ: Forgejo — ✅ DONE (Wave 2, `2edd2a70c151`)
 
 > Files primarily touched: `clients/forgejo/src/lib.rs`, `clients/forgejo/src/api.rs`
 
@@ -1321,7 +1321,7 @@ confirmed from documentation during research.
 
 ---
 
-### Phase B-GH: GitHub — ✅ DONE (Wave 2, `8c9367bc20d7`)
+### Phase B-GH: GitHub — ✅ DONE (Wave 2, `2edd2a70c151`)
 
 > Files primarily touched: `clients/github/src/lib.rs`, `clients/github/src/api.rs`
 
@@ -1357,7 +1357,7 @@ confirmed from documentation during research.
 
 ---
 
-### Phase B-PS: poly-server — ✅ DONE (Wave 3, `c23018d42755`)
+### Phase B-PS: poly-server — ✅ DONE (Wave 3, `c1c75b589a57`)
 
 > Files primarily touched: `clients/server-client/src/backend.rs`, `servers/poly-server/src/`
 
@@ -1394,7 +1394,7 @@ confirmed from documentation during research.
 
 ---
 
-## Section 5 Host-Side Shared Work (Lands First) — ✅ DONE (Wave 1, `4d5f90a58f7c`)
+## Section 5 Host-Side Shared Work (Lands First) — ✅ DONE (Wave 1, `7f56a0c0a7b0`)
 
 This phase has no backend dependency and can be done in parallel with backend research.
 It must land before any per-backend phase to avoid merge conflicts.

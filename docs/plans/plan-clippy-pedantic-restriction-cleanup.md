@@ -4,10 +4,10 @@
 
 **Final commit chain on main (2026-05-01):**
 - Phases 0-6 + Native A/B: see history below
-- Round 1A (`2494d2bc`): poly-demo 163 → 0 (chrono `ago_*()` helpers + `CommentMeta` ref refactor)
-- Round 1B (`9d7c5754`): poly-core 179 → 53 (autofix + arithmetic refactors + `RenderArgs` bundle for `too_many_arguments`)
-- Round 1C (`9cec06f7`, includes orchestrator mop-up): small crates burn + poly-core non-mod 49 → 0 (incl banned-bypass refactors: stoat `network_error(&e)` 57 callers, server-client `new(&config)` 16 callers; intentional `match_same_arms` collapsed by removing redundant explicit arms; wildcard match allow moved to expression level so it actually applies)
-- Round 2 (`ec0f6d59`): 40 mod.rs files renamed to `foo.rs` mechanically + `theme.rs` `include_str!` paths fixed (`../../assets/...` → `../assets/...`) + `ui.rs` `include!("css.rs")` → `include!("ui/css.rs")` + 29 wasm-cfg-gated warnings in poly-core fixed + 4 stragglers in poly-discord IDENTIFY frame
+- Round 1A (`d587996d`): poly-demo 163 → 0 (chrono `ago_*()` helpers + `CommentMeta` ref refactor)
+- Round 1B (`c790c62d`): poly-core 179 → 53 (autofix + arithmetic refactors + `RenderArgs` bundle for `too_many_arguments`)
+- Round 1C (`d0e49949`, includes orchestrator mop-up): small crates burn + poly-core non-mod 49 → 0 (incl banned-bypass refactors: stoat `network_error(&e)` 57 callers, server-client `new(&config)` 16 callers; intentional `match_same_arms` collapsed by removing redundant explicit arms; wildcard match allow moved to expression level so it actually applies)
+- Round 2 (`af068a89`): 40 mod.rs files renamed to `foo.rs` mechanically + `theme.rs` `include_str!` paths fixed (`../../assets/...` → `../assets/...`) + `ui.rs` `include!("css.rs")` → `include!("ui/css.rs")` + 29 wasm-cfg-gated warnings in poly-core fixed + 4 stragglers in poly-discord IDENTIFY frame
 
 Trajectory: ~5564 (Phase 0 baseline) → 2065 (opt-in policy) → 362 (Tier 1-5 burn) → **0 (final, both targets)**. 100% reduction.
 
@@ -287,13 +287,13 @@ comments per lint. See sections in that file:
 
 - [x] **A.1** Rewrite `Cargo.toml` `[workspace.lints.clippy]` as opt-in (shipped 2026-05-01).
 - [x] **A.2** Re-run `cargo clippy --workspace --all-targets > /tmp/audit/post-phase-0-optin.log 2>&1`; warning count dropped 62%, all 47 crates check (no group-shadowing of errors).
-- [x] **A.3** Commit: `chore(lints): switch to opt-in clippy policy (drop wholesale pedantic+restriction)` — shipped in `452fe1b4`.
+- [x] **A.3** Commit: `chore(lints): switch to opt-in clippy policy (drop wholesale pedantic+restriction)` — shipped in `3e5f040e`.
 
 ---
 
 ## Phase 1 — ✅ DONE — Fix the 21 deny'd-lint blocker sites
 
-Shipped in commit `904e511f`.
+Shipped in commit `c8cf3452`.
 
 - [x] **B.1** `crates/lint-gate/build/custom_block_usage.rs` — replace 5 raw indexes with `.get()` + `?` / `else continue`.
 - [x] **B.2** `apps/poly-host/src/lib.rs:984,993` — drop 2 `expect()` calls.
@@ -302,13 +302,13 @@ Shipped in commit `904e511f`.
 - [x] **B.5** `clients/stoat/src/api.rs:515` — single index → `.get()`.
 - [x] **B.6** `servers/test-teams/src/routes.rs:224` — single index → `.get()`.
 - [x] **B.7** Workspace clippy exits 0 (warnings only).
-- [x] **B.8** Commit `904e511f`: `fix(lints): eliminate all deny'd-lint sites — clippy phase 1`.
+- [x] **B.8** Commit `c8cf3452`: `fix(lints): eliminate all deny'd-lint sites — clippy phase 1`.
 
 ---
 
 ## Phase 2 — ✅ DONE — Tier 1: Load-bearing crates
 
-Shipped in commits `9ae399d7` (host-bridge), `0b63520c` (plugin-host), `db538e8a` (demote `missing_trait_methods`), `0f5ed7ef` (crates/core), `2f2d38fb` (discord), `9bef4172` (matrix+web), `68ea96c3` (chat-mcp).
+Shipped in commits `0cf0ed1c` (host-bridge), `14ab134f` (plugin-host), `f678f5b5` (demote `missing_trait_methods`), `dceee2e1` (crates/core), `d54cc617` (discord), `46f05abb` (matrix+web), `34425623` (chat-mcp).
 
 **Crates:** `crates/core`, `crates/host-bridge`, `crates/plugin-host`,
 `clients/discord`, `clients/matrix`, `mcp/chat-mcp`, `apps/web`.
@@ -328,13 +328,13 @@ them on every edit.
 
 Per-crate sub-step:
 
-- [x] **C.1** `crates/host-bridge` — shipped in `9ae399d7`.
-- [x] **C.2** `crates/plugin-host` — shipped in `0b63520c`.
-- [x] **C.3** `crates/core` — shipped in `0f5ed7ef` (~700 → 236 warns; remaining are mostly `mod_module_files` (out of scope) and signature-refactor candidates left for follow-up).
-- [x] **C.4** `clients/discord` — shipped in `2f2d38fb`.
-- [x] **C.5** `clients/matrix` — shipped in `9bef4172` (bundled with apps/web).
-- [x] **C.6** `mcp/chat-mcp` — shipped in `68ea96c3`.
-- [x] **C.7** `apps/web` — shipped in `9bef4172`.
+- [x] **C.1** `crates/host-bridge` — shipped in `0cf0ed1c`.
+- [x] **C.2** `crates/plugin-host` — shipped in `14ab134f`.
+- [x] **C.3** `crates/core` — shipped in `dceee2e1` (~700 → 236 warns; remaining are mostly `mod_module_files` (out of scope) and signature-refactor candidates left for follow-up).
+- [x] **C.4** `clients/discord` — shipped in `d54cc617`.
+- [x] **C.5** `clients/matrix` — shipped in `46f05abb` (bundled with apps/web).
+- [x] **C.6** `mcp/chat-mcp` — shipped in `34425623`.
+- [x] **C.7** `apps/web` — shipped in `46f05abb`.
 - [x] **C.8** Per-crate acceptance verified post-each-commit.
 - [x] **C.9** Commits landed per crate (see hashes above).
 
@@ -342,7 +342,7 @@ Per-crate sub-step:
 
 ## Phase 3 — ✅ DONE — Tier 2: Active client backends
 
-Shipped in commits `a61d6078` (Tier 2A: teams + lemmy + forgejo + stoat) and `f7cc1179` (Tier 2B: github + hackernews + client). poly-server-client skipped (pre-existing build error: missing `tokio_tungstenite` for wasm32 target).
+Shipped in commits `5aab4c1e` (Tier 2A: teams + lemmy + forgejo + stoat) and `24b592dd` (Tier 2B: github + hackernews + client). poly-server-client skipped (pre-existing build error: missing `tokio_tungstenite` for wasm32 target).
 
 **Crates:** `clients/teams`, `clients/lemmy`, `clients/forgejo`,
 `clients/github`, `clients/stoat`, `clients/poly-server` (a.k.a.
@@ -355,20 +355,20 @@ HTTP wrappers around remote APIs. Most warnings will be the same
 recurring patterns; opportunistic copy-paste of fixes from Phase 2 is
 expected.
 
-- [x] **D.1** `clients/teams` — shipped in `a61d6078` (45 → 1; residual is `mod_module_files`, out of scope).
-- [x] **D.2** `clients/lemmy` — shipped in `a61d6078` (43 → 0).
-- [x] **D.3** `clients/forgejo` — shipped in `a61d6078` (35 → 0).
-- [x] **D.4** `clients/github` — shipped in `f7cc1179` (38 → 0).
-- [x] **D.5** `clients/stoat` — shipped in `a61d6078` (20 → 2; residuals are `needless_pass_by_value`, banned-lint exceptions).
+- [x] **D.1** `clients/teams` — shipped in `5aab4c1e` (45 → 1; residual is `mod_module_files`, out of scope).
+- [x] **D.2** `clients/lemmy` — shipped in `5aab4c1e` (43 → 0).
+- [x] **D.3** `clients/forgejo` — shipped in `5aab4c1e` (35 → 0).
+- [x] **D.4** `clients/github` — shipped in `24b592dd` (38 → 0).
+- [x] **D.5** `clients/stoat` — shipped in `5aab4c1e` (20 → 2; residuals are `needless_pass_by_value`, banned-lint exceptions).
 - [x] **D.6** `clients/server-client` (poly-server-client) — SKIPPED: pre-existing build error (missing `tokio_tungstenite` for wasm32). Address in separate fix.
-- [x] **D.7** `clients/hackernews` — shipped in `f7cc1179` (54 → 0).
+- [x] **D.7** `clients/hackernews` — shipped in `24b592dd` (54 → 0).
 - [x] **D.8** Per-crate acceptance verified.
 
 ---
 
 ## Phase 4 — ✅ DONE — Tier 3: Support / infrastructure
 
-Shipped in commits `f7db04bf` (Tier 3A: infra + CLI + lint-gate, 206 → 0) and `ac291c87` (Tier 3B: all MCPs, 220 → 0).
+Shipped in commits `02285791` (Tier 3A: infra + CLI + lint-gate, 206 → 0) and `e4cfdd45` (Tier 3B: all MCPs, 220 → 0).
 
 **Crates:** `crates/host-sandbox`, `apps/poly-host`,
 `tools/poly-cli`, `crates/plugin-host-tests`,
@@ -387,20 +387,20 @@ allow-per-file is the realistic strategy for many sites (e.g. allow
 `module_name_repetitions` in the bridge route module, allow
 `single_call_fn` in MCP tool handlers).
 
-- [x] **E.1** `crates/host-sandbox` — shipped in `f7db04bf` (1 → 0).
-- [x] **E.2** `apps/poly-host` — shipped in `f7db04bf` (14 → 0).
-- [x] **E.3** `tools/poly-cli` — shipped in `f7db04bf` (48 → 0).
-- [x] **E.4** `crates/plugin-host-tests` (renamed `poly-plugin-loader-tests`) — shipped in `f7db04bf` (5 → 0).
-- [x] **E.6** `crates/ui-types`, `crates/ui-macros`, `crates/lint-gate` — shipped in `f7db04bf` (138 → 0).
-- [x] **E.7** `mcp/devtools-protocol` — shipped in `ac291c87` (48 → 0).
-- [x] **E.8** `mcp/desktop-devtools-mcp` + `mcp/web-devtools-mcp` + `mcp/electron-devtools-mcp` — shipped in `ac291c87` (141 → 0).
-- [x] **E.9** `mcp/memory-mcp` — shipped in `ac291c87` (31 → 0).
+- [x] **E.1** `crates/host-sandbox` — shipped in `02285791` (1 → 0).
+- [x] **E.2** `apps/poly-host` — shipped in `02285791` (14 → 0).
+- [x] **E.3** `tools/poly-cli` — shipped in `02285791` (48 → 0).
+- [x] **E.4** `crates/plugin-host-tests` (renamed `poly-plugin-loader-tests`) — shipped in `02285791` (5 → 0).
+- [x] **E.6** `crates/ui-types`, `crates/ui-macros`, `crates/lint-gate` — shipped in `02285791` (138 → 0).
+- [x] **E.7** `mcp/devtools-protocol` — shipped in `e4cfdd45` (48 → 0).
+- [x] **E.8** `mcp/desktop-devtools-mcp` + `mcp/web-devtools-mcp` + `mcp/electron-devtools-mcp` — shipped in `e4cfdd45` (141 → 0).
+- [x] **E.9** `mcp/memory-mcp` — shipped in `e4cfdd45` (31 → 0).
 
 ---
 
 ## Phase 5 — ✅ DONE — Tier 4: Test servers and test infrastructure
 
-Shipped in commits `e729c340` (Tier 4A: poly-server + test-hackernews + backup-server) and `6925a6b0` (Tier 4B: test-common + test-runner + 8 small test-* crates). Total ~374 → 8 own-file warnings (8 residuals are all `mod_module_files`, intentionally out of scope).
+Shipped in commits `19ca9833` (Tier 4A: poly-server + test-hackernews + backup-server) and `b4d7dffd` (Tier 4B: test-common + test-runner + 8 small test-* crates). Total ~374 → 8 own-file warnings (8 residuals are all `mod_module_files`, intentionally out of scope).
 
 **Crates:** `servers/server`, `servers/backup-server`, `servers/test-common`,
 `servers/test-matrix`, `servers/test-stoat`, `servers/test-discord`,
@@ -423,19 +423,19 @@ already get test-only `#![allow(...)]` per existing user feedback (see
 `feedback_test_lints.md`); pedantic+restriction do NOT get added to
 that list.
 
-- [x] **F.1** `servers/server` — shipped in `e729c340` (70 → 5; residuals are `mod_module_files`).
-- [x] **F.2** `servers/backup-server` — shipped in `e729c340` (40 → 3; residuals are `mod_module_files`).
-- [x] **F.3** `servers/test-common` — shipped in `6925a6b0` (17 → 0).
-- [x] **F.4** `servers/test-discord` — shipped in `6925a6b0` (48 → 0).
-- [x] **F.5** `servers/test-matrix` — shipped in `6925a6b0` (30 → 0).
-- [x] **F.6** `servers/test-stoat` — shipped in `6925a6b0` (21 → 0).
-- [x] **F.7** `servers/test-teams` — shipped in `6925a6b0` (16 → 0).
-- [x] **F.8** `servers/test-poly` — shipped in `6925a6b0` (own files clean; cross-crate transitive warnings owned by poly-server scope).
-- [x] **F.9** `servers/test-lemmy` — shipped in `6925a6b0` (23 → 0).
-- [x] **F.10** `servers/test-hackernews` — shipped in `e729c340` (30 → 0).
-- [x] **F.11** `servers/test-forgejo` — shipped in `6925a6b0` (9 → 0).
-- [x] **F.12** `servers/test-github` — shipped in `6925a6b0` (6 → 0).
-- [x] **F.13** `servers/test-runner` — shipped in `6925a6b0` (19 → 0).
+- [x] **F.1** `servers/server` — shipped in `19ca9833` (70 → 5; residuals are `mod_module_files`).
+- [x] **F.2** `servers/backup-server` — shipped in `19ca9833` (40 → 3; residuals are `mod_module_files`).
+- [x] **F.3** `servers/test-common` — shipped in `b4d7dffd` (17 → 0).
+- [x] **F.4** `servers/test-discord` — shipped in `b4d7dffd` (48 → 0).
+- [x] **F.5** `servers/test-matrix` — shipped in `b4d7dffd` (30 → 0).
+- [x] **F.6** `servers/test-stoat` — shipped in `b4d7dffd` (21 → 0).
+- [x] **F.7** `servers/test-teams` — shipped in `b4d7dffd` (16 → 0).
+- [x] **F.8** `servers/test-poly` — shipped in `b4d7dffd` (own files clean; cross-crate transitive warnings owned by poly-server scope).
+- [x] **F.9** `servers/test-lemmy` — shipped in `b4d7dffd` (23 → 0).
+- [x] **F.10** `servers/test-hackernews` — shipped in `19ca9833` (30 → 0).
+- [x] **F.11** `servers/test-forgejo` — shipped in `b4d7dffd` (9 → 0).
+- [x] **F.12** `servers/test-github` — shipped in `b4d7dffd` (6 → 0).
+- [x] **F.13** `servers/test-runner` — shipped in `b4d7dffd` (19 → 0).
 
 ---
 
@@ -453,9 +453,9 @@ No work needed. All Tier 5 crates already at 0 own-file warnings post-Tier-1-thr
 These are thin shells around the core, mostly already touched in earlier
 phases. This phase is the "did we miss anything?" sweep.
 
-- [x] **G.1** `clients/client` — shipped in `f7cc1179` (29 → 0, bundled with Tier 2B).
+- [x] **G.1** `clients/client` — shipped in `24b592dd` (29 → 0, bundled with Tier 2B).
 - [x] **G.2** `clients/demo` — already 0 own-file warns.
-- [x] **G.3** `apps/web` (Tier 1, `9bef4172`), plus `apps/desktop`, `apps/desktop-blitz`, `apps/desktop-electron`, `apps/desktop-web`, `apps/desktop-devtools` — all 0 own-file warns.
+- [x] **G.3** `apps/web` (Tier 1, `46f05abb`), plus `apps/desktop`, `apps/desktop-blitz`, `apps/desktop-electron`, `apps/desktop-web`, `apps/desktop-devtools` — all 0 own-file warns.
 - [x] **G.4** `apps/android`, `apps/ios` — 0 own-file warns (stubs).
 
 (Excluded from this plan: `tools/lints/poly-lints` and `mcp/chat-mcp/fuzz`

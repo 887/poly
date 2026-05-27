@@ -187,7 +187,7 @@ use_effect(move || {
 });
 ```
 
-This was a real bug in `use_spawn_once` (commit `09d97a01`, 2026-04-25):
+This was a real bug in `use_spawn_once` (commit `94688279`, 2026-04-25):
 the Teams server-switch crashed because the internal `use_effect` only
 subscribed to its own guard signal, never to the changing `key` prop.
 
@@ -216,7 +216,7 @@ use_reactive_effect(
 
 For patterns that need to spawn an async task once per distinct key (e.g.,
 loading server data on navigation), use `use_spawn_once` — already fixed via
-commit `09d97a01` to use the same mirror-into-signal pattern internally.
+commit `94688279` to use the same mirror-into-signal pattern internally.
 
 ```rust
 // GOOD — async load fires once per distinct server_id.
@@ -275,7 +275,7 @@ signal write → ChatView re-renders → hook setup re-runs → .read() fires
 → subscription re-registered → next signal write → repeat at full speed
 ```
 
-Real incident (commit `55f94246`): `use_member_list_effect` read
+Real incident (commit `0ef1112f`): `use_member_list_effect` read
 `app_state.read().nav.selected_channel` to compute the key for
 `use_spawn_once`. One `load_server_data` call produced **1408 ChatView
 re-renders** before the WASM scheduler starved.

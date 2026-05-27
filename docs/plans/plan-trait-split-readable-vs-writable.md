@@ -1,7 +1,7 @@
 # Plan — Trait split: readable vs writable sibling traits
 
 ## Status: ✅ DONE — all 5 writable sub-traits shipped.
-##   - Tier 1: `WritableMessagingBackend` (commit `7078cddc`)
+##   - Tier 1: `WritableMessagingBackend` (commit `9ad515c8`)
 ##   - Tier 2: `WritableSocialGraphBackend`, `WritableModerationBackend`,
 ##     `WritableServerAdminBackend`, `WritableDmsAndGroupsBackend`
 ##     (Tier 2 commits, this branch)

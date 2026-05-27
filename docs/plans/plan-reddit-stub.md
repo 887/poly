@@ -1,13 +1,13 @@
 ## Status: ✅ DONE — all phases A–H shipped.
 
 **Shipped:**
-- Phase A scaffold (`a459cea2`), Phase B parsers (`a6e2f5c3`), Phase C cookie
-  auth (`21851b5a`), Phase D-anon read flows (`a55b75a3`), Phase D auth-gated
-  read flows (`21851b5a` + `13739e13`), Phase E write flows: E.1 top-level
-  submit (`9a36a82f`), E.2 reply / E.4 DM-reply / E.5 vote (`21851b5a`),
-  E.6 edit + delete (`9a36a82f`/follow-up), E.7 mark-read (`9a36a82f`/follow-up),
-  Phase F test backend (`a2c95418` + `21851b5a` + `13739e13`), Phase G UI
-  (`13739e13` signup + bundled-plugin reg + FTL keys).
+- Phase A scaffold (`6a0d8927`), Phase B parsers (`3809e0ac`), Phase C cookie
+  auth (`759d7924`), Phase D-anon read flows (`85f6f696`), Phase D auth-gated
+  read flows (`759d7924` + `d82bfb36`), Phase E write flows: E.1 top-level
+  submit (`453543d7`), E.2 reply / E.4 DM-reply / E.5 vote (`759d7924`),
+  E.6 edit + delete (`453543d7`/follow-up), E.7 mark-read (`453543d7`/follow-up),
+  Phase F test backend (`2387344c` + `759d7924` + `d82bfb36`), Phase G UI
+  (`d82bfb36` signup + bundled-plugin reg + FTL keys).
 - Total back-and-forth integration coverage: 6 tests passing
   (`cat_dms_dog_full_flow`, `submit_self_post_round_trips`,
   `delete_edit_and_mark_read_round_trip`, `list_subreddit_page_returns_cursor_when_present`,
@@ -160,7 +160,7 @@ side effect.
 
 ## Phases
 
-### Phase A — Crate scaffold + feature gating — ✅ shipped in commit a459cea2
+### Phase A — Crate scaffold + feature gating — ✅ shipped in commit 6a0d8927
 
 - [x] **A.1** Created `clients/reddit/Cargo.toml` mirroring
       `clients/lemmy/Cargo.toml` (closer peer than discord — same forum +

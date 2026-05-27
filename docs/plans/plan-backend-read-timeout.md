@@ -1,6 +1,6 @@
 # Plan — `backend.read_with_timeout(…)` Helper (Hang #4 Prevention)
 
-> Status: **✅ DONE** — Phases 1-3 + 5 shipped (`66810bd1`, `a935f2a8`, `e4d3fde2`, `f6599e76`). Helper added, 8 FRAGILE + 46 SAFE sites migrated, `forbid-raw-backend-read.sh` lint blocks regressions in `crates/core/src/ui/`.
+> Status: **✅ DONE** — Phases 1-3 + 5 shipped (`b1db8888`, `8e23c6ae`, `2de7434c`, `6ca22cfd`). Helper added, 8 FRAGILE + 46 SAFE sites migrated, `forbid-raw-backend-read.sh` lint blocks regressions in `crates/core/src/ui/`.
 > Authors: orchestrator + audit subagent (`/tmp/poly-backend-read-timeout-audit.md`).
 > Last updated: 2026-04-25.
 

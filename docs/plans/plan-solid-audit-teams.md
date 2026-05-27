@@ -5,7 +5,7 @@
 > integration deferred to plan-voice-video-calls).
 > Source-of-truth for SOLID definitions: top-of-repo `CLAUDE.md` §"Design Principles".
 
-## Status: ✅ DONE — Phase B shipped in change `nprtmlvu`; Phase C fully shipped in change `snonppwv` / commit `fb1fc675` (C.1 channel views via Graph, C.2 chat create, C.3 member ops, C.5 edit_group_dm topic; C.4 was previously shipped); Phase D.2 shipped in change `vvqwyqlnpuzl`; D.1 deferred to `docs/plans/plan-teams-calling.md` (ACS calling — ~800 LoC + Cargo dependency surface that does not yet exist in Rust ecosystem); D.3 deferred to `docs/plans/plan-teams-graph-subscriptions.md` (Graph change-notification subscriptions — ~700 LoC + requires publicly addressable HTTPS endpoint infrastructure). B.3 closed as reserved no-op — no further ≤50-LoC win was both safe and useful.
+## Status: ✅ DONE — Phase B shipped in change `nprtmlvu`; Phase C fully shipped in change `snonppwv` / commit `640ebd07` (C.1 channel views via Graph, C.2 chat create, C.3 member ops, C.5 edit_group_dm topic; C.4 was previously shipped); Phase D.2 shipped in change `vvqwyqlnpuzl`; D.1 deferred to `docs/plans/plan-teams-calling.md` (ACS calling — ~800 LoC + Cargo dependency surface that does not yet exist in Rust ecosystem); D.3 deferred to `docs/plans/plan-teams-graph-subscriptions.md` (Graph change-notification subscriptions — ~700 LoC + requires publicly addressable HTTPS endpoint infrastructure). B.3 closed as reserved no-op — no further ≤50-LoC win was both safe and useful.
 
 ---
 

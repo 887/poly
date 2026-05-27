@@ -110,10 +110,10 @@ disjoint files.
 - [x] **A.1** Per-backend `pub const SLUG: &str` exported from each
       `clients/<name>/src/lib.rs`; flip the 199 in-crate
       `BackendType::from("…")` literals to `BackendType::from(crate::SLUG)`.
-      Sites: see B.1.3 table. Effort S. — shipped in commit `c844f314`.
+      Sites: see B.1.3 table. Effort S. — shipped in commit `b33005c2`.
 - [x] **A.2** Split `crates/core/src/i18n/baked_locales.rs` (4487
       lines) per-locale. Patch site: `crates/core/build.rs:84-109`. Net
-      patch ≤15 lines. Effort S. Source: E.1#2. — shipped in commit `274f92ef`.
+      patch ≤15 lines. Effort S. Source: E.1#2. — shipped in commit `b3702bec`.
 - [x] **A.3** Extract `BackendHarness` trait + `run::<H>()` helper
       into `servers/test-common`. Collapse all 9 `main.rs` shells to
       4 lines each, 9 `seed/reset/reseed` triples → harness default,
@@ -121,13 +121,13 @@ disjoint files.
       Reddit landed in a follow-up (added inspect buffer + idempotent
       seed/reset on RedditState; the auth-state arg is intentionally
       ignored since Reddit's sessions live inline in the state).
-      Effort S/M. Source: E.1#1. — shipped in commits `17fd9d63`
+      Effort S/M. Source: E.1#1. — shipped in commits `f566c5f7`
       (8 backends) + Reddit follow-up.
 - [x] **A.4** File-split `clients/client/src/types.rs` (1891 lines)
       into `types/{backend, auth, server, file, message, user,
       notification, moderation, voice, command}.rs` with a `mod.rs`
       re-export shim. Zero behaviour change. Effort S/M. Source: A.1#4.
-      — shipped in commit `5647a26f`.
+      — shipped in commit `52525a68`.
 
 ### Phase B — LSP fixes + capability single-source-of-truth (~3 days)
 
@@ -136,13 +136,13 @@ disjoint files.
   - `get_pinned_messages` default → `Err(NotSupported)` (mirror `set_message_pinned`). MED.
   - HN `get_presence` `Ok(Offline)` → `Ok(PresenceStatus::Unknown)` + new variant. MED.
   - Teams `get_user` `NotFound` → `NotSupported`. LOW.
-  — shipped in commit `1034d3e2`.
+  — shipped in commit `02c5e768`.
 - [x] **B.2** Killed `capabilities_for_slug` table — single source of
       truth via runtime `ClientManager::backend_capabilities` registry.
       Deleted `pack_f_capability_gates` parity test + 8 per-backend
       `tests/capabilities.rs` parity tests. 22 UI consumer sites
       migrated to `client_manager.peek().capabilities_for_slug(slug)`.
-      — shipped in commit `68ee5243`.
+      — shipped in commit `890d7abe`.
 - [x] **B.3** Closed as moot — the `forbid_backend_slug_match` lint
       matches `match X.as_str() { ... }` ladders, NOT the 6
       `if backend == "<slug>"` quirk gates the survey flagged. No
@@ -156,12 +156,12 @@ These can land in parallel; they touch disjoint trees.
       `DemoClient2`, `DemoClient3` collapse into one parametric
       `DemoClientGeneric<F>` with type aliases. `lib.rs` 1867→514 LOC (73%),
       single `ClientBackend` impl body, all 7 tests pass. Effort M.
-      Source: B.1.2. — shipped in commit `fc621b7b`.
+      Source: B.1.2. — shipped in commit `2711841f`.
 - [x] **C.2** Pulled `crates/core/src/ui/account/common/chat_view.rs`'s
       virtualization engine into `chat_view/virtualization.rs` (~290 LOC,
       10 pure functions + 2 data structs + ~5 constants). chat_view.rs
       file→directory transition is now in place, de-risking Phase F.
-      Effort M. Source: A.1#1. — shipped in commit `74adc8e4`.
+      Effort M. Source: A.1#1. — shipped in commit `84f7dfd8`.
 
 ### Phase D — `ClientManager::with_backend` + `use_view_resource` (~3 days)
 
@@ -172,7 +172,7 @@ These can land in parallel; they touch disjoint trees.
       sites migrated across `crates/core/src/ui/`. Sites that couldn't
       cleanly migrate (multi-call write-lock bodies) had their `read()`
       flipped to `peek()` to close hang-class #7. Source: D.1.1. —
-      shipped in commit `c23d41a3`.
+      shipped in commit `6a20f477`.
 - [x] **D.2** `ViewQuery` trait + `use_view_resource<Q>(query)` hook
       shipped in `crates/core/src/ui/client_ui/use_view_resource.rs`,
       bundling backend-resolve + 5s timeout via D.1's `with_backend`.
@@ -187,16 +187,16 @@ These can land in parallel; they touch disjoint trees.
       error), multi-call closure bodies with side-effects on ChatData,
       `get_backend_for_server` resolution path, intentional
       `client_manager.read()` subscriptions. Source: D.1.4. — shipped
-      in commit `c1b6e031`.
+      in commit `1306feab`.
 - [x] **D.3** Trait-default approach (cleaner than a derive macro):
       `ClientBackend` gained `fn settings_storage(&self)` with a
       static-empty default, and `get_setting_value`/`set_setting_value`
       now have working defaults that delegate to it. Each of the 11
       plugin crates' identical 12-line {get,set} pair collapsed to a
       single 3-line override returning `&self.settings_storage`. Net
-      -270 LOC. Source: D.4.3. — shipped in commit `cd1809bc`.
+      -270 LOC. Source: D.4.3. — shipped in commit `5e22940d`.
 
-### Phase E — Lint-gate consolidation (~3 days) — shipped in commits `ec586e02` (E.3-E.5) + `6eb5e73b` (E.1+E.2)
+### Phase E — Lint-gate consolidation (~3 days) — shipped in commits `94737f70` (E.3-E.5) + `9635b013` (E.1+E.2)
 
 - [x] **E.1** Created `crates/lint-gate-rules` lib crate. Moved every
       `crates/lint-gate/build/<rule>.rs` into
@@ -204,42 +204,42 @@ These can land in parallel; they touch disjoint trees.
       thin driver calling `poly_lint_gate_rules`. Tests live next to
       rules (29 unit tests passing). Dropped the 1416-line mirror in
       `lint-gate/src/lib.rs` (now 7 lines). Source: E.2 ("recommended
-      consolidation"). — shipped in commit `6eb5e73b`.
+      consolidation"). — shipped in commit `9635b013`.
 - [x] **E.2** Ported 9 of 10 `tools/scripts/forbid-*.sh` scripts into
       `lint-gate-rules` modules using a shared `allowlist::Loader`.
       Bash scripts deleted after parity. CI workflow now runs a single
       `cargo check -p poly-lint-gate` step in place of 9 bash invocations.
       791 pre-existing violations grandfathered in `baseline.json`.
       `forbid-ui-only-persona-action.sh` (Q.3 stub) handled in E.5.
-      — shipped in commit `6eb5e73b`.
+      — shipped in commit `9635b013`.
 - [x] **E.3** Retired the dylint duplication. Deleted
       `tools/lints/poly-lints/` entirely + workspace exclude entry +
       CI dylint job + `dylint.toml`. The lint-gate-rules Rust scanners
       cover the same rules with allowlist semantics. — shipped in
-      commit `ec586e02`.
+      commit `94737f70`.
 - [x] **E.4** Documented `crates/lint-gate/baseline.json` via
       `crates/lint-gate/baseline.md` (when it would be the right tool
       and how to populate it). File itself untouched. — shipped in
-      commit `ec586e02`.
+      commit `94737f70`.
 - [x] **E.5** Deleted the 16-line stub `forbid-ui-only-persona-action.sh`
       and removed the corresponding Q.3 step from
       `.github/workflows/lint-test.yml`. Phase Q.3 stays open in the
       persona-quality-gates plan; will land as a real Rust scanner once
-      the UI surface ships. — shipped in commit `ec586e02`.
+      the UI surface ships. — shipped in commit `94737f70`.
 
-### Phase F — `chat_view.rs` full split (~1 week, parallelisable) — shipped in commits `059eaf55`, `f8ca9e1f`, `d11abf25`, this commit
+### Phase F — `chat_view.rs` full split (~1 week, parallelisable) — shipped in commits `e4d73ded`, `e324f5d8`, `2e3857f1`, this commit
 
 Phase F unlocks all the per-effect work (`use_history_state_effect` etc.)
 that hang-class plans already name as the canonical examples but couldn't
 isolate.
 
 - [x] **F.1** Move sub-components (`ChatHeaderActions` 347 lines,
-      `ChatUtilityRail` 205 lines) to `chat_view/{header,utility_rail}.rs`. — shipped in commit `059eaf55`
+      `ChatUtilityRail` 205 lines) to `chat_view/{header,utility_rail}.rs`. — shipped in commit `e4d73ded`
 - [x] **F.2** Move composer + search-filter helpers to
-      `chat_view/{composer_helpers,search_filter}.rs`. — shipped in commit `f8ca9e1f`
+      `chat_view/{composer_helpers,search_filter}.rs`. — shipped in commit `e324f5d8`
 - [x] **F.3** Move all 12 `use_*_effect` hooks to
       `chat_view/effects/<name>.rs` (one file per effect — they ARE the
-      "reasons to change" that SRP cares about). Source: A.1#1. — shipped in commit `d11abf25`
+      "reasons to change" that SRP cares about). Source: A.1#1. — shipped in commit `2e3857f1`
 - [x] **F.4** Pull `ChatViewSignals` (35 fields) and
       `ChatViewMarkupCtx` (70 fields) into `chat_view/signals.rs` and
       `chat_view/markup_ctx.rs` respectively. Constructor
@@ -269,10 +269,10 @@ ones (smaller signal subscriptions = less re-render churn).
       D.4.5. — shipped (commit ID pending jj describe)
 - [x] **G.2** Extract `BatchedSignal<VoiceState>` from `ChatData`
       (80 sites, self-contained). Voice writes stop re-rendering chat
-      list. Source: D.3. — shipped (commit ID: 1057ee20)
+      list. Source: D.3. — shipped (commit ID: 4a344b71)
 - [x] **G.3** Extract `BatchedSignal<DragState>` from `ChatData`
       (61 sites, transient, very write-heavy during drag). Source: D.3.
-      — shipped in commit `a89999f4`
+      — shipped in commit `c7b3804a`
 - [x] **G.4** Add `ChatAction` enum + `ChatData::apply()`. Migrate the
       23 manual-clear sites (`cd.channels.clear(); cd.messages.clear();
       cd.members.clear()`) to typed actions. Source: D.1.3.
@@ -298,11 +298,11 @@ ones (smaller signal subscriptions = less re-render churn).
         electron_titlebar, context_menu, profile, notifications,
         overview_subpages, create_server, direct_call, direct_call_overlay,
         dm_context_menu, user_profile_modal, routes). — shipped in
-        commit `efee96e5`.
+        commit `e1629980`.
   - [x] **G.6b** Fix multi-bucket consumer cascade
         (`direct_call.rs` reads both `dm_channels` from `ChatLists`
         AND `account_sessions` from `AccountSessions`; callers updated).
-        Both targets build clean. — shipped in commit `2928682e`.
+        Both targets build clean. — shipped in commit `3cca58de`.
   - [x] **G.6c** Writer-completeness migration. Every
         `chat_data.X = ...` / `chat_data.batch(|cd| cd.X.push(...))`
         site reroutes to the matching sub-signal. **MUST** use
@@ -321,7 +321,7 @@ ones (smaller signal subscriptions = less re-render churn).
         `ui.rs`, remove `ChatData` from all UI component imports, remove
         from run_reset_flow. ChatData struct kept in state/chat_data.rs
         for test infra + user_color helper; `pub use` kept accordingly.
-        — shipped in commit `862fb8745f7b`
+        — shipped in commit `363703c09486`
   - [x] **G.6f** By-id audit. Migrated 3 key `iter().find()` linear
         lookups to `*_by_id` helpers: `favorites_sidebar.rs` servers
         lookup (now `server_by_id`), `CategorySection` channels lookup
@@ -437,8 +437,8 @@ caveat).
 - [x] **H.3** Carve out `Moderation` + `SocialGraph` + `DmsAndGroups`
       (38 methods, ~43% of trait). Touches every backend; do
       one-trait-at-a-time. Effort L per trait. Source: C.2.3.
-      Shipped in changes `3abb6289` (H.3.a ModerationBackend) +
-      `3569129e` (H.3.b SocialGraphBackend) + `91923aca` (H.3.c DmsAndGroupsBackend).
+      Shipped in changes `82c4eaa3` (H.3.a ModerationBackend) +
+      `7d17cfc2` (H.3.b SocialGraphBackend) + `3ba3d197` (H.3.c DmsAndGroupsBackend).
 - [x] **H.4** Delete `ClientBackend` trait — all method moved out by H.1-H.3. Migrate all `Box<dyn ClientBackend>` storage sites to `Box<dyn IsBackend>`. Migrate all `~58` `with_backend` UI call sites to capability-gate via accessors. Final cleanup; ratchets the pattern. Shipped in changes `zuoruovy` (H.4.a) + `xxqtynuy` (H.4.b+c) + `rkspuvqmupwz` (H.4.d) + `ozyzuvvtswws` (H.4.e) + `wtosyoxqnxzx` (H.4.f-i).
   - [x] **H.4.a** Carve `MessagingBackend` (8 methods: send_typing, send_reply_message, search_messages, get_pinned_messages, set_message_pinned, get_channel_commands, get_available_emojis, get_available_stickers). All backends + 6 UI call sites migrated. Shipped in `zuoruovy`.
   - [x] **H.4.b** Carve `ServerAdminBackend` (6 methods: create_server, create_channel, update_server_banner, mark_channel_read, respond_to_server_invite, invite_user_to_server). All backends + 4 UI call sites migrated. Shipped in `xxqtynuy`.

@@ -248,7 +248,7 @@ These layouts do not render `ChannelList` at all, so the `.channel-list-wrapper 
 since the wrapper itself will now fill the viewport height. Separately, H2's
 secondary fix ensures the inner `<aside>` stretches within the wrapper.
 
-### H4: New `utility-rail` tab system (recent commit `74bd47a`)
+### H4: New `utility-rail` tab system (recent commit `f8656c7`)
 
 The utility rail (`ChatUtilityRail`, `chat-utility-rail` class) is rendered in the
 *right wing* of `ChatView` — inside `RightWingShell`, which is entirely separate from

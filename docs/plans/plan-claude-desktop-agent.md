@@ -1,8 +1,8 @@
 # Plan — Claude-Desktop-Driven Social Agent
 
 > **Created:** 2026-04-20
-> **Status:** ✅ DONE — every phase (A–F) shipped end-to-end. Memory UI (A.4 FTL keys + A.5 viewer) shipped as `AgentMemorySection` inside the per-chat agent panel. C.4 SSE transport shipped 2026-05-02 as a runtime toggle (default polling, flip to SSE when [anthropics/claude-code#4118](https://github.com/anthropics/claude-code/issues/4118) is fixed — no Poly-side change required since both endpoints always serve). C.7 doc shipped 2026-05-02 in `docs/6-ai-agent/6.1-mcp-server.md`. Plan chain: 9364d71e → afc617ed → 340f3f5f → 343b0ee1 → 05c9d21a → 3f6130d0 → c7e67657 → c6588714 → 0f3e5122 → 6ce5f7e4.
-> **Depends on:** `poly-chat-mcp` (shipped), `/agent` page KV persistence (shipped 7920bdb7), `send_typing` trait + MCP tool (shipped 6a587e66)
+> **Status:** ✅ DONE — every phase (A–F) shipped end-to-end. Memory UI (A.4 FTL keys + A.5 viewer) shipped as `AgentMemorySection` inside the per-chat agent panel. C.4 SSE transport shipped 2026-05-02 as a runtime toggle (default polling, flip to SSE when [anthropics/claude-code#4118](https://github.com/anthropics/claude-code/issues/4118) is fixed — no Poly-side change required since both endpoints always serve). C.7 doc shipped 2026-05-02 in `docs/6-ai-agent/6.1-mcp-server.md`. Plan chain: 64054392 → a020c6d1 → f694bd9e → cf42c67c → 843064fc → ff54a5c2 → 3f44dfc2 → b841e2ba → 7298e403 → c1118963.
+> **Depends on:** `poly-chat-mcp` (shipped), `/agent` page KV persistence (shipped 7708718f), `send_typing` trait + MCP tool (shipped 66519dca)
 > **Supersedes:** the LLM-provider-in-Poly approach drafted in `docs/6-ai-agent/6.0-social-agent-vision.md` — **not** taking that path.
 
 ---

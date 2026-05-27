@@ -1,6 +1,6 @@
 # Plan: SOLID + missing-impl audit — core/state, host-bridge, poly-client
 
-## Status: ✅ DONE — all phases shipped (A.1-A.5 in `swmztsumvtpl`; B.1+B.3 in `f07c7ad2`; B.2+B.4+B.5 in `597cdf93`; B.6 in `d1da3a4f`; B.7 in `ba201366`; B.8 in `62e2832e`; C.1 in `ab103b00`; C.2 in `04b444ff`; C.3 in `6bd11b71`)
+## Status: ✅ DONE — all phases shipped (A.1-A.5 in `swmztsumvtpl`; B.1+B.3 in `b6a7fc20`; B.2+B.4+B.5 in `1529521f`; B.6 in `ebf20208`; B.7 in `9e560649`; B.8 in `8aae5a6b`; C.1 in `a342cb82`; C.2 in `8111cc77`; C.3 in `28fe619f`)
 
 > Owner: 2300887@gmail.com
 > Created: 2026-05-17
@@ -192,7 +192,7 @@ Verification: `cargo check -p poly-core --all-features` — green, 2m43s.
   Removes the last "god-struct" name from the codebase and one whole
   `BatchedSignal` context. ~300 LoC of call-site updates across
   `crates/core/src/ui/` (so requires coordination with parallel UI agent).
-  Shipped in change `tllpzsqw` (git commit `6bd11b71` on
+  Shipped in change `tllpzsqw` (git commit `28fe619f` on
   worktree-agent-a2323d431ccdc055c). Deleted `AppState` struct entirely;
   migrated `is_setup_complete` → `AccountSessions`, `sidebar_invalidated_tick`
   → `ChatLists`; removed `BatchedSignal<AppState>` context provider; removed

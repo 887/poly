@@ -315,7 +315,7 @@ Q.1 grep set. Re-extend Q.1 when Phase E lands and the table is added.
 
 ### Phase R Status
 
-Phase R shipped in commit `947b6364`. All R.1–R.5 sub-steps complete.
+Phase R shipped in commit `b543de55`. All R.1–R.5 sub-steps complete.
 
 | Sub-step | Status | Notes |
 |---|---|---|

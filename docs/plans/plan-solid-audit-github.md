@@ -1,6 +1,6 @@
 # Plan: SOLID + missing-impl audit — `clients/github/`
 
-## Status: ✅ DONE — Phase A shipped (A.1+A.2 in change `zwmsmpmk` / commit `59b100cc`; A.3 skipped — cosmetic). Phase B fully shipped (B.1 in `6e2cd0a1`, B.2/B.4 via `common-forge` crate, B.3+B.5 in earlier waves). Phase C: C.3 shipped (mapping_tests.rs split); C.1 (octocrab migration) and C.2 (trait fan-out via `as_xxx()`) honestly deferred — both require multi-crate / multi-backend coordination outside this audit's scope.
+## Status: ✅ DONE — Phase A shipped (A.1+A.2 in change `zwmsmpmk` / commit `da2e154d`; A.3 skipped — cosmetic). Phase B fully shipped (B.1 in `b4292852`, B.2/B.4 via `common-forge` crate, B.3+B.5 in earlier waves). Phase C: C.3 shipped (mapping_tests.rs split); C.1 (octocrab migration) and C.2 (trait fan-out via `as_xxx()`) honestly deferred — both require multi-crate / multi-backend coordination outside this audit's scope.
 
 Audit pass over `clients/github/src/{api.rs,lib.rs,mapping.rs,signup.rs,types.rs}`
 (2921 LoC). Identifies SOLID violations and missing implementations.
@@ -12,10 +12,10 @@ Scope: only `clients/github/`. Do NOT touch other client crates.
 ## Phase A — Ship-now wins (≤50 LoC each, max 3)
 
 - [x] **A.1** Drop "TODO: migrate to" boilerplate from in-memory
-      settings storage doc comment (`lib.rs:68`). — shipped in change `zwmsmpmk` / `59b100cc`.
+      settings storage doc comment (`lib.rs:68`). — shipped in change `zwmsmpmk` / `da2e154d`.
 - [x] **A.2** Dedup `NotSupported` allocation strings (`lib.rs:1025-1133`,
       ~24 sites all "GitHub has no X") into module-level `const` slices.
-      — shipped in change `zwmsmpmk` / `59b100cc`; 7 `NS_NO_*` consts replace 20 inline allocations.
+      — shipped in change `zwmsmpmk` / `da2e154d`; 7 `NS_NO_*` consts replace 20 inline allocations.
 - [~] **A.3** ~~`mapping.rs:421,552` (test `meta_text.unwrap()`) — cosmetic
       tighten.~~ **SKIPPED** — test module already has `#![allow(clippy::unwrap_used)]`; no change needed.
 
@@ -25,7 +25,7 @@ Scope: only `clients/github/`. Do NOT touch other client crates.
       (line 190) + `CodeRepoBackend` (line 793) + `ModerationBackend`
       (line 849) + `SocialGraphBackend` (line 1009) +
       `DmsAndGroupsBackend` (line 1078) into sibling modules. SRP/ISP.
-      — shipped in commit `6e2cd0a1`; 9 new files, lib.rs reduced from
+      — shipped in commit `b4292852`; 9 new files, lib.rs reduced from
       1195 LoC to 183 LoC (85% reduction). New modules: `impl_is_backend`,
       `impl_code_repo`, `impl_moderation`, `impl_social_graph`,
       `impl_dms_and_groups`, `impl_settings`, `impl_view_descriptor`,

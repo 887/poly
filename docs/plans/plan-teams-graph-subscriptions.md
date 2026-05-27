@@ -4,7 +4,7 @@
 > Scope: `clients/teams/src/http.rs`, `clients/teams/src/is_backend.rs`,
 > `crates/host-bridge/` (new webhook relay route), shell tunneling.
 
-## Status: ✅ DONE — all phases shipped (Phase A.1 + B + C in changes `3b2bce28`, `a9a0e514`; Phase D + E in change `txxwonslzpyn`, 2026-05-24)
+## Status: ✅ DONE — all phases shipped (Phase A.1 + B + C in changes `3c427e0d`, `09a62815`; Phase D + E in change `txxwonslzpyn`, 2026-05-24)
 
 Carved out of `plan-solid-audit-teams.md` D.3 because the work is genuinely
 ~700 LoC across the client, the host-bridge, and requires a publicly

@@ -1,6 +1,6 @@
 # Plan: SOLID + missing-impl audit — `clients/hackernews/`
 
-## Status: ✅ DONE — A.1+A.2 shipped (`llvrkmlt`), A.3 skipped (already covered), B.1 (`6067edd2`), B.3+B.4 (prev change), B.2+B.5 (`xtkvrtox`). Phase C deferred: C.1/C.2/C.3 are >300-LoC architectural rewrites whose scope crosses crates (host-bridge KV wiring for C.1; auth/error redesign for C.2; native↔WASM HTML-parse strategy decision for C.3). They are intentionally left for follow-up plans rather than rolled into the SOLID-audit close-out — file separate plan-doc per item when ready to land.
+## Status: ✅ DONE — A.1+A.2 shipped (`llvrkmlt`), A.3 skipped (already covered), B.1 (`5ab70d78`), B.3+B.4 (prev change), B.2+B.5 (`xtkvrtox`). Phase C deferred: C.1/C.2/C.3 are >300-LoC architectural rewrites whose scope crosses crates (host-bridge KV wiring for C.1; auth/error redesign for C.2; native↔WASM HTML-parse strategy decision for C.3). They are intentionally left for follow-up plans rather than rolled into the SOLID-audit close-out — file separate plan-doc per item when ready to land.
 
 Audit pass over `clients/hackernews/src/{api.rs,auth.rs,cache.rs,lib.rs,mapping.rs,signup.rs,types.rs}`
 (2245 LoC). Identifies SOLID violations and missing implementations.
@@ -24,7 +24,7 @@ Scope: only `clients/hackernews/`. Do NOT touch other client crates.
       sibling trait impls (`SocialGraphBackend` line 701,
       `DmsAndGroupsBackend` line 774, plus 6 trait methods returning
       `NotSupported` each). Move trait impls to sibling modules. SRP.
-      — shipped in change `6067edd2`; `lib.rs` reduced to ~370 LoC;
+      — shipped in change `5ab70d78`; `lib.rs` reduced to ~370 LoC;
       new files: `social_graph.rs`, `dms_and_groups.rs`, `settings.rs`,
       `view_descriptor.rs`; also removed stale `auth.rs` duplicate
       (B.4 had created `auth/mod.rs` but left the old file).

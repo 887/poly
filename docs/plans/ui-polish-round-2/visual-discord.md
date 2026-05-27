@@ -81,7 +81,7 @@ OAuth2 bearer token. `authenticate()` calls `GET /api/v10/users/@me`. `AuthFaile
 ### Messaging
 `send_message`, `send_reply_message`, `send_typing`, `delete_message` all implemented. `search_messages` not overridden (NotSupported).
 
-### 14 New Backend Ops (commit 5b142e67)
+### 14 New Backend Ops (commit 2041f112)
 Most complete: `block_user`, `add_friend`/`remove_friend`, `set_friend_nickname`, `set_user_note`, `close_dm_channel`, `unmute_conversation`, `leave_group_dm`, `edit_group_dm`, `add_users_to_group_dm`, `invite_user_to_server` all via REST. `ignore_user`/`unignore_user` and `mute_conversation` use trait defaults.
 
 ### Moderation Ops

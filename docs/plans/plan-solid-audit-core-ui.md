@@ -131,7 +131,7 @@ Not started in this change — listed for follow-up agents.
   allowlist (main_layout.rs, settings.rs, account/settings.rs,
   routes/account.rs, etc.) to `use_reactive_effect` or
   `use_spawn_once`. Apply hang-class #6/#8 countermeasures per
-  CLAUDE.md. Shipped in git commit `9f50096a`.
+  CLAUDE.md. Shipped in git commit `1604bdfe`.
   MIGRATED to use_reactive_effect: main_layout.rs (2 sites: route_key + route deps),
   code_explorer.rs (1: channel/server props), chat_style_editor.rs (1: account/chat props).
   ALLOWLISTED inline: main_layout.rs (3), settings/mod.rs (3), routes/account.rs (1),
@@ -152,7 +152,7 @@ Not started in this change — listed for follow-up agents.
 
 ---
 
-## Phase C — Architectural rewrites (> 300 LoC each) — C.1 shipped in commit df696245
+## Phase C — Architectural rewrites (> 300 LoC each) — C.1 shipped in commit 292ee4da
 
 - [x] **C.1** `chat_view/mod.rs` (4025 LoC, 88 fns) — long-standing
   CLAUDE.md target. Split: `layout.rs` (shell, header, side column),

@@ -122,9 +122,9 @@ All three clients use hardcoded in-memory sessions — `authenticate()` returns 
 - Platypus (DemoClient3): returns `ViewKind::CardGrid` with `plugin-demo-forum-overview-title`.
 
 ### Messaging
-All three: `send_message`, `send_reply_message`, `send_typing` all return `Ok`. `search_messages` is implemented (the only backends in the codebase with this). Cat+Dog share an in-memory message store — cross-account chat functional since commit `1b35f0bc` (arena server + mutual friends seed).
+All three: `send_message`, `send_reply_message`, `send_typing` all return `Ok`. `search_messages` is implemented (the only backends in the codebase with this). Cat+Dog share an in-memory message store — cross-account chat functional since commit `aa6fab88` (arena server + mutual friends seed).
 
-### 14 New Backend Ops (commit 5b142e67)
+### 14 New Backend Ops (commit 2041f112)
 All 14 return `Ok(())` as in-memory stubs across all three demo clients.
 
 ### Context-Menu
@@ -133,4 +133,4 @@ All 14 return `Ok(())` as in-memory stubs across all three demo clients.
 ### Known Gaps
 - `get_pinned_messages` not overridden — trait default `NotSupported`.
 - Boot hang watchdog fires on Dog account switch.
-- Friends panel "No friends found" may be stale — Cat+Dog seeded as friends in `1b35f0bc`.
+- Friends panel "No friends found" may be stale — Cat+Dog seeded as friends in `aa6fab88`.

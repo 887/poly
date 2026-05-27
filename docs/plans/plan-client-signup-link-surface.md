@@ -1,6 +1,6 @@
 # Client Signup-Link Surface — WIT Extension + Per-Backend Defaults + Playwright
 
-## Status: ✅ DONE — Phases A through F all shipped (Phase E Playwright scenarios landed in commit 8a9cd591)
+## Status: ✅ DONE — Phases A through F all shipped (Phase E Playwright scenarios landed in commit 12ae89a8)
 
 > Why this is its own plan: every backend's account-add wizard currently lacks a
 > "Don't have an account? Register here" affordance. Most users register
@@ -256,7 +256,7 @@ runs in **mock-default mode** unless `POLY_SIGNUP_E2E_REAL=1` is set:
 
 ---
 
-## Phase A — WIT surface + ClientBackend trait extension (A.1+A.2 shipped in commit `083504763f0a`)
+## Phase A — WIT surface + ClientBackend trait extension (A.1+A.2 shipped in commit `2a91d4817f9e`)
 
 **Effort:** half day.
 
@@ -308,7 +308,7 @@ for this commit and remain for the next Phase A commit.
 
 ---
 
-## Phase B — Per-backend default URLs + custom-server param wiring (shipped in commit `f27ff362`)
+## Phase B — Per-backend default URLs + custom-server param wiring (shipped in commit `e47920a9`)
 
 **Effort:** 1 day (10 backends × ~30 min each, including unit tests).
 

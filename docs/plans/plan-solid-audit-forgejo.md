@@ -1,6 +1,6 @@
 # Plan: SOLID + missing-impl audit — `clients/forgejo/`
 
-## Status: ✅ DONE — all phases shipped or honestly deferred (Phase A `qmykutwl`/`5833a421`, Phases B + C close-out 2026-05-24).
+## Status: ✅ DONE — all phases shipped or honestly deferred (Phase A `qmykutwl`/`3b55489a`, Phases B + C close-out 2026-05-24).
 
 Audit pass over `clients/forgejo/src/{api.rs,lib.rs,mapping.rs,signup.rs,types.rs}`
 (2137 LoC). Identifies SOLID violations and missing implementations.

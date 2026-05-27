@@ -1,11 +1,11 @@
 # Plan: Stoat (Vortex) voice WASM port + mutual-audio cross-shell E2E
 
 > Created 2026-05-17. Counterpart to `plan-voice-media-plane-e2e.md` (Discord
-> voice), now landed on main as commits `b610de14` → `0c946c61` → `6d326f3f` →
-> `a7ea37e6` (event_stream listener for native restores + voice creds polling
+> voice), now landed on main as commits `e4fbb8a1` → `b1f213b1` → `9f867708` →
+> `7ddce4d5` (event_stream listener for native restores + voice creds polling
 > + gloo_timers boot overlay + dropped user_id filter).
 
-## Status: ✅ DONE — A.0/A.1/A.2/A.3 in `uxqvulmv`; B.1/B.2/B.5 in `oxuznzwv`; B.3/B.4 shipped (sibling files exist; B.3 further extended by RNNoise B.8); B.6 in `pwuvwxtp`; C.1 via core-state C.1 ISP split (`ab103b00`); C.2 via test-stoat seed; D.1 in `ptovooks`; E.1/E.2 verified via the live bug-bash that produced `8193daa9` / `63b97280` / `fb7c4d99` / `e7f7bde9` / `799bceab` / `59199fd5`. E.3 stretch deferred.
+## Status: ✅ DONE — A.0/A.1/A.2/A.3 in `uxqvulmv`; B.1/B.2/B.5 in `oxuznzwv`; B.3/B.4 shipped (sibling files exist; B.3 further extended by RNNoise B.8); B.6 in `pwuvwxtp`; C.1 via core-state C.1 ISP split (`a342cb82`); C.2 via test-stoat seed; D.1 in `ptovooks`; E.1/E.2 verified via the live bug-bash that produced `93185562` / `eb03b2d8` / `c16011c8` / `f3f5215a` / `9f974909` / `c1ee766b`. E.3 stretch deferred.
 
 ## Decisions (opus agent, 2026-05-17)
 
@@ -101,10 +101,10 @@ The 4 commits we shipped today touched **backend-agnostic** code:
 
 | Commit | Path | Helps stoat? |
 |---|---|---|
-| `b610de14` event_stream listener for native restores | `crates/core/src/event_stream.rs` + `account_restore.rs` | ✅ YES — stoat is a native account; its `event_stream()` will be polled on restore |
-| `0c946c61` voice_server_creds polling | `clients/discord/src/lib.rs` | ❌ no — discord-specific |
-| `6d326f3f` boot overlay gloo_timers | `crates/core/src/ui.rs` | ✅ YES — overlay is global; stoat account on the boot path benefits |
-| `a7ea37e6` drop user_id filter | `clients/discord/src/gateway_bridge.rs` | ❌ no — discord-specific |
+| `e4fbb8a1` event_stream listener for native restores | `crates/core/src/event_stream.rs` + `account_restore.rs` | ✅ YES — stoat is a native account; its `event_stream()` will be polled on restore |
+| `b1f213b1` voice_server_creds polling | `clients/discord/src/lib.rs` | ❌ no — discord-specific |
+| `9f867708` boot overlay gloo_timers | `crates/core/src/ui.rs` | ✅ YES — overlay is global; stoat account on the boot path benefits |
+| `7ddce4d5` drop user_id filter | `clients/discord/src/gateway_bridge.rs` | ❌ no — discord-specific |
 
 **Verification work for Phase A.0:** confirm a stoat account on the cold-boot path no longer wedges behind the boot overlay AND that stoat-side ClientEvents flow through the now-spawned event_stream listener. Likely a single bash + browser-eval smoke test, ~5 min.
 
@@ -112,7 +112,7 @@ The 4 commits we shipped today touched **backend-agnostic** code:
 
 ### Phase A — verification + protocol gap analysis
 
-- [x] **A.0 ✅ shipped in change `uxqvulmv` — verified.** Live poly-web (CDP /devtools/page/B6081A99…) probed: title `"Poly — PolyGlot Messenger"`, no boot-overlay element in DOM (`overlayDisplay: "no-overlay"`, `overlayVisible: false`). SQLite `~/.local/share/poly/storage.sqlite3` `account_tokens` row contains 2 stoat accounts (`Stoat` + `Raccoon` on `http://localhost:9101`). `crates/core/src/account_restore.rs:311` calls `spawn_event_stream_listener` unconditionally for every restored backend (slug-agnostic), so the discord chain commit `b610de14` automatically helps stoat — no stoat-specific change needed. `6d326f3f`'s `gloo_timers`-based overlay dismissal is also global. No stoat-tied console warnings.
+- [x] **A.0 ✅ shipped in change `uxqvulmv` — verified.** Live poly-web (CDP /devtools/page/B6081A99…) probed: title `"Poly — PolyGlot Messenger"`, no boot-overlay element in DOM (`overlayDisplay: "no-overlay"`, `overlayVisible: false`). SQLite `~/.local/share/poly/storage.sqlite3` `account_tokens` row contains 2 stoat accounts (`Stoat` + `Raccoon` on `http://localhost:9101`). `crates/core/src/account_restore.rs:311` calls `spawn_event_stream_listener` unconditionally for every restored backend (slug-agnostic), so the discord chain commit `e4fbb8a1` automatically helps stoat — no stoat-specific change needed. `9f867708`'s `gloo_timers`-based overlay dismissal is also global. No stoat-tied console warnings.
 - [x] **A.1 ✅ shipped in change `uxqvulmv` — native-only inventory complete.** See "A.1 native-only call inventory" sub-section below.
 - [x] **A.2 ✅ shipped in change `uxqvulmv` — mock wire format documented.** See "A.2 Vortex mock wire format" sub-section below.
 - [x] **A.3 ✅ shipped in change `uxqvulmv` — decision (b) sibling file `voice_wasm.rs`.** See "Decisions" section above for rationale. Stub at `clients/stoat/src/voice_wasm.rs` (placeholder), declared in `lib.rs` under `#[cfg(target_arch = "wasm32")]`.
@@ -195,8 +195,8 @@ Pure data items that already compile on wasm32 and should be hoisted to `voice_c
 
 ### Phase E — Live mutual-audio cross-shell smoke
 
-- [x] **E.1** Launch poly-web as stoat account (otter), poly-electron as stoat account (beaver), both join the same voice channel via mock. Shipped — live smoke ran; surfaced and fixed bugs `8193daa9` (stale channel context crash), `63b97280` (startup race), `fb7c4d99` (re-click drops participants), `e7f7bde9` (departing channel cleanup), `799bceab` (render-time safety net).
-- [x] **E.2** Both shells reach the in-voice UI with 🎤🔊📵 buttons; no console warnings; participant list shows both users. Shipped — verified during the bug-bash that produced the fixes listed in E.1; participant cache populated via Bonfire WS broadcast in `59199fd5`.
+- [x] **E.1** Launch poly-web as stoat account (otter), poly-electron as stoat account (beaver), both join the same voice channel via mock. Shipped — live smoke ran; surfaced and fixed bugs `93185562` (stale channel context crash), `eb03b2d8` (startup race), `c16011c8` (re-click drops participants), `f3f5215a` (departing channel cleanup), `9f974909` (render-time safety net).
+- [x] **E.2** Both shells reach the in-voice UI with 🎤🔊📵 buttons; no console warnings; participant list shows both users. Shipped — verified during the bug-bash that produced the fixes listed in E.1; participant cache populated via Bonfire WS broadcast in `c1ee766b`.
 - [~] **E.3** ~~(Optional, stretch) Add a `RemoteSpeakingEvent` tracing log analogous to discord, drive mic capture on one shell, observe the log on the other. This is the load-bearing mutual-audio byte-flow verification.~~ **DEFERRED** — explicit stretch goal, not blocking plan closure. Worth a follow-up plan if mutual-audio regressions surface.
 
 ## Open architectural questions for the OPUS agent

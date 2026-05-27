@@ -1,6 +1,6 @@
 # Plan — `BatchedSignal<T>` Newtype (Cascade-Hang Prevention)
 
-> Status: **✅ DONE** — Phases 1-3 + 5 lint shipped (`e091281c`, `33b18d4d`, `828f9584`, `6c6eba3f`). Phase 4 (other hot-path signals) remains opportunistic per CLAUDE.md hang #1 entry.
+> Status: **✅ DONE** — Phases 1-3 + 5 lint shipped (`38a9c81b`, `6f4afde0`, `d5e7dbcf`, `b07516dc`). Phase 4 (other hot-path signals) remains opportunistic per CLAUDE.md hang #1 entry.
 > Authors: orchestrator + audit subagent (`/tmp/poly-signal-write-audit.md`) + API design subagent (`/tmp/poly-batched-signal-design.md`).
 > Last updated: 2026-04-25.
 
@@ -12,7 +12,7 @@ Over the last month, Poly has been hit by the same WASM scheduler hang **six sep
 
 Known recent incidents (all the same bug class, different locations):
 
-- commit `a761fe01` — `favorites_sidebar.rs::AccountIcon::onclick` (5 `chat_data.write()` calls batched).
+- commit `1bd6e1fa` — `favorites_sidebar.rs::AccountIcon::onclick` (5 `chat_data.write()` calls batched).
 - commit HEAD − 1 — `chat_view.rs:759-763` (5 `chat_data.write()` in `open_message_hit` batched).
 - commit HEAD − 1 — `favorites_sidebar.rs::restore_server_channel` (7 writes accumulated into locals, 1 terminal batch).
 - Teams Sheep click freeze (task #237, still open at plan-authoring time) — another render cascade, suspected in `ChatView` `use_effect` chain.
@@ -217,7 +217,7 @@ Total: ~1 focused week. Can run phases 2 + 3 in parallel on worktrees if conflic
 - [`/tmp/poly-signal-write-audit.md`](file:///tmp/poly-signal-write-audit.md) — 17 HIGH + 104 MEDIUM cascade sites with line-ranges, signal names, severity.
 - [`/tmp/poly-batched-signal-design.md`](file:///tmp/poly-batched-signal-design.md) — 430-line API spec with code snippets, trait-interop matrix, failure-mode analysis, migration playbook.
 - `CLAUDE.md` § "Common WASM-hang causes" #1 — the hang class being eliminated.
-- Commit `a761fe01` — prior batch-fix for `AccountIcon::onclick`, canonical sync-batch example.
+- Commit `1bd6e1fa` — prior batch-fix for `AccountIcon::onclick`, canonical sync-batch example.
 - Commit `HEAD` (at plan time) — `restore_server_channel` + `open_message_hit` batch fixes, canonical async-interleaved example (to be supplanted by `PendingUpdate` in phase 2).
 
 ---

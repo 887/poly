@@ -40,7 +40,7 @@ Guiding principle (carried over from the moderation plan):
   - Update the `BackendCapabilities` struct defaults (`READ_ONLY_FEED`, `MESSAGING_NO_SOCIAL`, `FULL_SOCIAL_CHAT` — all in `clients/client/src/types.rs:743-841`) to set `landing: LandingPage::Overview`.
   - Audit `capabilities_for_slug` (`clients/client/src/types.rs:75-128`): each backend that previously declared `landing: DirectMessages` / `FirstServer` / `ServerOverview` either keeps its explicit override (if it really wants something else) or drops the override and inherits `Overview`. Sensible per-backend defaults to discuss in Phase 2.
   - Wire `LandingPage::Overview` into the AccountIcon click fallback in `crates/core/src/ui/favorites_sidebar.rs:698-731` so it routes to `Route::ServerOverviewRoute`.
-  - The capability validator added in commit `49d8eed9` (skip stored-route restore when incompatible) needs an extra branch for `/overview` paths — overview is always compatible because every backend implements it.
+  - The capability validator added in commit `27ac8b46` (skip stored-route restore when incompatible) needs an extra branch for `/overview` paths — overview is always compatible because every backend implements it.
 - Drop `crates/core/src/ui/server_overview.rs` from the host (the `ServerOverviewPage` component moves into the GitHub/Forgejo plugin code in Phase 2).
 - `cargo check --workspace` will fail until every backend implements the new trait method — that's the point of making it required. Phase 2 fixes it.
 

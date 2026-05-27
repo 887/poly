@@ -5,11 +5,11 @@
 
 ## Status: ✅ DONE — all phases shipped
 
-- Phase A — `e22ddb42` (SortModes layout + FTL keys)
-- Phase B — `d3f9e5e4` (Lemmy on SortModes, CommunitiesLayout deleted)
-- Phase C — `a7724ce6` (Reddit on SortModes, FeedLayout abuse dropped)
-- Phase D — `2b4cd67a` (Posts|Comments toggle + filter input)
-- Phase E — `bc3ba7fe` + `fdd4c538` (Discover route + page + sidebar nav)
+- Phase A — `6c6609e0` (SortModes layout + FTL keys)
+- Phase B — `af8edb20` (Lemmy on SortModes, CommunitiesLayout deleted)
+- Phase C — `72f0f7d3` (Reddit on SortModes, FeedLayout abuse dropped)
+- Phase D — `4f680ee2` (Posts|Comments toggle + filter input)
+- Phase E — `12faaa6a` + `83b1e245` (Discover route + page + sidebar nav)
 
 End-to-end verified: r/rust subreddit shows real reddit sort channels;
 direct nav to `/reddit/.../discover` renders search input + scope-tab-
@@ -127,7 +127,7 @@ Bar 1.
       the channel list shows the 16 sort modes with the active one
       highlighted; click a row, verify the post list re-orders.
 
-## Phase C — Reddit: drop FeedLayout abuse, ship SortModes (shipped in commit `178f58bc`)
+## Phase C — Reddit: drop FeedLayout abuse, ship SortModes (shipped in commit `a2e357cc`)
 
 - [x] **C.1** Change `clients/reddit/src/backend.rs::get_sidebar_declaration`
       to return `SidebarLayoutKind::SortModes` with Reddit's 5 sorts

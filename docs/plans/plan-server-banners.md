@@ -2,7 +2,7 @@
 
 > **Created:** 2026-04-21
 > **Last updated:** 2026-04-23
-> **Status:** ✅ DONE — implementation shipped end-to-end in commit `0c76d236e93b` (24 files: WIT trait `update_server_banner`, plugin impls for poly-server / Discord / Lemmy, host `BannerPanel` UI wired, test-server `PATCH /guilds/{id}` + `PUT /community` handlers, 9 integration tests in `clients/{discord,lemmy,server-client}/tests/banner.rs`).
+> **Status:** ✅ DONE — implementation shipped end-to-end in commit `90b7bc0fc4d0` (24 files: WIT trait `update_server_banner`, plugin impls for poly-server / Discord / Lemmy, host `BannerPanel` UI wired, test-server `PATCH /guilds/{id}` + `PUT /community` handlers, 9 integration tests in `clients/{discord,lemmy,server-client}/tests/banner.rs`).
 > **Plan-author:** agent-a882b844
 
 ---

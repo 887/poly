@@ -1,6 +1,6 @@
 # Plan — Read-Guard Scoping (Class #2 Hang Prevention)
 
-> Status: **✅ DONE** — Phases 1+2+3+5 shipped (`5c1e13c7`). `BatchedSignal::with(|v|)` documented as preferred read API; audit found zero live HIGH incidents (BatchedSignal Phases 2-3 disciplined the codebase); `forbid-long-read-guard.sh` lint ships as the regression gate. Phase 4 (Optional Dylint upgrade) marked OBSOLETE 2026-05-02 — the lint algorithm got smarter (brace-depth + `drop()` tracking) so the allowlist is empty by design and dylint's distinguish-`Signal::read`-from-other-`.read()`s value is theoretical. Canonical patterns at `docs/dev/reactive-state.md`.
+> Status: **✅ DONE** — Phases 1+2+3+5 shipped (`6927d2cb`). `BatchedSignal::with(|v|)` documented as preferred read API; audit found zero live HIGH incidents (BatchedSignal Phases 2-3 disciplined the codebase); `forbid-long-read-guard.sh` lint ships as the regression gate. Phase 4 (Optional Dylint upgrade) marked OBSOLETE 2026-05-02 — the lint algorithm got smarter (brace-depth + `drop()` tracking) so the allowlist is empty by design and dylint's distinguish-`Signal::read`-from-other-`.read()`s value is theoretical. Canonical patterns at `docs/dev/reactive-state.md`.
 > Authors: orchestrator (audit at [`/tmp/poly-hang-class-2-audit.md`](file:///tmp/poly-hang-class-2-audit.md)).
 > Last updated: 2026-05-02.
 
@@ -54,7 +54,7 @@ The combination buys defense-in-depth: the lint catches the regression at PR tim
 
 Each phase lands independently. Phase N blocks on phase N−1.
 
-### Phase 1 — Formalise `BatchedSignal::with` as the preferred read closure API — ✅ DONE (`5c1e13c7`)
+### Phase 1 — Formalise `BatchedSignal::with` as the preferred read closure API — ✅ DONE (`6927d2cb`)
 
 **Deliverable:** docs change + canonical example, no behaviour change.
 
@@ -70,7 +70,7 @@ Tasks:
 
 Verification: `cargo doc --no-deps -p poly-core` clean.
 
-### Phase 2 — Migrate the three MEDIUM sites — ✅ DONE (`5c1e13c7`)
+### Phase 2 — Migrate the three MEDIUM sites — ✅ DONE (`6927d2cb`)
 
 **Deliverable:** the three MEDIUM call sites identified in the audit each move to a no-guard-across-helper-call shape.
 
@@ -87,7 +87,7 @@ Tasks:
 
 Verification: `cargo check --workspace --target wasm32-unknown-unknown`, smoke-test electron titlebar (Phase-2 desktop build) and the AccountBar render path on each backend.
 
-### Phase 3 — Ship the lint script — ✅ DONE (`5c1e13c7`)
+### Phase 3 — Ship the lint script — ✅ DONE (`6927d2cb`)
 
 **Deliverable:** `tools/scripts/forbid-long-read-guard.sh` + allowlist + CI wiring.
 
@@ -117,7 +117,7 @@ The original Phase 4 idea — replace the regex with a `cargo dylint` HIR-aware 
 
 **Verdict:** dylint adds no value the smarter regex doesn't already provide. This phase is dead, not deferred. Keep the entry for plan-history continuity; do not re-open without a concrete failure case the regex can't handle.
 
-### Phase 5 — Documentation cleanup — ✅ DONE (`5c1e13c7`)
+### Phase 5 — Documentation cleanup — ✅ DONE (`6927d2cb`)
 
 - [x] Update `CLAUDE.md` "Common WASM-hang causes" #2 to point at this plan + the lint as the prevention.
 - [x] Add a row to the "lint scripts" table in `docs/dev/reactive-state.md` (or wherever the existing scripts are catalogued).

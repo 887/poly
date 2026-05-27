@@ -5,7 +5,7 @@
 > just landed, hands-off).
 > Source-of-truth for SOLID definitions: top-of-repo `CLAUDE.md` §"Design Principles".
 
-## Status: ✅ DONE — all phases shipped (changes `nprtmlvu`, `xwqxtotz`, `qumnkxmo`, `e1cb7a55`, and the SOLID close commit)
+## Status: ✅ DONE — all phases shipped (changes `nprtmlvu`, `xwqxtotz`, `qumnkxmo`, `1b0f9041`, and the SOLID close commit)
 
 Phase A (audit) complete. Phase B (ship-now wins) shipped. Phase C complete:
 C.1 (send_typing WS), C.2 (search_messages), C.3 (get_server_roles), C.4

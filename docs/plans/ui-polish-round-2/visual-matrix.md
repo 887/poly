@@ -77,9 +77,9 @@ No critical console errors observed during Matrix backend navigation.
 `get_account_overview_view()` returns `ViewKind::CardGrid` with Space list. `get_view_rows("")` fetches joined rooms mapped to card rows. `get_channel_view` returns `NotSupported` (chat-only, correct).
 
 ### Messaging
-`send_message`, `send_reply_message`, `send_typing`, `delete_message` all implemented via CS API. Avatar/display name hydrated since commits `7f4dc5df` and `44636eda`. `search_messages` not overridden (NotSupported).
+`send_message`, `send_reply_message`, `send_typing`, `delete_message` all implemented via CS API. Avatar/display name hydrated since commits `6f9d5dbd` and `c7d33e1d`. `search_messages` not overridden (NotSupported).
 
-### 14 New Backend Ops (commit 5b142e67)
+### 14 New Backend Ops (commit 2041f112)
 `block_user`/`ignore_user`/`unignore_user` via `m.ignored_user_list`. `close_dm_channel`/`leave_group_dm` via leave+forget+`m.direct`. `mute_conversation`/`unmute_conversation` via push rules. `edit_group_dm` via `m.room.name` + `m.room.avatar`. `add_users_to_group_dm`/`invite_user_to_server` via room invite. `add_friend`/`remove_friend`/`set_friend_nickname`/`set_user_note` return NotSupported (no Matrix friend concept).
 
 ### Moderation Ops

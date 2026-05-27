@@ -4,7 +4,7 @@
 > Scope: `clients/teams/src/voice.rs`, `voice_bridge`, native shell entitlements.
 > Source-of-truth for SOLID definitions: top-of-repo `CLAUDE.md`.
 
-## Status: IN PROGRESS — Phase A + B + Phase-C Rust scaffolding shipped in `clients/teams/src/calling/` (changes `a9a0e514` for A+B, then a follow-up Phase-C-Rust commit); Phase C JS bridge (`@azure/communication-calling` integration) + Phase D (UI parity) still deferred pending shell-side bundling + tenant infrastructure
+## Status: IN PROGRESS — Phase A + B + Phase-C Rust scaffolding shipped in `clients/teams/src/calling/` (changes `09a62815` for A+B, then a follow-up Phase-C-Rust commit); Phase C JS bridge (`@azure/communication-calling` integration) + Phase D (UI parity) still deferred pending shell-side bundling + tenant infrastructure
 
 Carved out of `plan-solid-audit-teams.md` D.1 because the work is genuinely a
 multi-week integration (~800 LoC of Rust + ~200 LoC of shell glue + a Cargo

@@ -2,7 +2,7 @@
 
 > Created 2026-05-17. Sibling to `plan-stoat-voice-wasm.md` (audio-only, shipped).
 > Counterpart to the discord video chain (`voice_bridge.rs` Phase Y — wasm H.264
-> capture/playback + mock video signaling, change `720c8f32` on main).
+> capture/playback + mock video signaling, change `b3bf8bff` on main).
 
 ## Status: IN PROGRESS — Phase A+B+C UI-only shipped (C.1/C.2/C.3 ship UI buttons + tile rendering + click handlers wiring `StoatClient::start_video_capture`); D smoke deferred pending WebCodecs JS interop.
 
@@ -219,7 +219,7 @@ fallback if Phase B research surfaces a wasm-LiveKit blocker.** Option
 
 ## Discord WASM video pieces — reuse inventory
 
-What the discord chain (commit `720c8f32` and ancestors) already ships
+What the discord chain (commit `b3bf8bff` and ancestors) already ships
 that stoat-video can reuse, and what is discord-specific:
 
 | Discord asset | Path | Reuse for stoat? |
@@ -233,7 +233,7 @@ that stoat-video can reuse, and what is discord-specific:
 | Video playback (`pub mod video_playback` at `voice_bridge.rs:1824`) | `voice_bridge.rs:1824-1976` | **Partial — same story as capture.** Decode side: `VideoDecoder` (browser) or host-bridge `/host/video/decode_h264` → `<canvas>` or `<video>` element draw. Stoat-side adaptation: same canvas-draw, different upstream packet source (LiveKit subscribe vs discord's RTP/AEAD/UDP recv). |
 | op 12 / op 21 video stream negotiation | `voice_bridge.rs:672-720` (`negotiate_video_stream`) | **NOT REUSABLE.** Discord-protocol-specific (RTP SSRC allocation). LiveKit replaces this entirely with the JWT `can_publish_sources` grant + LiveKit room publish API. |
 | RTP header building + AEAD for video frames | `clients/discord/src/voice/video.rs` (578 LoC) + `voice_bridge.rs:701-720` | **NOT REUSABLE.** LiveKit handles SRTP and packetization internally; we hand it raw encoded chunks. |
-| Mock video signaling (test-discord) | `servers/test-discord/src/` (per commit `720c8f32`) | **Pattern reusable for test-stoat.** The mock exposes the op-12/op-21 video negotiation in JSON. test-stoat would need an analogous mock-LiveKit (or mock-Vortex-extended) endpoint. |
+| Mock video signaling (test-discord) | `servers/test-discord/src/` (per commit `b3bf8bff`) | **Pattern reusable for test-stoat.** The mock exposes the op-12/op-21 video negotiation in JSON. test-stoat would need an analogous mock-LiveKit (or mock-Vortex-extended) endpoint. |
 
 What the existing **stoat** wasm code already ships that video work builds on:
 

@@ -462,7 +462,7 @@ Layout:
 
 ---
 
-## Phase A — WIT extension + ClientBackend trait surface (shipped in commit `083504763f0a`)
+## Phase A — WIT extension + ClientBackend trait surface (shipped in commit `2a91d4817f9e`)
 
 **Effort:** S (0.5 day). Touches: `wit/messenger-plugin.wit`,
 `clients/client/src/lib.rs`, all 10 `clients/<backend>/src/wit_bindings.rs`
@@ -524,7 +524,7 @@ All 5 sub-steps shipped in one commit (see commit ID in phase header).
 
 ---
 
-## Phase B — Per-backend impls (`get-client-version` + override) (shipped in commit `f27ff362`)
+## Phase B — Per-backend impls (`get-client-version` + override) (shipped in commit `e47920a9`)
 
 **Effort:** M (1 day). Touches every `clients/<backend>/src/lib.rs`
 and `http.rs`.
@@ -560,7 +560,7 @@ Unit tests, persistence, and WASM-guest wiring are deferred to Phases B.2-B.4 fo
 
 ---
 
-## Phase C — `poly_kv` storage + persistence (shipped in commit `7dd7dab1`)
+## Phase C — `poly_kv` storage + persistence (shipped in commit `d16dff4f`)
 
 **Effort:** S (0.5 day). Touches: `poly_kv` host-side wrapper,
 backend `new()` paths.
@@ -668,7 +668,7 @@ pattern still works via `meta_persona_recent_actions`).
 
 ---
 
-## Phase E — Mock-server inspection endpoints (shipped in commit `c305db0d`)
+## Phase E — Mock-server inspection endpoints (shipped in commit `70e9a8f8`)
 
 **Effort:** M (1 day). Touches every `servers/test-<backend>/`.
 
@@ -747,7 +747,7 @@ reloads.
 
 ---
 
-### Phase F Status: F.1–F.4 shipped in commit df0849eb
+### Phase F Status: F.1–F.4 shipped in commit c364eff0
 
 Component tree: `crates/core/src/ui/account/settings/client_settings/{mod,backend_card,version_override,mechanism_toggle,mcp}.rs`.
 Modified: `crates/core/src/ui/account/settings/mod.rs` (mount + nav item + scroll spy),
@@ -812,7 +812,7 @@ provided the same assertion capability without adding a new dependency.
 
 ---
 
-### Phase B Fix-up — wire-level override propagation (shipped in commit `9475a0e8`)
+### Phase B Fix-up — wire-level override propagation (shipped in commit `b2a81bbf`)
 
 All Phase G deferred wire gaps are now fixed. Every backend injects the correct
 `User-Agent` on every outbound HTTP request, and `cargo test --test version_override`
@@ -895,11 +895,11 @@ passes for all 7 backends with full wire assertions.
 Multi-agent harness correctly routes the scenario, boots poly-web, and
 calls `run_scenario_client_version_override_discord`.
 
-### Phase H Status: shipped in commit `c2f212d4ce77`
+### Phase H Status: shipped in commit `3c26bc225128`
 
 ---
 
-## Phase I — Sandbox host-cap stub (shipped in commit `6aff08a044ed`)
+## Phase I — Sandbox host-cap stub (shipped in commit `199777d5dc87`)
 
 **Effort:** S (0.5 day).
 
@@ -1033,7 +1033,7 @@ when it runs.
 ## Dependencies / out-of-band notes
 
 - The Phase D audit-row helper relies on the `meta_persona_*`
-  audit table being present (shipped in commit `ccc2f7a2`) and the
+  audit table being present (shipped in commit `b903262a`) and the
   `record_persona_audit` helper at
   `mcp/chat-mcp/src/memory.rs:1169`.
 - Phase H multi-agent scenario depends on the
@@ -1078,7 +1078,7 @@ All C.1–C.5 sub-steps shipped:
 
 ### Phase I Status: DONE
 
-All I.1–I.5 sub-steps shipped in commit `6aff08a044ed`:
+All I.1–I.5 sub-steps shipped in commit `199777d5dc87`:
 
 - `crates/host-sandbox/Cargo.toml` + `src/lib.rs` created.
 - `HostSandbox` trait + `SandboxError` enum + `SandboxResult` struct defined.

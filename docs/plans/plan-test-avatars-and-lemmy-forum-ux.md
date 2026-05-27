@@ -25,7 +25,7 @@ can reference.
 ### Per-backend avatar wire-up status
 
 Pattern reference: test-discord ships avatar bytes via
-`servers/test-discord/src/routes.rs:serve_avatar` (commit `71fd1d48`+;
+`servers/test-discord/src/routes.rs:serve_avatar` (commit `8ee19308`+;
 the route shape is `GET /avatars/{user_id}/{file}.png`, mapping the
 hash segment to embedded PNG bytes from `clients/demo/assets/`).
 Surfaces inspected: chat messages, DM list rows, forum thread rows,

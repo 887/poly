@@ -531,16 +531,16 @@ recurrence means either a missed migration site, an escape-hatch
 1. **`Signal::write()` chains in a click handler / loader.** Every `.write()`
    guard drop schedules a Dioxus reactive re-render. 5–7 consecutive writes
    → 5–7 cascades on the WASM single-thread → scheduler starves. Historical
-   incidents: commit `a761fe01` (AccountIcon.onclick), the `chat_view.rs`
+   incidents: commit `1bd6e1fa` (AccountIcon.onclick), the `chat_view.rs`
    `open_message_hit` batches, `restore_server_channel` PendingUpdate
    conversion, plus 3 more.
    **Countermeasure (shipped with CI gate): `BatchedSignal<T>` newtype.**
-   Phases 1-3 (commits `e091281c`, `33b18d4d`, `828f9584`) flipped
+   Phases 1-3 (commits `38a9c81b`, `6f4afde0`, `d5e7dbcf`) flipped
    `Signal<ChatData>` and `Signal<AppState>` — 271 `.write()` sites
    collapsed to `.batch(|v| …)` / `.pending_update()`. The deprecated
    shadow `BatchedSignal::write()` fails `#[deny(deprecated)]` so the
    bug is a compile error on the migrated signals. Phase 5 lint
-   (`6c6eba3f` — `tools/scripts/forbid-signal-write.sh`) bans raw
+   (`b07516dc` — `tools/scripts/forbid-signal-write.sh`) bans raw
    `Signal::write()` across `crates/core/src/ui/`; allowlisted
    exceptions live in `tools/scripts/signal-write-allowlist.txt` with
    rationale comments. `docs/plans/plan-batched-signal.md` Phase 4 (other
@@ -554,7 +554,7 @@ recurrence means either a missed migration site, an escape-hatch
    (no outer same-signal read can live alongside the write guard), AND
    `BatchedSignal::with(|v| …)` is the documented preferred read API for
    multi-statement scopes. Phase 5 lint
-   (commit `5c1e13c7` — `tools/scripts/forbid-long-read-guard.sh`) flags
+   (commit `6927d2cb` — `tools/scripts/forbid-long-read-guard.sh`) flags
    long-scoped raw `.read()` bindings followed by `.batch()`/`.write()`
    calls within 30 lines on the same signal. Inline-allowlist syntax:
    `// poly-lint: allow long-read-guard — <reason>`. Audit found zero
@@ -565,16 +565,16 @@ recurrence means either a missed migration site, an escape-hatch
 3. **`.write()` inside a `use_effect` whose body is also a subscriber to
    that signal** (including indirectly via a spawned async task that
    writes the signal). Causes infinite re-render loop. Historical
-   incidents: Teams Sheep wedge (fix `904920b9`, ServerHome missing
+   incidents: Teams Sheep wedge (fix `453f446a`, ServerHome missing
    `spawned_for` guard) — the SQLite-persisted BISECT trace captured
    ~1.2M iterations before sampling.
    **Countermeasure (shipped with CI gate): `use_spawn_once<K>(key, async_fn)`
-   hook** (commit `50da1841`). The hook bakes the `spawned_for: Signal<Option<K>>`
+   hook** (commit `99592f7c`). The hook bakes the `spawned_for: Signal<Option<K>>`
    guard into the call-site API so it can't be forgotten — ~15 lines of
-   preamble collapse to ~3. Phases 2-4 (commit `e7abb629`) migrated 10
+   preamble collapse to ~3. Phases 2-4 (commit `0b864822`) migrated 10
    call sites including the 2 HIGH-severity bug-waiting-to-happen sites
    (`ServerMediaViewerRoute`, `ForumPostView`). Phase 5 lint
-   (`8b2551e1` — `tools/scripts/forbid-use-effect-spawn-cycle.sh`) fails
+   (`957a17ea` — `tools/scripts/forbid-use-effect-spawn-cycle.sh`) fails
    CI on any raw `use_effect` + `spawn(async move { … signal.batch(…) })`
    triple; allowlisted exceptions live in
    `tools/scripts/use-effect-spawn-cycle-allowlist.txt` with rationale
@@ -591,10 +591,10 @@ recurrence means either a missed migration site, an escape-hatch
    `BackendHandleExt::read_with_timeout(dur)` — a cfg-gated helper that
    uses `tokio::time::timeout` on native and
    `gloo_timers::future::TimeoutFuture` raced via `futures::select` on
-   WASM. Commits: Phase 1 `66810bd1` (helper), Phase 2 `a935f2a8`
+   WASM. Commits: Phase 1 `b1db8888` (helper), Phase 2 `8e23c6ae`
    (8 FRAGILE sites, 5s default + 30s for chain loops), Phase 3
-   `e4d3fde2` (46 SAFE sites for uniformity across 24 files), Phase 5
-   `f6599e76` (lint — `tools/scripts/forbid-raw-backend-read.sh` bans
+   `2de7434c` (46 SAFE sites for uniformity across 24 files), Phase 5
+   `6ca22cfd` (lint — `tools/scripts/forbid-raw-backend-read.sh` bans
    raw `backend.read().await` in `crates/core/src/ui/`). Inline
    allowlist: `// poly-lint: allow raw backend.read().await — <reason>`.
 
@@ -620,11 +620,11 @@ recurrence means either a missed migration site, an escape-hatch
    effect captured `key` directly and never re-fired on T001 → T002.
    **Countermeasure (Phases 1+2+5 shipped with HARD-FAIL CI gate,
    `docs/plans/plan-use-reactive-effect.md`):**
-   `use_reactive_effect<Deps>(deps, body)` hook (commit `de6411f8`)
+   `use_reactive_effect<Deps>(deps, body)` hook (commit `d3d8e891`)
    mirrors `deps` into a Signal each render so the body re-fires through
    PartialEq dedup whenever deps change. Plus `use_spawn_once` was
-   patched (commit `09d97a01`) using the same mirror pattern. Phase 2
-   migration (commit `cb4cf07`) triaged all 54 raw `use_effect` sites:
+   patched (commit `94688279`) using the same mirror pattern. Phase 2
+   migration (commit `81d0373`) triaged all 54 raw `use_effect` sites:
    ~11 migrated to `use_reactive_effect`, 43 KEEP+inline-allowlisted as
    legitimate Signal-only / one-shot mount cases. Phase 5 lint
    `tools/scripts/forbid-stale-effect-capture.sh` is now `continue-on-
@@ -647,7 +647,7 @@ recurrence means either a missed migration site, an escape-hatch
    Use `.peek()` instead of `.read()` whenever the value isn't needed
    reactively (hook keys, one-shot snapshots, values passed unchanged
    to a child that has its own subscription). Phase 1 lint
-   `tools/scripts/forbid-render-time-read.sh` (commit `8321406d`)
+   `tools/scripts/forbid-render-time-read.sh` (commit `800b8b41`)
    flags every render-time `.read()` in `crates/core/src/ui/` with
    allowlist exceptions for the legitimate cases (rsx! formatting,
    conditional rendering, child-component prop threading where
@@ -681,7 +681,7 @@ recurrence means either a missed migration site, an escape-hatch
    `batch_if_changed(|cur| -> next)` — both compare `next` against the
    current value and skip the write when equal, so subscribers don't
    re-notify and self-write effects converge. Requires `T: PartialEq`.
-   Phase 1 (commit `49e5f7d7`): helper API + 2 migration sites in
+   Phase 1 (commit `16e774a5`): helper API + 2 migration sites in
    `use_history_state_effect`. Phase 2 lint
    `tools/scripts/forbid-effect-self-write.sh` flags any `use_effect`
    body that reads signal `X` and writes `X` via raw `.set(`/`.batch(`

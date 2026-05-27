@@ -1,7 +1,7 @@
 # Native Right-Click Leakage Audit
 
 > Generated: 2026-04-21
-> Source branches audited: HEAD (74bd47a)
+> Source branches audited: HEAD (f8656c7)
 > Files scanned: `crates/core/src/ui/**`, `clients/*/src/`, `crates/ui-macros/src/`
 
 ---
@@ -15,13 +15,13 @@
 | Native HTML leaf elements inside `inherit`-decorated components that bypass the root `None` guard | **28 call sites** (`<input>`, `<textarea>`, `<a>`, `<img>`) |
 | `dangerous_inner_html` blocks that can emit `<a>` tags | **2** (markdown renderer + `CustomBlock`) |
 | Surfaces flagged by the previous plan as "not yet wired" that are still missing runtime guards | **3** (`ForumPostCard`, `DmMemberRow`, `VoiceTile`) |
-| Root-level `oncontextmenu: prevent_default` guard (§4.5.1 of the plan) | **NOT PRESENT** — the plan claims shipped at commit f627d9fc, but `main_layout.rs` has no such handler |
+| Root-level `oncontextmenu: prevent_default` guard (§4.5.1 of the plan) | **NOT PRESENT** — the plan claims shipped at commit b604fe4f, but `main_layout.rs` has no such handler |
 
 ---
 
 ## 1. Critical: The global root guard is missing
 
-- [ ] **`crates/core/src/ui/main_layout.rs:294-305`** — The `.main-layout` root `<div>` has an `onclick` handler that dismisses the Poly menu, but **no `oncontextmenu` handler**. The plan (§4.5.1) states this was shipped in commit `f627d9fc` at `main_layout.rs:299`, but the current source has no `oncontextmenu` on that element. Without this guard, every component annotated `#[context_menu(None)]` still shows the native browser menu — the annotation is compile-time only (see §3 below for the macro behavior gap). This is the single highest-impact fix.
+- [ ] **`crates/core/src/ui/main_layout.rs:294-305`** — The `.main-layout` root `<div>` has an `onclick` handler that dismisses the Poly menu, but **no `oncontextmenu` handler**. The plan (§4.5.1) states this was shipped in commit `b604fe4f` at `main_layout.rs:299`, but the current source has no `oncontextmenu` on that element. Without this guard, every component annotated `#[context_menu(None)]` still shows the native browser menu — the annotation is compile-time only (see §3 below for the macro behavior gap). This is the single highest-impact fix.
 
 ---
 

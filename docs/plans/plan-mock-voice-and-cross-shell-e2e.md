@@ -11,7 +11,7 @@ mocks (no real third-party accounts), then prove the pipeline works by
 having two real shells (poly-web + poly-electron) join the same voice
 channel as two different test users and verify they connect.
 
-## Phase A — test-discord mock voice (server side) — shipped in git commit dd2df96a on branch worktree-agent-a3d76fe361a7ad85c
+## Phase A — test-discord mock voice (server side) — shipped in git commit 47b2832f on branch worktree-agent-a3d76fe361a7ad85c
 
 - [x] **A.1** Add op-4 handler in `servers/test-discord/src/routes.rs`'s `handle_gateway_socket`: client sends `{op:4, d:{guild_id, channel_id, self_mute, self_deaf}}`, mock responds with `VOICE_STATE_UPDATE` dispatch (carrying mock `session_id`) AND `VOICE_SERVER_UPDATE` dispatch (carrying `endpoint`/`token`/`guild_id`).
 - [x] **A.2** Add mock voice gateway WS endpoint at `/voice/ws` on the test-discord server. Implements: send op 8 HELLO on connect, accept op 0 IDENTIFY, send op 2 READY (with mock ssrc + a UDP port), accept op 1 SELECT_PROTOCOL, send op 4 SESSION_DESCRIPTION (with fake AEAD key bytes — all zeros is fine for mock, or random).

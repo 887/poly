@@ -6,7 +6,7 @@
 > sub-agents at appropriate model tiers, ticks checkboxes as commits land.
 > Skipped: Blitz component snapshot tests (deferred per user).
 
-## Stream A — Catch-me-up button (✅ DONE — `5041a73e`)
+## Stream A — Catch-me-up button (✅ DONE — `e8842a5a`)
 
 ✨ button on chat header opens a CatchUp utility-rail panel with the last
 20 messages and a "Copy summary prompt" button. No LLM call from the host.
@@ -17,9 +17,9 @@
 - [x] `CatchUpPanel` component renders into ChatUtilityRail
 - [x] "Copy summary prompt" copies a Claude-Desktop-ready prompt to clipboard
 - [x] Empty state for no messages
-- [x] Commit + push (`5041a73e`)
+- [x] Commit + push (`e8842a5a`)
 
-## Stream B — Typing-simulation UI button (✅ DONE — `5041a73e`)
+## Stream B — Typing-simulation UI button (✅ DONE — `e8842a5a`)
 
 ⌨️ toggle button in composer toolbar. While ON fires `send_typing` every
 5s up to 60s. Mirrors `chat-mcp/start_typing_simulation` as a one-click
@@ -30,9 +30,9 @@ manual trigger.
 - [x] `TypingSimulationButton` component
 - [x] WASM-safe sleep via `gloo_timers::TimeoutFuture`, native via tokio
 - [x] Auto-stops after 12 ticks (60s)
-- [x] Commit + push (`5041a73e`)
+- [x] Commit + push (`e8842a5a`)
 
-## Stream C — Discord e2e plan + tests (✅ DONE — `8dd9210c`)
+## Stream C — Discord e2e plan + tests (✅ DONE — `73e0b686`)
 
 Full feature matrix + mock-Discord HTTP server + Playwright specs.
 
@@ -42,13 +42,13 @@ Full feature matrix + mock-Discord HTTP server + Playwright specs.
 - [x] `tests/e2e/discord/` — 4 spec files (auth, message, context-menus, group-DM)
 - [x] `tests/e2e/discord/README.md` + `playwright.config.ts` `discord-api` project
 - [x] Real-OAuth specs are `test.skip` unless `DISCORD_TEST_WITH_REAL_OAUTH=1`
-- [x] Commit + push (`8dd9210c`)
+- [x] Commit + push (`73e0b686`)
 
 **Punted:** UI-level Playwright tests against the running WASM app
 (orchestrator follow-up). Reaction-endpoint spec scaffolding deferred
 until `DiscordHttpClient` extends.
 
-## Stream D — Phase-5 backend smoke tests (✅ DONE — `1dc378d8`)
+## Stream D — Phase-5 backend smoke tests (✅ DONE — `d1ab8c39`)
 
 Code-level audit across all 11 backends, 10 visual-*.md files +
 visual-INDEX.md.
@@ -58,7 +58,7 @@ visual-INDEX.md.
       lemmy, hackernews}.md — Phase-5 audit sections
 - [x] visual-INDEX.md — executive summary, 11-backend feature matrix,
       14-new-ops support table, moderation matrix
-- [x] Commit + push (`1dc378d8`)
+- [x] Commit + push (`d1ab8c39`)
 
 **Three biggest gaps surfaced:**
 1. **Teams** — CRITICAL: WASM hard freeze on every account activation;
@@ -70,9 +70,9 @@ visual-INDEX.md.
 3. **Forgejo + GitHub** — HIGH: issue detail fails to load on click in
    both backends. Primary code-forge interaction broken.
 
-## Stream E — Meta-personalities design plan (✅ DONE — `5041a73e`*)
+## Stream E — Meta-personalities design plan (✅ DONE — `e8842a5a`*)
 
-> *file landed in 5041a73e via jj-snapshot timing; will appear in `git log`
+> *file landed in e8842a5a via jj-snapshot timing; will appear in `git log`
 > as part of that commit. Functionally on main.
 
 `docs/plans/plan-meta-personalities.md` (1079 lines, 8 phases A–H).
@@ -110,23 +110,23 @@ Claude-Desktop-callback as v2. To be defended in code review.
 
 ## Status
 
-- 2026-04-29 17:30 — Plan committed (`4fbb7c34`).
-- 2026-04-29 17:32 — Streams A + B landed (`5041a73e`).
-- 2026-04-29 17:32 — Stream C landed (`8dd9210c`).
-- 2026-04-29 17:33 — Stream D landed (`1dc378d8`).
+- 2026-04-29 17:30 — Plan committed (`c2736ce6`).
+- 2026-04-29 17:32 — Streams A + B landed (`e8842a5a`).
+- 2026-04-29 17:32 — Stream C landed (`73e0b686`).
+- 2026-04-29 17:33 — Stream D landed (`d1ab8c39`).
 - 2026-04-29 17:33 — Stream E plan-file present on main (in-tree).
 - 2026-04-29 17:34 — All five streams done.
 - 2026-04-29 19:30 — F1 Teams freeze, F2 Lemmy nav, F3 Forgejo+GitHub
-  issue detail — all sub-agents shipped (`a4223099`).
+  issue detail — all sub-agents shipped (`e4d4880f`).
 - 2026-04-29 19:45 — F3's `/` separator broke URL routing (Dioxus router
-  truncates path on `/`). Switched to `~` separator (`d0b73aa0`).
+  truncates path on `/`). Switched to `~` separator (`5a400006`).
 - 2026-04-29 19:55 — Smoke test sweep of all fixes:
   - ✅ A — Catch-me-up button visible in chat header (✨), opens panel with last 20 messages + Copy summary prompt button.
   - ✅ B — Typing-simulation toggle visible in composer toolbar (⌨️), toggles to ⏸️ when active, fires send_typing.
   - ✅ F1 — Teams account icon click no longer freezes; URL is `/teams/localhost:9103/U001/overview` (scheme stripped).
   - ✅ F2 — Lemmy account shows subscribed communities (Programming, Rust Programming) in left wing; DM button correctly hidden.
   - ⚠️ F3 — Channel ID with `~` separator survives URL routing; full data round-trip needs re-login (test-forgejo binary restarted, invalidating existing session tokens — non-blocking session-refresh issue).
-- 2026-04-29 21:25 — Follow-ups landed (`20ce12a0`):
+- 2026-04-29 21:25 — Follow-ups landed (`77123477`):
   - ✅ FU1 — Session-expired UX: `crates/core/src/ui/errors.rs` (NEW)
     + `is_session_expired()` + `SessionExpiredCard`. Wrapped 4 view-body
     error sites (split / list / card / tree). FTL keys for

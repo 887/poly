@@ -388,7 +388,7 @@ Goal: outgoing video and screen share over the same voice connection.
   (`voice-video-coming-soon-camera` locale).
 - [x] **E.9** Bandwidth caps: respect Discord's REMB / TWCC RTCP
   feedback. webrtc-rs handles this in its congestion controller.
-  — shipped in git commit `6f6dffa8` (worktree-agent-a217bdc23063a573e) without
+  — shipped in git commit `35334368` (worktree-agent-a217bdc23063a573e) without
   webrtc-rs: hand-rolled REMB/TWCC parsers + BandwidthController in
   `clients/discord/src/voice/rtcp.rs`; wired into udp_decode_loop (RTCP dispatch),
   voice_ws_loop (ramp-up tick), DiscordVideoTransport (bw_target AtomicU32 per
@@ -406,7 +406,7 @@ Goal: outgoing video and screen share over the same voice connection.
 
 ## Phase F — Stoat voice gateway
 
-> **2026-05-17 note**: The stoat WASM voice client landed under `docs/plans/plan-stoat-voice-wasm.md` (commits `b610de14`–`f466f11b`) which uses the Vortex protocol directly instead of LiveKit/Janus. Phases F and G are reconciled below.
+> **2026-05-17 note**: The stoat WASM voice client landed under `docs/plans/plan-stoat-voice-wasm.md` (commits `e4fbb8a1`–`2ca97f09`) which uses the Vortex protocol directly instead of LiveKit/Janus. Phases F and G are reconciled below.
 
 Goal: real voice transport for Stoat. Stoat (Revolt fork) uses **Vortex**
 (its own custom voice service, originally Janus-based, evolving to
@@ -444,7 +444,7 @@ LiveKit and Janus are not used. See `plan-stoat-voice-wasm.md` Phase A for full 
 
 ## Phase G — Stoat voice UI integration
 
-> **2026-05-17 note**: The stoat WASM voice client landed under `docs/plans/plan-stoat-voice-wasm.md` (commits `b610de14`–`f466f11b`) which uses the Vortex protocol directly instead of LiveKit/Janus. Phases F and G are reconciled below.
+> **2026-05-17 note**: The stoat WASM voice client landed under `docs/plans/plan-stoat-voice-wasm.md` (commits `e4fbb8a1`–`2ca97f09`) which uses the Vortex protocol directly instead of LiveKit/Janus. Phases F and G are reconciled below.
 
 Goal: same as Phase C but for Stoat. Most of the work is already done
 once C lands — this is wiring + handling Stoat-specific quirks.

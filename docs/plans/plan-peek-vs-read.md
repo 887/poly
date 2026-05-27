@@ -1,6 +1,6 @@
 # Plan — `.peek()` vs `.read()` Hygiene (Hang #7 Prevention)
 
-> Status: **✅ DONE (Phases 1+2)** — `forbid-render-time-read.sh` lint shipped (`8321406d`), 988 pre-existing sites allowlisted as MEDIUM, 3 HIGH sites migrated to `.peek()`. Currently `continue-on-error: true`; Phase 5 tightening (flip to hard-fail) deferred until allowlist stabilises.
+> Status: **✅ DONE (Phases 1+2)** — `forbid-render-time-read.sh` lint shipped (`800b8b41`), 988 pre-existing sites allowlisted as MEDIUM, 3 HIGH sites migrated to `.peek()`. Currently `continue-on-error: true`; Phase 5 tightening (flip to hard-fail) deferred until allowlist stabilises.
 > Last updated: 2026-04-25.
 
 ---
@@ -11,7 +11,7 @@
 
 CLAUDE.md hang **#7** = **using `.read()` at the top of a render body to compute a value that doesn't actually need reactive subscription** (typically a hook key, a one-shot snapshot for an event handler closure, or a value that's only ever passed through to a child component that has its own subscription).
 
-**Real incident (just-shipped fix `55f94246`):**
+**Real incident (just-shipped fix `0ef1112f`):**
 
 ```rust
 fn use_member_list_effect(signals: &ChatViewSignals) {
@@ -133,7 +133,7 @@ After Phase 2 migration shrinks the allowlist:
 
 ## 7. Reference artifacts
 
-- Commit `55f94246` — the just-fixed `use_member_list_effect` instance.
+- Commit `0ef1112f` — the just-fixed `use_member_list_effect` instance.
 - `/tmp/poly-bisect-teams-switch.md` (if the bisect agent's report was saved) — the SQLite trace showing the 1408× re-render loop.
 - `docs/plans/plan-batched-signal.md` — sister plan; hang #2 is the closest analog (read across write on same signal).
 - `docs/plans/plan-use-reactive-effect.md` — also adjacent; hang #6 is the closure-capture variant.

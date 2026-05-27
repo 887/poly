@@ -89,7 +89,7 @@ MS Graph OAuth2 AAD token. `authenticate(Token { token })` validates via Graph. 
 `get_account_overview_view()` returns `ViewKind::CardGrid`. `get_channel_view` returns `NotSupported`. `get_view_rows` returns `NotSupported` for non-overview channel IDs. Overview not tested in practice due to WASM crash.
 
 ### Channel Sidebar
-`get_channels(server_id)` — Graph `GET /teams/{id}/channels`. Channel IDs stored as `"team_id/channel_id"` (fixed commit `e113bcb`). `get_dm_channels()` fetches Graph chats.
+`get_channels(server_id)` — Graph `GET /teams/{id}/channels`. Channel IDs stored as `"team_id/channel_id"` (fixed commit `8ed07f2`). `get_dm_channels()` fetches Graph chats.
 
 ### Messaging
 `send_message`, `send_reply_message`, `delete_message` (soft-delete) all implemented. `search_messages` not overridden (NotSupported).
@@ -97,7 +97,7 @@ MS Graph OAuth2 AAD token. `authenticate(Token { token })` validates via Graph. 
 ### Moderation Ops
 `kick_member` implemented. `ban_member`, `unban_member`, `timeout_member`, `untimeout_member`, `get_bans` all return `NotSupported("Teams has no ban/timeout concept")`. `delete_message` implemented (Graph soft-delete).
 
-### 14 New Backend Ops (commit 5b142e67)
+### 14 New Backend Ops (commit 2041f112)
 Per commit message: `close_dm_channel` via hideForUser, `edit_group_dm` via chat topic PATCH, `add_users_to_group_dm` via member add, `leave_group_dm` via member remove. `mute_conversation` in-memory only. All others use trait defaults (NotSupported).
 
 ### Critical Bug: WASM Hard Freeze

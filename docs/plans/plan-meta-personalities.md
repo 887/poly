@@ -1,6 +1,6 @@
 # Plan — Meta-Personalities (Personas Above Accounts)
 
-## Status: ✅ DONE — all phases shipped (A through H + J; commits ba4ec6ef, de8e9e50 + earlier)
+## Status: ✅ DONE — all phases shipped (A through H + J; commits f1ba6a6e, 59f69e64 + earlier)
 
 > **Created:** 2026-04-29
 > **Depends on:** `plan-claude-desktop-agent.md` (shipped Phases A-F: memory, drafts, events, typing, style, catch-me-up)
@@ -812,7 +812,7 @@ Numbers update live. Click → expanded source view.
 
 ---
 
-### Phase E — `PersonaTalkToOverlay` + invoke from UI (shipped in commit `834553ab`)
+### Phase E — `PersonaTalkToOverlay` + invoke from UI (shipped in commit `1353cf8f`)
 
 - [x] **E.1** `PersonaTalkToOverlay` component — slide-in over utility rail.
   Mounted in `AgentPanel` and `PersonaManagementRoute` when `Signal<Option<TalkSession>>`
@@ -886,7 +886,7 @@ Integration test passes 3/3.
 
 ---
 
-### Phase G — Outbound-mode allowlist + rate limiting (shipped in commits ba4ec6ef, de8e9e50)
+### Phase G — Outbound-mode allowlist + rate limiting (shipped in commits f1ba6a6e, 59f69e64)
 
 - [x] **G.1** `PersonaOutboundAllowlistEditor` UI (only visible when
   proactivity = outbound-allowlisted).
@@ -905,11 +905,11 @@ Integration test passes 3/3.
 
 **Effort:** 1 session.
 
-### Phase G Status: DONE — shipped in commits ba4ec6ef (UI: audit_panel, confirm_modals, outbound_allowlist_editor, types) + de8e9e50 (backend: memory.rs G.3/G.6, heartbeat.rs enforcement, quiet_hours_disabled migration, e2e tests)
+### Phase G Status: DONE — shipped in commits f1ba6a6e (UI: audit_panel, confirm_modals, outbound_allowlist_editor, types) + 59f69e64 (backend: memory.rs G.3/G.6, heartbeat.rs enforcement, quiet_hours_disabled migration, e2e tests)
 
 ---
 
-### Phase H — Telemetry + audit-log UI (shipped in commits ba4ec6ef, de8e9e50)
+### Phase H — Telemetry + audit-log UI (shipped in commits f1ba6a6e, 59f69e64)
 
 - [x] **H.1** `PersonaAuditPanel` component — paged list of `persona_audit`
   rows with filters (action / time range / target_account).
@@ -927,7 +927,7 @@ Integration test passes 3/3.
 
 **Effort:** 1 session.
 
-### Phase H Status: DONE — shipped in commits ba4ec6ef + de8e9e50; H.7 logged as deferred (page does not exist)
+### Phase H Status: DONE — shipped in commits f1ba6a6e + 59f69e64; H.7 logged as deferred (page does not exist)
 
 ---
 
@@ -1134,7 +1134,7 @@ that should land before the user is encouraged to enable outbound mode.
 
 | Item | Date | Notes |
 |---|---|---|
-| Schema + CRUD + tests landed | 2026-04-27 | commit `bd80fbd7` on `worktree-agent-a6eed0ee4bde17ee2` |
+| Schema + CRUD + tests landed | 2026-04-27 | commit `2d5ce004` on `worktree-agent-a6eed0ee4bde17ee2` |
 
 All 7 Phase A checklist items complete. Implementation note: the plan
 referenced a new `mcp/chat-mcp/src/persona/` module, but the existing

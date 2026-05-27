@@ -1,6 +1,6 @@
 # Plan — `use_spawn_once` Hook (use_effect-spawn-cycle Prevention)
 
-> Status: **✅ DONE** — Phases 1-4 + 5 lint shipped (`50da1841`, `e7abb629`, `8b2551e1`). All 10 call sites migrated, 2 HIGH bug-waiting-to-happen sites resolved, lint hard-fails in CI.
+> Status: **✅ DONE** — Phases 1-4 + 5 lint shipped (`99592f7c`, `0b864822`, `957a17ea`). All 10 call sites migrated, 2 HIGH bug-waiting-to-happen sites resolved, lint hard-fails in CI.
 > Related: `docs/plans/plan-batched-signal.md` (sister refactor, eliminates the multi-`.write()` cascade class — this plan eliminates the `use_effect`-spawns-future-that-writes-subscribed-signal cycle class).
 > Authors: orchestrator + cycle-site audit subagent (`/tmp/poly-use-spawn-once-audit.md`).
 > Last updated: 2026-04-25.
@@ -24,7 +24,7 @@ use_effect(move || {
 
 When `load_stuff` fails to reach its "done" state (e.g. a `loading=true → loading=false` toggle without populating the key field), the effect's subscribed read sees the intermediate toggle, re-fires, and spawns again. **Infinite spawn loop.** Wedges the tab — CLAUDE.md hang class #3.
 
-**Just-shipped incident (commit `904920b9`, 2026-04-24):**
+**Just-shipped incident (commit `453f446a`, 2026-04-24):**
 - `crates/core/src/ui/routes.rs` `ServerHome::use_effect` spawned `load_server_data_internal` for a Teams `server_id` that didn't map to any backend plugin. `load_server_data_internal` early-returned with `loading=true → loading=false`. The effect's `snapshot.loading` subscription re-fired on the release; `server_already_loaded` was still false (no backend → `current_server` never populates); it re-spawned. **SQLite-persisted BISECT trace captured 1,189,925 iterations** before it could be sampled.
 - Fix: add a `spawned_for: Signal<Option<String>>` guard so the effect remembers which `server_id` it already spawned for and refuses to re-spawn for the same id.
 - `ServerChat::use_effect` one function above had this guard since 2026-04-19 (that one caught a different variant of the same pattern on stale-channel URLs). `ServerHome` was missing it by accident.
@@ -107,7 +107,7 @@ where
 
 ## 3. Phases
 
-### Phase 1 — Introduce the hook, no call-site changes — ✅ DONE (`50da1841`)
+### Phase 1 — Introduce the hook, no call-site changes — ✅ DONE (`99592f7c`)
 
 **Deliverable:** `crates/core/src/state/use_spawn_once.rs` (~150 LoC incl. tests).
 
@@ -123,16 +123,16 @@ Tasks:
 
 Verification: `cargo test -p poly-core use_spawn_once` green. WASM + native cargo check clean. No call-site diff — lands green, zero behavior change.
 
-### Phase 2 — Migrate the 2 known correct sites — ✅ DONE (`e7abb629`)
+### Phase 2 — Migrate the 2 known correct sites — ✅ DONE (`0b864822`)
 
 Migrate the sites that already have the hand-rolled pattern, so they demonstrate the new hook and we have a baseline:
 
 - [x] `crates/core/src/ui/routes.rs` `ServerChat` (L1681-region `spawned_for` + `use_effect` → `use_spawn_once`).
-- [x] `crates/core/src/ui/routes.rs` `ServerHome` (just-shipped `spawned_for` from commit `904920b9` → `use_spawn_once`).
+- [x] `crates/core/src/ui/routes.rs` `ServerHome` (just-shipped `spawned_for` from commit `453f446a` → `use_spawn_once`).
 
 Each migration should shrink ~20 lines to ~3 lines. Net diff should be clearly smaller.
 
-### Phase 3 — Migrate HIGH-severity sites from audit — ✅ DONE (`e7abb629`)
+### Phase 3 — Migrate HIGH-severity sites from audit — ✅ DONE (`0b864822`)
 
 From `/tmp/poly-use-spawn-once-audit.md` (36 `use_effect`+`spawn` sites surveyed; 2 true cycle-risk HIGH, 6 fragile-guard MEDIUM, rest safe).
 
@@ -147,7 +147,7 @@ For each migration:
 - Verify the spawned future still writes the signals it needs to, unchanged.
 - Spot-check: grep for any newly-unused `spawned_for: Signal<Option<_>>` bindings — there shouldn't be any after these two sites, since the hook subsumes them.
 
-### Phase 4 — Migrate MEDIUM-severity sites opportunistically — ✅ DONE (`e7abb629`)
+### Phase 4 — Migrate MEDIUM-severity sites opportunistically — ✅ DONE (`0b864822`)
 
 Effects that aren't a direct-cycle bug today but are fragile — one signal shape change away from wedging:
 
@@ -162,7 +162,7 @@ Leave as-is for now:
 - `use_header_actions_overflow_effect` (chat_view.rs L1275) — resize-driven, no cycle, no migration needed.
 - All 25 LOW-severity sites.
 
-### Phase 5 — Clippy / dylint ban on raw pattern — ✅ DONE (`8b2551e1`)
+### Phase 5 — Clippy / dylint ban on raw pattern — ✅ DONE (`957a17ea`)
 
 Two tracks, ship whichever is ready first:
 
@@ -175,7 +175,7 @@ Two tracks, ship whichever is ready first:
 - [x] Custom lint `tools/lints/poly-lints/src/use_effect_spawn_cycle.rs` matching the AST pattern.
 - [x] Exception annotation: `#[allow(poly::use_effect_spawn_cycle)]` with a required rationale comment.
 
-### Phase 6 — Documentation + cleanup — ✅ DONE (`8b2551e1`)
+### Phase 6 — Documentation + cleanup — ✅ DONE (`957a17ea`)
 
 - [x] Update `CLAUDE.md` §"Common WASM-hang causes" #3 to cite `use_spawn_once` as the prescribed prevention.
 - [x] Add section to `docs/dev/reactive-state.md` with canonical patterns (keyed async load, debounced sync effect, non-spawning reactive effect).
@@ -191,7 +191,7 @@ After each phase:
 - `cargo test --workspace` green (excluding the pre-existing `poly-demo::capabilities::demo_plugins_match_slug_lookup_table` failure).
 
 After Phase 2 (regression check for the known-fixed cases):
-- Manual smoke-test: navigate to `/teams/localhost:9103/U001/channels/T001` (the Teams Sheep reproducer). Tab loads without wedging. (Matches behavior after commit `904920b9`.)
+- Manual smoke-test: navigate to `/teams/localhost:9103/U001/channels/T001` (the Teams Sheep reproducer). Tab loads without wedging. (Matches behavior after commit `453f446a`.)
 - Manual smoke-test: deep-link to a stale Discord channel URL. Falls back to a default channel without spawn-storm.
 
 After Phase 5:
@@ -234,8 +234,8 @@ Total: ~1 focused session for Phases 1-4 (the high-value cleanup), +1 day for Ph
 
 - `/tmp/poly-use-spawn-once-audit.md` — cycle-site audit (36 sites surveyed; 2 HIGH, 6 MEDIUM, 25 LOW; source of Phase 3+4 checklists).
 - `docs/plans/plan-batched-signal.md` — sister plan. Same 6-phase structure, same clippy-lint-as-final-gate model.
-- Commit `904920b9` — canonical `spawned_for` guard in `ServerHome::use_effect`. The pattern this hook codifies.
-- Commit `a761fe01`-era `ServerChat::use_effect` — earlier copy of the same pattern, confirming the divergence between sibling components.
+- Commit `453f446a` — canonical `spawned_for` guard in `ServerHome::use_effect`. The pattern this hook codifies.
+- Commit `1bd6e1fa`-era `ServerChat::use_effect` — earlier copy of the same pattern, confirming the divergence between sibling components.
 - `CLAUDE.md` §"Common WASM-hang causes" #3 — the hang class being eliminated.
 
 ---

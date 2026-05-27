@@ -125,7 +125,7 @@ Same screen shows two date conventions side-by-side:
   `May 25, 2026` — English long form, US-style.
 - **Per-message timestamp** (`.message-timestamp`): `23/05/2026, 11:44`
   — DD/MM/YYYY 24h local (the format we just fixed in Phase 3 of
-  last session, commit `kkuzvplr` / `ec441761`).
+  last session, commit `kkuzvplr` / `9746424d`).
 
 Either both should be DD/MM/YYYY-coded or both should be long-form;
 mixing them looks like a half-finished i18n pass.

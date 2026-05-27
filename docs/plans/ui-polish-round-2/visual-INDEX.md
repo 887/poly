@@ -10,7 +10,7 @@
 
 1. **Demo (all three clients) is the only backend that is fully production-ready** for dev/demo purposes. Cat+Dog have cross-account messaging, mutual friends, and all 14 social ops as in-memory stubs. Platypus (demo_forum) has a working Tree view with 12-sort forum layout.
 2. **Discord is the most feature-complete real backend**: all 14 new social ops implemented via REST, full moderation suite, send+delete messaging. Main gaps: intermittent plugin-sidebar load failure and server icons not loading (image proxy/CORS).
-3. **Matrix is functionally solid**: all 14 new ops implemented, full moderation (kick/ban/timeout), DMs, push-rule mutes. Avatar hydration fixed in commits `7f4dc5df`/`44636eda`. Remaining gap: `search_messages`.
+3. **Matrix is functionally solid**: all 14 new ops implemented, full moderation (kick/ban/timeout), DMs, push-rule mutes. Avatar hydration fixed in commits `6f9d5dbd`/`c7d33e1d`. Remaining gap: `search_messages`.
 4. **Stoat is solid for its Revolt-fork surface**: send/delete/friends/block/group-DM all work. Missing: mute_conversation, invite_user_to_server, social-nickname ops, audit log.
 5. **Teams is blocked by a WASM hard freeze** on account activation — both accounts crash 100% of the time. No UI has been verifiable. Root cause: likely Signal::write() chain in Teams init path (hang class #1). Must be fixed before Teams is usable.
 6. **Forgejo and GitHub both fail to load issue detail on click** — the primary interaction for code-forge backends is broken. Issue lists render but clicking produces "Failed to load detail" (Forgejo) or a permanently empty right pane (GitHub).

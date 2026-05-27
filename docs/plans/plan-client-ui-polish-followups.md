@@ -10,7 +10,7 @@
 
 ## 0. Honest accounting
 
-The previous status report claimed "363 passing." That count came from `--lib` only. Pre-F1 reality was `463 passed, 30 failed`. As of `main @ ea3ac2ee` (F1 shipped):
+The previous status report claimed "363 passing." That count came from `--lib` only. Pre-F1 reality was `463 passed, 30 failed`. As of `main @ d5abeb52` (F1 shipped):
 
 ```
 cargo test --workspace  →  780 passed, 0 failed
@@ -25,7 +25,7 @@ cargo check --workspace --all-targets  →  0 warnings
 
 ### ✅ F1 — WASM plugin harness can't run without manual build step (DONE 2026-04-19)
 
-**Resolution:** `main @ ea3ac2ee`. All 7 plugins updated to the post-Pack-E WIT world. `load_plugin` now auto-builds the missing WASM via `cargo component build -p <crate> --target wasm32-wasip2` (idempotent per process via `OnceLock<Mutex<HashSet>>`). e2e tests run clean: 37 passed in `client_e2e/main.rs` (30 original + 7 newly-wired orphan helpers). Total workspace: 780 passed, 0 failed.
+**Resolution:** `main @ d5abeb52`. All 7 plugins updated to the post-Pack-E WIT world. `load_plugin` now auto-builds the missing WASM via `cargo component build -p <crate> --target wasm32-wasip2` (idempotent per process via `OnceLock<Mutex<HashSet>>`). e2e tests run clean: 37 passed in `client_e2e/main.rs` (30 original + 7 newly-wired orphan helpers). Total workspace: 780 passed, 0 failed.
 
 ---
 
