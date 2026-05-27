@@ -1,6 +1,6 @@
 # Plan: SOLID refactor survey + ranked wins
 
-> Owner: alexander.stuermer@aareon.com
+> Owner: 2300887@gmail.com
 > Created: 2026-05-03
 > Status: 🟡 IN PROGRESS — Phase G fully closed; Phase H fully closed (H.0 `rylxrxno`, H.1-H.3 shipped, H.4.a `zuoruovy`, H.4.b+c `xxqtynuy`, H.4.d `rkspuvqmupwz`, H.4.e `ozyzuvvtswws`, H.4.f+g+h+i `wtosyoxqnxzx`, lint baseline `nmmzmnpvzvpp`); Phase I fully closed (I.1 `tkkkwssqxqrv`, I.2 `nortslwxwxtn`, cleanup `mppzpqnwpnxm`); Phase J fully closed (J.1 `rpnypolk`, J.2 `slqplxlt`)
 >

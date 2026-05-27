@@ -1,6 +1,6 @@
 # Plan: Discover Communities (Lemmy + Reddit)
 
-> Owner: alexander.stuermer@aareon.com
+> Owner: 2300887@gmail.com
 > Created: 2026-05-03
 
 ## Status: ✅ DONE — all phases shipped
