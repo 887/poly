@@ -332,39 +332,55 @@ const SNAPSHOT_VERBOSE_JS: &str = r#"(function(){
 /// every new document by CDP backends, and (b) the lazy install path inside
 /// [`CONSOLE_CAPTURE_JS`] for backends that don't have a pre-document hook.
 pub const CONSOLE_CAPTURE_INSTALL: &str = r#"(function(){
-  if(window.__polyConsoleLogs)return;
-  window.__polyConsoleLogs=[];
-  window.__polyConsoleErrors=[];
-  var orig={};
-  ['log','warn','error','info','debug'].forEach(function(lvl){
-    orig[lvl]=console[lvl];
-    console[lvl]=function(){
+  if(!window.__polyConsoleLogs){
+    window.__polyConsoleLogs=[];
+    // Capture uncaught errors / unhandled rejections — wasm-bindgen panic
+    // rethrows surface here when the Rust panic_hook can't write to localStorage
+    // (e.g. RefCell BorrowMutError inside Dioxus hooks → unreachable trap).
+    window.addEventListener('error',function(e){
       try{
-        var args=Array.from(arguments).map(function(a){
-          try{return typeof a==='string'?a:JSON.stringify(a);}catch(e){return String(a);}
-        });
-        window.__polyConsoleLogs.push({level:lvl,text:args.join(' '),timestamp:Date.now()});
+        window.__polyConsoleLogs.push({level:'error',text:'[window.error] '+(e.message||String(e))+' @ '+(e.filename||'?')+':'+(e.lineno||0),timestamp:Date.now()});
         if(window.__polyConsoleLogs.length>500)window.__polyConsoleLogs.shift();
       }catch(_){}
-      orig[lvl].apply(console,arguments);
-    };
-  });
-  // Also capture uncaught errors / unhandled rejections — wasm-bindgen panic
-  // rethrows surface here when the Rust panic_hook can't write to localStorage
-  // (e.g. RefCell BorrowMutError inside Dioxus hooks → unreachable trap).
-  window.addEventListener('error',function(e){
-    try{
-      window.__polyConsoleLogs.push({level:'error',text:'[window.error] '+(e.message||String(e))+' @ '+(e.filename||'?')+':'+(e.lineno||0),timestamp:Date.now()});
-      if(window.__polyConsoleLogs.length>500)window.__polyConsoleLogs.shift();
-    }catch(_){}
-  },true);
-  window.addEventListener('unhandledrejection',function(e){
-    try{
-      var r=e.reason;var msg=(r&&r.message)?r.message:String(r);
-      window.__polyConsoleLogs.push({level:'error',text:'[unhandledrejection] '+msg,timestamp:Date.now()});
-      if(window.__polyConsoleLogs.length>500)window.__polyConsoleLogs.shift();
-    }catch(_){}
-  },true);
+    },true);
+    window.addEventListener('unhandledrejection',function(e){
+      try{
+        var r=e.reason;var msg=(r&&r.message)?r.message:String(r);
+        window.__polyConsoleLogs.push({level:'error',text:'[unhandledrejection] '+msg,timestamp:Date.now()});
+        if(window.__polyConsoleLogs.length>500)window.__polyConsoleLogs.shift();
+      }catch(_){}
+    },true);
+  }
+  // Re-wrap console on every install call. Dioxus's `patch_console.js`
+  // overwrites console.* AFTER our pre-document install runs, breaking the
+  // chain. We mark our wrapper with __polyWrapped so we only chain once per
+  // wrapping. install_chain runs: at addScript time (catches very early
+  // panics if any), at DOMContentLoaded (catches patch_console.js's wrap),
+  // and at every load event (catches any later swaps). Each call re-wraps
+  // whatever console.log currently is — buffer survives across re-wraps.
+  function install_chain(){
+    ['log','warn','error','info','debug'].forEach(function(lvl){
+      var current=console[lvl];
+      if(current && current.__polyWrapped)return;
+      var wrapped=function(){
+        try{
+          var args=Array.from(arguments).map(function(a){
+            try{return typeof a==='string'?a:JSON.stringify(a);}catch(e){return String(a);}
+          });
+          window.__polyConsoleLogs.push({level:lvl,text:args.join(' '),timestamp:Date.now()});
+          if(window.__polyConsoleLogs.length>500)window.__polyConsoleLogs.shift();
+        }catch(_){}
+        if(typeof current==='function')current.apply(console,arguments);
+      };
+      wrapped.__polyWrapped=true;
+      console[lvl]=wrapped;
+    });
+  }
+  install_chain();
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded',install_chain,{once:true});
+  }
+  window.addEventListener('load',install_chain,{once:true});
 })()"#;
 
 /// JS pre-document script — installed via `Page.addScriptToEvaluateOnNewDocument`
