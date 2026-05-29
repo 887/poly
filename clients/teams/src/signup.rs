@@ -83,8 +83,8 @@ fn walrus_auth(
 }
 
 /// Test accounts for the Teams local dev server (port 9103).
-#[must_use] 
-pub fn get_test_accounts() -> &'static [poly_client::TestAccountEntry] {
+#[must_use]
+pub const fn get_test_accounts() -> &'static [poly_client::TestAccountEntry] {
     use poly_client::TestAccountEntry;
     const ACCOUNTS: &[TestAccountEntry] = &[
         TestAccountEntry {
@@ -129,7 +129,7 @@ enum TeamsTab {
 /// Teams account setup form — Microsoft OAuth (device code) or raw Bearer token.
 #[component]
 fn TeamsSignupPage(on_complete: Callback<SignupCompleted>, ctx: SignupContext) -> Element {
-    let _t = ctx.t;
+    let _ = ctx;
     let tab = use_signal(|| TeamsTab::Microsoft);
 
     rsx! {
@@ -300,7 +300,8 @@ fn TeamsOAuthTab(on_complete: Callback<SignupCompleted>) -> Element {
                                                 }
                                                 return;
                                             }
-                                            Ok(None) => continue,
+                                            Ok(None) => {}
+
                                             Err(e) => {
                                                 error_msg.set(Some(e.to_string()));
                                                 polling.set(false);

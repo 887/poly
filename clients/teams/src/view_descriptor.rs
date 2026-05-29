@@ -5,7 +5,7 @@ use crate::TeamsClient;
 #[cfg(feature = "native")]
 use async_trait::async_trait;
 #[cfg(feature = "native")]
-use poly_client::*;
+use poly_client::{ClientResult, SidebarDeclaration, SidebarLayoutKind, ActionOutcome, ClientError, ViewDescriptor, ViewKind, ViewHeader, ViewBody, CardSpec, ListSpec, RowTemplate, Cursor, ViewRowsPage, ViewRow, MenuTargetKind, IsBackend, ViewDetail, CustomBlock};
 
 // ── C.1 — ViewDescriptorBackend ──────────────────────────────────────────────
 

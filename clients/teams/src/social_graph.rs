@@ -12,7 +12,7 @@ use crate::TeamsClient;
 #[cfg(feature = "native")]
 use async_trait::async_trait;
 #[cfg(feature = "native")]
-use poly_client::*;
+use poly_client::{ClientResult, User, ClientError, PresenceStatus};
 
 // ── H.3.b — SocialGraphBackend (reads + writable accessor) ───────────────────
 

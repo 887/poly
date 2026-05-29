@@ -78,7 +78,7 @@ pub use config::{DEFAULT_HOMESERVER_URL, MatrixAuthInput, MatrixConfig, MatrixCo
 #[cfg(feature = "native")]
 use http::{MatrixHttpClient, MatrixSessionState};
 #[cfg(feature = "native")]
-use poly_client::*;
+use poly_client::{SettingsStorageCell, Session, User, PresenceStatus, BackendType, ClientResult, ClientError, Message, MessageContent, SidebarItem, IconSource, SidebarRouteKind, MenuSlot, MenuItemVariant, MenuItem};
 #[cfg(feature = "native")]
 use std::collections::HashSet;
 
@@ -379,7 +379,7 @@ impl MatrixClient {
                     .display_name
                     .clone()
                     .unwrap_or_else(|| session.user_id.clone()),
-                avatar_url: session.avatar_url.clone(),
+                avatar_url: session.avatar_url,
                 presence: PresenceStatus::Online,
                 backend: BackendType::from(crate::SLUG),
             },

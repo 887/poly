@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use futures::stream::Stream;
 #[cfg(target_arch = "wasm32")]
 use futures::stream;
-use poly_client::*;
+use poly_client::{IsBackend, AuthCredentials, ClientResult, Session, ClientError, PluginManifest, Server, BackendType, Channel, ChannelType, MessageQuery, Message, User, PresenceStatus, Notification, ClientEvent, BackendCapabilities, VoiceSupport, SignupMethod};
 use std::pin::Pin;
 
 use crate::api;
@@ -122,7 +122,7 @@ impl IsBackend for MatrixClient {
             mention_count: 0,
             categories: vec![],
             backend: BackendType::from(crate::SLUG),
-            account_id: account_id.clone(),
+            account_id,
             default_channel_id: None,
             description: None,
             star_count: None,
@@ -340,7 +340,7 @@ impl IsBackend for MatrixClient {
                                         if let Some(timeline) = &room.timeline {
                                             for event in &timeline.events {
                                                 if let Some(msg) =
-                                                    MatrixClient::room_event_to_message(event)
+                                                    Self::room_event_to_message(event)
                                                 {
                                                     drop(
                                                         tx.send(ClientEvent::MessageReceived {
@@ -419,7 +419,7 @@ impl IsBackend for MatrixClient {
         BackendType::from(crate::SLUG)
     }
 
-    fn backend_name(&self) -> &str {
+    fn backend_name(&self) -> &'static str {
         "Matrix"
     }
 

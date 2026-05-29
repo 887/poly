@@ -32,13 +32,15 @@ pub struct TeamsVoiceClient;
 impl TeamsVoiceClient {
     /// Create a new Teams voice stub.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self
     }
 
     /// Attempt to connect to a Teams voice channel.
     ///
     /// Always returns `NotSupported` — Teams calling is not yet implemented.
+    // lint-allow-unused: async required — callers drive this through the VoiceTransportBackend trait which is async
+    #[allow(clippy::unused_async)]
     pub async fn connect_voice(&self, _channel_id: &str) -> Result<(), ClientError> {
         Err(ClientError::NotSupported(
             "Teams calling is not yet implemented".to_string(),
@@ -48,6 +50,8 @@ impl TeamsVoiceClient {
     /// Attempt to start a Teams DM voice call.
     ///
     /// Always returns `NotSupported` — Teams calling is not yet implemented.
+    // lint-allow-unused: async required — callers drive this through the VoiceTransportBackend trait which is async
+    #[allow(clippy::unused_async)]
     pub async fn start_direct_call(&self, _dm_id: &str) -> Result<(), ClientError> {
         Err(ClientError::NotSupported(
             "Teams calling is not yet implemented".to_string(),
@@ -57,6 +61,8 @@ impl TeamsVoiceClient {
     /// Attempt to disconnect from a Teams voice channel or call.
     ///
     /// Always returns `NotSupported` — Teams calling is not yet implemented.
+    // lint-allow-unused: async required — callers drive this through the VoiceTransportBackend trait which is async
+    #[allow(clippy::unused_async)]
     pub async fn disconnect_voice(&self) -> Result<(), ClientError> {
         Err(ClientError::NotSupported(
             "Teams calling is not yet implemented".to_string(),
@@ -66,6 +72,8 @@ impl TeamsVoiceClient {
     /// Toggle the local user's mute state.
     ///
     /// Always returns `NotSupported` — Teams calling is not yet implemented.
+    // lint-allow-unused: async required — callers drive this through the VoiceTransportBackend trait which is async
+    #[allow(clippy::unused_async)]
     pub async fn set_self_mute(
         &self,
         _channel_id: &str,
@@ -83,6 +91,8 @@ impl TeamsVoiceClient {
     /// The trait default in `clients/client/src/lib.rs` already returns
     /// `Ok(vec![])`, so this method is provided here for symmetry with the
     /// Discord voice module.
+    // lint-allow-unused: async required — callers drive this through the VoiceTransportBackend trait which is async
+    #[allow(clippy::unused_async)]
     pub async fn get_voice_participants(
         &self,
         _channel_id: &str,

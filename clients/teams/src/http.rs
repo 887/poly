@@ -134,7 +134,7 @@ impl TeamsHttpClient {
         resp.json::<T>().await.map_err(|e| ClientError::Internal(e.to_string()))
     }
 
-    async fn post_json<B: serde::Serialize, T: serde::de::DeserializeOwned>(
+    async fn post_json<B: serde::Serialize + Sync, T: serde::de::DeserializeOwned>(
         &self,
         path: &str,
         body: &B,
@@ -158,7 +158,7 @@ impl TeamsHttpClient {
         resp.json::<T>().await.map_err(|e| ClientError::Internal(e.to_string()))
     }
 
-    async fn patch_json<B: serde::Serialize, T: serde::de::DeserializeOwned>(
+    async fn patch_json<B: serde::Serialize + Sync, T: serde::de::DeserializeOwned>(
         &self,
         path: &str,
         body: &B,
@@ -198,7 +198,7 @@ impl TeamsHttpClient {
         Ok(())
     }
 
-    async fn post_json_unit<B: serde::Serialize>(
+    async fn post_json_unit<B: serde::Serialize + Sync>(
         &self,
         path: &str,
         body: &B,
@@ -222,7 +222,7 @@ impl TeamsHttpClient {
         Ok(())
     }
 
-    async fn patch_json_unit<B: serde::Serialize>(
+    async fn patch_json_unit<B: serde::Serialize + Sync>(
         &self,
         path: &str,
         body: &B,

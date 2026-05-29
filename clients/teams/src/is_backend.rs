@@ -7,14 +7,14 @@ use async_trait::async_trait;
 #[cfg(feature = "native")]
 use futures::stream::Stream;
 #[cfg(feature = "native")]
-use poly_client::*;
+use poly_client::{ClientEvent, Message, User, PresenceStatus, BackendType, MessageContent, IsBackend, AuthCredentials, ClientResult, Session, ClientError, PluginManifest, Server, Channel, ChannelType, MessageQuery, Notification, BackendCapabilities, Mechanism, SettingsScope, HostCap, SignupMethod};
 #[cfg(feature = "native")]
 use std::pin::Pin;
 
 /// Convert a `TeamsEvent` JSON payload (from `/test/events/poll`) to a
 /// `ClientEvent`. Returns None for events we don't yet surface.
 #[cfg(all(feature = "native", not(target_arch = "wasm32")))]
-pub(crate) fn teams_event_to_client(ev: &serde_json::Value) -> Option<ClientEvent> {
+pub fn teams_event_to_client(ev: &serde_json::Value) -> Option<ClientEvent> {
     let ty = ev.get("type")?.as_str()?;
     match ty {
         "MessageCreated" => {
@@ -107,7 +107,7 @@ impl IsBackend for TeamsClient {
             id: user.id.clone(),
             user: User {
                 id: user.id.clone(),
-                display_name: user.display_name.clone(),
+                display_name: user.display_name,
                 avatar_url: None,
                 presence: PresenceStatus::Online,
                 backend: BackendType::from(crate::SLUG),
@@ -260,7 +260,7 @@ impl IsBackend for TeamsClient {
         } else {
             self.http.get_chat_messages(channel_id, query.limit).await?
         };
-        Ok(msgs.into_iter().map(|m| self.graph_message_to_poly(m)).collect())
+        Ok(msgs.into_iter().map(Self::graph_message_to_poly).collect())
     }
 
     // ── Social graph (H.3.b — moved to SocialGraphBackend) ──────────────────
@@ -337,7 +337,7 @@ impl IsBackend for TeamsClient {
         BackendType::from(crate::SLUG)
     }
 
-    fn backend_name(&self) -> &str {
+    fn backend_name(&self) -> &'static str {
         "Teams"
     }
 
@@ -369,8 +369,7 @@ impl IsBackend for TeamsClient {
         let oauth_sandbox_enabled = self
             .settings_storage
             .get(SettingsScope::AccountGlobal, "", "oauth-sandbox")
-            .map(|v| v == "true")
-            .unwrap_or(false);
+            .is_some_and(|v| v == "true");
         Ok(vec![Mechanism {
             id: "oauth-sandbox".to_string(),
             name_key: "plugin-teams-mechanism-oauth-sandbox-label".to_string(),
@@ -438,6 +437,6 @@ impl poly_client::WritableMessagingBackend for TeamsClient {
         } else {
             self.http.send_chat_message(channel_id, &text).await?
         };
-        Ok(self.graph_message_to_poly(m))
+        Ok(Self::graph_message_to_poly(m))
     }
 }

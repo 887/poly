@@ -1,7 +1,7 @@
 //! `impl MessagingBackend for MatrixClient` — typing, replies, search, pinned messages.
 
 use async_trait::async_trait;
-use poly_client::*;
+use poly_client::{ClientResult, MessageContent, Message, MessageSearchQuery, MessageSearchHit, ChatCommand, CustomEmoji, StickerItem};
 
 use crate::api;
 use crate::MatrixClient;
@@ -15,12 +15,9 @@ impl poly_client::MessagingBackend for MatrixClient {
         // SOLID-audit-matrix C.1: wire `PUT /_matrix/client/v3/rooms/{roomId}/typing/{userId}`
         // with a 4-second timeout.  Errors are best-effort and logged at debug level only —
         // typing indicators are non-critical and should never surface in the UI as errors.
-        let user_id = match self.http.session().map(|s| s.user_id) {
-            Some(id) => id,
-            None => {
-                tracing::debug!(channel_id, "matrix: send_typing skipped (not authenticated)");
-                return Ok(());
-            }
+        let Some(user_id) = self.http.session().map(|s| s.user_id) else {
+            tracing::debug!(channel_id, "matrix: send_typing skipped (not authenticated)");
+            return Ok(());
         };
         if let Err(err) = self.http.put_room_typing(channel_id, &user_id, 4000).await {
             tracing::debug!(channel_id, %err, "matrix: send_typing failed (best-effort)");
@@ -82,8 +79,7 @@ impl poly_client::MessagingBackend for MatrixClient {
                     return None;
                 }
                 let room_id_str = event.event_id.as_deref()
-                    .map(|_| room_id.map(str::to_string))
-                    .unwrap_or(None)
+                    .and_then(|_| room_id.map(str::to_string))
                     .unwrap_or_default();
 
                 // Extract the room ID the event belongs to from the event itself.

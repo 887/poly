@@ -5,7 +5,7 @@
 //! and the invite/mark-read methods stay on the read trait.
 
 use async_trait::async_trait;
-use poly_client::*;
+use poly_client::{ClientResult, ClientError, Server, BackendType, ChannelType, Channel};
 
 use crate::api;
 use crate::MatrixClient;
@@ -119,7 +119,7 @@ impl poly_client::WritableServerAdminBackend for MatrixClient {
     ) -> ClientResult<Channel> {
         match channel_type {
             ChannelType::Text => {}
-            _ => {
+            ChannelType::Voice | ChannelType::Video | ChannelType::Forum | ChannelType::HackerNews | ChannelType::Code | ChannelType::Thread | ChannelType::Announcement => {
                 return Err(ClientError::NotSupported(
                     "matrix: create_channel only supports Text channels; \
                      Matrix has no native Voice/Video room type"

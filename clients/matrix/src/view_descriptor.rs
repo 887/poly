@@ -1,7 +1,7 @@
 //! `impl ViewDescriptorBackend for MatrixClient` — sidebar layout, overview, view rows.
 
 use async_trait::async_trait;
-use poly_client::*;
+use poly_client::{ClientResult, SidebarDeclaration, SidebarLayoutKind, SidebarSection, ActionOutcome, ClientError, ViewDescriptor, ViewKind, ViewHeader, ViewBody, CardSpec, Cursor, ViewRowsPage, ViewRow, MenuTargetKind, ViewDetail};
 
 use crate::build_sidebar_items;
 use crate::MatrixClient;

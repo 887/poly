@@ -5,7 +5,7 @@ use crate::TeamsClient;
 #[cfg(feature = "native")]
 use async_trait::async_trait;
 #[cfg(feature = "native")]
-use poly_client::*;
+use poly_client::{ClientResult, Group, DmChannel, User, PresenceStatus, BackendType, ClientError};
 
 // ── H.3.c — DmsAndGroupsBackend ───────────────────────────────────────────────
 // Teams supports chat channels as DMs. No group-DM management API exposed.
@@ -32,7 +32,7 @@ impl poly_client::DmsAndGroupsBackend for TeamsClient {
                         backend: BackendType::from(crate::SLUG),
                     })
                 })
-                .unwrap_or_else(|| self.unknown_user());
+                .unwrap_or_else(Self::unknown_user);
             DmChannel {
                 id: chat.id,
                 user: contact,
@@ -65,20 +65,22 @@ impl poly_client::DmsAndGroupsBackend for TeamsClient {
         // Build a contact User from chat members; pick the non-self member.
         let contact = chat.members.iter()
             .find(|m| m.user_id.as_deref() != Some(account_id.as_str()))
-            .map(|m| User {
-                id: m.user_id.clone().unwrap_or_else(|| user_id.to_string()),
-                display_name: m.display_name.clone().unwrap_or_else(|| user_id.to_string()),
-                avatar_url: None,
-                presence: PresenceStatus::Offline,
-                backend: BackendType::from(crate::SLUG),
-            })
-            .unwrap_or_else(|| User {
-                id: user_id.to_string(),
-                display_name: user_id.to_string(),
-                avatar_url: None,
-                presence: PresenceStatus::Offline,
-                backend: BackendType::from(crate::SLUG),
-            });
+            .map_or_else(
+                || User {
+                    id: user_id.to_string(),
+                    display_name: user_id.to_string(),
+                    avatar_url: None,
+                    presence: PresenceStatus::Offline,
+                    backend: BackendType::from(crate::SLUG),
+                },
+                |m| User {
+                    id: m.user_id.clone().unwrap_or_else(|| user_id.to_string()),
+                    display_name: m.display_name.clone().unwrap_or_else(|| user_id.to_string()),
+                    avatar_url: None,
+                    presence: PresenceStatus::Offline,
+                    backend: BackendType::from(crate::SLUG),
+                },
+            );
         Ok(DmChannel {
             id: chat.id,
             user: contact,

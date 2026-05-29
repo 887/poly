@@ -10,7 +10,7 @@
 //! impls; friend-system methods drop to the read-trait shim's
 //! `NotSupported` (Matrix has no friends).
 
-use poly_client::*;
+use poly_client::{ClientResult, User, PresenceStatus, BackendType, ClientError};
 
 use crate::api;
 use crate::mxc_to_http_thumbnail;
@@ -69,7 +69,7 @@ impl poly_client::SocialGraphBackend for MatrixClient {
             // Some homeservers return 404 or 403 when presence is disabled
             // server-wide. Treat these as "not supported on this homeserver"
             // rather than "offline" so the UI hides the dot.
-            Err(ClientError::NotFound(_)) | Err(ClientError::PermissionDenied(_)) => {
+            Err(ClientError::NotFound(_) | ClientError::PermissionDenied(_)) => {
                 Err(ClientError::NotSupported(
                     "get_presence: homeserver has presence disabled".to_string(),
                 ))
@@ -133,7 +133,7 @@ impl poly_client::WritableSocialGraphBackend for MatrixClient {
         let mut list = self.http.fetch_ignored_user_list(&me).await?;
         list.ignored_users
             .entry(user_id.to_string())
-            .or_insert(serde_json::Value::Object(serde_json::Map::new()));
+            .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
         self.http.put_ignored_user_list(&me, &list).await
     }
 
@@ -151,7 +151,7 @@ impl poly_client::WritableSocialGraphBackend for MatrixClient {
         let mut list = self.http.fetch_ignored_user_list(&me).await?;
         list.ignored_users
             .entry(user_id.to_string())
-            .or_insert(serde_json::Value::Object(serde_json::Map::new()));
+            .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
         self.http.put_ignored_user_list(&me, &list).await
     }
 
@@ -189,7 +189,7 @@ impl poly_client::WritableSocialGraphBackend for MatrixClient {
             Ok(()) => Ok(()),
             // Homeserver with presence disabled — treat as NotSupported so
             // the UI can mark the toggle as inert instead of failing loudly.
-            Err(ClientError::NotFound(_)) | Err(ClientError::PermissionDenied(_)) => {
+            Err(ClientError::NotFound(_) | ClientError::PermissionDenied(_)) => {
                 Err(ClientError::NotSupported(
                     "set_presence: homeserver has presence disabled".to_string(),
                 ))
@@ -207,7 +207,7 @@ impl poly_client::WritableSocialGraphBackend for MatrixClient {
 /// - `offline` → `Offline`.
 /// - Any other / future variant → `Unknown` so the UI can hide the dot
 ///   instead of guessing.
-pub(crate) fn map_matrix_presence(resp: &api::PresenceStatusResponse) -> PresenceStatus {
+pub fn map_matrix_presence(resp: &api::PresenceStatusResponse) -> PresenceStatus {
     match resp.presence.as_str() {
         "online" => {
             if matches!(resp.currently_active, Some(false)) {

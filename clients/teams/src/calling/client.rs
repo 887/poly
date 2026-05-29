@@ -168,7 +168,7 @@ pub struct StubCallingClient;
 impl StubCallingClient {
     /// Construct a new stub.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self
     }
 }

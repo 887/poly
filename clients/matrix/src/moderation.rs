@@ -6,7 +6,7 @@
 //! `get_moderation_log`, `get_server_roles`) stay on the read trait.
 
 use async_trait::async_trait;
-use poly_client::*;
+use poly_client::{ClientResult, MemberPermissions, BannedMember, ModerationLogEntry, Role, ClientError, UpdateChannelParams};
 
 use crate::moderation_log;
 use crate::MatrixClient;

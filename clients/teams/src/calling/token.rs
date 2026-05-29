@@ -95,7 +95,7 @@ pub struct AcsTokenAcquirer {
 impl AcsTokenAcquirer {
     /// Construct a new acquirer over a shared `HttpClient`.
     #[must_use]
-    pub fn new(http: HttpClient, config: TokenAcquisitionConfig) -> Self {
+    pub const fn new(http: HttpClient, config: TokenAcquisitionConfig) -> Self {
         Self { http, config }
     }
 
@@ -170,10 +170,14 @@ impl AcsTokenAcquirer {
         };
         let expiry_utc = expiry.with_timezone(&chrono::Utc);
         // Two-hour safety window before expiry.
-        let target = expiry_utc - chrono::Duration::hours(2);
+        let target = expiry_utc
+            .checked_sub_signed(chrono::Duration::hours(2))
+            .unwrap_or(expiry_utc);
         let jitter = jitter_seconds_provider();
-        let target_with_jitter = target + chrono::Duration::seconds(jitter);
-        let delta = (target_with_jitter - now).num_seconds();
+        let target_with_jitter = target
+            .checked_add_signed(chrono::Duration::seconds(jitter))
+            .unwrap_or(target);
+        let delta = target_with_jitter.signed_duration_since(now).num_seconds();
         if delta <= 0 {
             Duration::from_secs(0)
         } else {

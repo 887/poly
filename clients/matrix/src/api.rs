@@ -352,7 +352,7 @@ pub struct PowerLevelsContent {
     pub users: std::collections::HashMap<String, i64>,
 }
 
-fn default_50() -> i64 {
+const fn default_50() -> i64 {
     50
 }
 

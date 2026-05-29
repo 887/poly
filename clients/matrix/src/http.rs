@@ -89,11 +89,9 @@ impl MatrixHttpClient {
 
     /// Store a new session state.
     pub fn set_session(&self, state: MatrixSessionState) -> ClientResult<()> {
-        let mut guard = self
-            .session
+        *self.session
             .write()
-            .map_err(|err| ClientError::Internal(format!("session lock poisoned: {err}")))?;
-        *guard = Some(state);
+            .map_err(|err| ClientError::Internal(format!("session lock poisoned: {err}")))? = Some(state);
         Ok(())
     }
 
@@ -114,16 +112,16 @@ impl MatrixHttpClient {
             state.display_name = display_name;
             state.avatar_url = avatar_url;
         }
+        // Guard must span the conditional write above — dropping it early here is safe.
+        drop(guard);
         Ok(())
     }
 
     /// Clear the stored session (logout).
     pub fn clear_session(&self) -> ClientResult<()> {
-        let mut guard = self
-            .session
+        *self.session
             .write()
-            .map_err(|err| ClientError::Internal(format!("session lock poisoned: {err}")))?;
-        *guard = None;
+            .map_err(|err| ClientError::Internal(format!("session lock poisoned: {err}")))? = None;
         Ok(())
     }
 

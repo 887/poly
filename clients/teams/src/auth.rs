@@ -188,7 +188,7 @@ pub async fn poll_device_code_token(
     let err: OAuthError = resp
         .json()
         .await
-        .unwrap_or(OAuthError {
+        .unwrap_or_else(|_| OAuthError {
             error: format!("http_{}", status.as_u16()),
         });
     match err.error.as_str() {

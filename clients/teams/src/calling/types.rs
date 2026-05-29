@@ -134,10 +134,8 @@ pub enum CallingError {
 impl From<CallingError> for ClientError {
     fn from(e: CallingError) -> Self {
         match e {
-            CallingError::NotSupported(msg) => Self::NotSupported(msg),
-            CallingError::NotImplemented(msg) => Self::NotSupported(msg),
-            CallingError::AcsNotProvisioned(msg) => Self::AuthFailed(msg),
-            CallingError::TokenAcquisition(msg) => Self::AuthFailed(msg),
+            CallingError::NotSupported(msg) | CallingError::NotImplemented(msg) => Self::NotSupported(msg),
+            CallingError::AcsNotProvisioned(msg) | CallingError::TokenAcquisition(msg) => Self::AuthFailed(msg),
             CallingError::Network(msg) => Self::Network(msg),
             CallingError::PolicyDenied(msg) => Self::PermissionDenied(msg),
             CallingError::Internal(msg) => Self::Internal(msg),

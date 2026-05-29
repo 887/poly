@@ -3,7 +3,7 @@
 //! Matrix supports DM channels (via m.direct account data) and group rooms.
 //! No native saved-messages or add_group_member concept; those return NotSupported.
 
-use poly_client::*;
+use poly_client::{ClientResult, Group, DmChannel, User, PresenceStatus, BackendType, ClientError};
 
 use crate::MatrixClient;
 
@@ -20,7 +20,7 @@ impl poly_client::DmsAndGroupsBackend for MatrixClient {
             .http
             .fetch_account_data(&user_id, "m.direct")
             .await
-            .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+            .unwrap_or_else(|_| serde_json::Value::Object(serde_json::Map::new()));
 
         // F-MX-1: collect (room_id, user_id) pairs first, then fetch profiles concurrently.
         let mut pairs: Vec<(String, String)> = Vec::new();

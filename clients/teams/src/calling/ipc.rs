@@ -229,7 +229,7 @@ impl MockCallingTransport {
     /// only happen if a test panicked mid-mutation, in which case the
     /// downstream queue state is still readable / writable.
     pub fn inject_event(&self, ev: CallingEvent) {
-        let mut inbox = self.inbox.lock().unwrap_or_else(|e| e.into_inner());
+        let mut inbox = self.inbox.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         inbox.push_back(ev);
     }
 
@@ -237,7 +237,7 @@ impl MockCallingTransport {
     /// [`Self::inject_event`].
     #[must_use]
     pub fn sent_commands(&self) -> Vec<CallingCommand> {
-        let sent = self.sent.lock().unwrap_or_else(|e| e.into_inner());
+        let sent = self.sent.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         sent.clone()
     }
 }
@@ -245,14 +245,12 @@ impl MockCallingTransport {
 #[async_trait]
 impl CallingTransport for MockCallingTransport {
     async fn send(&self, cmd: CallingCommand) -> Result<(), CallingError> {
-        let mut sent = self.sent.lock().unwrap_or_else(|e| e.into_inner());
-        sent.push(cmd);
+        self.sent.lock().unwrap_or_else(std::sync::PoisonError::into_inner).push(cmd);
         Ok(())
     }
 
     async fn recv(&self) -> Option<CallingEvent> {
-        let mut inbox = self.inbox.lock().unwrap_or_else(|e| e.into_inner());
-        inbox.pop_front()
+        self.inbox.lock().unwrap_or_else(std::sync::PoisonError::into_inner).pop_front()
     }
 }
 

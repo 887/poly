@@ -5,7 +5,7 @@ use crate::TeamsClient;
 #[cfg(feature = "native")]
 use async_trait::async_trait;
 #[cfg(feature = "native")]
-use poly_client::*;
+use poly_client::{ClientResult, MemberPermissions, ClientError, BannedMember, UpdateChannelParams, ModerationLogEntry, Role};
 
 // ── H.3.a — ModerationBackend ────────────────────────────────────────────────
 #[cfg(feature = "native")]

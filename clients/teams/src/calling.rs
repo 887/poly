@@ -30,7 +30,7 @@
 //! shouldn't have to stub participant queries. Each capability lives on
 //! its own trait so backends only implement what they support.
 
-#![cfg(feature = "native")]
+// lib.rs already gates this module with #[cfg(feature = "native")]
 
 pub mod types;
 pub mod token;

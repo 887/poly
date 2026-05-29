@@ -160,7 +160,7 @@ pub enum ResourceKind {
 impl ResourceKind {
     /// Maximum lifetime allowed by Graph for this resource kind.
     #[must_use]
-    pub fn max_lifetime(self) -> Duration {
+    pub const fn max_lifetime(self) -> Duration {
         match self {
             Self::ChannelMessage | Self::ChatMessage | Self::UserPresence => {
                 Duration::from_secs(60 * 60)
@@ -176,10 +176,10 @@ impl ResourceKind {
         let max = self.max_lifetime();
         let margin = Duration::from_secs(5 * 60);
         if max > margin {
-            max - margin
+            max.checked_sub(margin).unwrap_or(Duration::from_secs(0))
         } else {
             // Pathological — fall back to half the lifetime.
-            Duration::from_secs(max.as_secs() / 2)
+            Duration::from_secs(max.as_secs().wrapping_div(2))
         }
     }
 }
@@ -196,7 +196,9 @@ pub fn compute_expiration_iso(
 ) -> String {
     let lifetime = kind.max_lifetime();
     let secs = i64::try_from(lifetime.as_secs()).unwrap_or(i64::MAX);
-    let expiry = now + chrono::Duration::seconds(secs);
+    let expiry = now
+        .checked_add_signed(chrono::Duration::seconds(secs))
+        .unwrap_or(now);
     expiry.to_rfc3339()
 }
 

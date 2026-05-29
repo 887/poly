@@ -68,7 +68,7 @@ pub fn plugin_translations(locale: &str) -> String {
 #[cfg(feature = "native")]
 use http::TeamsHttpClient;
 #[cfg(feature = "native")]
-use poly_client::*;
+use poly_client::{SettingsStorageCell, Message, User, PresenceStatus, BackendType, MessageContent, ClientResult, ClientError};
 #[cfg(feature = "native")]
 use std::collections::HashSet;
 #[cfg(feature = "native")]
@@ -142,7 +142,7 @@ impl TeamsClient {
         self.account_display_name.clone().unwrap_or_default()
     }
 
-    pub(crate) fn graph_message_to_poly(&self, m: types::GraphMessage) -> Message {
+    pub(crate) fn graph_message_to_poly(m: types::GraphMessage) -> Message {
         let author = if let Some(from) = m.from {
             if let Some(u) = from.user {
                 User {
@@ -153,10 +153,10 @@ impl TeamsClient {
                     backend: BackendType::from(crate::SLUG),
                 }
             } else {
-                self.unknown_user()
+                Self::unknown_user()
             }
         } else {
-            self.unknown_user()
+            Self::unknown_user()
         };
         let timestamp = chrono::DateTime::parse_from_rfc3339(&m.created_date_time).map_or_else(|_| chrono::Utc::now(), |dt| dt.with_timezone(&chrono::Utc));
         Message {
@@ -182,7 +182,7 @@ impl TeamsClient {
             )));
         };
         let m = self.http.edit_channel_message(team_id, ch_id, message_id, content).await?;
-        Ok(self.graph_message_to_poly(m))
+        Ok(Self::graph_message_to_poly(m))
     }
 
     /// Soft-delete a channel message.
@@ -233,7 +233,7 @@ impl TeamsClient {
         calling::WebViewBridgeCallingClient::new(transport)
     }
 
-    pub(crate) fn unknown_user(&self) -> User {
+    pub(crate) fn unknown_user() -> User {
         User {
             id: String::new(),
             display_name: "Unknown".to_string(),

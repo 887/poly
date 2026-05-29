@@ -1,7 +1,7 @@
 //! `impl ContextActionBackend for MatrixClient` — context menus, composer/message actions.
 
 use async_trait::async_trait;
-use poly_client::*;
+use poly_client::{MenuTargetKind, ClientResult, MenuItem, MenuSlot, MenuItemVariant, ActionOutcome, ClientError, PendingHandle, ComposerButton, ComposerSlot};
 
 use crate::MatrixClient;
 

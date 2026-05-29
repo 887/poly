@@ -53,7 +53,7 @@ const PER_ROOM_EVENT_CAP: u64 = 50;
 
 /// Walk the space hierarchy and project member/redaction events into a
 /// merged, time-sorted moderation log capped at `limit` entries.
-pub(crate) async fn synthesize(
+pub async fn synthesize(
     http: &MatrixHttpClient,
     server_id: &str,
     limit: usize,
@@ -152,8 +152,7 @@ fn project_member_event(event: &RoomEvent, room_id: &str) -> Option<ModerationLo
     let action = match (content.membership.as_str(), prev_membership.as_deref()) {
         ("ban", _) => ModerationAction::MemberBanned,
         ("leave", Some("ban")) if sender != target => ModerationAction::MemberUnbanned,
-        ("leave", Some("join")) if sender != target => ModerationAction::MemberKicked,
-        ("leave", Some("invite")) if sender != target => ModerationAction::MemberKicked,
+        ("leave", Some("join" | "invite")) if sender != target => ModerationAction::MemberKicked,
         // Self-leaves, joins, invites, knocks: not moderation actions.
         _ => return None,
     };
@@ -166,7 +165,7 @@ fn project_member_event(event: &RoomEvent, room_id: &str) -> Option<ModerationLo
         target_display_name: content.displayname.clone(),
         channel_id: Some(room_id.to_string()),
         message_id: None,
-        reason: content.reason.clone(),
+        reason: content.reason,
         timestamp: ts_to_rfc3339(ts),
     })
 }

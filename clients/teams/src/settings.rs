@@ -5,7 +5,7 @@ use crate::TeamsClient;
 #[cfg(feature = "native")]
 use async_trait::async_trait;
 #[cfg(feature = "native")]
-use poly_client::*;
+use poly_client::{ClientResult, SettingsSection, SettingsScope, SettingDescriptor, SettingKind, SettingsStorageCell};
 
 // ── C.1 — SettingsBackend ────────────────────────────────────────────────────
 

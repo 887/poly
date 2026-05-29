@@ -5,11 +5,13 @@ use crate::TeamsClient;
 #[cfg(feature = "native")]
 use async_trait::async_trait;
 #[cfg(feature = "native")]
-use poly_client::*;
+use poly_client::{MenuTargetKind, ClientResult, MenuItem, MenuSlot, MenuItemVariant, ActionOutcome, ClientError, PendingHandle, ComposerButton, ComposerSlot};
 
 // ── C.1 — ContextActionBackend ───────────────────────────────────────────────
 
 #[cfg(feature = "native")]
+// lint-allow-unused: get_context_menu_items is a dispatch table across 4 MenuTargetKind variants; splitting scatters cohesive menu logic
+#[allow(clippy::too_many_lines)]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl poly_client::ContextActionBackend for TeamsClient {
