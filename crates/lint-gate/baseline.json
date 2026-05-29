@@ -68,6 +68,12 @@
     },
     {
       "detail": "banned #[allow(clippy::too_many_lines)]",
+      "line": 198,
+      "path": "clients/reddit/src/backend/view_descriptor.rs",
+      "rule": "allow_ban"
+    },
+    {
+      "detail": "banned #[allow(clippy::too_many_lines)]",
       "line": 431,
       "path": "clients/stoat/src/is_backend.rs",
       "rule": "allow_ban"

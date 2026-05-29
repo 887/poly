@@ -5,7 +5,11 @@
 
 use async_trait::async_trait;
 use futures::stream::{self, Stream};
-use poly_client::*;
+use poly_client::{
+    AuthCredentials, BackendCapabilities, BackendType, Channel, ClientError, ClientEvent,
+    ClientResult, CommunitySearchSupport, IsBackend, Mechanism, Message, MessageQuery,
+    Notification, PluginManifest, Server, Session, SettingsScope, SignupMethod, User,
+};
 use std::pin::Pin;
 
 use crate::LemmyClient;
@@ -23,7 +27,7 @@ impl LemmyClient {
     /// the three-arm duplication that previously lived in `authenticate`.
     ///
     /// DIP: callers no longer know how `Person → Session` projection works.
-    fn finalize_session(&mut self, person: &LemmyPerson, jwt: String) -> Session {
+    fn finalize_session(&self, person: &LemmyPerson, jwt: String) -> Session {
         let session = LemmySession {
             jwt: jwt.clone(),
             user_id: person.id,
@@ -304,7 +308,7 @@ impl IsBackend for LemmyClient {
         BackendType::from(crate::SLUG)
     }
 
-    fn backend_name(&self) -> &str {
+    fn backend_name(&self) -> &'static str {
         "Lemmy"
     }
 

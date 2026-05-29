@@ -54,7 +54,7 @@ fn dog_auth(
 
 /// Test accounts for the Reddit local dev server (port 9108).
 #[must_use]
-pub fn get_test_accounts() -> &'static [poly_client::TestAccountEntry] {
+pub const fn get_test_accounts() -> &'static [poly_client::TestAccountEntry] {
     use poly_client::TestAccountEntry;
     const ACCOUNTS: &[TestAccountEntry] = &[
         TestAccountEntry {

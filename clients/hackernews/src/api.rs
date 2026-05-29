@@ -58,7 +58,7 @@ impl HnApiClient {
     /// Borrow the underlying HTTP client — used by `auth` module for
     /// non-Firebase requests (login at news.ycombinator.com, comment POST).
     /// Public-in-crate so external consumers go through `HackerNewsClient`.
-    pub(crate) fn http_client(&self) -> &HttpClient {
+    pub(crate) const fn http_client(&self) -> &HttpClient {
         &self.http
     }
 

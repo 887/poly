@@ -80,7 +80,7 @@ pub fn parse_user_overview(html: &str) -> Result<UserProfile, ParseError> {
         .trim()
         .strip_prefix("overview for ")
         .or_else(|| title.trim().strip_suffix("'s posts"))
-        .unwrap_or(title.trim())
+        .unwrap_or_else(|| title.trim())
         .to_string();
 
     // Avatar: <img class="profile-img" src="..."> in the sidebar.

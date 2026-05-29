@@ -7,7 +7,7 @@
 //! `NotSupported` automatically.
 
 use async_trait::async_trait;
-use poly_client::*;
+use poly_client::{ClientResult, User, PresenceStatus, BackendType, ClientError};
 
 use crate::LemmyClient;
 

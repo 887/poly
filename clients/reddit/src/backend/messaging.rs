@@ -55,7 +55,7 @@ impl poly_client::MessagingBackend for RedditBackend {
                 id: self
                     .session
                     .as_ref()
-                    .map_or("u_me".to_string(), |s| s.user.id.clone()),
+                    .map_or_else(|| "u_me".to_string(), |s| s.user.id.clone()),
                 display_name: account_display,
                 avatar_url: None,
                 presence: PresenceStatus::Offline,

@@ -4,7 +4,7 @@
 //! and row/detail fetching for HN story feeds.
 
 use async_trait::async_trait;
-use poly_client::*;
+use poly_client::{ClientResult, ClientError, ViewRow, Cursor, CursorKind, SidebarDeclaration, SidebarLayoutKind, ViewDescriptor, ViewKind, ViewHeader, ViewBody, ListSpec, RowTemplate, ViewRowsPage, ViewDetail, CustomBlock};
 
 use crate::HackerNewsClient;
 use crate::api::HnApiClient;
@@ -44,7 +44,7 @@ impl HnViewKind {
     }
 
     /// Underlying feed to query against the HN Firebase API.
-    fn feed(self) -> HnFeed {
+    const fn feed(self) -> HnFeed {
         match self {
             Self::Overview => HnFeed::Top,
             Self::Feed(f) => f,

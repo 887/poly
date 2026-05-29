@@ -45,7 +45,7 @@ mod mapping_tests;
 pub mod signup;
 mod types;
 
-use poly_client::*;
+use poly_client::{Session, SettingsStorageCell, User, PresenceStatus, BackendType, ClientError};
 
 pub use api::{GhCli, GhError, RepoPermissions};
 pub use mapping::{BACKEND_SLUG, issue_thread_channel_id};
@@ -131,7 +131,7 @@ impl GitHubClient {
     fn build_session(&self, login: &str) -> Session {
         let instance = self.cli.instance_id().to_string();
         Session {
-            id: format!("gh-{}-{}", instance, login),
+            id: format!("gh-{instance}-{login}"),
             user: User {
                 id: login.to_string(),
                 display_name: login.to_string(),

@@ -3,7 +3,7 @@
 //! Split out of `lib.rs` for Single Responsibility (B.1).
 
 use async_trait::async_trait;
-use poly_client::*;
+use poly_client::{ClientResult, SidebarDeclaration, SidebarLayoutKind, ActionOutcome, ClientError, SettingsScope, ViewDescriptor, ViewKind, ViewHeader, ViewBody, CardSpec, ListSpec, RowTemplate, ViewToolbar, TreeSpec, Cursor, ViewRowsPage, ViewRow, MessageContent, MenuTargetKind, ViewDetail, CustomBlock};
 
 use crate::LemmyClient;
 use crate::api::{
@@ -138,12 +138,13 @@ impl poly_client::ViewDescriptorBackend for LemmyClient {
                     MessageContent::Text(s) => s.clone(),
                     MessageContent::WithAttachments { text, .. } => text.clone(),
                 };
+                let icon = msg.author.avatar_url;
                 ViewRow {
-                    id: msg.id.clone(),
+                    id: msg.id,
                     primary_text: content_text,
-                    secondary_text: Some(msg.author.display_name.clone()),
+                    secondary_text: Some(msg.author.display_name),
                     meta_text: None,
-                    icon: msg.author.avatar_url.clone(),
+                    icon,
                     badge: None,
                     context_menu_target_kind: MenuTargetKind::Message,
                     preview_image_url: None,
@@ -188,6 +189,13 @@ impl poly_client::ViewDescriptorBackend for LemmyClient {
         _channel_id: &str,
         row_id: &str,
     ) -> ClientResult<ViewDetail> {
+        fn html_escape(s: &str) -> String {
+            s.replace('&', "&amp;")
+                .replace('<', "&lt;")
+                .replace('>', "&gt;")
+                .replace('"', "&quot;")
+        }
+
         let post_id = row_id
             .parse::<i64>()
             .ok()
@@ -200,13 +208,6 @@ impl poly_client::ViewDescriptorBackend for LemmyClient {
             .ok_or_else(|| {
                 ClientError::NotFound(format!("get_view_detail: cannot parse row id: {row_id}"))
             })?;
-
-        fn html_escape(s: &str) -> String {
-            s.replace('&', "&amp;")
-                .replace('<', "&lt;")
-                .replace('>', "&gt;")
-                .replace('"', "&quot;")
-        }
 
         let post_view = self.http.fetch_post(post_id).await?;
         let body = post_view.post.body.clone().unwrap_or_default();

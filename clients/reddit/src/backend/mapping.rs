@@ -10,7 +10,10 @@ use super::ids::{
 };
 use crate::parser::{RawComment, RawDm, RawPost, UserProfile};
 use crate::SortKind;
-use poly_client::*;
+use poly_client::{
+    Attachment, BackendType, Category, Channel, ChannelType, DmChannel, MenuTargetKind, Message,
+    MessageContent, PresenceStatus, Server, User, ViewRow,
+};
 
 /// Strip HTML tags + decode common entities from a reddit comment body.
 ///
@@ -22,7 +25,7 @@ use poly_client::*;
 ///
 /// Future improvement: round-trip HTML → markdown so the chat-view's
 /// markdown renderer can lay out lists / links / code blocks properly.
-pub(crate) fn html_to_plain_text(html: &str) -> String {
+pub fn html_to_plain_text(html: &str) -> String {
     // Replace block-level closing tags with double-newline so paragraphs
     // and list items separate visually.
     let mut s = html.to_string();
@@ -60,7 +63,7 @@ pub(crate) fn html_to_plain_text(html: &str) -> String {
 /// per-post comment-fetch route (`hn-post-<pid>`) so ForumPostView
 /// can render the thread as a flat list (Message-level reply_to
 /// threading is a separate, future pass).
-pub(crate) fn flatten_comments_into_messages(
+pub fn flatten_comments_into_messages(
     comments: &[RawComment],
     backend: &BackendType,
     out: &mut Vec<Message>,
@@ -96,7 +99,9 @@ pub(crate) fn flatten_comments_into_messages(
 /// Recursively emit reddit comments as depth-indented sanitized HTML.
 /// Used by `get_view_detail` to inline the comment thread under the
 /// post body (TreeSpec-via-ViewRow doesn't support hierarchy yet).
-pub(crate) fn render_comments_to_html(out: &mut String, comments: &[RawComment], depth: u32, max_depth: u32) {
+pub fn render_comments_to_html(out: &mut String, comments: &[RawComment], depth: u32, max_depth: u32) {
+    use std::fmt::Write as _;
+
     fn html_escape(s: &str) -> String {
         s.replace('&', "&amp;")
             .replace('<', "&lt;")
@@ -105,21 +110,17 @@ pub(crate) fn render_comments_to_html(out: &mut String, comments: &[RawComment],
     }
     let indent_px = depth.min(max_depth).saturating_mul(16);
     for comment in comments {
-        out.push_str(&format!(
-            "<div class=\"reddit-comment\" style=\"margin-left:{indent_px}px\">"
-        ));
-        out.push_str(&format!(
+        write!(out, "<div class=\"reddit-comment\" style=\"margin-left:{indent_px}px\">").ok();
+        write!(
+            out,
             "<div class=\"reddit-comment-meta\">u/{} · {} points</div>",
             html_escape(&comment.author),
             comment.score,
-        ));
+        ).ok();
         // Body is already HTML-rendered by the parser (markdown → HTML by
         // reddit), so include verbatim — host's CustomBlock sanitizer
         // strips dangerous tags downstream.
-        out.push_str(&format!(
-            "<div class=\"reddit-comment-body\">{}</div>",
-            comment.body_html,
-        ));
+        write!(out, "<div class=\"reddit-comment-body\">{}</div>", comment.body_html).ok();
         out.push_str("</div>");
         if depth < max_depth && !comment.replies.is_empty() {
             render_comments_to_html(out, &comment.replies, depth.saturating_add(1), max_depth);
@@ -131,29 +132,32 @@ pub(crate) fn render_comments_to_html(out: &mut String, comments: &[RawComment],
 /// `/api/submit`. The first non-empty line becomes the title; everything
 /// after the first newline is the body (verbatim — leading blank lines
 /// trimmed).
-pub(crate) fn split_title_body(text: &str) -> (String, &str) {
+pub fn split_title_body(text: &str) -> (String, &str) {
     let trimmed = text.trim_start_matches('\n');
-    if let Some(idx) = trimmed.find('\n') {
-        let (title, rest) = trimmed.split_at(idx);
-        (title.trim().to_string(), rest.trim_start_matches('\n'))
-    } else {
-        (trimmed.trim().to_string(), "")
-    }
+    trimmed.find('\n').map_or_else(
+        || (trimmed.trim().to_string(), ""),
+        |idx| {
+            let (title, rest) = trimmed.split_at(idx);
+            (title.trim().to_string(), rest.trim_start_matches('\n'))
+        },
+    )
 }
 
-pub(crate) fn raw_post_to_message(post: &RawPost, backend: &BackendType) -> Message {
-    let content = if let Some(body) = &post.body {
-        let body_text = html_to_plain_text(body);
-        if !body_text.is_empty() {
-            MessageContent::Text(format!("{}\n\n{}", post.title, body_text))
-        } else {
-            MessageContent::Text(post.title.clone())
-        }
-    } else if let Some(url) = &post.url {
-        MessageContent::Text(format!("{}\n\n{}", post.title, url))
-    } else {
-        MessageContent::Text(post.title.clone())
-    };
+pub fn raw_post_to_message(post: &RawPost, backend: &BackendType) -> Message {
+    let content = post.body.as_deref().map_or_else(
+        || post.url.as_deref().map_or_else(
+            || MessageContent::Text(post.title.clone()),
+            |url| MessageContent::Text(format!("{}\n\n{}", post.title, url)),
+        ),
+        |body| {
+            let body_text = html_to_plain_text(body);
+            if body_text.is_empty() {
+                MessageContent::Text(post.title.clone())
+            } else {
+                MessageContent::Text(format!("{}\n\n{body_text}", post.title))
+            }
+        },
+    );
 
     // Add an attachment for image previews so the message view can render them.
     // For video posts we use the preview thumbnail (if available) and mark the
@@ -195,7 +199,7 @@ pub(crate) fn raw_post_to_message(post: &RawPost, backend: &BackendType) -> Mess
     }
 }
 
-pub(crate) fn raw_dm_to_dm_channel(dm: &RawDm, account_id: &str, backend: &BackendType) -> DmChannel {
+pub fn raw_dm_to_dm_channel(dm: &RawDm, account_id: &str, backend: &BackendType) -> DmChannel {
     let last_message = Message {
         id: message_id_for_dm(&dm.id),
         author: User {
@@ -231,7 +235,7 @@ pub(crate) fn raw_dm_to_dm_channel(dm: &RawDm, account_id: &str, backend: &Backe
     }
 }
 
-pub(crate) fn user_profile_to_user(profile: &UserProfile, backend: &BackendType) -> User {
+pub fn user_profile_to_user(profile: &UserProfile, backend: &BackendType) -> User {
     User {
         id: user_id_for_name(&profile.name),
         display_name: profile.name.clone(),
@@ -241,7 +245,7 @@ pub(crate) fn user_profile_to_user(profile: &UserProfile, backend: &BackendType)
     }
 }
 
-pub(crate) fn raw_post_to_viewrow(post: &RawPost, show_previews: bool) -> ViewRow {
+pub fn raw_post_to_viewrow(post: &RawPost, show_previews: bool) -> ViewRow {
     let secondary = format!("by u/{}", post.author);
     let preview_image_url = if show_previews { post.preview_url.clone() } else { None };
 
@@ -260,7 +264,7 @@ pub(crate) fn raw_post_to_viewrow(post: &RawPost, show_previews: bool) -> ViewRo
     }
 }
 
-pub(crate) fn build_sub_server(
+pub fn build_sub_server(
     sub: &str,
     account_id: &str,
     account_display_name: &str,
@@ -290,7 +294,7 @@ pub(crate) fn build_sub_server(
     }
 }
 
-pub(crate) fn build_sub_channel(sub: &str) -> Channel {
+pub fn build_sub_channel(sub: &str) -> Channel {
     Channel {
         id: channel_id_for_sub(sub),
         name: "posts".to_string(),
@@ -308,7 +312,7 @@ pub(crate) fn build_sub_channel(sub: &str) -> Channel {
 // ─── Sort state helpers ───────────────────────────────────────────────────────
 
 /// Stable string key used to persist a `SortKind` in `settings_storage`.
-pub(crate) fn sort_kind_to_str(sort: SortKind) -> &'static str {
+pub const fn sort_kind_to_str(sort: SortKind) -> &'static str {
     match sort {
         SortKind::Hot => "hot",
         SortKind::New => "new",
@@ -327,9 +331,8 @@ pub(crate) fn sort_kind_to_str(sort: SortKind) -> &'static str {
 /// Parse a persisted sort key back into a `SortKind`.
 ///
 /// Returns `SortKind::Hot` for unrecognised or absent values (safe default).
-pub(crate) fn sort_kind_from_str(s: &str) -> SortKind {
+pub fn sort_kind_from_str(s: &str) -> SortKind {
     match s {
-        "hot" => SortKind::Hot,
         "new" => SortKind::New,
         "rising" => SortKind::Rising,
         "controversial" => SortKind::Controversial,
@@ -340,6 +343,7 @@ pub(crate) fn sort_kind_from_str(s: &str) -> SortKind {
         "top-month" => SortKind::TopMonth,
         "top-year" => SortKind::TopYear,
         "top-all" => SortKind::TopAll,
+        // "hot" or any unrecognised value → default to Hot.
         _ => SortKind::Hot,
     }
 }

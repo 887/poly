@@ -215,7 +215,8 @@ impl RedditClient {
             let mut p = "/subreddits/popular.json?limit=25".to_string();
             if let Some(cursor) = after {
                 let encoded_after = urlencoding_simple(cursor);
-                p.push_str(&format!("&after={encoded_after}"));
+                p.push_str("&after=");
+                p.push_str(&encoded_after);
             }
             p
         } else {
@@ -223,7 +224,8 @@ impl RedditClient {
             let mut p = format!("/subreddits/search.json?q={encoded_q}&limit=25");
             if let Some(cursor) = after {
                 let encoded_after = urlencoding_simple(cursor);
-                p.push_str(&format!("&after={encoded_after}"));
+                p.push_str("&after=");
+                p.push_str(&encoded_after);
             }
             p
         };

@@ -3,7 +3,7 @@
 //! Split out of `lib.rs` for Single Responsibility (B.1).
 
 use async_trait::async_trait;
-use poly_client::*;
+use poly_client::{MenuTargetKind, ClientResult, MenuItem, MenuSlot, MenuItemVariant, ActionOutcome, ClientError};
 
 use crate::LemmyClient;
 

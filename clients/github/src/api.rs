@@ -32,6 +32,9 @@ use crate::types::{
 
 /// The authenticated user's permission flags for a single GitHub repo,
 /// as returned by `GET /repos/{owner}/{repo}` under the `permissions` key.
+// Five bools directly mirror the five GitHub API permission levels; a state
+// machine or enum would misrepresent the API (they are independent flags).
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, Default)]
 pub struct RepoPermissions {
     /// Full admin access (repo settings, delete, transfer).
@@ -77,7 +80,7 @@ pub struct GhCli {
 impl GhCli {
     /// Wrap the user's gh CLI for github.com.
     #[must_use]
-    pub fn dotcom() -> Self {
+    pub const fn dotcom() -> Self {
         Self {
             hostname: None,
             http_base_url: None,
@@ -119,15 +122,14 @@ impl GhCli {
     /// Display name for the instance (used as `instance_id` and in errors).
     #[must_use]
     pub fn instance_id(&self) -> &str {
-        if let Some(url) = &self.http_base_url {
-            url.trim_start_matches("http://")
+        self.http_base_url.as_ref().map_or_else(
+            || self.hostname.as_deref().unwrap_or("github.com"),
+            |url| url.trim_start_matches("http://")
                 .trim_start_matches("https://")
                 .split('/')
                 .next()
-                .unwrap_or("localhost")
-        } else {
-            self.hostname.as_deref().unwrap_or("github.com")
-        }
+                .unwrap_or("localhost"),
+        )
     }
 
     /// Run `gh api <endpoint>` and parse the JSON output as `T`.
@@ -145,13 +147,13 @@ impl GhCli {
     /// Native: run `gh api <endpoint>` as a subprocess and return raw stdout.
     #[cfg(not(target_arch = "wasm32"))]
     pub async fn api_raw(&self, endpoint: &str, extra_args: &[&str]) -> Result<Vec<u8>, GhError> {
+        use std::process::Stdio;
+        use tokio::process::Command;
+
         // If HTTP mode is configured, use direct HTTP instead of gh CLI
         if let Some(base_url) = &self.http_base_url {
             return self.api_raw_http(base_url, endpoint).await;
         }
-
-        use std::process::Stdio;
-        use tokio::process::Command;
 
         let mut cmd = Command::new("gh");
         cmd.arg("api");
@@ -232,22 +234,22 @@ impl GhCli {
     async fn api_raw_http(&self, base_url: &str, endpoint: &str) -> Result<Vec<u8>, GhError> {
         use poly_host_bridge::http::HttpClient;
 
-        let url = format!("{}{}", base_url, endpoint);
+        let url = format!("{base_url}{endpoint}");
         let http = HttpClient::new();
         let mut req = http.get(&url);
         if let Some(token) = &self.http_token {
-            req = req.header("Authorization", format!("token {}", token));
+            req = req.header("Authorization", format!("token {token}"));
         }
         let response = req
             .send()
             .await
-            .map_err(|e| GhError::Spawn(format!("HTTP request failed: {}", e)))?;
+            .map_err(|e| GhError::Spawn(format!("HTTP request failed: {e}")))?;
 
         let status = response.status();
         let bytes = response
             .bytes()
             .await
-            .map_err(|e| GhError::Parse(format!("failed to read response body: {}", e)))?;
+            .map_err(|e| GhError::Parse(format!("failed to read response body: {e}")))?;
 
         if !status.is_success() {
             return Err(GhError::Exit {
@@ -400,13 +402,13 @@ impl GhCli {
     /// piped to stdin, or use direct HTTP when `http_base_url` is set.
     #[cfg(not(target_arch = "wasm32"))]
     async fn graphql_raw(&self, body: &serde_json::Value) -> Result<Vec<u8>, GhError> {
-        if let Some(base_url) = &self.http_base_url {
-            return self.graphql_raw_http(base_url, body).await;
-        }
-
         use std::process::Stdio;
         use tokio::io::AsyncWriteExt as _;
         use tokio::process::Command;
+
+        if let Some(base_url) = &self.http_base_url {
+            return self.graphql_raw_http(base_url, body).await;
+        }
 
         let body_bytes =
             serde_json::to_vec(body).map_err(|e| GhError::Parse(e.to_string()))?;
@@ -516,13 +518,13 @@ impl GhCli {
         endpoint: &str,
         body: serde_json::Value,
     ) -> Result<Vec<u8>, GhError> {
-        if let Some(base_url) = &self.http_base_url {
-            return self.api_post_raw_http(base_url, endpoint, body).await;
-        }
-
         use std::process::Stdio;
         use tokio::io::AsyncWriteExt as _;
         use tokio::process::Command;
+
+        if let Some(base_url) = &self.http_base_url {
+            return self.api_post_raw_http(base_url, endpoint, body).await;
+        }
 
         let body_bytes = serde_json::to_vec(&body).map_err(|e| GhError::Parse(e.to_string()))?;
 
@@ -612,7 +614,7 @@ impl GhCli {
     ) -> Result<Vec<u8>, GhError> {
         use poly_host_bridge::http::HttpClient;
 
-        let url = format!("{}{}", base_url, endpoint);
+        let url = format!("{base_url}{endpoint}");
         let http = HttpClient::new();
         let mut req = http
             .post(&url)
@@ -710,11 +712,11 @@ impl GhCli {
     async fn api_delete_http(&self, base_url: &str, endpoint: &str) -> Result<(), GhError> {
         use poly_host_bridge::http::HttpClient;
 
-        let url = format!("{}{}", base_url, endpoint);
+        let url = format!("{base_url}{endpoint}");
         let http = HttpClient::new();
         let mut req = http.delete(&url);
         if let Some(token) = &self.http_token {
-            req = req.header("Authorization", format!("token {}", token));
+            req = req.header("Authorization", format!("token {token}"));
         }
         let response = req
             .send()
@@ -775,7 +777,7 @@ impl GhCli {
         first: u32,
         after: Option<&str>,
     ) -> Result<(Vec<GhDiscussion>, Option<String>), GhError> {
-        const QUERY: &str = r#"
+        const QUERY: &str = r"
 query($owner: String!, $name: String!, $first: Int!, $after: String) {
   repository(owner: $owner, name: $name) {
     discussions(first: $first, after: $after, orderBy: {field: UPDATED_AT, direction: DESC}) {
@@ -797,7 +799,7 @@ query($owner: String!, $name: String!, $first: Int!, $after: String) {
     }
   }
 }
-"#;
+";
         let variables = serde_json::json!({
             "owner": owner,
             "name": repo,

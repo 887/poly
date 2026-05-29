@@ -10,7 +10,7 @@
 //! default shims return `NotSupported` automatically.
 
 use async_trait::async_trait;
-use poly_client::*;
+use poly_client::{ClientResult, User, ClientError, PresenceStatus};
 
 use crate::HackerNewsClient;
 use crate::mapping::hn_user_to_user;

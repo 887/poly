@@ -69,7 +69,7 @@ pub enum HnFeed {
 
 impl HnFeed {
     /// Returns the API path segment for this feed.
-    pub fn path(self) -> &'static str {
+    pub const fn path(self) -> &'static str {
         match self {
             Self::Top => "topstories.json",
             Self::New => "newstories.json",
@@ -81,7 +81,7 @@ impl HnFeed {
     }
 
     /// Returns the channel ID for this feed.
-    pub fn channel_id(self) -> &'static str {
+    pub const fn channel_id(self) -> &'static str {
         match self {
             Self::Top => "hn-top",
             Self::New => "hn-new",
@@ -93,7 +93,7 @@ impl HnFeed {
     }
 
     /// Returns the channel display name for this feed.
-    pub fn display_name(self) -> &'static str {
+    pub const fn display_name(self) -> &'static str {
         match self {
             Self::Top => "Top",
             Self::New => "New",

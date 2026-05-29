@@ -50,7 +50,7 @@ pub fn parse_listing(html: &str) -> Result<Vec<RawPost>, ParseError> {
     parse_listing_from_doc(&doc)
 }
 
-pub(crate) fn parse_listing_from_doc(doc: &Html) -> Result<Vec<RawPost>, ParseError> {
+pub fn parse_listing_from_doc(doc: &Html) -> Result<Vec<RawPost>, ParseError> {
     let thing_sel = post_selector();
     let mut posts = Vec::new();
     for el in doc.select(&thing_sel) {
@@ -64,22 +64,25 @@ pub(crate) fn parse_listing_from_doc(doc: &Html) -> Result<Vec<RawPost>, ParseEr
 /// if present. Returns `None` when there is no next-button (final page).
 #[must_use]
 pub fn extract_next_after(html: &str) -> Option<String> {
+    const HREF_ATTR_LEN: usize = 6; // length of `href="`
+    const AFTER_PARAM_LEN: usize = "after=".len();
+
     // Locate the next-button span and the first href= within ~512 chars.
     let span_idx = html.find("\"next-button\"")?;
-    let window_end = (span_idx + 512).min(html.len());
-    let window = &html[span_idx..window_end];
+    let window_end = span_idx.saturating_add(512).min(html.len());
+    let window = html.get(span_idx..window_end)?;
     let href_idx = window.find("href=\"")?;
-    let after_href = &window[href_idx + 6..];
+    let after_href = window.get(href_idx.saturating_add(HREF_ATTR_LEN)..)?;
     let close = after_href.find('"')?;
-    let href = &after_href[..close];
+    let href = after_href.get(..close)?;
     // href may include the literal `&amp;` from HTML escaping; both
     // shapes can carry an after=... query param.
     let after_marker = href.find("after=")?;
-    let raw = &href[after_marker + "after=".len()..];
+    let raw = href.get(after_marker.saturating_add(AFTER_PARAM_LEN)..)?;
     let end = raw
-        .find(|c: char| c == '&' || c == '#')
+        .find(['&', '#'])
         .unwrap_or(raw.len());
-    let token = &raw[..end];
+    let token = raw.get(..end)?;
     if token.is_empty() {
         None
     } else {
@@ -87,7 +90,7 @@ pub fn extract_next_after(html: &str) -> Option<String> {
     }
 }
 
-pub(crate) fn post_selector() -> Selector {
+pub fn post_selector() -> Selector {
     // Lints: parser-internal selector strings are static and known-good.
     #[allow(clippy::unwrap_used)] // lint-allow-unused: static selector literal infallible
     {
@@ -95,7 +98,7 @@ pub(crate) fn post_selector() -> Selector {
     }
 }
 
-pub(crate) fn parse_post_thing(el: &ElementRef<'_>) -> Result<RawPost, ParseError> {
+pub fn parse_post_thing(el: &ElementRef<'_>) -> Result<RawPost, ParseError> {
     let id = data_attr(el, "data-fullname")
         .and_then(|v| v.strip_prefix("t3_"))
         .ok_or(ParseError::MissingElement("data-fullname (t3_)"))?
@@ -109,7 +112,7 @@ pub(crate) fn parse_post_thing(el: &ElementRef<'_>) -> Result<RawPost, ParseErro
     let score = data_attr(el, "data-score")
         .ok_or(ParseError::MissingElement("data-score"))?
         .parse::<i64>()
-        .map_err(|_| ParseError::MalformedInt("data-score"))?;
+        .map_err(|_parse_err| ParseError::MalformedInt("data-score"))?;
     let timestamp_raw = data_attr(el, "data-timestamp")
         .ok_or(ParseError::MissingElement("data-timestamp"))?;
     let timestamp = parse_timestamp_ms(timestamp_raw)?;
@@ -119,7 +122,7 @@ pub(crate) fn parse_post_thing(el: &ElementRef<'_>) -> Result<RawPost, ParseErro
     let comment_count = data_attr(el, "data-comments-count")
         .unwrap_or("0")
         .parse::<u32>()
-        .map_err(|_| ParseError::MalformedInt("data-comments-count"))?;
+        .map_err(|_parse_err| ParseError::MalformedInt("data-comments-count"))?;
     let url = data_attr(el, "data-url").map(str::to_owned);
 
     // Title is in <a class="title may-blank ..."> inside <p class="title">.
@@ -150,12 +153,13 @@ pub(crate) fn parse_post_thing(el: &ElementRef<'_>) -> Result<RawPost, ParseErro
     // (e.g. a post with `data-domain="i.imgur.com"` always has an image URL,
     // but some posts on `imgur.com` only link to an album).
     let url_is_image = url.as_deref().is_some_and(|u| {
-        let lower = u.to_lowercase();
-        lower.ends_with(".jpg")
-            || lower.ends_with(".jpeg")
-            || lower.ends_with(".png")
-            || lower.ends_with(".gif")
-            || lower.ends_with(".webp")
+        std::path::Path::new(u).extension().is_some_and(|ext| {
+            ext.eq_ignore_ascii_case("jpg")
+                || ext.eq_ignore_ascii_case("jpeg")
+                || ext.eq_ignore_ascii_case("png")
+                || ext.eq_ignore_ascii_case("gif")
+                || ext.eq_ignore_ascii_case("webp")
+        })
     });
 
     // Video domains — `v.redd.it` requires the HLS manifest, but other

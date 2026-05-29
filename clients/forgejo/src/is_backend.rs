@@ -1,7 +1,13 @@
 //! `impl IsBackend for ForgejoClient` — authentication, servers, channels, messages,
 //! event stream, capabilities, and capability-downcast accessors.
 
-use crate::*;
+use async_trait::async_trait;
+use futures::stream::{self as stream, Stream};
+use poly_client::{IsBackend, AuthCredentials, ClientResult, Session, ClientError, BackendType, Server, Channel, MessageQuery, Message, User, Notification, ClientEvent, BackendCapabilities, PluginManifest, SignupMethod};
+use poly_common_forge::split_owner_repo;
+use std::pin::Pin;
+use crate::{ForgejoClient, mapping, api};
+use crate::mapping::BACKEND_SLUG;
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
@@ -77,41 +83,50 @@ impl IsBackend for ForgejoClient {
             .iter()
             .map(|r| mapping::server_from_repo(r, &account_id, &display_name))
             .collect();
-        let mut cache = self.repos.lock().await;
-        *cache = active;
+        *self.repos.lock().await = active;
         Ok(servers)
     }
 
     async fn get_server(&self, id: &str) -> ClientResult<Server> {
-        let cache = self.repos.lock().await;
-        cache
-            .iter()
-            .find(|r| mapping::server_id_for_repo(r) == id)
-            .map(|r| mapping::server_from_repo(r, self.session_id(), self.session_login()))
-            .ok_or_else(|| ClientError::NotFound(format!("repo {id}")))
+        let server = {
+            let cache = self.repos.lock().await;
+            cache
+                .iter()
+                .find(|r| mapping::server_id_for_repo(r) == id)
+                .map(|r| mapping::server_from_repo(r, self.session_id(), self.session_login()))
+        };
+        server.ok_or_else(|| ClientError::NotFound(format!("repo {id}")))
     }
 
     // --- Channels ---
 
     async fn get_channels(&self, server_id: &str) -> ClientResult<Vec<Channel>> {
-        let cache = self.repos.lock().await;
-        let repo = cache
-            .iter()
-            .find(|r| mapping::server_id_for_repo(r) == server_id)
-            .ok_or_else(|| ClientError::NotFound(format!("repo {server_id}")))?;
-        Ok(mapping::channels_for_repo(repo))
+        let channels = {
+            let cache = self.repos.lock().await;
+            cache
+                .iter()
+                .find(|r| mapping::server_id_for_repo(r) == server_id)
+                .map(mapping::channels_for_repo)
+        };
+        channels.ok_or_else(|| ClientError::NotFound(format!("repo {server_id}")))
     }
 
     async fn get_channel(&self, id: &str) -> ClientResult<Channel> {
-        let cache = self.repos.lock().await;
-        for repo in cache.iter() {
-            for ch in mapping::channels_for_repo(repo) {
-                if ch.id == id {
-                    return Ok(ch);
+        let found = {
+            let cache = self.repos.lock().await;
+            let mut result = None;
+            'outer: for repo in cache.iter() {
+                for ch in mapping::channels_for_repo(repo) {
+                    if ch.id == id {
+                        result = Some(ch);
+                        break 'outer;
+                    }
                 }
             }
-        }
-        Err(ClientError::NotFound(format!("channel {id}")))
+            drop(cache);
+            result
+        };
+        found.ok_or_else(|| ClientError::NotFound(format!("channel {id}")))
     }
 
     // --- Messages ---
@@ -209,7 +224,7 @@ impl IsBackend for ForgejoClient {
         BackendType::from(BACKEND_SLUG)
     }
 
-    fn backend_name(&self) -> &str {
+    fn backend_name(&self) -> &'static str {
         "Forgejo"
     }
 

@@ -266,24 +266,28 @@ pub fn map_issue_to_viewrow(issue: &ForgejoIssue) -> ViewRow {
 /// thread in the split-pane detail panel without a second round-trip.
 #[must_use]
 pub fn issue_to_view_detail(issue: &ForgejoIssue, comments: &[ForgejoComment]) -> ViewDetail {
+    use std::fmt::Write as _;
+
     let mut html = format!(
         "<p class=\"issue-body\">{}</p>",
         html_escape(&issue.body.clone().unwrap_or_default())
     );
 
     if !comments.is_empty() {
-        html.push_str(&format!(
-            "<hr><p class=\"comments-heading\"><strong>{} comment{}</strong></p>",
+        let plural = if comments.len() == 1 { "" } else { "s" };
+        write!(
+            html,
+            "<hr><p class=\"comments-heading\"><strong>{} comment{plural}</strong></p>",
             comments.len(),
-            if comments.len() == 1 { "" } else { "s" }
-        ));
+        ).ok();
         for c in comments {
-            html.push_str(&format!(
+            write!(
+                html,
                 "<div class=\"issue-comment\"><p class=\"comment-author\"><strong>{}</strong> · {}</p><p class=\"comment-body\">{}</p></div>",
                 html_escape(&c.user.login),
                 html_escape(&humanize_age(&c.created_at)),
                 html_escape(&c.body.clone().unwrap_or_default()),
-            ));
+            ).ok();
         }
     }
 
@@ -293,13 +297,13 @@ pub fn issue_to_view_detail(issue: &ForgejoIssue, comments: &[ForgejoComment]) -
             stylesheet: None,
             max_height_px: None,
         },
-        comments_section: if !comments.is_empty() {
+        comments_section: if comments.is_empty() {
+            None
+        } else {
             Some(TreeSpec {
                 root_page_size: u32::try_from(comments.len()).unwrap_or(u32::MAX),
                 max_depth: 1,
             })
-        } else {
-            None
         },
     }
 }
@@ -353,12 +357,11 @@ pub fn filter_active_repos(repos: Vec<ForgejoRepo>) -> Vec<ForgejoRepo> {
             if r.archived {
                 return false;
             }
-            match &r.updated_at {
-                None => true,
-                Some(s) => DateTime::parse_from_rfc3339(s)
+            r.updated_at.as_ref().is_none_or(|s| {
+                DateTime::parse_from_rfc3339(s)
                     .map(|dt| dt.with_timezone(&Utc) >= cutoff)
-                    .unwrap_or(true),
-            }
+                    .unwrap_or(true)
+            })
         })
         .collect()
 }

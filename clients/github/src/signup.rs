@@ -20,9 +20,9 @@ pub async fn test_authenticate(
     use poly_host_bridge::http::HttpClient;
     let http = HttpClient::new();
     let resp = http
-        .post(format!("{}/test/auth/token", base_url))
+        .post(format!("{base_url}/test/auth/token"))
         .header("Content-Type", "application/json")
-        .body(format!(r#"{{"username":"{}"}}"#, username))
+        .body(format!(r#"{{"username":"{username}"}}"#))
         .send()
         .await
         .map_err(|e| e.to_string())?;
@@ -63,7 +63,7 @@ fn chameleon_auth(
 
 /// Test accounts for the GitHub local dev server (port 9107).
 #[must_use]
-pub fn get_test_accounts() -> &'static [poly_client::TestAccountEntry] {
+pub const fn get_test_accounts() -> &'static [poly_client::TestAccountEntry] {
     use poly_client::TestAccountEntry;
     const ACCOUNTS: &[TestAccountEntry] = &[
         TestAccountEntry {

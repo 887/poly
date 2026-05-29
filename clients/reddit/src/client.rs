@@ -116,7 +116,7 @@ impl RedditClient {
 
     /// The underlying HTTP client. Used by parser modules in Phase B.
     #[must_use]
-    pub fn http(&self) -> &reqwest::Client {
+    pub const fn http(&self) -> &reqwest::Client {
         &self.http
     }
 
@@ -176,7 +176,7 @@ impl RedditClient {
 ///
 /// Only encodes `&`, `?`, `#`, `%`, and space — enough for query strings
 /// without a full-blown percent-encoding library dependency on WASM.
-pub(super) fn urlencoding_simple(s: &str) -> String {
+pub fn urlencoding_simple(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for ch in s.chars() {
         match ch {

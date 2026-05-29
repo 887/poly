@@ -24,35 +24,37 @@ use super::types::{
 /// from the list still get the right signal via `embed_video_url`,
 /// which is always trusted.
 pub fn post_is_video(post: &LemmyPost) -> bool {
+    // Domain-match for the well-known video hosts. `contains` to
+    // tolerate `www.` / `m.` prefixes and `https://` schemes.
+    const VIDEO_HOSTS: &[&str] = &[
+        "youtube.com/",
+        "youtu.be/",
+        "vimeo.com/",
+        // PeerTube flagship instances — federation makes a complete
+        // list impossible; this is the largest-traffic subset.
+        "peertube.tv/",
+        "tilvids.com/",
+        "kolektiva.media/",
+        "framatube.org/",
+        // Invidious frontends are youtube-equivalent.
+        "invidious.io/",
+        "yewtu.be/",
+    ];
+
     if post.embed_video_url.is_some() {
         return true;
     }
     post.url.as_deref().is_some_and(|u| {
         let lower = u.to_lowercase();
-        // File-extension match.
-        if lower.ends_with(".mp4")
-            || lower.ends_with(".webm")
-            || lower.ends_with(".ogv")
-            || lower.ends_with(".mov")
-        {
+        // File-extension match (case-insensitive via Path::extension).
+        if std::path::Path::new(&lower).extension().is_some_and(|ext| {
+            ext.eq_ignore_ascii_case("mp4")
+                || ext.eq_ignore_ascii_case("webm")
+                || ext.eq_ignore_ascii_case("ogv")
+                || ext.eq_ignore_ascii_case("mov")
+        }) {
             return true;
         }
-        // Domain-match for the well-known video hosts. `contains` to
-        // tolerate `www.` / `m.` prefixes and `https://` schemes.
-        const VIDEO_HOSTS: &[&str] = &[
-            "youtube.com/",
-            "youtu.be/",
-            "vimeo.com/",
-            // PeerTube flagship instances — federation makes a complete
-            // list impossible; this is the largest-traffic subset.
-            "peertube.tv/",
-            "tilvids.com/",
-            "kolektiva.media/",
-            "framatube.org/",
-            // Invidious frontends are youtube-equivalent.
-            "invidious.io/",
-            "yewtu.be/",
-        ];
         VIDEO_HOSTS.iter().any(|host| lower.contains(host))
     })
 }
@@ -362,11 +364,13 @@ pub fn map_pm_to_dm_channel(
 /// Map a single `PrivateMessageView` to a Poly `Message`.
 pub fn map_pm_to_message(view: &PrivateMessageView, my_user_id: i64) -> Message {
     let pm = &view.private_message;
-    let author = if pm.creator_id == my_user_id {
-        &view.creator
-    } else {
-        &view.creator
-    };
+    // The creator field holds the sender. For messages the local user sent,
+    // `pm.creator_id == my_user_id`; the author shown is still the creator
+    // because that's who wrote it. The recipient field is used by the DM
+    // channel display layer, not the individual message author.
+    let _ = my_user_id; // retained for API symmetry; see creator_id in PrivateMessage
+    let _ = pm.creator_id; // part of API DTO; used by `map_pm_to_dm_channel`
+    let author = &view.creator;
 
     Message {
         id: format!("lemmy-pm-{}", pm.id),

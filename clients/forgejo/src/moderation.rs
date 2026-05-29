@@ -11,12 +11,14 @@
 //! become defaulted by the read-trait shim and return `NotSupported`
 //! through that path.
 
-use crate::*;
+use async_trait::async_trait;
+use poly_client::{ClientResult, MemberPermissions, BannedMember, ClientError, ModerationLogEntry, Role, UpdateChannelParams};
+use crate::{ForgejoClient, channel_ids};
 
 mod mod_ns {
-    pub(super) const BAN_LIST: &str = "Forgejo: no per-repo ban list";
-    pub(super) const MOD_LOG: &str = "Forgejo: admin audit log is not available via the REST API";
-    pub(super) const ROLES: &str = "Forgejo: no role concept";
+    pub const BAN_LIST: &str = "Forgejo: no per-repo ban list";
+    pub const MOD_LOG: &str = "Forgejo: admin audit log is not available via the REST API";
+    pub const ROLES: &str = "Forgejo: no role concept";
     // Tier 2: KICK / BAN / UNBAN / TIMEOUT / CHANNEL_UPDATE /
     // CHANNEL_REORDER constants removed — those mutators dropped from
     // the impl block; the read-trait shim returns generic NotSupported.

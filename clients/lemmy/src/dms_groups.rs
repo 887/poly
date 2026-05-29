@@ -4,7 +4,7 @@
 //! Split out of `lib.rs` for Single Responsibility (B.1).
 
 use async_trait::async_trait;
-use poly_client::*;
+use poly_client::{ClientResult, Group, DmChannel, ClientError};
 use std::collections::HashMap;
 
 use crate::{CONVO_MUTE_UNSUPPORTED, GROUP_DM_UNSUPPORTED, LemmyClient};

@@ -1,7 +1,9 @@
 //! `impl DmsAndGroupsBackend for ForgejoClient` — all not-supported stubs
 //! (Forgejo has no DM or group DM concept).
 
-use crate::*;
+use async_trait::async_trait;
+use poly_client::{ClientResult, Group, DmChannel, ClientError};
+use crate::{ForgejoClient, ns};
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]

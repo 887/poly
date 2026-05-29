@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use poly_client::*;
+use poly_client::{ClientResult, FileEntry, ClientError, FileContent};
 use poly_common_forge::{decode_b64, kind_from_string};
 
 use crate::mapping;

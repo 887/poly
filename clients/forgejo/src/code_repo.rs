@@ -1,7 +1,10 @@
 //! `impl CodeRepoBackend for ForgejoClient` — file listing and file content reading
 //! from Forgejo repos via the REST API.
 
-use crate::*;
+use async_trait::async_trait;
+use poly_client::{ClientResult, FileEntry, ClientError, FileContent};
+use poly_common_forge::{kind_from_string, decode_b64};
+use crate::{ForgejoClient, mapping};
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]

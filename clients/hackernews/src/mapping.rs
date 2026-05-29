@@ -8,7 +8,7 @@ use poly_client::{
 
 use crate::types::{HnFeed, HnItem, HnItemType, HnUser};
 
-pub(crate) const SERVER_ID: &str = "hn";
+pub const SERVER_ID: &str = "hn";
 
 /// Build the static "Hacker News" virtual server.
 ///
@@ -87,10 +87,13 @@ pub fn build_channels() -> Vec<Channel> {
 }
 
 /// Strip HTML tags from a string, replacing common block tags with newlines.
+// State-machine HTML stripper: every branch is a single syntactic case of the
+// HN HTML subset; splitting further would make the logic harder to audit.
+#[allow(clippy::cognitive_complexity)]
 pub fn strip_html(html: &str) -> String {
     let mut result = String::with_capacity(html.len());
     let mut in_tag = false;
-    let mut chars = html.chars().peekable();
+    let mut chars = html.chars();
 
     while let Some(ch) = chars.next() {
         match ch {
@@ -197,16 +200,13 @@ fn anonymous_user() -> User {
 }
 
 fn hn_author_to_user(by: Option<&str>) -> User {
-    match by {
-        Some(username) => User {
-            id: username.to_string(),
-            display_name: username.to_string(),
-            avatar_url: None,
-            presence: PresenceStatus::Offline,
-            backend: BackendType::from(crate::SLUG),
-        },
-        None => anonymous_user(),
-    }
+    by.map_or_else(anonymous_user, |username| User {
+        id: username.to_string(),
+        display_name: username.to_string(),
+        avatar_url: None,
+        presence: PresenceStatus::Offline,
+        backend: BackendType::from(crate::SLUG),
+    })
 }
 
 /// Format a story item as readable text content.
@@ -226,14 +226,16 @@ pub fn format_story_text(item: &HnItem) -> String {
             let score = item.score.unwrap_or(0);
             let comments = item.descendants.unwrap_or(0);
 
-            if let Some(url) = &item.url {
-                format!("{title}\n{url}\n\n{score} points | {comments} comments | by {by}")
-            } else if let Some(text) = &item.text {
-                let body = strip_html(text);
-                format!("{title}\n\n{body}\n\n{score} points | {comments} comments | by {by}")
-            } else {
-                format!("{title}\n\n{score} points | {comments} comments | by {by}")
-            }
+            item.url.as_ref().map_or_else(
+                || item.text.as_ref().map_or_else(
+                    || format!("{title}\n\n{score} points | {comments} comments | by {by}"),
+                    |text| {
+                        let body = strip_html(text);
+                        format!("{title}\n\n{body}\n\n{score} points | {comments} comments | by {by}")
+                    },
+                ),
+                |url| format!("{title}\n{url}\n\n{score} points | {comments} comments | by {by}"),
+            )
         }
     }
 }
@@ -260,20 +262,15 @@ pub fn hn_item_to_message(item: &HnItem) -> Message {
         });
     }
 
-    let attachments = if let Some(url) = &item.url {
+    let attachments = item.url.as_ref().map_or_else(Vec::new, |url| {
         vec![Attachment::remote(
             format!("url-{}", item.id),
-            item.title
-                .as_deref()
-                .unwrap_or("Link")
-                .to_string(),
+            item.title.as_deref().unwrap_or("Link").to_string(),
             "text/html".to_string(),
             url.clone(),
             0,
         )]
-    } else {
-        Vec::new()
-    };
+    });
 
     Message {
         id: item.id.to_string(),
@@ -411,11 +408,7 @@ pub fn hn_item_to_view_row(item: &HnItem) -> ViewRow {
 /// Returns `None` if the URL has no host or cannot be parsed simply.
 fn domain_from_url(url: &str) -> Option<String> {
     // Strip scheme (e.g. "https://")
-    let after_scheme = if let Some(pos) = url.find("://") {
-        url.get(pos.saturating_add(3)..).unwrap_or(url)
-    } else {
-        url
-    };
+    let after_scheme = url.find("://").map_or(url, |pos| url.get(pos.saturating_add(3)..).unwrap_or(url));
     // Take everything before the first '/'
     let host = after_scheme.split('/').next()?;
     // Drop port if present
@@ -439,10 +432,7 @@ pub fn hn_item_to_overview_row(item: &HnItem) -> ViewRow {
 
     let author = item.by.as_deref().unwrap_or("unknown");
     let domain = item.url.as_deref().and_then(domain_from_url);
-    let secondary_text = Some(match domain {
-        Some(d) => format!("{author} · {d}"),
-        None => author.to_string(),
-    });
+    let secondary_text = Some(domain.map_or_else(|| author.to_string(), |d| format!("{author} · {d}")));
 
     let meta_text = Some(format!(
         "{} points · {} comments · {}",

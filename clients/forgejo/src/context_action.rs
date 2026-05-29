@@ -1,7 +1,9 @@
 //! `impl ContextActionBackend for ForgejoClient` — server context menu items
 //! (open, star, watch) and action invocation.
 
-use crate::*;
+use async_trait::async_trait;
+use poly_client::{MenuTargetKind, ClientResult, MenuItem, IsBackend, MenuSlot, MenuItemVariant, ActionOutcome, ClientError};
+use crate::{ForgejoClient, mapping};
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]

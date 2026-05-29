@@ -4,7 +4,7 @@
 
 use async_trait::async_trait;
 use futures::stream::{self, Stream};
-use poly_client::*;
+use poly_client::{IsBackend, AuthCredentials, ClientResult, Session, ClientError, Server, Channel, MessageQuery, Message, MessageContent, User, Notification, ClientEvent, BackendType, BackendCapabilities, PluginManifest, SignupMethod, Mechanism, SettingsScope, PresenceStatus};
 use std::pin::Pin;
 
 use super::error::NS_CREDS;
@@ -171,11 +171,11 @@ impl IsBackend for RedditBackend {
                 .session
                 .as_ref()
                 .map_or("u_me", |s| s.user.id.as_str());
-            let dm_chan = raw_dm_to_dm_channel(&dm, account_id, &bt);
+            let dm_chan_user = raw_dm_to_dm_channel(&dm, account_id, &bt).user;
             let body_plain = html_to_plain_text(&dm.body_html);
             let msg = Message {
                 id: message_id_for_dm(&dm.id),
-                author: dm_chan.user.clone(),
+                author: dm_chan_user,
                 content: MessageContent::Text(body_plain),
                 timestamp: dm.timestamp,
                 attachments: Vec::new(),
@@ -235,7 +235,7 @@ impl IsBackend for RedditBackend {
         BackendType::from(crate::SLUG)
     }
 
-    fn backend_name(&self) -> &str {
+    fn backend_name(&self) -> &'static str {
         "Reddit"
     }
 
@@ -375,7 +375,7 @@ impl poly_client::WritableMessagingBackend for RedditBackend {
                 id: self
                     .session
                     .as_ref()
-                    .map_or("u_me".to_string(), |s| s.user.id.clone()),
+                    .map_or_else(|| "u_me".to_string(), |s| s.user.id.clone()),
                 display_name: account_display,
                 avatar_url: None,
                 presence: PresenceStatus::Offline,

@@ -44,7 +44,11 @@ use mapping::{
     post_id_from_channel,
 };
 #[cfg(feature = "native")]
-use poly_client::*;
+use poly_client::{
+    IsBackend, Session, SettingsStorageCell, User, PresenceStatus, BackendType, AuthCredentials,
+    ClientResult, PluginManifest, Server, ClientError, Channel, MessageQuery, Message,
+    Notification, ClientEvent, BackendCapabilities, SignupMethod, MessageContent,
+};
 #[cfg(feature = "native")]
 use std::pin::Pin;
 #[cfg(feature = "native")]
@@ -165,9 +169,10 @@ impl IsBackend for HackerNewsClient {
                 let cookie: String = auth::login(self.api.http_client(), &self.api.ua(), &email, &password)
                     .await?;
                 let mut session = self.named_session(&email);
-                session.token = cookie.clone();
-                self.session = Some(session.clone());
-                Ok(session)
+                session.token = cookie;
+                let session_out = session.clone();
+                self.session = Some(session);
+                Ok(session_out)
             }
             // Anonymous fallback (Token(""), OAuth{token:""}, or anything else
             // we don't have a real login flow for) — guest session, read-only.
@@ -345,7 +350,7 @@ impl IsBackend for HackerNewsClient {
         BackendType::from(crate::SLUG)
     }
 
-    fn backend_name(&self) -> &str {
+    fn backend_name(&self) -> &'static str {
         "Hacker News"
     }
 
@@ -498,7 +503,7 @@ fn require_post_channel(channel_id: &str) -> ClientResult<u64> {
 fn require_text_content(content: MessageContent) -> ClientResult<String> {
     match content {
         MessageContent::Text(s) => Ok(s),
-        other => Err(ClientError::NotSupported(format!(
+        other @ MessageContent::WithAttachments { .. } => Err(ClientError::NotSupported(format!(
             "Hacker News comments only accept plain text (got: {other:?})"
         ))),
     }

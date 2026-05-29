@@ -96,7 +96,7 @@ pub struct GhIssue {
 
 impl GhIssue {
     /// Whether this issue is actually a pull request.
-    pub fn is_pull_request(&self) -> bool {
+    pub const fn is_pull_request(&self) -> bool {
         self.pull_request.is_some()
     }
 }

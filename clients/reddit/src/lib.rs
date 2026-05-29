@@ -131,7 +131,7 @@ pub enum SortKind {
 impl SortKind {
     /// URL path segment for this sort.
     #[must_use]
-    pub fn as_path(self) -> &'static str {
+    pub const fn as_path(self) -> &'static str {
         match self {
             Self::Hot => "hot",
             Self::New => "new",
@@ -146,7 +146,7 @@ impl SortKind {
     ///
     /// Returns `None` for sorts that don't need a time filter.
     #[must_use]
-    pub fn time_filter(self) -> Option<&'static str> {
+    pub const fn time_filter(self) -> Option<&'static str> {
         match self {
             Self::TopHour => Some("hour"),
             Self::TopDay => Some("day"),
@@ -154,7 +154,7 @@ impl SortKind {
             Self::TopMonth => Some("month"),
             Self::TopYear => Some("year"),
             Self::TopAll => Some("all"),
-            _ => None,
+            Self::Hot | Self::New | Self::Rising | Self::Controversial | Self::Top => None,
         }
     }
 }

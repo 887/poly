@@ -5,7 +5,7 @@ use poly_common_forge::split_owner_repo;
 ///
 /// Handles `gh-issues-{owner}/{repo}`, `gh-pulls-{owner}/{repo}`,
 /// and `gh-discussions-{owner}/{repo}`.
-pub(crate) fn parse_forum_channel(channel_id: &str) -> ClientResult<(String, String)> {
+pub fn parse_forum_channel(channel_id: &str) -> ClientResult<(String, String)> {
     let rest = channel_id
         .strip_prefix("gh-issues-")
         .or_else(|| channel_id.strip_prefix("gh-pulls-"))

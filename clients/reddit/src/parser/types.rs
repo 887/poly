@@ -65,7 +65,7 @@ pub struct RawComment {
     /// Reddit-internal permalink to this comment.
     pub permalink: String,
     /// Direct child comments (HTML nesting; depth-first preserved).
-    pub replies: Vec<RawComment>,
+    pub replies: Vec<Self>,
 }
 
 /// A direct message thread root (`t4_`).

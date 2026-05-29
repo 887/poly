@@ -3,7 +3,7 @@
 //! Split out of `lib.rs` for Single Responsibility (B.1).
 
 use async_trait::async_trait;
-use poly_client::*;
+use poly_client::{ClientResult, ClientError, MessageContent, Message, MessageSearchQuery, MessageSearchHit, ChatCommand, CustomEmoji, StickerItem};
 
 use crate::LemmyClient;
 use crate::api::map_comment_to_message;

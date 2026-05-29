@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use poly_client::*;
+use poly_client::{ClientResult, Group, DmChannel, ClientError};
 
 use crate::{
     GitHubClient, NS_NO_CONVERSATION_MUTE, NS_NO_DM_CONCEPT, NS_NO_GROUP_DMS,

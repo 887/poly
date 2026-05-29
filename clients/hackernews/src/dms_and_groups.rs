@@ -4,7 +4,7 @@
 //! All methods return either an empty list or `NotSupported`.
 
 use async_trait::async_trait;
-use poly_client::*;
+use poly_client::{ClientResult, Group, DmChannel, ClientError};
 
 use crate::HackerNewsClient;
 

@@ -5,7 +5,10 @@
 //! implement [`WritableSocialGraphBackend`], so the read-trait shims
 //! return `NotSupported` automatically.
 
-use crate::*;
+use async_trait::async_trait;
+use poly_client::{ClientResult, User, PresenceStatus, BackendType};
+use crate::{ForgejoClient};
+use crate::mapping::BACKEND_SLUG;
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]

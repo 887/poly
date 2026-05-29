@@ -262,18 +262,22 @@ pub fn issue_to_view_detail(issue: &GhIssue, comments: &[GhIssueComment]) -> Vie
     );
 
     if !comments.is_empty() {
-        html.push_str(&format!(
-            "<hr><p class=\"comments-heading\"><strong>{} comment{}</strong></p>",
+        use std::fmt::Write as _;
+
+        let plural = if comments.len() == 1 { "" } else { "s" };
+        write!(
+            html,
+            "<hr><p class=\"comments-heading\"><strong>{} comment{plural}</strong></p>",
             comments.len(),
-            if comments.len() == 1 { "" } else { "s" }
-        ));
+        ).ok();
         for c in comments {
-            html.push_str(&format!(
+            write!(
+                html,
                 "<div class=\"issue-comment\"><p class=\"comment-author\"><strong>{}</strong> · {}</p><p class=\"comment-body\">{}</p></div>",
                 html_escape(&c.user.login),
                 html_escape(&humanize_age(&c.created_at)),
                 html_escape(&c.body.clone().unwrap_or_default()),
-            ));
+            ).ok();
         }
     }
 
@@ -363,8 +367,7 @@ pub fn discussion_to_message(d: &GhDiscussion) -> Message {
     let author_login = d
         .author
         .as_ref()
-        .map(|a| a.login.as_str())
-        .unwrap_or("[deleted]");
+        .map_or("[deleted]", |a| a.login.as_str());
     let author_avatar = d.author.as_ref().and_then(|a| a.avatar_url.clone());
     let body = d.body_text.clone().unwrap_or_default();
     let status = if d.answer_chosen_at.is_some() {
@@ -440,12 +443,11 @@ pub fn filter_active_repos(repos: Vec<GhRepo>, years: i64) -> Vec<GhRepo> {
     let cutoff = Utc::now() - chrono::Duration::days(365_i64.saturating_mul(years));
     repos
         .into_iter()
-        .filter(|r| match &r.pushed_at {
-            None => true,
-            Some(s) => DateTime::parse_from_rfc3339(s)
+        .filter(|r| r.pushed_at.as_ref().is_none_or(|s| {
+            DateTime::parse_from_rfc3339(s)
                 .map(|dt| dt.with_timezone(&Utc) >= cutoff)
-                .unwrap_or(true),
-        })
+                .unwrap_or(true)
+        }))
         .filter(|r| !r.archived)
         .collect()
 }

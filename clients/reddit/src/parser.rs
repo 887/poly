@@ -29,8 +29,6 @@
 //! Both markers must surface as `ParseError::LoggedOut` so the caller
 //! can prompt for a fresh `reddit_session` cookie.
 
-#![cfg(feature = "native")]
-
 use chrono::{DateTime, Utc};
 use scraper::Html;
 
@@ -100,7 +98,7 @@ pub(crate) fn parse_timestamp_ms(raw: &str) -> Result<DateTime<Utc>, ParseError>
     }
     DateTime::parse_from_rfc3339(raw)
         .map(|dt| dt.with_timezone(&Utc))
-        .map_err(|_| ParseError::MalformedTimestamp(raw.to_string()))
+        .map_err(|_parse_err| ParseError::MalformedTimestamp(raw.to_string()))
 }
 
 #[cfg(test)]

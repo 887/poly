@@ -3,7 +3,7 @@
 //! Split out of `lib.rs` for Single Responsibility (B.1).
 
 use async_trait::async_trait;
-use poly_client::*;
+use poly_client::{CommunityPage, CommunityScope, ClientError, ClientResult};
 
 use crate::LemmyClient;
 use crate::api::map_community_to_server;
@@ -40,7 +40,7 @@ impl poly_client::DiscoverBackend for LemmyClient {
             .and_then(|c| c.parse().ok())
             .unwrap_or(1u32);
         let next_cursor = if resp.communities.len() == 50 {
-            Some((current_page + 1).to_string())
+            Some(current_page.saturating_add(1).to_string())
         } else {
             None
         };

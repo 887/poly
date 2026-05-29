@@ -9,7 +9,7 @@
 //! writable trait carries `delete_message` (real) and stubs the rest.
 
 use async_trait::async_trait;
-use poly_client::*;
+use poly_client::{ClientResult, MemberPermissions, ClientError, BannedMember, ModerationLogEntry, Role, UpdateChannelParams};
 
 use crate::forum::parse_forum_channel;
 use crate::{GitHubClient, NS_NO_BAN_CONCEPT, NS_NO_TIMEOUT_CONCEPT};

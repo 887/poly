@@ -4,7 +4,11 @@
 //! and the view-row / view-detail rendering for subreddit channels.
 
 use async_trait::async_trait;
-use poly_client::*;
+use poly_client::{
+    ActionOutcome, ClientError, ClientResult, Cursor, CustomBlock, ListSpec, RowTemplate,
+    SettingsScope, SidebarDeclaration, SidebarItem, SidebarLayoutKind, SidebarRouteKind,
+    SidebarSection, ViewBody, ViewDescriptor, ViewDetail, ViewKind, ViewRowsPage,
+};
 
 use super::ids::sub_from_channel_id;
 use super::mapping::{raw_post_to_viewrow, render_comments_to_html, sort_kind_to_str};
@@ -189,11 +193,23 @@ impl poly_client::ViewDescriptorBackend for RedditBackend {
         Ok(ViewRowsPage { rows, next_cursor: None })
     }
 
+    // lint-allow-unused: single-responsibility HTML render fn; splitting it into
+    // sub-fns would scatter the CSS and gallery/comment logic with no clear seam.
+    #[allow(clippy::too_many_lines)]
     async fn get_view_detail(
         &self,
         _channel_id: &str,
         row_id: &str,
     ) -> ClientResult<ViewDetail> {
+        use std::fmt::Write as _;
+
+        fn html_escape(s: &str) -> String {
+            s.replace('&', "&amp;")
+                .replace('<', "&lt;")
+                .replace('>', "&gt;")
+                .replace('"', "&quot;")
+        }
+
         let post_id = row_id
             .strip_prefix("t3_")
             .ok_or_else(|| ClientError::NotFound(format!("get_view_detail: not a t3_ row: {row_id}")))?;
@@ -215,33 +231,25 @@ impl poly_client::ViewDescriptorBackend for RedditBackend {
         };
         let is_real_gallery = gallery_urls.len() >= 2;
 
-        fn html_escape(s: &str) -> String {
-            s.replace('&', "&amp;")
-                .replace('<', "&lt;")
-                .replace('>', "&gt;")
-                .replace('"', "&quot;")
-        }
-
         let mut html = String::new();
-        html.push_str(&format!("<h3>{}</h3>", html_escape(&post.title)));
-        html.push_str(&format!(
+        write!(html, "<h3>{}</h3>", html_escape(&post.title)).ok();
+        write!(
+            html,
             "<p class=\"reddit-post-meta\">by u/{} · {} points · {} comments</p>",
             html_escape(&post.author),
             post.score,
             post.comment_count,
-        ));
+        ).ok();
         if let Some(ref url) = post.url
             && gallery_urls.is_empty()
         {
             let escaped = html_escape(url);
-            html.push_str(&format!(
-                "<p class=\"reddit-post-link\"><a href=\"{escaped}\">{escaped}</a></p>"
-            ));
+            write!(html, "<p class=\"reddit-post-link\"><a href=\"{escaped}\">{escaped}</a></p>").ok();
         }
         if let Some(ref body) = post.body
             && !body.is_empty()
         {
-            html.push_str(&format!("<div class=\"reddit-post-body\">{body}</div>"));
+            write!(html, "<div class=\"reddit-post-body\">{body}</div>").ok();
         }
         if !gallery_urls.is_empty() {
             let wrapper_class = if is_real_gallery {
@@ -249,33 +257,37 @@ impl poly_client::ViewDescriptorBackend for RedditBackend {
             } else {
                 "reddit-gallery"
             };
-            html.push_str(&format!("<div class=\"{wrapper_class}\">"));
+            write!(html, "<div class=\"{wrapper_class}\">").ok();
+            let gallery_len = gallery_urls.len();
             for (i, url) in gallery_urls.iter().enumerate() {
                 let alt = if is_real_gallery {
-                    format!("Gallery image {}/{}", i + 1, gallery_urls.len())
+                    // lint-allow-unused: display index uses saturating_add for safety
+                    format!("Gallery image {}/{gallery_len}", i.saturating_add(1))
                 } else {
                     "Post image".to_string()
                 };
-                html.push_str(&format!(
+                write!(
+                    html,
                     "<img class=\"reddit-gallery-item\" src=\"{}\" alt=\"{}\" loading=\"lazy\" />",
                     html_escape(url),
                     html_escape(&alt),
-                ));
+                ).ok();
             }
             html.push_str("</div>");
             if is_real_gallery {
-                html.push_str(&format!(
-                    "<p class=\"reddit-gallery-count\">{} images — swipe / scroll to view</p>",
-                    gallery_urls.len(),
-                ));
+                write!(
+                    html,
+                    "<p class=\"reddit-gallery-count\">{gallery_len} images — swipe / scroll to view</p>",
+                ).ok();
             }
         }
 
         if !comments.is_empty() {
-            html.push_str(&format!(
+            write!(
+                html,
                 "<h4 class=\"reddit-comments-heading\">Comments ({})</h4>",
                 post.comment_count.min(9999),
-            ));
+            ).ok();
             html.push_str("<div class=\"reddit-comments\">");
             render_comments_to_html(&mut html, &comments, 0, 8);
             html.push_str("</div>");

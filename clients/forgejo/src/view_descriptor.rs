@@ -1,7 +1,9 @@
 //! `impl ViewDescriptorBackend for ForgejoClient` — sidebar layout, overview
 //! card grid, issue/PR split views, paginated view rows, and view detail.
 
-use crate::*;
+use async_trait::async_trait;
+use poly_client::{ClientResult, SidebarDeclaration, SidebarLayoutKind, ViewDescriptor, ViewKind, ViewHeader, ViewBody, CardSpec, ViewToolbar, ToolbarOption, SplitSpec, ListSpec, RowTemplate, Cursor, ViewRowsPage, ViewRow, MenuTargetKind, CursorKind, ViewDetail, ClientError};
+use crate::{ForgejoClient, mapping, channel_ids};
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
@@ -77,7 +79,6 @@ impl poly_client::ViewDescriptorBackend for ForgejoClient {
         tab_id: Option<&str>,
     ) -> ClientResult<ViewRowsPage> {
         if channel_id.is_empty() || channel_id == "fj-overview" {
-            let repos = self.repos.lock().await;
             let page: u32 = cursor
                 .as_ref()
                 .and_then(|c| c.value.parse().ok())
@@ -86,10 +87,10 @@ impl poly_client::ViewDescriptorBackend for ForgejoClient {
             let start = usize::try_from(page.saturating_sub(1))
                 .unwrap_or(usize::MAX)
                 .saturating_mul(page_size);
-            let slice: Vec<_> = repos.iter().skip(start).take(page_size).collect();
-            let rows: Vec<ViewRow> = slice
-                .iter()
-                .map(|r| ViewRow {
+            let (rows, has_more): (Vec<ViewRow>, bool) = {
+                let repos = self.repos.lock().await;
+                let has_more = repos.len() > start.saturating_add(page_size);
+                let rows = repos.iter().skip(start).take(page_size).map(|r| ViewRow {
                     id: mapping::server_id_for_repo(r),
                     primary_text: r.full_name.clone(),
                     secondary_text: r.description.clone(),
@@ -102,9 +103,11 @@ impl poly_client::ViewDescriptorBackend for ForgejoClient {
                     context_menu_target_kind: MenuTargetKind::Server,
                     preview_image_url: None,
                     is_video: false,
-                })
-                .collect();
-            let next_cursor = if repos.len() > start.saturating_add(page_size) {
+                }).collect();
+                drop(repos);
+                (rows, has_more)
+            };
+            let next_cursor = if has_more {
                 Some(Cursor { kind: CursorKind::Offset, value: page.saturating_add(1).to_string() })
             } else {
                 None

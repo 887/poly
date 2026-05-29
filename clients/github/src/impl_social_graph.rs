@@ -7,7 +7,7 @@
 //! `NotSupported` automatically.
 
 use async_trait::async_trait;
-use poly_client::*;
+use poly_client::{ClientResult, User, PresenceStatus, BackendType};
 
 use crate::GitHubClient;
 use crate::mapping::BACKEND_SLUG;

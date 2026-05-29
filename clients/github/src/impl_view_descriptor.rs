@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use poly_client::*;
+use poly_client::{ClientResult, SidebarDeclaration, SidebarLayoutKind, ViewDescriptor, ViewKind, ViewHeader, ViewBody, CardSpec, ViewToolbar, ToolbarOption, SplitSpec, ListSpec, RowTemplate, Cursor, ViewRowsPage, ViewRow, MenuTargetKind, CursorKind, ViewDetail, ClientError};
 
 use crate::mapping;
 use crate::GitHubClient;
@@ -82,10 +82,9 @@ impl poly_client::ViewDescriptorBackend for GitHubClient {
         tab_id: Option<&str>,
     ) -> ClientResult<ViewRowsPage> {
         if channel_id.is_empty() {
-            let repos = self.repos.lock().await;
-            let rows: Vec<ViewRow> = repos
-                .iter()
-                .map(|r| ViewRow {
+            let rows: Vec<ViewRow> = {
+                let repos = self.repos.lock().await;
+                repos.iter().map(|r| ViewRow {
                     id: mapping::server_id_for_repo(r),
                     primary_text: r.full_name.clone(),
                     secondary_text: r.description.clone(),
@@ -98,8 +97,8 @@ impl poly_client::ViewDescriptorBackend for GitHubClient {
                     context_menu_target_kind: MenuTargetKind::Server,
                     preview_image_url: None,
                     is_video: false,
-                })
-                .collect();
+                }).collect()
+            };
             return Ok(ViewRowsPage { rows, next_cursor: None });
         }
 

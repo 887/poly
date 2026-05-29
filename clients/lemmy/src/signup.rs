@@ -49,7 +49,7 @@ fn hedgehog_auth(
 
 /// Test accounts for the Lemmy local dev server (port 9104).
 #[must_use] 
-pub fn get_test_accounts() -> &'static [poly_client::TestAccountEntry] {
+pub const fn get_test_accounts() -> &'static [poly_client::TestAccountEntry] {
     use poly_client::TestAccountEntry;
     const ACCOUNTS: &[TestAccountEntry] = &[
         TestAccountEntry {

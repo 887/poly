@@ -86,7 +86,7 @@ impl LemmyHttpClient {
     }
 
     /// Borrow the underlying HTTP client — used by `endpoints.rs`.
-    pub(super) fn raw_http(&self) -> &HttpClient {
+    pub(super) const fn raw_http(&self) -> &HttpClient {
         &self.http
     }
 
@@ -114,7 +114,7 @@ impl LemmyHttpClient {
     /// Currently unused — kept for upcoming UA-aware routes.
     // lint-allow-unused: helper kept for upcoming UA-aware routes
     #[allow(dead_code)]
-    pub(super) async fn http_post<B: serde::Serialize, T: serde::de::DeserializeOwned>(
+    pub(super) async fn http_post<B: serde::Serialize + Sync, T: serde::de::DeserializeOwned>(
         &self,
         path: &str,
         body: &B,

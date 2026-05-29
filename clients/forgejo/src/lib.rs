@@ -49,26 +49,20 @@ pub use mapping::{BACKEND_SLUG, issue_thread_channel_id, map_issue_to_viewrow};
 #[cfg(feature = "native")]
 pub use types::ForgejoIssue;
 
+
 #[cfg(feature = "native")]
-use async_trait::async_trait;
-#[cfg(feature = "native")]
-use futures::stream::{self, Stream};
-#[cfg(feature = "native")]
-use poly_client::*;
-#[cfg(feature = "native")]
-use poly_common_forge::{decode_b64, kind_from_string, split_owner_repo};
-#[cfg(feature = "native")]
-use std::pin::Pin;
+use poly_client::{Session, SettingsStorageCell};
+
 
 // ── Not-supported message constants ─────────────────────────────────────────
 // One cfg gate for all constants; the 30+ NotSupported sites don't allocate
 // unique string literals.
 #[cfg(feature = "native")]
 mod ns {
-    pub(super) const DM: &str = "Forgejo has no DM concept";
-    pub(super) const SAVED_MSG: &str = "Forgejo has no saved-messages concept";
-    pub(super) const GROUP_DM: &str = "Forgejo has no group DMs";
-    pub(super) const CONV_MUTE: &str = "Forgejo has no conversation mute";
+    pub const DM: &str = "Forgejo has no DM concept";
+    pub const SAVED_MSG: &str = "Forgejo has no saved-messages concept";
+    pub const GROUP_DM: &str = "Forgejo has no group DMs";
+    pub const CONV_MUTE: &str = "Forgejo has no conversation mute";
     // Tier 2 (plan-trait-split-readable-vs-writable): FRIEND / USER_NOTE
     // / BLOCK / UNBLOCK / IGNORE / PRESENCE removed — forgejo no longer
     // implements those write methods; the read trait's shim returns

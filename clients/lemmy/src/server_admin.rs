@@ -6,7 +6,7 @@
 //! to the read-trait shim's `NotSupported` default.
 
 use async_trait::async_trait;
-use poly_client::*;
+use poly_client::{ClientResult, ClientError, Server, ChannelType, Channel};
 
 use crate::LemmyClient;
 
@@ -71,7 +71,7 @@ impl poly_client::WritableServerAdminBackend for LemmyClient {
         server_id: &str,
         banner_url: Option<&str>,
     ) -> ClientResult<()> {
-        let community_id = LemmyClient::parse_community_id(server_id)?;
+        let community_id = Self::parse_community_id(server_id)?;
         self.http
             .put_community(community_id, banner_url)
             .await

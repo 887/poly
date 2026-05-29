@@ -27,7 +27,7 @@
 //! - [`settings`] — `SettingsBackend` impl
 //! - [`view_descriptor`] — `ViewDescriptorBackend` impl
 
-use poly_client::*;
+use poly_client::{Session, SettingsStorageCell, SettingsScope, BackendType, User, PresenceStatus, ClientResult, Message, ClientError, Attachment};
 
 use crate::{RedditClient, SortKind};
 
@@ -79,8 +79,7 @@ impl RedditBackend {
         self.settings_storage
             .get(SettingsScope::AccountGlobal, "", "current-sort")
             .as_deref()
-            .map(sort_kind_from_str)
-            .unwrap_or(SortKind::Hot)
+            .map_or(SortKind::Hot, sort_kind_from_str)
     }
 
     pub(crate) fn backend_type() -> BackendType {

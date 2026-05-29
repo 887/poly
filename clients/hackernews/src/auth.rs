@@ -182,13 +182,15 @@ fn url_encode_form(pairs: &[(&str, &str)]) -> String {
 /// Tiny RFC 3986 unreserved-set percent-encoder. Anything outside
 /// `A-Za-z0-9-._~` is escaped as `%XX`.
 fn percent_encode(s: &str) -> String {
+    use std::fmt::Write as _;
+
     let mut out = String::with_capacity(s.len());
     for b in s.bytes() {
         if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.' | b'_' | b'~') {
             out.push(char::from(b));
         } else {
             out.push('%');
-            out.push_str(&format!("{:02X}", b));
+            write!(out, "{b:02X}").ok();
         }
     }
     out

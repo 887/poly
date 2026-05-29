@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use poly_client::*;
+use poly_client::{MenuTargetKind, ClientResult, MenuItem, IsBackend, MenuSlot, MenuItemVariant, ActionOutcome, ClientError};
 
 use crate::GitHubClient;
 

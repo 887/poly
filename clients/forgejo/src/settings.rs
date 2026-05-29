@@ -1,7 +1,9 @@
 //! `impl SettingsBackend for ForgejoClient` — account-global preference
 //! descriptors and in-memory settings storage delegation.
 
-use crate::*;
+use async_trait::async_trait;
+use poly_client::{ClientResult, SettingsSection, SettingsScope, SettingDescriptor, SettingKind, SettingsStorageCell};
+use crate::ForgejoClient;
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]

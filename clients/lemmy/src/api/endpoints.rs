@@ -95,6 +95,12 @@ impl LemmyHttpClient {
 
     /// `GET /api/v3/community?id={id}`
     pub async fn fetch_community(&self, community_id: i64) -> ClientResult<CommunityView> {
+        // The single-community response wraps in `community_view`
+        #[derive(Deserialize)]
+        struct SingleCommunityResponse {
+            community_view: CommunityView,
+        }
+
         let jwt = self.jwt()?;
         let url = self.url(&format!("/api/v3/community?id={community_id}"));
         let resp = self
@@ -118,12 +124,6 @@ impl LemmyHttpClient {
             )));
         }
 
-        // The single-community response wraps in `community_view`
-        #[derive(Deserialize)]
-        struct SingleCommunityResponse {
-            community_view: CommunityView,
-        }
-
         resp.json::<SingleCommunityResponse>()
             .await
             .map(|r| r.community_view)
@@ -142,13 +142,8 @@ impl LemmyHttpClient {
     ) -> ClientResult<PostListResponse> {
         let jwt = self.jwt()?;
         // Title-case the sort id so we accept both "hot" and "Hot" from the toolbar.
-        let sort_param = {
-            let mut chars = sort.chars();
-            match chars.next() {
-                Some(c) => c.to_ascii_uppercase().to_string() + chars.as_str(),
-                None => "Hot".to_string(),
-            }
-        };
+        let mut chars = sort.chars();
+        let sort_param = chars.next().map_or_else(|| "Hot".to_string(), |c| c.to_ascii_uppercase().to_string() + chars.as_str());
         let url = self.url(&format!(
             "/api/v3/post/list?community_id={community_id}&sort={sort_param}&page={page}&limit={limit}"
         ));
@@ -175,6 +170,11 @@ impl LemmyHttpClient {
 
     /// `GET /api/v3/post?id={id}` — fetch a single post by id.
     pub async fn fetch_post(&self, post_id: i64) -> ClientResult<PostView> {
+        #[derive(Deserialize)]
+        struct SinglePostResponse {
+            post_view: PostView,
+        }
+
         let jwt = self.jwt()?;
         let url = self.url(&format!("/api/v3/post?id={post_id}"));
         let resp = self
@@ -194,11 +194,6 @@ impl LemmyHttpClient {
                 "GET /api/v3/post returned HTTP {}",
                 resp.status()
             )));
-        }
-
-        #[derive(Deserialize)]
-        struct SinglePostResponse {
-            post_view: PostView,
         }
 
         resp.json::<SinglePostResponse>()
@@ -363,6 +358,11 @@ impl LemmyHttpClient {
         content: &str,
         parent_id: Option<i64>,
     ) -> ClientResult<CommentView> {
+        #[derive(Deserialize)]
+        struct CommentResponse {
+            comment_view: CommentView,
+        }
+
         let jwt = self.jwt()?;
         let body = CreateCommentRequest {
             content: content.to_string(),
@@ -385,11 +385,6 @@ impl LemmyHttpClient {
                 "POST /api/v3/comment returned HTTP {}",
                 resp.status()
             )));
-        }
-
-        #[derive(Deserialize)]
-        struct CommentResponse {
-            comment_view: CommentView,
         }
 
         resp.json::<CommentResponse>()
@@ -570,6 +565,11 @@ impl LemmyHttpClient {
         community_id: i64,
         banner: Option<&str>,
     ) -> ClientResult<CommunityView> {
+        #[derive(Deserialize)]
+        struct EditCommunityResponse {
+            community_view: CommunityView,
+        }
+
         let jwt = self.jwt()?;
         let body = serde_json::json!({
             "community_id": community_id,
@@ -591,11 +591,6 @@ impl LemmyHttpClient {
                 "PUT /api/v3/community returned HTTP {}",
                 resp.status()
             )));
-        }
-
-        #[derive(Deserialize)]
-        struct EditCommunityResponse {
-            community_view: CommunityView,
         }
 
         resp.json::<EditCommunityResponse>()
