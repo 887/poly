@@ -1,33 +1,43 @@
 # Workspace-level cranky lint configuration.
 # `cargo cranky` respects this file (equivalent to cargo clippy but config-file driven).
+# Each key is a sequence of lint names — see https://github.com/ericseppanen/cargo-cranky
 
-[deny]
-warnings = true
-# Safety
-unsafe_code = true
+deny = [
+    "warnings",
+    # Safety
+    "unsafe_code",
 
-# Fallible short-circuits
-"clippy::unwrap_used" = true
-"clippy::expect_used" = true
-"clippy::panic" = true
-"clippy::indexing_slicing" = true
+    # Fallible short-circuits
+    "clippy::unwrap_used",
+    "clippy::expect_used",
+    "clippy::panic",
+    "clippy::indexing_slicing",
 
-# Code hygiene
-"clippy::todo" = true
-"clippy::unimplemented" = true
-"clippy::dbg_macro" = true
-"clippy::print_stdout" = true  # use tracing, not println!
-"clippy::print_stderr" = true
+    # Code hygiene
+    "clippy::todo",
+    "clippy::unimplemented",
+    "clippy::dbg_macro",
+    "clippy::print_stdout",  # use tracing, not println!
+    "clippy::print_stderr",
 
-# Complexity — no giant functions, no spaghetti nesting
-"clippy::too_many_lines" = true       # threshold: see clippy.toml
-"clippy::cognitive_complexity" = true # threshold: see clippy.toml
-"clippy::too_many_arguments" = true   # threshold: see clippy.toml
+    # Complexity — no giant functions, no spaghetti nesting
+    "clippy::too_many_lines",        # threshold: see clippy.toml
+    "clippy::cognitive_complexity",  # threshold: see clippy.toml
+    "clippy::too_many_arguments",    # threshold: see clippy.toml
+]
 
-[warn]
-"clippy::pedantic" = true
-"clippy::nursery" = true
-"clippy::missing_docs_in_private_items" = false
-"clippy::missing_errors_doc" = false
-"clippy::must_use_candidate" = false
-"clippy::module_name_repetitions" = false
+warn = [
+    "clippy::pedantic",
+    "clippy::nursery",
+]
+
+allow = [
+    # Re-allow noisy pedantic findings that mostly fire on idiomatic code.
+    "clippy::missing_docs_in_private_items",
+    "clippy::must_use_candidate",
+    "clippy::module_name_repetitions",
+    "clippy::missing_errors_doc",
+    "clippy::missing_panics_doc",
+    "clippy::doc_markdown",
+    "clippy::too_long_first_doc_paragraph",
+]
