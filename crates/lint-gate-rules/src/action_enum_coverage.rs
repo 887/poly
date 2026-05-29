@@ -75,6 +75,7 @@ pub fn scan(walker: &WorkspaceWalker, violations: &mut Vec<Violation>) {
 
 /// Per-file scan — returns violations for `src` at `path`.
 /// Split out so it can be re-used in lib.rs unit tests.
+#[must_use] 
 pub fn scan_src(src: &str, path: &str) -> Vec<Violation> {
     let mut out = Vec::new();
     let lines: Vec<&str> = src.lines().collect();

@@ -65,6 +65,7 @@ use std::path::Path;
 /// Run all scanners and return every violation found.
 ///
 /// This is the entry point used by `crates/lint-gate/build.rs`.
+#[must_use] 
 pub fn all_rules(walker: &WorkspaceWalker, ws_root: &Path) -> Vec<Violation> {
     let mut violations = Vec::new();
 

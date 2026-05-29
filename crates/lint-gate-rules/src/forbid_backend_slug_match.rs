@@ -66,6 +66,7 @@ pub fn scan(walker: &WorkspaceWalker, violations: &mut Vec<Violation>) {
 }
 
 /// Per-file scan — public so `src/lib.rs` unit tests can call it directly.
+#[must_use] 
 pub fn scan_src(src: &str, path: &str) -> Vec<Violation> {
     let mut out = Vec::new();
 
@@ -108,6 +109,7 @@ pub fn scan_src(src: &str, path: &str) -> Vec<Violation> {
 /// followed by `{`. Comments and string-literal occurrences inside other
 /// constructs are intentionally ignored: a `match .. as_str()` on its own
 /// line is the structural shape this scan targets.
+#[must_use] 
 pub fn is_match_as_str_line(line: &str) -> bool {
     let t = line.trim_start();
     if t.starts_with("//") {

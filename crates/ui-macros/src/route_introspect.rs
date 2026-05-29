@@ -130,7 +130,7 @@ fn variant_has_account_id_field(v: &Variant) -> bool {
         Fields::Named(named) => named
             .named
             .iter()
-            .any(|f| f.ident.as_ref().map_or(false, |i| i == "account_id")),
+            .any(|f| f.ident.as_ref().is_some_and(|i| i == "account_id")),
         _ => false,
     }
 }

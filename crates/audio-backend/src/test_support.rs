@@ -122,6 +122,7 @@ impl MockAudioBackend {
     }
 
     /// Drain all recorded events since the last call.
+    #[must_use] 
     pub fn drain_events(&self) -> Vec<MockEvent> {
         self.state
             .lock()
@@ -132,6 +133,7 @@ impl MockAudioBackend {
     }
 
     /// Peek at the event log without clearing it.
+    #[must_use] 
     pub fn peek_events(&self) -> Vec<MockEvent> {
         self.state
             .lock()
@@ -141,6 +143,7 @@ impl MockAudioBackend {
     }
 
     /// Total number of PCM samples pushed to any output stream.
+    #[must_use] 
     pub fn total_pushed(&self) -> usize {
         self.state
             .lock()

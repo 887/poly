@@ -9,6 +9,7 @@ pub struct WorkspaceWalker {
 }
 
 impl WorkspaceWalker {
+    #[must_use] 
     pub fn new(root: &Path) -> Self {
         let mut files = Vec::new();
         let walker = ignore::WalkBuilder::new(root)
@@ -36,6 +37,7 @@ impl WorkspaceWalker {
         }
     }
 
+    #[must_use] 
     pub fn relative(&self, p: &Path) -> String {
         p.strip_prefix(&self.root)
             .unwrap_or(p)

@@ -110,8 +110,7 @@ fn extract_receiver(line: &str) -> String {
     let last_ident_end = trimmed.len();
     let start = trimmed
         .rfind(|c: char| !c.is_alphanumeric() && c != '_')
-        .map(|i| i + 1)
-        .unwrap_or(0);
+        .map_or(0, |i| i + 1);
     if start < last_ident_end {
         trimmed[start..last_ident_end].to_string()
     } else {

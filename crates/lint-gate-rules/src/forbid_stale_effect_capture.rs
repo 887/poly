@@ -58,12 +58,10 @@ pub fn scan(walker: &WorkspaceWalker, ws_root: &Path, violations: &mut Vec<Viola
                 rule: RULE.to_string(),
                 path: rel.clone(),
                 line: line_no,
-                detail: format!(
-                    "raw use_effect(move ||) — potential hang class #6 (stale non-Signal closure \
+                detail: "raw use_effect(move ||) — potential hang class #6 (stale non-Signal closure \
                      capture). Use use_reactive_effect<Deps>(deps, body) or \
                      use_spawn_once<K>(key, async_fn) instead. \
-                     Inline-allowlist: // poly-lint: allow stale-effect-capture — <reason>"
-                ),
+                     Inline-allowlist: // poly-lint: allow stale-effect-capture — <reason>".to_string(),
             });
         }
     }

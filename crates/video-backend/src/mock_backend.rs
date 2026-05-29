@@ -54,8 +54,8 @@ pub fn generate_gradient_frame(width: u32, height: u32, offset: u8, timestamp_ms
     for y in 0..height {
         for x in 0..width {
             // Hue sweeps across width, brightness across height.
-            let hue = ((x as u32 * 255 / width.max(1)) as u8).wrapping_add(offset);
-            let val = (y as u32 * 255 / height.max(1)) as u8;
+            let hue = ((x * 255 / width.max(1)) as u8).wrapping_add(offset);
+            let val = (y * 255 / height.max(1)) as u8;
             // Simple hue → RGB (6 sectors).
             let (r, g, b) = hue_to_rgb(hue, val);
             // BGRA order.
@@ -75,7 +75,7 @@ pub fn generate_gradient_frame(width: u32, height: u32, offset: u8, timestamp_ms
 }
 
 fn hue_to_rgb(hue: u8, brightness: u8) -> (u8, u8, u8) {
-    let h = hue as u32;
+    let h = u32::from(hue);
     let sector = h / 43;
     let rem = (h - sector * 43) * 6;
     let p = 0u32;
@@ -147,6 +147,7 @@ impl MockVideoBackend {
     }
 
     /// Return a snapshot of current call counts for test assertions.
+    #[must_use] 
     pub fn state_snapshot(&self) -> MockVideoState {
         let g = self.state.lock().expect("MockVideoState lock poisoned");
         MockVideoState {
@@ -221,9 +222,7 @@ impl VideoBackend for MockVideoBackend {
             self.cameras
                 .iter()
                 .find(|d| d.is_default)
-                .or_else(|| self.cameras.first())
-                .map(|d| d.id.clone())
-                .unwrap_or_else(|| "mock-camera".into())
+                .or_else(|| self.cameras.first()).map_or_else(|| "mock-camera".into(), |d| d.id.clone())
         } else {
             device_id.to_owned()
         };
@@ -251,9 +250,7 @@ impl VideoBackend for MockVideoBackend {
     ) -> Result<Box<dyn VideoInputStream>, VideoError> {
         let resolved = if source_id.is_empty() {
             self.screens
-                .first()
-                .map(|s| s.id.clone())
-                .unwrap_or_else(|| "mock-screen-0".into())
+                .first().map_or_else(|| "mock-screen-0".into(), |s| s.id.clone())
         } else {
             source_id.to_owned()
         };
@@ -280,9 +277,10 @@ impl VideoBackend for MockVideoBackend {
 
 /// Build a [`BoxVideoStream`] from the mock — converts the sync
 /// `poll_next_frame` loop into a futures::Stream.
+#[must_use] 
 pub fn mock_stream(frames: usize) -> BoxVideoStream {
     let frames: Vec<_> = (0..frames as u8)
-        .map(|i| generate_gradient_frame(480, 360, i.wrapping_mul(8), i as u64 * 33))
+        .map(|i| generate_gradient_frame(480, 360, i.wrapping_mul(8), u64::from(i) * 33))
         .collect();
     Box::pin(stream::iter(frames))
 }

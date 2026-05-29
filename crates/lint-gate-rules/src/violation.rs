@@ -17,6 +17,7 @@ pub struct Violation {
 
 impl Violation {
     /// Format as a `cargo::error=` line for build-script output.
+    #[must_use] 
     pub fn to_error_line(&self) -> String {
         format!(
             "[{rule}] {path}:{line}: {detail}",
@@ -27,6 +28,7 @@ impl Violation {
         )
     }
 
+    #[must_use] 
     pub fn key(&self) -> (&str, &str, u32, &str) {
         (&self.rule, &self.path, self.line, &self.detail)
     }

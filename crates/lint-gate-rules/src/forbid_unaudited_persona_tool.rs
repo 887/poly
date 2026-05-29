@@ -35,8 +35,8 @@ pub fn scan(_walker: &WorkspaceWalker, ws_root: &Path, violations: &mut Vec<Viol
 
     // Scan persona.rs for handle_meta_persona_* functions.
     let persona_path = ws_root.join(PERSONA_TOOLS_FILE);
-    if persona_path.exists() {
-        if let Ok(content) = std::fs::read_to_string(&persona_path) {
+    if persona_path.exists()
+        && let Ok(content) = std::fs::read_to_string(&persona_path) {
             for func in extract_functions(&content) {
                 if !func.name.starts_with("handle_meta_persona_") {
                     continue;
@@ -65,12 +65,11 @@ pub fn scan(_walker: &WorkspaceWalker, ws_root: &Path, violations: &mut Vec<Viol
                 }
             }
         }
-    }
 
     // Scan client_settings.rs for handle_client_settings_* functions.
     let client_path = ws_root.join(CLIENT_SETTINGS_TOOLS_FILE);
-    if client_path.exists() {
-        if let Ok(content) = std::fs::read_to_string(&client_path) {
+    if client_path.exists()
+        && let Ok(content) = std::fs::read_to_string(&client_path) {
             for func in extract_functions(&content) {
                 if !func.name.starts_with("handle_client_settings_") {
                     continue;
@@ -105,7 +104,6 @@ pub fn scan(_walker: &WorkspaceWalker, ws_root: &Path, violations: &mut Vec<Viol
                 }
             }
         }
-    }
 }
 
 struct ExtractedFn {
@@ -187,7 +185,7 @@ fn extract_functions(content: &str) -> Vec<ExtractedFn> {
 }
 
 /// Extract function name if the line defines a function matching the given prefix.
-fn extract_fn_name<'a>(line: &'a str, prefix: &str) -> Option<String> {
+fn extract_fn_name(line: &str, prefix: &str) -> Option<String> {
     // Patterns: `fn prefix_suffix(`, `async fn prefix_suffix(`, etc.
     let trimmed = line.trim_start();
     // Skip comments.

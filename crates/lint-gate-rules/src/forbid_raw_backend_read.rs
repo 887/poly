@@ -78,15 +78,13 @@ pub fn scan(walker: &WorkspaceWalker, ws_root: &Path, violations: &mut Vec<Viola
                 rule: RULE.to_string(),
                 path: rel.clone(),
                 line: line_no,
-                detail: format!(
-                    "raw `backend.read().await` — hang class #4 (RwLock starvation on WASM) \
+                detail: "raw `backend.read().await` — hang class #4 (RwLock starvation on WASM) \
                      and Phase K.8 voice transport lint. \
                      Use BackendHandleExt::read_with_timeout(Duration::from_secs(5)) instead. \
                      See: crates/core/src/client_manager_timeout.rs. \
                      Voice files (clients/*/src/voice*.rs) are also covered per \
                      docs/plans/plan-voice-video-calls.md Phase K.8. \
-                     Inline-allowlist: // poly-lint: allow raw backend.read().await — <reason>"
-                ),
+                     Inline-allowlist: // poly-lint: allow raw backend.read().await — <reason>".to_string(),
             });
         }
     }

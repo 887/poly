@@ -68,6 +68,7 @@ pub fn scan(walker: &WorkspaceWalker, violations: &mut Vec<Violation>) {
 
 /// Per-source scan — count `CustomBlock {` literal sites in `src`.
 /// Public so unit tests in `src/lib.rs` can call directly.
+#[must_use] 
 pub fn count_custom_block_literals(src: &str) -> usize {
     // Match `CustomBlock` followed by optional whitespace then `{`.
     // Must NOT be preceded by an identifier character (so we don't count
@@ -105,6 +106,7 @@ fn is_ident_char(b: u8) -> bool {
 
 /// Extract a plugin id from a workspace path — `clients/<plugin>/src/...`
 /// → `Some("<plugin>")`. Returns `None` for any path not under `clients/`.
+#[must_use] 
 pub fn plugin_id_from_path(p: &str) -> Option<String> {
     let idx = p.find("clients/")?;
     let after = &p[idx + "clients/".len()..];

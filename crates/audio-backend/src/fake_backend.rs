@@ -115,6 +115,7 @@ impl FakeAudioBackend {
     /// let snap = backend.state_snapshot();
     /// assert_eq!(snap.open_input_calls, 0);
     /// ```
+    #[must_use] 
     pub fn state_snapshot(&self) -> FakeState {
         let guard = self.state.lock().expect("FakeState lock poisoned");
         FakeState {
@@ -189,9 +190,7 @@ impl AudioBackend for FakeAudioBackend {
                 .inputs
                 .iter()
                 .find(|d| d.is_default)
-                .or_else(|| self.devices.inputs.first())
-                .map(|d| d.id.clone())
-                .unwrap_or_else(|| "fake-mic".into())
+                .or_else(|| self.devices.inputs.first()).map_or_else(|| "fake-mic".into(), |d| d.id.clone())
         } else {
             device_id.to_owned()
         };
@@ -229,9 +228,7 @@ impl AudioBackend for FakeAudioBackend {
                 .outputs
                 .iter()
                 .find(|d| d.is_default)
-                .or_else(|| self.devices.outputs.first())
-                .map(|d| d.id.clone())
-                .unwrap_or_else(|| "fake-speaker".into())
+                .or_else(|| self.devices.outputs.first()).map_or_else(|| "fake-speaker".into(), |d| d.id.clone())
         } else {
             device_id.to_owned()
         };

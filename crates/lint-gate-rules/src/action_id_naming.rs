@@ -42,6 +42,7 @@ pub fn scan(walker: &WorkspaceWalker, violations: &mut Vec<Violation>) {
 }
 
 /// Per-file scan — public so `src/lib.rs` unit tests can call it directly.
+#[must_use] 
 pub fn scan_src(src: &str, path: &str) -> Vec<Violation> {
     let mut out = Vec::new();
 
@@ -119,6 +120,7 @@ pub fn scan_src(src: &str, path: &str) -> Vec<Violation> {
 
 /// Extract the string literal value after `id:` on a line.
 /// Returns `None` if no such pattern is found.
+#[must_use] 
 pub fn extract_id_field(line: &str) -> Option<String> {
     // Look for `id:` optionally followed by whitespace then `"<value>"`.
     let pos = line.find("id:")?;
@@ -133,6 +135,7 @@ pub fn extract_id_field(line: &str) -> Option<String> {
 /// Returns `true` iff `s` matches `^[a-z][a-z0-9]*(-[a-z0-9]+)*$`.
 /// This is the D25 kebab-case convention: starts with lowercase letter,
 /// segments separated by single hyphens, no trailing hyphen.
+#[must_use] 
 pub fn is_kebab_case(s: &str) -> bool {
     if s.is_empty() {
         return false;

@@ -82,11 +82,10 @@ fn scan_effect_body(lines: &[&str], start: usize) -> Option<EffectScan> {
         let mut search = stripped;
         while let Some(pos) = search.find(".read(") {
             let before = &search[..pos];
-            if let Some(ident) = extract_last_ident(before) {
-                if ident != "self" {
+            if let Some(ident) = extract_last_ident(before)
+                && ident != "self" {
                     read_set.insert(ident);
                 }
-            }
             search = &search[pos + 1..];
         }
 
@@ -102,13 +101,11 @@ fn scan_effect_body(lines: &[&str], start: usize) -> Option<EffectScan> {
             } else {
                 None
             };
-            if let Some(method) = method {
-                if let Some(ident) = extract_last_ident(before) {
-                    if ident != "self" {
+            if let Some(method) = method
+                && let Some(ident) = extract_last_ident(before)
+                    && ident != "self" {
                         write_set.insert((ident, method.to_string()));
                     }
-                }
-            }
             search2 = &search2[dot_pos + 1..];
         }
 
@@ -207,7 +204,7 @@ fn find_write_call(s: &str) -> Option<usize> {
             let is_if_changed = suffix_after.starts_with("set_if_changed(")
                 || suffix_after.starts_with("batch_if_changed(");
             if !is_if_changed {
-                if earliest.map_or(true, |e| abs_pos < e) {
+                if earliest.is_none_or(|e| abs_pos < e) {
                     earliest = Some(abs_pos);
                 }
                 break;
@@ -226,8 +223,7 @@ fn extract_last_ident(before: &str) -> Option<String> {
     }
     let start = trimmed
         .rfind(|c: char| !c.is_alphanumeric() && c != '_')
-        .map(|i| i + 1)
-        .unwrap_or(0);
+        .map_or(0, |i| i + 1);
     let name = &trimmed[start..];
     if name.is_empty() {
         None

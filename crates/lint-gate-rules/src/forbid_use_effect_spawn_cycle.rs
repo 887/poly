@@ -81,13 +81,12 @@ fn scan_file_content(
             };
 
             // Look for spawn start inside effect.
-            if effect_depth > 0 && !in_spawn {
-                if stripped.contains("spawn(async move") || stripped.contains("spawn(async move {") {
+            if effect_depth > 0 && !in_spawn
+                && (stripped.contains("spawn(async move") || stripped.contains("spawn(async move {")) {
                     found_spawn = true;
                     in_spawn = true;
                     spawn_depth_start = effect_depth;
                 }
-            }
 
             // Look for write-family calls inside spawn.
             if in_spawn {
@@ -124,22 +123,19 @@ fn scan_file_content(
         }
 
         // If we found the triple, emit a violation.
-        if found_spawn && found_write && effect_ended_at < n {
-            if !allowlist::is_allowed(allowlist_entries, rel, effect_start_line) {
+        if found_spawn && found_write && effect_ended_at < n
+            && !allowlist::is_allowed(allowlist_entries, rel, effect_start_line) {
                 violations.push(Violation {
                     rule: RULE.to_string(),
                     path: rel.to_string(),
                     line: effect_start_line,
-                    detail: format!(
-                        "use_effect+spawn+signal-write triple — hang class #3. \
+                    detail: "use_effect+spawn+signal-write triple — hang class #3. \
                          Use use_spawn_once<K>(key, async_fn) instead. \
                          See: crates/core/src/state/use_spawn_once.rs, \
                          docs/plans/plan-use-spawn-once.md. \
-                         Allowlist: tools/scripts/use-effect-spawn-cycle-allowlist.txt"
-                    ),
+                         Allowlist: tools/scripts/use-effect-spawn-cycle-allowlist.txt".to_string(),
                 });
             }
-        }
 
         // Advance past the effect body.
         i = effect_ended_at + 1;

@@ -84,12 +84,10 @@ pub fn scan(walker: &WorkspaceWalker, ws_root: &Path, violations: &mut Vec<Viola
                 rule: RULE.to_string(),
                 path: rel.clone(),
                 line: line_no,
-                detail: format!(
-                    "render-time .read() silently subscribes the parent component — \
+                detail: "render-time .read() silently subscribes the parent component — \
                      CLAUDE.md hang class #7. Use .peek() for key computation / snapshots. \
                      See docs/dev/reactive-state.md. \
-                     Inline-allowlist: // poly-lint: allow render-time-read — <reason>"
-                ),
+                     Inline-allowlist: // poly-lint: allow render-time-read — <reason>".to_string(),
             });
         }
     }

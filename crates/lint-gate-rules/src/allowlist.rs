@@ -33,6 +33,7 @@ pub enum AllowlistEntry {
 ///   `path:42`                → [`AllowlistEntry::PathLine`]
 ///   `path:10-20`             → [`AllowlistEntry::PathRange`]
 ///   `path:receiver_name`     → [`AllowlistEntry::PathReceiver`] (if non-numeric)
+#[must_use] 
 pub fn load(path: &Path) -> Vec<AllowlistEntry> {
     let Ok(content) = std::fs::read_to_string(path) else {
         return Vec::new();
@@ -57,12 +58,11 @@ pub fn load(path: &Path) -> Vec<AllowlistEntry> {
                 continue;
             }
             // Is suffix a range `start-end`?
-            if let Some((lo_str, hi_str)) = suffix.split_once('-') {
-                if let (Ok(lo), Ok(hi)) = (lo_str.parse::<u32>(), hi_str.parse::<u32>()) {
+            if let Some((lo_str, hi_str)) = suffix.split_once('-')
+                && let (Ok(lo), Ok(hi)) = (lo_str.parse::<u32>(), hi_str.parse::<u32>()) {
                     entries.push(AllowlistEntry::PathRange(path_part.to_string(), lo, hi));
                     continue;
                 }
-            }
             // Otherwise treat as a receiver/name suffix.
             entries.push(AllowlistEntry::PathReceiver(
                 path_part.to_string(),
@@ -77,6 +77,7 @@ pub fn load(path: &Path) -> Vec<AllowlistEntry> {
 }
 
 /// Check whether a hit at `(rel_path, line)` is covered by any allowlist entry.
+#[must_use] 
 pub fn is_allowed(entries: &[AllowlistEntry], rel_path: &str, line: u32) -> bool {
     for entry in entries {
         match entry {
@@ -109,6 +110,7 @@ pub fn is_allowed(entries: &[AllowlistEntry], rel_path: &str, line: u32) -> bool
 
 /// Check whether a hit at `(rel_path, line, receiver)` is covered by any allowlist entry.
 /// Used by `forbid_signal_write` which has the three-way allowlist.
+#[must_use] 
 pub fn is_allowed_with_receiver(
     entries: &[AllowlistEntry],
     rel_path: &str,
@@ -145,6 +147,7 @@ pub fn is_allowed_with_receiver(
 /// Checks if a source line contains an inline allowlist comment for the given lint name.
 ///
 /// Pattern: `// poly-lint: allow <name>` (anywhere on the line).
+#[must_use] 
 pub fn has_inline_allow(line: &str, lint_name: &str) -> bool {
     // Allow both `—` (em dash) and `-` separators after the name.
     let needle = format!("poly-lint: allow {lint_name}");

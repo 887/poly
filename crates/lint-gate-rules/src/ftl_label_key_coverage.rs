@@ -60,6 +60,7 @@ pub fn scan(walker: &WorkspaceWalker, violations: &mut Vec<Violation>) {
 ///
 /// `ftl_keys`: the set of FTL message identifiers found in the plugin's English bundle.
 /// `plugin_name`: used only for the violation detail message.
+#[must_use] 
 pub fn scan_src(
     src: &str,
     path: &str,
@@ -107,6 +108,7 @@ pub fn scan_src(
 
 /// Extract the string literal value after `label_key:` or `label-key:`.
 /// Returns `None` if no such pattern is found on the line.
+#[must_use] 
 pub fn extract_label_key(line: &str) -> Option<String> {
     // Try both `label_key` and `label-key` prefixes.
     for prefix in &["label_key", "label-key"] {
@@ -129,6 +131,7 @@ pub fn extract_label_key(line: &str) -> Option<String> {
 /// (identifier at column 0, followed by ` =`).
 /// Attribute lines start with `.` — those are sub-keys, not top-level ids, skip them.
 /// Term lines start with `-` — also skip (terms aren't used as label keys in this plan).
+#[must_use] 
 pub fn collect_ftl_keys(plugin_dir: &std::path::Path) -> std::collections::HashSet<String> {
     let mut keys = std::collections::HashSet::new();
     let en_dir = plugin_dir.join("locales").join("en");
