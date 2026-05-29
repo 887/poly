@@ -138,8 +138,9 @@ impl TeamsKeyStore {
         let mut guard = self
             .inner
             .write()
-            .map_err(|_| EncryptionError::Rsa("keystore lock poisoned".into()))?;
+            .map_err(|_e| EncryptionError::Rsa("keystore lock poisoned".into()))?;
         *guard = Some(Keypair { private_pem, public_der });
+        drop(guard);
         Ok(public_b64)
     }
 
@@ -158,8 +159,9 @@ impl TeamsKeyStore {
         let mut guard = self
             .inner
             .write()
-            .map_err(|_| EncryptionError::Rsa("keystore lock poisoned".into()))?;
+            .map_err(|_e| EncryptionError::Rsa("keystore lock poisoned".into()))?;
         *guard = Some(Keypair { private_pem: pem.to_string(), public_der });
+        drop(guard);
         Ok(())
     }
 
@@ -169,11 +171,13 @@ impl TeamsKeyStore {
         let guard = self
             .inner
             .read()
-            .map_err(|_| EncryptionError::Rsa("keystore lock poisoned".into()))?;
-        guard
+            .map_err(|_e| EncryptionError::Rsa("keystore lock poisoned".into()))?;
+        let result = guard
             .as_ref()
             .map(|kp| B64.encode(&kp.public_der))
-            .ok_or(EncryptionError::NoKeypair)
+            .ok_or(EncryptionError::NoKeypair);
+        drop(guard);
+        result
     }
 
     /// PKCS#8 PEM of the private key — caller's responsibility to
@@ -183,11 +187,13 @@ impl TeamsKeyStore {
         let guard = self
             .inner
             .read()
-            .map_err(|_| EncryptionError::Rsa("keystore lock poisoned".into()))?;
-        guard
+            .map_err(|_e| EncryptionError::Rsa("keystore lock poisoned".into()))?;
+        let result = guard
             .as_ref()
             .map(|kp| kp.private_pem.clone())
-            .ok_or(EncryptionError::NoKeypair)
+            .ok_or(EncryptionError::NoKeypair);
+        drop(guard);
+        result
     }
 
     /// Decrypt an `encryptedContent` block from a Graph notification.
@@ -200,9 +206,11 @@ impl TeamsKeyStore {
         let guard = self
             .inner
             .read()
-            .map_err(|_| EncryptionError::Rsa("keystore lock poisoned".into()))?;
+            .map_err(|_e| EncryptionError::Rsa("keystore lock poisoned".into()))?;
         let kp = guard.as_ref().ok_or(EncryptionError::NoKeypair)?;
-        decrypt_resource_data(encrypted, &kp.private_pem)
+        let pem = kp.private_pem.clone();
+        drop(guard);
+        decrypt_resource_data(encrypted, &pem)
     }
 }
 
@@ -249,6 +257,11 @@ pub fn decrypt_resource_data(
     encrypted: &EncryptedContent,
     private_pem: &str,
 ) -> Result<Vec<u8>, EncryptionError> {
+    use cbc::cipher::{BlockDecryptMut, KeyIvInit, block_padding::Pkcs7};
+    use hmac::Mac;
+    type Aes256CbcDec = cbc::Decryptor<aes::Aes256>;
+    type HmacSha256 = hmac::Hmac<sha2::Sha256>;
+
     let private = RsaPrivateKey::from_pkcs8_pem(private_pem)
         .map_err(|e| EncryptionError::Pem(e.to_string()))?;
 
@@ -274,26 +287,23 @@ pub fn decrypt_resource_data(
     }
 
     // HMAC-SHA256 over the ciphertext, keyed by the AES key bytes.
-    {
-        use hmac::Mac;
-        type HmacSha256 = hmac::Hmac<sha2::Sha256>;
-        let mut mac = HmacSha256::new_from_slice(&aes_key)
-            .map_err(|e| EncryptionError::Aes(format!("HMAC keying: {e}")))?;
-        mac.update(&ciphertext);
-        mac.verify_slice(&signature)
-            .map_err(|_| EncryptionError::HmacMismatch)?;
-    }
+    let mut mac = HmacSha256::new_from_slice(&aes_key)
+        .map_err(|e| EncryptionError::Aes(format!("HMAC keying: {e}")))?;
+    mac.update(&ciphertext);
+    mac.verify_slice(&signature)
+        .map_err(|_e| EncryptionError::HmacMismatch)?;
 
-    // AES-256-CBC decrypt. IV is the first 16 bytes of the AES key per
-    // Graph's spec. PKCS#7 unpad.
-    use cbc::cipher::{BlockDecryptMut, KeyIvInit, block_padding::Pkcs7};
-    type Aes256CbcDec = cbc::Decryptor<aes::Aes256>;
+    // AES-256-CBC decrypt. IV is the first 16 bytes of the AES key per Graph's spec.
+    // lint-allow-unused: aes_key.len() >= 32 checked above, so [..16] is in bounds
+    #[allow(clippy::indexing_slicing)]
     let iv: [u8; 16] = aes_key[..16]
         .try_into()
-        .map_err(|_| EncryptionError::Aes("IV slice".into()))?;
+        .map_err(|_e| EncryptionError::Aes("IV slice".into()))?;
+    // lint-allow-unused: aes_key.len() >= 32 checked above, so [..32] is in bounds
+    #[allow(clippy::indexing_slicing)]
     let key: [u8; 32] = aes_key[..32]
         .try_into()
-        .map_err(|_| EncryptionError::Aes("key slice".into()))?;
+        .map_err(|_e| EncryptionError::Aes("key slice".into()))?;
     let plaintext = Aes256CbcDec::new(&key.into(), &iv.into())
         .decrypt_padded_vec_mut::<Pkcs7>(&ciphertext)
         .map_err(|e| EncryptionError::Aes(format!("CBC decrypt: {e}")))?;

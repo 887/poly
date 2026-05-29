@@ -134,7 +134,7 @@ impl VideoBridgeClient {
     async fn post_json<T, B>(&self, url: &str, body: &B) -> Result<T, VideoClientError>
     where
         T: serde::de::DeserializeOwned,
-        B: serde::Serialize,
+        B: serde::Serialize + Sync,
     {
         let text = self
             .http

@@ -19,6 +19,19 @@
 //!
 //! `#[cfg(all(not(target_arch = "wasm32"), feature = "codec-opus"))]`
 
+// Bounded DSP arithmetic: the `n * 2` sample-count multiplication and
+// `len * 2` capacity are bounded by the 5760-sample decode ceiling and
+// the caller-supplied frame size; `chunks_exact(2)` indexing into a
+// guaranteed-even byte slice is safe by construction.
+// significant_drop_tightening: the MutexGuard must outlive the borrowed encoder/decoder
+// reference; clippy's suggested rewrite would be invalid (borrow lifetime).
+#![allow(
+    clippy::arithmetic_side_effects,
+    clippy::integer_division,
+    clippy::indexing_slicing,
+    clippy::significant_drop_tightening
+)]
+
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
@@ -64,7 +77,6 @@ impl OpusState {
 
 // ── Router ─────────────────────────────────────────────────────────────────────
 
-#[must_use]
 pub fn router(state: OpusState) -> axum::Router {
     use axum::routing::post;
     axum::Router::new()
@@ -86,21 +98,18 @@ async fn handle_encoder_create(
     let ch = parse_channels(req.channels);
     let app = parse_application(&req.application);
 
-    let (sr, ch, app) = match (sr, ch, app) {
-        (Some(s), Some(c), Some(a)) => (s, c, a),
-        _ => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(OpusSessionCreateResponse {
-                    ok: false,
-                    session_id: String::new(),
-                    err: Some(format!(
-                        "invalid params: sample_rate={} channels={} application={}",
-                        req.sample_rate, req.channels, req.application
-                    )),
-                }),
-            );
-        }
+    let (Some(sr), Some(ch), Some(app)) = (sr, ch, app) else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(OpusSessionCreateResponse {
+                ok: false,
+                session_id: String::new(),
+                err: Some(format!(
+                    "invalid params: sample_rate={} channels={} application={}",
+                    req.sample_rate, req.channels, req.application
+                )),
+            }),
+        );
     };
 
     let encoder = match OpusEncoder::new(sr, ch, app) {
@@ -118,11 +127,18 @@ async fn handle_encoder_create(
     };
 
     let session_id = Uuid::new_v4().to_string();
-    state
-        .sessions
-        .lock()
-        .unwrap()
-        .insert(session_id.clone(), OpusSession::Encoder(encoder));
+    let Ok(mut guard) = state.sessions.lock() else {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(OpusSessionCreateResponse {
+                ok: false,
+                session_id: String::new(),
+                err: Some("session lock poisoned".into()),
+            }),
+        );
+    };
+    guard.insert(session_id.clone(), OpusSession::Encoder(encoder));
+    drop(guard);
 
     (
         StatusCode::OK,
@@ -159,19 +175,25 @@ async fn handle_encode(
     }
     let pcm: Vec<i16> = raw.chunks_exact(2).map(|c| i16::from_le_bytes([c[0], c[1]])).collect();
 
-    let mut map = state.sessions.lock().unwrap();
-    let encoder = match map.get_mut(&req.session_id) {
-        Some(OpusSession::Encoder(e)) => e,
-        _ => {
-            return (
-                StatusCode::NOT_FOUND,
-                Json(OpusEncodeResponse {
-                    ok: false,
-                    encoded: String::new(),
-                    err: Some(format!("encoder session {} not found", req.session_id)),
-                }),
-            );
-        }
+    let Ok(mut map) = state.sessions.lock() else {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(OpusEncodeResponse {
+                ok: false,
+                encoded: String::new(),
+                err: Some("session lock poisoned".into()),
+            }),
+        );
+    };
+    let Some(OpusSession::Encoder(encoder)) = map.get_mut(&req.session_id) else {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(OpusEncodeResponse {
+                ok: false,
+                encoded: String::new(),
+                err: Some(format!("encoder session {} not found", req.session_id)),
+            }),
+        );
     };
 
     let mut out = vec![0u8; 4000];
@@ -206,21 +228,18 @@ async fn handle_decoder_create(
     let sr = parse_sample_rate(req.sample_rate);
     let ch = parse_channels(req.channels);
 
-    let (sr, ch) = match (sr, ch) {
-        (Some(s), Some(c)) => (s, c),
-        _ => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(OpusSessionCreateResponse {
-                    ok: false,
-                    session_id: String::new(),
-                    err: Some(format!(
-                        "invalid params: sample_rate={} channels={}",
-                        req.sample_rate, req.channels
-                    )),
-                }),
-            );
-        }
+    let (Some(sr), Some(ch)) = (sr, ch) else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(OpusSessionCreateResponse {
+                ok: false,
+                session_id: String::new(),
+                err: Some(format!(
+                    "invalid params: sample_rate={} channels={}",
+                    req.sample_rate, req.channels
+                )),
+            }),
+        );
     };
 
     let decoder = match OpusDecoder::new(sr, ch) {
@@ -238,11 +257,18 @@ async fn handle_decoder_create(
     };
 
     let session_id = Uuid::new_v4().to_string();
-    state
-        .sessions
-        .lock()
-        .unwrap()
-        .insert(session_id.clone(), OpusSession::Decoder(decoder));
+    let Ok(mut guard) = state.sessions.lock() else {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(OpusSessionCreateResponse {
+                ok: false,
+                session_id: String::new(),
+                err: Some("session lock poisoned".into()),
+            }),
+        );
+    };
+    guard.insert(session_id.clone(), OpusSession::Decoder(decoder));
+    drop(guard);
 
     (
         StatusCode::OK,
@@ -268,19 +294,25 @@ async fn handle_decode(
         }
     };
 
-    let mut map = state.sessions.lock().unwrap();
-    let decoder = match map.get_mut(&req.session_id) {
-        Some(OpusSession::Decoder(d)) => d,
-        _ => {
-            return (
-                StatusCode::NOT_FOUND,
-                Json(OpusDecodeResponse {
-                    ok: false,
-                    pcm: String::new(),
-                    err: Some(format!("decoder session {} not found", req.session_id)),
-                }),
-            );
-        }
+    let Ok(mut map) = state.sessions.lock() else {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(OpusDecodeResponse {
+                ok: false,
+                pcm: String::new(),
+                err: Some("session lock poisoned".into()),
+            }),
+        );
+    };
+    let Some(OpusSession::Decoder(decoder)) = map.get_mut(&req.session_id) else {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(OpusDecodeResponse {
+                ok: false,
+                pcm: String::new(),
+                err: Some(format!("decoder session {} not found", req.session_id)),
+            }),
+        );
     };
 
     // 120ms @ 48kHz stereo = 5760 samples max.
@@ -347,11 +379,14 @@ async fn handle_close(
     State(state): State<OpusState>,
     Json(req): Json<OpusCloseRequest>,
 ) -> impl IntoResponse {
-    let removed = state
-        .sessions
-        .lock()
-        .unwrap()
-        .remove(&req.session_id);
+    let Ok(mut guard) = state.sessions.lock() else {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(OpusCloseResponse { ok: false, err: Some("session lock poisoned".into()) }),
+        );
+    };
+    let removed = guard.remove(&req.session_id);
+    drop(guard);
     if removed.is_none() {
         return (
             StatusCode::NOT_FOUND,
@@ -366,7 +401,7 @@ async fn handle_close(
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-fn parse_sample_rate(hz: u32) -> Option<OpusSampleRate> {
+const fn parse_sample_rate(hz: u32) -> Option<OpusSampleRate> {
     match hz {
         8_000 => Some(OpusSampleRate::Hz8000),
         12_000 => Some(OpusSampleRate::Hz12000),
@@ -377,7 +412,7 @@ fn parse_sample_rate(hz: u32) -> Option<OpusSampleRate> {
     }
 }
 
-fn parse_channels(n: u8) -> Option<OpusChannels> {
+const fn parse_channels(n: u8) -> Option<OpusChannels> {
     match n {
         1 => Some(OpusChannels::Mono),
         2 => Some(OpusChannels::Stereo),

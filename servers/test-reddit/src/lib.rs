@@ -11,6 +11,23 @@
 //! // axum::serve(listener, app).await
 //! ```
 
+// Mock test-server fixture (lint-gate exempt): pedantic/nursery style lints
+// are not worth chasing in throwaway fixture code.
+#![allow(
+    clippy::missing_const_for_fn,
+    clippy::double_must_use,
+    clippy::use_self,
+    clippy::option_if_let_else,
+    clippy::significant_drop_tightening,
+    clippy::redundant_clone,
+    clippy::match_same_arms,
+    clippy::let_underscore_must_use,
+    clippy::explicit_iter_loop,
+    clippy::expect_used,
+    clippy::default_numeric_fallback,
+    clippy::cast_possible_truncation
+)]
+
 pub mod routes;
 pub mod state;
 

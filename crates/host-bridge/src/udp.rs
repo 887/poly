@@ -67,7 +67,6 @@ impl UdpState {
 
 // ── Router ─────────────────────────────────────────────────────────────────────
 
-#[must_use]
 pub fn router(state: UdpState) -> axum::Router {
     use axum::routing::{get, post};
     axum::Router::new()
@@ -142,17 +141,14 @@ async fn handle_connect(
     State(state): State<UdpState>,
     Json(req): Json<UdpConnectRequest>,
 ) -> impl IntoResponse {
-    let socket = match get_socket(&state, &req.session_id) {
-        Some(s) => s,
-        None => {
-            return (
-                StatusCode::NOT_FOUND,
-                Json(UdpConnectResponse {
-                    ok: false,
-                    err: Some(format!("session {} not found", req.session_id)),
-                }),
-            );
-        }
+    let Some(socket) = get_socket(&state, &req.session_id) else {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(UdpConnectResponse {
+                ok: false,
+                err: Some(format!("session {} not found", req.session_id)),
+            }),
+        );
     };
 
     let peer: std::net::SocketAddr = match req.peer_addr.parse() {
@@ -184,18 +180,15 @@ async fn handle_send(
     State(state): State<UdpState>,
     Json(req): Json<UdpSendRequest>,
 ) -> impl IntoResponse {
-    let socket = match get_socket(&state, &req.session_id) {
-        Some(s) => s,
-        None => {
-            return (
-                StatusCode::NOT_FOUND,
-                Json(UdpSendResponse {
-                    ok: false,
-                    bytes_sent: 0,
-                    err: Some(format!("session {} not found", req.session_id)),
-                }),
-            );
-        }
+    let Some(socket) = get_socket(&state, &req.session_id) else {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(UdpSendResponse {
+                ok: false,
+                bytes_sent: 0,
+                err: Some(format!("session {} not found", req.session_id)),
+            }),
+        );
     };
 
     let data = match base64::engine::general_purpose::STANDARD.decode(req.data.as_bytes()) {
@@ -270,16 +263,13 @@ async fn handle_recv_stream(
     // spawn its own recv loop that drains into the SSE stream. Only one SSE
     // subscriber is expected per session (the plugin's SSE connection).
 
-    let socket = match get_socket(&state, &id) {
-        Some(s) => s,
-        None => {
-            use futures::stream;
-            let once_stream = stream::once(async move {
-                let json = serde_json::json!({ "err": "session not found" }).to_string();
-                Ok::<Event, std::convert::Infallible>(Event::default().event("udp").data(json))
-            });
-            return sse_response(Box::pin(once_stream));
-        }
+    let Some(socket) = get_socket(&state, &id) else {
+        use futures::stream;
+        let once_stream = stream::once(async move {
+            let json = serde_json::json!({ "err": "session not found" }).to_string();
+            Ok::<Event, std::convert::Infallible>(Event::default().event("udp").data(json))
+        });
+        return sse_response(Box::pin(once_stream));
     };
 
     let stream = make_recv_stream(socket);
@@ -294,12 +284,11 @@ fn make_recv_stream(
         loop {
             match socket.recv_from(&mut buf).await {
                 Ok((n, src)) => {
+                    // lint-allow-unused: recv_from guarantees n <= buf.len(), so [..n] is in bounds
+                    #[allow(clippy::indexing_slicing)]
                     let data = base64::engine::general_purpose::STANDARD.encode(&buf[..n]);
                     let dgram = UdpDatagram { data, src_addr: src.to_string() };
-                    let json = match serde_json::to_string(&dgram) {
-                        Ok(j) => j,
-                        Err(_) => continue,
-                    };
+                    let Ok(json) = serde_json::to_string(&dgram) else { continue };
                     yield Ok(Event::default().event("udp").data(json));
                 }
                 Err(e) => {

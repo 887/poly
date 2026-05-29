@@ -1,9 +1,16 @@
+// Mock test-server fixture (lint-gate exempt): pedantic/nursery style lints
+// are not worth chasing in throwaway fixture code.
 #![allow(
     clippy::unwrap_used,
     clippy::expect_used,
     clippy::panic,
     clippy::indexing_slicing,
-    dead_code
+    dead_code,
+    clippy::unreadable_literal,
+    clippy::use_self,
+    clippy::redundant_clone,
+    clippy::unused_async,
+    clippy::needless_pass_by_value
 )]
 //! Mock Hacker News Firebase API server for Poly testing.
 //!

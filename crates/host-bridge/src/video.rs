@@ -70,7 +70,14 @@
     clippy::arithmetic_side_effects,
     clippy::integer_division,
     clippy::indexing_slicing,
-    clippy::unwrap_used
+    clippy::unwrap_used,
+    // cast: as_millis()→u64 is bounded (Duration since UNIX_EPOCH is centuries, fits u64);
+    //        u32→usize widening is safe (usize ≥ 32 bits on all targets we support).
+    clippy::cast_possible_truncation,
+    clippy::as_conversions,
+    // The MutexGuard for encode/decode sessions must outlive the codec reference that
+    // borrows from it; clippy's rewrite suggestion is structurally invalid here.
+    clippy::significant_drop_tightening,
 )]
 
 use std::collections::HashMap;
@@ -271,11 +278,11 @@ fn nv12_to_yuv420p(nv12: &[u8], width: u32, height: u32) -> Result<Vec<u8>, Stri
     // Y plane: copy directly
     out[..y_size].copy_from_slice(&nv12[..y_size]);
     // De-interleave Cb/Cr from interleaved UV plane
-    let cb_base = y_size;
-    let cr_base = y_size + uv_size;
+    let cb_offset = y_size;
+    let cr_offset = y_size + uv_size;
     for i in 0..uv_size {
-        out[cb_base + i] = nv12[y_size + 2 * i];
-        out[cr_base + i] = nv12[y_size + 2 * i + 1];
+        out[cb_offset + i] = nv12[y_size + 2 * i];
+        out[cr_offset + i] = nv12[y_size + 2 * i + 1];
     }
     Ok(out)
 }
@@ -292,7 +299,7 @@ struct PlaneYuv420p<'a> {
     cr: &'a [u8],
 }
 
-impl<'a> YUVSource for PlaneYuv420p<'a> {
+impl YUVSource for PlaneYuv420p<'_> {
     fn dimensions(&self) -> (usize, usize) {
         (self.width, self.height)
     }
@@ -310,6 +317,14 @@ impl<'a> YUVSource for PlaneYuv420p<'a> {
     }
 }
 
+// ─── Encoder constants ────────────────────────────────────────────────────────
+
+/// Default encoder bitrate when no `target_bps` is provided.
+const DEFAULT_ENCODER_BPS: u32 = 2_000_000;
+/// Reinitialize the encoder if the requested bitrate differs by more than this fraction.
+/// 15% hysteresis avoids churn from minor REMB fluctuations.
+const BITRATE_REINIT_THRESHOLD: f64 = 0.15;
+
 // ─── Axum handlers ───────────────────────────────────────────────────────────
 
 /// `POST /host/video/encode_h264`
@@ -319,6 +334,10 @@ impl<'a> YUVSource for PlaneYuv420p<'a> {
 ///
 /// CPU-bound openh264 work is offloaded to a blocking thread via
 /// `tokio::task::spawn_blocking` so the axum async runtime is not stalled.
+// bgra/yuv420p/nv12 format branches cannot be split without duplicating the
+// entire spawn_blocking frame (session-lock + encode + collect).
+// lint-allow-unused: codec format dispatch + spawn_blocking frame is one unit
+#[allow(clippy::too_many_lines)]
 pub async fn encode_h264(
     State(state): State<VideoState>,
     Json(req): Json<EncodeH264Request>,
@@ -367,12 +386,6 @@ pub async fn encode_h264(
     let target_bps = req.target_bps;
     let encoders_arc = Arc::clone(&state.encoders);
 
-    /// Default encoder bitrate when no `target_bps` is provided.
-    const DEFAULT_ENCODER_BPS: u32 = 2_000_000;
-    /// Reinitialize the encoder if the requested bitrate differs by more than this fraction.
-    /// 15% hysteresis avoids churn from minor REMB fluctuations.
-    const BITRATE_REINIT_THRESHOLD: f64 = 0.15;
-
     // Offload CPU-bound encode to blocking thread pool.
     let result = tokio::task::spawn_blocking(move || -> Result<(Vec<Vec<u8>>, bool), String> {
         let mut map = encoders_arc
@@ -385,7 +398,7 @@ pub async fn encode_h264(
         // Create a new encoder session OR reinitialize an existing one if the bitrate
         // has changed beyond the hysteresis threshold (Phase E.9).
         let needs_init = if let Some((_, current_bps)) = map.get(&session_id) {
-            let delta = (*current_bps as f64 - desired_bps as f64).abs() / *current_bps as f64;
+            let delta = (f64::from(*current_bps) - f64::from(desired_bps)).abs() / f64::from(*current_bps);
             delta > BITRATE_REINIT_THRESHOLD
         } else {
             true
@@ -630,6 +643,8 @@ pub async fn decode_h264(
 ///
 /// Drops the encoder and/or decoder for `session_id`. Always returns
 /// `ok: true` even if no session was found (idempotent cleanup).
+// lint-allow-unused: axum route handlers must be async even when the body is sync.
+#[allow(clippy::unused_async)]
 pub async fn close_session(
     State(state): State<VideoState>,
     Json(req): Json<CloseSessionRequest>,

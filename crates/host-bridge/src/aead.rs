@@ -22,10 +22,10 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use aes_gcm::{Aes256Gcm, Nonce as GcmNonce, aead::{Aead as GcmAead, KeyInit as GcmKeyInit}};
+use aes_gcm::{Aes256Gcm, Nonce as GcmNonce, aead::{Aead as GcmAead, AeadInPlace, KeyInit as GcmKeyInit}};
 use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 use base64::Engine as _;
-use chacha20poly1305::{XChaCha20Poly1305, XNonce, aead::{Aead, Payload}};
+use chacha20poly1305::{XChaCha20Poly1305, XNonce, aead::{Aead as ChaChaAead, Payload}};
 use uuid::Uuid;
 
 // Wire types and route constants are defined in aead_client (always compiled).
@@ -39,7 +39,8 @@ pub use crate::aead_client::{
 
 enum AeadSession {
     XChaCha20(XChaCha20Poly1305),
-    Aes256Gcm(Aes256Gcm),
+    // Boxed to reduce the size difference between enum variants (Aes256Gcm is ~992 bytes).
+    Aes256Gcm(Box<Aes256Gcm>),
 }
 
 /// Shared state for the AEAD service.
@@ -57,7 +58,6 @@ impl AeadState {
 
 // ── Router ─────────────────────────────────────────────────────────────────────
 
-#[must_use]
 pub fn router(state: AeadState) -> axum::Router {
     use axum::routing::post;
     axum::Router::new()
@@ -106,7 +106,7 @@ async fn handle_create(
         }
         "aes256gcm" => {
             match Aes256Gcm::new_from_slice(&key_bytes) {
-                Ok(c) => AeadSession::Aes256Gcm(c),
+                Ok(c) => AeadSession::Aes256Gcm(Box::new(c)),
                 Err(e) => {
                     return (
                         StatusCode::BAD_REQUEST,
@@ -132,7 +132,18 @@ async fn handle_create(
     };
 
     let session_id = Uuid::new_v4().to_string();
-    state.sessions.lock().unwrap().insert(session_id.clone(), session);
+    let Ok(mut guard) = state.sessions.lock() else {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(AeadCreateResponse {
+                ok: false,
+                session_id: String::new(),
+                err: Some("session lock poisoned".into()),
+            }),
+        );
+    };
+    guard.insert(session_id.clone(), session);
+    drop(guard);
 
     (StatusCode::OK, Json(AeadCreateResponse { ok: true, session_id, err: None }))
 }
@@ -159,28 +170,30 @@ async fn handle_encrypt(
         None => Vec::new(),
     };
 
-    let map = state.sessions.lock().unwrap();
+    let Ok(map) = state.sessions.lock() else {
+        return err_encrypt("session lock poisoned".into());
+    };
     let result = match map.get(&req.session_id) {
         Some(AeadSession::XChaCha20(c)) => {
             if nonce_bytes.len() != 24 {
                 return err_encrypt("XChaCha20 nonce must be 24 bytes".into());
             }
             let nonce = XNonce::from_slice(&nonce_bytes);
-            c.encrypt(nonce, Payload { msg: &plaintext, aad: &aad })
-                .map_err(|_| "AEAD encrypt failed".to_string())
+            ChaChaAead::encrypt(c, nonce, Payload { msg: &plaintext, aad: &aad })
+                .map_err(|_e| "AEAD encrypt failed".to_string())
         }
         Some(AeadSession::Aes256Gcm(c)) => {
             if nonce_bytes.len() != 12 {
                 return err_encrypt("AES-256-GCM nonce must be 12 bytes".into());
             }
             let nonce = GcmNonce::from_slice(&nonce_bytes);
-            let mut buf = plaintext.clone();
-            aes_gcm::aead::AeadInPlace::encrypt_in_place_detached(c, nonce, &aad, &mut buf)
+            let mut buf = plaintext;
+            AeadInPlace::encrypt_in_place_detached(c.as_ref(), nonce, &aad, &mut buf)
                 .map(|tag| {
                     buf.extend_from_slice(&tag);
                     buf
                 })
-                .map_err(|_| "AES-GCM encrypt failed".to_string())
+                .map_err(|_e| "AES-GCM encrypt failed".to_string())
         }
         None => {
             return (
@@ -193,6 +206,7 @@ async fn handle_encrypt(
             );
         }
     };
+    drop(map);
 
     match result {
         Ok(ct) => (
@@ -225,23 +239,25 @@ async fn handle_decrypt(
         None => Vec::new(),
     };
 
-    let map = state.sessions.lock().unwrap();
+    let Ok(map) = state.sessions.lock() else {
+        return err_decrypt("session lock poisoned".into());
+    };
     let result = match map.get(&req.session_id) {
         Some(AeadSession::XChaCha20(c)) => {
             if nonce_bytes.len() != 24 {
                 return err_decrypt("XChaCha20 nonce must be 24 bytes".into());
             }
             let nonce = XNonce::from_slice(&nonce_bytes);
-            c.decrypt(nonce, Payload { msg: &ciphertext, aad: &aad })
-                .map_err(|_| "AEAD decrypt failed".to_string())
+            ChaChaAead::decrypt(c, nonce, Payload { msg: &ciphertext, aad: &aad })
+                .map_err(|_e| "AEAD decrypt failed".to_string())
         }
         Some(AeadSession::Aes256Gcm(c)) => {
             if nonce_bytes.len() != 12 {
                 return err_decrypt("AES-256-GCM nonce must be 12 bytes".into());
             }
             let nonce = GcmNonce::from_slice(&nonce_bytes);
-            c.decrypt(nonce, aes_gcm::aead::Payload { msg: &ciphertext, aad: &aad })
-                .map_err(|_| "AES-GCM decrypt failed".to_string())
+            GcmAead::decrypt(c.as_ref(), nonce, aes_gcm::aead::Payload { msg: &ciphertext, aad: &aad })
+                .map_err(|_e| "AES-GCM decrypt failed".to_string())
         }
         None => {
             return (
@@ -254,6 +270,7 @@ async fn handle_decrypt(
             );
         }
     };
+    drop(map);
 
     match result {
         Ok(pt) => (
@@ -268,7 +285,14 @@ async fn handle_close(
     State(state): State<AeadState>,
     Json(req): Json<AeadCloseRequest>,
 ) -> impl IntoResponse {
-    let removed = state.sessions.lock().unwrap().remove(&req.session_id);
+    let Ok(mut guard) = state.sessions.lock() else {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(AeadCloseResponse { ok: false, err: Some("session lock poisoned".into()) }),
+        );
+    };
+    let removed = guard.remove(&req.session_id);
+    drop(guard);
     if removed.is_none() {
         return (
             StatusCode::NOT_FOUND,
@@ -293,6 +317,8 @@ fn b64_decode(s: &str) -> Result<Vec<u8>, String> {
         .map_err(|e| e.to_string())
 }
 
+// clippy::missing_const_for_fn: these return Json<T> which is not const-constructible.
+#[allow(clippy::missing_const_for_fn)]
 fn err_encrypt(msg: String) -> (StatusCode, Json<AeadEncryptResponse>) {
     (
         StatusCode::BAD_REQUEST,
@@ -300,6 +326,8 @@ fn err_encrypt(msg: String) -> (StatusCode, Json<AeadEncryptResponse>) {
     )
 }
 
+// clippy::missing_const_for_fn: see err_encrypt above.
+#[allow(clippy::missing_const_for_fn)]
 fn err_decrypt(msg: String) -> (StatusCode, Json<AeadDecryptResponse>) {
     (
         StatusCode::BAD_REQUEST,

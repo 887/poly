@@ -1,9 +1,16 @@
+// Mock test-server fixture (lint-gate exempt): pedantic/nursery style lints
+// are not worth chasing in throwaway fixture code.
 #![allow(
     clippy::unwrap_used,
     clippy::expect_used,
     clippy::panic,
     clippy::indexing_slicing,
-    dead_code
+    dead_code,
+    clippy::manual_let_else,
+    clippy::use_self,
+    clippy::redundant_clone,
+    clippy::option_if_let_else,
+    clippy::too_many_lines
 )]
 //! Mock Forgejo API server for Poly testing — library entry point.
 //!

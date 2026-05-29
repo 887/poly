@@ -4,6 +4,10 @@
 //! `include_str!`'d at compile time. Per-request mutations
 //! (subscribe, compose, comment, vote) live here.
 
+// Mock test-server fixture: timestamp/id casts are intentional and bounded
+// by seed data; truncation cannot occur at these sizes.
+#![allow(clippy::cast_possible_truncation)]
+
 #![allow(clippy::module_name_repetitions)]
 
 use chrono::{DateTime, Utc};

@@ -160,7 +160,6 @@ impl TeamsWebhookState {
 ///
 /// Mount via `Router::merge(teams_webhook::router(state))` from the
 /// host process (see `apps/poly-host/src/lib.rs`).
-#[must_use]
 pub fn router(state: TeamsWebhookState) -> Router {
     Router::new()
         // Per-account routes — Graph hits `<base>/host/teams/notifications/<account_id>`.
@@ -229,22 +228,34 @@ pub fn dispatch_envelope(
     envelope: ChangeNotificationEnvelope,
 ) {
     for notification in envelope.value {
-        match state.store.get(&notification.subscription_id) {
-            Some(expected) if constant_time_eq(&expected, &notification.client_state) => {
-                state.sink.dispatch(account_id, notification);
-            }
-            Some(_) => {
-                tracing::warn!(
-                    subscription_id = %notification.subscription_id,
-                    "teams webhook: clientState mismatch — dropping notification"
-                );
-            }
-            None => {
-                tracing::warn!(
-                    subscription_id = %notification.subscription_id,
-                    "teams webhook: unknown subscription_id — dropping notification"
-                );
-            }
+        dispatch_one(state, account_id, notification);
+    }
+}
+
+/// Dispatch a single verified notification or log and drop it.
+// Cognitive complexity: three-arm dispatch table with a pattern guard; cannot
+// be meaningfully split without introducing additional allocations.
+#[allow(clippy::cognitive_complexity)]
+fn dispatch_one(
+    state: &TeamsWebhookState,
+    account_id: &str,
+    notification: ChangeNotification,
+) {
+    match state.store.get(&notification.subscription_id) {
+        Some(expected) if constant_time_eq(&expected, &notification.client_state) => {
+            state.sink.dispatch(account_id, notification);
+        }
+        Some(_) => {
+            tracing::warn!(
+                subscription_id = %notification.subscription_id,
+                "teams webhook: clientState mismatch — dropping notification"
+            );
+        }
+        None => {
+            tracing::warn!(
+                subscription_id = %notification.subscription_id,
+                "teams webhook: unknown subscription_id — dropping notification"
+            );
         }
     }
 }

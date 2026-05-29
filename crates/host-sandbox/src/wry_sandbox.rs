@@ -34,6 +34,7 @@
 use std::sync::mpsc as std_mpsc;
 
 use tao::event_loop::{ControlFlow, EventLoopBuilder};
+use tao::platform::run_return::EventLoopExtRunReturn as _;
 use tao::window::WindowBuilder;
 use tracing::{debug, warn};
 
@@ -60,12 +61,13 @@ impl HostSandbox for WrySandbox {
             .name("poly-sandbox".into())
             .spawn(move || {
                 let result = run_sandbox_event_loop(&url, &capture_url_pattern);
-                let _ = tx.send(result);
+                // Receiver is still alive (we await it below); ignore if dropped.
+                drop(tx.send(result));
             })
             .map_err(|e| SandboxError::Internal(format!("thread spawn failed: {e}")))?;
 
         rx.await
-            .map_err(|_| SandboxError::Internal("sandbox thread exited without result".into()))?
+            .map_err(|_e| SandboxError::Internal("sandbox thread exited without result".into()))?
     }
 }
 
@@ -107,7 +109,6 @@ fn run_sandbox_event_loop(
         .map_err(|e| SandboxError::Internal(format!("window build failed: {e}")))?;
 
     let pattern_owned = pattern.to_owned();
-    let nav_tx_clone = nav_tx.clone();
 
     // Build the WebView.
     //
@@ -122,7 +123,8 @@ fn run_sandbox_event_loop(
             if glob_matches(&pattern_owned, &nav_url) {
                 // Pattern matched — send URL and signal we're done.
                 debug!("sandbox: captured {nav_url}");
-                let _ = nav_tx_clone.send(Ok(nav_url));
+                // nav_tx moved into closure; ignore error if receiver already dropped.
+                drop(nav_tx.send(Ok(nav_url)));
                 // Return false to block loading the capture URL in the WebView.
                 return false;
             }
@@ -130,6 +132,8 @@ fn run_sandbox_event_loop(
         });
 
     // On Linux we must use `build_gtk` with `default_vbox()`.
+    // The webview binding keeps the WebView alive for the event loop; it is not
+    // accessed directly — this is a RAII guard, not unused code.
     #[cfg(any(
         target_os = "linux",
         target_os = "dragonfly",
@@ -137,7 +141,7 @@ fn run_sandbox_event_loop(
         target_os = "netbsd",
         target_os = "openbsd",
     ))]
-    let _webview = {
+    let webview = {
         use tao::platform::unix::WindowExtUnix as _;
         use wry::WebViewBuilderExtUnix as _;
 
@@ -155,14 +159,12 @@ fn run_sandbox_event_loop(
         target_os = "netbsd",
         target_os = "openbsd",
     )))]
-    let _webview = webview_builder
+    let webview = webview_builder
         .build(&window)
         .map_err(|e| SandboxError::Internal(format!("webview build failed: {e}")))?;
 
     // Final result; set when the event loop exits.
     let mut outcome: Option<Result<SandboxResult, SandboxError>> = None;
-
-    use tao::platform::run_return::EventLoopExtRunReturn as _;
 
     event_loop.run_return(|event, _, control_flow| {
         *control_flow = ControlFlow::Wait;
@@ -184,20 +186,19 @@ fn run_sandbox_event_loop(
             Err(std_mpsc::TryRecvError::Empty) => {}
         }
 
-        #[allow(clippy::wildcard_enum_match_arm)]
-        match event {
-            tao::event::Event::WindowEvent {
-                event: tao::event::WindowEvent::CloseRequested,
-                ..
-            } => {
-                // A.4 cancel path: user closed the window.
-                warn!("sandbox window closed by user — UserCancelled");
-                outcome = Some(Err(SandboxError::UserCancelled));
-                *control_flow = ControlFlow::Exit;
-            }
-            _ => {}
+        // A.4 cancel path: user closed the window.
+        if let tao::event::Event::WindowEvent {
+            event: tao::event::WindowEvent::CloseRequested,
+            ..
+        } = event
+        {
+            warn!("sandbox window closed by user — UserCancelled");
+            outcome = Some(Err(SandboxError::UserCancelled));
+            *control_flow = ControlFlow::Exit;
         }
     });
 
+    // Keep the webview alive through the event loop, then release it.
+    drop(webview);
     outcome.unwrap_or_else(|| Err(SandboxError::Internal("event loop exited without result".into())))
 }
