@@ -51,10 +51,15 @@ use futures::{SinkExt, StreamExt};
 use tokio::{
     sync::{broadcast, mpsc, Mutex as TokioMutex},
 };
-use tokio_tungstenite::{connect_async, tungstenite::Message as TMsg};
+use tokio_tungstenite::{
+    connect_async,
+    tungstenite::Message as TMsg,
+    MaybeTlsStream,
+    WebSocketStream,
+};
 use tracing::{debug, info, warn};
 
-use poly_audio_backend::{AudioFormat};
+use poly_audio_backend::{AudioFormat, AudioOutputStream, BoxInputStream};
 use poly_client::{ClientEvent, VoiceParticipant};
 
 use super::voice_common::{
@@ -86,7 +91,7 @@ pub struct StoatVoiceConnection {
 impl StoatVoiceConnection {
     /// Disconnect from the voice channel (sends shutdown signal to all tasks).
     pub fn disconnect(&self) {
-        let _ = self.shutdown_tx.send(true);
+        drop(self.shutdown_tx.send(true));
     }
 
     /// Snapshot the current participant list.
@@ -106,6 +111,177 @@ pub type VoiceSessionGuard = Arc<TokioMutex<Option<StoatVoiceConnection>>>;
 
 // ── Main connect entrypoint ───────────────────────────────────────────────────
 
+type WsSink = futures::stream::SplitSink<WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>, TMsg>;
+type WsSource = futures::stream::SplitStream<WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>>;
+
+/// Spawn the WS write loop: drains the `ws_write_rx` channel into `ws_sink`.
+fn spawn_ws_write_loop(
+    mut ws_sink: WsSink,
+    mut ws_write_rx: mpsc::Receiver<TMsg>,
+    mut sd: broadcast::Receiver<bool>,
+) {
+    tokio::spawn(async move {
+        loop {
+            tokio::select! {
+                msg = ws_write_rx.recv() => {
+                    match msg {
+                        None => break,
+                        Some(m) => { if ws_sink.send(m).await.is_err() { break; } }
+                    }
+                }
+                _ = sd.recv() => break,
+            }
+        }
+        drop(ws_sink.close().await);
+        debug!("Stoat voice WS write loop stopped");
+    });
+}
+
+/// Shared context threaded into the WS event loop task.
+struct EventLoopCtx {
+    channel_id: String,
+    participants: Arc<TokioMutex<HashMap<String, VoiceParticipant>>>,
+    event_tx: mpsc::Sender<ClientEvent>,
+    ws_write_tx: mpsc::Sender<TMsg>,
+    speaker: Arc<Box<dyn AudioOutputStream>>,
+}
+
+/// Spawn the WS event loop: dispatches text/binary frames, sends participant events.
+fn spawn_ws_event_loop(
+    mut ws_source: WsSource,
+    ctx: EventLoopCtx,
+    mut sd: broadcast::Receiver<bool>,
+) {
+    tokio::spawn(async move {
+        let mut decoders: HashMap<String, OpusDecoder> = HashMap::new();
+
+        loop {
+            tokio::select! {
+                msg = ws_source.next() => {
+                    match msg {
+                        None | Some(Err(_) | Ok(TMsg::Close(_))) => break,
+                        Some(Ok(TMsg::Text(text))) => {
+                            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
+                                handle_vortex_event(
+                                    &json,
+                                    &ctx.channel_id,
+                                    &ctx.participants,
+                                    &ctx.event_tx,
+                                ).await;
+                            }
+                        }
+                        Some(Ok(TMsg::Binary(bytes))) => {
+                            decode_and_play_opus_frame(
+                                &bytes,
+                                &mut decoders,
+                                &ctx.speaker,
+                            ).await;
+                        }
+                        _ => {}
+                    }
+                }
+                _ = sd.recv() => break,
+            }
+        }
+
+        // Send Leave before dropping.
+        let leave = serde_json::json!({ "type": "Leave" });
+        drop(ctx.ws_write_tx.send(TMsg::Text(leave.to_string().into())).await);
+        debug!("Stoat voice WS event loop stopped");
+    });
+}
+
+/// Decode a single binary Opus frame from the wire and push PCM to the speaker.
+async fn decode_and_play_opus_frame(
+    bytes: &[u8],
+    decoders: &mut HashMap<String, OpusDecoder>,
+    speaker: &Arc<Box<dyn AudioOutputStream>>,
+) {
+    // Frame format (test-stoat mock): 8-byte ASCII user_id (null-padded) + Opus payload.
+    if bytes.len() <= 8 {
+        return;
+    }
+    let uid_raw = &bytes[..8];
+    let user_id = String::from_utf8_lossy(uid_raw)
+        .trim_end_matches('\0')
+        .to_string();
+    let opus_data = &bytes[8..];
+
+    let decoder = decoders.entry(user_id.clone()).or_insert_with(|| {
+        OpusDecoder::new(OpusSampleRate::Hz48000, OpusChannels::Mono)
+            .expect("Stoat voice: Opus decoder init")
+    });
+
+    let mut pcm = vec![0i16; OPUS_MAX_DECODE_SAMPLES];
+    let Ok(packet) = Packet::try_from(opus_data) else { return };
+    let Ok(mut_signals) = MutSignals::try_from(&mut pcm[..]) else { return };
+    let n_decoded = match decoder.decode(Some(packet), mut_signals, false) {
+        Ok(n) => n,
+        Err(e) => {
+            debug!("Stoat voice decode error (user={user_id}): {e:?}");
+            return;
+        }
+    };
+    pcm.truncate(n_decoded);
+    drop(speaker.push(&pcm).await);
+}
+
+/// Spawn the Opus encode loop: reads PCM from mic, encodes, sends to WS write loop.
+fn spawn_encode_loop(
+    mic_stream: BoxInputStream,
+    transmit_mode: Option<TransmitMode>,
+    ws_write_tx: mpsc::Sender<TMsg>,
+    mut sd: broadcast::Receiver<bool>,
+) {
+    let transmit = transmit_mode.unwrap_or_default();
+    tokio::spawn(async move {
+        let encoder = match OpusEncoder::new(
+            OpusSampleRate::Hz48000,
+            OpusChannels::Mono,
+            OPUS_APP,
+        ) {
+            Ok(e) => e,
+            Err(e) => {
+                warn!("Stoat voice: Opus encoder init failed: {e:?}");
+                return;
+            }
+        };
+
+        let mut mic = mic_stream;
+        let mut buf: Vec<i16> = Vec::with_capacity(OPUS_FRAME_SAMPLES * 2);
+
+        loop {
+            let frame = tokio::select! {
+                f = mic.next() => f,
+                _ = sd.recv() => break,
+            };
+            let Some(samples) = frame else { break };
+            buf.extend_from_slice(&samples);
+
+            while buf.len() >= OPUS_FRAME_SAMPLES {
+                let pcm_slice = &buf[..OPUS_FRAME_SAMPLES];
+                if transmit.should_transmit(pcm_slice) {
+                    let mut opus_out = vec![0u8; 4000];
+                    match encoder.encode(pcm_slice, &mut opus_out) {
+                        Ok(n) => {
+                            opus_out.truncate(n);
+                            // Prepend 8 bytes of zero user_id (local user).
+                            let mut frame_bytes = vec![0u8; 8];
+                            frame_bytes.extend_from_slice(&opus_out);
+                            if ws_write_tx.send(TMsg::Binary(frame_bytes.into())).await.is_err() {
+                                return;
+                            }
+                        }
+                        Err(e) => debug!("Stoat voice encode error: {e:?}"),
+                    }
+                }
+                buf.drain(..OPUS_FRAME_SAMPLES);
+            }
+        }
+        debug!("Stoat voice encode loop stopped");
+    });
+}
+
 /// Connect to a Stoat voice channel.
 ///
 /// 1. Connects to the Vortex WebSocket at `server_info.ws_url`.
@@ -121,14 +297,17 @@ pub type VoiceSessionGuard = Arc<TokioMutex<Option<StoatVoiceConnection>>>;
 pub async fn connect_voice(
     guard: VoiceSessionGuard,
     server_info: VortexServerInfo,
-    audio: &dyn poly_audio_backend::AudioBackend,
+    audio: &(dyn poly_audio_backend::AudioBackend + Send + Sync),
     transmit_mode: Option<TransmitMode>,
     event_tx: mpsc::Sender<ClientEvent>,
 ) -> Result<(), StoatVoiceError> {
     // F.8 — single voice connection per account.
-    let mut guard_lock = guard.lock().await;
-    if guard_lock.is_some() {
-        return Err(StoatVoiceError::AlreadyConnected);
+    // Check and bail early; guard released before any IO.
+    {
+        let guard_lock = guard.lock().await;
+        if guard_lock.is_some() {
+            return Err(StoatVoiceError::AlreadyConnected);
+        }
     }
 
     let channel_id = server_info.channel_id.clone();
@@ -142,7 +321,7 @@ pub async fn connect_voice(
 
     info!(channel_id = %channel_id, url = %ws_url, "Stoat voice WS connected");
 
-    let (mut ws_sink, mut ws_source) = ws_stream.split();
+    let (mut ws_sink, ws_source) = ws_stream.split();
 
     // Authenticate on the WS.
     let auth_msg = serde_json::json!({ "type": "Authenticate", "token": token });
@@ -166,193 +345,55 @@ pub async fn connect_voice(
     let participants = Arc::new(TokioMutex::new(HashMap::<String, VoiceParticipant>::new()));
 
     // Channel: encode loop → ws_write task.
-    let (ws_write_tx, mut ws_write_rx) = mpsc::channel::<TMsg>(64);
+    let (ws_write_tx, ws_write_rx) = mpsc::channel::<TMsg>(64);
 
-    // ── WS write loop ─────────────────────────────────────────────────────────
-    {
-        let mut sd = shutdown_tx.subscribe();
-        tokio::spawn(async move {
-            loop {
-                tokio::select! {
-                    msg = ws_write_rx.recv() => {
-                        match msg {
-                            None => break,
-                            Some(m) => { if ws_sink.send(m).await.is_err() { break; } }
-                        }
-                    }
-                    _ = sd.recv() => break,
-                }
-            }
-            drop(ws_sink.close().await);
-            debug!("Stoat voice WS write loop stopped");
-        });
-    }
+    spawn_ws_write_loop(ws_sink, ws_write_rx, shutdown_tx.subscribe());
+    let ctx = EventLoopCtx {
+        channel_id: channel_id.clone(),
+        participants: Arc::clone(&participants),
+        event_tx,
+        ws_write_tx: ws_write_tx.clone(),
+        speaker: Arc::new(speaker),
+    };
+    spawn_ws_event_loop(ws_source, ctx, shutdown_tx.subscribe());
+    spawn_encode_loop(mic_stream, transmit_mode, ws_write_tx, shutdown_tx.subscribe());
 
-    // ── WS event loop ─────────────────────────────────────────────────────────
-    {
-        let ch_ev = channel_id.clone();
-        let parts_ev = Arc::clone(&participants);
-        let ev_tx = event_tx.clone();
-        let ws_tx_ev = ws_write_tx.clone();
-        let speaker_arc = Arc::new(speaker);
-        let mut sd = shutdown_tx.subscribe();
-
-        tokio::spawn(async move {
-            let mut decoders: HashMap<String, OpusDecoder> = HashMap::new();
-
-            loop {
-                tokio::select! {
-                    msg = ws_source.next() => {
-                        match msg {
-                            None | Some(Err(_)) => break,
-                            Some(Ok(TMsg::Close(_))) => break,
-                            Some(Ok(TMsg::Text(text))) => {
-                                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
-                                    handle_vortex_event(
-                                        &json,
-                                        &ch_ev,
-                                        &parts_ev,
-                                        &ev_tx,
-                                    ).await;
-                                }
-                            }
-                            Some(Ok(TMsg::Binary(bytes))) => {
-                                // Binary frame: Opus audio from a remote participant.
-                                // Frame format (test-stoat mock): 8-byte ASCII user_id (null-padded) + Opus payload.
-                                if bytes.len() <= 8 { continue; }
-                                let uid_raw = &bytes[..8];
-                                let user_id = String::from_utf8_lossy(uid_raw)
-                                    .trim_end_matches('\0')
-                                    .to_string();
-                                let opus_data = &bytes[8..];
-
-                                let decoder = decoders.entry(user_id.clone()).or_insert_with(|| {
-                                    OpusDecoder::new(OpusSampleRate::Hz48000, OpusChannels::Mono)
-                                        .expect("Stoat voice: Opus decoder init")
-                                });
-
-                                let mut pcm = vec![0i16; OPUS_MAX_DECODE_SAMPLES];
-                                let packet = match Packet::try_from(opus_data) {
-                                    Ok(p) => p,
-                                    Err(_) => continue,
-                                };
-                                let mut_signals = match MutSignals::try_from(&mut pcm[..]) {
-                                    Ok(s) => s,
-                                    Err(_) => continue,
-                                };
-                                let decoded = match decoder.decode(
-                                    Some(packet),
-                                    mut_signals,
-                                    false,
-                                ) {
-                                    Ok(n) => n,
-                                    Err(e) => {
-                                        debug!("Stoat voice decode error (user={user_id}): {e:?}");
-                                        continue;
-                                    }
-                                };
-                                pcm.truncate(decoded);
-                                drop(speaker_arc.push(&pcm).await);
-                            }
-                            _ => {}
-                        }
-                    }
-                    _ = sd.recv() => break,
-                }
-            }
-
-            // Send Leave before dropping.
-            let leave = serde_json::json!({ "type": "Leave" });
-            drop(ws_tx_ev.send(TMsg::Text(leave.to_string().into())).await);
-            debug!("Stoat voice WS event loop stopped");
-        });
-    }
-
-    // ── Encode loop ───────────────────────────────────────────────────────────
-    {
-        let transmit = transmit_mode.unwrap_or_default();
-        let ws_tx_enc = ws_write_tx;
-        let mut sd = shutdown_tx.subscribe();
-
-        tokio::spawn(async move {
-            let encoder = match OpusEncoder::new(
-                OpusSampleRate::Hz48000,
-                OpusChannels::Mono,
-                OPUS_APP,
-            ) {
-                Ok(e) => e,
-                Err(e) => {
-                    warn!("Stoat voice: Opus encoder init failed: {e:?}");
-                    return;
-                }
-            };
-
-            let mut mic = mic_stream;
-            let mut buf: Vec<i16> = Vec::with_capacity(OPUS_FRAME_SAMPLES * 2);
-
-            loop {
-                let frame = tokio::select! {
-                    f = mic.next() => f,
-                    _ = sd.recv() => break,
-                };
-                let Some(samples) = frame else { break };
-                buf.extend_from_slice(&samples);
-
-                while buf.len() >= OPUS_FRAME_SAMPLES {
-                    let pcm_slice = &buf[..OPUS_FRAME_SAMPLES];
-                    if transmit.should_transmit(pcm_slice) {
-                        let mut opus_out = vec![0u8; 4000];
-                        match encoder.encode(pcm_slice, &mut opus_out) {
-                            Ok(n) => {
-                                opus_out.truncate(n);
-                                // Prepend 8 bytes of zero user_id (local user).
-                                let mut frame_bytes = vec![0u8; 8];
-                                frame_bytes.extend_from_slice(&opus_out);
-                                if ws_tx_enc.send(TMsg::Binary(frame_bytes.into())).await.is_err() {
-                                    return;
-                                }
-                            }
-                            Err(e) => debug!("Stoat voice encode error: {e:?}"),
-                        }
-                    }
-                    buf.drain(..OPUS_FRAME_SAMPLES);
-                }
-            }
-            debug!("Stoat voice encode loop stopped");
-        });
-    }
-
+    let mut guard_lock = guard.lock().await;
     *guard_lock = Some(StoatVoiceConnection {
         channel_id,
         participants: Arc::clone(&participants),
         shutdown_tx,
     });
+    drop(guard_lock);
     Ok(())
 }
 
 /// Handle a JSON event received from the Vortex WebSocket.
+// cognitive_complexity: dispatch table over 5 named event types — splitting further
+// would obscure the protocol mapping without reducing actual complexity.
+#[allow(clippy::cognitive_complexity)]
 async fn handle_vortex_event(
     json: &serde_json::Value,
     channel_id: &str,
     participants: &TokioMutex<HashMap<String, VoiceParticipant>>,
     event_tx: &mpsc::Sender<ClientEvent>,
 ) {
-    let Some(ev_type) = json.get("type").and_then(|t| t.as_str()) else {
+    let Some(ev_type) = json.get("type").and_then(serde_json::Value::as_str) else {
         return;
     };
 
     match ev_type {
         "VoiceParticipantJoined" => {
-            let Some(user_id) = json.get("user_id").and_then(|v| v.as_str()) else {
+            let Some(user_id) = json.get("user_id").and_then(serde_json::Value::as_str) else {
                 return;
             };
             let display_name = json.get("display_name")
-                .and_then(|v| v.as_str())
+                .and_then(serde_json::Value::as_str)
                 .unwrap_or(user_id)
                 .to_string();
             let avatar_url = json.get("avatar_url")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string());
+                .and_then(serde_json::Value::as_str)
+                .map(std::string::ToString::to_string);
 
             let participant = VoiceParticipant {
                 user: poly_client::User {
@@ -362,7 +403,7 @@ async fn handle_vortex_event(
                     presence: poly_client::PresenceStatus::Online,
                     backend: poly_client::BackendType::from(crate::SLUG),
                 },
-                is_muted: json.get("is_muted").and_then(|v| v.as_bool()).unwrap_or(false),
+                is_muted: json.get("is_muted").and_then(serde_json::Value::as_bool).unwrap_or(false),
                 is_deafened: false,
                 is_streaming: false,
                 is_video_on: false,
@@ -372,71 +413,71 @@ async fn handle_vortex_event(
             participants.lock().await.insert(user_id.to_string(), participant.clone());
             debug!(channel_id, user_id, "Stoat voice: participant joined");
 
-            let _ = event_tx.send(ClientEvent::VoiceUserJoined {
+            drop(event_tx.send(ClientEvent::VoiceUserJoined {
                 channel_id: channel_id.to_string(),
                 participant,
-            }).await;
+            }).await);
         }
 
         "VoiceParticipantLeft" => {
-            let Some(user_id) = json.get("user_id").and_then(|v| v.as_str()) else {
+            let Some(user_id) = json.get("user_id").and_then(serde_json::Value::as_str) else {
                 return;
             };
             participants.lock().await.remove(user_id);
             debug!(channel_id, user_id, "Stoat voice: participant left");
-            let _ = event_tx.send(ClientEvent::VoiceUserLeft {
+            drop(event_tx.send(ClientEvent::VoiceUserLeft {
                 channel_id: channel_id.to_string(),
                 user_id: user_id.to_string(),
-            }).await;
+            }).await);
         }
 
         "SpeakingUpdate" => {
-            let Some(user_id) = json.get("user_id").and_then(|v| v.as_str()) else {
+            let Some(user_id) = json.get("user_id").and_then(serde_json::Value::as_str) else {
                 return;
             };
-            let is_speaking = json.get("speaking").and_then(|v| v.as_bool()).unwrap_or(false);
+            let is_speaking = json.get("speaking").and_then(serde_json::Value::as_bool).unwrap_or(false);
             if let Some(p) = participants.lock().await.get_mut(user_id) {
                 p.is_speaking = is_speaking;
             }
-            let _ = event_tx.send(ClientEvent::VoiceSpeakingUpdate {
+            drop(event_tx.send(ClientEvent::VoiceSpeakingUpdate {
                 channel_id: channel_id.to_string(),
                 user_id: user_id.to_string(),
                 is_speaking,
-            }).await;
+            }).await);
         }
 
         "VoiceStateUpdated" => {
-            let Some(user_id) = json.get("user_id").and_then(|v| v.as_str()) else {
+            let Some(user_id) = json.get("user_id").and_then(serde_json::Value::as_str) else {
                 return;
             };
             let mut guard = participants.lock().await;
             if let Some(p) = guard.get_mut(user_id) {
-                if let Some(v) = json.get("is_muted").and_then(|v| v.as_bool()) {
+                if let Some(v) = json.get("is_muted").and_then(serde_json::Value::as_bool) {
                     p.is_muted = v;
                 }
-                if let Some(v) = json.get("is_deafened").and_then(|v| v.as_bool()) {
+                if let Some(v) = json.get("is_deafened").and_then(serde_json::Value::as_bool) {
                     p.is_deafened = v;
                 }
                 let updated = p.clone();
                 drop(guard);
-                let _ = event_tx.send(ClientEvent::VoiceStateUpdated {
+                drop(event_tx.send(ClientEvent::VoiceStateUpdated {
                     channel_id: channel_id.to_string(),
                     participant: updated,
-                }).await;
+                }).await);
             }
         }
 
         "IncomingCall" => {
             // F.6 / H.3 — emit IncomingCall from Vortex WS events.
-            let dm_id = json.get("dm_id").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            let caller = json.get("caller_user_id").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            let with_video = json.get("with_video").and_then(|v| v.as_bool()).unwrap_or(false);
+            let dm_id = json.get("dm_id").and_then(serde_json::Value::as_str).unwrap_or("").to_string();
+            let caller = json.get("caller_user_id").and_then(serde_json::Value::as_str).unwrap_or("").to_string();
+            let with_video = json.get("with_video").and_then(serde_json::Value::as_bool).unwrap_or(false);
             if !dm_id.is_empty() && !caller.is_empty() {
-                let _ = event_tx.send(ClientEvent::IncomingCall {
+                drop(event_tx.send(ClientEvent::IncomingCall {
                     dm_id,
                     caller_user_id: caller,
                     with_video,
-                }).await;
+                }).await);
             }
         }
 

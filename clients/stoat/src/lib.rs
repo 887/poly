@@ -373,7 +373,7 @@ impl StoatClient {
     pub async fn connect_voice(
         &self,
         channel_id: &str,
-        audio: &dyn poly_audio_backend::AudioBackend,
+        audio: &(dyn poly_audio_backend::AudioBackend + Send + Sync),
         transmit_mode: Option<voice_common::TransmitMode>,
         event_tx: tokio::sync::mpsc::Sender<poly_client::ClientEvent>,
     ) -> Result<(), voice_common::StoatVoiceError> {

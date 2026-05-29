@@ -37,10 +37,10 @@ impl poly_client::VoiceTransportBackend for StoatClient {
                 return Ok(guard);
             }
             // Also check the RwLock cache (populated by event_stream).
-            if let Ok(cache) = self.voice_participants.try_read() {
-                if let Some(participants) = cache.get(_channel_id) {
-                    return Ok(participants.clone());
-                }
+            if let Ok(cache) = self.voice_participants.try_read()
+                && let Some(participants) = cache.get(_channel_id)
+            {
+                return Ok(participants.clone());
             }
         }
         Ok(vec![])
