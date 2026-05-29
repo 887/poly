@@ -237,6 +237,7 @@ impl DesktopHttpBackend {
             buffer.push_line(format!(
                 "[meta] trigger={trigger} mode={mode} command={command_line} cwd={working_directory}"
             ));
+            drop(buffer);
             seq
         };
 
@@ -387,7 +388,7 @@ impl DesktopHttpBackend {
     async fn suppress_rebuild_toast_if_app_ready(&self) {
         let _ignored = http_eval(
             &self.client,
-            r#"return (function(){
+            r"return (function(){
                 var appRoot = document.querySelector('#main');
                 var toast = document.querySelector('#__dx-toast');
                 if (appRoot && toast) {
@@ -396,7 +397,7 @@ impl DesktopHttpBackend {
                     return JSON.stringify({ hidden: true, reason: 'app-root-present' });
                 }
                 return JSON.stringify({ hidden: false, appRoot: !!appRoot, toast: !!toast });
-            })()"#,
+            })()",
         )
         .await;
     }
@@ -425,7 +426,8 @@ impl DesktopHttpBackend {
                 return Ok(());
             }
             // Early abort: check if the app binary crashed before the bridge came up.
-            if let Some(crash_line) = self.build_log.lock().await.check_for_app_crash() {
+            let crash_check = self.build_log.lock().await.check_for_app_crash();
+            if let Some(crash_line) = crash_check {
                 anyhow::bail!(
                     "App binary crashed before eval bridge came up.\n\
                      Matched log line: {crash_line}\n\n\
@@ -440,7 +442,7 @@ impl DesktopHttpBackend {
     }
 
     /// Atomically increment `/tmp/poly-devtools-rebuild-counter`.
-    async fn increment_rebuild_counter() -> anyhow::Result<()> {
+    fn increment_rebuild_counter() -> anyhow::Result<()> {
         let path = std::path::Path::new("/tmp/poly-devtools-rebuild-counter");
         let current: u64 = std::fs::read_to_string(path)
             .ok()
@@ -482,20 +484,20 @@ impl DesktopHttpBackend {
             if port_up && port_up_since.is_none() {
                 port_up_since = Some(std::time::Instant::now());
             }
-            if let Some(t0) = port_up_since {
-                if t0.elapsed().as_secs() > SILENT_HANG_THRESHOLD_SECS && bundle_status == 404 {
-                    anyhow::bail!(
-                        "dx serve appears wedged: server on port {port} has been answering \
-                         for >{SILENT_HANG_THRESHOLD_SECS}s but {WASM_BUNDLE_PATH} is still \
-                         404. The wasm half of dx serve sometimes silently fails to invoke \
-                         cargo build.\n\n\
-                         Fix: run\n  \
-                         cd apps/desktop && cargo build --target wasm32-unknown-unknown\n\
-                         to surface the real compile error, then retry launch_app."
-                    );
-                }
+            if let Some(t0) = port_up_since
+                && t0.elapsed().as_secs() > SILENT_HANG_THRESHOLD_SECS && bundle_status == 404 {
+                anyhow::bail!(
+                    "dx serve appears wedged: server on port {port} has been answering \
+                     for >{SILENT_HANG_THRESHOLD_SECS}s but {WASM_BUNDLE_PATH} is still \
+                     404. The wasm half of dx serve sometimes silently fails to invoke \
+                     cargo build.\n\n\
+                     Fix: run\n  \
+                     cd apps/desktop && cargo build --target wasm32-unknown-unknown\n\
+                     to surface the real compile error, then retry launch_app."
+                );
             }
-            if let Some(crash_line) = self.build_log.lock().await.check_for_app_crash() {
+            let wasm_crash = self.build_log.lock().await.check_for_app_crash();
+            if let Some(crash_line) = wasm_crash {
                 anyhow::bail!("dx serve crashed: {crash_line}");
             }
             tokio::time::sleep(std::time::Duration::from_millis(500)).await;
@@ -508,7 +510,8 @@ impl DesktopHttpBackend {
 
     /// Kill the tracked dx serve process (web shell mode).
     async fn kill_dx_serve(&self) {
-        if let Some(pid) = self.dx_serve_pid.lock().await.take() {
+        let old_pid = self.dx_serve_pid.lock().await.take();
+        if let Some(pid) = old_pid {
             drop(tokio::process::Command::new("kill")
                 .args(["-15", &pid.to_string()])
                 .status()
@@ -526,7 +529,8 @@ impl DesktopHttpBackend {
 
     /// Kill the poly-desktop-web shell process.
     async fn kill_web_shell(&self) {
-        if let Some(pid) = self.shell_pid.lock().await.take() {
+        let shell_pid = self.shell_pid.lock().await.take();
+        if let Some(pid) = shell_pid {
             drop(tokio::process::Command::new("kill")
                 .args(["-15", &pid.to_string()])
                 .status()
@@ -545,6 +549,8 @@ impl DesktopHttpBackend {
     /// 2. Poll port 3002 until ready (max 120s)
     /// 3. Launch `poly-desktop-web` (thin Wry shell)
     /// 4. Wait for eval bridge on port 9223 (max 30s)
+    // Sequential launch orchestration — linear state machine, splitting would fragment context.
+    #[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
     async fn bg_serve_and_launch_web_shell(&self, app_dir: &str, workspace: &str) {
         tracing::info!(
             "[bg] dx serve --platform web --port {WEB_SERVE_PORT} --fullstack  in {app_dir}"
@@ -617,7 +623,7 @@ impl DesktopHttpBackend {
             tracing::info!("[bg] dx serve exited");
         });
 
-        drop(Self::increment_rebuild_counter().await);
+        drop(Self::increment_rebuild_counter());
 
         // ── Wait for dx serve to actually serve the WASM bundle ───────────────
         match self.wait_for_wasm_bundle(WEB_SERVE_PORT, 600).await {
@@ -723,6 +729,8 @@ impl DesktopHttpBackend {
     /// 2. Restart dx serve
     /// 3. Poll port 3002
     /// 4. Call eval bridge POST /reload
+    // Sequential rebuild orchestration — linear state machine, splitting would fragment context.
+    #[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
     async fn bg_rebuild_web_shell(&self, app_dir: &str) {
         tracing::info!("[bg] rebuild: killing dx serve, restarting on port {WEB_SERVE_PORT}");
 
@@ -866,18 +874,15 @@ impl DesktopHttpBackend {
             spawn_log_reader(stderr, "dx-stderr", self.build_log.clone());
         }
 
-        let pid = match child.id() {
-            Some(p) => p,
-            None => {
-                self.finish_build_record(
-                    BuildLifecycleState::Failed,
-                    "dx serve process has no PID immediately after spawn.",
-                    "tokio process::id() returned None.",
-                    None,
-                )
-                .await;
-                return;
-            }
+        let Some(pid) = child.id() else {
+            self.finish_build_record(
+                BuildLifecycleState::Failed,
+                "dx serve process has no PID immediately after spawn.",
+                "tokio process::id() returned None.",
+                None,
+            )
+            .await;
+            return;
         };
         // Store the dx serve PID so kill_app can terminate it.
         *self.app_process.lock().await = Some(AppProcess { pid });
@@ -889,7 +894,7 @@ impl DesktopHttpBackend {
             *app_ref.lock().await = None;
         });
 
-        drop(Self::increment_rebuild_counter().await);
+        drop(Self::increment_rebuild_counter());
 
         // ── Wait for the eval bridge ──────────────────────────────────────────
         // Allow up to 120 s: dx serve must compile before launching the app.
@@ -921,7 +926,7 @@ impl DesktopHttpBackend {
 
 #[async_trait]
 impl DevtoolsBackend for DesktopHttpBackend {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "desktop-http"
     }
 
@@ -1022,7 +1027,8 @@ impl DevtoolsBackend for DesktopHttpBackend {
     async fn kill_app(&self) -> anyhow::Result<String> {
         if is_legacy_mode() {
             // Legacy: SIGTERM dx serve (which also terminates the devtools binary).
-            if let Some(proc) = self.app_process.lock().await.take() {
+            let legacy_proc = self.app_process.lock().await.take();
+            if let Some(proc) = legacy_proc {
                 drop(tokio::process::Command::new("kill")
                     .args(["-15", &proc.pid.to_string()])
                     .status()
@@ -1083,7 +1089,8 @@ impl DevtoolsBackend for DesktopHttpBackend {
 
     async fn hard_kill(&self) -> anyhow::Result<String> {
         if is_legacy_mode() {
-            if let Some(proc) = self.app_process.lock().await.take() {
+            let hk_legacy_proc = self.app_process.lock().await.take();
+            if let Some(proc) = hk_legacy_proc {
                 drop(tokio::process::Command::new("kill")
                     .args(["-9", &proc.pid.to_string()])
                     .status()
@@ -1103,13 +1110,15 @@ impl DevtoolsBackend for DesktopHttpBackend {
             )
         } else {
             // Web-shell mode: SIGKILL both dx serve and shell.
-            if let Some(pid) = self.dx_serve_pid.lock().await.take() {
+            let hk_dx_pid = self.dx_serve_pid.lock().await.take();
+            if let Some(pid) = hk_dx_pid {
                 drop(tokio::process::Command::new("kill")
                     .args(["-9", &pid.to_string()])
                     .status()
                     .await);
             }
-            if let Some(pid) = self.shell_pid.lock().await.take() {
+            let hk_shell_pid = self.shell_pid.lock().await.take();
+            if let Some(pid) = hk_shell_pid {
                 drop(tokio::process::Command::new("kill")
                     .args(["-9", &pid.to_string()])
                     .status()
@@ -1155,7 +1164,7 @@ impl DevtoolsBackend for DesktopHttpBackend {
 
         let app_dir = format!("{workspace}/apps/desktop");
 
-        drop(Self::increment_rebuild_counter().await);
+        drop(Self::increment_rebuild_counter());
 
         self.start_build_record(
             "rebuild_app",
@@ -1416,7 +1425,7 @@ impl DevtoolsBackend for DesktopHttpBackend {
     async fn hover_element(&self, selector: &str) -> anyhow::Result<String> {
         let escaped = selector.replace('\\', "\\\\").replace('\'', "\\'");
         let js = format!(
-            r#"return (function(){{
+            r"return (function(){{
                 var el=document.querySelector('{escaped}');
                 if(!el)return 'Error: No element found for selector: {escaped}';
                 el.scrollIntoView({{block:'center',behavior:'instant'}});
@@ -1427,7 +1436,7 @@ impl DevtoolsBackend for DesktopHttpBackend {
                 el.dispatchEvent(new MouseEvent('mouseover',opts));
                 el.dispatchEvent(new MouseEvent('mousemove',opts));
                 return 'Hovered over '+el.tagName.toLowerCase()+(el.id?'#'+el.id:'');
-            }})()"#
+            }})()"
         );
         self.js_eval(&js).await
     }
@@ -1464,22 +1473,19 @@ impl DevtoolsBackend for DesktopHttpBackend {
 
     async fn type_text(&self, text: &str, submit_key: Option<&str>) -> anyhow::Result<String> {
         let escaped_text = text.replace('\\', "\\\\").replace('\'', "\\'");
-        let key_js = match submit_key {
-            Some(k) => {
-                let ek = k.replace('\'', "\\'");
-                format!(
-                    "el.dispatchEvent(new KeyboardEvent('keydown',{{key:'{ek}',bubbles:true}}));\
-                     el.dispatchEvent(new KeyboardEvent('keyup',{{key:'{ek}',bubbles:true}}));"
-                )
-            }
-            None => String::new(),
-        };
-        let display = match submit_key {
-            Some(k) => format!("Typed \"{escaped_text}\" + {k}"),
-            None => format!("Typed \"{escaped_text}\""),
-        };
+        let key_js = submit_key.map_or_else(String::new, |k| {
+            let ek = k.replace('\'', "\\'");
+            format!(
+                "el.dispatchEvent(new KeyboardEvent('keydown',{{key:'{ek}',bubbles:true}}));\
+                 el.dispatchEvent(new KeyboardEvent('keyup',{{key:'{ek}',bubbles:true}}));"
+            )
+        });
+        let display = submit_key.map_or_else(
+            || format!("Typed \"{escaped_text}\""),
+            |k| format!("Typed \"{escaped_text}\" + {k}"),
+        );
         let js = format!(
-            r#"return (function(){{
+            r"return (function(){{
                 var el=document.activeElement||document.body;
                 var t='{escaped_text}';
                 if(el.tagName==='INPUT'||el.tagName==='TEXTAREA'){{
@@ -1498,7 +1504,7 @@ impl DevtoolsBackend for DesktopHttpBackend {
                 }}
                 {key_js}
                 return '{display}';
-            }})()"#
+            }})()"
         );
         self.js_eval(&js).await
     }
@@ -1574,7 +1580,7 @@ fn extract_cli_flag<'a>(args: &'a [String], flag: &str) -> Option<&'a str> {
 }
 
 /// CLI help text for the desktop MCP.
-fn desktop_cli_help() -> &'static str {
+const fn desktop_cli_help() -> &'static str {
     "poly-desktop-devtools-mcp — CLI mode (PREFERRED over MCP)
 
 COMMANDS:
@@ -1617,6 +1623,8 @@ async fn cli_screenshot_cmd(
 }
 
 /// Dispatch a single CLI command for the desktop backend.
+// Dispatch table — each arm is a different command; complexity is inherent.
+#[allow(clippy::cognitive_complexity)]
 async fn dispatch_desktop_cli(
     backend: &DesktopHttpBackend,
     cmd: &str,
@@ -1693,7 +1701,7 @@ async fn dispatch_desktop_cli(
             backend
                 .navigate_page(&NavigateParams {
                     nav_type: "url".to_string(),
-                    url: Some(url.to_string()),
+                    url: Some(url.clone()),
                     ..Default::default()
                 })
                 .await

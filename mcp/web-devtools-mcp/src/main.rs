@@ -203,6 +203,24 @@ where
     });
 }
 
+/// Convert an f64 viewport coordinate to i64 for CDP dispatch.
+/// Bounds-checked: NaN → 0, out-of-range → i64::MAX / i64::MIN.
+fn cdp_f64_to_i64(v: f64) -> i64 {
+    if v.is_nan() {
+        return 0;
+    }
+    if v >= 9_223_372_036_854_775_807.0_f64 {
+        return i64::MAX;
+    }
+    if v <= -9_223_372_036_854_775_808.0_f64 {
+        return i64::MIN;
+    }
+    // SAFETY: bounds checked above — truncation is intentional.
+    #[allow(clippy::cast_possible_truncation, clippy::as_conversions)]
+    let out = v.round() as i64;
+    out
+}
+
 impl ChromeCdpBackend {
     fn new(headless: bool) -> Self {
         Self {
@@ -269,8 +287,8 @@ impl ChromeCdpBackend {
             // but bundle is still 404. dx serve never invoked the wasm build,
             // or rustc died without surfacing. Abort early with actionable
             // guidance rather than burning the full timeout.
-            if let Some(t0) = port_up_since {
-                if t0.elapsed().as_secs() > SILENT_HANG_THRESHOLD_SECS && bundle_status == 404 {
+            if let Some(t0) = port_up_since
+                && t0.elapsed().as_secs() > SILENT_HANG_THRESHOLD_SECS && bundle_status == 404 {
                     anyhow::bail!(
                         "dx serve appears wedged: server on port {WEB_SERVER_PORT} has been \
                          answering for >{SILENT_HANG_THRESHOLD_SECS}s but {WASM_BUNDLE_PATH} \
@@ -281,11 +299,11 @@ impl ChromeCdpBackend {
                          --no-default-features --features \"dev-plugins,web\"\n\
                          to surface the real compile error, then retry launch_app."
                     );
-                }
             }
 
             // Early abort: check if the build/app crashed.
-            if let Some(crash_line) = self.build_log.lock().await.check_for_app_crash() {
+            let crash_check = self.build_log.lock().await.check_for_app_crash();
+            if let Some(crash_line) = crash_check {
                 anyhow::bail!(
                     "Build/app crashed before web server came up.\n\
                      Matched log line: {crash_line}\n\n\
@@ -314,6 +332,7 @@ impl ChromeCdpBackend {
             buffer.push_line(format!(
                 "[meta] trigger={trigger} mode={mode} command={command_line} cwd={working_directory}"
             ));
+            drop(buffer);
             seq
         };
         let diagnostics = BuildDiagnostics {
@@ -525,11 +544,8 @@ impl ChromeCdpBackend {
         if self.headless {
             // Headless mode: no visible window
             args.insert(0, "--headless=new".to_string());
-            args.push(format!("http://127.0.0.1:{WEB_SERVER_PORT}"));
-        } else {
-            // Visible mode: ensure window is created and visible
-            args.push(format!("http://127.0.0.1:{WEB_SERVER_PORT}"));
         }
+        args.push(format!("http://127.0.0.1:{WEB_SERVER_PORT}"));
 
         args
     }
@@ -538,7 +554,8 @@ impl ChromeCdpBackend {
     /// Returns immediately after Chrome is spawned.
     async fn spawn_chrome_with_watchdog(&self) -> anyhow::Result<()> {
         // Cancel any existing watchdog
-        if let Some(handle) = self.watchdog_handle.lock().await.take() {
+        let existing_watchdog = self.watchdog_handle.lock().await.take();
+        if let Some(handle) = existing_watchdog {
             handle.abort();
         }
 
@@ -699,9 +716,9 @@ impl ChromeCdpBackend {
                     let resp: Value = serde_json::from_str(&text)?;
                     if resp.get("id").and_then(Value::as_i64) == Some(id) {
                         if let Some(err) = resp.get("error") {
-                            anyhow::bail!("CDP error: {}", err);
+                            anyhow::bail!("CDP error: {err}");
                         }
-                        return Ok(resp.get("result").cloned().unwrap_or(json!({})));
+                        return Ok(resp.get("result").cloned().unwrap_or_else(|| json!({})));
                     }
                     // Not our response — could be an event, skip it
                 }
@@ -810,7 +827,7 @@ impl ChromeCdpBackend {
             .cdp_send(
                 "Runtime.evaluate",
                 json!({
-                    "expression": r#"(function(){
+                    "expression": r"(function(){
                         var appRoot = document.querySelector('#main');
                         var toast = document.querySelector('#__dx-toast');
                         if (appRoot && toast) {
@@ -819,7 +836,7 @@ impl ChromeCdpBackend {
                             return JSON.stringify({ hidden: true, reason: 'app-root-present' });
                         }
                         return JSON.stringify({ hidden: false, appRoot: !!appRoot, toast: !!toast });
-                    })()"#,
+                    })()",
                     "returnByValue": true,
                     "awaitPromise": true,
                 }),
@@ -833,9 +850,12 @@ impl ChromeCdpBackend {
     /// background process. `dx serve` compiles the WASM bundle and serves it on
     /// port {WEB_SERVER_PORT} — no python3 static server needed. We poll for HTTP
     /// readiness then launch Chrome via the watchdog.
+    // Sequential launch orchestration — linear state machine, splitting would fragment context.
+    #[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
     async fn bg_build_and_launch(&self, app_dir: &str) {
         // ── Kill any existing dx serve process ────────────────────────────────
-        if let Some(pid) = self.dx_serve_pid.lock().await.take() {
+        let old_pid = self.dx_serve_pid.lock().await.take();
+        if let Some(pid) = old_pid {
             drop(tokio::process::Command::new("kill")
                 .args(["-9", &pid.to_string()])
                 .status()
@@ -945,9 +965,12 @@ impl ChromeCdpBackend {
     /// Kills the running `dx serve`, spawns a fresh one to recompile and re-serve
     /// the WASM bundle, then reloads the Chrome page via CDP. On success the agent
     /// only needs to call `connect_cdp` — the page reload is done automatically.
+    // Sequential rebuild orchestration — linear state machine, splitting would fragment context.
+    #[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
     async fn bg_rebuild(&self, app_dir: &str) {
         // ── Kill current dx serve ─────────────────────────────────────────────
-        if let Some(pid) = self.dx_serve_pid.lock().await.take() {
+        let old_pid = self.dx_serve_pid.lock().await.take();
+        if let Some(pid) = old_pid {
             drop(tokio::process::Command::new("kill")
                 .args(["-9", &pid.to_string()])
                 .status()
@@ -1082,7 +1105,7 @@ impl ChromeCdpBackend {
 
 #[async_trait]
 impl DevtoolsBackend for ChromeCdpBackend {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "web-cdp"
     }
 
@@ -1107,7 +1130,8 @@ impl DevtoolsBackend for ChromeCdpBackend {
 
         // ── Step 0: Kill Chrome / static server synchronously (fast) ─────────
         self.shutting_down.store(true, Ordering::Relaxed);
-        if let Some(handle) = self.watchdog_handle.lock().await.take() {
+        let old_watchdog = self.watchdog_handle.lock().await.take();
+        if let Some(handle) = old_watchdog {
             handle.abort();
         }
         *self.ws.lock().await = None;
@@ -1119,7 +1143,8 @@ impl DevtoolsBackend for ChromeCdpBackend {
             .args(["-f", "dx.*serve.*web"])
             .status()
             .await);
-        if let Some(pid) = self.dx_serve_pid.lock().await.take() {
+        let old_pid_launch = self.dx_serve_pid.lock().await.take();
+        if let Some(pid) = old_pid_launch {
             drop(tokio::process::Command::new("kill")
                 .args(["-9", &pid.to_string()])
                 .status()
@@ -1164,7 +1189,8 @@ impl DevtoolsBackend for ChromeCdpBackend {
         *self.ws.lock().await = None;
 
         // Cancel watchdog task.
-        if let Some(handle) = self.watchdog_handle.lock().await.take() {
+        let kill_watchdog = self.watchdog_handle.lock().await.take();
+        if let Some(handle) = kill_watchdog {
             handle.abort();
         }
 
@@ -1174,7 +1200,8 @@ impl DevtoolsBackend for ChromeCdpBackend {
             .status()
             .await);
         // Kill static file server by PID if we have it.
-        if let Some(pid) = self.dx_serve_pid.lock().await.take() {
+        let kill_pid = self.dx_serve_pid.lock().await.take();
+        if let Some(pid) = kill_pid {
             drop(tokio::process::Command::new("kill")
                 .args(["-9", &pid.to_string()])
                 .status()
@@ -1192,6 +1219,8 @@ impl DevtoolsBackend for ChromeCdpBackend {
         )
     }
 
+    // CDP connect orchestrates discovery + WS handshake + post-connect setup — inherently long.
+    #[allow(clippy::too_many_lines)]
     async fn connect(&self) -> anyhow::Result<String> {
         // Clear any stale connection first
         *self.ws.lock().await = None;
@@ -1318,6 +1347,7 @@ impl DevtoolsBackend for ChromeCdpBackend {
     }
 
     async fn take_screenshot(&self, params: &ScreenshotParams) -> anyhow::Result<ScreenshotResult> {
+        use base64::Engine as _;
         self.suppress_rebuild_toast_if_app_ready().await;
 
         // Use CDP format/quality parameters.
@@ -1363,7 +1393,6 @@ impl DevtoolsBackend for ChromeCdpBackend {
             .get("data")
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow::anyhow!("No data in screenshot response"))?;
-        use base64::Engine as _;
         let image_bytes = base64::engine::general_purpose::STANDARD.decode(b64)?;
         Ok(ScreenshotResult {
             image_bytes,
@@ -1413,24 +1442,8 @@ impl DevtoolsBackend for ChromeCdpBackend {
     async fn click_at(&self, x: f64, y: f64, dbl_click: bool) -> anyhow::Result<String> {
         let count: i64 = if dbl_click { 2_i64 } else { 1_i64 };
         // CSS-pixel viewport coords are bounded; CDP wants integers.
-        fn f64_to_i64(v: f64) -> i64 {
-            if v.is_nan() {
-                return 0;
-            }
-            if v >= 9_223_372_036_854_775_807.0_f64 {
-                return i64::MAX;
-            }
-            if v <= -9_223_372_036_854_775_808.0_f64 {
-                return i64::MIN;
-            }
-            // SAFETY: bounds checked above.
-            // lint-allow-unused: bounds checked + intentional truncation
-            #[allow(clippy::cast_possible_truncation, clippy::as_conversions)]
-            let out = v.round() as i64;
-            out
-        }
-        let xi = f64_to_i64(x);
-        let yi = f64_to_i64(y);
+        let xi = cdp_f64_to_i64(x);
+        let yi = cdp_f64_to_i64(y);
         // Use CDP Input.dispatchMouseEvent for precise clicking.
         for click_num in 1_i64..=count {
             self.cdp_send(
@@ -1477,10 +1490,10 @@ impl DevtoolsBackend for ChromeCdpBackend {
             )
             .await?;
         }
-        let display = match submit_key {
-            Some(k) => format!("Typed \"{text}\" + {k}"),
-            None => format!("Typed \"{text}\""),
-        };
+        let display = submit_key.map_or_else(
+            || format!("Typed \"{text}\""),
+            |k| format!("Typed \"{text}\" + {k}"),
+        );
         Ok(display)
     }
 
@@ -1514,23 +1527,24 @@ impl DevtoolsBackend for ChromeCdpBackend {
         // A3.2: write the dev.autoseed_disabled marker so the next boot does
         // not re-seed demo accounts. Mirrors the in-app Nuke flow in
         // crates/core/src/ui/settings/general.rs.
-        let _ = self
-            .client
-            .post(format!("http://127.0.0.1:{WEB_SERVER_PORT}/host/kv/set"))
-            .header("Content-Type", "application/json")
-            .body(r#"{"key":"dev.autoseed_disabled","value":true}"#)
-            .timeout(std::time::Duration::from_secs(5))
-            .send()
-            .await;
+        drop(
+            self.client
+                .post(format!("http://127.0.0.1:{WEB_SERVER_PORT}/host/kv/set"))
+                .header("Content-Type", "application/json")
+                .body(r#"{"key":"dev.autoseed_disabled","value":true}"#)
+                .timeout(std::time::Duration::from_secs(5))
+                .send()
+                .await,
+        );
         self.js_eval(
-            r#"(function(){
+            r"(function(){
                 localStorage.clear();
                 sessionStorage.clear();
                 indexedDB.databases().then(function(dbs){
                     dbs.forEach(function(db){ indexedDB.deleteDatabase(db.name); });
                 });
                 return 'Browser-side storage cleared';
-            })()"#,
+            })()",
         )
         .await?;
         self.cdp_send("Page.reload", json!({ "ignoreCache": true }))
@@ -1550,12 +1564,14 @@ impl DevtoolsBackend for ChromeCdpBackend {
         *self.ws.lock().await = None;
 
         // Cancel watchdog task.
-        if let Some(handle) = self.watchdog_handle.lock().await.take() {
+        let hk_watchdog = self.watchdog_handle.lock().await.take();
+        if let Some(handle) = hk_watchdog {
             handle.abort();
         }
 
         // SIGKILL static file server by PID.
-        if let Some(pid) = self.dx_serve_pid.lock().await.take() {
+        let hk_pid = self.dx_serve_pid.lock().await.take();
+        if let Some(pid) = hk_pid {
             drop(tokio::process::Command::new("kill")
                 .args(["-9", &pid.to_string()])
                 .status()
@@ -1741,6 +1757,8 @@ impl DevtoolsBackend for ChromeCdpBackend {
         ]
     }
 
+    // Extension tool dispatch — each arm handles a different tool; length is inherent.
+    #[allow(clippy::too_many_lines)]
     async fn handle_extension_tool(
         &self,
         name: &str,
@@ -1904,7 +1922,7 @@ fn web_cli_write(text: &str) -> anyhow::Result<()> {
 }
 
 /// Web CLI help text.
-fn web_cli_help() -> &'static str {
+const fn web_cli_help() -> &'static str {
     "poly-web-devtools-mcp — CLI mode (PREFERRED over MCP)
 
 COMMANDS:
@@ -1962,6 +1980,8 @@ fn web_detect_workspace() -> String {
 }
 
 /// Dispatch a CLI command for the web backend.
+// Dispatch table — each arm is a different command; complexity is inherent.
+#[allow(clippy::cognitive_complexity)]
 async fn dispatch_web_cli(
     backend: &ChromeCdpBackend,
     cmd: &str,
@@ -2050,7 +2070,7 @@ async fn dispatch_web_cli(
             backend
                 .navigate_page(&NavigateParams {
                     nav_type: "url".to_string(),
-                    url: Some(url.to_string()),
+                    url: Some(url.clone()),
                     ..Default::default()
                 })
                 .await

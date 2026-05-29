@@ -123,6 +123,24 @@ struct ElectronCdpBackend {
     shutting_down: Arc<AtomicBool>,
 }
 
+/// Convert an f64 viewport coordinate to i64 for CDP dispatch.
+/// Bounds-checked: NaN → 0, out-of-range → i64::MAX / i64::MIN.
+fn cdp_f64_to_i64(v: f64) -> i64 {
+    if v.is_nan() {
+        return 0;
+    }
+    if v >= 9_223_372_036_854_775_807.0_f64 {
+        return i64::MAX;
+    }
+    if v <= -9_223_372_036_854_775_808.0_f64 {
+        return i64::MIN;
+    }
+    // SAFETY: bounds checked above — truncation is intentional.
+    #[allow(clippy::cast_possible_truncation, clippy::as_conversions)]
+    let out = v.round() as i64;
+    out
+}
+
 impl ElectronCdpBackend {
     fn new() -> Self {
         Self {
@@ -157,6 +175,7 @@ impl ElectronCdpBackend {
             buffer.push_line(format!(
                 "[meta] trigger={trigger} mode={mode} command={command_line} cwd={working_directory}"
             ));
+            drop(buffer);
             seq
         };
         let diagnostics = BuildDiagnostics {
@@ -424,7 +443,7 @@ impl ElectronCdpBackend {
                         if let Some(err) = resp.get("error") {
                             anyhow::bail!("CDP error from method '{method}': {err}");
                         }
-                        return Ok(resp.get("result").cloned().unwrap_or(json!({})));
+                        return Ok(resp.get("result").cloned().unwrap_or_else(|| json!({})));
                     }
                     // Not our response — CDP event or another command's response, skip.
                 }
@@ -529,7 +548,7 @@ impl ElectronCdpBackend {
             .cdp_send(
                 "Runtime.evaluate",
                 json!({
-                    "expression": r#"(function(){
+                    "expression": r"(function(){
                         var appRoot = document.querySelector('#main');
                         var toast = document.querySelector('#__dx-toast');
                         if (appRoot && toast) {
@@ -538,7 +557,7 @@ impl ElectronCdpBackend {
                             return JSON.stringify({ hidden: true, reason: 'app-root-present' });
                         }
                         return JSON.stringify({ hidden: false, appRoot: !!appRoot, toast: !!toast });
-                    })()"#,
+                    })()",
                     "returnByValue": true,
                     "awaitPromise": true,
                 }),
@@ -580,19 +599,18 @@ impl ElectronCdpBackend {
             if port_up && port_up_since.is_none() {
                 port_up_since = Some(std::time::Instant::now());
             }
-            if let Some(t0) = port_up_since {
-                if t0.elapsed().as_secs() > SILENT_HANG_THRESHOLD_SECS && bundle_status == 404 {
-                    anyhow::bail!(
-                        "dx serve appears wedged: server on port {port} has been answering \
-                         for >{SILENT_HANG_THRESHOLD_SECS}s but {WASM_BUNDLE_PATH} is still \
-                         404. The wasm half of dx serve sometimes silently fails to invoke \
-                         cargo build.\n\n\
-                         Fix: run\n  \
-                         cd apps/desktop-electron && cargo build \
-                         --target wasm32-unknown-unknown\n\
-                         to surface the real compile error, then retry launch_app."
-                    );
-                }
+            if let Some(t0) = port_up_since
+                && t0.elapsed().as_secs() > SILENT_HANG_THRESHOLD_SECS && bundle_status == 404 {
+                anyhow::bail!(
+                    "dx serve appears wedged: server on port {port} has been answering \
+                     for >{SILENT_HANG_THRESHOLD_SECS}s but {WASM_BUNDLE_PATH} is still \
+                     404. The wasm half of dx serve sometimes silently fails to invoke \
+                     cargo build.\n\n\
+                     Fix: run\n  \
+                     cd apps/desktop-electron && cargo build \
+                     --target wasm32-unknown-unknown\n\
+                     to surface the real compile error, then retry launch_app."
+                );
             }
             tokio::time::sleep(Duration::from_millis(500)).await;
         }
@@ -604,7 +622,8 @@ impl ElectronCdpBackend {
 
     /// Kill the tracked `dx serve` process and wait briefly for it to exit.
     async fn kill_dx_serve(&self) {
-        if let Some(pid) = self.dx_serve_pid.lock().await.take() {
+        let old_dx_pid = self.dx_serve_pid.lock().await.take();
+        if let Some(pid) = old_dx_pid {
             drop(tokio::process::Command::new("kill")
                 .args(["-15", &pid.to_string()])
                 .status()
@@ -627,6 +646,8 @@ impl ElectronCdpBackend {
     /// Starts `dx serve --platform web --port DX_SERVE_PORT`, waits for the
     /// dev server to become ready, then launches Electron with `POLY_DEV=1` so
     /// it loads from the live dev server.  Electron stays alive across rebuilds.
+    // Sequential launch orchestration — linear state machine, splitting would fragment context.
+    #[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
     async fn bg_serve_and_launch_electron(
         self,
         app_dir: String,
@@ -836,6 +857,8 @@ impl ElectronCdpBackend {
     /// Restarts `dx serve --platform web` (recompiles WASM) then sends a CDP
     /// `Page.reload` so Electron picks up the fresh bundle.  Electron is NOT
     /// killed — the window stays alive, only the page content reloads.
+    // Sequential rebuild orchestration — linear state machine, splitting would fragment context.
+    #[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
     async fn bg_restart_serve_and_reload(self, app_dir: String) {
         tracing::info!(
             "[bg] rebuild: killing dx serve, restarting dx serve --platform web --port {DX_SERVE_PORT}"
@@ -962,7 +985,7 @@ impl ElectronCdpBackend {
 
 #[async_trait]
 impl DevtoolsBackend for ElectronCdpBackend {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "electron-cdp"
     }
 
@@ -987,7 +1010,8 @@ impl DevtoolsBackend for ElectronCdpBackend {
 
         // Kill existing dx serve and ALL Electron processes from this app.
         self.kill_dx_serve().await;
-        if let Some(pid) = self.electron_pid.lock().await.take() {
+        let old_electron_pid = self.electron_pid.lock().await.take();
+        if let Some(pid) = old_electron_pid {
             drop(tokio::process::Command::new("kill")
                 .args(["-15", &pid.to_string()])
                 .status()
@@ -1040,7 +1064,8 @@ impl DevtoolsBackend for ElectronCdpBackend {
         *self.ws.lock().await = None;
         self.kill_dx_serve().await;
 
-        if let Some(pid) = self.electron_pid.lock().await.take() {
+        let kill_electron_pid = self.electron_pid.lock().await.take();
+        if let Some(pid) = kill_electron_pid {
             drop(tokio::process::Command::new("kill")
                 .args(["-15", &pid.to_string()])
                 .status()
@@ -1062,7 +1087,8 @@ impl DevtoolsBackend for ElectronCdpBackend {
         *self.ws.lock().await = None;
         self.kill_dx_serve().await;
 
-        if let Some(pid) = self.electron_pid.lock().await.take() {
+        let hk_electron_pid = self.electron_pid.lock().await.take();
+        if let Some(pid) = hk_electron_pid {
             drop(tokio::process::Command::new("kill")
                 .args(["-9", &pid.to_string()])
                 .status()
@@ -1134,14 +1160,14 @@ impl DevtoolsBackend for ElectronCdpBackend {
     async fn reset_app(&self) -> anyhow::Result<String> {
         // Clear all web storage (Poly WASM uses localStorage/IndexedDB when running in Electron).
         self.js_eval(
-            r#"(function(){
+            r"(function(){
                 localStorage.clear();
                 sessionStorage.clear();
                 indexedDB.databases().then(function(dbs){
                     dbs.forEach(function(db){ indexedDB.deleteDatabase(db.name); });
                 });
                 return 'Storage cleared';
-            })()"#,
+            })()",
         )
         .await?;
 
@@ -1246,6 +1272,7 @@ impl DevtoolsBackend for ElectronCdpBackend {
     // ── Core primitives ─────────────────────────────────────────────────────
 
     async fn take_screenshot(&self, params: &ScreenshotParams) -> anyhow::Result<ScreenshotResult> {
+        use base64::Engine as _;
         self.suppress_rebuild_toast_if_app_ready().await;
 
         let format = match params.format.as_str() {
@@ -1302,7 +1329,6 @@ impl DevtoolsBackend for ElectronCdpBackend {
                         anyhow::anyhow!("No data field in CDP captureScreenshot response")
                     })?;
 
-                    use base64::Engine as _;
                     let image_bytes = base64::engine::general_purpose::STANDARD.decode(b64)?;
                     return Ok(ScreenshotResult {
                         image_bytes,
@@ -1367,24 +1393,8 @@ impl DevtoolsBackend for ElectronCdpBackend {
     async fn click_at(&self, x: f64, y: f64, dbl_click: bool) -> anyhow::Result<String> {
         let count: i64 = if dbl_click { 2_i64 } else { 1_i64 };
         // CSS-pixel viewport coords are bounded; CDP wants integers.
-        fn f64_to_i64(v: f64) -> i64 {
-            if v.is_nan() {
-                return 0;
-            }
-            if v >= 9_223_372_036_854_775_807.0_f64 {
-                return i64::MAX;
-            }
-            if v <= -9_223_372_036_854_775_808.0_f64 {
-                return i64::MIN;
-            }
-            // SAFETY: bounds checked above.
-            // lint-allow-unused: bounds checked + intentional truncation
-            #[allow(clippy::cast_possible_truncation, clippy::as_conversions)]
-            let out = v.round() as i64;
-            out
-        }
-        let xi = f64_to_i64(x);
-        let yi = f64_to_i64(y);
+        let xi = cdp_f64_to_i64(x);
+        let yi = cdp_f64_to_i64(y);
 
         for click_num in 1_i64..=count {
             self.cdp_send(
@@ -1442,10 +1452,10 @@ impl DevtoolsBackend for ElectronCdpBackend {
             )
             .await?;
         }
-        Ok(match submit_key {
-            Some(k) => format!("Typed \"{text}\" + {k}"),
-            None => format!("Typed \"{text}\""),
-        })
+        Ok(submit_key.map_or_else(
+            || format!("Typed \"{text}\""),
+            |k| format!("Typed \"{text}\" + {k}"),
+        ))
     }
 
     // ── Navigation ──────────────────────────────────────────────────────────
@@ -1623,7 +1633,7 @@ fn electron_cli_write(text: &str) -> anyhow::Result<()> {
 }
 
 /// Electron CLI help text.
-fn electron_cli_help() -> &'static str {
+const fn electron_cli_help() -> &'static str {
     "poly-electron-devtools-mcp — CLI mode (PREFERRED over MCP)
 
 COMMANDS:
@@ -1681,6 +1691,8 @@ async fn electron_cli_screenshot(
 }
 
 /// Dispatch a CLI command for the electron backend.
+// Dispatch table — each arm is a different command; complexity is inherent.
+#[allow(clippy::cognitive_complexity)]
 async fn dispatch_electron_cli(
     backend: &ElectronCdpBackend,
     cmd: &str,
@@ -1771,7 +1783,7 @@ async fn dispatch_electron_cli(
             backend
                 .navigate_page(&NavigateParams {
                     nav_type: "url".to_string(),
-                    url: Some(url.to_string()),
+                    url: Some(url.clone()),
                     ..Default::default()
                 })
                 .await
