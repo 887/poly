@@ -34,7 +34,7 @@ use poly_client::{self as pc};
 // ─── PresenceStatus ────────────────────────────────────────────────
 
 /// Convert WIT `PresenceStatus` → poly-client `PresenceStatus`.
-pub(crate) fn from_wit_presence(ps: wit::PresenceStatus) -> pc::PresenceStatus {
+pub(crate) const fn from_wit_presence(ps: wit::PresenceStatus) -> pc::PresenceStatus {
     match ps {
         wit::PresenceStatus::Online => pc::PresenceStatus::Online,
         wit::PresenceStatus::Idle => pc::PresenceStatus::Idle,
@@ -45,25 +45,24 @@ pub(crate) fn from_wit_presence(ps: wit::PresenceStatus) -> pc::PresenceStatus {
 }
 
 /// Convert poly-client `PresenceStatus` → WIT `PresenceStatus`.
-pub(crate) fn to_wit_presence(ps: pc::PresenceStatus) -> wit::PresenceStatus {
+pub(crate) const fn to_wit_presence(ps: pc::PresenceStatus) -> wit::PresenceStatus {
     match ps {
         pc::PresenceStatus::Online => wit::PresenceStatus::Online,
         pc::PresenceStatus::Idle => wit::PresenceStatus::Idle,
         pc::PresenceStatus::DoNotDisturb => wit::PresenceStatus::DoNotDisturb,
         pc::PresenceStatus::Invisible => wit::PresenceStatus::Invisible,
-        pc::PresenceStatus::Offline => wit::PresenceStatus::Offline,
         // The WIT wire type does not yet declare an Unknown variant.
         // Map "no information" to Offline on egress so older WASM plugins
         // still receive a value they can match on; native callers continue
         // to see Unknown via the in-process Rust trait.
-        pc::PresenceStatus::Unknown => wit::PresenceStatus::Offline,
+        pc::PresenceStatus::Offline | pc::PresenceStatus::Unknown => wit::PresenceStatus::Offline,
     }
 }
 
 // ─── ChannelType ───────────────────────────────────────────────────
 
 /// Convert WIT `ChannelType` → poly-client `ChannelType`.
-pub(crate) fn from_wit_channel_type(ct: wit::ChannelType) -> pc::ChannelType {
+pub(crate) const fn from_wit_channel_type(ct: wit::ChannelType) -> pc::ChannelType {
     match ct {
         wit::ChannelType::Text => pc::ChannelType::Text,
         wit::ChannelType::Voice => pc::ChannelType::Voice,
@@ -124,7 +123,7 @@ pub(crate) fn from_wit_forum_post(p: wit::ForumPost) -> pc::ForumPost {
 // ─── File / code-explorer types ────────────────────────────────────
 
 /// Convert WIT `FileKind` → poly-client `FileKind`.
-pub(crate) fn from_wit_file_kind(k: wit::FileKind) -> pc::FileKind {
+pub(crate) const fn from_wit_file_kind(k: wit::FileKind) -> pc::FileKind {
     match k {
         wit::FileKind::File => pc::FileKind::File,
         wit::FileKind::Directory => pc::FileKind::Directory,
@@ -159,7 +158,7 @@ pub(crate) fn from_wit_file_content(c: wit::FileContent) -> pc::FileContent {
 /// The WIT interface still uses the legacy flat-bool shape. We project
 /// those bools onto the richer enum-based Rust shape conservatively:
 /// unknown axes (friends, notifications) default to `None`.
-pub(crate) fn from_wit_backend_capabilities(c: wit::BackendCapabilities) -> pc::BackendCapabilities {
+pub(crate) const fn from_wit_backend_capabilities(c: wit::BackendCapabilities) -> pc::BackendCapabilities {
     pc::BackendCapabilities {
         messaging: if c.supports_send_messages {
             pc::MessagingModel::Full
@@ -671,7 +670,7 @@ pub(crate) fn from_wit_icon_source(i: wit_ui_common::IconSource) -> pc::IconSour
     }
 }
 
-pub(crate) fn from_wit_cursor_kind(k: wit_ui_common::CursorKind) -> pc::CursorKind {
+pub(crate) const fn from_wit_cursor_kind(k: wit_ui_common::CursorKind) -> pc::CursorKind {
     match k {
         wit_ui_common::CursorKind::Offset => pc::CursorKind::Offset,
         wit_ui_common::CursorKind::Timestamp => pc::CursorKind::Timestamp,
@@ -680,7 +679,7 @@ pub(crate) fn from_wit_cursor_kind(k: wit_ui_common::CursorKind) -> pc::CursorKi
     }
 }
 
-pub(crate) fn to_wit_cursor_kind(k: pc::CursorKind) -> wit_ui_common::CursorKind {
+pub(crate) const fn to_wit_cursor_kind(k: pc::CursorKind) -> wit_ui_common::CursorKind {
     match k {
         pc::CursorKind::Offset => wit_ui_common::CursorKind::Offset,
         pc::CursorKind::Timestamp => wit_ui_common::CursorKind::Timestamp,
@@ -705,7 +704,7 @@ pub(crate) fn to_wit_cursor(c: pc::Cursor) -> wit_ui_common::Cursor {
 
 // ─── Menus ─────────────────────────────────────────────────────────
 
-pub(crate) fn from_wit_menu_target_kind(t: wit_menus::MenuTargetKind) -> pc::MenuTargetKind {
+pub(crate) const fn from_wit_menu_target_kind(t: wit_menus::MenuTargetKind) -> pc::MenuTargetKind {
     match t {
         wit_menus::MenuTargetKind::Category => pc::MenuTargetKind::Category,
         wit_menus::MenuTargetKind::Channel => pc::MenuTargetKind::Channel,
@@ -716,7 +715,7 @@ pub(crate) fn from_wit_menu_target_kind(t: wit_menus::MenuTargetKind) -> pc::Men
     }
 }
 
-pub(crate) fn to_wit_menu_target_kind(t: pc::MenuTargetKind) -> wit_menus::MenuTargetKind {
+pub(crate) const fn to_wit_menu_target_kind(t: pc::MenuTargetKind) -> wit_menus::MenuTargetKind {
     match t {
         pc::MenuTargetKind::Category => wit_menus::MenuTargetKind::Category,
         pc::MenuTargetKind::Channel => wit_menus::MenuTargetKind::Channel,
@@ -727,7 +726,7 @@ pub(crate) fn to_wit_menu_target_kind(t: pc::MenuTargetKind) -> wit_menus::MenuT
     }
 }
 
-pub(crate) fn from_wit_menu_slot(s: wit_menus::MenuSlot) -> pc::MenuSlot {
+pub(crate) const fn from_wit_menu_slot(s: wit_menus::MenuSlot) -> pc::MenuSlot {
     match s {
         wit_menus::MenuSlot::Top => pc::MenuSlot::Top,
         wit_menus::MenuSlot::AfterFavorites => pc::MenuSlot::AfterFavorites,
@@ -736,7 +735,7 @@ pub(crate) fn from_wit_menu_slot(s: wit_menus::MenuSlot) -> pc::MenuSlot {
     }
 }
 
-pub(crate) fn from_wit_menu_item_variant(v: wit_menus::MenuItemVariant) -> pc::MenuItemVariant {
+pub(crate) const fn from_wit_menu_item_variant(v: wit_menus::MenuItemVariant) -> pc::MenuItemVariant {
     match v {
         wit_menus::MenuItemVariant::Normal => pc::MenuItemVariant::Normal,
         wit_menus::MenuItemVariant::Destructive => pc::MenuItemVariant::Destructive,
@@ -775,7 +774,7 @@ pub(crate) fn from_wit_menu_item(item: wit_menus::MenuItem) -> pc::MenuItem {
     }
 }
 
-pub(crate) fn from_wit_toast_tone(t: wit_menus::ToastTone) -> pc::ToastTone {
+pub(crate) const fn from_wit_toast_tone(t: wit_menus::ToastTone) -> pc::ToastTone {
     match t {
         wit_menus::ToastTone::Info => pc::ToastTone::Info,
         wit_menus::ToastTone::Success => pc::ToastTone::Success,
@@ -836,7 +835,7 @@ pub(crate) fn from_wit_action_outcome(o: wit_menus::ActionOutcome) -> pc::Action
 
 // ─── Settings ──────────────────────────────────────────────────────
 
-pub(crate) fn from_wit_setting_kind(k: wit_settings::SettingKind) -> pc::SettingKind {
+pub(crate) const fn from_wit_setting_kind(k: wit_settings::SettingKind) -> pc::SettingKind {
     match k {
         wit_settings::SettingKind::Toggle => pc::SettingKind::Toggle,
         wit_settings::SettingKind::TextInput => pc::SettingKind::TextInput,
@@ -855,7 +854,7 @@ pub(crate) fn from_wit_setting_descriptor(d: wit_settings::SettingDescriptor) ->
     }
 }
 
-pub(crate) fn from_wit_settings_scope(s: wit_settings::SettingsScope) -> pc::SettingsScope {
+pub(crate) const fn from_wit_settings_scope(s: wit_settings::SettingsScope) -> pc::SettingsScope {
     match s {
         wit_settings::SettingsScope::AccountGlobal => pc::SettingsScope::AccountGlobal,
         wit_settings::SettingsScope::PerServer => pc::SettingsScope::PerServer,
@@ -864,7 +863,7 @@ pub(crate) fn from_wit_settings_scope(s: wit_settings::SettingsScope) -> pc::Set
     }
 }
 
-pub(crate) fn to_wit_settings_scope(s: pc::SettingsScope) -> wit_settings::SettingsScope {
+pub(crate) const fn to_wit_settings_scope(s: pc::SettingsScope) -> wit_settings::SettingsScope {
     match s {
         pc::SettingsScope::AccountGlobal => wit_settings::SettingsScope::AccountGlobal,
         pc::SettingsScope::PerServer => wit_settings::SettingsScope::PerServer,
@@ -889,7 +888,7 @@ pub(crate) fn from_wit_settings_section(s: wit_settings::SettingsSection) -> pc:
 
 // ─── Sidebar ───────────────────────────────────────────────────────
 
-pub(crate) fn from_wit_sidebar_layout_kind(k: wit_sidebar::SidebarLayoutKind) -> pc::SidebarLayoutKind {
+pub(crate) const fn from_wit_sidebar_layout_kind(k: wit_sidebar::SidebarLayoutKind) -> pc::SidebarLayoutKind {
     match k {
         wit_sidebar::SidebarLayoutKind::ChannelList => pc::SidebarLayoutKind::ChannelList,
         wit_sidebar::SidebarLayoutKind::SpacesRooms => pc::SidebarLayoutKind::SpacesRooms,
@@ -900,7 +899,7 @@ pub(crate) fn from_wit_sidebar_layout_kind(k: wit_sidebar::SidebarLayoutKind) ->
     }
 }
 
-pub(crate) fn from_wit_sidebar_route_kind(k: wit_sidebar::SidebarRouteKind) -> pc::SidebarRouteKind {
+pub(crate) const fn from_wit_sidebar_route_kind(k: wit_sidebar::SidebarRouteKind) -> pc::SidebarRouteKind {
     match k {
         wit_sidebar::SidebarRouteKind::Channel => pc::SidebarRouteKind::Channel,
         wit_sidebar::SidebarRouteKind::Forum => pc::SidebarRouteKind::Forum,
@@ -950,7 +949,7 @@ pub(crate) fn from_wit_sidebar_declaration(d: wit_sidebar::SidebarDeclaration) -
 
 // ─── Views ─────────────────────────────────────────────────────────
 
-pub(crate) fn from_wit_view_kind(k: wit_views::ViewKind) -> pc::ViewKind {
+pub(crate) const fn from_wit_view_kind(k: wit_views::ViewKind) -> pc::ViewKind {
     match k {
         wit_views::ViewKind::FlatList => pc::ViewKind::FlatList,
         wit_views::ViewKind::CardGrid => pc::ViewKind::CardGrid,
@@ -988,7 +987,7 @@ pub(crate) fn from_wit_card_spec(c: wit_views::CardSpec) -> pc::CardSpec {
     pc::CardSpec { primary_field: c.primary_field }
 }
 
-pub(crate) fn from_wit_tree_spec(t: wit_views::TreeSpec) -> pc::TreeSpec {
+pub(crate) const fn from_wit_tree_spec(t: wit_views::TreeSpec) -> pc::TreeSpec {
     pc::TreeSpec {
         root_page_size: t.root_page_size,
         max_depth: t.max_depth,
@@ -1054,7 +1053,7 @@ pub(crate) fn from_wit_view_descriptor(d: wit_views::ViewDescriptor) -> pc::View
 
 /// Forwarder: `client-views` re-uses `menu-target-kind` from
 /// `client-menus`. Bindgen preserves identity so this is a pass-through.
-pub(crate) fn from_wit_view_menu_target_kind(k: wit_menus::MenuTargetKind) -> pc::MenuTargetKind {
+pub(crate) const fn from_wit_view_menu_target_kind(k: wit_menus::MenuTargetKind) -> pc::MenuTargetKind {
     from_wit_menu_target_kind(k)
 }
 
@@ -1107,7 +1106,7 @@ pub(crate) fn from_wit_view_detail(d: wit_views::ViewDetail) -> pc::ViewDetail {
 
 // ─── Composer ──────────────────────────────────────────────────────
 
-pub(crate) fn from_wit_composer_slot(s: wit_composer::ComposerSlot) -> pc::ComposerSlot {
+pub(crate) const fn from_wit_composer_slot(s: wit_composer::ComposerSlot) -> pc::ComposerSlot {
     match s {
         wit_composer::ComposerSlot::LeftOfInput => pc::ComposerSlot::LeftOfInput,
         wit_composer::ComposerSlot::RightOfInput => pc::ComposerSlot::RightOfInput,
@@ -1144,7 +1143,7 @@ pub(crate) fn from_wit_sidebar_action_outcome(o: wit_menus::ActionOutcome) -> pc
 // ─── ForumSortOrder ────────────────────────────────────────────────
 
 /// Convert poly-client `ForumSortOrder` → WIT `ForumSortOrder`.
-pub(crate) fn to_wit_forum_sort_order(s: pc::ForumSortOrder) -> wit::ForumSortOrder {
+pub(crate) const fn to_wit_forum_sort_order(s: pc::ForumSortOrder) -> wit::ForumSortOrder {
     match s {
         pc::ForumSortOrder::LatestActivity => wit::ForumSortOrder::LatestActivity,
         pc::ForumSortOrder::CreationDate => wit::ForumSortOrder::CreationDate,

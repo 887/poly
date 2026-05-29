@@ -96,14 +96,12 @@ impl PluginStorageBackend for InMemoryPluginStorage {
     }
 
     async fn set(&self, plugin_id: &str, key: &str, value: Vec<u8>) -> Result<(), String> {
-        let mut map = self.inner.lock().await;
-        map.insert(Self::global_key(plugin_id, key), value);
+        self.inner.lock().await.insert(Self::global_key(plugin_id, key), value);
         Ok(())
     }
 
     async fn delete(&self, plugin_id: &str, key: &str) -> Result<(), String> {
-        let mut map = self.inner.lock().await;
-        map.remove(&Self::global_key(plugin_id, key));
+        self.inner.lock().await.remove(&Self::global_key(plugin_id, key));
         Ok(())
     }
 
@@ -126,8 +124,7 @@ impl PluginStorageBackend for InMemoryPluginStorage {
         key: &str,
         value: Vec<u8>,
     ) -> Result<(), String> {
-        let mut map = self.inner.lock().await;
-        map.insert(Self::account_key(plugin_id, account, key), value);
+        self.inner.lock().await.insert(Self::account_key(plugin_id, account, key), value);
         Ok(())
     }
 
@@ -137,8 +134,7 @@ impl PluginStorageBackend for InMemoryPluginStorage {
         account: &str,
         key: &str,
     ) -> Result<(), String> {
-        let mut map = self.inner.lock().await;
-        map.remove(&Self::account_key(plugin_id, account, key));
+        self.inner.lock().await.remove(&Self::account_key(plugin_id, account, key));
         Ok(())
     }
 }

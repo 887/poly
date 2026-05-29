@@ -91,7 +91,7 @@ pub use wry_sandbox::WrySandbox;
 /// The UI reads this list to render mechanism toggles as DISABLED when their
 /// `requires-host-cap` isn't present here.
 #[must_use]
-pub fn advertised_host_caps() -> &'static [HostCap] {
+pub const fn advertised_host_caps() -> &'static [HostCap] {
     #[cfg(any(feature = "wry-sandbox", feature = "web"))]
     {
         &[HostCap::SandboxBrowser]
@@ -111,6 +111,7 @@ pub fn glob_matches(pattern: &str, url: &str) -> bool {
         return pattern == url;
     }
     let parts: Vec<&str> = pattern.split('*').collect();
+    let last_idx = parts.len().saturating_sub(1);
     let mut rest = url;
     for (i, part) in parts.iter().enumerate() {
         if part.is_empty() {
@@ -122,10 +123,14 @@ pub fn glob_matches(pattern: &str, url: &str) -> bool {
             } else {
                 return false;
             }
-        } else if i == parts.len() - 1 {
+        } else if i == last_idx {
             return rest.ends_with(part);
         } else if let Some(pos) = rest.find(part) {
-            rest = &rest[pos + part.len()..];
+            // `pos` is a byte index returned by `find`, which is always a valid
+            // char boundary. Adding `part.len()` (also in bytes) gives the byte
+            // index of the character immediately after the matched substring —
+            // guaranteed to be a char boundary because `part` is a valid &str.
+            rest = rest.split_at(pos.saturating_add(part.len())).1;
         } else {
             return false;
         }

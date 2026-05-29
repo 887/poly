@@ -110,7 +110,10 @@ impl Baseline {
         for item in arr {
             let rule = item.get("rule").and_then(|v| v.as_str()).unwrap_or("").to_string();
             let path_s = item.get("path").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            let line = item.get("line").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+            let line = u32::try_from(
+                item.get("line").and_then(serde_json::Value::as_u64).unwrap_or(0),
+            )
+            .unwrap_or(0);
             let detail = item.get("detail").and_then(|v| v.as_str()).unwrap_or("").to_string();
             b.insert(rules::Violation { rule, path: path_s, line, detail });
         }

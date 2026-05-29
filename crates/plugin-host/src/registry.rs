@@ -214,10 +214,10 @@ impl PluginRegistry {
         let schema: Vec<SettingDescriptor> = Vec::new();
 
         drop(store.set_fuel(1_000_000_000));
-        let display_name_key = match meta.call_get_display_name_key(&mut store).await {
-            Ok(k) => k,
-            Err(_) => format!("plugin-{plugin_id}-title"),
-        };
+        let display_name_key = meta
+            .call_get_display_name_key(&mut store)
+            .await
+            .unwrap_or_else(|_| format!("plugin-{plugin_id}-title"));
 
         drop(store.set_fuel(1_000_000_000));
         let icon = meta.call_get_icon(&mut store).await.unwrap_or_default();
@@ -321,11 +321,12 @@ pub struct PluginBackend {
 }
 
 // Manual Debug since Store/MessengerPlugin don't implement Debug.
+// finish_non_exhaustive() signals intentional omission of store/instance fields.
 impl std::fmt::Debug for PluginBackend {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("PluginBackend")
             .field("plugin_id", &self.plugin_id)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -355,12 +356,14 @@ impl IsBackend for PluginBackend {
     async fn authenticate(&mut self, credentials: AuthCredentials) -> ClientResult<Session> {
         refuel(&self.store).await;
         let wit_creds = bridge::to_wit_auth_credentials(credentials);
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_messenger_client()
-            .call_authenticate(&mut *store, &wit_creds)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            self
+                .instance
+                .poly_messenger_messenger_client()
+                .call_authenticate(&mut *store, &wit_creds)
+                .await
+        };
         match result {
             Ok(Ok(session)) => Ok(bridge::from_wit_session(session)),
             Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
@@ -370,12 +373,14 @@ impl IsBackend for PluginBackend {
 
     async fn logout(&mut self) -> ClientResult<()> {
         refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_messenger_client()
-            .call_logout(&mut *store)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            self
+                .instance
+                .poly_messenger_messenger_client()
+                .call_logout(&mut *store)
+                .await
+        };
         convert_result_unit(result)
     }
 
@@ -388,12 +393,14 @@ impl IsBackend for PluginBackend {
 
     async fn get_servers(&self) -> ClientResult<Vec<Server>> {
         refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_messenger_client()
-            .call_get_servers(&mut *store)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            self
+                .instance
+                .poly_messenger_messenger_client()
+                .call_get_servers(&mut *store)
+                .await
+        };
         match result {
             Ok(Ok(servers)) => Ok(servers.into_iter().map(bridge::from_wit_server).collect()),
             Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
@@ -403,12 +410,14 @@ impl IsBackend for PluginBackend {
 
     async fn get_server(&self, id: &str) -> ClientResult<Server> {
         refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_messenger_client()
-            .call_get_server(&mut *store, id)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            self
+                .instance
+                .poly_messenger_messenger_client()
+                .call_get_server(&mut *store, id)
+                .await
+        };
         match result {
             Ok(Ok(server)) => Ok(bridge::from_wit_server(server)),
             Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
@@ -418,12 +427,14 @@ impl IsBackend for PluginBackend {
 
     async fn get_channels(&self, server_id: &str) -> ClientResult<Vec<Channel>> {
         refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_messenger_client()
-            .call_get_channels(&mut *store, server_id)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            self
+                .instance
+                .poly_messenger_messenger_client()
+                .call_get_channels(&mut *store, server_id)
+                .await
+        };
         match result {
             Ok(Ok(channels)) => Ok(channels.into_iter().map(bridge::from_wit_channel).collect()),
             Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
@@ -433,12 +444,14 @@ impl IsBackend for PluginBackend {
 
     async fn get_channel(&self, id: &str) -> ClientResult<Channel> {
         refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_messenger_client()
-            .call_get_channel(&mut *store, id)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            self
+                .instance
+                .poly_messenger_messenger_client()
+                .call_get_channel(&mut *store, id)
+                .await
+        };
         match result {
             Ok(Ok(channel)) => Ok(bridge::from_wit_channel(channel)),
             Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
@@ -453,12 +466,14 @@ impl IsBackend for PluginBackend {
     ) -> ClientResult<Message> {
         refuel(&self.store).await;
         let wit_content = bridge::to_wit_message_content(content);
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_messenger_client()
-            .call_send_message(&mut *store, channel_id, &wit_content)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            self
+                .instance
+                .poly_messenger_messenger_client()
+                .call_send_message(&mut *store, channel_id, &wit_content)
+                .await
+        };
         match result {
             Ok(Ok(msg)) => Ok(bridge::from_wit_message(msg)),
             Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
@@ -473,12 +488,14 @@ impl IsBackend for PluginBackend {
     ) -> ClientResult<Vec<Message>> {
         refuel(&self.store).await;
         let wit_query = bridge::to_wit_message_query(query);
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_messenger_client()
-            .call_get_messages(&mut *store, channel_id, &wit_query)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            self
+                .instance
+                .poly_messenger_messenger_client()
+                .call_get_messages(&mut *store, channel_id, &wit_query)
+                .await
+        };
         match result {
             Ok(Ok(msgs)) => Ok(msgs.into_iter().map(bridge::from_wit_message).collect()),
             Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
@@ -507,12 +524,14 @@ impl IsBackend for PluginBackend {
 
     async fn get_channel_members(&self, channel_id: &str) -> ClientResult<Vec<User>> {
         refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_messenger_client()
-            .call_get_channel_members(&mut *store, channel_id)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            self
+                .instance
+                .poly_messenger_messenger_client()
+                .call_get_channel_members(&mut *store, channel_id)
+                .await
+        };
         match result {
             Ok(Ok(users)) => Ok(users.into_iter().map(bridge::from_wit_user).collect()),
             Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
@@ -528,12 +547,14 @@ impl IsBackend for PluginBackend {
 
     async fn get_notifications(&self) -> ClientResult<Vec<Notification>> {
         refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_messenger_client()
-            .call_get_notifications(&mut *store)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            self
+                .instance
+                .poly_messenger_messenger_client()
+                .call_get_notifications(&mut *store)
+                .await
+        };
         match result {
             Ok(Ok(notifs)) => Ok(notifs
                 .into_iter()
@@ -549,12 +570,14 @@ impl IsBackend for PluginBackend {
         channel_id: &str,
     ) -> ClientResult<Vec<VoiceParticipant>> {
         refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_messenger_client()
-            .call_get_voice_participants(&mut *store, channel_id)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            self
+                .instance
+                .poly_messenger_messenger_client()
+                .call_get_voice_participants(&mut *store, channel_id)
+                .await
+        };
         match result {
             Ok(Ok(participants)) => Ok(participants
                 .into_iter()
@@ -583,13 +606,16 @@ impl IsBackend for PluginBackend {
         // Also take ownership of the WS inbound receiver.
         // Use try_lock — the store is never contended at event_stream() call time,
         // and blocking_lock() would panic when called from within a tokio runtime.
-        let ws_inbound_rx = if let Ok(mut guard) = store.try_lock() {
-            guard.data_mut().event_tx = Some(event_tx);
-            guard.data_mut().ws_inbound_rx.take()
-        } else {
-            tracing::warn!("event_stream: store was contended, event delivery may be delayed");
-            None
-        };
+        let ws_inbound_rx = store.try_lock().map_or_else(
+            |_| {
+                tracing::warn!("event_stream: store was contended, event delivery may be delayed");
+                None
+            },
+            |mut guard| {
+                guard.data_mut().event_tx = Some(event_tx);
+                guard.data_mut().ws_inbound_rx.take()
+            },
+        );
 
         // Spawn the WS data forwarding loop
         if let Some(mut ws_rx) = ws_inbound_rx {
@@ -641,12 +667,14 @@ impl IsBackend for PluginBackend {
     ) -> ClientResult<Vec<MenuItem>> {
         refuel(&self.store).await;
         let wit_target = bridge::to_wit_menu_target_kind(target);
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_client_menus()
-            .call_get_context_menu_items(&mut *store, wit_target, target_id)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            self
+                .instance
+                .poly_messenger_client_menus()
+                .call_get_context_menu_items(&mut *store, wit_target, target_id)
+                .await
+        };
         match result {
             Ok(Ok(items)) => Ok(items.into_iter().map(bridge::from_wit_menu_item).collect()),
             Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
@@ -662,12 +690,14 @@ impl IsBackend for PluginBackend {
     ) -> ClientResult<ActionOutcome> {
         refuel(&self.store).await;
         let wit_target = bridge::to_wit_menu_target_kind(target);
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_client_menus()
-            .call_invoke_context_action(&mut *store, action_id, wit_target, target_id)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            self
+                .instance
+                .poly_messenger_client_menus()
+                .call_invoke_context_action(&mut *store, action_id, wit_target, target_id)
+                .await
+        };
         match result {
             Ok(Ok(outcome)) => Ok(bridge::from_wit_action_outcome(outcome)),
             Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
@@ -678,12 +708,14 @@ impl IsBackend for PluginBackend {
     async fn poll_action(&self, handle: PendingHandle) -> ClientResult<ActionOutcome> {
         refuel(&self.store).await;
         let wit_handle = bridge::to_wit_pending_handle(handle);
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_client_menus()
-            .call_poll_action(&mut *store, &wit_handle)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            self
+                .instance
+                .poly_messenger_client_menus()
+                .call_poll_action(&mut *store, &wit_handle)
+                .await
+        };
         match result {
             Ok(Ok(outcome)) => Ok(bridge::from_wit_action_outcome(outcome)),
             Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
@@ -693,12 +725,14 @@ impl IsBackend for PluginBackend {
 
     async fn get_settings_sections(&self) -> ClientResult<Vec<SettingsSection>> {
         refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_client_settings()
-            .call_get_settings_sections(&mut *store)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            self
+                .instance
+                .poly_messenger_client_settings()
+                .call_get_settings_sections(&mut *store)
+                .await
+        };
         match result {
             Ok(Ok(sections)) => Ok(sections
                 .into_iter()
@@ -717,12 +751,14 @@ impl IsBackend for PluginBackend {
     ) -> ClientResult<String> {
         refuel(&self.store).await;
         let wit_scope = bridge::to_wit_settings_scope(scope);
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_client_settings()
-            .call_get_setting_value(&mut *store, wit_scope, scope_id, key)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            self
+                .instance
+                .poly_messenger_client_settings()
+                .call_get_setting_value(&mut *store, wit_scope, scope_id, key)
+                .await
+        };
         match result {
             Ok(Ok(value)) => Ok(value),
             Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
@@ -739,23 +775,27 @@ impl IsBackend for PluginBackend {
     ) -> ClientResult<()> {
         refuel(&self.store).await;
         let wit_scope = bridge::to_wit_settings_scope(scope);
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_client_settings()
-            .call_set_setting_value(&mut *store, wit_scope, scope_id, key, value)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            self
+                .instance
+                .poly_messenger_client_settings()
+                .call_set_setting_value(&mut *store, wit_scope, scope_id, key, value)
+                .await
+        };
         convert_result_unit(result)
     }
 
     async fn get_sidebar_declaration(&self) -> ClientResult<SidebarDeclaration> {
         refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_client_sidebar()
-            .call_get_sidebar_declaration(&mut *store)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            self
+                .instance
+                .poly_messenger_client_sidebar()
+                .call_get_sidebar_declaration(&mut *store)
+                .await
+        };
         match result {
             Ok(Ok(decl)) => Ok(bridge::from_wit_sidebar_declaration(decl)),
             Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
@@ -765,12 +805,14 @@ impl IsBackend for PluginBackend {
 
     async fn invoke_sidebar_action(&self, action_id: &str) -> ClientResult<ActionOutcome> {
         refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_client_sidebar()
-            .call_invoke_sidebar_action(&mut *store, action_id)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            self
+                .instance
+                .poly_messenger_client_sidebar()
+                .call_invoke_sidebar_action(&mut *store, action_id)
+                .await
+        };
         match result {
             Ok(Ok(outcome)) => Ok(bridge::from_wit_sidebar_action_outcome(outcome)),
             Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
@@ -780,12 +822,14 @@ impl IsBackend for PluginBackend {
 
     async fn get_channel_view(&self, channel_id: &str) -> ClientResult<ViewDescriptor> {
         refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_client_views()
-            .call_get_channel_view(&mut *store, channel_id)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            self
+                .instance
+                .poly_messenger_client_views()
+                .call_get_channel_view(&mut *store, channel_id)
+                .await
+        };
         match result {
             Ok(Ok(d)) => Ok(bridge::from_wit_view_descriptor(d)),
             Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
@@ -803,19 +847,21 @@ impl IsBackend for PluginBackend {
     ) -> ClientResult<ViewRowsPage> {
         refuel(&self.store).await;
         let wit_cursor = cursor.map(bridge::to_wit_view_cursor);
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_client_views()
-            .call_get_view_rows(
-                &mut *store,
-                channel_id,
-                wit_cursor.as_ref(),
-                sort_id,
-                filter_id,
-                tab_id,
-            )
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            self
+                .instance
+                .poly_messenger_client_views()
+                .call_get_view_rows(
+                    &mut *store,
+                    channel_id,
+                    wit_cursor.as_ref(),
+                    sort_id,
+                    filter_id,
+                    tab_id,
+                )
+                .await
+        };
         match result {
             Ok(Ok(page)) => Ok(bridge::from_wit_view_rows_page(page)),
             Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
@@ -829,12 +875,14 @@ impl IsBackend for PluginBackend {
         row_id: &str,
     ) -> ClientResult<ViewDetail> {
         refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_client_views()
-            .call_get_view_detail(&mut *store, channel_id, row_id)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            self
+                .instance
+                .poly_messenger_client_views()
+                .call_get_view_detail(&mut *store, channel_id, row_id)
+                .await
+        };
         match result {
             Ok(Ok(d)) => Ok(bridge::from_wit_view_detail(d)),
             Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
@@ -847,12 +895,14 @@ impl IsBackend for PluginBackend {
         channel_id: &str,
     ) -> ClientResult<Vec<ComposerButton>> {
         refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_client_composer()
-            .call_get_composer_buttons(&mut *store, channel_id)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            self
+                .instance
+                .poly_messenger_client_composer()
+                .call_get_composer_buttons(&mut *store, channel_id)
+                .await
+        };
         match result {
             Ok(Ok(buttons)) => Ok(buttons
                 .into_iter()
@@ -869,12 +919,14 @@ impl IsBackend for PluginBackend {
         message_id: &str,
     ) -> ClientResult<Vec<MenuItem>> {
         refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_client_composer()
-            .call_get_message_actions(&mut *store, channel_id, message_id)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            self
+                .instance
+                .poly_messenger_client_composer()
+                .call_get_message_actions(&mut *store, channel_id, message_id)
+                .await
+        };
         match result {
             Ok(Ok(items)) => Ok(items
                 .into_iter()
@@ -891,12 +943,14 @@ impl IsBackend for PluginBackend {
         channel_id: &str,
     ) -> ClientResult<ActionOutcome> {
         refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_client_composer()
-            .call_invoke_composer_action(&mut *store, action_id, channel_id)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            self
+                .instance
+                .poly_messenger_client_composer()
+                .call_invoke_composer_action(&mut *store, action_id, channel_id)
+                .await
+        };
         match result {
             Ok(Ok(outcome)) => Ok(bridge::from_wit_composer_action_outcome(outcome)),
             Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
@@ -911,12 +965,14 @@ impl IsBackend for PluginBackend {
         message_id: &str,
     ) -> ClientResult<ActionOutcome> {
         refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_client_composer()
-            .call_invoke_message_action(&mut *store, action_id, channel_id, message_id)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            self
+                .instance
+                .poly_messenger_client_composer()
+                .call_invoke_message_action(&mut *store, action_id, channel_id, message_id)
+                .await
+        };
         match result {
             Ok(Ok(outcome)) => Ok(bridge::from_wit_composer_action_outcome(outcome)),
             Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
@@ -950,12 +1006,14 @@ impl ForumBackend for PluginBackend {
     ) -> ClientResult<Vec<ForumPost>> {
         refuel(&self.store).await;
         let wit_sort = bridge::to_wit_forum_sort_order(sort);
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_messenger_client()
-            .call_get_forum_posts(&mut *store, forum_channel_id, wit_sort, limit)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            self
+                .instance
+                .poly_messenger_messenger_client()
+                .call_get_forum_posts(&mut *store, forum_channel_id, wit_sort, limit)
+                .await
+        };
         match result {
             Ok(Ok(posts)) => Ok(posts.into_iter().map(bridge::from_wit_forum_post).collect()),
             Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
@@ -971,12 +1029,14 @@ impl ForumBackend for PluginBackend {
         tags: Vec<String>,
     ) -> ClientResult<ForumPost> {
         refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_messenger_client()
-            .call_create_forum_post(&mut *store, forum_channel_id, title, body, &tags)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            self
+                .instance
+                .poly_messenger_messenger_client()
+                .call_create_forum_post(&mut *store, forum_channel_id, title, body, &tags)
+                .await
+        };
         match result {
             Ok(Ok(post)) => Ok(bridge::from_wit_forum_post(post)),
             Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
@@ -1002,12 +1062,14 @@ impl ForumBackend for PluginBackend {
 impl ThreadsBackend for PluginBackend {
     async fn get_active_threads(&self, server_id: &str) -> ClientResult<Vec<ThreadInfo>> {
         refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_messenger_client()
-            .call_get_active_threads(&mut *store, server_id)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            self
+                .instance
+                .poly_messenger_messenger_client()
+                .call_get_active_threads(&mut *store, server_id)
+                .await
+        };
         match result {
             Ok(Ok(threads)) => Ok(threads.into_iter().map(bridge::from_wit_thread_info).collect()),
             Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
@@ -1021,12 +1083,14 @@ impl ThreadsBackend for PluginBackend {
         limit: Option<u32>,
     ) -> ClientResult<Vec<ThreadInfo>> {
         refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_messenger_client()
-            .call_get_archived_threads(&mut *store, parent_channel_id, limit)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            self
+                .instance
+                .poly_messenger_messenger_client()
+                .call_get_archived_threads(&mut *store, parent_channel_id, limit)
+                .await
+        };
         match result {
             Ok(Ok(threads)) => Ok(threads.into_iter().map(bridge::from_wit_thread_info).collect()),
             Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
@@ -1046,12 +1110,14 @@ impl ThreadsBackend for PluginBackend {
 impl poly_client::SocialGraphBackend for PluginBackend {
     async fn get_user(&self, id: &str) -> ClientResult<User> {
         refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_messenger_client()
-            .call_get_user(&mut *store, id)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            self
+                .instance
+                .poly_messenger_messenger_client()
+                .call_get_user(&mut *store, id)
+                .await
+        };
         match result {
             Ok(Ok(user)) => Ok(bridge::from_wit_user(user)),
             Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
@@ -1061,12 +1127,14 @@ impl poly_client::SocialGraphBackend for PluginBackend {
 
     async fn get_friends(&self) -> ClientResult<Vec<User>> {
         refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_messenger_client()
-            .call_get_friends(&mut *store)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            self
+                .instance
+                .poly_messenger_messenger_client()
+                .call_get_friends(&mut *store)
+                .await
+        };
         match result {
             Ok(Ok(users)) => Ok(users.into_iter().map(bridge::from_wit_user).collect()),
             Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
@@ -1117,12 +1185,14 @@ impl poly_client::SocialGraphBackend for PluginBackend {
 
     async fn get_presence(&self, user_id: &str) -> ClientResult<PresenceStatus> {
         refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_messenger_client()
-            .call_get_presence(&mut *store, user_id)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            self
+                .instance
+                .poly_messenger_messenger_client()
+                .call_get_presence(&mut *store, user_id)
+                .await
+        };
         match result {
             Ok(Ok(status)) => Ok(bridge::from_wit_presence(status)),
             Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
@@ -1133,12 +1203,14 @@ impl poly_client::SocialGraphBackend for PluginBackend {
     async fn set_presence(&self, status: PresenceStatus) -> ClientResult<()> {
         refuel(&self.store).await;
         let wit_status = bridge::to_wit_presence(status);
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_messenger_client()
-            .call_set_presence(&mut *store, wit_status)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            self
+                .instance
+                .poly_messenger_messenger_client()
+                .call_set_presence(&mut *store, wit_status)
+                .await
+        };
         convert_result_unit(result)
     }
 }
@@ -1162,13 +1234,15 @@ impl poly_client::MessagingBackend for PluginBackend {
         content: poly_client::MessageContent,
     ) -> ClientResult<poly_client::Message> {
         refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let wit_content = bridge::to_wit_message_content(content);
-        let result = self
-            .instance
-            .poly_messenger_messenger_client()
-            .call_send_reply_message(&mut *store, channel_id, reply_to_message_id, &wit_content)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            let wit_content = bridge::to_wit_message_content(content);
+            self
+                .instance
+                .poly_messenger_messenger_client()
+                .call_send_reply_message(&mut *store, channel_id, reply_to_message_id, &wit_content)
+                .await
+        };
         match result {
             Ok(Ok(msg)) => Ok(bridge::from_wit_message(msg)),
             Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
@@ -1181,13 +1255,15 @@ impl poly_client::MessagingBackend for PluginBackend {
         query: poly_client::MessageSearchQuery,
     ) -> ClientResult<Vec<poly_client::MessageSearchHit>> {
         refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let wit_query = bridge::to_wit_message_search_query(query);
-        let result = self
-            .instance
-            .poly_messenger_messenger_client()
-            .call_search_messages(&mut *store, &wit_query)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            let wit_query = bridge::to_wit_message_search_query(query);
+            self
+                .instance
+                .poly_messenger_messenger_client()
+                .call_search_messages(&mut *store, &wit_query)
+                .await
+        };
         match result {
             Ok(Ok(hits)) => Ok(hits.into_iter().map(bridge::from_wit_message_search_hit).collect()),
             Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
@@ -1197,12 +1273,14 @@ impl poly_client::MessagingBackend for PluginBackend {
 
     async fn get_pinned_messages(&self, channel_id: &str) -> ClientResult<Vec<poly_client::Message>> {
         refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_messenger_client()
-            .call_get_pinned_messages(&mut *store, channel_id)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            self
+                .instance
+                .poly_messenger_messenger_client()
+                .call_get_pinned_messages(&mut *store, channel_id)
+                .await
+        };
         match result {
             Ok(Ok(msgs)) => Ok(msgs.into_iter().map(bridge::from_wit_message).collect()),
             Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
@@ -1217,12 +1295,14 @@ impl poly_client::MessagingBackend for PluginBackend {
         pinned: bool,
     ) -> ClientResult<()> {
         refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_messenger_client()
-            .call_set_message_pinned(&mut *store, channel_id, message_id, pinned)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            self
+                .instance
+                .poly_messenger_messenger_client()
+                .call_set_message_pinned(&mut *store, channel_id, message_id, pinned)
+                .await
+        };
         convert_result_unit(result)
     }
 
@@ -1240,12 +1320,14 @@ impl poly_client::MessagingBackend for PluginBackend {
         channel_id: &str,
     ) -> ClientResult<Vec<poly_client::CustomEmoji>> {
         refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_messenger_client()
-            .call_get_available_emojis(&mut *store, channel_id)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            self
+                .instance
+                .poly_messenger_messenger_client()
+                .call_get_available_emojis(&mut *store, channel_id)
+                .await
+        };
         match result {
             Ok(Ok(emojis)) => Ok(emojis.into_iter().map(bridge::from_wit_custom_emoji).collect()),
             Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
@@ -1258,12 +1340,14 @@ impl poly_client::MessagingBackend for PluginBackend {
         channel_id: &str,
     ) -> ClientResult<Vec<poly_client::StickerItem>> {
         refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_messenger_client()
-            .call_get_available_stickers(&mut *store, channel_id)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            self
+                .instance
+                .poly_messenger_messenger_client()
+                .call_get_available_stickers(&mut *store, channel_id)
+                .await
+        };
         match result {
             Ok(Ok(stickers)) => Ok(stickers.into_iter().map(bridge::from_wit_sticker_item).collect()),
             Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
@@ -1276,12 +1360,14 @@ impl poly_client::MessagingBackend for PluginBackend {
 impl poly_client::DmsAndGroupsBackend for PluginBackend {
     async fn get_groups(&self) -> ClientResult<Vec<Group>> {
         refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_messenger_client()
-            .call_get_groups(&mut *store)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            self
+                .instance
+                .poly_messenger_messenger_client()
+                .call_get_groups(&mut *store)
+                .await
+        };
         match result {
             Ok(Ok(groups)) => Ok(groups.into_iter().map(bridge::from_wit_group).collect()),
             Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
@@ -1291,12 +1377,14 @@ impl poly_client::DmsAndGroupsBackend for PluginBackend {
 
     async fn get_dm_channels(&self) -> ClientResult<Vec<DmChannel>> {
         refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_messenger_client()
-            .call_get_dm_channels(&mut *store)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            self
+                .instance
+                .poly_messenger_messenger_client()
+                .call_get_dm_channels(&mut *store)
+                .await
+        };
         match result {
             Ok(Ok(dms)) => Ok(dms.into_iter().map(bridge::from_wit_dm_channel).collect()),
             Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
@@ -1306,12 +1394,14 @@ impl poly_client::DmsAndGroupsBackend for PluginBackend {
 
     async fn open_direct_message_channel(&self, user_id: &str) -> ClientResult<DmChannel> {
         refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_messenger_client()
-            .call_open_direct_message_channel(&mut *store, user_id)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            self
+                .instance
+                .poly_messenger_messenger_client()
+                .call_open_direct_message_channel(&mut *store, user_id)
+                .await
+        };
         match result {
             Ok(Ok(dm)) => Ok(bridge::from_wit_dm_channel(dm)),
             Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
@@ -1321,12 +1411,14 @@ impl poly_client::DmsAndGroupsBackend for PluginBackend {
 
     async fn open_saved_messages_channel(&self) -> ClientResult<DmChannel> {
         refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_messenger_client()
-            .call_open_saved_messages_channel(&mut *store)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            self
+                .instance
+                .poly_messenger_messenger_client()
+                .call_open_saved_messages_channel(&mut *store)
+                .await
+        };
         match result {
             Ok(Ok(dm)) => Ok(bridge::from_wit_dm_channel(dm)),
             Ok(Err(e)) => Err(bridge::from_wit_client_error(e)),
@@ -1336,23 +1428,27 @@ impl poly_client::DmsAndGroupsBackend for PluginBackend {
 
     async fn add_group_member(&self, group_id: &str, user_id: &str) -> ClientResult<()> {
         refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_messenger_client()
-            .call_add_group_member(&mut *store, group_id, user_id)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            self
+                .instance
+                .poly_messenger_messenger_client()
+                .call_add_group_member(&mut *store, group_id, user_id)
+                .await
+        };
         convert_result_unit(result)
     }
 
     async fn remove_group_member(&self, group_id: &str, user_id: &str) -> ClientResult<()> {
         refuel(&self.store).await;
-        let mut store = self.store.lock().await;
-        let result = self
-            .instance
-            .poly_messenger_messenger_client()
-            .call_remove_group_member(&mut *store, group_id, user_id)
-            .await;
+        let result = {
+            let mut store = self.store.lock().await;
+            self
+                .instance
+                .poly_messenger_messenger_client()
+                .call_remove_group_member(&mut *store, group_id, user_id)
+                .await
+        };
         convert_result_unit(result)
     }
 
