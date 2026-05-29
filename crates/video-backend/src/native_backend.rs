@@ -28,6 +28,7 @@
 
 use std::sync::{mpsc, Arc};
 
+use base64::Engine as _;
 use nokhwa::{
     pixel_format::RgbAFormat,
     query,
@@ -75,7 +76,7 @@ impl VideoBackend for NativeVideoBackend {
             .enumerate()
             .map(|(i, info)| VideoDevice {
                 id: info.index().to_string(),
-                label: info.human_name().to_string(),
+                label: info.human_name(),
                 is_default: i == 0,
             })
             .collect();
@@ -100,43 +101,56 @@ impl VideoBackend for NativeVideoBackend {
         } else {
             device_id
                 .parse::<u32>()
-                .map(CameraIndex::Index)
-                .unwrap_or_else(|_| CameraIndex::String(device_id.to_string()))
+                .map_or_else(|_| CameraIndex::String(device_id.to_string()), CameraIndex::Index)
         };
 
         let (tx, rx) = mpsc::sync_channel::<Result<VideoFrame, VideoError>>(8);
 
-        let index_clone = index.clone();
         tokio::task::spawn_blocking(move || {
             let format = RequestedFormat::new::<RgbAFormat>(
                 RequestedFormatType::AbsoluteHighestFrameRate,
             );
-            let mut cam = match Camera::new(index_clone.clone(), format) {
+            let index_str = index.to_string();
+            let mut cam = match Camera::new(index, format) {
                 Ok(c) => c,
                 Err(e) => {
                     let err = match e {
                         nokhwa::NokhwaError::OpenDeviceError(_, _) => {
-                            VideoError::DeviceNotFound(index_clone.to_string())
+                            VideoError::DeviceNotFound(index_str)
                         }
-                        other => VideoError::Backend(format!("nokhwa Camera::new: {other}")),
+                        other @ (nokhwa::NokhwaError::UnitializedError
+                        | nokhwa::NokhwaError::InitializeError { .. }
+                        | nokhwa::NokhwaError::ShutdownError { .. }
+                        | nokhwa::NokhwaError::GeneralError(_)
+                        | nokhwa::NokhwaError::StructureError { .. }
+                        | nokhwa::NokhwaError::GetPropertyError { .. }
+                        | nokhwa::NokhwaError::SetPropertyError { .. }
+                        | nokhwa::NokhwaError::OpenStreamError(_)
+                        | nokhwa::NokhwaError::ReadFrameError(_)
+                        | nokhwa::NokhwaError::ProcessFrameError { .. }
+                        | nokhwa::NokhwaError::StreamShutdownError(_)
+                        | nokhwa::NokhwaError::UnsupportedOperationError(_)
+                        | nokhwa::NokhwaError::NotImplementedError(_)) => {
+                            VideoError::Backend(format!("nokhwa Camera::new: {other}"))
+                        }
                     };
-                    let _ = tx.send(Err(err));
+                    drop(tx.send(Err(err)));
                     return;
                 }
             };
             if let Err(e) = cam.open_stream() {
-                let _ = tx.send(Err(VideoError::Backend(format!(
+                drop(tx.send(Err(VideoError::Backend(format!(
                     "nokhwa open_stream: {e}"
-                ))));
+                )))));
                 return;
             }
             loop {
                 let frame = match cam.frame() {
                     Ok(f) => f,
                     Err(e) => {
-                        let _ = tx.send(Err(VideoError::Backend(format!(
+                        drop(tx.send(Err(VideoError::Backend(format!(
                             "nokhwa frame: {e}"
-                        ))));
+                        )))));
                         break;
                     }
                 };
@@ -146,10 +160,13 @@ impl VideoBackend for NativeVideoBackend {
                     chunk.swap(0, 2); // R ↔ B
                 }
                 let res = frame.resolution();
-                let timestamp_ms = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .map(|d| d.as_millis() as u64)
-                    .unwrap_or(0);
+                let timestamp_ms = u64::try_from(
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_millis())
+                        .unwrap_or(0),
+                )
+                .unwrap_or(u64::MAX);
                 let poly_frame = VideoFrame {
                     width: res.width(),
                     height: res.height(),
@@ -236,7 +253,6 @@ impl NativeVideoEncoder {
             )));
         }
 
-        use base64::Engine as _;
         let data_b64 = base64::engine::general_purpose::STANDARD.encode(&frame.data);
 
         let req = poly_host_bridge::video_client::EncodeH264Request {
