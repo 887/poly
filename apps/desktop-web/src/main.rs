@@ -33,6 +33,10 @@ use std::sync::{Arc, Mutex};
 
 use axum::response::IntoResponse;
 use serde_json::Value;
+use tao::event_loop::{ControlFlow, EventLoopBuilder};
+use tao::window::WindowBuilder;
+#[cfg(target_os = "linux")]
+use tao::platform::unix::WindowExtUnix as _;
 use tokio::sync::oneshot;
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -80,7 +84,7 @@ enum UserEvent {
 /// 2. Sends the result back via `window.ipc.postMessage(JSON)`.
 ///
 /// Also installs the console log interceptor so `/console` works.
-const INIT_SCRIPT: &str = r#"
+const INIT_SCRIPT: &str = r"
 (function() {
     /* ── Eval bridge ── */
     window.__poly_eval = function(id, script) {
@@ -112,7 +116,7 @@ const INIT_SCRIPT: &str = r#"
         };
     });
 })();
-"#;
+";
 
 // ─── HTTP server helpers ───────────────────────────────────────────────────────
 
@@ -151,8 +155,7 @@ async fn do_eval(
         Ok(Ok(result)) => result,
         Ok(Err(_)) => Err("Eval channel closed before response".to_string()),
         Err(_) => {
-            let mut map = pending.lock().map_err(|e| e.to_string())?;
-            map.remove(&id);
+            pending.lock().map_err(|e| e.to_string())?.remove(&id);
             Err("Eval timeout after 15s".to_string())
         }
     }
@@ -160,6 +163,8 @@ async fn do_eval(
 
 // ─── Axum HTTP server ─────────────────────────────────────────────────────────
 
+// lint-allow-unused: axum router registration — each route is one logical step, extraction would break readability
+#[allow(clippy::too_many_lines)]
 async fn start_http_server(
     proxy: tao::event_loop::EventLoopProxy<UserEvent>,
     pending: PendingEvals,
@@ -399,6 +404,9 @@ async fn http_screenshot(
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
+// lint-allow-unused: platform-branching startup code (window/webview/event-loop) — splitting would scatter related setup
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::cognitive_complexity)] // event-loop dispatch: cfg branches + match variants inflate score
 fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -419,11 +427,6 @@ fn main() {
     let http_started = AtomicBool::new(false);
 
     // ── tao event loop ────────────────────────────────────────────────────────
-    use tao::event_loop::{ControlFlow, EventLoopBuilder};
-    use tao::window::WindowBuilder;
-    #[cfg(target_os = "linux")]
-    use tao::platform::unix::WindowExtUnix as _;
-
     let event_loop = EventLoopBuilder::<UserEvent>::with_user_event().build();
     let proxy = event_loop.create_proxy();
 
@@ -462,13 +465,15 @@ fn main() {
                 tracing::warn!("IPC: missing id in message");
                 return;
             };
-            let result = if let Some(r) = v.get("result").and_then(|v| v.as_str()) {
-                Ok(r.to_string())
-            } else if let Some(e) = v.get("error").and_then(|v| v.as_str()) {
-                Err(e.to_string())
-            } else {
-                Ok(v.to_string())
-            };
+            let result: Result<String, String> =
+                v.get("result").and_then(|v| v.as_str()).map_or_else(
+                    || {
+                        v.get("error")
+                            .and_then(|v| v.as_str())
+                            .map_or_else(|| Ok(v.to_string()), |e| Err(e.to_string()))
+                    },
+                    |r| Ok(r.to_string()),
+                );
 
             let mut map = pending_ipc.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
             if let Some(pending_eval) = map.remove(&id) {
@@ -482,16 +487,13 @@ fn main() {
     #[cfg(target_os = "linux")]
     let webview = {
         use wry::WebViewBuilderExtUnix as _;
-        let vbox = match window.default_vbox() {
-            Some(v) => v,
-            None => {
-                // lint-allow-unused: pre-logger startup fatal — stderr is the only sink
-                #[allow(clippy::print_stderr)]
-                {
-                    eprintln!("fatal: tao window should have a default vbox");
-                }
-                std::process::exit(1);
+        let Some(vbox) = window.default_vbox() else {
+            // lint-allow-unused: pre-logger startup fatal — stderr is the only sink
+            #[allow(clippy::print_stderr)]
+            {
+                eprintln!("fatal: tao window should have a default vbox");
             }
+            std::process::exit(1);
         };
         match builder.build_gtk(vbox) {
             Ok(wv) => wv,
@@ -549,18 +551,14 @@ fn main() {
     };
 
     if !http_started.swap(true, Ordering::SeqCst) {
-        let proxy2 = proxy.clone();
-        let pending2 = pending.clone();
-        let next_id2 = next_id.clone();
-        let screenshot_tx2 = screenshot_tx.clone();
         let dev_url2 = dev_url.clone();
         let gen2 = generation.clone();
         rt.spawn(async move {
             if let Err(e) = start_http_server(
-                proxy2,
-                pending2,
-                next_id2,
-                screenshot_tx2,
+                proxy,
+                pending,
+                next_id,
+                screenshot_tx,
                 dev_url2,
                 gen2,
             )
@@ -623,7 +621,7 @@ fn main() {
                     let guard = poll_rx.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
                     match guard.try_recv() {
                         Ok(r) => break r,
-                        Err(std_mpsc::TryRecvError::Empty) => continue,
+                        Err(std_mpsc::TryRecvError::Empty) => {}
                         Err(std_mpsc::TryRecvError::Disconnected) => {
                             break Err("Screenshot channel disconnected".to_string());
                         }

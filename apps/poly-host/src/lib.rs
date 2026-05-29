@@ -170,19 +170,24 @@ pub fn router(state: HostState) -> Router {
         .route("/sandbox/{id}", get(sandbox_shim))
         .route("/poly-service-worker.js", get(poly_service_worker))
         .with_state(state)
-        .layer(cors.clone());
+        .layer(cors);
 
     // Mount video H.264 encode/decode routes when the `video` feature is enabled.
     // Video state is separate from HostState (no SQLite needed — it's all in-memory
     // encoder/decoder maps) so we use .merge() with its own with_state call.
     #[cfg(feature = "video")]
     let base = {
+        // New cors layer for this feature router — same settings, separate instance.
+        let cors = CorsLayer::new()
+            .allow_origin(Any)
+            .allow_methods(Any)
+            .allow_headers(Any);
         let video_router = Router::new()
             .route("/host/video/encode_h264", post(encode_h264))
             .route("/host/video/decode_h264", post(decode_h264))
             .route("/host/video/close_session", post(close_session))
             .with_state(VideoState::new())
-            .layer(cors.clone());
+            .layer(cors);
         base.merge(video_router)
     };
 
@@ -191,9 +196,13 @@ pub fn router(state: HostState) -> Router {
     // (WS handshake, RTP framing) runs in the discord plugin, not here.
     #[cfg(feature = "voice")]
     let base = {
+        let cors = CorsLayer::new()
+            .allow_origin(Any)
+            .allow_methods(Any)
+            .allow_headers(Any);
         let udp_r = udp_router(UdpState::new()).layer(cors.clone());
         let opus_r = opus_router(OpusState::new()).layer(cors.clone());
-        let aead_r = aead_router(AeadState::new()).layer(cors.clone());
+        let aead_r = aead_router(AeadState::new()).layer(cors);
         base.merge(udp_r).merge(opus_r).merge(aead_r)
     };
 
@@ -204,6 +213,10 @@ pub fn router(state: HostState) -> Router {
     // docs/plans/plan-teams-graph-subscriptions.md Phase C.
     #[cfg(feature = "teams-webhook")]
     let base = {
+        let cors = CorsLayer::new()
+            .allow_origin(Any)
+            .allow_methods(Any)
+            .allow_headers(Any);
         let webhook_state = TeamsWebhookState::new(
             std::sync::Arc::new(InMemoryClientStateStore::default()),
             std::sync::Arc::new(TracingNotificationSink),
@@ -271,7 +284,7 @@ impl NotificationSink for TracingNotificationSink {
 /// SW calls `client.navigate(client.url)` to force-reload that tab — which
 /// works even when the main thread is stuck in an infinite WASM loop
 /// (the navigation is executed at the browser level, not by main-thread JS).
-const POLY_SERVICE_WORKER_JS: &str = r#"// poly hang watchdog
+const POLY_SERVICE_WORKER_JS: &str = r"// poly hang watchdog
 const HEARTBEAT_TIMEOUT_MS = 25000;
 const CHECK_INTERVAL_MS = 2000;
 const lastBeat = new Map();
@@ -301,7 +314,7 @@ setInterval(async () => {
     }
   }
 }, CHECK_INTERVAL_MS);
-"#;
+";
 
 async fn poly_service_worker() -> impl IntoResponse {
     let mut headers = HeaderMap::new();
@@ -507,10 +520,10 @@ async fn plugin_kv_delete(
 /// Per-account: `plugin:{plugin}:account:{account}:{key}`.
 #[must_use]
 pub fn plugin_kv_key(plugin: &str, account: Option<&str>, key: &str) -> String {
-    match account {
-        None => format!("plugin:{plugin}:global:{key}"),
-        Some(acct) => format!("plugin:{plugin}:account:{acct}:{key}"),
-    }
+    account.map_or_else(
+        || format!("plugin:{plugin}:global:{key}"),
+        |acct| format!("plugin:{plugin}:account:{acct}:{key}"),
+    )
 }
 
 async fn host_legacy(Json(call): Json<HostCall>) -> Json<HostResponse> {
@@ -896,16 +909,16 @@ async fn accounts_add(
     if req.account_id.trim().is_empty() {
         return Json(AccountAddResponse {
             ok: false,
-            account_id: req.account_id.clone(),
-            backend: req.backend.clone(),
+            account_id: req.account_id,
+            backend: req.backend,
             err: Some("account_id is required".into()),
         });
     }
     if req.backend.trim().is_empty() {
         return Json(AccountAddResponse {
             ok: false,
-            account_id: req.account_id.clone(),
-            backend: req.backend.clone(),
+            account_id: req.account_id,
+            backend: req.backend,
             err: Some("backend is required".into()),
         });
     }
@@ -917,28 +930,31 @@ async fn accounts_add(
             if !allowed.iter().any(|s| s == &req.backend) {
                 return Json(AccountAddResponse {
                     ok: false,
-                    account_id: req.account_id.clone(),
-                    backend: req.backend.clone(),
                     err: Some(format!(
                         "backend `{}` is not available (not compiled in or disabled)",
                         req.backend
                     )),
+                    account_id: req.account_id,
+                    backend: req.backend,
                 });
             }
         }
         Err(e) => {
             return Json(AccountAddResponse {
                 ok: false,
-                account_id: req.account_id.clone(),
-                backend: req.backend.clone(),
+                account_id: req.account_id,
+                backend: req.backend,
                 err: Some(e),
             });
         }
     }
 
+    // Extract before moving req into the json! macro and closure.
+    let account_id = req.account_id;
+    let backend = req.backend;
     let entry = serde_json::json!({
-        "backend": req.backend,
-        "account_id": req.account_id,
+        "backend": backend,
+        "account_id": account_id,
         "token": req.token,
         "display_name": req.display_name,
         "instance_id": req.instance_id,
@@ -950,23 +966,23 @@ async fn accounts_add(
         match mutate_account_tokens(&state, |tokens| {
             // Upsert by (backend, account_id).
             tokens.retain(|t| {
-                !(t.get("backend").and_then(|v| v.as_str()) == Some(&req.backend)
+                !(t.get("backend").and_then(|v| v.as_str()) == Some(&backend)
                     && t.get("account_id").and_then(|v| v.as_str())
-                        == Some(&req.account_id))
+                        == Some(&account_id))
             });
             tokens.push(entry.clone());
             Ok(())
         }) {
             Ok(()) => AccountAddResponse {
                 ok: true,
-                account_id: req.account_id.clone(),
-                backend: req.backend.clone(),
+                account_id,
+                backend,
                 err: None,
             },
             Err(e) => AccountAddResponse {
                 ok: false,
-                account_id: req.account_id.clone(),
-                backend: req.backend.clone(),
+                account_id,
+                backend,
                 err: Some(e),
             },
         },
@@ -1195,6 +1211,7 @@ fn lock_db(
         .map_err(|_poison| "sqlite mutex poisoned".to_string())
 }
 
+#[allow(clippy::significant_drop_tightening)] // stmt borrows db; cannot release db before stmt
 fn sqlite_get(state: &HostState, key: &str) -> Result<Option<serde_json::Value>, String> {
     let db = lock_db(state)?;
     let mut stmt = db
@@ -1218,6 +1235,7 @@ fn sqlite_get(state: &HostState, key: &str) -> Result<Option<serde_json::Value>,
     }
 }
 
+#[allow(clippy::significant_drop_tightening)] // stmt borrows db; cannot release db before stmt
 fn sqlite_set(state: &HostState, key: &str, value: &serde_json::Value) -> Result<(), String> {
     let serialized =
         serde_json::to_string(value).map_err(|e| format!("serde set({key}): {e}"))?;
@@ -1240,6 +1258,7 @@ fn sqlite_set(state: &HostState, key: &str, value: &serde_json::Value) -> Result
     Ok(())
 }
 
+#[allow(clippy::significant_drop_tightening)] // stmt borrows db; cannot release db before stmt
 fn sqlite_delete(state: &HostState, key: &str) -> Result<(), String> {
     let db = lock_db(state)?;
     let mut stmt = db
@@ -1256,8 +1275,8 @@ fn sqlite_delete(state: &HostState, key: &str) -> Result<(), String> {
 }
 
 fn sqlite_clear(state: &HostState) -> Result<(), String> {
-    let db = lock_db(state)?;
-    db.execute("DELETE FROM poly_kv")
+    lock_db(state)?
+        .execute("DELETE FROM poly_kv")
         .map_err(|e| format!("clear: {e}"))?;
     Ok(())
 }
@@ -2235,6 +2254,7 @@ async fn sandbox_shim(AxumPath(id): AxumPath<String>) -> impl IntoResponse {
     (StatusCode::OK, headers, html)
 }
 
+#[allow(clippy::cognitive_complexity)] // signal dispatch: cfg branches inflate score artificially
 async fn shutdown_signal() {
     let ctrl_c = async {
         drop(tokio::signal::ctrl_c().await);
@@ -2250,7 +2270,7 @@ async fn shutdown_signal() {
     #[cfg(not(unix))]
     let terminate = std::future::pending::<()>();
     tokio::select! {
-        _ = ctrl_c => tracing::info!("received ctrl-c, shutting down"),
-        _ = terminate => tracing::info!("received SIGTERM, shutting down"),
+        () = ctrl_c => tracing::info!("received ctrl-c, shutting down"),
+        () = terminate => tracing::info!("received SIGTERM, shutting down"),
     }
 }
