@@ -325,14 +325,14 @@ pub async fn next_task(data_dir: &Path) -> anyhow::Result<String> {
     let next = tasks
         .iter()
         .find(|t| t.status == TaskStatus::Todo || t.status == TaskStatus::Redo);
-    match next {
-        None => Ok("✅ All tasks are completed! No pending tasks.".to_string()),
-        Some(task) => Ok(format!(
+    Ok(next.map_or_else(
+        || "✅ All tasks are completed! No pending tasks.".to_string(),
+        |task| format!(
             "Next task: {}\n\nCall `task_start_reminders {}` before starting.",
             task.summary_line(),
             task.id
-        )),
-    }
+        ),
+    ))
 }
 
 /// Return reminders and context for starting work on a specific task.
@@ -355,7 +355,7 @@ pub async fn task_start_reminders(data_dir: &Path, id_or_name: &str) -> anyhow::
          - **{mem_count}** memory note(s) already stored\n\
          - **{finding_count}** research finding(s) already stored\n\
          \n\
-         {}\
+         {checklist_md}\
          \n\
          ## ⚠️  MANDATORY AGENT RULES for this task:\n\
          1. **Read existing memories first**: call `load_memories {task_id}` now.\n\
@@ -368,7 +368,6 @@ pub async fn task_start_reminders(data_dir: &Path, id_or_name: &str) -> anyhow::
          7. **Mark task complete** when done: `set_task_status {task_id} completed`.\n\
          \n\
          Start by loading memories and findings, then begin work.",
-        checklist_md
     ))
 }
 

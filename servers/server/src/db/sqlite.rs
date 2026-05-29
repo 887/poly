@@ -11,7 +11,7 @@ use tracing::info;
 
 use crate::config::Config;
 use crate::error::{AppError, Result};
-use crate::models::*;
+use crate::models::{UserRecord, AuthChallenge, Device, FriendRequest, Server, Channel, Membership, Category, Message, Attachment};
 
 /// Bundled parameters for [`Db::append_modlog`] — keeps the call sites
 /// inside the `clippy::too_many_arguments` cap of 6.
@@ -32,6 +32,10 @@ pub struct Db {
 }
 
 impl Db {
+    // Caller awaits this via the db::init shim — keep async for the public API contract.
+    #[allow(clippy::unused_async)]
+    // Sequential migration steps make this inherently complex; splitting would obscure intent.
+    #[allow(clippy::cognitive_complexity)]
     pub async fn init(config: &Config) -> anyhow::Result<Self> {
         let path = &config.db_path;
         let is_memory = path == ":memory:" || path.is_empty();
@@ -160,8 +164,10 @@ impl Db {
     }
 
     pub async fn is_device_revoked(&self, device_id: &str) -> Result<bool> {
-        let conn = self.inner.lock().await;
-        let val: Option<serde_json::Value> = query_one(&conn, "SELECT revoked FROM device WHERE id = ?1", &[device_id])?;
+        let val: Option<serde_json::Value> = {
+            let conn = self.inner.lock().await;
+            query_one(&conn, "SELECT revoked FROM device WHERE id = ?1", &[device_id])?
+        };
         Ok(val
             .as_ref()
             .and_then(|v| v.get("revoked"))
@@ -199,6 +205,8 @@ impl Db {
         query_one(&conn, "SELECT * FROM user WHERE id = ?1", &[id])
     }
 
+    // conn must span stmt preparation and iteration — cannot drop early.
+    #[allow(clippy::significant_drop_tightening)]
     pub async fn list_friends_raw(&self, user_id: &str) -> Result<Vec<serde_json::Value>> {
         let conn = self.inner.lock().await;
         let sql = "SELECT fr.id, \
@@ -211,7 +219,7 @@ impl Db {
         let mut stmt = conn.prepare(sql).map_err(|ref e| db_err(e))?;
         stmt.bind((1, user_id)).map_err(|ref e| db_err(e))?;
         let mut results = vec![];
-        while let Ok(State::Row) = stmt.next() {
+        while matches!(stmt.next(), Ok(State::Row)) {
             let from_obj = serde_json::json!({
                 "id": read_str(&stmt, "from_id"),
                 "username": read_str(&stmt, "from_username"),
@@ -524,16 +532,20 @@ impl Db {
     }
 
     pub async fn is_participant(&self, user_id: &str, channel_id: &str) -> Result<bool> {
-        let conn = self.inner.lock().await;
-        let raw: Option<serde_json::Value> = query_one(&conn,
-            "SELECT id FROM participant WHERE user = ?1 AND channel = ?2 LIMIT 1",
-            &[user_id, channel_id])?;
+        let raw: Option<serde_json::Value> = {
+            let conn = self.inner.lock().await;
+            query_one(&conn,
+                "SELECT id FROM participant WHERE user = ?1 AND channel = ?2 LIMIT 1",
+                &[user_id, channel_id])?
+        };
         Ok(raw.is_some())
     }
 
     pub async fn get_channel_server_id(&self, channel_id: &str) -> Result<Option<String>> {
-        let conn = self.inner.lock().await;
-        let raw: Option<serde_json::Value> = query_one(&conn, "SELECT server FROM channel WHERE id = ?1 LIMIT 1", &[channel_id])?;
+        let raw: Option<serde_json::Value> = {
+            let conn = self.inner.lock().await;
+            query_one(&conn, "SELECT server FROM channel WHERE id = ?1 LIMIT 1", &[channel_id])?
+        };
         Ok(raw
             .as_ref()
             .and_then(|v| v.get("server"))
@@ -542,15 +554,19 @@ impl Db {
     }
 
     pub async fn is_server_owner(&self, server_id: &str, user_id: &str) -> Result<bool> {
-        let conn = self.inner.lock().await;
-        let raw: Option<serde_json::Value> = query_one(&conn,
-            "SELECT id FROM server WHERE id = ?1 AND owner = ?2 LIMIT 1",
-            &[server_id, user_id])?;
+        let raw: Option<serde_json::Value> = {
+            let conn = self.inner.lock().await;
+            query_one(&conn,
+                "SELECT id FROM server WHERE id = ?1 AND owner = ?2 LIMIT 1",
+                &[server_id, user_id])?
+        };
         Ok(raw.is_some())
     }
 
     // ── Message operations ───────────────────────────────────────────────────
 
+    // Two distinct SQL queries with different arg counts — map_or_else would be unreadable.
+    #[allow(clippy::option_if_let_else)]
     pub async fn list_messages(
         &self,
         channel_id: &str,
@@ -558,19 +574,16 @@ impl Db {
         limit: u8,
     ) -> Result<Vec<Message>> {
         let conn = self.inner.lock().await;
-        match cursor {
-            Some(cur) => {
-                let sql = format!(
-                    "SELECT * FROM message WHERE channel = ?1 AND id < ?2 ORDER BY id DESC LIMIT {limit}"
-                );
-                query_many(&conn, &sql, &[channel_id, cur])
-            }
-            None => {
-                let sql = format!(
-                    "SELECT * FROM message WHERE channel = ?1 ORDER BY id DESC LIMIT {limit}"
-                );
-                query_many(&conn, &sql, &[channel_id])
-            }
+        if let Some(cur) = cursor {
+            let sql = format!(
+                "SELECT * FROM message WHERE channel = ?1 AND id < ?2 ORDER BY id DESC LIMIT {limit}"
+            );
+            query_many(&conn, &sql, &[channel_id, cur])
+        } else {
+            let sql = format!(
+                "SELECT * FROM message WHERE channel = ?1 ORDER BY id DESC LIMIT {limit}"
+            );
+            query_many(&conn, &sql, &[channel_id])
         }
     }
 
@@ -668,8 +681,10 @@ impl Db {
     }
 
     pub async fn get_message_channel_id(&self, message_id: &str) -> Result<Option<String>> {
-        let conn = self.inner.lock().await;
-        let raw: Option<serde_json::Value> = query_one(&conn, "SELECT channel FROM message WHERE id = ?1 LIMIT 1", &[message_id])?;
+        let raw: Option<serde_json::Value> = {
+            let conn = self.inner.lock().await;
+            query_one(&conn, "SELECT channel FROM message WHERE id = ?1 LIMIT 1", &[message_id])?
+        };
         Ok(raw
             .as_ref()
             .and_then(|v| v.get("channel"))
@@ -681,10 +696,12 @@ impl Db {
 
     /// Get the role of a member in a server (None if not a member).
     pub async fn get_member_role(&self, server_id: &str, user_id: &str) -> Result<Option<String>> {
-        let conn = self.inner.lock().await;
-        let raw: Option<serde_json::Value> = query_one(&conn,
-            "SELECT role FROM membership WHERE user = ?1 AND server = ?2 LIMIT 1",
-            &[user_id, server_id])?;
+        let raw: Option<serde_json::Value> = {
+            let conn = self.inner.lock().await;
+            query_one(&conn,
+                "SELECT role FROM membership WHERE user = ?1 AND server = ?2 LIMIT 1",
+                &[user_id, server_id])?
+        };
         Ok(raw
             .as_ref()
             .and_then(|v| v.get("role"))
@@ -740,12 +757,14 @@ impl Db {
 
     /// Check if a user is currently banned from a server (respects expires_at).
     pub async fn is_banned(&self, server_id: &str, user_id: &str) -> Result<bool> {
-        let conn = self.inner.lock().await;
         let now = now_iso();
         let sql = format!(
             "SELECT server_id FROM server_bans WHERE server_id = ?1 AND user_id = ?2 AND (expires_at IS NULL OR expires_at > '{now}') LIMIT 1"
         );
-        let raw: Option<serde_json::Value> = query_one(&conn, &sql, &[server_id, user_id])?;
+        let raw: Option<serde_json::Value> = {
+            let conn = self.inner.lock().await;
+            query_one(&conn, &sql, &[server_id, user_id])?
+        };
         Ok(raw.is_some())
     }
 
@@ -782,6 +801,7 @@ impl Db {
     }
 
     /// Set a timeout on a member (stores expires_at in membership row).
+    #[allow(clippy::option_if_let_else)]
     pub async fn set_member_timeout(&self, server_id: &str, user_id: &str, until: Option<&str>) -> Result<()> {
         let conn = self.inner.lock().await;
         match until {
@@ -832,6 +852,8 @@ impl Db {
     // ── Relationship operations ──────────────────────────────────────────────
 
     /// Block a user (upsert into user_blocks).
+    // blocker_id / blocked_id are domain-meaningful paired names; rename would lose clarity.
+    #[allow(clippy::similar_names)]
     pub async fn block_user(&self, blocker_id: &str, blocked_id: &str) -> Result<()> {
         let conn = self.inner.lock().await;
         let now = now_iso();
@@ -841,6 +863,7 @@ impl Db {
     }
 
     /// Unblock a user.
+    #[allow(clippy::similar_names)]
     pub async fn unblock_user(&self, blocker_id: &str, blocked_id: &str) -> Result<()> {
         let conn = self.inner.lock().await;
         exec_bind(&conn,
@@ -849,6 +872,7 @@ impl Db {
     }
 
     /// Ignore a user (upsert into user_ignores).
+    #[allow(clippy::similar_names)]
     pub async fn ignore_user(&self, ignorer_id: &str, ignored_id: &str) -> Result<()> {
         let conn = self.inner.lock().await;
         let now = now_iso();
@@ -858,6 +882,7 @@ impl Db {
     }
 
     /// Unignore a user.
+    #[allow(clippy::similar_names)]
     pub async fn unignore_user(&self, ignorer_id: &str, ignored_id: &str) -> Result<()> {
         let conn = self.inner.lock().await;
         exec_bind(&conn,
@@ -876,6 +901,8 @@ impl Db {
     }
 
     /// Set or clear a nickname for a relationship (None clears).
+    // Two distinct SQL statements — map_or_else form would be less readable than match.
+    #[allow(clippy::option_if_let_else)]
     pub async fn set_relationship_nickname(&self, user_id: &str, target_id: &str, nickname: Option<&str>) -> Result<()> {
         let conn = self.inner.lock().await;
         let now = now_iso();
@@ -892,6 +919,7 @@ impl Db {
     }
 
     /// Set or clear a private note about a user (None clears).
+    #[allow(clippy::option_if_let_else)]
     pub async fn set_user_note(&self, user_id: &str, target_id: &str, note: Option<&str>) -> Result<()> {
         let conn = self.inner.lock().await;
         let now = now_iso();
@@ -918,6 +946,7 @@ impl Db {
     }
 
     /// Mute a conversation until the given timestamp (or indefinitely if None).
+    #[allow(clippy::option_if_let_else)]
     pub async fn mute_conversation(&self, user_id: &str, channel_id: &str, until: Option<&str>) -> Result<()> {
         let conn = self.inner.lock().await;
         let now = now_iso();
@@ -942,6 +971,8 @@ impl Db {
     }
 
     /// Update group DM name and/or avatar_url. Skips fields that are None.
+    // conn must span both optional exec_bind calls — cannot be dropped early.
+    #[allow(clippy::significant_drop_tightening)]
     pub async fn update_group_dm(&self, channel_id: &str, name: Option<&str>, avatar_url: Option<&str>) -> Result<()> {
         let conn = self.inner.lock().await;
         if let Some(n) = name {
@@ -958,6 +989,8 @@ impl Db {
     // ── Server invite (user-targeted) ────────────────────────────────────────
 
     /// Record a server invite sent to a specific user via DM.
+    // inviter_id / invitee_id are domain-meaningful paired names; rename would lose clarity.
+    #[allow(clippy::similar_names)]
     pub async fn create_user_invite(&self, server_id: &str, inviter_id: &str, invitee_id: &str) -> Result<()> {
         let conn = self.inner.lock().await;
         let id = new_id("user_invite");
@@ -980,7 +1013,7 @@ impl Db {
             )?;
             stmt.bind((1, channel_id))?;
             let mut ids = vec![];
-            while let Ok(State::Row) = stmt.next() {
+            while matches!(stmt.next(), Ok(State::Row)) {
                 if let Ok(id) = stmt.read::<String, _>("user") {
                     ids.push(id);
                 }
@@ -993,7 +1026,7 @@ impl Db {
             let mut stmt = conn.prepare("SELECT user FROM participant WHERE channel = ?1")?;
             stmt.bind((1, channel_id))?;
             let mut ids = vec![];
-            while let Ok(State::Row) = stmt.next() {
+            while matches!(stmt.next(), Ok(State::Row)) {
                 if let Ok(id) = stmt.read::<String, _>("user") {
                     ids.push(id);
                 }
@@ -1051,7 +1084,7 @@ fn exec_bind(conn: &sqlite::Connection, sql: &str, binds: &[&str]) -> Result<()>
         stmt.bind((i.wrapping_add(1), *val)).map_err(|ref e| db_err(e))?;
     }
     // Drive the statement to completion.
-    while let Ok(State::Row) = stmt.next() {}
+    while matches!(stmt.next(), Ok(State::Row)) {}
     // Final step returns State::Done (not an error).
     Ok(())
 }
@@ -1076,7 +1109,7 @@ fn query_one<T: DeserializeOwned>(
     for (i, val) in binds.iter().enumerate() {
         stmt.bind((i.wrapping_add(1), *val)).map_err(|ref e| db_err(e))?;
     }
-    if let Ok(State::Row) = stmt.next() {
+    if matches!(stmt.next(), Ok(State::Row)) {
         let json = row_to_json(&stmt);
         serde_json::from_value(json)
             .map(Some)
@@ -1097,7 +1130,7 @@ fn query_many<T: DeserializeOwned>(
         stmt.bind((i.wrapping_add(1), *val)).map_err(|ref e| db_err(e))?;
     }
     let mut results = vec![];
-    while let Ok(State::Row) = stmt.next() {
+    while matches!(stmt.next(), Ok(State::Row)) {
         let json = row_to_json(&stmt);
         let item: T = serde_json::from_value(json)
             .map_err(|e| AppError::Internal(format!("deserialize error: {e}")))?;

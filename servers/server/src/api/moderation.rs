@@ -44,7 +44,7 @@ impl RoleTier {
     }
 
     #[must_use]
-    pub fn as_str(self) -> &'static str {
+    pub const fn as_str(self) -> &'static str {
         match self {
             Self::Owner => "owner",
             Self::Admin => "admin",
@@ -112,6 +112,9 @@ pub fn router() -> Router<AppState> {
 
 // ── Request / response types ──────────────────────────────────────────────────
 
+// PermissionsResponse is a direct serialization of server permission flags; bool fields are
+// idiomatic for a JSON boolean permissions response — enum variants would add no clarity here.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Serialize)]
 struct PermissionsResponse {
     role: String,

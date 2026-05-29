@@ -12,6 +12,8 @@ use crate::store;
 use crate::types::TaskStatus;
 
 /// Print the CLI help text to stdout.
+// Callers use .await — keep async for consistent calling convention.
+#[allow(clippy::unused_async)]
 pub async fn print_help() -> anyhow::Result<()> {
     let help = "\
 poly-memory-mcp — Persistent task list + memory + knowledge-base for AI agents.
@@ -230,10 +232,9 @@ async fn dispatch_knowledge(data_dir: &Path, args: &[String]) -> anyhow::Result<
         }
         "get" => {
             let topic = require_arg(rest, 0, "knowledge get <topic>")?;
-            match store::load_knowledge(data_dir, topic).await? {
-                Some(content) => Ok(content),
-                None => Err(anyhow::anyhow!("No knowledge entry found for '{topic}'")),
-            }
+            store::load_knowledge(data_dir, topic)
+                .await?
+                .ok_or_else(|| anyhow::anyhow!("No knowledge entry found for '{topic}'"))
         }
         other => Err(anyhow::anyhow!("Unknown knowledge subcommand: '{other}'")),
     }

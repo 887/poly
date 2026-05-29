@@ -32,7 +32,7 @@ impl std::fmt::Display for TaskStatus {
 
 impl TaskStatus {
     /// Visual emoji indicator for this status.
-    pub fn emoji(&self) -> &'static str {
+    pub const fn emoji(&self) -> &'static str {
         match self {
             Self::Todo => "⬜",
             Self::InProgress => "🔵",

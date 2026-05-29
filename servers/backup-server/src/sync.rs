@@ -249,7 +249,7 @@ pub async fn status(
 
     let account = account.ok_or(AppError::NotFound)?;
 
-    let stats: Option<serde_json::Value> = state
+    let blob_stats: Option<serde_json::Value> = state
         .db
         .query(
             "SELECT count() AS blob_count, math::max(sequence) AS latest_seq \
@@ -260,12 +260,12 @@ pub async fn status(
         .take(0)
         .map_err(AppError::from)?;
 
-    let blob_count = stats
+    let blob_count = blob_stats
         .as_ref()
         .and_then(|v| v.get("blob_count"))
         .and_then(serde_json::Value::as_i64)
         .unwrap_or(0);
-    let latest_sequence = stats
+    let latest_sequence = blob_stats
         .as_ref()
         .and_then(|v| v.get("latest_seq"))
         .and_then(serde_json::Value::as_i64)

@@ -113,6 +113,8 @@ async fn main() -> anyhow::Result<()> {
 }
 
 /// Wait for Ctrl-C or SIGTERM.
+// Platform-branching signal dispatch — splitting would add indirection without clarity.
+#[allow(clippy::cognitive_complexity)]
 async fn shutdown_signal() {
     let ctrl_c = async {
         if let Err(e) = signal::ctrl_c().await {

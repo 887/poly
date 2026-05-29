@@ -86,7 +86,10 @@ pub async fn load_next_id(data_dir: &Path) -> anyhow::Result<u32> {
     let mut max_id: u32 = 0;
     while let Some(entry) = entries.next_entry().await? {
         let name = entry.file_name().to_string_lossy().into_owned();
-        if name.ends_with(".json") {
+        if std::path::Path::new(&name)
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
+        {
             // Filenames look like `001_my_task.json`; parse the numeric prefix.
             if let Some(Ok(id)) = name.split('_').next().map(str::parse::<u32>) {
                 max_id = max_id.max(id);
@@ -126,7 +129,10 @@ pub async fn load_tasks(data_dir: &Path) -> anyhow::Result<Vec<Task>> {
     let mut tasks: Vec<Task> = Vec::new();
     while let Some(entry) = entries.next_entry().await? {
         let name = entry.file_name().to_string_lossy().into_owned();
-        if name.ends_with(".json") {
+        if std::path::Path::new(&name)
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
+        {
             let bytes = tokio::fs::read(entry.path()).await?;
             let task: Task = serde_json::from_slice(&bytes)?;
             tasks.push(task);
@@ -261,7 +267,10 @@ pub async fn list_memories(data_dir: &Path, task: &Task) -> anyhow::Result<Vec<(
     let mut files: Vec<String> = Vec::new();
     while let Some(entry) = entries.next_entry().await? {
         let name = entry.file_name().to_string_lossy().into_owned();
-        if name.ends_with(".md") {
+        if std::path::Path::new(&name)
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("md"))
+        {
             files.push(name);
         }
     }
@@ -310,7 +319,10 @@ pub async fn search_knowledge(
     let q_lower = query.to_lowercase();
     while let Some(entry) = entries.next_entry().await? {
         let name = entry.file_name().to_string_lossy().into_owned();
-        if !name.ends_with(".md") {
+        if !std::path::Path::new(&name)
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("md"))
+        {
             continue;
         }
         let bytes = tokio::fs::read(entry.path()).await?;
@@ -333,7 +345,10 @@ pub async fn list_knowledge(data_dir: &Path) -> anyhow::Result<Vec<String>> {
     let mut topics = Vec::new();
     while let Some(entry) = entries.next_entry().await? {
         let name = entry.file_name().to_string_lossy().into_owned();
-        if name.ends_with(".md") {
+        if std::path::Path::new(&name)
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("md"))
+        {
             topics.push(name.trim_end_matches(".md").to_string());
         }
     }

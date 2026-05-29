@@ -14,6 +14,9 @@
 //! ## OpenAPI spec
 //! Available at `/swagger-ui` (Swagger UI) and `/api-docs/openapi.json`.
 
+// needless_for_each fires inside utoipa's OpenApi proc-macro expansion — not our code.
+#![allow(clippy::needless_for_each)]
+
 pub mod auth;
 pub mod config;
 pub mod db;
@@ -56,6 +59,8 @@ pub struct AppState {
 /// 2. Add the handler function path to `paths(...)` below.
 /// 3. Add any new request/response structs to `components(schemas(...))`.
 /// 4. Run `cargo doc` to verify the generated spec.
+// needless_for_each fires inside OpenApi derive-generated code — not in our hand-written code.
+#[allow(clippy::needless_for_each)]
 #[derive(OpenApi)]
 #[openapi(
     info(

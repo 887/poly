@@ -298,7 +298,7 @@ async fn challenge(
         .db
         .create_auth_challenge(&req.public_key, &nonce)
         .await?
-        .ok_or(AppError::Internal("failed to create challenge".into()))?;
+        .ok_or_else(|| AppError::Internal("failed to create challenge".into()))?;
 
     Ok(Json(ChallengeResponse {
         challenge: nonce,
@@ -345,7 +345,7 @@ async fn verify(
     // Mark the challenge as used.
     let challenge_id = challenge_record
         .id
-        .ok_or(AppError::Internal("missing challenge id".into()))?;
+        .ok_or_else(|| AppError::Internal("missing challenge id".into()))?;
     state.db.mark_challenge_used(&challenge_id).await?;
 
     let user = resolve_user_for_signin(&state, &req.public_key, req.user_id.as_deref()).await?;

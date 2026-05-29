@@ -29,6 +29,8 @@ pub enum AppError {
 }
 
 impl IntoResponse for AppError {
+    // Match dispatch table — splitting would add indirection without clarity.
+    #[allow(clippy::cognitive_complexity)]
     fn into_response(self) -> Response {
         let (status, message) = match &self {
             Self::NotFound => (StatusCode::NOT_FOUND, self.to_string()),

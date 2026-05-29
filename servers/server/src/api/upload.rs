@@ -103,7 +103,7 @@ async fn upload(
         .create_attachment(&auth.user_id, &filename, &storage_name, &content_type, size_bytes)
         .await?
         .ok_or_else(|| AppError::Internal("no record".into()))?;
-    let id = att.id.clone().unwrap_or_default();
+    let id = att.id.unwrap_or_default();
 
     Ok((
         StatusCode::CREATED,

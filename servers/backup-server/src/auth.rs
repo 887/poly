@@ -162,6 +162,8 @@ fn validate_auth_input(body: &AuthRequest) -> Result<()> {
 
 /// Look up the challenge for `(nonce, public_key)`, check expiry, verify PoW,
 /// verify passphrase, then delete the challenge from the database.
+// Sequential validation steps — splitting would obscure the auth flow.
+#[allow(clippy::cognitive_complexity)]
 async fn verify_and_consume_challenge(
     db: &crate::Db,
     body: &AuthRequest,
@@ -547,7 +549,7 @@ where
             i64::try_from(app_state.config.token_expiry_days).unwrap_or(i64::MAX),
         )
         .await;
-        Ok(AuthUser {
+        Ok(Self {
             public_key,
             token_hash,
         })

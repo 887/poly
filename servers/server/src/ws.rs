@@ -115,17 +115,16 @@ async fn ws_handler(
 }
 
 /// Drive one WebSocket connection for the lifetime of the session.
+// Dispatch table + nested async — cognitive_complexity lint fires but splitting would obscure flow.
+#[allow(clippy::cognitive_complexity)]
 async fn handle_socket(socket: WebSocket, token: String, state: AppState) {
     // Validate token.
-    let claims = match Claims::decode(&token, &state.config.jwt_secret) {
-        Ok(c) => c,
-        Err(_) => {
-            // Close immediately — invalid token.
-            let (mut sink, _) = socket.split();
-            let msg = serde_json::to_string(&ServerEvent::DeviceRevoked).unwrap_or_default();
-            drop(sink.send(Message::Text(msg.into())).await);
-            return;
-        }
+    let Ok(claims) = Claims::decode(&token, &state.config.jwt_secret) else {
+        // Close immediately — invalid token.
+        let (mut sink, _) = socket.split();
+        let msg = serde_json::to_string(&ServerEvent::DeviceRevoked).unwrap_or_default();
+        drop(sink.send(Message::Text(msg.into())).await);
+        return;
     };
 
     let user_id = claims.sub;
@@ -198,6 +197,8 @@ enum ClientMessage {
     VoiceSignal { target_user_id: String, sdp: String },
 }
 
+// WS message dispatch table — splitting would add indirection without clarity.
+#[allow(clippy::cognitive_complexity)]
 async fn handle_client_message(text: &str, user_id: &str, device_id: &str, state: &AppState) {
     let Ok(msg) = serde_json::from_str::<ClientMessage>(text) else {
         return;

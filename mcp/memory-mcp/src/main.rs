@@ -76,11 +76,11 @@ async fn main() -> anyhow::Result<()> {
     // Any subcommand other than "mcp" triggers CLI mode.
     let mode_arg = args.get(1).map(String::as_str);
     match mode_arg {
-        None | Some("mcp") | Some("--mcp") => {
+        None | Some("mcp" | "--mcp") => {
             tracing::info!("Starting poly-memory-mcp in MCP/stdio mode");
             mcp::run_server(config.data_dir).await
         }
-        Some("--help") | Some("-h") | Some("help") => cli::print_help().await,
+        Some("--help" | "-h" | "help") => cli::print_help().await,
         _ => {
             // All other subcommands go to CLI mode.
             // Skip the binary name (args[0]); pass remaining args.

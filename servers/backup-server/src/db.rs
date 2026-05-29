@@ -18,6 +18,8 @@ use crate::config::Config;
 pub type Db = Surreal<SurrealDb>;
 
 /// Initialize SurrealKV, select namespace/database, and run schema migrations.
+// Sequential init + migrations — splitting would obscure the startup flow.
+#[allow(clippy::cognitive_complexity)]
 pub async fn init(config: &Config) -> anyhow::Result<Db> {
     let db_path = config.data_dir.join("backup.db");
     info!("Opening SurrealKV at {}", db_path.display());
@@ -33,7 +35,7 @@ pub async fn init(config: &Config) -> anyhow::Result<Db> {
 /// Idempotent SurrealQL schema for the backup server.
 ///
 /// Uses `DEFINE … OVERWRITE` so re-applying on every restart is safe.
-const SCHEMA: &str = r#"
+const SCHEMA: &str = r"
 -- Registered accounts (identified by Ed25519 public key)
 DEFINE TABLE OVERWRITE account SCHEMAFULL;
 DEFINE FIELD OVERWRITE public_key    ON account TYPE string;
@@ -74,7 +76,7 @@ DEFINE FIELD OVERWRITE ip           ON rate_limit TYPE string;
 DEFINE FIELD OVERWRITE failures     ON rate_limit TYPE int DEFAULT 0;
 DEFINE FIELD OVERWRITE window_start ON rate_limit TYPE string;
 DEFINE INDEX OVERWRITE rate_limit_ip ON rate_limit COLUMNS ip UNIQUE;
-"#;
+";
 
 // ── DB record types (deserialization targets) ──────────────────────────────────
 

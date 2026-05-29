@@ -43,6 +43,8 @@ fn mcp_error(id: Option<&Value>, code: i64, msg: &str) -> String {
 ///
 /// Descriptions include embedded agent instructions because the MCP client
 /// shows these to the AI agent as context.
+// Large JSON tool-schema table — cannot be meaningfully split without losing colocation of name+schema.
+#[allow(clippy::too_many_lines)]
 pub fn tool_list() -> Vec<Value> {
     vec![
         // ── Task management ──────────────────────────────────────────
@@ -265,6 +267,8 @@ async fn dispatch_tool(name: &str, params: &Value, data_dir: &Path) -> Value {
 }
 
 /// Inner dispatch — returns `anyhow::Result<String>` so `?` works cleanly.
+// Tool dispatch table — splitting would add indirection without clarity.
+#[allow(clippy::cognitive_complexity)]
 async fn dispatch_inner(name: &str, params: &Value, data_dir: &Path) -> anyhow::Result<String> {
     match name {
         "list_tasks" => ops::list_tasks(data_dir).await,
@@ -314,11 +318,11 @@ async fn dispatch_inner(name: &str, params: &Value, data_dir: &Path) -> anyhow::
         "search_knowledge" => {
             let query = str_param(params, "query")?;
             let results = store::search_knowledge(data_dir, query).await?;
-            format_knowledge_results(query, &results)
+            Ok(format_knowledge_results(query, &results))
         }
         "list_knowledge" => {
             let topics = store::list_knowledge(data_dir).await?;
-            format_knowledge_list(&topics)
+            Ok(format_knowledge_list(&topics))
         }
         "get_knowledge" => {
             let topic = str_param(params, "topic")?;
@@ -382,27 +386,27 @@ fn u32_param(params: &Value, key: &str) -> anyhow::Result<u32> {
 
 // ─── Formatting helpers ───────────────────────────────────────────────────────
 
-fn format_knowledge_results(query: &str, results: &[(String, String)]) -> anyhow::Result<String> {
+fn format_knowledge_results(query: &str, results: &[(String, String)]) -> String {
     if results.is_empty() {
-        return Ok(format!("No knowledge entries found for: '{query}'"));
+        return format!("No knowledge entries found for: '{query}'");
     }
     let mut out = vec![format!("# Knowledge Search: '{query}'\n")];
     for (slug, content) in results {
         out.push(format!("---\n**Topic:** {slug}\n\n{content}"));
     }
-    Ok(out.join("\n"))
+    out.join("\n")
 }
 
-fn format_knowledge_list(topics: &[String]) -> anyhow::Result<String> {
+fn format_knowledge_list(topics: &[String]) -> String {
     if topics.is_empty() {
-        return Ok("No knowledge entries yet. Add with `store_knowledge`.".to_string());
+        return "No knowledge entries yet. Add with `store_knowledge`.".to_string();
     }
     let list = topics
         .iter()
         .map(|t| format!("  • {t}"))
         .collect::<Vec<_>>()
         .join("\n");
-    Ok(format!("📚 Knowledge topics ({}):\n{list}", topics.len()))
+    format!("📚 Knowledge topics ({}):\n{list}", topics.len())
 }
 
 // ─── MCP server loop ──────────────────────────────────────────────────────────
@@ -444,7 +448,7 @@ async fn handle_request(line: &str, data_dir: &Path) -> String {
             return mcp_error(id.as_ref(), -32_600, "Missing method field");
         }
     };
-    let params = req.get("params").cloned().unwrap_or(json!({}));
+    let params = req.get("params").cloned().unwrap_or_else(|| json!({}));
     handle_method(&method, id, &params, data_dir).await
 }
 

@@ -157,19 +157,17 @@ fn check_session(
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
 
-    let raw_token = match cookie_header
+    let Some(raw_token) = cookie_header
         .split(';')
         .map(str::trim)
         .find_map(|part| part.strip_prefix("poly_admin="))
-    {
-        Some(t) => t,
-        None => return Some((StatusCode::UNAUTHORIZED, "not authenticated")),
+    else {
+        return Some((StatusCode::UNAUTHORIZED, "not authenticated"));
     };
 
     let hash = hash_session_token(raw_token);
-    let entry = match admin.sessions.get(&hash) {
-        Some(e) => e,
-        None => return Some((StatusCode::UNAUTHORIZED, "session expired or invalid")),
+    let Some(entry) = admin.sessions.get(&hash) else {
+        return Some((StatusCode::UNAUTHORIZED, "session expired or invalid"));
     };
 
     if entry.elapsed().as_secs() > session_hours.saturating_mul(3600) {
@@ -210,6 +208,8 @@ async fn admin_challenge(State(state): State<AppState>) -> Json<serde_json::Valu
 }
 
 /// `POST /admin/login` — verify PoW + credentials, issue session cookie.
+// Sequential auth steps with early returns — splitting would obscure the flow.
+#[allow(clippy::cognitive_complexity)]
 async fn admin_login(
     State(state): State<AppState>,
     Json(body): Json<AdminLoginRequest>,
