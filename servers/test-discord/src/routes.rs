@@ -542,7 +542,7 @@ pub async fn open_dm(
             let dm_id = Id::<ChannelMarker>::new_checked(dm_id_u64).unwrap_or_else(|| Id::new(10_001));
             let ch = state.channels.entry(dm_id).or_insert_with(|| Channel {
                 id: dm_id,
-                name: "".into(),
+                name: String::new(),
                 guild_id: None,
                 channel_type: ChannelType::Private,
                 parent_id: None,
@@ -1880,22 +1880,22 @@ fn channel_to_json(c: &Channel) -> serde_json::Value {
     });
 
     // Forum channel fields
-    if !c.available_tags.is_empty() {
+    if c.available_tags.is_empty() {
+        obj["available_tags"] = serde_json::json!([]);
+    } else {
         let tags: Vec<serde_json::Value> = c.available_tags.iter().map(forum_tag_to_json).collect();
         obj["available_tags"] = serde_json::Value::Array(tags);
-    } else {
-        obj["available_tags"] = serde_json::json!([]);
     }
     if let Some(layout) = c.default_forum_layout {
         obj["default_forum_layout"] = serde_json::json!(layout);
     }
 
     // Thread fields
-    if !c.applied_tags.is_empty() {
+    if c.applied_tags.is_empty() {
+        obj["applied_tags"] = serde_json::json!([]);
+    } else {
         let tags: Vec<serde_json::Value> = c.applied_tags.iter().map(|id| serde_json::json!(id.to_string())).collect();
         obj["applied_tags"] = serde_json::Value::Array(tags);
-    } else {
-        obj["applied_tags"] = serde_json::json!([]);
     }
     if let Some(ref meta) = c.thread_metadata {
         obj["thread_metadata"] = thread_metadata_to_json(meta);
@@ -1954,7 +1954,7 @@ fn message_to_json(m: &Message, state: &DiscordState) -> serde_json::Value {
 // Helpers
 // ---------------------------------------------------------------------------
 
-fn is_thread_type(ct: ChannelType) -> bool {
+const fn is_thread_type(ct: ChannelType) -> bool {
     matches!(
         ct,
         ChannelType::PublicThread

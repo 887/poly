@@ -262,6 +262,9 @@ pub struct WireAttachment {
 // ── Moderation wire types (B-PS) ─────────────────────────────────────────────
 
 /// Member permissions response from `GET /servers/{id}/members/@me/permissions`.
+// Wire type mirrors server-side permission flags 1:1; a state-machine refactor
+// would break the Deserialize mapping.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, Deserialize)]
 pub struct WirePermissions {
     pub role: String,

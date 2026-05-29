@@ -75,7 +75,15 @@ use async_trait::async_trait;
 #[cfg(feature = "native")]
 use futures::stream::Stream;
 #[cfg(feature = "native")]
-use poly_client::*;
+use poly_client::{
+    ActionOutcome, AuthCredentials, BackendCapabilities, BackendType, Channel, ChatCommand,
+    ClientError, ClientResult, ClientEvent, CommunityPage, CommunityScope, Cursor, CustomEmoji,
+    DmChannel, Group, IsBackend, Message, MessageContent, MessageQuery, MessageSearchHit,
+    MessageSearchQuery, MenuItem, MenuItemVariant, MenuSlot, MenuTargetKind, Notification,
+    PresenceStatus, Server, Session, SettingDescriptor, SettingKind, SettingsScope,
+    SettingsSection, SettingsStorageCell, SidebarDeclaration, StickerItem, User, ViewDescriptor,
+    ViewDetail, ViewRowsPage, VoiceParticipant,
+};
 #[cfg(feature = "native")]
 use std::pin::Pin;
 

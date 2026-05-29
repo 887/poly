@@ -22,7 +22,19 @@ use crate::http::{PolyServerConfig, PolyServerHttpClient};
 use crate::models::{self as srv, ChannelKind};
 #[cfg(feature = "native")]
 use crate::ws::PolyServerWsClient;
-use poly_client::*;
+use poly_client::{
+    ActionOutcome, AuthCredentials, BackendCapabilities, BackendType, BannedMember,
+    CardSpec, Category, Channel, ChannelType, ChatCommand, ClientError, ClientEvent,
+    ClientResult, ComposerButton, Cursor, CustomEmoji, DmChannel, Group, IsBackend,
+    MemberPermissions, MenuItem, MenuItemVariant, MenuSlot, MenuTargetKind, Message,
+    MessageContent, MessageQuery, MessageSearchHit, MessageSearchQuery, ModerationAction,
+    ModerationLogEntry, Notification, PendingHandle, PresenceStatus, Role, Server,
+    Session, SettingDescriptor, SettingKind, SettingsScope, SettingsSection,
+    SettingsStorageCell, SidebarDeclaration, SidebarLayoutKind, SignupMethod,
+    StickerItem, UpdateChannelParams, User, ViewBody, ViewDescriptor, ViewDetail,
+    ViewHeader, ViewKind, ViewRow, ViewRowsPage, VoiceParticipant, Attachment,
+    SocialGraphBackend,
+};
 
 /// A [`ClientBackend`] implementation for poly-server instances.
 ///
@@ -50,7 +62,7 @@ impl std::fmt::Debug for PolyServerBackend {
         f.debug_struct("PolyServerBackend")
             .field("base_url", &self.base_url)
             .field("account_id", &self.account_id)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -84,7 +96,7 @@ impl PolyServerBackend {
     }
 
     /// Get the HTTP client for direct API calls.
-    pub fn http(&self) -> &PolyServerHttpClient {
+    pub const fn http(&self) -> &PolyServerHttpClient {
         &self.http
     }
 
@@ -503,10 +515,7 @@ impl IsBackend for PolyServerBackend {
             let stream = tokio_stream::wrappers::BroadcastStream::new(rx);
 
             Box::pin(futures::stream::StreamExt::filter_map(stream, |result| {
-                let event = match result {
-                    Ok(srv_event) => map_server_event(srv_event),
-                    Err(_) => None,
-                };
+                let event = result.ok().and_then(map_server_event);
                 async move { event }
             }))
         }
@@ -523,7 +532,7 @@ impl IsBackend for PolyServerBackend {
         BackendType::from(crate::SLUG)
     }
 
-    fn backend_name(&self) -> &str {
+    fn backend_name(&self) -> &'static str {
         "Poly Server"
     }
 
@@ -950,16 +959,16 @@ impl poly_client::DmsAndGroupsBackend for PolyServerBackend {
             let other = participants.iter().find(|p| p.user != account_id);
 
             let user = if let Some(p) = other {
-                match self.http.get_user(&p.user).await {
-                    Ok(profile) => Self::map_user(&profile),
-                    Err(_) => User {
+                self.http.get_user(&p.user).await.map_or_else(
+                    |_| User {
                         id: p.user.clone(),
                         display_name: ch.name.clone(),
                         avatar_url: None,
                         presence: PresenceStatus::Offline,
                         backend: BackendType::from(crate::SLUG),
                     },
-                }
+                    |profile| Self::map_user(&profile),
+                )
             } else {
                 User {
                     id: String::new(),
@@ -1067,6 +1076,8 @@ impl poly_client::DmsAndGroupsBackend for PolyServerBackend {
 /// Map a poly-server `ServerEvent` to a `poly_client::ClientEvent`.
 ///
 /// Only used with the `native` feature (WebSocket events).
+// lint-allow-unused: exhaustive event dispatch table; splitting adds indirection with no clarity gain
+#[allow(clippy::too_many_lines)]
 #[cfg(feature = "native")]
 fn map_server_event(event: srv::ServerEvent) -> Option<ClientEvent> {
     match event {

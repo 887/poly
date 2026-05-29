@@ -427,7 +427,7 @@ pub async fn sync(
         // Wait for an event or timeout
         let got_event = tokio::select! {
             result = rx.recv() => result.is_ok(),
-            _ = tokio::time::sleep_until(deadline) => false,
+            () = tokio::time::sleep_until(deadline) => false,
         };
 
         if !got_event {

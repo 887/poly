@@ -109,11 +109,20 @@ impl PolyServerWsClient {
     /// Returns `Ok(())` if no connection is currently active (fire-and-forget).
     pub async fn send_message(&self, msg: &serde_json::Value) -> Result<()> {
         let text = serde_json::to_string(msg)?;
-        let mut guard = self.sink.lock().await;
-        if let Some(ref mut sink) = *guard {
-            sink.send(WsMessage::Text(text.into()))
-                .await
-                .map_err(|e| crate::error::PolyServerError::WebSocket(e.to_string()))?;
+        let send_result = {
+            let mut guard = self.sink.lock().await;
+            if let Some(ref mut sink) = *guard {
+                Some(
+                    sink.send(WsMessage::Text(text.into()))
+                        .await
+                        .map_err(|e| crate::error::PolyServerError::WebSocket(e.to_string())),
+                )
+            } else {
+                None
+            }
+        };
+        if let Some(r) = send_result {
+            r?;
         }
         Ok(())
     }
@@ -138,16 +147,19 @@ impl Drop for PolyServerWsClient {
 
 /// Convert an HTTP URL to a WebSocket URL.
 fn to_ws_url(base_url: &str) -> String {
-    if let Some(rest) = base_url.strip_prefix("https://") {
-        format!("wss://{rest}")
-    } else if let Some(rest) = base_url.strip_prefix("http://") {
-        format!("ws://{rest}")
-    } else {
-        format!("ws://{base_url}")
-    }
+    base_url.strip_prefix("https://").map_or_else(
+        || {
+            base_url
+                .strip_prefix("http://")
+                .map_or_else(|| format!("ws://{base_url}"), |rest| format!("ws://{rest}"))
+        },
+        |rest| format!("wss://{rest}"),
+    )
 }
 
 /// Background reconnection loop.
+// Complexity inherent to connection lifecycle: connect → stream → reconnect with backoff.
+#[allow(clippy::cognitive_complexity)]
 async fn ws_reconnect_loop(
     base_url: String,
     session: Arc<RwLock<Option<SessionState>>>,
@@ -160,13 +172,13 @@ async fn ws_reconnect_loop(
         // Get the current token.
         let token = {
             let guard = session.read().await;
-            match guard.as_ref() {
-                Some(s) => s.token.clone(),
-                None => {
-                    debug!("WS: No session token, waiting 5s before retry");
-                    tokio::time::sleep(Duration::from_secs(5)).await;
-                    continue;
-                }
+            if let Some(s) = guard.as_ref() {
+                s.token.clone()
+            } else {
+                debug!("WS: No session token, waiting 5s before retry");
+                drop(guard);
+                tokio::time::sleep(Duration::from_secs(5)).await;
+                continue;
             }
         };
 

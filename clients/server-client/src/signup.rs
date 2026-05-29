@@ -174,7 +174,7 @@ fn UrlConnectForm(
                 onclick: move |_| {
                     let url    = server_url.read().trim().to_string();
                     let key    = ctx.private_key.clone();
-                    let no_key = t("plugin-poly-signup-no-identity").to_string();
+                    let no_key = t("plugin-poly-signup-no-identity");
                     connecting.set(true);
                     error_msg.set(None);
                     spawn(async move {
@@ -238,13 +238,13 @@ fn ExistingAccountsForm(
                     {
                         let account_id = account.user_id.clone();
                         let label = if account.display_name == account.username {
-                            account.display_name.clone()
+                            account.display_name
                         } else {
                             format!("{} (@{})", account.display_name, account.username)
                         };
                         let url = server_url.clone();
                         let key = ctx.private_key.clone();
-                        let no_key = t("plugin-poly-signup-no-identity").to_string();
+                        let no_key = t("plugin-poly-signup-no-identity");
                         rsx! {
                             button {
                                 class: "profile-status-option",
@@ -375,7 +375,7 @@ fn SignupDetailsForm(
             div { class: "signup-form-actions",
                 {
                     let back_server_url = server_url.clone();
-                    let back_accounts = existing_accounts.clone();
+                    let back_accounts = existing_accounts;
                     rsx! {
                 button {
                     class: "btn btn-secondary",
@@ -408,7 +408,7 @@ fn SignupDetailsForm(
                             if d.is_empty() { user.clone() } else { d }
                         };
                         let key   = ctx.private_key.clone();
-                        let no_key = t("plugin-poly-signup-no-identity").to_string();
+                        let no_key = t("plugin-poly-signup-no-identity");
                         connecting.set(true);
                         error_msg.set(None);
                         spawn(async move {

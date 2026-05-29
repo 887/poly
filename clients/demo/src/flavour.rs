@@ -1,3 +1,12 @@
+// Explicit imports used across multiple fn bodies in this module.
+#[cfg(feature = "native")]
+use poly_client::{
+    BackendType, CardSpec, ClientError, CustomBlock, DmChannel, Message, MessageContent,
+    MenuTargetKind, PresenceStatus, SidebarDeclaration, SidebarItem, SidebarLayoutKind,
+    SidebarRouteKind, SidebarSection, TreeSpec, User, ViewBody, ViewDescriptor, ViewDetail,
+    ViewHeader, ViewKind, ViewRow, ViewRowsPage, ViewToolbar,
+};
+
 /// Per-flavour data-source bindings for the generic `DemoClient<F>`.
 ///
 /// Each associated function/method on this trait provides the per-flavour
@@ -224,7 +233,6 @@ impl DemoFlavour for Demo {
     }
 
     fn account_overview_view() -> poly_client::ClientResult<poly_client::ViewDescriptor> {
-        use poly_client::*;
         Ok(ViewDescriptor {
             kind: ViewKind::CardGrid,
             header: Some(ViewHeader {
@@ -247,7 +255,6 @@ impl DemoFlavour for Demo {
         channel_id: &str,
         _tab_id: Option<&str>,
     ) -> Result<poly_client::ViewRowsPage, poly_client::ClientError> {
-        use poly_client::*;
         if channel_id.is_empty() || channel_id == "overview" {
             let rows = crate::data::demo_servers()
                 .into_iter()
@@ -288,7 +295,6 @@ impl DemoFlavour for Demo {
     }
 
     fn sidebar_declaration() -> Result<poly_client::SidebarDeclaration, poly_client::ClientError> {
-        use poly_client::*;
         Ok(SidebarDeclaration {
             layout: SidebarLayoutKind::ChannelList,
             sections: Vec::new(),
@@ -313,6 +319,8 @@ impl DemoFlavour for Demo {
         None
     }
 
+    // lint-allow-unused: event-stream dispatch table — splitting loses cohesion
+    #[allow(clippy::too_many_lines)]
     fn event_stream() -> std::pin::Pin<Box<dyn futures::stream::Stream<Item = poly_client::ClientEvent> + Send>> {
         #[cfg(target_arch = "wasm32")]
         {
@@ -462,7 +470,7 @@ impl DemoFlavour for Demo {
                                 .unwrap_or(0);
                             let status = statuses
                                 .get(s_idx)
-                                .cloned()
+                                .copied()
                                 .unwrap_or(PresenceStatus::Online);
                             ClientEvent::PresenceChanged {
                                 user_id: user.id.clone(),
@@ -567,7 +575,6 @@ impl DemoFlavour for DemoChat {
     }
 
     fn dm_channels() -> Vec<poly_client::DmChannel> {
-        use poly_client::*;
         // A subset of DMs from a different perspective
         let mut dms: Vec<DmChannel> = crate::data::demo_dm_channels()
             .into_iter()
@@ -637,7 +644,6 @@ impl DemoFlavour for DemoChat {
     }
 
     fn account_overview_view() -> poly_client::ClientResult<poly_client::ViewDescriptor> {
-        use poly_client::*;
         Ok(ViewDescriptor {
             kind: ViewKind::CardGrid,
             header: Some(ViewHeader {
@@ -660,7 +666,6 @@ impl DemoFlavour for DemoChat {
         channel_id: &str,
         _tab_id: Option<&str>,
     ) -> Result<poly_client::ViewRowsPage, poly_client::ClientError> {
-        use poly_client::*;
         if channel_id.is_empty() || channel_id == "overview" {
             let rows = crate::data::demo2_servers()
                 .into_iter()
@@ -701,7 +706,6 @@ impl DemoFlavour for DemoChat {
     }
 
     fn sidebar_declaration() -> Result<poly_client::SidebarDeclaration, poly_client::ClientError> {
-        use poly_client::*;
         Ok(SidebarDeclaration {
             layout: SidebarLayoutKind::ChannelList,
             sections: Vec::new(),
@@ -849,7 +853,6 @@ impl DemoFlavour for DemoForum {
     }
 
     fn account_overview_view() -> poly_client::ClientResult<poly_client::ViewDescriptor> {
-        use poly_client::*;
         Ok(ViewDescriptor {
             kind: ViewKind::CardGrid,
             header: Some(ViewHeader {
@@ -863,7 +866,6 @@ impl DemoFlavour for DemoForum {
     }
 
     fn channel_view(_channel_id: &str) -> Result<poly_client::ViewDescriptor, poly_client::ClientError> {
-        use poly_client::*;
         Ok(ViewDescriptor {
             kind: ViewKind::Tree,
             header: Some(ViewHeader {
@@ -888,7 +890,6 @@ impl DemoFlavour for DemoForum {
         channel_id: &str,
         tab_id: Option<&str>,
     ) -> Result<poly_client::ViewRowsPage, poly_client::ClientError> {
-        use poly_client::*;
         if channel_id.is_empty() || channel_id == "overview" {
             let rows = crate::data::demo3_servers()
                 .into_iter()
@@ -960,7 +961,6 @@ impl DemoFlavour for DemoForum {
         channel_id: &str,
         row_id: &str,
     ) -> Result<poly_client::ViewDetail, poly_client::ClientError> {
-        use poly_client::*;
         fn html_escape(s: &str) -> String {
             s.replace('&', "&amp;")
                 .replace('<', "&lt;")
@@ -992,7 +992,6 @@ impl DemoFlavour for DemoForum {
     }
 
     fn sidebar_declaration() -> Result<poly_client::SidebarDeclaration, poly_client::ClientError> {
-        use poly_client::*;
         let mk = |id: &str, label_key: &str, parent: Option<&str>| SidebarItem {
             id: id.to_string(),
             parent_id: parent.map(str::to_string),
@@ -1031,12 +1030,12 @@ impl DemoFlavour for DemoForum {
         settings: &poly_client::SettingsStorageCell,
     ) -> Option<Result<poly_client::ActionOutcome, poly_client::ClientError>> {
         if action_id.starts_with("sort-") {
-            let _ = settings.set(
+            drop(settings.set(
                 poly_client::SettingsScope::AccountGlobal,
                 "",
                 "current-sort",
                 action_id,
-            );
+            ));
             return Some(Ok(poly_client::ActionOutcome::RefreshTarget));
         }
         Some(Err(poly_client::ClientError::NotFound(format!(

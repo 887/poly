@@ -11,7 +11,11 @@ use tokio::sync::RwLock;
 use tracing::{debug, info};
 
 use crate::error::{PolyServerError, Result};
-use crate::models::*;
+use crate::models::{
+    AccountLookupResponse, AuthResponse, ChallengeResponse, Device, FriendRequest,
+    IdentityAccount, Invite, Participant, ServerDetail, ServerInfo, UserProfile,
+    WireAttachmentRef, WireCategory, WireChannel, WireMessage, WireReaction, WireServer,
+};
 
 /// Configuration for connecting to a poly-server instance.
 #[derive(Debug, Clone)]
@@ -52,7 +56,7 @@ impl std::fmt::Debug for PolyServerHttpClient {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("PolyServerHttpClient")
             .field("base_url", &self.base_url)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -101,37 +105,35 @@ impl PolyServerHttpClient {
         format!("{}{}", self.base_url, path)
     }
 
+    /// Extract the current auth token, returning `NotAuthenticated` if not logged in.
+    async fn auth_token(&self) -> Result<String> {
+        self.session
+            .read()
+            .await
+            .as_ref()
+            .map(|s| s.token.clone())
+            .ok_or(PolyServerError::NotAuthenticated)
+    }
+
     /// Build a request with auth token if available.
     async fn auth_get(&self, url: &str) -> Result<reqwest::RequestBuilder> {
-        let session = self.session.read().await;
-        let Some(ref s) = *session else {
-            return Err(PolyServerError::NotAuthenticated);
-        };
-        Ok(self.http.get(url).bearer_auth(&s.token))
+        let token = self.auth_token().await?;
+        Ok(self.http.get(url).bearer_auth(&token))
     }
 
     async fn auth_post(&self, url: &str) -> Result<reqwest::RequestBuilder> {
-        let session = self.session.read().await;
-        let Some(ref s) = *session else {
-            return Err(PolyServerError::NotAuthenticated);
-        };
-        Ok(self.http.post(url).bearer_auth(&s.token))
+        let token = self.auth_token().await?;
+        Ok(self.http.post(url).bearer_auth(&token))
     }
 
     async fn auth_patch(&self, url: &str) -> Result<reqwest::RequestBuilder> {
-        let session = self.session.read().await;
-        let Some(ref s) = *session else {
-            return Err(PolyServerError::NotAuthenticated);
-        };
-        Ok(self.http.patch(url).bearer_auth(&s.token))
+        let token = self.auth_token().await?;
+        Ok(self.http.patch(url).bearer_auth(&token))
     }
 
     async fn auth_delete(&self, url: &str) -> Result<reqwest::RequestBuilder> {
-        let session = self.session.read().await;
-        let Some(ref s) = *session else {
-            return Err(PolyServerError::NotAuthenticated);
-        };
-        Ok(self.http.delete(url).bearer_auth(&s.token))
+        let token = self.auth_token().await?;
+        Ok(self.http.delete(url).bearer_auth(&token))
     }
 
     /// Parse a server error response.

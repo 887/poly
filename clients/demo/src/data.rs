@@ -1,4 +1,7 @@
 //! Demo data generators for testing the Poly UI.
+// The Dioxus `asset!()` macro expands to a type that clippy wrongly flags as
+// volatile-incompatible; suppress here since this is not our code to change.
+#![allow(clippy::volatile_composites)]
 //!
 //! Generates rich mock data: 3 servers for the "cat" demo account,
 //! 4 servers for the "dog" demo account, 12+ channels, 10 users, messages
@@ -12,7 +15,14 @@
 use chrono::{Duration, Utc};
 #[cfg(feature = "native")]
 use dioxus::prelude::*;
-use poly_client::*;
+use poly_client::{
+    Attachment, BackendType, BlockedUser, Category, Channel, ChannelType, ChatCommand,
+    ClientError, ClientResult, CommandScope, ContentPolicy, CustomEmoji, DmChannel,
+    DmSpamFilterLevel, Group, Message, MessageContent, MessageQuery, MessageReplyPreview,
+    MessageSearchHit, MessageSearchQuery, Notification, NotificationKind, Reaction,
+    SensitiveContentLevel, Server, Session, StickerItem, User, VoiceParticipant,
+    PresenceStatus,
+};
 use rand::distr::{Alphanumeric, SampleString};
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
@@ -442,6 +452,8 @@ pub fn demo3_discover_servers() -> Vec<Server> {
 
 /// Generate forum channels for demo3 servers.
 #[must_use]
+// lint-allow-unused: demo fixture — spliting scatters related test data; dispatch table
+#[allow(clippy::too_many_lines)]
 pub fn demo3_channels(server_id: &str) -> Vec<Channel> {
     match server_id {
         "comm-rust-lang" => vec![
@@ -554,6 +566,8 @@ pub fn demo3_channels(server_id: &str) -> Vec<Channel> {
 ///
 /// Posts are top-level messages in a Lemmy-style community board.
 #[must_use] 
+// lint-allow-unused: demo fixture — spliting scatters related test data; dispatch table
+#[allow(clippy::too_many_lines)]
 pub fn demo3_messages(channel_id: &str) -> Vec<Message> {
     match channel_id {
         "forum-rust-posts" => vec![
@@ -809,9 +823,9 @@ pub fn demo3_messages(channel_id: &str) -> Vec<Message> {
 /// A flat list — the UI builds the tree by walking `reply_to` links.
 /// Top-level comments have `reply_to: None`.
 #[must_use] 
+// lint-allow-unused: demo fixture — spliting scatters related test data; dispatch table
+#[allow(clippy::too_many_lines)]
 pub fn demo3_post_comments(post_id: &str) -> Vec<Message> {
-    let now = Utc::now();
-
     fn forum_user(id: &str, name: &str) -> User {
         User {
             id: id.to_string(),
@@ -867,6 +881,8 @@ pub fn demo3_post_comments(post_id: &str) -> Vec<Message> {
             preview_image_url: None,
         }
     }
+
+    let now = Utc::now();
 
     // Convenience macro-like closure — captures `now` legally.
     let c = |id: &str, author: User, text: &str, offset: chrono::Duration,
@@ -1118,8 +1134,7 @@ fn svg_data_uri(svg: &str) -> String {
         .replace('\\', "%5C")
         .replace('^', "%5E")
         .replace('`', "%60")
-        .replace("\n", "")
-        .replace("\r", "")
+        .replace(['\n', '\r'], "")
         .replace(' ', "%20");
     format!("data:image/svg+xml;utf8,{encoded}")
 }
@@ -1127,7 +1142,7 @@ fn svg_data_uri(svg: &str) -> String {
 /// Animal-style demo avatar.
 fn animal_avatar(emoji: &str, primary: &str, secondary: &str) -> String {
     svg_data_uri(&format!(
-        r#"
+        r"
 <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'>
     <defs>
         <linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>
@@ -1139,14 +1154,14 @@ fn animal_avatar(emoji: &str, primary: &str, secondary: &str) -> String {
     <circle cx='48' cy='48' r='32' fill='rgba(10,12,24,0.14)'/>
     <text x='48' y='58' text-anchor='middle' font-size='34'>{emoji}</text>
 </svg>
-                "#
+                "
     ))
 }
 
 /// Server icon matched to the server name/theme.
 fn themed_server_icon(symbol: &str, primary: &str, secondary: &str) -> String {
     svg_data_uri(&format!(
-        r#"
+        r"
 <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'>
     <defs>
         <linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>
@@ -1158,14 +1173,14 @@ fn themed_server_icon(symbol: &str, primary: &str, secondary: &str) -> String {
     <rect x='10' y='10' width='76' height='76' rx='22' fill='rgba(255,255,255,0.10)'/>
     <text x='48' y='58' text-anchor='middle' font-size='32'>{symbol}</text>
 </svg>
-                "#
+                "
     ))
 }
 
 /// Wide banner artwork matched to the server theme.
 fn themed_banner(primary: &str, secondary: &str, accent: &str, symbol: &str) -> String {
     svg_data_uri(&format!(
-        r#"
+        r"
 <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 960 240'>
     <defs>
         <linearGradient id='bg' x1='0' y1='0' x2='1' y2='1'>
@@ -1180,7 +1195,7 @@ fn themed_banner(primary: &str, secondary: &str, accent: &str, symbol: &str) -> 
     <rect x='0' y='170' width='960' height='70' fill='rgba(8,10,22,0.24)'/>
     <text x='812' y='148' text-anchor='middle' font-size='86' fill='rgba(255,255,255,0.18)'>{symbol}</text>
 </svg>
-                "#
+                "
     ))
 }
 
@@ -1691,6 +1706,8 @@ pub fn demo_servers() -> Vec<Server> {
 /// than the cat account. These appear in Bar 2 when demo2 is the active account,
 /// and the favorites bar can show icons from both accounts side-by-side.
 #[must_use] 
+// lint-allow-unused: demo fixture — spliting scatters related test data; dispatch table
+#[allow(clippy::too_many_lines)]
 pub fn demo2_servers() -> Vec<Server> {
     vec![
         Server {
@@ -1810,6 +1827,8 @@ pub fn demo2_servers() -> Vec<Server> {
 
 /// Generate channels for demo2 servers.
 #[must_use] 
+// lint-allow-unused: demo fixture — spliting scatters related test data; dispatch table
+#[allow(clippy::too_many_lines)]
 pub fn demo2_channels(server_id: &str) -> Vec<Channel> {
     match server_id {
         "cat-dog-arena" => vec![cat_dog_arena_channel()],
@@ -2100,6 +2119,8 @@ pub fn demo2_notifications() -> Vec<Notification> {
 
 /// Generate channels for a given server.
 #[must_use] 
+// lint-allow-unused: demo fixture — spliting scatters related test data; dispatch table
+#[allow(clippy::too_many_lines)]
 pub fn demo_channels(server_id: &str) -> Vec<Channel> {
     match server_id {
         "cat-dog-arena" => vec![cat_dog_arena_channel()],
@@ -2238,6 +2259,8 @@ pub fn demo_channels(server_id: &str) -> Vec<Channel> {
 /// Returns messages with realistic timestamps spread across multiple days,
 /// multi-line content, image attachments, reactions, and edited flags.
 #[must_use] 
+// lint-allow-unused: demo fixture — spliting scatters related test data; dispatch table
+#[allow(clippy::too_many_lines)]
 pub fn demo_messages(channel_id: &str) -> Vec<Message> {
     let users = demo_users();
 
@@ -2750,6 +2773,8 @@ pub fn demo_groups() -> Vec<Group> {
 
 /// Generate demo DM channels for cat account.
 #[must_use] 
+// lint-allow-unused: demo fixture — spliting scatters related test data; dispatch table
+#[allow(clippy::too_many_lines)]
 pub fn demo_dm_channels() -> Vec<DmChannel> {
     let users = demo_users();
     let mut channels: Vec<DmChannel> = users
@@ -2779,7 +2804,7 @@ pub fn demo_dm_channels() -> Vec<DmChannel> {
         thread: None,
         preview_image_url: None,
                 }),
-                unread_count: if i < 2 { 1 } else { 0 },
+                unread_count: u32::from(i < 2),
                 backend: BackendType::from(crate::SLUG),
                 account_id: DEMO_ACCOUNT_ID.to_string(),
             }
@@ -2796,7 +2821,7 @@ pub fn demo_dm_channels() -> Vec<DmChannel> {
         user: iris.clone(),
         last_message: Some(Message {
             id: "msg-dm-iris-latest".to_string(),
-            author: iris.clone(),
+            author: iris,
             content: MessageContent::Text(
                 "Hey! Great meeting you at RustConf 🦀 Here are a few shots from the hallway track:".to_string(),
             ),
@@ -2840,7 +2865,7 @@ pub fn demo_dm_channels() -> Vec<DmChannel> {
         user: jack.clone(),
         last_message: Some(Message {
             id: "msg-dm-jack-latest".to_string(),
-            author: jack.clone(),
+            author: jack,
             content: MessageContent::Text(
                 "Sent you the slides — let me know what you think of the WebRTC section!".to_string(),
             ),
@@ -2919,6 +2944,8 @@ pub fn demo_empty_dm_channel_for_user(user_id: &str, account_id: &str) -> Client
 
 /// Generate demo notifications.
 #[must_use] 
+// lint-allow-unused: demo fixture — spliting scatters related test data; dispatch table
+#[allow(clippy::too_many_lines)]
 pub fn demo_notifications() -> Vec<Notification> {
     vec![
         // — @mention in a channel —
@@ -3043,7 +3070,7 @@ pub fn demo_notifications() -> Vec<Notification> {
 
 /// Generate a default demo content policy for settings preview.
 #[must_use] 
-pub fn demo_content_policy() -> ContentPolicy {
+pub const fn demo_content_policy() -> ContentPolicy {
     ContentPolicy {
         sensitive_content_dm_friends: SensitiveContentLevel::Hide,
         sensitive_content_dm_others: SensitiveContentLevel::Hide,
@@ -3080,6 +3107,8 @@ pub fn demo_blocked_users() -> Vec<BlockedUser> {
 /// Returns realistic-looking participants for the two demo voice channels.
 /// Real clients get this from the server; the demo client provides static data.
 #[must_use] 
+// lint-allow-unused: demo fixture — spliting scatters related test data; dispatch table
+#[allow(clippy::too_many_lines)]
 pub fn demo_voice_participants(channel_id: &str) -> Vec<VoiceParticipant> {
     let users = demo_users();
     match channel_id {
@@ -3199,6 +3228,8 @@ pub fn demo_voice_participants(channel_id: &str) -> Vec<VoiceParticipant> {
 /// Each DM contact gets a personalised conversation thread instead of
 /// the generic "Hey, how's it going?" placeholder.
 #[must_use] 
+// lint-allow-unused: demo fixture — spliting scatters related test data; dispatch table
+#[allow(clippy::too_many_lines)]
 pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
     let users = demo_users();
 
@@ -3868,7 +3899,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 },
                 Message {
                     id: "msg-dm-iris-2".to_string(),
-                    author: iris.clone(),
+                    author: iris,
                     content: MessageContent::Text(
                         "Here are a few shots from the hallway track:".to_string(),
                     ),
@@ -3957,7 +3988,7 @@ pub fn demo_dm_messages(dm_channel_id: &str) -> Vec<Message> {
                 },
                 Message {
                     id: "msg-dm-jack-2".to_string(),
-                    author: jack.clone(),
+                    author: jack,
                     content: MessageContent::Text(
                         "Sent you the slides — let me know what you think of the WebRTC section!".to_string(),
                     ),
@@ -4160,6 +4191,8 @@ pub fn demo2_groups() -> Vec<Group> {
 ///
 /// Each group gets a personalised thread matching its theme.
 #[must_use] 
+// lint-allow-unused: demo fixture — spliting scatters related test data; dispatch table
+#[allow(clippy::too_many_lines)]
 pub fn demo_group_messages(group_id: &str) -> Vec<Message> {
     let users = demo_users();
 
@@ -4626,6 +4659,8 @@ fn demo2_general_attachment(index: usize) -> Attachment {
     )
 }
 
+// lint-allow-unused: demo fixture — spliting scatters related test data; dispatch table
+#[allow(clippy::too_many_lines)]
 fn demo2_opensource_general_messages() -> Vec<Message> {
     let users = demo_users();
     let authors = [
@@ -4702,10 +4737,8 @@ fn demo2_opensource_general_messages() -> Vec<Message> {
             let mut text = format!("Daily check-in #{index}: {topic} {action}. {detail}",);
 
             if index.checked_rem(17) == Some(0) {
-                text.push_str(&format!(
-                    "\nhttps://github.com/polyglot-messenger/poly/issues/{}",
-                    400_usize.saturating_add(index)
-                ));
+                use std::fmt::Write as _;
+                write!(text, "\nhttps://github.com/polyglot-messenger/poly/issues/{}", 400_usize.saturating_add(index)).ok();
             }
 
             if index.checked_rem(29) == Some(0) {
@@ -4757,6 +4790,8 @@ fn demo2_opensource_general_messages() -> Vec<Message> {
 }
 
 #[must_use] 
+// lint-allow-unused: demo fixture — spliting scatters related test data; dispatch table
+#[allow(clippy::too_many_lines)]
 pub fn demo2_messages_rich(channel_id: &str) -> Vec<Message> {
     let users = demo_users();
 
@@ -5490,6 +5525,8 @@ pub fn demo2_search_messages(query: &MessageSearchQuery) -> Vec<MessageSearchHit
 }
 
 /// Search messages for either demo account.
+// lint-allow-unused: demo fixture — spliting scatters related test data; dispatch table
+#[allow(clippy::too_many_lines)]
 fn search_demo_messages(query: &MessageSearchQuery, demo2: bool) -> Vec<MessageSearchHit> {
     #[derive(Clone)]
     struct SearchChannelMeta {
@@ -5580,24 +5617,19 @@ fn search_demo_messages(query: &MessageSearchQuery, demo2: bool) -> Vec<MessageS
             .collect::<Vec<_>>()
     };
 
-    let channels = server_channels
+    let text_lower = query.text.to_lowercase();
+    let mut hits = server_channels
         .into_iter()
         .chain(dm_channels)
         .chain(group_channels)
         .filter(|channel| {
-            if let Some(ref channel_id) = query.channel_id {
-                &channel.id == channel_id
-            } else if let Some(ref server_id) = query.server_id {
-                channel.server_id.as_deref() == Some(server_id.as_str())
-            } else {
-                false
-            }
+            query.channel_id.as_ref().map_or_else(
+                || query.server_id.as_ref().is_some_and(|server_id| {
+                    channel.server_id.as_deref() == Some(server_id.as_str())
+                }),
+                |channel_id| &channel.id == channel_id,
+            )
         })
-        .collect::<Vec<_>>();
-
-    let text_lower = query.text.to_lowercase();
-    let mut hits = channels
-        .into_iter()
         .filter(|channel| channel.is_text_like)
         .flat_map(|channel| {
             let channel_name = channel.name.clone();
@@ -5745,7 +5777,7 @@ pub fn demo_available_emojis(channel_id: &str) -> Vec<CustomEmoji> {
             unicode_fallback: Some("👋".to_string()),
             animated: false,
             server_id: Some("srv-poly-dev".to_string()),
-            source_name: source_name.clone(),
+            source_name,
         },
         CustomEmoji {
             id: "emoji-rustacean-hype".to_string(),
@@ -5789,7 +5821,7 @@ pub fn demo_available_stickers(channel_id: &str) -> Vec<StickerItem> {
             pack_name: Some("Larar Pack".to_string()),
             description: Some("Party sticker for celebrating wins".to_string()),
             server_id: Some("srv-poly-dev".to_string()),
-            source_name: source_name.clone(),
+            source_name,
             format: "png".to_string(),
         },
         StickerItem {

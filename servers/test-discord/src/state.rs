@@ -408,7 +408,7 @@ impl DiscordState {
         });
         self.channels.insert(Id::new(300), Channel {
             id: Id::new(300),
-            name: "".into(),
+            name: String::new(),
             guild_id: None,
             channel_type: ChannelType::Private,
             parent_id: None,
@@ -791,7 +791,7 @@ impl DiscordState {
                         id: 90001,
                         filename: "billabong_sunset.jpg".into(),
                         content_type: Some("image/jpeg".into()),
-                        size: 204800,
+                        size: 204_800,
                         url: "https://cdn.discordapp.com/attachments/601/90001/billabong_sunset.jpg".into(),
                         proxy_url: "https://media.discordapp.net/attachments/601/90001/billabong_sunset.jpg".into(),
                         width: Some(1920),
@@ -828,7 +828,7 @@ impl DiscordState {
                 // ADMINISTRATOR = 1<<3 = 8; represented as string per Discord wire format.
                 permissions: "8".into(),
                 position: 1,
-                color: 0xFF5765,
+                color: 0xFF_5765,
             },
         ]);
 
