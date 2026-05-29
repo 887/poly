@@ -23,39 +23,85 @@
 
 ---
 
-## Design Principles — SOLID (as it maps to Rust)
+## Design Principles — SOLID pre-merge gate (8-item checklist)
 
-Design new code — and opportunistically refactor old code — against SOLID. These
-are *design* principles, not a refactor mandate: don't rewrite working code just
-to hit a checklist. Do apply them when you're touching a file anyway, and
-especially when the component-size / connected-routes / context-menu lint plans
-force a refactor of oversize components.
+Every new crate, every substrate addition, every work package that lands more
+than ~200 LOC must pass this checklist before merging. The agent's report MUST
+state pass / partial / fail per item with one-sentence evidence.
 
-- **Single Responsibility.** One reason to change per type/module/function. If
-  describing what a thing does needs "and", it's two things. A 684-line rsx!
-  isn't one responsibility — it's a dozen.
-- **Open/Closed.** Add new variants/impls, don't edit existing ones. In Rust:
-  prefer adding a trait impl or a new enum variant to swapping out a match arm's
-  semantics. New backends/routes should not require surgery on old code.
-- **Liskov Substitution.** A trait impl must obey the trait's documented
-  contract. If `ClientBackend::send_message` says "may fail, won't panic", no
-  impl can panic. Don't strengthen preconditions or weaken postconditions in
-  impls.
-- **Interface Segregation.** Small traits over kitchen-sink traits. Consumers
-  should depend only on methods they actually call. `Read + Write` over one
-  `ReadWrite`; split capability traits when a backend only supports part of
-  the surface (cf. `NotSupported` returns — a sign the trait needs splitting).
-- **Dependency Inversion.** Depend on abstractions. Pass `impl Trait` /
-  `&dyn Trait` / generics rather than concrete types at call sites. A
-  component that reads from `Signal<RoomList>` should not know how the list
-  was loaded.
+**Pre-merge gate:** PARTIAL must name the specific item and reason. FAIL must
+either be fixed or carved into a follow-up cleanup task (with a filed issue or
+plan entry) before the change lands on main. "We'll SOLID it later" is not a
+passing gate.
 
-**When this kicks in:** the three in-flight lint plans
-(`plan-component-lints.md`, `plan-connected-routes-static-check.md`,
-`plan-context-menu-quality-control.md`) will force refactors on the oversize
-components (`FavoriteServerIcon`, `ChatView`, `ServerContextMenu`, …). Apply
-SOLID during those refactors — especially Single Responsibility when deciding
-*how* to split an rsx! block.
+Refactors ARE allowed and encouraged when SOLID gates fail — but each refactor
+itself passes the same 8-item gate before merging.
+
+1. **SRP — Single Responsibility.** Each module / type has exactly one reason
+   to change. UI composes; services orchestrate; backends aggregate and fetch;
+   stores persist — roles are not fused for convenience. A 684-line `rsx!`
+   block is not one responsibility. If describing what a thing does needs
+   "and", it is two things.
+
+2. **OCP — Open/Closed.** The substrate is extensible without modifying
+   existing impls. Canonical shape: trait + default impl + adapter-plugin
+   slots. Used in `IsBackend` (the primary messenger backend substrate —
+   adding a new messenger means adding a new `impl IsBackend`, not editing
+   a match arm), `KvStore`, `AudioBackend`, `VideoBackend`, `HostRoute`.
+   Adding a new backend or route must not require surgery on existing impls.
+
+3. **LSP — Liskov Substitution.** Every impl of a trait honours the trait's
+   full contract. If `IsBackend::send_message` says "may fail, won't panic",
+   no impl may panic. No impl strengthens preconditions or weakens
+   postconditions relative to the documented trait contract. Swapping one
+   impl for another must not break callers.
+
+4. **ISP — Interface Segregation.** Traits are client-focused, not
+   god-interfaces. A trait with 15+ methods is a smell — split by client
+   need. `BackendCapabilities` flags exist precisely so the UI can gate on
+   what a backend actually supports; a backend that returns `NotSupported` on
+   most methods is a sign the trait needs splitting. `Read + Write` over one
+   `ReadWrite`.
+
+5. **DIP — Dependency Inversion.** High-level modules depend on abstractions,
+   not concretes. Pass `impl Trait` / `&dyn Trait` / generics rather than
+   concrete types at call sites. A component that reads from
+   `Signal<RoomList>` must not know how the list was loaded. Plugin-host
+   wires concrete impls into abstract surfaces; nothing above the data layer
+   holds a concrete reference to anything below it.
+
+6. **No god-objects / no god-modules.** The largest type or module by LOC
+   should be proportional to its job. The old `ClientBackend` god-trait was
+   replaced by `IsBackend` in Phase H.4 for exactly this reason. If one file
+   is 5x the size of its peers in the same crate, suspect god-creep. The
+   three in-flight lint plans (`plan-component-lints.md`,
+   `plan-connected-routes-static-check.md`,
+   `plan-context-menu-quality-control.md`) exist to enforce this on the
+   oversize UI components (`FavoriteServerIcon`, `ChatView`,
+   `ServerContextMenu`). Split before merging, not after.
+
+7. **Test seams at every IO boundary.** Every external boundary — SQLite
+   (`KvStore` + `PluginStorageBackend`), HTTP outbound (`host-bridge /host/http`),
+   WebSocket (`host-bridge /host/exec`), audio (`AudioBackend`), video
+   (`VideoBackend`), notification sink (`NotificationSink`), OAuth token
+   store (`ClientStateStore`), browser sandbox (`HostSandbox`) — has a
+   trait + in-memory or stub impl + concrete impl. The in-memory/stub impl
+   lets tests run without external dependencies. A boundary without a seam
+   is an untestable surface and a pre-merge blocker.
+
+8. **Pure plugins — no direct IO.** Plugin code (WASM components implementing
+   `poly:messenger@0.1.0` or any future WIT interface) must never perform
+   direct IO. All HTTP, storage, exec, clock, and logging calls must flow
+   through the host-bridge capability surface (`/host/http`, `/host/kv/*`,
+   `/host/exec`, `/host/status`). A plugin that opens a socket, reads a file,
+   or calls a system clock directly violates the capability-isolation contract
+   and must be fixed or rejected before merge. Native backends that implement
+   `IsBackend` directly (demo, stoat, matrix, discord, teams, poly-server) are
+   exempt — this item applies only to WASM guest components.
+
+**When SOLID kicks in:** the in-flight lint plans will force refactors on
+oversize components. Apply this checklist during those refactors — especially
+SRP and item 6 when deciding how to split an `rsx!` block or a large module.
 
 ---
 
