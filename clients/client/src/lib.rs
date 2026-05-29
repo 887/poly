@@ -638,10 +638,10 @@ pub trait IsBackend: Send + Sync {
     /// Phase C.1 — default delegates to [`Self::as_settings`] when `Some`,
     /// otherwise returns a static empty cell.
     fn settings_storage(&self) -> &SettingsStorageCell {
+        static EMPTY: std::sync::OnceLock<SettingsStorageCell> = std::sync::OnceLock::new();
         if let Some(s) = self.as_settings() {
             return s.settings_storage();
         }
-        static EMPTY: std::sync::OnceLock<SettingsStorageCell> = std::sync::OnceLock::new();
         EMPTY.get_or_init(SettingsStorageCell::new)
     }
 
@@ -892,7 +892,7 @@ fn _default_t(key: &str) -> String {
     key.to_string()
 }
 
-fn _default_navigate_back() {}
+const fn _default_navigate_back() {}
 
 impl PartialEq for SignupContext {
     fn eq(&self, other: &Self) -> bool {

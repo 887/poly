@@ -60,7 +60,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Tell Cargo to re-run this build script if any partial changes.
     for partial in PARTIALS {
-        println!("cargo:rerun-if-changed=assets/styling/{}", partial);
+        println!("cargo:rerun-if-changed=assets/styling/{partial}");
     }
     // Also watch the themes directory for changes.
     println!("cargo:rerun-if-changed=assets/styling/themes");
@@ -122,7 +122,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
              \x20  Partials (in cascade order):\n",
         );
         for partial in PARTIALS {
-            output.push_str(&format!("     assets/styling/{partial}\n"));
+            use std::fmt::Write as _;
+            writeln!(output, "     assets/styling/{partial}").ok();
         }
         output.push_str(
             "   ======================================================================= */\n\n",
@@ -137,10 +138,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         // Only write if the content actually changed — avoids unnecessary rebuilds.
-        let write_needed = match std::fs::read_to_string(&tailwind_path) {
-            Ok(existing) => existing != output,
-            Err(_) => true,
-        };
+        let write_needed = std::fs::read_to_string(&tailwind_path)
+            .map_or(true, |existing| existing != output);
         if write_needed {
             std::fs::write(&tailwind_path, &output)
                 .map_err(|e| format!("build.rs: failed to write tailwind.css: {e}"))?;
@@ -168,16 +167,18 @@ const CSS_SLICES: &[Asset] = &[CSS_0];
         );
 
         for (i, partial) in PARTIALS.iter().enumerate() {
-            let const_name = format!("CSS_{}", i);
-            css_rs.push_str(&format!(
-                "const {const_name}: Asset = asset!(\"assets/styling/{partial}\");\n"
-            ));
+            use std::fmt::Write as _;
+            writeln!(
+                css_rs,
+                "const CSS_{i}: Asset = asset!(\"assets/styling/{partial}\");"
+            ).ok();
         }
 
         // Generate a CSS_SLICES constant for easy iteration.
         css_rs.push_str("\nconst CSS_SLICES: &[Asset] = &[\n");
         for i in 0..PARTIALS.len() {
-            css_rs.push_str(&format!("    CSS_{i},\n"));
+            use std::fmt::Write as _;
+            writeln!(css_rs, "    CSS_{i},").ok();
         }
         css_rs.push_str("];\n");
 

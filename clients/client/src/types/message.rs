@@ -43,7 +43,7 @@ pub struct Attachment {
 impl Attachment {
     /// Construct an attachment that already exists on a remote backend.
     #[must_use]
-    pub fn remote(
+    pub const fn remote(
         id: String,
         filename: String,
         content_type: String,

@@ -39,7 +39,7 @@ impl BackendId {
     /// hand, and simply returns the slug itself — never a hardcoded brand
     /// name.
     #[must_use]
-    pub fn display_name(&self) -> &str {
+    pub const fn display_name(&self) -> &str {
         self.0.as_str()
     }
 
@@ -343,6 +343,9 @@ pub enum VideoCaptureCapability {
 /// It covers messaging model, DMs, friends, notifications, voice, and
 /// landing page — the dimensions that drive host-owned UI affordances.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+// Capability flags are individually named bools; an enum would require
+// versioned variants for every new backend feature, increasing churn.
+#[allow(clippy::struct_excessive_bools)]
 pub struct BackendCapabilities {
     pub messaging: MessagingModel,
     pub dms: DmSupport,

@@ -31,7 +31,7 @@ pub enum ConnectionStatus {
 impl ConnectionStatus {
     /// Short CSS class suffix for styling, e.g. `"status-dot--connected"`.
     #[must_use]
-    pub fn css_class(&self) -> &'static str {
+    pub const fn css_class(&self) -> &'static str {
         match self {
             Self::Connected => "connected",
             Self::Connecting => "connecting",
@@ -43,7 +43,7 @@ impl ConnectionStatus {
 
     /// Small indicator emoji shown on the account icon top-left badge.
     #[must_use]
-    pub fn emoji(&self) -> &'static str {
+    pub const fn emoji(&self) -> &'static str {
         match self {
             Self::Connected => "●",
             Self::Connecting => "◌",
@@ -57,7 +57,7 @@ impl ConnectionStatus {
     /// account (prominent icon + toast notification). Forge/forum backends
     /// never show a connection-status badge, but they DO show this one.
     #[must_use]
-    pub fn needs_reauth(&self) -> bool {
+    pub const fn needs_reauth(&self) -> bool {
         matches!(self, Self::Unauthenticated(_))
     }
 }
@@ -89,7 +89,7 @@ pub enum AccountPresence {
 impl AccountPresence {
     /// Short CSS class suffix, e.g. `"presence-dot--online"`.
     #[must_use]
-    pub fn css_class(self) -> &'static str {
+    pub const fn css_class(self) -> &'static str {
         match self {
             Self::Online => "online",
             Self::Away => "away",
@@ -101,7 +101,7 @@ impl AccountPresence {
 
     /// Small indicator emoji shown on the account icon bottom-left badge.
     #[must_use]
-    pub fn emoji(self) -> &'static str {
+    pub const fn emoji(self) -> &'static str {
         match self {
             Self::Online => "●",
             Self::Away => "◑",
@@ -112,7 +112,7 @@ impl AccountPresence {
 
     /// Display name for UI labels.
     #[must_use]
-    pub fn display_name(self) -> &'static str {
+    pub const fn display_name(self) -> &'static str {
         match self {
             Self::Online => "Online",
             Self::Away => "Away",

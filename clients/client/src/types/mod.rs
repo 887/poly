@@ -1,4 +1,7 @@
 //! Shared data types used across all messenger backends.
+// This crate uses the mod.rs style intentionally (all sub-modules sit under
+// types/); renaming to types.rs would require moving every sibling file.
+#![allow(clippy::mod_module_files)]
 //!
 //! Organised into topic sub-modules. Every type is re-exported flat so
 //! `use poly_client::types::Foo` and `use poly_client::Foo` keep working

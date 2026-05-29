@@ -19,7 +19,7 @@ pub enum SensitiveContentLevel {
 impl SensitiveContentLevel {
     /// Display label for this level.
     #[must_use]
-    pub fn label(self) -> &'static str {
+    pub const fn label(self) -> &'static str {
         match self {
             Self::Show => "Show",
             Self::Hide => "Hide",
@@ -43,7 +43,7 @@ pub enum DmSpamFilterLevel {
 impl DmSpamFilterLevel {
     /// Display label for this level.
     #[must_use]
-    pub fn label(self) -> &'static str {
+    pub const fn label(self) -> &'static str {
         match self {
             Self::FilterAll => "Filter all messages from non-friends",
             Self::FilterNonFriends => "Filter messages from non-friends",
@@ -57,6 +57,9 @@ impl DmSpamFilterLevel {
 /// Controls what content is shown, who can send DMs, and friend request
 /// permissions. These are stored per-account and come from the client backend.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+// Policy struct mirrors the backend's bool flags 1-to-1; collapsing into a
+// bitfield or enum would obscure semantics and hurt serde compatibility.
+#[allow(clippy::struct_excessive_bools)]
 pub struct ContentPolicy {
     /// Sensitive media filter for DMs from friends.
     pub sensitive_content_dm_friends: SensitiveContentLevel,
@@ -116,6 +119,9 @@ pub struct BlockedUser {
 /// Boolean flags — the host uses these to gate UI affordances without knowing
 /// which backend-specific role system produced them.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+// Permission flags are individually named bools by design; a bitfield would
+// make serde output opaque and hurt cross-backend readability.
+#[allow(clippy::struct_excessive_bools)]
 pub struct MemberPermissions {
     /// Can manage the server itself (rename, change settings, delete).
     pub manage_server: bool,

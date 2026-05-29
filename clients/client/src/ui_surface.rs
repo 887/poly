@@ -252,7 +252,7 @@ impl SettingsScope {
     /// Used as the storage-key prefix in plugin-side settings persistence
     /// (Pack C P18) and as the string form in [`SettingsAnchor::scope`].
     #[must_use]
-    pub fn as_label(self) -> &'static str {
+    pub const fn as_label(self) -> &'static str {
         match self {
             Self::AccountGlobal => "account-global",
             Self::PerServer => "per-server",

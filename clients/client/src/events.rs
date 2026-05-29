@@ -1,6 +1,6 @@
 //! Real-time event types from messenger backends.
 
-use crate::types::*;
+use crate::types::{BackendType, Channel, Message, Notification, PresenceStatus, Server, User, VoiceParticipant};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 

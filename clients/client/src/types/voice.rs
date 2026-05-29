@@ -7,6 +7,9 @@ use super::user::User;
 
 /// A user connected to a voice or video channel.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+// Each bool tracks a distinct, independently togglable voice state; an enum
+// or bitfield would not map cleanly to the WIT interface or backend events.
+#[allow(clippy::struct_excessive_bools)]
 pub struct VoiceParticipant {
     /// The user in the voice channel.
     pub user: User,
@@ -33,6 +36,9 @@ pub enum VoiceConnectionKind {
 
 /// The local user's voice connection state.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+// Voice-control toggles (mute, deafen, stream, video) are each individually
+// controllable; an enum cannot represent all 2^4 combinations orthogonally.
+#[allow(clippy::struct_excessive_bools)]
 pub struct VoiceConnection {
     /// Channel ID we are connected to.
     pub channel_id: String,
