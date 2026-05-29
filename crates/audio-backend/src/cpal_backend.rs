@@ -351,6 +351,7 @@ impl AudioBackend for CpalBackend {
     // open_input builds a sample-format-switching match and a multi-step stream
     // setup pipeline; the function is inherently long and splitting it into
     // helpers would obscure the cpal callback wiring.
+// lint-allow-unused: realtime cpal callback setup is inherently long (3 sample-format branches)
     #[allow(clippy::too_many_lines, clippy::wildcard_enum_match_arm)]
     async fn open_input(
         &self,
