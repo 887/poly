@@ -166,7 +166,7 @@ impl Default for RollingBuildLog {
 impl RollingBuildLog {
     /// Create a new rolling build log with a maximum number of retained lines.
     #[must_use]
-    pub fn new(max_lines: usize) -> Self {
+    pub const fn new(max_lines: usize) -> Self {
         Self {
             next_seq: 1,
             lines: VecDeque::new(),
@@ -187,7 +187,7 @@ impl RollingBuildLog {
 
     /// Sequence number that the next appended line will receive.
     #[must_use]
-    pub fn next_sequence(&self) -> u64 {
+    pub const fn next_sequence(&self) -> u64 {
         self.next_seq
     }
 
@@ -331,7 +331,7 @@ const SNAPSHOT_VERBOSE_JS: &str = r#"(function(){
 /// both (a) the body of [`CONSOLE_CAPTURE_PRELUDE`], evaluated very early in
 /// every new document by CDP backends, and (b) the lazy install path inside
 /// [`CONSOLE_CAPTURE_JS`] for backends that don't have a pre-document hook.
-pub const CONSOLE_CAPTURE_INSTALL: &str = r#"(function(){
+pub const CONSOLE_CAPTURE_INSTALL: &str = r"(function(){
   if(!window.__polyConsoleLogs){
     window.__polyConsoleLogs=[];
     // Capture uncaught errors / unhandled rejections — wasm-bindgen panic
@@ -381,7 +381,7 @@ pub const CONSOLE_CAPTURE_INSTALL: &str = r#"(function(){
     document.addEventListener('DOMContentLoaded',install_chain,{once:true});
   }
   window.addEventListener('load',install_chain,{once:true});
-})()"#;
+})()";
 
 /// JS pre-document script — installed via `Page.addScriptToEvaluateOnNewDocument`
 /// in CDP backends at `connect_cdp` time. Runs before any page script (incl.
@@ -392,7 +392,7 @@ pub const CONSOLE_CAPTURE_PRELUDE: &str = CONSOLE_CAPTURE_INSTALL;
 /// Used by backends without a pre-document hook (e.g. HTTP-eval/Wry desktop).
 /// CDP backends install via [`CONSOLE_CAPTURE_PRELUDE`] at connect time, so by
 /// the time this runs the buffer already exists and the install is a no-op.
-const CONSOLE_CAPTURE_JS: &str = r#"(function(){
+const CONSOLE_CAPTURE_JS: &str = r"(function(){
   if(!window.__polyConsoleLogs){
     window.__polyConsoleLogs=[];
     var orig={};
@@ -407,7 +407,7 @@ const CONSOLE_CAPTURE_JS: &str = r#"(function(){
     });
   }
   return JSON.stringify(window.__polyConsoleLogs);
-})()"#;
+})()";
 
 // ─── Trait ────────────────────────────────────────────────────────────────────
 
@@ -580,14 +580,14 @@ pub trait DevtoolsBackend: Send + Sync {
 
         loop {
             let check_js = format!(
-                r#"(function(){{
+                r"(function(){{
                     var texts = {texts_json};
                     var body = document.body ? document.body.innerText : '';
                     for (var i = 0; i < texts.length; i++) {{
                         if (body.indexOf(texts[i]) !== -1) return JSON.stringify({{found: texts[i]}});
                     }}
                     return JSON.stringify({{found: null}});
-                }})()"#
+                }})()"
             );
 
             if let Ok(result) = self.js_eval(&check_js).await {
@@ -644,7 +644,7 @@ pub trait DevtoolsBackend: Send + Sync {
     async fn click_at(&self, x: f64, y: f64, dbl_click: bool) -> anyhow::Result<String> {
         let count: u32 = if dbl_click { 2 } else { 1 };
         self.js_eval(&format!(
-            r#"(function(){{
+            r"(function(){{
                 var x={x},y={y};
                 var el=document.elementFromPoint(x,y);
                 if(!el)return 'No element at ('+x+','+y+')';
@@ -661,7 +661,7 @@ pub trait DevtoolsBackend: Send + Sync {
                 var cls=(el.className||'').toString().trim().replace(/\s+/g,'.');
                 var txt=(el.textContent||'').trim().slice(0,40);
                 return 'Clicked '+tag+(id?id:(cls?'.'+cls:''))+' at ('+x+','+y+')';
-            }})()"#
+            }})()"
         ))
         .await
     }
@@ -672,7 +672,7 @@ pub trait DevtoolsBackend: Send + Sync {
     async fn hover_element(&self, selector: &str) -> anyhow::Result<String> {
         let escaped = selector.replace('\\', "\\\\").replace('\'', "\\'");
         self.js_eval(&format!(
-            r#"(function(){{
+            r"(function(){{
                 var el=document.querySelector('{escaped}');
                 if(!el)return 'Error: No element found for selector: {escaped}';
                 el.scrollIntoView({{block:'center',behavior:'instant'}});
@@ -683,7 +683,7 @@ pub trait DevtoolsBackend: Send + Sync {
                 el.dispatchEvent(new MouseEvent('mouseover',opts));
                 el.dispatchEvent(new MouseEvent('mousemove',opts));
                 return 'Hovered over '+el.tagName.toLowerCase()+(el.id?'#'+el.id:'');
-            }})()"#
+            }})()"
         ))
         .await
     }
@@ -729,7 +729,7 @@ pub trait DevtoolsBackend: Send + Sync {
     async fn type_text(&self, text: &str, submit_key: Option<&str>) -> anyhow::Result<String> {
         let escaped = text.replace('\\', "\\\\").replace('\'', "\\'");
         let mut js = format!(
-            r#"(function(){{
+            r"(function(){{
                 var el=document.activeElement||document.body;
                 var t='{escaped}';
                 if(el.tagName==='INPUT'||el.tagName==='TEXTAREA'){{
@@ -743,22 +743,28 @@ pub trait DevtoolsBackend: Send + Sync {
                         el.dispatchEvent(new KeyboardEvent('keypress',{{key:c,bubbles:true}}));
                         el.dispatchEvent(new KeyboardEvent('keyup',{{key:c,bubbles:true}}));
                     }}
-                }}"#
+                }}"
         );
         if let Some(key) = submit_key {
             let ek = key.replace('\\', "\\\\").replace('\'', "\\'");
+            // format_push_string: write! to String requires use std::fmt::Write which would fire
+            // items_after_statements. push_str+format! is clearer and the allocation is negligible.
+            #[allow(clippy::format_push_string)]
             js.push_str(&format!(
                 "\n                el.dispatchEvent(new KeyboardEvent('keydown',{{key:'{ek}',bubbles:true}}));\
                  \n                el.dispatchEvent(new KeyboardEvent('keyup',{{key:'{ek}',bubbles:true}}));"
             ));
         }
-        let display = match submit_key {
-            Some(k) => format!("Typed \\\"{escaped}\\\" + {k}"),
-            None => format!("Typed \\\"{escaped}\\\""),
-        };
+        let display = submit_key.map_or_else(
+            || format!("Typed \\\"{escaped}\\\""),
+            |k| format!("Typed \\\"{escaped}\\\" + {k}"),
+        );
+        #[allow(clippy::format_push_string)]
         js.push_str(&format!(
             "\n                return '{display}';\n            }})()"
         ));
+
+
         self.js_eval(&js).await
     }
 

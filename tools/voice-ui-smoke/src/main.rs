@@ -111,6 +111,7 @@ async fn main() -> anyhow::Result<()> {
     run(&url, cdp_port).await
 }
 
+#[allow(clippy::cognitive_complexity)]
 async fn run(target_url: &str, cdp_port: u16) -> anyhow::Result<()> {
     tracing::info!("Connecting to CDP on 127.0.0.1:{cdp_port}");
     let mut cdp = CdpClient::connect(cdp_port).await?;
@@ -191,7 +192,7 @@ impl CdpClient {
             self.ws.send(Message::Text(txt.into())),
         )
         .await
-        .map_err(|_| anyhow!("CDP send timeout for {method}"))??;
+        .map_err(|_e| anyhow!("CDP send timeout for {method}"))??;
 
         let deadline = Instant::now() + Duration::from_secs(CDP_RESPONSE_TIMEOUT_SECS);
         loop {
@@ -200,12 +201,12 @@ impl CdpClient {
                 .ok_or_else(|| anyhow!("CDP response timeout for {method}"))?;
             let next = tokio::time::timeout(remaining, self.ws.next())
                 .await
-                .map_err(|_| anyhow!("CDP response timeout for {method}"))?;
+                .map_err(|_e| anyhow!("CDP response timeout for {method}"))?;
             let Some(Ok(Message::Text(t))) = next else {
                 bail!("CDP WS closed while waiting for {method}");
             };
             let v: Value = serde_json::from_str(&t)?;
-            if v.get("id").and_then(|x| x.as_u64()) == Some(id) {
+            if v.get("id").and_then(Value::as_u64) == Some(id) {
                 if let Some(err) = v.get("error") {
                     bail!("CDP error on {method}: {err}");
                 }

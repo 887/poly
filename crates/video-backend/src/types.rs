@@ -37,8 +37,16 @@ pub struct VideoFrame {
 
 impl VideoFrame {
     /// Expected byte length for a frame with this format and dimensions.
+    ///
+    /// `u32 → usize` casts are safe: `usize` is at least 32 bits on every
+    /// target this codebase supports, so no truncation can occur.
     #[must_use]
-    pub fn expected_len(width: u32, height: u32, format: VideoPixelFormat) -> usize {
+    #[allow(
+        clippy::as_conversions,
+        clippy::cast_possible_truncation,
+        reason = "u32 → usize widening; usize ≥ 32 bits on all supported targets"
+    )]
+    pub const fn expected_len(width: u32, height: u32, format: VideoPixelFormat) -> usize {
         let bpp: usize = match format {
             VideoPixelFormat::Bgra | VideoPixelFormat::Rgba => 4,
             VideoPixelFormat::Yuv420p => 3, // 1.5 bytes/pixel but we use 3/2 → usize math

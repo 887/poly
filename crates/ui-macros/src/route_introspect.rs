@@ -31,7 +31,7 @@ pub fn expand(input: TokenStream) -> TokenStream {
 
     let variants: Vec<&Variant> = match &ast.data {
         Data::Enum(e) => e.variants.iter().collect(),
-        _ => {
+        Data::Struct(_) | Data::Union(_) => {
             return syn::Error::new(
                 Span::call_site(),
                 "#[derive(Connected)] can only be applied to enums",
@@ -57,7 +57,7 @@ pub fn expand(input: TokenStream) -> TokenStream {
         } else {
             match &v.fields {
                 Fields::Unit => none_arms.push(quote! { #enum_name::#vname => ::core::option::Option::None, }),
-                _ => none_arms.push(quote! { #enum_name::#vname { .. } => ::core::option::Option::None, }),
+                Fields::Named(_) | Fields::Unnamed(_) => none_arms.push(quote! { #enum_name::#vname { .. } => ::core::option::Option::None, }),
             }
         }
     }
@@ -68,9 +68,10 @@ pub fn expand(input: TokenStream) -> TokenStream {
         .map(|v| {
             let vname = &v.ident;
             let vname_str = vname.to_string();
-            match &v.fields {
-                Fields::Unit => quote! { #enum_name::#vname => #vname_str, },
-                _ => quote! { #enum_name::#vname { .. } => #vname_str, },
+            if matches!(&v.fields, Fields::Unit) {
+                quote! { #enum_name::#vname => #vname_str, }
+            } else {
+                quote! { #enum_name::#vname { .. } => #vname_str, }
             }
         })
         .collect();
@@ -131,7 +132,7 @@ fn variant_has_account_id_field(v: &Variant) -> bool {
             .named
             .iter()
             .any(|f| f.ident.as_ref().is_some_and(|i| i == "account_id")),
-        _ => false,
+        Fields::Unnamed(_) | Fields::Unit => false,
     }
 }
 

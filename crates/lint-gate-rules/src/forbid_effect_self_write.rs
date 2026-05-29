@@ -68,10 +68,7 @@ fn scan_effect_body(lines: &[&str], start: usize) -> Option<EffectScan> {
         let j = start + offset;
 
         // Strip line comments for brace counting and pattern matching.
-        let stripped = match l.find("//") {
-            Some(pos) => &l[..pos],
-            None => l,
-        };
+        let stripped = l.find("//").map_or(l, |pos| &l[..pos]);
 
         // Check inline allowlist on the original line (comment text).
         if allowlist::has_inline_allow(l, "effect-self-write") {

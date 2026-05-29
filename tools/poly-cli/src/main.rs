@@ -138,7 +138,7 @@ async fn main() -> anyhow::Result<()> {
             match cli.watch {
                 None => {
                     // Normal one-shot call.
-                    let arguments = parse_tool_args(&args)?;
+                    let arguments = parse_tool_args(&args);
                     let result = client.call_tool(&tool, arguments).await?;
                     let text = extract_tool_result(&result);
                     print_result_text(&text, cli.format);
@@ -173,7 +173,7 @@ async fn main() -> anyhow::Result<()> {
 ///   `occurred_at` seen after each successful poll.
 /// - Runs until SIGINT (Ctrl+C).
 // poly-cli is a user-facing CLI binary; println!/eprintln! is the production output channel.
-#[allow(clippy::print_stdout, clippy::print_stderr)]
+#[allow(clippy::print_stdout, clippy::print_stderr, clippy::cognitive_complexity)]
 async fn run_watch(
     client: &McpClient,
     tool: &str,
@@ -207,7 +207,7 @@ async fn run_watch(
             raw_args.to_vec()
         };
 
-        let arguments = parse_tool_args(&call_args)?;
+        let arguments = parse_tool_args(&call_args);
 
         match client.call_tool(tool, arguments).await {
             Ok(result) => {
@@ -266,7 +266,7 @@ async fn run_watch(
 
         // Wait for either the interval or Ctrl+C.
         tokio::select! {
-            _ = tokio::time::sleep(std::time::Duration::from_secs(interval_secs)) => {},
+            () = tokio::time::sleep(std::time::Duration::from_secs(interval_secs)) => {},
             _ = &mut ctrl_c => {
                 eprintln!("[watch] interrupted.");
                 break;
@@ -309,18 +309,18 @@ fn current_utc_iso8601() -> String {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs();
-    let s  = secs % 60;
-    let m  = (secs / 60) % 60;
-    let h  = (secs / 3600) % 24;
+    let sec = secs % 60;
+    let min = (secs / 60) % 60;
+    let hr  = (secs / 3600) % 24;
     let days = secs / 86400;
-    let (y, mo, d) = days_to_ymd(days);
-    format!("{y:04}-{mo:02}-{d:02}T{h:02}:{m:02}:{s:02}Z")
+    let (yr, mo, dy) = days_to_ymd(days);
+    format!("{yr:04}-{mo:02}-{dy:02}T{hr:02}:{min:02}:{sec:02}Z")
 }
 
 /// Integer-arithmetic Gregorian calendar conversion (same algorithm as memory.rs).
 // Howard Hinnant's date algorithm requires exact integer arithmetic.
 #[allow(clippy::integer_division, clippy::arithmetic_side_effects)]
-fn days_to_ymd(days: u64) -> (u64, u64, u64) {
+const fn days_to_ymd(days: u64) -> (u64, u64, u64) {
     let z   = days + 719_468;
     let era = z / 146_097;
     let doe = z % 146_097;
@@ -340,7 +340,7 @@ fn days_to_ymd(days: u64) -> (u64, u64, u64) {
 /// Numeric strings become JSON numbers.
 // Index loop bounded by args.get; overflow only at usize::MAX args (unreachable).
 #[allow(clippy::arithmetic_side_effects)]
-fn parse_tool_args(args: &[String]) -> anyhow::Result<Value> {
+fn parse_tool_args(args: &[String]) -> Value {
     let mut map = serde_json::Map::new();
     let mut i = 0;
 
@@ -369,20 +369,24 @@ fn parse_tool_args(args: &[String]) -> anyhow::Result<Value> {
         i += 1;
     }
 
-    Ok(Value::Object(map))
+    Value::Object(map)
 }
 
 /// Extract the text content from an MCP tool result.
 fn extract_tool_result(result: &Value) -> String {
-    if let Some(content) = result.get("content").and_then(|c| c.as_array()) {
-        content
-            .iter()
-            .filter_map(|item| item.get("text").and_then(|t| t.as_str()))
-            .collect::<Vec<_>>()
-            .join("\n")
-    } else {
-        serde_json::to_string_pretty(result).unwrap_or_default()
-    }
+    result
+        .get("content")
+        .and_then(|c| c.as_array())
+        .map_or_else(
+            || serde_json::to_string_pretty(result).unwrap_or_default(),
+            |content| {
+                content
+                    .iter()
+                    .filter_map(|item| item.get("text").and_then(|t| t.as_str()))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            },
+        )
 }
 
 /// Show the schema/help for a specific tool.
@@ -394,54 +398,51 @@ async fn show_tool_help(client: &McpClient, tool_name: &str) -> anyhow::Result<(
         .iter()
         .find(|t| t.get("name").and_then(|n| n.as_str()) == Some(tool_name));
 
-    match tool {
-        Some(t) => {
-            let name = t.get("name").and_then(|n| n.as_str()).unwrap_or("?");
-            let desc = t
-                .get("description")
-                .and_then(|d| d.as_str())
-                .unwrap_or("");
-            println!("Tool: {name}");
-            println!("Description: {desc}");
-            println!();
+    if let Some(t) = tool {
+        let name = t.get("name").and_then(|n| n.as_str()).unwrap_or("?");
+        let desc = t
+            .get("description")
+            .and_then(|d| d.as_str())
+            .unwrap_or("");
+        println!("Tool: {name}");
+        println!("Description: {desc}");
+        println!();
 
-            if let Some(schema) = t.get("inputSchema")
-                && let Some(props) = schema.get("properties").and_then(|p| p.as_object())
-            {
-                    let required: Vec<&str> = schema
-                        .get("required")
-                        .and_then(|r| r.as_array())
-                        .map(|arr| {
-                            arr.iter()
-                                .filter_map(|v| v.as_str())
-                                .collect()
-                        })
-                        .unwrap_or_default();
+        if let Some(schema) = t.get("inputSchema")
+            && let Some(props) = schema.get("properties").and_then(|p| p.as_object())
+        {
+            let required: Vec<&str> = schema
+                .get("required")
+                .and_then(|r| r.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str())
+                        .collect()
+                })
+                .unwrap_or_default();
 
-                    println!("Arguments:");
-                    for (key, prop) in props {
-                        let ptype = prop
-                            .get("type")
-                            .and_then(|t| t.as_str())
-                            .unwrap_or("string");
-                        let pdesc = prop
-                            .get("description")
-                            .and_then(|d| d.as_str())
-                            .unwrap_or("");
-                        let req = if required.contains(&key.as_str()) {
-                            " (required)"
-                        } else {
-                            ""
-                        };
-                        println!("  --{key:<16} {ptype:<10} {pdesc}{req}");
-                    }
+            println!("Arguments:");
+            for (key, prop) in props {
+                let ptype = prop
+                    .get("type")
+                    .and_then(|t| t.as_str())
+                    .unwrap_or("string");
+                let pdesc = prop
+                    .get("description")
+                    .and_then(|d| d.as_str())
+                    .unwrap_or("");
+                let req = if required.contains(&key.as_str()) {
+                    " (required)"
+                } else {
+                    ""
+                };
+                println!("  --{key:<16} {ptype:<10} {pdesc}{req}");
             }
         }
-        None => {
-            eprintln!("Unknown tool: {tool_name}");
-            eprintln!("Run `poly-cli tools` to see available tools.");
-            std::process::exit(1);
-        }
+    } else {
+        eprintln!("Unknown tool: {tool_name}");
+        eprintln!("Run `poly-cli tools` to see available tools.");
+        std::process::exit(1);
     }
 
     Ok(())
@@ -454,10 +455,8 @@ fn print_result_text(text: &str, fmt: OutputFormat) {
         OutputFormat::Pretty => {
             // Try to parse as JSON and pretty-print
             if let Ok(parsed) = serde_json::from_str::<Value>(text) {
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&parsed).unwrap_or_else(|_| text.to_string())
-                );
+                let pretty = serde_json::to_string_pretty(&parsed).unwrap_or_else(|_| text.to_string());
+                println!("{pretty}");
             } else {
                 println!("{text}");
             }
@@ -479,7 +478,8 @@ fn print_value(value: &Value, fmt: OutputFormat) {
             );
         }
         OutputFormat::Json => {
-            println!("{}", serde_json::to_string(value).unwrap_or_default());
+            let s = serde_json::to_string(value).unwrap_or_default();
+            println!("{s}");
         }
     }
 }

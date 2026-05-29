@@ -746,7 +746,7 @@ impl Client {
     }
 
     /// Shared POST+decode helper for the sub-routes.
-    async fn post_json<T: serde::de::DeserializeOwned, B: Serialize>(
+    async fn post_json<T: serde::de::DeserializeOwned + Send, B: Serialize + Sync>(
         &self,
         url: &str,
         body: &B,
@@ -810,7 +810,7 @@ impl Client {
                     .map_err(|e| BridgeError::ParseResponse(format!("stderr_b64: {e}")))?;
                 Ok((exit_code, stdout, stderr))
             }
-            other => Err(BridgeError::VariantMismatch {
+            other @ HostOk::HttpResponse { .. } => Err(BridgeError::VariantMismatch {
                 call: "exec-command",
                 got: variant_name(&other).to_string(),
             }),
@@ -818,7 +818,7 @@ impl Client {
     }
 }
 
-fn variant_name(ok: &HostOk) -> &'static str {
+const fn variant_name(ok: &HostOk) -> &'static str {
     match ok {
         HostOk::ExecOutput { .. } => "exec-output",
         HostOk::HttpResponse { .. } => "http-response",

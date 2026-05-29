@@ -80,7 +80,7 @@ pub enum HttpError {
 impl HttpError {
     /// Returns the HTTP status code if this is a `Status` error.
     #[must_use]
-    pub fn status(&self) -> Option<StatusCode> {
+    pub const fn status(&self) -> Option<StatusCode> {
         match self {
             Self::Status { status, .. } => Some(*status),
             Self::Build(_) | Self::Transport(_) | Self::Decode(_) => None,
@@ -153,7 +153,7 @@ impl HttpClient {
     /// Force routing through a specific bridge client. Mostly useful for
     /// tests that want to point at a non-default bridge URL.
     #[must_use]
-    pub fn with_bridge(client: BridgeClient) -> Self {
+    pub const fn with_bridge(client: BridgeClient) -> Self {
         Self {
             inner: HttpInner::Bridge(client),
         }
@@ -232,14 +232,14 @@ impl HttpClientBuilder {
     /// transport currently ignores it (the native shell uses its own
     /// reqwest defaults).
     #[must_use]
-    pub fn timeout(mut self, dur: Duration) -> Self {
+    pub const fn timeout(mut self, dur: Duration) -> Self {
         self.timeout = Some(dur);
         self
     }
 
     /// Force the direct transport even on wasm32 (browser fetch fallback).
     #[must_use]
-    pub fn direct(mut self) -> Self {
+    pub const fn direct(mut self) -> Self {
         self.force_direct = true;
         self
     }
@@ -320,7 +320,7 @@ impl RequestBuilder {
             return self;
         }
         self.headers.clear();
-        for (name, value) in headers.iter() {
+        for (name, value) in headers {
             let Ok(value_str) = value.to_str() else {
                 self.error =
                     Some(HttpError::Build(format!("non-ASCII header value for {name}")));
@@ -346,10 +346,7 @@ impl RequestBuilder {
         P: std::fmt::Display,
     {
         use base64::Engine as _;
-        let raw = match password {
-            Some(p) => format!("{username}:{p}"),
-            None => format!("{username}:"),
-        };
+        let raw = password.map_or_else(|| format!("{username}:"), |p| format!("{username}:{p}"));
         let encoded = base64::engine::general_purpose::STANDARD.encode(raw.as_bytes());
         self.header("authorization", format!("Basic {encoded}"))
     }
@@ -536,13 +533,13 @@ pub struct Response {
 impl Response {
     /// HTTP status code.
     #[must_use]
-    pub fn status(&self) -> StatusCode {
+    pub const fn status(&self) -> StatusCode {
         self.status
     }
 
     /// Response headers.
     #[must_use]
-    pub fn headers(&self) -> &HeaderMap {
+    pub const fn headers(&self) -> &HeaderMap {
         &self.headers
     }
 
@@ -563,18 +560,18 @@ impl Response {
     }
 
     /// Consume the response and return the raw body bytes.
-    pub async fn bytes(self) -> Result<Bytes, HttpError> {
+    pub fn bytes(self) -> Result<Bytes, HttpError> {
         Ok(self.body)
     }
 
     /// Consume the response and return the body as UTF-8 text.
-    pub async fn text(self) -> Result<String, HttpError> {
+    pub fn text(self) -> Result<String, HttpError> {
         String::from_utf8(self.body.to_vec())
             .map_err(|e| HttpError::Decode(format!("not valid UTF-8: {e}")))
     }
 
     /// Consume the response and decode the body as JSON.
-    pub async fn json<T: DeserializeOwned>(self) -> Result<T, HttpError> {
+    pub fn json<T: DeserializeOwned>(self) -> Result<T, HttpError> {
         serde_json::from_slice(&self.body).map_err(|e| HttpError::Decode(e.to_string()))
     }
 

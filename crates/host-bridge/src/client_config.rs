@@ -73,7 +73,7 @@ impl ClientConfigStore {
 
     /// Create a store backed by an existing bridge client.
     #[must_use]
-    pub fn from_client(client: Client) -> Self {
+    pub const fn from_client(client: Client) -> Self {
         Self { client }
     }
 

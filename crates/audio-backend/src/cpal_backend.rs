@@ -235,7 +235,7 @@ impl CpalBackend {
         );
         device
             .default_input_config()
-            .map(|c| c.into())
+            .map(Into::into)
             .map_err(|e| AudioError::Backend(e.to_string()))
     }
 
@@ -266,7 +266,7 @@ impl CpalBackend {
         );
         device
             .default_output_config()
-            .map(|c| c.into())
+            .map(Into::into)
             .map_err(|e| AudioError::Backend(e.to_string()))
     }
 }
@@ -309,7 +309,7 @@ impl AudioOutputStream for CpalOutputStream {
         self.sender
             .send(frame.to_vec())
             .await
-            .map_err(|_| AudioError::DeviceLost)
+            .map_err(|_e| AudioError::DeviceLost)
     }
 
     async fn close(&self) -> Result<(), AudioError> {
@@ -348,6 +348,10 @@ impl AudioBackend for CpalBackend {
             .clone()
     }
 
+    // open_input builds a sample-format-switching match and a multi-step stream
+    // setup pipeline; the function is inherently long and splitting it into
+    // helpers would obscure the cpal callback wiring.
+    #[allow(clippy::too_many_lines, clippy::wildcard_enum_match_arm)]
     async fn open_input(
         &self,
         device_id: &str,
@@ -363,6 +367,8 @@ impl AudioBackend for CpalBackend {
             config
         );
 
+        // Widening cast: u16 channel count → usize, always safe.
+        #[allow(clippy::as_conversions, clippy::cast_possible_truncation)]
         let channels = config.channels as usize;
 
         // Build the stream. cpal supports multiple sample formats; we
@@ -373,7 +379,6 @@ impl AudioBackend for CpalBackend {
             .sample_format()
         {
             SampleFormat::I16 => {
-                let tx = tx.clone();
                 device
                     .build_input_stream(
                         &config,
@@ -389,14 +394,23 @@ impl AudioBackend for CpalBackend {
                     .map_err(|e| AudioError::Backend(e.to_string()))?
             }
             SampleFormat::F32 => {
-                let tx = tx.clone();
                 device
                     .build_input_stream(
                         &config,
                         move |data: &[f32], _| {
+                            // Clamp-then-cast: f32 sample is clamped to [-1.0, 1.0]
+                            // then scaled to i16 range. Truncation is intentional.
+                            #[allow(
+                                clippy::cast_possible_truncation,
+                                clippy::as_conversions
+                            )]
                             let frame: Vec<i16> = data
                                 .iter()
-                                .map(|&s| (s * i16::MAX as f32).clamp(i16::MIN as f32, i16::MAX as f32) as i16)
+                                .map(|&s| {
+                                    (s * f32::from(i16::MAX))
+                                        .clamp(f32::from(i16::MIN), f32::from(i16::MAX))
+                                        as i16
+                                })
                                 .collect();
                             if tx.try_send(frame).is_err() {
                                 warn!("cpal input buffer full — dropping frame");
@@ -408,14 +422,20 @@ impl AudioBackend for CpalBackend {
                     .map_err(|e| AudioError::Backend(e.to_string()))?
             }
             SampleFormat::U8 => {
-                let tx = tx.clone();
                 device
                     .build_input_stream(
                         &config,
                         move |data: &[u8], _| {
+                            // u8 PCM is offset-binary: subtract 128 to centre, then
+                            // scale to i16. The multiply result fits in i16 range
+                            // after the clamp (-128..127 × 256 = -32768..32512).
+                            #[allow(
+                                clippy::cast_possible_truncation,
+                                clippy::as_conversions
+                            )]
                             let frame: Vec<i16> = data
                                 .iter()
-                                .map(|&s| ((s as i32 - 128) * 256) as i16)
+                                .map(|&s| ((i32::from(s) - 128_i32) * 256_i32) as i16)
                                 .collect();
                             if tx.try_send(frame).is_err() {
                                 warn!("cpal input buffer full — dropping frame");
@@ -456,6 +476,9 @@ impl AudioBackend for CpalBackend {
         }))
     }
 
+    // Intentional wildcard: future cpal SampleFormat variants should return
+    // UnsupportedFormat rather than silently misbehave.
+    #[allow(clippy::wildcard_enum_match_arm)]
     async fn open_output(
         &self,
         device_id: &str,
@@ -477,7 +500,6 @@ impl AudioBackend for CpalBackend {
         let rx = Arc::new(Mutex::new(rx));
 
         let stream = {
-            let rx = Arc::clone(&rx);
             match device
                 .default_output_config()
                 .map_err(|e| AudioError::Backend(e.to_string()))?
@@ -507,7 +529,6 @@ impl AudioBackend for CpalBackend {
                     )
                     .map_err(|e| AudioError::Backend(e.to_string()))?,
                 SampleFormat::F32 => {
-                    let rx = Arc::clone(&rx);
                     device
                         .build_output_stream(
                             &config,
@@ -566,13 +587,15 @@ impl AudioBackend for CpalBackend {
         // Validate that the device exists.
         let device = self.find_input_device(device_id)?;
         let name = device.name().unwrap_or_else(|_| device_id.into());
-        let mut state = self.state.lock().expect("BackendState lock poisoned");
-        state.current_input = Some(AudioDevice {
-            id: name.clone(),
-            label: name,
-            is_default: device_id.is_empty(),
-            kind: AudioDeviceKind::Input,
-        });
+        {
+            let mut state = self.state.lock().expect("BackendState lock poisoned");
+            state.current_input = Some(AudioDevice {
+                id: name.clone(),
+                label: name,
+                is_default: device_id.is_empty(),
+                kind: AudioDeviceKind::Input,
+            });
+        }
         debug!("CpalBackend: switched preferred input to '{device_id}'");
         // NOTE: This only updates the preference. The caller must re-open
         // the input stream against the new device_id for the change to
@@ -583,13 +606,15 @@ impl AudioBackend for CpalBackend {
     async fn switch_output(&self, device_id: &str) -> Result<(), AudioError> {
         let device = self.find_output_device(device_id)?;
         let name = device.name().unwrap_or_else(|_| device_id.into());
-        let mut state = self.state.lock().expect("BackendState lock poisoned");
-        state.current_output = Some(AudioDevice {
-            id: name.clone(),
-            label: name,
-            is_default: device_id.is_empty(),
-            kind: AudioDeviceKind::Output,
-        });
+        {
+            let mut state = self.state.lock().expect("BackendState lock poisoned");
+            state.current_output = Some(AudioDevice {
+                id: name.clone(),
+                label: name,
+                is_default: device_id.is_empty(),
+                kind: AudioDeviceKind::Output,
+            });
+        }
         debug!("CpalBackend: switched preferred output to '{device_id}'");
         Ok(())
     }

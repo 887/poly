@@ -321,10 +321,7 @@ fn make_dgram_stream(http: reqwest::Client, url: String) -> impl Stream<Item = U
                     break;
                 }
             };
-            let text = match std::str::from_utf8(&chunk) {
-                Ok(t) => t,
-                Err(_) => continue,
-            };
+            let Ok(text) = std::str::from_utf8(&chunk) else { continue };
             line_buf.push_str(text);
 
             while let Some(pos) = line_buf.find('\n') {

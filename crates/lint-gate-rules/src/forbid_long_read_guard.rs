@@ -82,59 +82,14 @@ fn scan_file_content(
         }
 
         // Extract variable name and signal name.
-        let (var_name, sig_name) = match extract_var_and_sig(trimmed) {
-            Some(v) => v,
-            None => continue,
+        let Some((var_name, sig_name)) = extract_var_and_sig(trimmed) else { continue };
+
+        let lookahead_lines = {
+            let start = i + 1;
+            let end = (i + LOOK_AHEAD + 1).min(lines.len());
+            &lines[start..end]
         };
-
-        // Walk forward from i+1 tracking brace depth.
-        let limit = (i + LOOK_AHEAD).min(lines.len() - 1);
-        let mut depth: i32 = 0;
-        let mut hit = false;
-
-        for j in (i + 1)..=limit {
-            let line_j = lines[j];
-
-            // Explicit drop ends scope cleanly.
-            if line_j.contains(&format!("drop({var_name})"))
-                || line_j.contains(&format!("drop( {var_name})"))
-            {
-                break;
-            }
-
-            // Write on the same signal while guard is live.
-            if depth >= 0 {
-                for write_method in &[".batch(", ".write(", ".set(", ".pending_update("] {
-                    let pattern = format!("{sig_name}{write_method}");
-                    if line_j.contains(&pattern) {
-                        hit = true;
-                        break;
-                    }
-                }
-            }
-            if hit {
-                break;
-            }
-
-            // Count braces (strip comments first).
-            let stripped = strip_comment(line_j);
-            for ch in stripped.chars() {
-                match ch {
-                    '{' => depth += 1,
-                    '}' => {
-                        depth -= 1;
-                        if depth < 0 {
-                            // Enclosing block closed — guard dropped.
-                            break;
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            if depth < 0 {
-                break;
-            }
-        }
+        let hit = guard_written_before_drop(&var_name, &sig_name, lookahead_lines);
 
         if hit {
             violations.push(Violation {
@@ -152,16 +107,58 @@ fn scan_file_content(
     }
 }
 
+/// Returns `true` if `sig_name` is written while the read guard is live
+/// (i.e. before a `drop(var_name)` or an enclosing `}` that closes the scope).
+fn guard_written_before_drop(var_name: &str, sig_name: &str, lines: &[&str]) -> bool {
+    let mut depth: i32 = 0;
+    for &line_j in lines {
+        // Explicit drop ends scope cleanly.
+        if line_j.contains(&format!("drop({var_name})"))
+            || line_j.contains(&format!("drop( {var_name})"))
+        {
+            return false;
+        }
+
+        // Write on the same signal while guard is live.
+        if depth >= 0 {
+            for write_method in &[".batch(", ".write(", ".set(", ".pending_update("] {
+                if line_j.contains(&format!("{sig_name}{write_method}")) {
+                    return true;
+                }
+            }
+        }
+
+        // Count braces (strip comments first).
+        let stripped = strip_comment(line_j);
+        for ch in stripped.chars() {
+            match ch {
+                '{' => depth += 1,
+                '}' => {
+                    depth -= 1;
+                    if depth < 0 {
+                        // Enclosing block closed — guard dropped.
+                        return false;
+                    }
+                }
+                _ => {}
+            }
+        }
+        if depth < 0 {
+            return false;
+        }
+    }
+    false
+}
+
 /// Returns true if the trimmed line is a bare `let [mut] X = Y.read();` —
 /// no trailing method chain after `.read()`.
 fn is_bare_read_let(trimmed: &str) -> bool {
     // Pattern: starts with `let`, contains `.read();`, and the `.read();` is the end
     // of the significant part (no more method chaining).
     // The trimmed line may have trailing whitespace or a comment; we strip those.
-    let without_comment = match trimmed.find("//") {
-        Some(pos) => trimmed[..pos].trim_end(),
-        None => trimmed.trim_end(),
-    };
+    let without_comment = trimmed
+        .find("//")
+        .map_or_else(|| trimmed.trim_end(), |pos| trimmed[..pos].trim_end());
     // Must end with `.read();`
     without_comment.ends_with(".read();")
         && without_comment.contains("= ")
@@ -186,10 +183,7 @@ fn extract_var_and_sig(trimmed: &str) -> Option<(String, String)> {
 
 /// Strip `//` line comment from a line.
 fn strip_comment(line: &str) -> &str {
-    match line.find("//") {
-        Some(pos) => &line[..pos],
-        None => line,
-    }
+    line.find("//").map_or(line, |pos| &line[..pos])
 }
 
 #[cfg(test)]

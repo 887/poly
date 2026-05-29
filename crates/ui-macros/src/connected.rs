@@ -45,9 +45,9 @@ impl Parse for Edge {
         let ident: Ident = input.parse()?;
         let s = ident.to_string();
         match s.as_str() {
-            "linked" => Ok(Edge::Linked),
-            "entry_point" => Ok(Edge::EntryPoint),
-            "skip_account_id" => Ok(Edge::SkipAccountId),
+            "linked" => Ok(Self::Linked),
+            "entry_point" => Ok(Self::EntryPoint),
+            "skip_account_id" => Ok(Self::SkipAccountId),
             "programmatic" => {
                 input.parse::<Token![<]>().map_err(|_orig| {
                     Error::new(
@@ -58,7 +58,7 @@ impl Parse for Edge {
                 })?;
                 let path: Path = input.parse()?;
                 input.parse::<Token![>]>()?;
-                Ok(Edge::Programmatic(path))
+                Ok(Self::Programmatic(path))
             }
             other => Err(Error::new(
                 ident.span(),
@@ -100,7 +100,7 @@ impl Parse for Connected {
                 "`entry_point` may appear at most once per variant",
             ));
         }
-        Ok(Connected { edges })
+        Ok(Self { edges })
     }
 }
 

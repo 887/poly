@@ -91,22 +91,22 @@ impl Parse for Arg {
             // case-insensitive `none` / `None`
             if s.eq_ignore_ascii_case("none") {
                 input.parse::<Ident>()?;
-                return Ok(Arg::None);
+                return Ok(Self::None);
             }
             if s == "allow_default" {
                 input.parse::<Ident>()?;
-                return Ok(Arg::AllowDefault);
+                return Ok(Self::AllowDefault);
             }
             if s == "inherit" {
                 input.parse::<Ident>()?;
-                return Ok(Arg::Inherit);
+                return Ok(Self::Inherit);
             }
         }
 
         // Otherwise must parse as a type path (e.g. `ChannelMenu` or
         // `crate::ui::server::ServerContextMenu`).
         match input.parse::<Path>() {
-            Ok(p) if input.is_empty() => Ok(Arg::Menu(p)),
+            Ok(p) if input.is_empty() => Ok(Self::Menu(p)),
             Ok(p) => Err(Error::new_spanned(
                 &p,
                 "`#[context_menu(...)]` accepts exactly one argument",
@@ -149,7 +149,7 @@ fn wrap_fn_body(
 
 /// Internal expand logic operating entirely on `proc_macro2::TokenStream` so
 /// it can be unit-tested without the proc-macro bridge.
-pub(crate) fn expand2(
+pub fn expand2(
     attr: proc_macro2::TokenStream,
     item: proc_macro2::TokenStream,
 ) -> proc_macro2::TokenStream {

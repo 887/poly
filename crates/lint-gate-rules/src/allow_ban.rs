@@ -67,7 +67,7 @@ pub fn scan(walker: &WorkspaceWalker, violations: &mut Vec<Violation>) {
             // Crude brace accounting on the same or following lines.
             // This is intentionally loose — the goal is to avoid false
             // positives, not to be a full Rust parser.
-            if cfg_test_depth > 0 && line.contains("}") && !line.contains("{") {
+            if cfg_test_depth > 0 && line.contains('}') && !line.contains('{') {
                 cfg_test_depth = cfg_test_depth.saturating_sub(1);
             }
             if cfg_test_depth > 0 {

@@ -206,6 +206,7 @@ impl AudioOutputStream for MockOutputStream {
         let mut st = self.state.lock().expect("MockState lock poisoned");
         st.total_pushed += frame.len();
         st.events.push(MockEvent::PushSamples(frame.len()));
+        drop(st);
         Ok(())
     }
 
@@ -261,7 +262,7 @@ impl AudioBackend for MockAudioBackend {
         {
             let mut st = self.state.lock().expect("MockState lock poisoned");
             st.current_input = Some(device.clone());
-            st.events.push(MockEvent::OpenInput(device.id.clone()));
+            st.events.push(MockEvent::OpenInput(device.id));
         }
         Ok(Box::pin(stream::empty()))
     }
@@ -275,7 +276,7 @@ impl AudioBackend for MockAudioBackend {
         {
             let mut st = self.state.lock().expect("MockState lock poisoned");
             st.current_output = Some(device.clone());
-            st.events.push(MockEvent::OpenOutput(device.id.clone()));
+            st.events.push(MockEvent::OpenOutput(device.id));
         }
         Ok(Box::new(MockOutputStream {
             state: Arc::clone(&self.state),
@@ -287,7 +288,7 @@ impl AudioBackend for MockAudioBackend {
         {
             let mut st = self.state.lock().expect("MockState lock poisoned");
             st.current_input = Some(device.clone());
-            st.events.push(MockEvent::SwitchInput(device.id.clone()));
+            st.events.push(MockEvent::SwitchInput(device.id));
         }
         Ok(())
     }
@@ -297,7 +298,7 @@ impl AudioBackend for MockAudioBackend {
         {
             let mut st = self.state.lock().expect("MockState lock poisoned");
             st.current_output = Some(device.clone());
-            st.events.push(MockEvent::SwitchOutput(device.id.clone()));
+            st.events.push(MockEvent::SwitchOutput(device.id));
         }
         Ok(())
     }

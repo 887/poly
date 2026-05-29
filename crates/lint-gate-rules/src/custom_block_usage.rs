@@ -45,7 +45,7 @@ pub fn scan(walker: &WorkspaceWalker, violations: &mut Vec<Violation>) {
             continue;
         }
         let rel = walker.relative(path);
-        let entry = per_plugin.entry(plugin).or_insert((0, rel.clone()));
+        let entry = per_plugin.entry(plugin).or_insert_with(|| (0, rel.clone()));
         entry.0 += count;
     }
 
@@ -100,7 +100,7 @@ pub fn count_custom_block_literals(src: &str) -> usize {
     count
 }
 
-fn is_ident_char(b: u8) -> bool {
+const fn is_ident_char(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'_'
 }
 

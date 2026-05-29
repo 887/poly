@@ -20,7 +20,7 @@ impl SampleRate {
 
     /// Raw Hz value.
     #[must_use]
-    pub fn hz(self) -> u32 {
+    pub const fn hz(self) -> u32 {
         self.0
     }
 }
@@ -43,7 +43,7 @@ pub enum Channels {
 impl Channels {
     /// Return the raw channel count.
     #[must_use]
-    pub fn count(self) -> u16 {
+    pub const fn count(self) -> u16 {
         match self {
             Self::Mono => 1,
             Self::Stereo => 2,
@@ -88,9 +88,12 @@ impl AudioFormat {
         // Division by a nonzero constant; cannot panic.
         #[allow(clippy::integer_division)]
         let samples_per_ms = self.sample_rate.0 / 1000;
-        samples_per_ms
+        // Widening cast u32 → usize: usize is always ≥ 32 bits on all supported targets.
+        #[allow(clippy::as_conversions, clippy::cast_possible_truncation)]
+        let result = samples_per_ms
             .saturating_mul(duration_ms)
-            .saturating_mul(u32::from(self.channels.count())) as usize
+            .saturating_mul(u32::from(self.channels.count())) as usize;
+        result
     }
 }
 

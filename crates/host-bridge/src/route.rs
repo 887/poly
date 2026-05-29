@@ -141,7 +141,12 @@ pub async fn call<R: HostRoute>(
     http: &reqwest::Client,
     base_url: &str,
     req: R::Req,
-) -> Result<R::Resp, R::Err> {
+) -> Result<R::Resp, R::Err>
+where
+    R::Req: Send + Sync,
+    R::Resp: Send,
+    R::Err: Send,
+{
     let url = format!("{}{}", base_url, R::endpoint());
 
     // attempt 0 … RETRIES (inclusive).
@@ -168,7 +173,12 @@ async fn do_post<R: HostRoute>(
     http: &reqwest::Client,
     url: &str,
     req: &R::Req,
-) -> Result<R::Resp, R::Err> {
+) -> Result<R::Resp, R::Err>
+where
+    R::Req: Sync,
+    R::Resp: Send,
+    R::Err: Send,
+{
     use std::time::Duration;
 
     let fut = post_and_parse::<R::Resp>(http, url, req);
@@ -187,7 +197,12 @@ async fn do_post<R: HostRoute>(
     http: &reqwest::Client,
     url: &str,
     req: &R::Req,
-) -> Result<R::Resp, R::Err> {
+) -> Result<R::Resp, R::Err>
+where
+    R::Req: Sync,
+    R::Resp: Send,
+    R::Err: Send,
+{
     post_and_parse::<R::Resp>(http, url, req)
         .await
         .map_err(R::Err::from)
@@ -195,10 +210,10 @@ async fn do_post<R: HostRoute>(
 
 // ── inner: shared POST + JSON-decode ──────────────────────────────────────────
 
-async fn post_and_parse<Resp: DeserializeOwned>(
+async fn post_and_parse<Resp: DeserializeOwned + Send>(
     http: &reqwest::Client,
     url: &str,
-    req: &impl Serialize,
+    req: &(impl Serialize + Sync),
 ) -> Result<Resp, TransportError> {
     let text = http
         .post(url)

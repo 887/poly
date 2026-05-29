@@ -50,6 +50,7 @@ use axum::response::IntoResponse;
 use axum::Json;
 
 /// Standard `/health` response.
+#[allow(clippy::unused_async)]
 pub async fn health_handler(backend: &'static str) -> impl IntoResponse {
     Json(serde_json::json!({ "status": "ok", "backend": backend }))
 }

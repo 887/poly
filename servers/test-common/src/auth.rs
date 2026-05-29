@@ -34,6 +34,7 @@ impl AuthState {
 
     /// Load tokens from `path`. If the file is missing or malformed, start
     /// empty. Subsequent mutations are written back to `path`.
+    #[allow(clippy::cognitive_complexity)]
     pub fn load(path: impl Into<PathBuf>) -> Self {
         let path = path.into();
         let tokens = match std::fs::read(&path) {
@@ -62,6 +63,7 @@ impl AuthState {
     }
 
     /// Best-effort write of the current token map to the persist path.
+    #[allow(clippy::cognitive_complexity)]
     fn save(&self) {
         let Some(path) = self
             .persist_path
@@ -124,6 +126,7 @@ impl AuthState {
 
 /// Delete the persisted auth file at `path`, if any. Used by `--reset` at
 /// server startup before the AuthState is loaded.
+#[allow(clippy::cognitive_complexity)]
 pub fn wipe_persisted(path: impl AsRef<Path>) {
     let path = path.as_ref();
     match std::fs::remove_file(path) {

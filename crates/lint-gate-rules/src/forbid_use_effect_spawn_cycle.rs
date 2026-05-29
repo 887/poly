@@ -75,10 +75,7 @@ fn scan_file_content(
         while j < n {
             let l = lines[j];
             // Strip line comments.
-            let stripped = match l.find("//") {
-                Some(pos) => &l[..pos],
-                None => l,
-            };
+            let stripped = l.find("//").map_or(l, |pos| &l[..pos]);
 
             // Look for spawn start inside effect.
             if effect_depth > 0 && !in_spawn

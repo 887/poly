@@ -60,11 +60,11 @@ pub fn scan(walker: &WorkspaceWalker, violations: &mut Vec<Violation>) {
 ///
 /// `ftl_keys`: the set of FTL message identifiers found in the plugin's English bundle.
 /// `plugin_name`: used only for the violation detail message.
-#[must_use] 
-pub fn scan_src(
+#[must_use]
+pub fn scan_src<S: ::std::hash::BuildHasher>(
     src: &str,
     path: &str,
-    ftl_keys: &std::collections::HashSet<String>,
+    ftl_keys: &std::collections::HashSet<String, S>,
     plugin_name: &str,
 ) -> Vec<Violation> {
     let mut out = Vec::new();

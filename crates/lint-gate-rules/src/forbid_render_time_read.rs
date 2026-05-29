@@ -130,11 +130,7 @@ fn is_event_handler_line(line: &str) -> bool {
         let after_ident = &rest[ident_end..].trim_start();
         if let Some(stripped) = after_ident.strip_prefix(':') {
             let rest2 = stripped.trim_start();
-            let rest2 = if let Some(s) = rest2.strip_prefix("move") {
-                s.trim_start()
-            } else {
-                rest2
-            };
+            let rest2 = rest2.strip_prefix("move").map_or(rest2, |s| s.trim_start());
             if rest2.starts_with('|') {
                 return true;
             }

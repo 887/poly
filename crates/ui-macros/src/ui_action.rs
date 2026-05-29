@@ -51,18 +51,18 @@ impl Parse for Arg {
             let s = ident.to_string();
             if s == "None" {
                 input.parse::<Ident>()?;
-                return Ok(Arg::None);
+                return Ok(Self::None);
             }
             if s == "inherit" {
                 input.parse::<Ident>()?;
-                return Ok(Arg::Inherit);
+                return Ok(Self::Inherit);
             }
         }
 
         // Otherwise must parse as a type path (e.g. `ChatAction` or
         // `crate::ui::server::ServerAction`).
         match input.parse::<Path>() {
-            Ok(p) if input.is_empty() => Ok(Arg::Action(p)),
+            Ok(p) if input.is_empty() => Ok(Self::Action(p)),
             Ok(p) => Err(Error::new_spanned(
                 &p,
                 "`#[ui_action(...)]` accepts exactly one argument",

@@ -24,11 +24,23 @@
 // are on infallible in-test conversions. The overflow / division / expect
 // panic-class lints would fire on every pixel expression, so they are allowed
 // module-wide rather than line-by-line. See feedback_test_lints.
+//
+// Additional module-wide allows for this test double:
+//   as_conversions / cast_possible_truncation — pixel dimension casts (u32 →
+//     usize for buffer sizing; u32 → u8 for color channels) are bounded by
+//     frame geometry and intentional; annotating every pixel expression would
+//     obscure the math.
+//   many_single_char_names — the HSV-to-RGB algorithm uses the standard
+//     single-letter names (h, p, q, t, v) from the derivation; renaming
+//     them to multi-letter aliases would break readability of the math.
 #![allow(
     clippy::arithmetic_side_effects,
     clippy::integer_division,
     clippy::indexing_slicing,
-    clippy::expect_used
+    clippy::expect_used,
+    clippy::as_conversions,
+    clippy::cast_possible_truncation,
+    clippy::many_single_char_names,
 )]
 
 use std::sync::{Arc, Mutex};
@@ -172,7 +184,7 @@ pub struct MockVideoInputStream {
 }
 
 impl MockVideoInputStream {
-    fn new(width: u32, height: u32, frames: usize) -> Self {
+    const fn new(width: u32, height: u32, frames: usize) -> Self {
         Self {
             width,
             height,

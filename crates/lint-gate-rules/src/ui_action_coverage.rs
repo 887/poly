@@ -125,15 +125,13 @@ fn find_handler_start<'a>(line: &'a str, ev: &str) -> Option<&'a str> {
 }
 
 fn is_empty_body(s: &str) -> bool {
-    if let Some(inner) = s.strip_prefix('{') {
-        let rest = inner.trim_start();
-        rest.starts_with('}')
-    } else if let Some(inner) = s.strip_prefix('(') {
-        let rest = inner.trim_start();
-        rest.starts_with(')')
-    } else {
-        false
-    }
+    s.strip_prefix('{').map_or_else(
+        || {
+            s.strip_prefix('(')
+                .is_some_and(|inner| inner.trim_start().starts_with(')'))
+        },
+        |inner| inner.trim_start().starts_with('}'),
+    )
 }
 
 // ── Rule B ────────────────────────────────────────────────────────────────────
@@ -190,11 +188,7 @@ fn is_empty_rsx_on_line(s: &str) -> bool {
     };
     let rest = after_rsx.trim_start();
     // Strip optional `(`  — Dioxus supports both `rsx! {}` and `rsx!(...)`; focus on `{}`
-    let rest = if let Some(stripped) = rest.strip_prefix('(') {
-        stripped.trim_start()
-    } else {
-        rest
-    };
+    let rest = rest.strip_prefix('(').map_or(rest, |stripped| stripped.trim_start());
     if !rest.starts_with('{') {
         return false;
     }

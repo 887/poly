@@ -140,7 +140,7 @@ pub fn is_kebab_case(s: &str) -> bool {
     if s.is_empty() {
         return false;
     }
-    let mut chars = s.chars().peekable();
+    let mut chars = s.chars();
 
     // First character must be a lowercase ASCII letter.
     match chars.next() {

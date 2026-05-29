@@ -67,7 +67,7 @@ pub fn parse_request(line: &str) -> Option<(Option<Value>, String, Value)> {
     let v: Value = serde_json::from_str(line).ok()?;
     let id = v.get("id").cloned();
     let method = v.get("method")?.as_str()?.to_string();
-    let params = v.get("params").cloned().unwrap_or(json!({}));
+    let params = v.get("params").cloned().unwrap_or_else(|| json!({}));
     Some((id, method, params))
 }
 
@@ -79,6 +79,11 @@ pub fn parse_request(line: &str) -> Option<(Option<Value>, String, Value)> {
 /// The tool names, descriptions, and schemas follow the conventions from
 /// chrome-devtools-mcp. Annotations include category and readOnlyHint.
 #[must_use]
+// too_many_lines: this is a pure data table of MCP tool definitions. Each tool is one logical
+// entry; splitting into sub-functions would obscure the structure without reducing complexity.
+// literal_string_with_formatting_args: the `{ignoreCache:true}` fragments in tool descriptions
+// are JSON-like parameter examples in documentation text, not Rust format arguments.
+#[allow(clippy::too_many_lines, clippy::literal_string_with_formatting_args)]
 pub fn standard_tool_list() -> Vec<Value> {
     vec![
         // ── Lifecycle (Poly-specific) ────────────────────────────────
@@ -367,18 +372,27 @@ fn timeout_result(tool_name: &str, timeout_ms: u64) -> Value {
 /// Dispatch a `tools/call` request to the appropriate backend method.
 pub async fn dispatch_tool(backend: &dyn DevtoolsBackend, name: &str, args: &Value) -> Value {
     let timeout_ms = backend.tool_timeout_ms(name, args);
-    match tokio::time::timeout(
+    tokio::time::timeout(
         std::time::Duration::from_millis(timeout_ms),
         dispatch_tool_inner(backend, name, args),
     )
     .await
-    {
-        Ok(result) => result,
-        Err(_) => timeout_result(name, timeout_ms),
-    }
+    .unwrap_or_else(|_| timeout_result(name, timeout_ms))
 }
 
+// clippy::cognitive_complexity and clippy::too_many_lines: this is a single-level tool dispatch
+// table. Splitting it into sub-functions would make the dispatch harder to follow (each arm is
+// already one logical unit). The complexity score is purely structural (many match arms), not
+// actual logic depth.
+#[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
 async fn dispatch_tool_inner(backend: &dyn DevtoolsBackend, name: &str, args: &Value) -> Value {
+    use base64::Engine as _;
+    // or_fun_call: default_workspace() reads a OnceLock (near-zero cost) and its
+    // &'static str return type makes `unwrap_or_else(default_workspace)` fail with a
+    // lifetime error (the static lifetime propagates back through the or_else closure
+    // and conflicts with `args`). The eager `unwrap_or(default_workspace())` is correct
+    // and idiomatic here.
+    #[allow(clippy::or_fun_call)]
     let ws = args
         .get("workspace")
         .and_then(serde_json::Value::as_str)
@@ -504,7 +518,6 @@ async fn dispatch_tool_inner(backend: &dyn DevtoolsBackend, name: &str, args: &V
                             );
                         }
 
-                        use base64::Engine as _;
                         let b64 = base64::engine::general_purpose::STANDARD.encode(&image_bytes);
                         json!({ "content": [
                             {"type": "text", "text": viewport_info},
@@ -556,7 +569,7 @@ async fn dispatch_tool_inner(backend: &dyn DevtoolsBackend, name: &str, args: &V
                 nav_type: args
                     .get("type")
                     .and_then(serde_json::Value::as_str)
-                    .unwrap_or(if args.get("url").is_some() { "url" } else { "" })
+                    .unwrap_or_else(|| if args.get("url").is_some() { "url" } else { "" })
                     .to_string(),
                 url: args
                     .get("url")
@@ -804,14 +817,16 @@ async fn dispatch_tool_inner(backend: &dyn DevtoolsBackend, name: &str, args: &V
 
         // ── Extension / unknown ──────────────────────────────────────
         other => {
-            if let Some(result) = backend.handle_extension_tool(other, args).await {
-                match result {
-                    Ok(r) => text_result(&r, false),
-                    Err(e) => text_result(&format!("{other} error: {e}"), true),
-                }
-            } else {
-                text_result(&format!("Unknown tool: {other}"), true)
-            }
+            backend
+                .handle_extension_tool(other, args)
+                .await
+                .map_or_else(
+                    || text_result(&format!("Unknown tool: {other}"), true),
+                    |result| match result {
+                        Ok(r) => text_result(&r, false),
+                        Err(e) => text_result(&format!("{other} error: {e}"), true),
+                    },
+                )
         }
     }
 }
@@ -888,7 +903,7 @@ pub async fn run_mcp_loop(backend: &dyn DevtoolsBackend, server_name: &str) {
 
             "tools/call" => {
                 let name = params.get("name").and_then(serde_json::Value::as_str).unwrap_or("");
-                let args = params.get("arguments").cloned().unwrap_or(json!({}));
+                let args = params.get("arguments").cloned().unwrap_or_else(|| json!({}));
                 dispatch_tool(backend, name, &args).await
             }
 

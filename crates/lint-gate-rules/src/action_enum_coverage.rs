@@ -20,7 +20,9 @@ fn is_in_scope(s: &str) -> bool {
 }
 
 fn is_ui_rs(s: &str) -> bool {
-    s.ends_with(".rs")
+    std::path::Path::new(s)
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("rs"))
 }
 
 /// Paths that should always be excluded regardless of scope.
@@ -68,9 +70,12 @@ pub fn scan(walker: &WorkspaceWalker, violations: &mut Vec<Violation>) {
 
     // Emit as a build-script warning when running under cargo build.
     // In test/normal-lib context this just prints to stdout harmlessly.
-    println!(
-        "cargo::warning=poly-action-coverage: {typed_count} components declare #[ui_action(SomeEnum)] ({remaining_count} remaining without typed actions)"
-    );
+    #[allow(clippy::print_stdout)]
+    {
+        println!(
+            "cargo::warning=poly-action-coverage: {typed_count} components declare #[ui_action(SomeEnum)] ({remaining_count} remaining without typed actions)"
+        );
+    }
 }
 
 /// Per-file scan — returns violations for `src` at `path`.
