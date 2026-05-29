@@ -633,7 +633,7 @@ impl IsBackend for StoatClient {
             // routes encoded H.264 frames over the shared Vortex WS. Native is still
             // audio-only (the A.5 plan decision).
             #[cfg(target_arch = "wasm32")]
-            video_capture: VideoCaptureCapability::Full,
+            video_capture: poly_client::VideoCaptureCapability::Full,
             ..BackendCapabilities::FULL_SOCIAL_CHAT
         }
     }
