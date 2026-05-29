@@ -560,18 +560,24 @@ impl Response {
     }
 
     /// Consume the response and return the raw body bytes.
-    pub fn bytes(self) -> Result<Bytes, HttpError> {
+    // lint-allow-unused: async kept for API symmetry; callers `.await` this
+    #[allow(clippy::unused_async)]
+    pub async fn bytes(self) -> Result<Bytes, HttpError> {
         Ok(self.body)
     }
 
     /// Consume the response and return the body as UTF-8 text.
-    pub fn text(self) -> Result<String, HttpError> {
+    // lint-allow-unused: async kept for API symmetry; callers `.await` this
+    #[allow(clippy::unused_async)]
+    pub async fn text(self) -> Result<String, HttpError> {
         String::from_utf8(self.body.to_vec())
             .map_err(|e| HttpError::Decode(format!("not valid UTF-8: {e}")))
     }
 
     /// Consume the response and decode the body as JSON.
-    pub fn json<T: DeserializeOwned>(self) -> Result<T, HttpError> {
+    // lint-allow-unused: async kept for API symmetry; callers `.await` this
+    #[allow(clippy::unused_async)]
+    pub async fn json<T: DeserializeOwned>(self) -> Result<T, HttpError> {
         serde_json::from_slice(&self.body).map_err(|e| HttpError::Decode(e.to_string()))
     }
 
