@@ -57,6 +57,22 @@
 //! (loopback). Migrate to a binary multipart endpoint when latency matters —
 //! the `VideoBridgeClient` API is designed so only the transport layer changes.
 
+// This module is a self-contained H.264 codec service. Every arithmetic and
+// indexing operation below is YUV-plane math derived from frame dimensions that
+// are validated before use (see the explicit `raw.len() < y_size + 2 * uv_size`
+// / `nv12.len() < ...` length guards before each plane slice), and the two
+// `unwrap()`s on `bitstream.layer(li)` / `layer.nal_unit(ni)` are bounded by the
+// `0..num_layers()` / `0..nal_count()` ranges they iterate. These panic-class
+// lints would fire on every line of provably-bounded codec math, so they are
+// allowed module-wide rather than suppressed line-by-line.
+// poly-lint: allow — bounded codec math, see comment above
+#![allow(
+    clippy::arithmetic_side_effects,
+    clippy::integer_division,
+    clippy::indexing_slicing,
+    clippy::unwrap_used
+)]
+
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};

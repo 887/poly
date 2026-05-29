@@ -85,8 +85,12 @@ impl AudioFormat {
     /// `frame_samples(20)` → 1920.
     #[must_use]
     pub fn frame_samples(self, duration_ms: u32) -> usize {
+        // Division by a nonzero constant; cannot panic.
+        #[allow(clippy::integer_division)]
         let samples_per_ms = self.sample_rate.0 / 1000;
-        (samples_per_ms * duration_ms * u32::from(self.channels.count())) as usize
+        samples_per_ms
+            .saturating_mul(duration_ms)
+            .saturating_mul(u32::from(self.channels.count())) as usize
     }
 }
 

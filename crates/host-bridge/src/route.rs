@@ -145,13 +145,13 @@ pub async fn call<R: HostRoute>(
     let url = format!("{}{}", base_url, R::endpoint());
 
     // attempt 0 … RETRIES (inclusive).
-    let max_attempts = R::RETRIES + 1;
-    let mut i = 0;
+    let max_attempts = R::RETRIES.saturating_add(1);
+    let mut i = 0usize;
     loop {
         match do_post::<R>(http, &url, &req).await {
             Ok(resp) => return Ok(resp),
             Err(e) => {
-                i += 1;
+                i = i.saturating_add(1);
                 if i >= max_attempts {
                     return Err(e);
                 }

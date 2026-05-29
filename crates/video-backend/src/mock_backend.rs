@@ -19,6 +19,18 @@
 //! - Camera: `"mock-camera"` (default)
 //! - Screen: `"mock-screen-0"` (full screen)
 
+// Synthetic test-pattern generator: all arithmetic below is gradient /
+// color-bar pixel math bounded by the frame dimensions, and the `.expect()`s
+// are on infallible in-test conversions. The overflow / division / expect
+// panic-class lints would fire on every pixel expression, so they are allowed
+// module-wide rather than line-by-line. See feedback_test_lints.
+#![allow(
+    clippy::arithmetic_side_effects,
+    clippy::integer_division,
+    clippy::indexing_slicing,
+    clippy::expect_used
+)]
+
 use std::sync::{Arc, Mutex};
 
 use futures::stream;

@@ -14,6 +14,17 @@
 //! assert!(events.contains(&MockEvent::SwitchInput("fake-mic".into())));
 //! ```
 
+// Instrumented test double: `.expect()`/panics on misuse are acceptable, and
+// in-test arithmetic is on small fixed sizes. See feedback_test_lints.
+#![allow(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::indexing_slicing,
+    clippy::arithmetic_side_effects,
+    clippy::integer_division
+)]
+
 use std::sync::{Arc, Mutex};
 
 use futures::stream;

@@ -47,6 +47,19 @@
 //! [`switch_input`]: CpalBackend::switch_input
 //! [`switch_output`]: CpalBackend::switch_output
 
+// Native real-time audio backend. The `.expect()`s are all on `std::Mutex`
+// lock poisoning — unrecoverable by design (a poisoned lock means another
+// thread panicked mid-update), so propagating the panic is correct. The slice
+// indexing in the cpal data callbacks is bounded by `len = min(data.len(),
+// frame.len())` computed immediately above each use. These panic-class lints
+// would fire across the whole callback path, so they are allowed module-wide
+// rather than line-by-line.
+#![allow(
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    clippy::arithmetic_side_effects
+)]
+
 use std::sync::{Arc, Mutex};
 
 use cpal::{

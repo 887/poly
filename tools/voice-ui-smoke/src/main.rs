@@ -61,8 +61,9 @@
 //! Compile-only by default — fits the same pattern as
 //! `tools/discord-voice-smoke/` and `tools/stoat-voice-smoke/`.
 
-// lint-allow-unused: smoke-test binary; unwrap/expect/panic are fine here
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+// lint-allow-unused: smoke-test binary; unwrap/expect/panic are fine here.
+// arithmetic is on small fixed in-test values. See feedback_test_lints.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::arithmetic_side_effects)]
 
 use anyhow::{anyhow, bail, Context as _};
 use futures_util::{SinkExt, StreamExt};

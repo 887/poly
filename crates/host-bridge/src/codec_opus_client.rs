@@ -250,7 +250,7 @@ impl OpusClient {
         session_id: &str,
         pcm: &[i16],
     ) -> Result<Vec<u8>, OpusClientError> {
-        let mut bytes = Vec::with_capacity(pcm.len() * 2);
+        let mut bytes = Vec::with_capacity(pcm.len().saturating_mul(2));
         for &s in pcm {
             bytes.extend_from_slice(&s.to_le_bytes());
         }
@@ -314,9 +314,11 @@ impl OpusClient {
             if bytes.len() % 2 != 0 {
                 return Err(OpusClientError::Server("pcm byte length not even".into()));
             }
+            // `chunks_exact(2)` guarantees each `c` has exactly 2 elements, so
+            // the array conversion can't fail; fall back to 0 to stay panic-free.
             let samples: Vec<i16> = bytes
                 .chunks_exact(2)
-                .map(|c| i16::from_le_bytes([c[0], c[1]]))
+                .map(|c| i16::from_le_bytes(c.try_into().unwrap_or([0, 0])))
                 .collect();
             Ok(samples)
         } else {

@@ -45,11 +45,14 @@ impl VideoFrame {
         };
         match format {
             VideoPixelFormat::Bgra | VideoPixelFormat::Rgba => {
-                width as usize * height as usize * bpp
+                (width as usize).saturating_mul(height as usize).saturating_mul(bpp)
             }
             VideoPixelFormat::Yuv420p => {
                 // Y plane: w*h, U plane: w/2*h/2, V plane: w/2*h/2
-                (width as usize * height as usize * 3).div_ceil(2)
+                (width as usize)
+                    .saturating_mul(height as usize)
+                    .saturating_mul(3)
+                    .div_ceil(2)
             }
         }
     }

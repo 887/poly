@@ -14,6 +14,17 @@
 //!
 //! Tests can inject custom device lists via [`FakeAudioBackend::with_devices`].
 
+// Test double: `.expect()`/panics on misuse are acceptable here, and the
+// in-test arithmetic is on small fixed sizes. See feedback_test_lints.
+#![allow(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::indexing_slicing,
+    clippy::arithmetic_side_effects,
+    clippy::integer_division
+)]
+
 use std::sync::{Arc, Mutex};
 
 use futures::stream;
