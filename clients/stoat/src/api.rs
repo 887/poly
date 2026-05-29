@@ -588,10 +588,8 @@ impl StoatChannelUnread {
         let mention_count = self.mention_count();
         if mention_count > 0 {
             mention_count
-        } else if self.last_id.is_some() {
-            1
         } else {
-            0
+            u32::from(self.last_id.is_some())
         }
     }
 }
@@ -1011,7 +1009,7 @@ pub enum StoatPresence {
 impl StoatPresence {
     /// Convert Stoat presence into Poly's shared presence enum.
     #[must_use]
-    pub fn into_poly_presence(self) -> PresenceStatus {
+    pub const fn into_poly_presence(self) -> PresenceStatus {
         match self {
             Self::Online => PresenceStatus::Online,
             Self::Idle => PresenceStatus::Idle,
@@ -1167,7 +1165,7 @@ fn extract_ulid_timestamp_ms(ulid: &str) -> Option<i64> {
     i64::try_from(value & 0x0000_FFFF_FFFF_FFFF).ok()
 }
 
-fn crockford_base32_value(ch: char) -> Option<u8> {
+const fn crockford_base32_value(ch: char) -> Option<u8> {
     match ch.to_ascii_uppercase() {
         '0' => Some(0),
         '1' => Some(1),

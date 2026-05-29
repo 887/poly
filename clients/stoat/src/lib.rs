@@ -163,7 +163,12 @@ use futures::future;
 #[cfg(feature = "native")]
 use http::StoatHttpClient;
 #[cfg(feature = "native")]
-use poly_client::*;
+use poly_client::{
+    BackendType, ClientError, ClientResult, DmChannel, Message, MessageContent, MessageQuery,
+    SettingsStorageCell, User,
+};
+#[cfg(feature = "voice")]
+use poly_client::VoiceParticipant;
 #[cfg(feature = "native")]
 use poly_host_bridge::http::{Method, RequestBuilder};
 #[cfg(feature = "native")]
@@ -187,6 +192,10 @@ pub fn plugin_translations(locale: &str) -> String {
         _ => String::new(),
     }
 }
+
+/// Callback type stored in `StoatClient::ws_write_tx` for outbound Bonfire WS frames.
+#[cfg(all(feature = "native", not(target_arch = "wasm32")))]
+type WsWriteTx = std::sync::Mutex<Option<Box<dyn Fn(String) + Send + Sync + 'static>>>;
 
 /// In-memory state for context-menu toggle actions (F10).
 /// Persistent storage is F9 — out of scope here.
@@ -267,7 +276,7 @@ pub struct StoatClient {
     /// An unbounded-channel sender is used internally so the call never blocks.
     /// Set to `None` until `event_stream` establishes the WS connection.
     #[cfg(all(feature = "native", not(target_arch = "wasm32")))]
-    pub(crate) ws_write_tx: std::sync::Mutex<Option<Box<dyn Fn(String) + Send + Sync + 'static>>>,
+    pub(crate) ws_write_tx: WsWriteTx,
 }
 
 #[cfg(feature = "native")]

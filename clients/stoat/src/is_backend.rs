@@ -18,7 +18,12 @@ use futures::{
     future,
     stream::{self, Stream},
 };
-use poly_client::*;
+use poly_client::{
+    AuthCredentials, BackendCapabilities, BackendType, Channel, ClientError, ClientEvent,
+    ClientResult, IsBackend, Message, MessageContent, MessageQuery, MessageReplyPreview,
+    Notification, NotificationKind, Server, Session, SignupMethod, User, VoiceParticipant,
+    VoiceSupport,
+};
 use std::collections::HashMap;
 use std::pin::Pin;
 
@@ -83,7 +88,7 @@ impl StoatClient {
         let current_user_id = self.current_user_id();
         let (raw_messages, bundled_users, bundled_members) = response.into_parts();
 
-        let mut messages_with_replies: Vec<(Message, Option<String>)> = raw_messages
+        let messages_with_replies: Vec<(Message, Option<String>)> = raw_messages
             .into_iter()
             .map(|raw| {
                 let reply_id = raw.primary_reply_id().map(str::to_string);
@@ -103,7 +108,7 @@ impl StoatClient {
             .collect();
 
         let mut messages: Vec<Message> = messages_with_replies
-            .drain(..)
+            .into_iter()
             .map(|(mut message, reply_id)| {
                 message.reply_to =
                     reply_id.and_then(|reply_id| preview_index.get(&reply_id).cloned());
@@ -421,6 +426,9 @@ impl IsBackend for StoatClient {
         Some(self)
     }
 
+    // lint-allow-unused: event_stream spans three cfg-gated platform arms (native WS, wasm32 WS,
+    // fallback empty) that cannot be split without losing the cfg context.
+    #[allow(clippy::too_many_lines)]
     #[cfg_attr(not(feature = "voice"), allow(unused_variables))]
     fn event_stream(&self) -> Pin<Box<dyn Stream<Item = ClientEvent> + Send>> {
         #[cfg(not(target_arch = "wasm32"))]
@@ -428,13 +436,11 @@ impl IsBackend for StoatClient {
             use tokio::sync::mpsc;
             use tokio_tungstenite::tungstenite::Message as WsMessage;
 
-            let ws_url = match self.http.ws_url() {
-                Some(url) => url,
-                None => return Box::pin(stream::empty()),
+            let Some(ws_url) = self.http.ws_url() else {
+                return Box::pin(stream::empty());
             };
-            let token = match self.http.session().map(|s| s.token) {
-                Some(t) => t,
-                None => return Box::pin(stream::empty()),
+            let Some(token) = self.http.session().map(|s| s.token) else {
+                return Box::pin(stream::empty());
             };
 
             let (tx, rx) = mpsc::channel::<ClientEvent>(128);
@@ -445,14 +451,15 @@ impl IsBackend for StoatClient {
             // the WS stream (which lives inside the spawned task).
             let (ws_out_tx, mut ws_out_rx) = mpsc::unbounded_channel::<String>();
             if let Ok(mut guard) = self.ws_write_tx.lock() {
-                let ws_out_tx_clone = ws_out_tx.clone();
                 *guard = Some(Box::new(move |json: String| {
                     // Best-effort: ignore send errors (WS may not be connected yet).
-                    let _ = ws_out_tx_clone.send(json);
+                    drop(ws_out_tx.send(json));
                 }));
             }
 
             tokio::spawn(async move {
+                use futures::{SinkExt, StreamExt};
+
                 let (mut ws_stream, _) = match tokio_tungstenite::connect_async(&ws_url).await {
                     Ok(conn) => conn,
                     Err(e) => {
@@ -463,18 +470,14 @@ impl IsBackend for StoatClient {
 
                 // Authenticate
                 let auth_msg = serde_json::json!({"type": "Authenticate", "token": token});
+                if ws_stream
+                    .send(WsMessage::Text(auth_msg.to_string().into()))
+                    .await
+                    .is_err()
                 {
-                    use futures::SinkExt;
-                    if ws_stream
-                        .send(WsMessage::Text(auth_msg.to_string().into()))
-                        .await
-                        .is_err()
-                    {
-                        return;
-                    }
+                    return;
                 }
 
-                use futures::StreamExt;
                 loop {
                     tokio::select! {
                         // Inbound: Bonfire events → parse → forward to event channel.
@@ -489,13 +492,12 @@ impl IsBackend for StoatClient {
                                         break;
                                     }
                                 }
-                                Some(Ok(WsMessage::Close(_))) | Some(Err(_)) | None => break,
+                                Some(Ok(WsMessage::Close(_)) | Err(_)) | None => break,
                                 _ => {}
                             }
                         }
                         // Outbound: write commands from send_typing / future callers.
                         Some(json) = ws_out_rx.recv() => {
-                            use futures::SinkExt;
                             if ws_stream
                                 .send(WsMessage::Text(json.into()))
                                 .await
@@ -603,7 +605,7 @@ impl IsBackend for StoatClient {
         BackendType::from(crate::SLUG)
     }
 
-    fn backend_name(&self) -> &str {
+    fn backend_name(&self) -> &'static str {
         "Stoat"
     }
 
@@ -676,7 +678,9 @@ impl IsBackend for StoatClient {
 /// Parser for the Bonfire WebSocket event protocol — translates JSON event
 /// frames into `poly_client::ClientEvent`. Called from `event_stream` above
 /// on both native and wasm32 targets.
-pub(crate) fn parse_bonfire_event(json: &serde_json::Value) -> Option<ClientEvent> {
+// Complexity comes from the event-type dispatch table, not from nesting.
+#[allow(clippy::cognitive_complexity)]
+pub fn parse_bonfire_event(json: &serde_json::Value) -> Option<ClientEvent> {
     match json.get("type")?.as_str()? {
         "Message" => {
             let channel_id = json.get("channel")?.as_str()?.to_string();
@@ -684,16 +688,16 @@ pub(crate) fn parse_bonfire_event(json: &serde_json::Value) -> Option<ClientEven
             let id = msg_json.get("_id")?.as_str()?.to_string();
             let content = msg_json.get("content")?.as_str()?.to_string();
             let author_id = msg_json.get("author")?.as_str()?.to_string();
-            let message = poly_client::Message {
+            let message = Message {
                 id,
-                author: poly_client::User {
+                author: User {
                     id: author_id,
                     display_name: String::new(),
                     avatar_url: None,
                     presence: poly_client::PresenceStatus::Online,
                     backend: BackendType::from(crate::SLUG),
                 },
-                content: poly_client::MessageContent::Text(content),
+                content: MessageContent::Text(content),
                 timestamp: chrono::Utc::now(),
                 attachments: vec![],
                 reactions: vec![],
@@ -721,22 +725,27 @@ pub(crate) fn parse_bonfire_event(json: &serde_json::Value) -> Option<ClientEven
         "VoiceUserJoined" => {
             let channel_id = json.get("channel_id")?.as_str()?.to_string();
             let user_id = json.get("user_id")?.as_str()?.to_string();
-            let display_name = json.get("display_name")
-                .and_then(|v| v.as_str())
+            let display_name = json
+                .get("display_name")
+                .and_then(serde_json::Value::as_str)
                 .unwrap_or(&user_id)
                 .to_string();
-            let avatar_url = json.get("avatar_url")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string());
-            let participant = poly_client::VoiceParticipant {
-                user: poly_client::User {
+            let avatar_url = json
+                .get("avatar_url")
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_string);
+            let participant = VoiceParticipant {
+                user: User {
                     id: user_id,
                     display_name,
                     avatar_url,
                     presence: poly_client::PresenceStatus::Online,
                     backend: BackendType::from(crate::SLUG),
                 },
-                is_muted: json.get("is_muted").and_then(|v| v.as_bool()).unwrap_or(false),
+                is_muted: json
+                    .get("is_muted")
+                    .and_then(serde_json::Value::as_bool)
+                    .unwrap_or(false),
                 is_deafened: false,
                 is_streaming: false,
                 is_video_on: false,
@@ -754,7 +763,10 @@ pub(crate) fn parse_bonfire_event(json: &serde_json::Value) -> Option<ClientEven
         "VoiceSpeakingUpdate" => {
             let channel_id = json.get("channel_id")?.as_str()?.to_string();
             let user_id = json.get("user_id")?.as_str()?.to_string();
-            let is_speaking = json.get("speaking").and_then(|v| v.as_bool()).unwrap_or(false);
+            let is_speaking = json
+                .get("speaking")
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false);
             Some(ClientEvent::VoiceSpeakingUpdate { channel_id, user_id, is_speaking })
         }
 

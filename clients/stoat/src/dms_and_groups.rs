@@ -104,11 +104,11 @@ impl poly_client::DmsAndGroupsBackend for StoatClient {
     }
 
     async fn open_direct_message_channel(&self, user_id: &str) -> ClientResult<DmChannel> {
-        StoatClient::open_direct_message_channel(self, user_id).await
+        Self::open_direct_message_channel(self, user_id).await
     }
 
     async fn open_saved_messages_channel(&self) -> ClientResult<DmChannel> {
-        StoatClient::open_saved_messages_channel(self).await
+        Self::open_saved_messages_channel(self).await
     }
 
     async fn add_group_member(&self, group_id: &str, user_id: &str) -> ClientResult<()> {

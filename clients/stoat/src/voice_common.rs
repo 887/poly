@@ -83,15 +83,24 @@ pub fn rms_db(pcm: &[i16]) -> f32 {
     if pcm.is_empty() {
         return -96.0;
     }
-    let sum_sq: f64 = pcm.iter().map(|&s| {
-        let f = f64::from(s) / 32768.0;
-        f * f
-    }).sum();
-    let rms = (sum_sq / pcm.len() as f64).sqrt();
-    if rms < 1e-10 {
+    let sum_sq: f64 = pcm
+        .iter()
+        .map(|&s| {
+            let f = f64::from(s) / 32_768.0_f64;
+            f * f
+        })
+        .sum();
+    // pcm.len() fits in f64 for any realistic audio buffer; precision loss is acceptable.
+    #[allow(clippy::cast_precision_loss, clippy::as_conversions)]
+    let len_f64 = pcm.len() as f64;
+    let rms = (sum_sq / len_f64).sqrt();
+    if rms < 1e-10_f64 {
         return -96.0;
     }
-    (20.0 * rms.log10()) as f32
+    // Intentional f64→f32 narrowing: audio level output only needs f32 precision.
+    #[allow(clippy::cast_possible_truncation, clippy::as_conversions)]
+    let db = (20.0_f64 * rms.log10()) as f32;
+    db
 }
 
 // ── Server info returned by join_call REST ────────────────────────────────────
@@ -145,7 +154,9 @@ pub enum FrameKind {
 /// other peers.
 #[must_use]
 pub fn build_outbound_frame(kind: FrameKind, payload: &[u8]) -> Vec<u8> {
-    let mut frame = Vec::with_capacity(1 + 8 + payload.len());
+    let mut frame = Vec::with_capacity(9_usize.saturating_add(payload.len()));
+    // Intentional enum-discriminant-to-u8 cast; discriminants are 0x00/0x01.
+    #[allow(clippy::as_conversions)]
     frame.push(kind as u8);
     frame.extend_from_slice(&[0u8; 8]);
     frame.extend_from_slice(payload);
@@ -165,37 +176,38 @@ pub struct ParsedFrame<'a> {
 /// format.
 #[must_use]
 pub fn parse_inbound_frame(bytes: &[u8]) -> Option<ParsedFrame<'_>> {
-    if bytes.is_empty() {
-        return None;
+    // All indexing/slicing below is bounds-checked by the enclosing `if` guards.
+    #[allow(clippy::indexing_slicing)]
+    {
+        let first = *bytes.first()?;
+        // New format: kind byte at [0].
+        if (first == 0x00 || first == 0x01) && bytes.len() >= 9 {
+            let kind = if first == 0x00 { FrameKind::Audio } else { FrameKind::Video };
+            let user_id = std::str::from_utf8(&bytes[1..9])
+                .unwrap_or("")
+                .trim_end_matches('\0')
+                .to_string();
+            return Some(ParsedFrame {
+                kind,
+                user_id,
+                payload: &bytes[9..],
+            });
+        }
+        // Legacy format: [uid:8][opus]. Only valid if first byte is ASCII-ish
+        // (Vortex user_ids are ULID-shaped ASCII, always >= 0x20).
+        if bytes.len() > 8 && first >= 0x20 {
+            let user_id = std::str::from_utf8(&bytes[..8])
+                .unwrap_or("")
+                .trim_end_matches('\0')
+                .to_string();
+            return Some(ParsedFrame {
+                kind: FrameKind::Audio,
+                user_id,
+                payload: &bytes[8..],
+            });
+        }
+        None
     }
-    let first = bytes[0];
-    // New format: kind byte at [0].
-    if (first == 0x00 || first == 0x01) && bytes.len() >= 9 {
-        let kind = if first == 0x00 { FrameKind::Audio } else { FrameKind::Video };
-        let user_id = std::str::from_utf8(&bytes[1..9])
-            .unwrap_or("")
-            .trim_end_matches('\0')
-            .to_string();
-        return Some(ParsedFrame {
-            kind,
-            user_id,
-            payload: &bytes[9..],
-        });
-    }
-    // Legacy format: [uid:8][opus]. Only valid if first byte is ASCII-ish
-    // (Vortex user_ids are ULID-shaped ASCII, always >= 0x20).
-    if bytes.len() > 8 && first >= 0x20 {
-        let user_id = std::str::from_utf8(&bytes[..8])
-            .unwrap_or("")
-            .trim_end_matches('\0')
-            .to_string();
-        return Some(ParsedFrame {
-            kind: FrameKind::Audio,
-            user_id,
-            payload: &bytes[8..],
-        });
-    }
-    None
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────

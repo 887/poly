@@ -123,7 +123,15 @@ impl Default for NoiseFilter {
 ///     apply_rnnoise(&mut mono_f32_i16_scale, &mut filter);
 /// }
 /// ```
-pub fn apply_rnnoise(samples: &mut Vec<f32>, filter: &mut NoiseFilter) {
+// Arithmetic is safe: chunk indices are bounded by `complete_chunks * DENOISE_FRAME <= len`.
+// Integer division is intentional: we process only complete DENOISE_FRAME-sized chunks.
+// Slicing is safe: `start..end` fits within `0..len` by construction.
+#[allow(
+    clippy::arithmetic_side_effects,
+    clippy::integer_division,
+    clippy::indexing_slicing
+)]
+pub fn apply_rnnoise(samples: &mut [f32], filter: &mut NoiseFilter) {
     let len = samples.len();
     let complete_chunks = len / DENOISE_FRAME;
 

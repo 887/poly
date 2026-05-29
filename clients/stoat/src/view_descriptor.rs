@@ -83,10 +83,8 @@ impl poly_client::ViewDescriptorBackend for StoatClient {
             .zip(member_counts)
             .map(|(s, member_count_opt)| {
                 let meta = {
-                    let members_str = match member_count_opt {
-                        Some(n) => format!("{n} members"),
-                        None => "? members".to_string(),
-                    };
+                    let members_str = member_count_opt
+                        .map_or_else(|| "? members".to_string(), |n| format!("{n} members"));
                     let unread_part = if s.unread_count > 0 {
                         format!(" · {} unread", s.unread_count)
                     } else {
@@ -104,7 +102,7 @@ impl poly_client::ViewDescriptorBackend for StoatClient {
                     primary_text: s.name.clone(),
                     secondary_text: s.description.clone(),
                     meta_text: Some(meta),
-                    icon: s.icon_url.clone(),
+                    icon: s.icon_url,
                     badge: None,
                     context_menu_target_kind: MenuTargetKind::Server,
                     preview_image_url: None,

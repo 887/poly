@@ -122,24 +122,23 @@ impl StoatHttpClient {
 
     /// Clear any authenticated session state.
     pub fn clear_session(&self) -> ClientResult<()> {
-        let mut session = self
+        *self
             .session
             .write()
-            .map_err(|_err| ClientError::Internal("Stoat session lock poisoned".to_string()))?;
-        *session = None;
+            .map_err(|_err| ClientError::Internal("Stoat session lock poisoned".to_string()))? =
+            None;
         Ok(())
     }
 
     /// Replace the full authenticated session state.
     pub fn set_session(&self, session_state: StoatSessionState) -> ClientResult<()> {
-        let mut session = self
+        *self
             .session
             .write()
-            .map_err(|_err| ClientError::Internal("Stoat session lock poisoned".to_string()))?;
-        *session = Some(session_state);
+            .map_err(|_err| ClientError::Internal("Stoat session lock poisoned".to_string()))? =
+            Some(session_state);
         Ok(())
     }
-
 
     /// Update the User-Agent string.
     pub fn set_user_agent(&self, ua: String) {
@@ -151,7 +150,8 @@ impl StoatHttpClient {
     fn ua(&self) -> String {
         self.user_agent
             .read()
-            .ok().map_or_else(|| DEFAULT_CLIENT_VERSION.to_string(), |g| g.clone())
+            .ok()
+            .map_or_else(|| DEFAULT_CLIENT_VERSION.to_string(), |g| g.clone())
     }
 
     /// Create an unauthenticated HTTP request builder.

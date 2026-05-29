@@ -18,6 +18,9 @@ use poly_host_bridge::http::Method;
 
 use super::StoatClient;
 
+// lint-allow-unused: three cfg-gated platform arms (wasm32, voice feature, fallback) cannot be
+// split into smaller functions without losing the cfg context and platform-specific imports.
+#[allow(clippy::too_many_lines)]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl poly_client::VoiceTransportBackend for StoatClient {
@@ -169,7 +172,6 @@ impl poly_client::VoiceTransportBackend for StoatClient {
                     let delete_result = self
                         .http
                         .authenticated_request(Method::DELETE, &format!("/channels/{ch_id}"))
-                        .and_then(|req| Ok(req))
                         .map(|req| async move { req.send().await });
 
                     match delete_result {

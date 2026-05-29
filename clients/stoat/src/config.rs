@@ -64,13 +64,16 @@ impl StoatConfig {
     /// Derive the Bonfire websocket URL from the REST API root.
     #[must_use]
     pub fn websocket_url(&self) -> String {
-        let ws_root = if let Some(rest) = self.base_url.strip_prefix("https://") {
-            format!("wss://{rest}")
-        } else if let Some(rest) = self.base_url.strip_prefix("http://") {
-            format!("ws://{rest}")
-        } else {
-            self.base_url.clone()
-        };
+        let ws_root = self
+            .base_url
+            .strip_prefix("https://")
+            .map(|rest| format!("wss://{rest}"))
+            .or_else(|| {
+                self.base_url
+                    .strip_prefix("http://")
+                    .map(|rest| format!("ws://{rest}"))
+            })
+            .unwrap_or_else(|| self.base_url.clone());
         format!("{ws_root}/ws")
     }
 

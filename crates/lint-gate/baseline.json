@@ -67,6 +67,42 @@
       "rule": "allow_ban"
     },
     {
+      "detail": "banned #[allow(clippy::too_many_lines)]",
+      "line": 431,
+      "path": "clients/stoat/src/is_backend.rs",
+      "rule": "allow_ban"
+    },
+    {
+      "detail": "banned #[allow(clippy::indexing_slicing)]",
+      "line": 92,
+      "path": "clients/stoat/src/video_common.rs",
+      "rule": "allow_ban"
+    },
+    {
+      "detail": "banned #[allow(clippy::indexing_slicing)]",
+      "line": 137,
+      "path": "clients/stoat/src/video_common.rs",
+      "rule": "allow_ban"
+    },
+    {
+      "detail": "banned #[allow(clippy::indexing_slicing)]",
+      "line": 190,
+      "path": "clients/stoat/src/video_common.rs",
+      "rule": "allow_ban"
+    },
+    {
+      "detail": "banned #[allow(clippy::indexing_slicing)]",
+      "line": 180,
+      "path": "clients/stoat/src/voice_common.rs",
+      "rule": "allow_ban"
+    },
+    {
+      "detail": "banned #[allow(clippy::too_many_lines)]",
+      "line": 23,
+      "path": "clients/stoat/src/voice_transport.rs",
+      "rule": "allow_ban"
+    },
+    {
       "detail": "banned #[allow(clippy::expect_used)]",
       "line": 43,
       "path": "tools/discord-voice-smoke/src/main.rs",

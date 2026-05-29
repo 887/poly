@@ -88,6 +88,8 @@ pub enum StoatVideoError {
 ///
 /// Ported verbatim from
 /// `clients/discord/src/voice_bridge/video_capture.rs::find_nal_unit_starts`.
+// Arithmetic is bounds-checked by the while guard; indexing is safe within those bounds.
+#[allow(clippy::arithmetic_side_effects, clippy::indexing_slicing)]
 #[must_use]
 pub fn find_nal_unit_starts(buf: &[u8]) -> Vec<usize> {
     let mut starts = Vec::new();
@@ -129,6 +131,10 @@ pub fn find_nal_unit_starts(buf: &[u8]) -> Vec<usize> {
 ///
 /// Ported verbatim from
 /// `clients/discord/src/voice_bridge/video_capture.rs::fragment_nal_units_to_fua`.
+// Arithmetic: `idx + chunk_size` bounded by `.min(total)` and loop guard `idx < total`;
+// `end - idx` non-wrapping because `end = (idx + chunk_size).min(total) >= idx`.
+// Indexing: all slices within bounds verified by the nal.is_empty guard and loop guard.
+#[allow(clippy::arithmetic_side_effects, clippy::indexing_slicing)]
 #[must_use]
 pub fn fragment_nal_units_to_fua(nal: &[u8], mtu: usize) -> Vec<Vec<u8>> {
     if nal.is_empty() {
@@ -177,6 +183,11 @@ pub fn fragment_nal_units_to_fua(nal: &[u8], mtu: usize) -> Vec<Vec<u8>> {
 ///
 /// Ported verbatim from
 /// `clients/discord/src/voice_bridge/video_playback.rs::reassemble_fua`.
+// Indexing: `first[0]`, `first[1]`, `last[1]` — safe because of the `len() < 2` guards.
+// `f.len() - 2` — safe because the `f.len() < 2` guard returns None before subtracting.
+// `f[2..]` — safe because the `f.len() < 2` guard ensures len >= 2.
+// Arithmetic: `1 + sum` — bounded by available memory; overflow would OOM before wrapping.
+#[allow(clippy::arithmetic_side_effects, clippy::indexing_slicing)]
 #[must_use]
 pub fn reassemble_fua(fragments: &[Vec<u8>]) -> Option<Vec<u8>> {
     if fragments.is_empty() {
