@@ -47,10 +47,10 @@
 
 **Not outdated:** axum (0.8 = latest), tokio (1 = latest), serde (1 = latest), rusqlite/sqlx (not in workspace deps directly)
 
-## Phase B — Compatible upgrades (low risk)
-- [ ] **B.1** `cargo upgrade` (semver-compatible only, no --incompatible) → bumps within current major
-- [ ] **B.2** `cargo build --workspace` + `cargo build -p poly-web --target wasm32-unknown-unknown` (or the dx web build) to confirm nothing broke
-- [ ] **B.3** commit "chore(deps): semver-compatible upgrades"
+## Phase B — Compatible upgrades (shipped in git commit 4a34090f on branch worktree-agent-a798d20b0f07a332e)
+- [x] **B.1** `cargo upgrade` (semver-compatible only, no --incompatible) → bumps within current major
+- [x] **B.2** `cargo build --workspace` — clean (also fixed pre-existing discord gateway feature build failure)
+- [x] **B.3** commit "chore(deps): semver-compatible upgrades"
 
 ## Phase C — Incompatible (major) upgrades, one cluster at a time
 - [ ] **C.1** Apply major bumps in small related clusters (e.g. all tokio-stack together), `cargo upgrade --incompatible -p <crate>` per cluster

@@ -45,7 +45,7 @@ thiserror = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }
-scraper = { version = "0.20", optional = true }
+scraper = { version = "0.27", optional = true }
 regex = { version = "1", optional = true }
 # Form-encoded body building. reqwest's `.form()` is workspace-disabled
 # (default-features = false drops serde_urlencoded), so we encode manually.
