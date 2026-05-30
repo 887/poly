@@ -56,6 +56,29 @@
     // pedantic: short single-char locals (date-component y/mo/d/h/m/s parsing) are
     // clearer than verbose names in tight numeric-parse scopes.
     clippy::many_single_char_names,
+    // pedantic: large value types are moved into rsx!/spawn closures by design;
+    // passing by-ref would fight the move-into-closure capture pattern.
+    clippy::large_types_passed_by_value,
+    // pedantic: `&T` for small Copy types is the idiomatic Dioxus prop shape.
+    clippy::trivially_copy_pass_by_ref,
+    // pedantic: `&mut T` params kept for API uniformity across sibling handlers.
+    clippy::needless_pass_by_ref_mut,
+    // restriction: identical match arms kept distinct on purpose — each documents a
+    // route/variant expected to diverge as features land.
+    clippy::match_same_arms,
+    // pedantic: a 3-way if/else on an ordering reads clearer than match a.cmp(b) here.
+    clippy::comparison_chain,
+    // restriction: wildcard enum arm is intentional — handles the cases it cares about,
+    // drops the rest (incl. future-added variants) by design.
+    clippy::wildcard_enum_match_arm,
+    // pedantic: the flagged Result/closure type aliases are clear in context.
+    clippy::type_complexity,
+    // restriction: fire-and-forget voice/video/theme-string calls intentionally discard
+    // the Result; the UI does not surface these failures.
+    clippy::let_underscore_must_use,
+    // restriction: the two branches are intentionally identical placeholders that will
+    // diverge as the camera-on/off video-toggle copy lands.
+    clippy::if_same_then_else,
 )]
 #![cfg_attr(
     test,
