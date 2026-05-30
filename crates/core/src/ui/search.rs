@@ -704,7 +704,7 @@ pub fn SearchPage(
                             let avatar_url = session
                                 .and_then(|s| s.user.avatar_url.clone());
                             let icon_color = user_color(aid);
-                            let bt = cm.sessions.get(aid).map_or(BackendType::from("demo"), |s| s.backend.clone());
+                            let bt = cm.sessions.get(aid).map_or_else(|| BackendType::from("demo"), |s| s.backend.clone());
                             let backend_name = bt.display_name().to_string();
                             let backend_icon_str = backend_icon(&bt).to_string();
                             let enabled = enabled_accounts.read().contains(aid);

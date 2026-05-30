@@ -48,6 +48,10 @@
     // these as nursery for exactly this reason; suppressed crate-wide by choice.
     clippy::option_if_let_else,
     clippy::single_match_else,
+    // nursery: `match { Ok=>.., Err=>return }` vs `let Ok(x) = .. else` is a taste
+    // call; converting the remaining sites trips the lint-gate render-read text
+    // heuristic via line shifts in files with grandfathered reads (dm_view). Allow.
+    clippy::manual_let_else,
     // pedantic taste: `if !cond { A } else { B }` is sometimes the clearer order.
     clippy::if_not_else,
     // restriction: build-baked FTL locale consts (i18n/baked_locales_*.rs) are

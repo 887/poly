@@ -361,11 +361,10 @@ fn VoiceBannerControls(
     } else {
         t("voice-deafen")
     };
-    let camera_title = if is_video_on {
-        t("voice-video-toggle-camera")
-    } else {
-        t("voice-video-toggle-camera")
-    };
+    // Same label for both states today; `is_video_on` is reserved for when the
+    // on/off copy diverges. Bind it to silence unused + keep the intent visible.
+    let _ = is_video_on;
+    let camera_title = t("voice-video-toggle-camera");
     let screen_title = t("voice-video-toggle-screen");
 
     rsx! {

@@ -9,6 +9,7 @@
 //! - All signals local to this component.
 //! - `use_reactive_effect` re-fires on slug or filter changes.
 
+use std::fmt::Write as _;
 use super::mcp::call_persona_mcp;
 use super::types::AuditRow;
 use crate::i18n::t;
@@ -353,7 +354,7 @@ fn js_sys_encode_uri_component(s: &str) -> String {
             }
             _ => {
                 out.push('%');
-                out.push_str(&format!("{b:02X}"));
+                let _ = write!(out, "{b:02X}");
             }
         }
     }

@@ -387,7 +387,7 @@ pub(crate) async fn open_message_hit(
         .as_ref()
         .map(|server| server.backend.clone())
         .or(fallback_backend)
-        .unwrap_or(BackendType::from("demo"));
+        .unwrap_or_else(|| BackendType::from("demo"));
     drop(guard);
 
     // Batch 5 cascades into one — separate writes each schedule a full
