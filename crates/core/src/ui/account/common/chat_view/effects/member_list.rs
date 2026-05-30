@@ -62,7 +62,7 @@ pub(in super::super) fn use_member_list_effect(signals: &ChatViewSignals) {
         match guard.get_channel_members(&active_channel_id).await {
             Ok(members) => {
                 chat_view_state.batch(move |cv| {
-                    cv.members = members.clone();
+                    cv.members.clone_from(&members);
                     cv.active_group_members = if is_group { members } else { Vec::new() };
                 });
             }

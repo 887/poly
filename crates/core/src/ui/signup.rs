@@ -432,7 +432,7 @@ fn build_on_complete_reauth(
         let scope = completed.scope.clone();
         let mut session = completed.session;
         // Pin the session to the original account id so existing rows overwrite.
-        session.id = target_account_id.clone();
+        session.id.clone_from(&target_account_id);
         spawn(async move {
             let backend_slug = session.backend.slug().to_string();
             let account_id  = session.id.clone();

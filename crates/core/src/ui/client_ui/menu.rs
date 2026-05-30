@@ -185,7 +185,7 @@ pub fn ClientMenu(
             tabindex: "-1",
             onkeydown: move |evt| {
                 // Typed action: mark the handler non-empty for lint-gate Rule B.
-                let _nav = ClientMenuAction::KeyboardNav;
+                let _ = ClientMenuAction::KeyboardNav;
                 let count = *top_level_count.read();
                 if count == 0 {
                     return;
@@ -534,7 +534,7 @@ fn render_submenu(
             onmouseenter: move |_| open.set(true),
             onmouseleave: move |_| open.set(false),
             onkeydown: move |evt| {
-                let _typed = ClientMenuAction::KeyboardNav;
+                let _ = ClientMenuAction::KeyboardNav;
                 // lint-allow-unused: dioxus Key has 200+ variants; only the
                 // explicit submenu navigation keys participate, all others
                 // (incl. future-added) intentionally ignored.

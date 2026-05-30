@@ -264,7 +264,7 @@ async fn join_voice_channel(
 
     let voice_backend = current_server
         .as_ref()
-        .map_or(poly_client::BackendType::from("demo"), |s| s.backend.clone());
+        .map_or_else(|| poly_client::BackendType::from("demo"), |s| s.backend.clone());
 
     // Fetch current participants from backend, then signal the join transport.
     let server_id_for_join = current_server.as_ref().map(|s| s.id.clone()).unwrap_or_default();

@@ -253,7 +253,7 @@ pub fn generate_css(config: &ThemeConfig) -> String {
     if config.color_overrides_enabled && !config.color_overrides.is_empty() {
         css.push_str(":root {\n");
         for (var, value) in &config.color_overrides {
-            css.push_str(&format!("  {var}: {value};\n"));
+            let _ = writeln!(css, "  {var}: {value};");
         }
         css.push_str("}\n");
     }
@@ -293,10 +293,10 @@ pub fn build_css_template(config: &ThemeConfig) -> String {
             .unwrap_or_else(|| "#808080".into());
         if let Some(override_val) = config.color_overrides.get(var) {
             // Active override — uncommented
-            out.push_str(&format!("  {var}: {override_val};  /* {desc} */\n"));
+            let _ = writeln!(out, "  {var}: {override_val};  /* {desc} */");
         } else {
             // Default — commented out so user can see the value
-            out.push_str(&format!("  /* {var}: {preset_val};  {desc} */\n"));
+            let _ = writeln!(out, "  /* {var}: {preset_val};  {desc} */");
         }
     }
 
@@ -336,7 +336,7 @@ pub fn export_theme(config: &ThemeConfig) -> String {
 
     // Write overrides as magic comments
     for (var, value) in &config.color_overrides {
-        output.push_str(&format!("/* {EXPORT_PREFIX} {var}: {value} */\n"));
+        let _ = writeln!(output, "/* {EXPORT_PREFIX} {var}: {value} */");
     }
 
     // Include custom CSS body (always, even if toggled off — so it survives round-trip)

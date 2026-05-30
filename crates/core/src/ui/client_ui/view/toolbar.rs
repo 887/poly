@@ -88,7 +88,7 @@ pub fn ViewToolbar(
     {
         let mut s = selected_sort.write();
         if s.is_none() {
-            *s = default_sort.clone();
+            s.clone_from(&default_sort);
         }
     }
     {

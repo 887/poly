@@ -1325,7 +1325,7 @@ async fn init_storage(
                 Ok(settings) if settings.setup_complete => {
                     tracing::info!("Storage: setup complete, going to main layout");
                     crate::i18n::set_locale(&settings.locale);
-                    *locale_sig.write() = settings.locale.clone();
+                    locale_sig.write().clone_from(&settings.locale);
                     {
                         let disabled = settings.disabled_native_backends.clone();
                         client_manager.batch(move |cm| cm.set_disabled_native_backends(disabled));

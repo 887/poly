@@ -478,7 +478,7 @@ impl std::fmt::Debug for ClientManager {
             .field("demo_active", &self.demo_active)
             .field("backend_count", &self.backends.len())
             .field("account_ids", &self.backends.keys().collect::<Vec<_>>())
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 

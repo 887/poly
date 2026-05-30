@@ -111,8 +111,6 @@ pub(super) struct ChatViewMarkupCtx {
     pub(super) mobile_layout_resize_tick: Signal<u64>,
 }
 
-// lint-allow-unused: long cohesive view/handler; splitting risks reactive bugs
-#[allow(clippy::too_many_lines)]
 // lint-allow-unused: flat struct-builder mapping every signal into the markup ctx; long by field count, not complexity
 #[allow(clippy::too_many_lines)]
 pub(super) fn build_chat_view_markup_ctx(signals: &ChatViewSignals) -> ChatViewMarkupCtx {
