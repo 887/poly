@@ -148,7 +148,7 @@ pub fn set_plugin_enabled(
 }
 
 /// Pure: snapshot of every plugin known to the app, classified by source.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PluginListing {
     /// Compile-time built-in backends (demo, stoat, matrix, …) with
     /// their effective enabled state.

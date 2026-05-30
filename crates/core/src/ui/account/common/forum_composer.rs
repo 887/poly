@@ -20,7 +20,7 @@ use pulldown_cmark::Options;
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Which mode the composer is in.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum ComposerMode {
     /// Creating a brand-new top-level forum post.
     NewPost,

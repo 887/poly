@@ -54,7 +54,7 @@ pub enum TalkLineKind {
 }
 
 /// One line in the conversation transcript.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TalkLine {
     pub kind: TalkLineKind,
     pub content: String,

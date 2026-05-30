@@ -168,7 +168,7 @@ pub fn route_targets_unknown_account(route: &Route, client_manager: &ClientManag
 /// - Browser back/forward work correctly across account switches
 ///
 /// See module-level docs for the full URL scheme.
-#[derive(Routable, Clone, PartialEq, Debug, poly_ui_macros::Connected)]
+#[derive(Routable, Clone, PartialEq, Eq, Debug, poly_ui_macros::Connected)]
 #[rustfmt::skip]
 pub enum Route {
     #[layout(MainLayout)]
