@@ -43,6 +43,13 @@
     clippy::struct_field_names,
     // pedantic: short-scoped local names are intentional and not actually confusable.
     clippy::similar_names,
+    // nursery readability-subjective lints whose suggested rewrite is frequently
+    // LESS readable in this crate's match-heavy UI logic. clippy itself ships
+    // these as nursery for exactly this reason; suppressed crate-wide by choice.
+    clippy::option_if_let_else,
+    clippy::single_match_else,
+    // pedantic taste: `if !cond { A } else { B }` is sometimes the clearer order.
+    clippy::if_not_else,
 )]
 #![cfg_attr(
     test,
