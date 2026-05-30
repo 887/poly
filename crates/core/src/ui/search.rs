@@ -414,12 +414,9 @@ fn ServerNode(
         async move {
             let backend_info = cm.read().get_backend_for_server(&sid);
             if let Some((_aid, backend)) = backend_info {
-                let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
-                    Ok(g) => g,
-                    Err(_) => {
-                        tracing::warn!("search: backend read timed out fetching channels");
-                        return Vec::new();
-                    }
+                let Ok(guard) = backend.read_with_timeout(std::time::Duration::from_secs(5)).await else {
+                    tracing::warn!("search: backend read timed out fetching channels");
+                    return Vec::new();
                 };
                 guard.get_channels(&sid).await.unwrap_or_default()
             } else {

@@ -26,9 +26,8 @@ struct SourceSummary {
 }
 
 fn compute_summary(json: &serde_json::Value) -> SourceSummary {
-    let arr = match json.as_array() {
-        Some(a) => a,
-        None => return SourceSummary::default(),
+    let Some(arr) = json.as_array() else {
+        return SourceSummary::default();
     };
 
     // Count INCLUDE rows (include == 1); collect unique account_ids.

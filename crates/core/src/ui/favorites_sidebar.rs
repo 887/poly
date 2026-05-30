@@ -1281,18 +1281,15 @@ async fn load_server_data_internal(
 
     // Load server details
     {
-        let guard = match backend
+        let Ok(guard) = backend
             .read_with_timeout(std::time::Duration::from_secs(5))
             .await
-        {
-            Ok(g) => g,
-            Err(_) => {
-                tracing::warn!(server_id = %server_id, "load_server_data: backend read timed out");
-                pending_cv.discard();
-                pending_cl.discard();
-                chat_view_state.batch(|cv| cv.loading = false);
-                return;
-            }
+        else {
+            tracing::warn!(server_id = %server_id, "load_server_data: backend read timed out");
+            pending_cv.discard();
+            pending_cl.discard();
+            chat_view_state.batch(|cv| cv.loading = false);
+            return;
         };
         if let Ok(server) = guard.get_server(&server_id).await {
             pending_cv.set(move |cv| cv.current_server = Some(server));
@@ -1301,15 +1298,12 @@ async fn load_server_data_internal(
 
     // Load channels
     let channels = {
-        let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
-            Ok(g) => g,
-            Err(_) => {
-                tracing::warn!("favorites_sidebar: backend read timed out loading channels");
-                pending_cv.discard();
-                pending_cl.discard();
-                chat_view_state.batch(|cv| cv.loading = false);
-                return;
-            }
+        let Ok(guard) = backend.read_with_timeout(std::time::Duration::from_secs(5)).await else {
+            tracing::warn!("favorites_sidebar: backend read timed out loading channels");
+            pending_cv.discard();
+            pending_cl.discard();
+            chat_view_state.batch(|cv| cv.loading = false);
+            return;
         };
         guard.get_channels(&server_id).await.unwrap_or_default()
     };
@@ -1345,15 +1339,12 @@ async fn load_server_data_internal(
         pending_cv.set(move |cv| cv.current_channel = Some(ch_for_current));
 
         // Load messages for first channel
-        let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
-            Ok(g) => g,
-            Err(_) => {
-                tracing::warn!("favorites_sidebar: backend read timed out loading first-channel messages");
-                pending_cv.discard();
-                pending_cl.discard();
-                chat_view_state.batch(|cv| cv.loading = false);
-                return;
-            }
+        let Ok(guard) = backend.read_with_timeout(std::time::Duration::from_secs(5)).await else {
+            tracing::warn!("favorites_sidebar: backend read timed out loading first-channel messages");
+            pending_cv.discard();
+            pending_cl.discard();
+            chat_view_state.batch(|cv| cv.loading = false);
+            return;
         };
         if let Ok(messages) = guard
             .get_messages(&ch.id, initial_message_query(ch.unread_count))

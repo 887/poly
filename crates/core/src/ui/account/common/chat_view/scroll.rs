@@ -222,13 +222,10 @@ pub(super) async fn load_older_messages(
     let anchor_snapshot = read_message_list_anchor().await;
 
     let older_messages = {
-        let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
-            Ok(g) => g,
-            Err(_) => {
-                tracing::warn!("chat_view: backend read timed out in load_older_messages");
-                history_state.batch(|h| h.loading_before = false);
-                return;
-            }
+        let Ok(guard) = backend.read_with_timeout(std::time::Duration::from_secs(5)).await else {
+            tracing::warn!("chat_view: backend read timed out in load_older_messages");
+            history_state.batch(|h| h.loading_before = false);
+            return;
         };
         guard
             .get_messages(
@@ -327,16 +324,13 @@ pub(super) async fn load_newer_messages(
     let anchor_snapshot = read_message_list_anchor().await;
 
     let (newer_messages, reached_latest_message) = {
-        let guard = match backend
+        let Ok(guard) = backend
             .read_with_timeout(std::time::Duration::from_secs(30))
             .await
-        {
-            Ok(g) => g,
-            Err(_) => {
-                tracing::warn!("load_newer_messages: chain-load backend read timed out");
-                history_state.batch(|h| h.loading_after = false);
-                return;
-            }
+        else {
+            tracing::warn!("load_newer_messages: chain-load backend read timed out");
+            history_state.batch(|h| h.loading_after = false);
+            return;
         };
         let mut collected_messages = Vec::new();
         let mut next_after_message_id = after_message_id;

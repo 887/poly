@@ -320,12 +320,9 @@ pub(crate) async fn toggle_demo(
             // Load all servers.
             let mut servers = Vec::new();
             for (_, backend) in &backend_handles {
-                let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
-                    Ok(g) => g,
-                    Err(_) => {
-                        tracing::warn!("demo: backend read timed out in load_all_servers loop");
-                        continue;
-                    }
+                let Ok(guard) = backend.read_with_timeout(std::time::Duration::from_secs(5)).await else {
+                    tracing::warn!("demo: backend read timed out in load_all_servers loop");
+                    continue;
                 };
                 if let Ok(mut s) = guard.get_servers().await {
                     servers.append(&mut s);
@@ -349,12 +346,9 @@ pub(crate) async fn toggle_demo(
 
             // Load DMs, groups, notifications, friends from all demo accounts.
             for (aid, backend) in &backend_handles {
-                let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
-                    Ok(g) => g,
-                    Err(_) => {
-                        tracing::warn!("demo: backend read timed out in load_dm_groups_friends loop");
-                        continue;
-                    }
+                let Ok(guard) = backend.read_with_timeout(std::time::Duration::from_secs(5)).await else {
+                    tracing::warn!("demo: backend read timed out in load_dm_groups_friends loop");
+                    continue;
                 };
                 let (dms, groups) = if let Some(dg) = guard.as_dms_and_groups() {
                     (dg.get_dm_channels().await.ok(), dg.get_groups().await.ok())

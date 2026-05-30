@@ -194,12 +194,9 @@ async fn poll_until_resolved(
         };
 
         let outcome = {
-            let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
-                Ok(g) => g,
-                Err(_) => {
-                    tracing::warn!("action_outcome: backend read timed out polling action");
-                    return;
-                }
+            let Ok(guard) = backend.read_with_timeout(std::time::Duration::from_secs(5)).await else {
+                tracing::warn!("action_outcome: backend read timed out polling action");
+                return;
             };
             guard.poll_action(handle.clone()).await
         };

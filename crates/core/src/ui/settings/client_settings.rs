@@ -32,9 +32,8 @@ use serde_json::Value;
 /// Parse the backend list from a `client_settings_list` (all-backends) JSON response.
 /// Returns a vec of `(backend_id, effective_version, version_override)`.
 fn parse_backend_list(json: &Value) -> Vec<(String, String, Option<String>)> {
-    let arr = match json.as_array() {
-        Some(a) => a,
-        None => return Vec::new(),
+    let Some(arr) = json.as_array() else {
+        return Vec::new();
     };
     arr.iter()
         .filter_map(|item| {

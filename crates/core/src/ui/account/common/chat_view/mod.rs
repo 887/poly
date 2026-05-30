@@ -354,16 +354,13 @@ pub(crate) async fn open_message_hit(
     };
     let (account_id, backend, fallback_backend) = backend_info?;
 
-    let guard = match backend
+    let Ok(guard) = backend
         .read_with_timeout(std::time::Duration::from_secs(5))
         .await
-    {
-        Ok(g) => g,
-        Err(_) => {
-            tracing::warn!("permalink hit: backend read timed out, bailing out");
-            chat_view_state.batch(|cv| cv.loading = false);
-            return None;
-        }
+    else {
+        tracing::warn!("permalink hit: backend read timed out, bailing out");
+        chat_view_state.batch(|cv| cv.loading = false);
+        return None;
     };
     let target_channel = guard.get_channel(&target_channel_id).await.ok();
     let target_messages = guard
