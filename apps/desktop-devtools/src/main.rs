@@ -173,7 +173,7 @@ fn has_top_level_semicolon(s: &str) -> bool {
 /// Injected into <head> on startup.
 /// • Intercepts console.* to buffer the last 200 messages in window.__polyLogs
 /// Intercepts console.* to buffer messages in window.__polyLogs.
-const DEVTOOLS_HEAD: &str = r#"<script>
+const DEVTOOLS_HEAD: &str = r"<script>
 /* poly-devtools initialisation */
 (function () {
   window.__polyLogs = [];
@@ -191,7 +191,7 @@ const DEVTOOLS_HEAD: &str = r#"<script>
     };
   });
 }());
-</script>"#;
+</script>";
 
 // ─── Entry Point ──────────────────────────────────────────────────────────────
 
@@ -234,6 +234,10 @@ fn main() {
 /// This design survives hot-reload: if the component remounts, the new
 /// coroutine creates new channels and the HTTP handlers automatically
 /// pick up the latest sender via the global mutex.
+// future_not_send: runs on the GTK main-thread (single-threaded) dioxus-desktop
+// executor; Send is not required. cognitive_complexity: one cohesive
+// channel-lifecycle loop (publish sender, drain requests, clear on exit).
+#[allow(clippy::future_not_send, clippy::cognitive_complexity)]
 async fn run_eval_coroutine() {
     let (tx, mut rx) = mpsc::channel::<EvalRequest>(64);
 
@@ -279,6 +283,10 @@ async fn run_eval_coroutine() {
 /// Must run on the GTK main thread — all dioxus-desktop coroutines do.
 /// Creates a fresh channel pair and stores the sender in [`SCREENSHOT_TX`],
 /// same recreatable pattern as the eval coroutine.
+// future_not_send: runs on the GTK main-thread (single-threaded) dioxus-desktop
+// executor; Send is not required. cognitive_complexity: one cohesive
+// screenshot-request loop (snapshot callback + 16ms poll handshake).
+#[allow(clippy::future_not_send, clippy::cognitive_complexity)]
 async fn run_screenshot_coroutine() {
     let (tx, mut rx) = mpsc::channel::<ScreenshotRequest>(4);
 
@@ -325,7 +333,8 @@ async fn run_screenshot_coroutine() {
             tokio::time::sleep(std::time::Duration::from_millis(16)).await;
             match poll_rx.try_recv() {
                 Ok(r) => break r,
-                Err(std_mpsc::TryRecvError::Empty) => continue,
+                // Empty → keep polling on the next 16ms tick (no-op this pass).
+                Err(std_mpsc::TryRecvError::Empty) => {}
                 Err(std_mpsc::TryRecvError::Disconnected) => {
                     break Err("Screenshot channel disconnected".to_string());
                 }
