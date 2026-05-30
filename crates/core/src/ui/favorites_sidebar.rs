@@ -739,7 +739,7 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
         };
         menu_ui_overlays.batch(|o| {
             o.context_menu_stack.push(account_entry_at(
-                AccountContextMenuState {
+                &AccountContextMenuState {
                     x: coords.x,
                     y: coords.y,
                     account_id: menu_aid.clone(),
