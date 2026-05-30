@@ -28,7 +28,7 @@ pub(super) fn now_iso8601() -> String {
 /// Convert days since Unix epoch (1970-01-01) to (year, month, day).
 // poly-lint: textbook Hinnant Gregorian-calendar algorithm; operands bounded by Unix epoch range.
 #[allow(clippy::arithmetic_side_effects, clippy::integer_division)]
-fn days_to_ymd(days: u64) -> (u64, u64, u64) {
+const fn days_to_ymd(days: u64) -> (u64, u64, u64) {
     let z = days + 719_468;
     let era = z / 146_097;
     let doe = z % 146_097;

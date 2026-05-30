@@ -220,7 +220,7 @@ impl PersonaBackendProvider for BackendPoolProvider<'_> {
 
         Ok(servers
             .into_iter()
-            .map(|s| (s.id.to_string(), s.name))
+            .map(|s| (s.id.clone(), s.name))
             .collect())
     }
 
@@ -241,7 +241,7 @@ impl PersonaBackendProvider for BackendPoolProvider<'_> {
 
         Ok(channels
             .into_iter()
-            .map(|c| (c.id.to_string(), c.name))
+            .map(|c| (c.id.clone(), c.name))
             .collect())
     }
 
@@ -261,7 +261,7 @@ impl PersonaBackendProvider for BackendPoolProvider<'_> {
 
         Ok(dms
             .into_iter()
-            .map(|d| (d.id.to_string(), d.user.display_name))
+            .map(|d| (d.id.clone(), d.user.display_name))
             .collect())
     }
 

@@ -124,7 +124,7 @@ pub(super) fn handle_meta_persona_set_sources(args: &Value, mem: &MemoryDb) -> V
     // Atomic replace: remove all existing sources, then insert new ones.
     if let Err(e) = mem.list_persona_sources(slug).and_then(|existing| {
         for s in &existing {
-            if let Some(id) = s.get("id").and_then(|v| v.as_i64()) {
+            if let Some(id) = s.get("id").and_then(serde_json::Value::as_i64) {
                 mem.remove_persona_source(id)?;
             }
         }

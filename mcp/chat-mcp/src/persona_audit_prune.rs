@@ -75,7 +75,7 @@ fn unix_secs_to_iso8601(secs: u64) -> String {
     format!("{y:04}-{mo:02}-{d:02}T{h:02}:{min:02}:{sec:02}Z")
 }
 
-fn days_to_ymd(days: u64) -> (u64, u64, u64) {
+const fn days_to_ymd(days: u64) -> (u64, u64, u64) {
     let z   = days + 719_468;
     let era = z / 146_097;
     let doe = z % 146_097;

@@ -687,7 +687,7 @@ fn parse_u64(s: &str) -> Option<u64> {
 /// Convert (year, month, day) to days since 1970-01-01 (Gregorian).
 // poly-lint: textbook Gregorian-calendar algorithm (Hinnant); inputs are validated upstream.
 #[allow(clippy::arithmetic_side_effects, clippy::integer_division)]
-fn ymd_to_days(y: u64, m: u64, d: u64) -> Option<u64> {
+const fn ymd_to_days(y: u64, m: u64, d: u64) -> Option<u64> {
     // Port of the inverse algorithm used in memory.rs `days_to_ymd`.
     // Reference: https://howardhinnant.github.io/date_algorithms.html
     let (y, m) = if m <= 2 { (y - 1, m + 9) } else { (y, m - 3) };
@@ -713,7 +713,7 @@ fn unix_secs_to_iso8601(secs: u64) -> String {
 /// Mirror of `days_to_ymd` from memory.rs (private there).
 // poly-lint: textbook Gregorian-calendar algorithm (Hinnant); operands are bounded by Unix epoch range.
 #[allow(clippy::arithmetic_side_effects, clippy::integer_division)]
-fn days_to_ymd_pub(days: u64) -> (u64, u64, u64) {
+const fn days_to_ymd_pub(days: u64) -> (u64, u64, u64) {
     let z   = days + 719_468;
     let era = z / 146_097;
     let doe = z % 146_097;

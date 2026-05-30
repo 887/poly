@@ -78,7 +78,7 @@ pub enum EventKind {
 }
 
 impl EventKind {
-    fn from_client_event(ev: &ClientEvent) -> Self {
+    const fn from_client_event(ev: &ClientEvent) -> Self {
         match ev {
             ClientEvent::MessageReceived { .. } => Self::MessageReceived,
             ClientEvent::MessageEdited { .. } => Self::MessageEdited,
@@ -369,15 +369,12 @@ pub fn spawn_fan_out(
                     break;
                 }
                 maybe_ev = stream.next() => {
-                    match maybe_ev {
-                        Some(ev) => {
-                            let mcp_ev = McpEvent::from_client_event(account_key.clone(), &ev);
-                            store.lock().await.publish(mcp_ev);
-                        }
-                        None => {
-                            tracing::debug!(account = %account_key, "event stream closed");
-                            break;
-                        }
+                    if let Some(ev) = maybe_ev {
+                        let mcp_ev = McpEvent::from_client_event(account_key.clone(), &ev);
+                        store.lock().await.publish(mcp_ev);
+                    } else {
+                        tracing::debug!(account = %account_key, "event stream closed");
+                        break;
                     }
                 }
             }

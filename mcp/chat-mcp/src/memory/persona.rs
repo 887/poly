@@ -196,7 +196,7 @@ impl MemoryDb {
         };
         let fin_pro = args.proactivity.map_or(cur_pro, std::string::ToString::to_string);
         let fin_rl  = args.rate_limit_per_hour.unwrap_or(cur_rl);
-        let fin_en  = args.enabled.map_or(cur_enabled, |b| if b { 1_i64 } else { 0_i64 });
+        let fin_en  = args.enabled.map_or(cur_enabled, |b| i64::from(b));
         let fin_lr: Option<String> = match args.last_run_at {
             Some(Some(v)) => Some(v.to_string()),
             Some(None)    => None,
@@ -250,7 +250,7 @@ impl MemoryDb {
         let mut stmt = db.prepare(
             "UPDATE personas SET quiet_hours_disabled=?1, updated_at=?2 WHERE slug=?3"
         )?;
-        stmt.bind((1, if disabled { 1_i64 } else { 0_i64 }))?;
+        stmt.bind((1, i64::from(disabled)))?;
         stmt.bind((2, now.as_str()))?;
         stmt.bind((3, slug))?;
         drain(&mut stmt)
@@ -288,7 +288,7 @@ impl MemoryDb {
             Some(v) => stmt.bind((4, v))?,
             None    => stmt.bind((4, sqlite::Value::Null))?,
         }
-        stmt.bind((5, if include { 1_i64 } else { 0_i64 }))?;
+        stmt.bind((5, i64::from(include)))?;
         stmt.bind((6, now.as_str()))?;
         drain(&mut stmt)?;
 
@@ -399,7 +399,7 @@ impl MemoryDb {
             None    => stmt.bind((2, sqlite::Value::Null))?,
         }
         stmt.bind((3, fact_text))?;
-        stmt.bind((4, if pinned { 1_i64 } else { 0_i64 }))?;
+        stmt.bind((4, i64::from(pinned)))?;
         stmt.bind((5, now.as_str()))?;
         stmt.bind((6, now.as_str()))?;
         drain(&mut stmt)?;

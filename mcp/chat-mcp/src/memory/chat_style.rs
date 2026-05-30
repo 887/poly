@@ -40,7 +40,7 @@ impl MemoryDb {
         let final_tone      = tone.map(std::string::ToString::to_string).or(cur_tone);
         let final_formality = formality.map(std::string::ToString::to_string).or(cur_formality);
         let final_emoji     = emoji_allowed
-            .map(|b| if b { 1_i64 } else { 0_i64 })
+            .map(|b| i64::from(b))
             .or(cur_emoji)
             .unwrap_or(1_i64);
         let final_sig       = signature.map(std::string::ToString::to_string).or(cur_sig);
@@ -163,12 +163,12 @@ pub struct ChatStyle;
 
 impl ChatStyle {
     #[must_use]
-    pub fn tone_options() -> &'static [&'static str] {
+    pub const fn tone_options() -> &'static [&'static str] {
         &["casual", "professional", "snarky", "warm", "direct"]
     }
 
     #[must_use]
-    pub fn formality_options() -> &'static [&'static str] {
+    pub const fn formality_options() -> &'static [&'static str] {
         &["tu", "vous", "neutral"]
     }
 }

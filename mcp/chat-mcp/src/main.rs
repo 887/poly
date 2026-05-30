@@ -222,7 +222,7 @@ async fn run_autosend_engine(
     loop {
         // Wait 2s or until shutdown.
         tokio::select! {
-            _ = tokio::time::sleep(std::time::Duration::from_secs(2)) => {}
+            () = tokio::time::sleep(std::time::Duration::from_secs(2)) => {}
             _ = &mut shutdown => {
                 tracing::debug!("auto-send engine: shutdown signal received");
                 return;

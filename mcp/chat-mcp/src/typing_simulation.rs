@@ -339,8 +339,8 @@ pub fn spawn_worker(
                 }
                 TickDecision::Pulse => {
                     // Only send an actual HTTP pulse every PULSE_INTERVAL_MS ms.
-                    if elapsed_ms.saturating_sub(last_pulse_ms) >= PULSE_INTERVAL_MS || last_pulse_ms == 0 {
-                        if let Some(mb) = backend.as_messaging() {
+                    if (elapsed_ms.saturating_sub(last_pulse_ms) >= PULSE_INTERVAL_MS || last_pulse_ms == 0)
+                        && let Some(mb) = backend.as_messaging() {
                             match mb.send_typing(&chat_id).await {
                                 Ok(()) => {
                                     tracing::trace!("typing pulse sent for chat {chat_id} at {elapsed_ms}ms");
@@ -352,7 +352,6 @@ pub fn spawn_worker(
                                 }
                             }
                         }
-                    }
                     // Sleep 1 s between tick decisions.
                     tokio::time::sleep(Duration::from_secs(1)).await;
                 }
