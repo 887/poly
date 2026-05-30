@@ -10,9 +10,10 @@ use poly_client::{MenuTargetKind, MenuItem, ClientError, MenuSlot, MenuItemVaria
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl poly_client::ContextActionBackend for DiscordClient {
-    // reason: one flat match over every MenuTargetKind emitting that target's
-    // full context-menu item set in UI order; splitting per-arm would scatter
-    // the shared MenuItem builders for no readability gain.
+    // one flat match over every MenuTargetKind emitting that target's full
+    // context-menu item set in UI order; splitting per-arm would scatter the
+    // shared MenuItem builders for no readability gain.
+    // lint-allow-unused: flat per-target context-menu builder, intentionally one fn
     #[allow(clippy::too_many_lines)]
     async fn get_context_menu_items(
         &self, target: MenuTargetKind, target_id: &str,

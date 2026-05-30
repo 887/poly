@@ -577,9 +577,10 @@ impl DiscordClient {
     ///
     /// The `fallback_server_id` is used when `guild_id` is absent from the
     /// payload (Discord omits it on `THREAD_DELETE` events).
-    // reason: one flat match mapping each Discord gateway event name to its
+    // one flat match mapping each Discord gateway event name to its
     // ClientEvent(s); a single dispatch table reads clearer than fragmenting
     // the 1:1 event-name→event mapping across helpers.
+    // lint-allow-unused: flat gateway-event dispatch table, intentionally one fn
     #[allow(clippy::too_many_lines)]
     #[cfg(feature = "native")]
     pub fn parse_gateway_event(
