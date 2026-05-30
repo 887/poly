@@ -143,7 +143,7 @@ poly-server-client = { workspace = true, optional = true, features = [
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 indexed_db_futures = { workspace = true }
 getrandom02-js = { workspace = true }
-getrandom04-wasm = { workspace = true }
+getrandom = { workspace = true }  # forces wasm_js feature for rand 0.10 → getrandom 0.4 path
 web-sys = { workspace = true }
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = { workspace = true }

@@ -182,10 +182,9 @@ getrandom = { version = "0.4", features = ["wasm_js"] }
 # semver line that transitive dependencies pull in on wasm32 targets.
 # rand_core 0.6 (from aead / chacha20poly1305 / ed25519-dalek) → getrandom 0.2
 getrandom02-js = { package = "getrandom", version = "0.2", features = ["js"] }
-# rand 0.10 → getrandom 0.4
-getrandom04-wasm = { package = "getrandom", version = "0.4", features = [
-    "wasm_js",
-] }
+# getrandom04-wasm alias removed: getrandom is now at 0.4 directly, so the
+# alias is redundant (having getrandom="0.4" + getrandom04-wasm=package"getrandom"="0.4"
+# in the same crate is a cargo error). Use getrandom workspace dep directly instead.
 js-sys = "0.3"
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"

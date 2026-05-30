@@ -74,8 +74,7 @@ anyhow = { workspace = true, optional = true }
 # by poly-reddit) ALSO needs wasm_js — must be explicitly added so feature
 # unification reaches the 0.3 dep on wasm32 targets.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-getrandom = { workspace = true }
-getrandom04-wasm = { workspace = true }
+getrandom = { workspace = true }  # forces wasm_js for getrandom 0.4 (rand 0.10 path)
 web-sys = { workspace = true }
 # apps/web runs in a real browser — no native shell, no /host bridge.
 # Enabling `web-direct` makes HttpClient::new() fall back to browser fetch

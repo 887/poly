@@ -70,7 +70,7 @@ poly-host-sandbox = { workspace = true, features = ["wry-sandbox"] }
 
 # WASM build (used by poly-desktop-web shell via `dx serve --platform web`)
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-getrandom04-wasm = { workspace = true }
+getrandom = { workspace = true }  # forces wasm_js for getrandom 0.4 (rand 0.10 path)
 poly-host-bridge = { workspace = true, features = ["web-direct"] }
 
 # Integration test dependencies (native only — sandbox_capture.rs).

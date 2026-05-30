@@ -72,7 +72,7 @@ async-trait = { workspace = true }
 
 # getrandom 0.4 (pulled by rand 0.10 → poly-demo) needs wasm_js on WASM targets
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-getrandom04-wasm = { workspace = true }
+getrandom = { workspace = true }  # forces wasm_js for getrandom 0.4 (rand 0.10 path)
 web-sys = { workspace = true }
 poly-host-bridge = { workspace = true, features = ["web-direct"] }
 
