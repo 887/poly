@@ -57,7 +57,7 @@ pub fn forum_post_entry(ctx: ForumPostCtx, evt: &MouseEvent) -> ActiveContextMen
             x: coords.x,
             y: coords.y,
         },
-        ctx_json: serde_json::to_value(&ctx).unwrap_or(serde_json::Value::Null),
+        ctx_json: serde_json::to_value(ctx).unwrap_or(serde_json::Value::Null),
         menu_type: FORUM_POST_MENU_TYPE,
         dismiss_on_outside: true,
     }
@@ -123,7 +123,7 @@ pub fn user_row_entry(ctx: UserRowCtx, evt: &MouseEvent) -> ActiveContextMenu {
             x: coords.x,
             y: coords.y,
         },
-        ctx_json: serde_json::to_value(&ctx).unwrap_or(serde_json::Value::Null),
+        ctx_json: serde_json::to_value(ctx).unwrap_or(serde_json::Value::Null),
         menu_type: USER_ROW_MENU_TYPE,
         dismiss_on_outside: true,
     }
@@ -288,7 +288,7 @@ impl ContextMenuFor<()> for ForumPostContextMenu {
         }
     }
     fn render(ctx: Self::Ctx, close: EventHandler<()>) -> Element {
-        let json = serde_json::to_value(&ctx).unwrap_or(serde_json::Value::Null);
+        let json = serde_json::to_value(ctx).unwrap_or(serde_json::Value::Null);
         render_forum_post(&json, close)
     }
 }
@@ -301,7 +301,7 @@ impl ContextMenuFor<()> for UserRowContextMenu {
         unreachable!("UserRowCtx requires trigger-scoped data not available from ()")
     }
     fn render(ctx: Self::Ctx, close: EventHandler<()>) -> Element {
-        let json = serde_json::to_value(&ctx).unwrap_or(serde_json::Value::Null);
+        let json = serde_json::to_value(ctx).unwrap_or(serde_json::Value::Null);
         render_user_row(&json, close)
     }
 }
@@ -324,11 +324,11 @@ pub fn server_icon_entry(ctx: &ContextMenuState, evt: &MouseEvent) -> ActiveCont
 }
 
 /// Variant for long-press where coords come from touch (not a MouseEvent).
-pub fn server_icon_entry_at(ctx: ContextMenuState, x: f64, y: f64) -> ActiveContextMenu {
+pub fn server_icon_entry_at(ctx: &ContextMenuState, x: f64, y: f64) -> ActiveContextMenu {
     ActiveContextMenu {
         id: next_menu_id(),
         anchor: MenuAnchor::Cursor { x, y },
-        ctx_json: serde_json::to_value(&ctx).unwrap_or(serde_json::Value::Null),
+        ctx_json: serde_json::to_value(ctx).unwrap_or(serde_json::Value::Null),
         menu_type: SERVER_ICON_MENU_TYPE,
         dismiss_on_outside: true,
     }
@@ -361,11 +361,11 @@ pub fn channel_entry(ctx: &ChannelContextMenuState, evt: &MouseEvent) -> ActiveC
     }
 }
 
-pub fn channel_entry_at(ctx: ChannelContextMenuState, x: f64, y: f64) -> ActiveContextMenu {
+pub fn channel_entry_at(ctx: &ChannelContextMenuState, x: f64, y: f64) -> ActiveContextMenu {
     ActiveContextMenu {
         id: next_menu_id(),
         anchor: MenuAnchor::Cursor { x, y },
-        ctx_json: serde_json::to_value(&ctx).unwrap_or(serde_json::Value::Null),
+        ctx_json: serde_json::to_value(ctx).unwrap_or(serde_json::Value::Null),
         menu_type: CHANNEL_MENU_TYPE,
         dismiss_on_outside: true,
     }
@@ -398,11 +398,11 @@ pub fn dm_entry(ctx: &DmContextMenuState, evt: &MouseEvent) -> ActiveContextMenu
     }
 }
 
-pub fn dm_entry_at(ctx: DmContextMenuState, x: f64, y: f64) -> ActiveContextMenu {
+pub fn dm_entry_at(ctx: &DmContextMenuState, x: f64, y: f64) -> ActiveContextMenu {
     ActiveContextMenu {
         id: next_menu_id(),
         anchor: MenuAnchor::Cursor { x, y },
-        ctx_json: serde_json::to_value(&ctx).unwrap_or(serde_json::Value::Null),
+        ctx_json: serde_json::to_value(ctx).unwrap_or(serde_json::Value::Null),
         menu_type: DM_MENU_TYPE,
         dismiss_on_outside: true,
     }
@@ -439,7 +439,7 @@ pub fn group_dm_entry_at(ctx: GroupDmContextMenuState, x: f64, y: f64) -> Active
     ActiveContextMenu {
         id: next_menu_id(),
         anchor: MenuAnchor::Cursor { x, y },
-        ctx_json: serde_json::to_value(&ctx).unwrap_or(serde_json::Value::Null),
+        ctx_json: serde_json::to_value(ctx).unwrap_or(serde_json::Value::Null),
         menu_type: GROUP_DM_MENU_TYPE,
         dismiss_on_outside: true,
     }
@@ -472,11 +472,11 @@ pub fn account_entry(ctx: &AccountContextMenuState, evt: &MouseEvent) -> ActiveC
     }
 }
 
-pub fn account_entry_at(ctx: AccountContextMenuState, x: f64, y: f64) -> ActiveContextMenu {
+pub fn account_entry_at(ctx: &AccountContextMenuState, x: f64, y: f64) -> ActiveContextMenu {
     ActiveContextMenu {
         id: next_menu_id(),
         anchor: MenuAnchor::Cursor { x, y },
-        ctx_json: serde_json::to_value(&ctx).unwrap_or(serde_json::Value::Null),
+        ctx_json: serde_json::to_value(ctx).unwrap_or(serde_json::Value::Null),
         menu_type: ACCOUNT_MENU_TYPE,
         dismiss_on_outside: true,
     }
@@ -513,7 +513,7 @@ pub fn attachment_entry_at(ctx: AttachmentContextMenuState, x: f64, y: f64) -> A
     ActiveContextMenu {
         id: next_menu_id(),
         anchor: MenuAnchor::Cursor { x, y },
-        ctx_json: serde_json::to_value(&ctx).unwrap_or(serde_json::Value::Null),
+        ctx_json: serde_json::to_value(ctx).unwrap_or(serde_json::Value::Null),
         menu_type: ATTACHMENT_MENU_TYPE,
         dismiss_on_outside: true,
     }
@@ -550,7 +550,7 @@ pub fn reaction_entry_at(ctx: ReactionContextMenuState, x: f64, y: f64) -> Activ
     ActiveContextMenu {
         id: next_menu_id(),
         anchor: MenuAnchor::Cursor { x, y },
-        ctx_json: serde_json::to_value(&ctx).unwrap_or(serde_json::Value::Null),
+        ctx_json: serde_json::to_value(ctx).unwrap_or(serde_json::Value::Null),
         menu_type: REACTION_MENU_TYPE,
         dismiss_on_outside: true,
     }
@@ -587,7 +587,7 @@ pub fn avatar_entry_at(ctx: AvatarContextMenuState, x: f64, y: f64) -> ActiveCon
     ActiveContextMenu {
         id: next_menu_id(),
         anchor: MenuAnchor::Cursor { x, y },
-        ctx_json: serde_json::to_value(&ctx).unwrap_or(serde_json::Value::Null),
+        ctx_json: serde_json::to_value(ctx).unwrap_or(serde_json::Value::Null),
         menu_type: AVATAR_MENU_TYPE,
         dismiss_on_outside: true,
     }
