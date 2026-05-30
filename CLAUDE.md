@@ -436,12 +436,30 @@ to chrome-devtools as a replacement.
 
 ## Parallel Agent Work — `.claude/worktrees/` pattern
 
-When you spawn an Agent with `isolation: "worktree"`, the runtime creates a git
-worktree under `.claude/worktrees/agent-<id>/` that the subagent edits. The
-`PreToolUse` hook in `.claude/settings.json` symlinks `target/` inside each
-worktree to `/media/games/workspacemsg-worktree-targets/agent-<id>/` so build
-artifacts live on a separate disk and don't fill `/`. The `Stop` hook cleans
-worktrees older than a day.
+When you spawn an Agent with `isolation: "worktree"`, the runtime creates a
+workspace directory under `.claude/worktrees/agent-<id>/` that the subagent
+edits. The `PreToolUse` hook in `.claude/settings.json` symlinks `target/`
+inside each worktree to `/media/games/workspacemsg-worktree-targets/agent-<id>/`
+so build artifacts live on a separate disk and don't fill `/`. The `Stop` hook
+cleans worktrees older than a day.
+
+### jj workspace isolation — why per-agent workspaces are safe
+
+`jj workspace add` (jj 0.41.0) is jj's **native** isolation primitive — the
+proper equivalent of `git worktree add`. Each workspace directory backed by the
+same `.jj/repo` gets its **own working-copy commit and its own `@` resolution**.
+Two concurrent agents, each in their own `jj workspace add` directory, will NOT
+fight over `@` or clobber each other's uncommitted edits. This is safe by design.
+
+**The default-workspace edit race** (documented separately in memory) was caused
+by two agents sharing the *same* default workspace — NOT by jj workspaces being
+unsafe. The fix is the pattern already used here: one `jj workspace add
+.claude/worktrees/agent-<id>` directory per concurrent agent. With each agent
+owning its own workspace, the race is structurally impossible.
+
+After a workspace directory is cleaned up, run `jj workspace forget agent-<id>`
+so jj stops tracking its stale working-copy commit. Use `jj workspace list` to
+audit live workspaces.
 
 ### MANDATORY before the subagent exits — `jj describe` AND verify the commit landed
 

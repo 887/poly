@@ -272,7 +272,7 @@ pub fn MessageMediaViewerOverlay(props: MessageMediaViewerOverlayProps) -> Eleme
                             let coords = evt.client_coordinates();
                             ui_overlays.batch(|o| {
                                 o.context_menu_stack.push(attachment_entry_at(
-                                    AttachmentContextMenuState {
+                                    &AttachmentContextMenuState {
                                         x: coords.x,
                                         y: coords.y,
                                         url: ctx_url.clone(),
