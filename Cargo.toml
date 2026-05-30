@@ -85,11 +85,11 @@ rust-version = "1.85"
 
 [workspace.dependencies]
 # UI framework
-dioxus = { version = "0.7.3", features = ["router"] }
-dioxus-cli-config = "0.7.3"
+dioxus = { version = "0.7.9", features = ["router"] }
+dioxus-cli-config = "0.7.9"
 
 # Database
-surrealdb = { version = "3.0.1", default-features = false }
+surrealdb = { version = "3.1.2", default-features = false }
 sqlite = "0.37.0"
 indexed_db_futures = { version = "0.6.4", features = ["serde"] }
 
@@ -110,7 +110,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 # Cryptography
-ed25519-dalek = { version = "2.1", features = ["rand_core"] }
+ed25519-dalek = { version = "2.2", features = ["rand_core"] }
 x25519-dalek = { version = "2.0", features = ["static_secrets"] }
 bip39 = "2.2"
 sha2 = "0.10"
@@ -138,7 +138,7 @@ sys-locale = "0.3"
 # depend on it — cargo absorbs the -l flag into the dylib and doesn't re-emit
 # it for the final binary's rlib chain. native-tls (system OpenSSL/SChannel/
 # SecureTransport) avoids aws-lc entirely, eliminating the dylib boundary issue.
-reqwest = { version = "0.13.2", default-features = false, features = [
+reqwest = { version = "0.13.4", default-features = false, features = [
     "json",
     "native-tls",
     "charset",
@@ -213,7 +213,7 @@ tokio-tungstenite = { version = "0.26", features = ["native-tls"] }
 futures-util = "0.3"
 tempfile = "3"
 webkit2gtk = { version = "2.0", features = [] }
-webbrowser = "1.0"
+webbrowser = "1.2"
 
 # Audio / Noise
 # nnnoiseless: pure-Rust port of Mozilla RNNoise for real-time noise cancellation.

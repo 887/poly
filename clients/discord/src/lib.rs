@@ -80,6 +80,8 @@ use futures::stream::{self, Stream};
 use http::DiscordHttpClient;
 #[cfg(feature = "native")]
 use poly_client::{ChannelType, Channel, Message, ClientEvent, SettingsStorageCell, User, PresenceStatus, BackendType, MessageContent, ThreadMetadata, ThreadInfo, ForumTag};
+#[cfg(feature = "gateway")]
+use poly_client::{VoiceParticipant, ClientError};
 #[cfg(feature = "native")]
 use std::collections::HashSet;
 #[cfg(feature = "native")]

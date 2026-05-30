@@ -12,10 +12,40 @@
 - cargo-outdated BROKEN (libgit2.so.1.7 missing) → use `cargo upgrade --dry-run`
 - 176 entries in `[workspace.dependencies]`; dioxus 0.7.3
 
-## Phase A — Audit
-- [ ] **A.1** `cargo upgrade --dry-run --incompatible` → capture every dep with a newer (incl. major) version available
-- [ ] **A.2** Note high-risk majors (dioxus, axum, tokio, reqwest, wit-bindgen, serde, sqlx/rusqlite) — these may need code changes
-- [ ] **A.3** Record the audit table in this plan before changing anything
+## Phase A — Audit (shipped in change slqszoutprvy)
+- [x] **A.1** `cargo upgrade --dry-run --incompatible` → capture every dep with a newer (incl. major) version available
+- [x] **A.2** Note high-risk majors (dioxus, axum, tokio, reqwest, wit-bindgen, serde, sqlx/rusqlite) — these may need code changes
+- [x] **A.3** Record the audit table in this plan before changing anything
+
+### Audit Table (before upgrades)
+
+| crate | old | new | type | notes |
+|---|---|---|---|---|
+| dioxus | 0.7.3 | 0.7.9 | compatible | patch only |
+| dioxus-cli-config | 0.7.3 | 0.7.9 | compatible | patch only |
+| surrealdb | 3.0.1 | 3.1.2 | compatible | minor bump |
+| ed25519-dalek | 2.1 | 2.2 | compatible | |
+| reqwest | 0.13.2 | 0.13.4 | compatible | patch |
+| webbrowser | 1.0 | 1.2.1 | compatible | minor |
+| tao | 0.34 | 0.35.3 | compatible | minor |
+| sha2 | 0.10 | 0.11 | MAJOR | crypto, may affect API |
+| gloo-net | 0.6 | 0.7 | MAJOR | WASM net |
+| aes | 0.8 | 0.9 | MAJOR | crypto |
+| cbc | 0.1 | 0.2 | MAJOR | crypto |
+| hmac | 0.12 | 0.13 | MAJOR | crypto |
+| getrandom | 0.3 | 0.4 | MAJOR | WASM random |
+| tower | 0.4 | 0.5 | MAJOR | middleware |
+| jsonwebtoken | 9 | 10 | MAJOR | JWT |
+| tokio-tungstenite | 0.26 | 0.29 | MAJOR | websocket |
+| cpal | 0.16 | 0.17 | MAJOR | audio |
+| wasmtime | 42 | 45 | MAJOR | wasm runtime |
+| wit-bindgen | 0.53 | 0.57 | MAJOR | wasm bindgen |
+| cairo-rs | 0.18 | 0.22 | MAJOR | graphics |
+| wry | 0.53 | 0.55 | MAJOR | webview |
+| scraper | 0.20 | 0.27 | MAJOR | HTML parsing (poly-reddit only) |
+| gloo-timers | 0.3 | 0.4 | MAJOR | WASM timers (poly-core, poly-discord) |
+
+**Not outdated:** axum (0.8 = latest), tokio (1 = latest), serde (1 = latest), rusqlite/sqlx (not in workspace deps directly)
 
 ## Phase B — Compatible upgrades (low risk)
 - [ ] **B.1** `cargo upgrade` (semver-compatible only, no --incompatible) → bumps within current major

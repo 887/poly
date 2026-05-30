@@ -5,6 +5,10 @@
 use super::super::{DiscordClient, Pin, Stream, stream};
 use async_trait::async_trait;
 use poly_client::{IsBackend, AuthCredentials, ClientResult, Session, ClientError, User, PresenceStatus, BackendType, PluginManifest, Server, Channel, MessageQuery, Message, Notification, ClientEvent, BackendCapabilities, VideoCaptureCapability, Mechanism, SettingsScope, HostCap, SignupMethod};
+#[cfg(feature = "gateway")]
+use super::super::gateway_connect_loop;
+#[cfg(feature = "gateway")]
+use std::sync::Arc;
 
 #[cfg(feature = "native")]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]

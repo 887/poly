@@ -13,7 +13,7 @@ impl poly_client::VoiceTransportBackend for DiscordClient {
     async fn get_voice_participants(&self, channel_id: &str) -> ClientResult<Vec<VoiceParticipant>> {
         #[cfg(feature = "gateway")]
         {
-            let states = self.voice_states.read().await;
+            let states: tokio::sync::RwLockReadGuard<'_, std::collections::HashMap<String, Vec<VoiceParticipant>>> = self.voice_states.read().await;
             return Ok(states.get(channel_id).cloned().unwrap_or_default());
         }
         #[cfg(not(feature = "gateway"))]
