@@ -551,7 +551,7 @@ pub(super) fn GroupChannelItem(
         move |x, y| {
             ui_overlays.batch(|o| {
                 o.context_menu_stack.push(group_dm_entry_at(
-                    &GroupDmContextMenuState {
+                    GroupDmContextMenuState {
                         x,
                         y,
                         channel_id: lp_channel_id.clone(),
@@ -577,7 +577,7 @@ pub(super) fn GroupChannelItem(
                 let coords = evt.client_coordinates();
                 ui_overlays.batch(|o| {
                     o.context_menu_stack.push(group_dm_entry_at(
-                        &GroupDmContextMenuState {
+                        GroupDmContextMenuState {
                             x: coords.x,
                             y: coords.y,
                             channel_id: menu_channel_id.clone(),

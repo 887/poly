@@ -1091,7 +1091,7 @@ fn FavoriteServerIcon(
                     let coords = evt.client_coordinates();
                     ui_overlays.batch(|o| {
                         o.context_menu_stack.push(server_icon_entry_at(
-                            ContextMenuState {
+                            &ContextMenuState {
                                 x: coords.x,
                                 y: coords.y,
                                 server_id: sid.clone(),
