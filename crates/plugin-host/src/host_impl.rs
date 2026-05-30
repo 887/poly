@@ -353,6 +353,8 @@ impl host_api::Host for PluginHostState {
     /// The guest calls this (via `emit-event` host import) when it has
     /// parsed WebSocket/HTTP data into a structured event. The host
     /// converts it and forwards to the `event_stream()` consumer.
+    // cognitive_complexity: linear WIT-event → ClientEvent conversion + forward.
+    #[allow(clippy::cognitive_complexity)]
     async fn emit_event(&mut self, event: types::ClientEvent) {
         if let Some(tx) = &self.event_tx {
             let client_event = super::bridge::from_wit_client_event(event);
@@ -438,6 +440,8 @@ impl host_api::Host for PluginHostState {
     }
 
     /// Log a message through the host's tracing system.
+    // cognitive_complexity: flat match over LogLevel → tracing macro per level.
+    #[allow(clippy::cognitive_complexity)]
     async fn log(&mut self, level: types::LogLevel, message: String) {
         let plugin_id = &self.plugin_id;
         match level {

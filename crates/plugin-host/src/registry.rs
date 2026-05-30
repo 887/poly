@@ -137,6 +137,9 @@ impl PluginRegistry {
     ///
     /// This is primarily used by plugin-host tests so they can inject mocked
     /// host I/O while still exercising the real WASM guest code path.
+    // cognitive_complexity: linear host-state instantiation (resolve component,
+    // build store, wire capabilities, instantiate) — wasmtime 45 component API.
+    #[allow(clippy::cognitive_complexity)]
     pub async fn instantiate_with_host_state(
         &self,
         plugin_id: &str,

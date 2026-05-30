@@ -358,6 +358,10 @@ impl ElectronCdpBackend {
     ///
     /// Auto-reconnects if the page was reloaded (which invalidates the
     /// previous debugger session and opens a fresh one at a new WS URL).
+    // cognitive_complexity: one cohesive reconnect loop (8 attempts: fetch
+    // target list, pick page, open WS, handshake) — the retry/backoff flow
+    // reads clearer as a single sequence than fragmented across helpers.
+    #[allow(clippy::cognitive_complexity)]
     async fn ensure_ws(&self) -> anyhow::Result<()> {
         if self.ws.lock().await.is_some() {
             return Ok(());

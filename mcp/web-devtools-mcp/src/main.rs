@@ -637,6 +637,10 @@ impl ChromeCdpBackend {
 
     /// Ensure the CDP WebSocket is connected, auto-reconnecting if the page was
     /// reloaded (which closes the old WebSocket and opens a new debugger target).
+    // cognitive_complexity: one cohesive reconnect loop (8 attempts: fetch
+    // target list, pick page, open WS, handshake) — the retry/backoff flow
+    // reads clearer as a single sequence than fragmented across helpers.
+    #[allow(clippy::cognitive_complexity)]
     async fn ensure_ws(&self) -> anyhow::Result<()> {
         if self.ws.lock().await.is_some() {
             return Ok(());

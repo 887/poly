@@ -73,6 +73,10 @@ impl HostSandbox for WrySandbox {
 
 /// Run a tao event loop on the current OS thread, open a sandbox window,
 /// and return when the capture pattern matches or the user cancels.
+// cognitive_complexity: one linear event-loop driver — build tao loop, build
+// webview with nav-handler closure, run loop, relay captured URL. The steps
+// share channel + window state and read clearer as a single sequence.
+#[allow(clippy::cognitive_complexity)]
 fn run_sandbox_event_loop(
     url: &str,
     pattern: &str,
