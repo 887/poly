@@ -186,6 +186,8 @@ fn build_backend_for_slug(
 /// - belong to the `poly` / demo backends (those have dedicated paths).
 // lint-allow-unused: Dioxus props/handler arity; grouping into a struct adds churn / long cohesive view/handler; splitting risks reactive bugs
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+// lint-allow-unused: account-restore driver: linear per-account reconnect loop; arity from injected state handles
+#[allow(clippy::too_many_lines, clippy::too_many_arguments)]
 pub async fn restore_native_accounts(
     storage: &Storage,
     client_manager: BatchedSignal<ClientManager>,

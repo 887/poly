@@ -1033,6 +1033,8 @@ fn auto_signin_test_accounts(
 ///
 /// Accounts that fail to reconnect (e.g. server offline) are silently skipped.
 #[cfg(feature = "server")]
+// lint-allow-unused: poly-account restore: linear reconnect+populate flow, cohesive
+#[allow(clippy::too_many_lines)]
 async fn restore_poly_accounts(
     storage: &crate::storage::Storage,
     client_manager: BatchedSignal<ClientManager>,
@@ -1273,6 +1275,8 @@ async fn restore_poly_accounts(
 /// `true` when done — failures fall back to in-memory-only mode.
 // DECISION(DX-STORAGE-4): storage init in use_future ensures it runs after
 // the component mounts but before the first meaningful render completes.
+// lint-allow-unused: storage init: arity from injected signal handles set once on mount
+#[allow(clippy::too_many_arguments)]
 async fn init_storage(
     theme_config: BatchedSignal<crate::theme::ThemeConfig>,
     mut storage_ready: Signal<bool>,
