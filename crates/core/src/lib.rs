@@ -26,6 +26,23 @@
     clippy::todo,
     // asset!()/include-style macros emit composite consts that trip this nursery lint.
     clippy::volatile_composites,
+    // nursery: const-ifying ~80 UI helper/component fns is pure churn with no
+    // runtime benefit and is brittle across the WASM/native cfg split.
+    clippy::missing_const_for_fn,
+    // nursery: `pub(crate)` inside private modules is intentional intent-signaling.
+    clippy::redundant_pub_crate,
+    // nursery: large event-dispatch / state-machine fns; splitting risks Dioxus reactive bugs.
+    clippy::cognitive_complexity,
+    // pedantic: `&Option<T>` is the idiomatic Dioxus prop-passing shape.
+    clippy::ref_option,
+    // restriction: `mod.rs` is this crate's deliberate module-layout convention.
+    clippy::mod_module_files,
+    // async kept to satisfy trait signatures even where the body is currently sync.
+    clippy::unused_async,
+    // pedantic: field-name repetition (e.g. `server_id` in `Server`) aids discoverability.
+    clippy::struct_field_names,
+    // pedantic: short-scoped local names are intentional and not actually confusable.
+    clippy::similar_names,
 )]
 #![cfg_attr(
     test,
