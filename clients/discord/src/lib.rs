@@ -577,6 +577,10 @@ impl DiscordClient {
     ///
     /// The `fallback_server_id` is used when `guild_id` is absent from the
     /// payload (Discord omits it on `THREAD_DELETE` events).
+    // reason: one flat match mapping each Discord gateway event name to its
+    // ClientEvent(s); a single dispatch table reads clearer than fragmenting
+    // the 1:1 event-name→event mapping across helpers.
+    #[allow(clippy::too_many_lines)]
     #[cfg(feature = "native")]
     pub fn parse_gateway_event(
         &self,
@@ -1547,8 +1551,10 @@ impl DiscordClient {
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod mechanism_tests {
-    use super::{ChannelType, DiscordClient, Channel, api, Message, ClientEvent};
-    use poly_client::HostCap;
+    use super::DiscordClient;
+    // `client_mechanisms` / `set_client_mechanism` are provided by the
+    // `IsBackend` trait impl in `backend/is_backend.rs`; bring it into scope.
+    use poly_client::{HostCap, IsBackend};
 
     /// Verify that Discord declares a `captcha-sandbox` mechanism that
     /// requires `HostCap::SandboxBrowser`. This is the Phase D.1 contract:

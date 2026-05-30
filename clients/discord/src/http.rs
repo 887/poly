@@ -295,6 +295,10 @@ impl DiscordHttpClient {
         resp.json::<T>().await.map_err(|e| ClientError::Internal(e.to_string()))
     }
 
+    // reason: the returned future holds the non-Send reqwest builder across
+    // awaits; this backend's futures run on a single-threaded local executor,
+    // so Send is not required.
+    #[allow(clippy::future_not_send)]
     async fn post_json<B: serde::Serialize, T: serde::de::DeserializeOwned>(
         &self,
         path: &str,
