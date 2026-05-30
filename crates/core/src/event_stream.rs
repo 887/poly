@@ -54,12 +54,9 @@ pub(crate) fn spawn_event_stream_listener(
     spawn(async move {
         // Acquire the stream without holding the lock for the duration of polling.
         let stream = {
-            let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
-                Ok(g) => g,
-                Err(_) => {
-                    tracing::warn!("event_stream: backend read timed out acquiring event_stream for {account_id}");
-                    return;
-                }
+            let Ok(guard) = backend.read_with_timeout(std::time::Duration::from_secs(5)).await else {
+                tracing::warn!("event_stream: backend read timed out acquiring event_stream for {account_id}");
+                return;
             };
             guard.event_stream()
         };

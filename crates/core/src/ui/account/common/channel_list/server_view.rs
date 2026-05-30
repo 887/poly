@@ -140,16 +140,13 @@ pub(super) async fn load_channel_data(
     // gloo_timers on WASM instead of tokio::time::timeout which panics
     // (Instant::now() unimplemented on wasm32-unknown-unknown).
     // See original channel_list.rs comments at lines 193-195, 360-364.
-    let guard = match backend
+    let Ok(guard) = backend
         .read_with_timeout(std::time::Duration::from_secs(5))
         .await
-    {
-        Ok(g) => g,
-        Err(_) => {
-            tracing::warn!(channel_id = %channel_id, "load_channel_data: backend read timed out");
-            chat_view_state.batch(|cv| cv.loading = false);
-            return;
-        }
+    else {
+        tracing::warn!(channel_id = %channel_id, "load_channel_data: backend read timed out");
+        chat_view_state.batch(|cv| cv.loading = false);
+        return;
     };
     let mut pending = chat_view_state.pending_update();
 

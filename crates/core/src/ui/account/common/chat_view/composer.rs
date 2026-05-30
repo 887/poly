@@ -82,12 +82,9 @@ async fn send_message(ctx: SendMessageCtx) {
         return;
     };
 
-    let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
-        Ok(g) => g,
-        Err(_) => {
-            tracing::warn!("chat_view: backend read timed out in send_message");
-            return;
-        }
+    let Ok(guard) = backend.read_with_timeout(std::time::Duration::from_secs(5)).await else {
+        tracing::warn!("chat_view: backend read timed out in send_message");
+        return;
     };
     let content = if attachments.is_empty() {
         MessageContent::Text(text)
