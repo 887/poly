@@ -108,7 +108,7 @@ mod native_impl {
 
     fn collect_drafts_from_stmt(stmt: &mut sqlite::Statement<'_>) -> Vec<Draft> {
         let mut out = Vec::new();
-        while let Ok(State::Row) = stmt.next() {
+        while matches!(stmt.next(), Ok(State::Row)) {
             let auto_send_at: Option<String> = match stmt.read::<sqlite::Value, _>(6) {
                 Ok(sqlite::Value::String(s)) => Some(s),
                 _ => None,

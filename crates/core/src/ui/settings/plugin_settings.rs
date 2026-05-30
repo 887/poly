@@ -587,8 +587,7 @@ async fn check_sandbox_cap() -> bool {
             if let Ok(json) = resp.json::<serde_json::Value>().await {
                 json.get("caps")
                     .and_then(|c| c.as_array())
-                    .map(|arr| arr.iter().any(|v| v.as_str() == Some("SandboxBrowser")))
-                    .unwrap_or(false)
+                    .is_some_and(|arr| arr.iter().any(|v| v.as_str() == Some("SandboxBrowser")))
             } else {
                 false
             }

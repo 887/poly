@@ -357,7 +357,7 @@ fn ModerationDialogOverlay() -> Element {
     let ui_overlays: crate::state::BatchedSignal<crate::state::UiOverlays> = use_context();
     let dialog = ui_overlays.read().active_moderation_dialog.clone();
 
-    let on_close = move |_| {
+    let on_close = move |()| {
         ui_overlays.batch(|o| o.active_moderation_dialog = None);
     };
 

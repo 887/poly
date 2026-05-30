@@ -113,7 +113,7 @@ impl UiAction for UserProfileModalAction {
                 else {
                     return;
                 };
-                close_modal(ui_overlays.clone());
+                close_modal(ui_overlays);
                 navigate_to_pending_direct_call_from_active_account(
                     DirectCallRequest {
                         target_user: user,
@@ -151,7 +151,7 @@ impl UiAction for UserProfileModalAction {
                 else {
                     return;
                 };
-                close_modal(ui_overlays.clone());
+                close_modal(ui_overlays);
                 navigate_to_pending_direct_call_from_active_account(
                     DirectCallRequest {
                         target_user: user,

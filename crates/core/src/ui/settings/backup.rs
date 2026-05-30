@@ -99,7 +99,7 @@ pub(super) async fn backup_startup_sync(
     let Ok(mut list) = storage.get_backup_servers().await else {
         return;
     };
-    for rec in list.iter_mut() {
+    for rec in &mut list {
         if !rec.enabled || rec.token.is_none() {
             continue;
         }
@@ -592,7 +592,7 @@ pub(super) fn WizardStep1(
                                             server_name: info.name,
                                             password_required: info.password_required,
                                             registrations_open: info.registrations_open,
-                                        })
+                                        });
                                     }
                                     Err(e) => ps.set(ProbeStatus::Error(e.to_string())),
                                 }

@@ -239,10 +239,10 @@ fn MemorySection(
             if *show_forget_confirm.read() {
                 ConfirmForgetMemoryModal {
                     persona_slug: persona_slug.clone(),
-                    on_cancel: move |_| show_forget_confirm.set(false),
+                    on_cancel: move |()| show_forget_confirm.set(false),
                     on_confirm: {
                         let slug = persona_slug.clone();
-                        move |_| {
+                        move |()| {
                             show_forget_confirm.set(false);
                             let slug_inner = slug.clone();
                             spawn(async move {
@@ -263,10 +263,10 @@ fn MemorySection(
             if *show_delete_confirm.read() {
                 ConfirmDeletePersonaModal {
                     persona_slug: persona_slug.clone(),
-                    on_cancel: move |_| show_delete_confirm.set(false),
+                    on_cancel: move |()| show_delete_confirm.set(false),
                     on_confirm: {
                         let slug = persona_slug.clone();
-                        move |_| {
+                        move |()| {
                             show_delete_confirm.set(false);
                             let slug_inner = slug.clone();
                             spawn(async move {
@@ -465,7 +465,7 @@ pub fn PersonaEditModal(props: PersonaEditModalProps) -> Element {
                         CollapsibleSection {
                             label: t("persona-section-identity").to_string(),
                             open: *open_identity.read(),
-                            on_toggle: move |_| {
+                            on_toggle: move |()| {
                                 let v = *open_identity.read();
                                 open_identity.set(!v);
                             },
@@ -484,7 +484,7 @@ pub fn PersonaEditModal(props: PersonaEditModalProps) -> Element {
                         CollapsibleSection {
                             label: t("persona-section-sources").to_string(),
                             open: *open_sources.read(),
-                            on_toggle: move |_| {
+                            on_toggle: move |()| {
                                 let v = *open_sources.read();
                                 open_sources.set(!v);
                             },
@@ -492,7 +492,7 @@ pub fn PersonaEditModal(props: PersonaEditModalProps) -> Element {
                                 persona_slug: slug.clone(),
                                 existing_sources: sources.clone(),
                                 account_ids: vec![],
-                                on_saved: move |_| tracing::info!("sources saved"),
+                                on_saved: move |()| tracing::info!("sources saved"),
                             }
                         }
 
@@ -500,14 +500,14 @@ pub fn PersonaEditModal(props: PersonaEditModalProps) -> Element {
                         CollapsibleSection {
                             label: t("persona-section-tools").to_string(),
                             open: *open_tools.read(),
-                            on_toggle: move |_| {
+                            on_toggle: move |()| {
                                 let v = *open_tools.read();
                                 open_tools.set(!v);
                             },
                             PersonaToolWhitelistEditor {
                                 persona_slug: slug.clone(),
                                 existing_whitelist: tools.clone(),
-                                on_saved: move |_| tracing::info!("tools saved"),
+                                on_saved: move |()| tracing::info!("tools saved"),
                             }
                         }
 
@@ -515,7 +515,7 @@ pub fn PersonaEditModal(props: PersonaEditModalProps) -> Element {
                         CollapsibleSection {
                             label: t("persona-section-behaviour").to_string(),
                             open: *open_behaviour.read(),
-                            on_toggle: move |_| {
+                            on_toggle: move |()| {
                                 let v = *open_behaviour.read();
                                 open_behaviour.set(!v);
                             },
@@ -528,7 +528,7 @@ pub fn PersonaEditModal(props: PersonaEditModalProps) -> Element {
                         CollapsibleSection {
                             label: t("persona-section-outbound").to_string(),
                             open: *open_outbound.read(),
-                            on_toggle: move |_| {
+                            on_toggle: move |()| {
                                 let v = *open_outbound.read();
                                 open_outbound.set(!v);
                             },
@@ -544,14 +544,14 @@ pub fn PersonaEditModal(props: PersonaEditModalProps) -> Element {
                         CollapsibleSection {
                             label: t("persona-section-memory").to_string(),
                             open: *open_memory.read(),
-                            on_toggle: move |_| {
+                            on_toggle: move |()| {
                                 let v = *open_memory.read();
                                 open_memory.set(!v);
                             },
                             MemorySection {
                                 facts: facts.clone(),
                                 persona_slug: if is_new { String::new() } else { slug.clone() },
-                                on_deleted: move |_| on_close_after_delete.call(()),
+                                on_deleted: move |()| on_close_after_delete.call(()),
                             }
                         }
 
@@ -559,7 +559,7 @@ pub fn PersonaEditModal(props: PersonaEditModalProps) -> Element {
                         CollapsibleSection {
                             label: t("persona-section-audit").to_string(),
                             open: *open_audit.read(),
-                            on_toggle: move |_| {
+                            on_toggle: move |()| {
                                 let v = *open_audit.read();
                                 open_audit.set(!v);
                             },

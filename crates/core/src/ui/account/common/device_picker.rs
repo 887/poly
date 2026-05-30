@@ -52,7 +52,7 @@ use poly_ui_macros::{context_menu, ui_action};
 // ── JS snippets ──────────────────────────────────────────────────────────────
 
 /// JS to wire `navigator.mediaDevices.ondevicechange` (Phase J.5, web only).
-const JS_DEVICE_CHANGE_LISTENER: &str = r#"
+const JS_DEVICE_CHANGE_LISTENER: &str = r"
 (function() {
     if (navigator.mediaDevices && !window.__polyDeviceChangeWired) {
         window.__polyDeviceChangeWired = true;
@@ -61,7 +61,7 @@ const JS_DEVICE_CHANGE_LISTENER: &str = r#"
         });
     }
 })();
-"#;
+";
 
 /// Record 2s of mic audio and play it back via the selected output (Phase J.6).
 const JS_MIC_TEST: &str = r#"
@@ -375,7 +375,7 @@ pub fn DevicePickerToggle() -> Element {
             }
             if is_open {
                 VoiceDevicePicker {
-                    on_close: move |_| show_picker.set(false),
+                    on_close: move |()| show_picker.set(false),
                 }
             }
         }

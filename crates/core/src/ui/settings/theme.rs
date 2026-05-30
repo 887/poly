@@ -420,8 +420,7 @@ fn CssEditorActions(local_css: Signal<String>, theme_config: BatchedSignal<Theme
                 onclick: move |_| {
                     let exported = crate::theme::export_theme(&theme_config.read());
                     let js = format!(
-                        "navigator.clipboard.writeText({:?}).catch(()=>{{}})",
-                        exported,
+                        "navigator.clipboard.writeText({exported:?}).catch(()=>{{}})",
                     );
                     let _ = document::eval(&js);
                 },

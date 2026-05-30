@@ -20,6 +20,7 @@ pub struct ActionCx<'a> {
 }
 
 impl<'a> ActionCx<'a> {
+    #[must_use] 
     pub fn live(nav: &'a NavState, navigator: Navigator) -> Self {
         Self { nav, navigator: Some(navigator) }
     }
@@ -27,6 +28,7 @@ impl<'a> ActionCx<'a> {
     /// Construct a test context — no Dioxus runtime needed.
     /// Accepts optional nav state; pass `&NavState::default()` when nav fields
     /// are not relevant to the action under test.
+    #[must_use] 
     pub fn test(nav: &'a NavState) -> Self {
         Self { nav, navigator: None }
     }

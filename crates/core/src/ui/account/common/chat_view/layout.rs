@@ -725,7 +725,7 @@ fn render_chat_utility_rail(
                     }
                 });
             },
-            on_close: move |_| utility_panel.set(None),
+            on_close: move |()| utility_panel.set(None),
         }
     }
 }

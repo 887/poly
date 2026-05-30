@@ -85,8 +85,7 @@ impl UiAction for VoiceBannerAction {
                     spawn(async move {
                         if let Some((_account_id, backend)) =
                             cm.peek().get_backend_for_server(&server_id)
-                        {
-                            if let Ok(guard) = backend
+                            && let Ok(guard) = backend
                                 .read_with_timeout(std::time::Duration::from_secs(5))
                                 .await
                             {
@@ -94,7 +93,6 @@ impl UiAction for VoiceBannerAction {
                                     .set_voice_mute(&server_id, &channel_id, self_mute, self_deaf)
                                     .await;
                             }
-                        }
                     });
                 }
             }
@@ -119,8 +117,7 @@ impl UiAction for VoiceBannerAction {
                     spawn(async move {
                         if let Some((_account_id, backend)) =
                             cm.peek().get_backend_for_server(&server_id)
-                        {
-                            if let Ok(guard) = backend
+                            && let Ok(guard) = backend
                                 .read_with_timeout(std::time::Duration::from_secs(5))
                                 .await
                             {
@@ -128,7 +125,6 @@ impl UiAction for VoiceBannerAction {
                                     .set_voice_mute(&server_id, &channel_id, self_mute, self_deaf)
                                     .await;
                             }
-                        }
                     });
                 }
             }
@@ -142,8 +138,7 @@ impl UiAction for VoiceBannerAction {
                     let vc = vc_ref.voice_connection.as_ref();
                     let slug = vc.map(|c| c.backend.slug().to_string()).unwrap_or_default();
                     let cap = dioxus::prelude::try_consume_context::<BatchedSignal<ClientManager>>()
-                        .map(|cm| cm.peek().capabilities_for_slug(&slug).video_capture)
-                        .unwrap_or(poly_client::VideoCaptureCapability::None);
+                        .map_or(poly_client::VideoCaptureCapability::None, |cm| cm.peek().capabilities_for_slug(&slug).video_capture);
                     (slug, cap)
                 };
                 match video_cap {
@@ -156,8 +151,7 @@ impl UiAction for VoiceBannerAction {
                             .peek()
                             .voice_connection
                             .as_ref()
-                            .map(|vc| !vc.is_video_on)
-                            .unwrap_or(false);
+                            .is_some_and(|vc| !vc.is_video_on);
                         tracing::debug!(
                             target: "poly_core::voice_banner",
                             backend = %backend_slug,
@@ -197,8 +191,7 @@ impl UiAction for VoiceBannerAction {
                         .map(|c| c.backend.slug().to_string())
                         .unwrap_or_default();
                     dioxus::prelude::try_consume_context::<BatchedSignal<ClientManager>>()
-                        .map(|cm| cm.peek().capabilities_for_slug(&slug).video_capture)
-                        .unwrap_or(poly_client::VideoCaptureCapability::None)
+                        .map_or(poly_client::VideoCaptureCapability::None, |cm| cm.peek().capabilities_for_slug(&slug).video_capture)
                 };
                 match video_cap {
                     poly_client::VideoCaptureCapability::Full => {

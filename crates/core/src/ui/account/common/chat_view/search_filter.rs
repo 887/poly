@@ -88,7 +88,7 @@ pub(super) fn build_search_filter_options(current_channel_name: &str) -> Vec<Sea
         .iter()
         .map(|suggestion| {
             let token = if suggestion.token == "in:#current" {
-                format!("in:#{}", current_channel_name)
+                format!("in:#{current_channel_name}")
             } else {
                 suggestion.token.to_string()
             };
@@ -477,7 +477,7 @@ pub(super) fn render_chat_header_search(ctx: super::ChatViewMarkupCtx) -> Elemen
                         show_search_filters.set(false);
                         utility_panel.set(Some(ChatUtilityPanel::Search));
                     },
-                    on_close: move |_| show_search_filters.set(false),
+                    on_close: move |()| show_search_filters.set(false),
                 }
             }
         }

@@ -353,7 +353,7 @@ fn js_sys_encode_uri_component(s: &str) -> String {
             }
             _ => {
                 out.push('%');
-                out.push_str(&format!("{:02X}", b));
+                out.push_str(&format!("{b:02X}"));
             }
         }
     }

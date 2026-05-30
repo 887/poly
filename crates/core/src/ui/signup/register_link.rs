@@ -78,8 +78,7 @@ pub(crate) fn RegisterLink(backend_slug: String, server_url: Option<String>) -> 
                         // - Electron: intercepted by setWindowOpenHandler → shell.openExternal.
                         // - Wry: falls back to system browser via window.open dispatch.
                         let js = format!(
-                            "window.open({url}, '_blank', 'noopener,noreferrer');",
-                            url = js_url,
+                            "window.open({js_url}, '_blank', 'noopener,noreferrer');",
                         );
                         // lint-allow-unused: Eval is fire-and-forget here (Copy + Future).
                         #[allow(clippy::let_underscore_must_use)]

@@ -124,8 +124,7 @@ pub(super) fn MnemonicModal(
                         onclick: move |_| {
                             let phrase = mnemonic_words.read().join(" ");
                             let js = format!(
-                                "navigator.clipboard.writeText({:?}).catch(() => {{}})",
-                                phrase,
+                                "navigator.clipboard.writeText({phrase:?}).catch(() => {{}})",
                             );
                             let _ = document::eval(&js);
                         },
@@ -326,7 +325,7 @@ fn IdentityCard(
                             button {
                                 class: "btn btn-sm btn-ghost",
                                 onclick: move |_| {
-                                    let js = format!("navigator.clipboard.writeText({:?}).catch(() => {{}})", account_id_copy);
+                                    let js = format!("navigator.clipboard.writeText({account_id_copy:?}).catch(() => {{}})");
                                     let _ = document::eval(&js);
                                 },
                                 "{t(\"settings-identity-copy-id\")}"

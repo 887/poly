@@ -211,11 +211,9 @@ pub(crate) fn mark_channel_as_read_with_backend(
             && let Ok(backend) = handle
                 .read_with_timeout(std::time::Duration::from_secs(5))
                 .await
-        {
-            if let Some(sa) = backend.as_server_admin() {
+            && let Some(sa) = backend.as_server_admin() {
                 drop(sa.mark_channel_read(&cid).await);
             }
-        }
     });
     cleared
 }
@@ -262,15 +260,14 @@ pub(crate) fn mark_channel_as_read(
             current_channel.mention_count = 0;
         }
 
-        if let Some(server_id) = current_server_id.as_deref() {
-            if let Some(current_server) = cv.current_server.as_mut()
+        if let Some(server_id) = current_server_id.as_deref()
+            && let Some(current_server) = cv.current_server.as_mut()
                 && current_server.id == server_id
             {
                 current_server.unread_count = current_server.unread_count.saturating_sub(unread_count);
                 current_server.mention_count =
                     current_server.mention_count.saturating_sub(mention_count);
             }
-        }
     });
 
     chat_lists.batch(|cl| {

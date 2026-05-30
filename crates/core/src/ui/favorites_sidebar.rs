@@ -261,7 +261,7 @@ pub fn FavoritesBar() -> Element {
     // Kills the N separate .read() subscriptions that were allowlisted on
     // lines 146, 154, 170 (account_sessions) and the client_manager reads.
     let snap = {
-        let live: Vec<String> = client_manager.with(|cm| cm.active_account_ids());
+        let live: Vec<String> = client_manager.with(super::super::client_manager::ClientManager::active_account_ids);
         let (account_ids, favorited_ids, _) = account_sessions.with(|as_| {
             // Collect distinct active account IDs applying user-saved order.
             // Accounts not in saved order appended by priority fallback:
@@ -320,7 +320,7 @@ pub fn FavoritesBar() -> Element {
 
     // Global tooltip show/hide + positioning for ALL sidebar icons.
     use_effect(move || { // poly-lint: allow stale-effect-capture — one-shot DOM initialiser; no non-Signal captures
-        let _ = dioxus::prelude::document::eval(r#"
+        let _ = dioxus::prelude::document::eval(r"
             (function() {
                 if (document._sidebarTooltipInit) return;
                 document._sidebarTooltipInit = true;
@@ -359,7 +359,7 @@ pub fn FavoritesBar() -> Element {
                     if (tip) tip.style.display = 'none';
                 });
             })()
-        "#);
+        ");
     });
 
     rsx! {

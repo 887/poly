@@ -398,9 +398,7 @@ fn render_descriptor_inner(
                     // filter signal for ListBody and TreeBody.
                     let effective_filter = extra_filter
                         .as_deref()
-                        .filter(|f| !f.is_empty())
-                        .map(|f| f.to_string())
-                        .unwrap_or_else(|| filter_str.clone());
+                        .filter(|f| !f.is_empty()).map_or_else(|| filter_str.clone(), std::string::ToString::to_string);
                     match body {
                         ViewBody::ListBody(spec) => rsx! {
                             ListBody {

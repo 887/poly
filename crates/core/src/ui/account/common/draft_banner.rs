@@ -234,7 +234,7 @@ pub fn DraftBanner(props: DraftBannerProps) -> Element {
                         DraftBannerRow {
                             key: "{draft.id}",
                             draft: draft.clone(),
-                            on_refresh: move |_| {
+                            on_refresh: move |()| {
                                 // Re-read from SQLite.
                                 let store = DraftStore::try_open();
                                 let loaded = store
@@ -455,7 +455,7 @@ pub fn DraftsSidebar(props: DraftsSidebarProps) -> Element {
                             draft: draft.clone(),
                             on_open: {
                                 let on_open_chat = props.on_open_chat;
-                                move |_| on_open_chat.call((draft.account_id.clone(), draft.chat_id.clone()))
+                                move |()| on_open_chat.call((draft.account_id.clone(), draft.chat_id.clone()))
                             },
                         }
                     }

@@ -407,11 +407,9 @@ fn maybe_send_real_typing(
             && let Ok(backend) = handle
                 .read_with_timeout(std::time::Duration::from_secs(2))
                 .await
-        {
-            if let Some(mb) = backend.as_messaging() {
+            && let Some(mb) = backend.as_messaging() {
                 drop(mb.send_typing(&channel_id).await);
             }
-        }
         #[cfg(target_arch = "wasm32")]
         gloo_timers::future::TimeoutFuture::new(5_000).await;
         #[cfg(not(target_arch = "wasm32"))]
@@ -497,11 +495,9 @@ fn TypingModeButton(mut typing_mode: Signal<TypingMode>) -> Element {
                             && let Ok(backend) = handle
                                 .read_with_timeout(std::time::Duration::from_secs(2))
                                 .await
-                        {
-                            if let Some(mb) = backend.as_messaging() {
+                            && let Some(mb) = backend.as_messaging() {
                                 drop(mb.send_typing(&channel_id).await);
                             }
-                        }
                         #[cfg(target_arch = "wasm32")]
                         gloo_timers::future::TimeoutFuture::new(5_000).await;
                         #[cfg(not(target_arch = "wasm32"))]
@@ -516,10 +512,10 @@ fn TypingModeButton(mut typing_mode: Signal<TypingMode>) -> Element {
 
 fn open_composer_file_picker() {
     document::eval(
-        r#"
+        r"
             let input = document.getElementById('poly-file-input');
             if (input) { input.click(); }
-        "#,
+        ",
     );
 }
 
@@ -807,7 +803,7 @@ pub(super) fn render_input_emoji_picker(ctx: ChatViewMarkupCtx) -> Element {
                 message_input.set(format!("{current}{emoji}"));
                 show_input_emoji.set(false);
             },
-            on_close: move |_| show_input_emoji.set(false),
+            on_close: move |()| show_input_emoji.set(false),
             markdown_enabled,
             custom_emojis: custom_emojis.read().clone(),
         }
@@ -833,7 +829,7 @@ pub(super) fn render_chat_overlays(ctx: ChatViewMarkupCtx) -> Element {
                         reaction_picker_msg.set(None);
                     }
                 },
-                on_close: move |_| reaction_picker_msg.set(None),
+                on_close: move |()| reaction_picker_msg.set(None),
             }
         }
         if msg_context_menu.read().is_some() {

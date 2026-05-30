@@ -51,14 +51,14 @@ const JS_START_CAMERA: &str = r#"
 })();
 "#;
 
-const JS_STOP_CAMERA: &str = r#"
+const JS_STOP_CAMERA: &str = r"
 if (window.__polyCameraStream) {
     window.__polyCameraStream.getTracks().forEach(t => t.stop());
     window.__polyCameraStream = null;
 }
 const vc = document.getElementById('poly-local-camera');
 if (vc) vc.srcObject = null;
-"#;
+";
 
 const JS_START_SCREEN: &str = r#"
 (async () => {
@@ -74,16 +74,16 @@ const JS_START_SCREEN: &str = r#"
 })();
 "#;
 
-const JS_STOP_SCREEN: &str = r#"
+const JS_STOP_SCREEN: &str = r"
 if (window.__polyScreenStream) {
     window.__polyScreenStream.getTracks().forEach(t => t.stop());
     window.__polyScreenStream = null;
 }
 const vs = document.getElementById('poly-local-screen');
 if (vs) vs.srcObject = null;
-"#;
+";
 
-const JS_STOP_ALL_STREAMS: &str = r#"
+const JS_STOP_ALL_STREAMS: &str = r"
 ['__polyCameraStream', '__polyScreenStream'].forEach(k => {
     if (window[k]) { window[k].getTracks().forEach(t => t.stop()); window[k] = null; }
 });
@@ -91,7 +91,7 @@ const JS_STOP_ALL_STREAMS: &str = r#"
     const v = document.getElementById(id);
     if (v) v.srcObject = null;
 });
-"#;
+";
 
 // ─── Root component ──────────────────────────────────────────────────────────
 

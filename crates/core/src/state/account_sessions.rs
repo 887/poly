@@ -62,6 +62,7 @@ pub struct AccountSessions {
 impl AccountSessions {
     /// Returns the content policy for the given account, or a default if the
     /// account has no policy stored yet.
+    #[must_use] 
     pub fn get_content_policy(&self, account_id: &str) -> ContentPolicy {
         self.content_policies
             .get(account_id)

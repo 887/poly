@@ -297,7 +297,7 @@ pub fn ForumView() -> Element {
     // selected_channel) so any batch() on AppState re-renders this component.
     let forum_scope = user_prefs.peek().forum_scope.clone();
     // Key forces a full remount on channel, scope, or view_filter change.
-    let key = format!("{}:{}:{}:{:?}", effective_channel_id, account_id, forum_scope, view_filter);
+    let key = format!("{effective_channel_id}:{account_id}:{forum_scope}:{view_filter:?}");
 
     let forum_filter_val = filter_debounced.read().clone();
     let forum_filter_opt = if forum_filter_val.is_empty() { None } else { Some(forum_filter_val) };
@@ -411,13 +411,12 @@ pub fn ForumPostView(channel_id: String, post_id: String) -> Element {
             let mut account_id_resolved = None;
             for attempt in 0..20_u32 {
                 let account_id = nav.peek().active_account_id.cloned();
-                if let Some(aid) = account_id.as_deref() {
-                    if let Some(bh) = client_manager.peek().get_backend(aid) {
+                if let Some(aid) = account_id.as_deref()
+                    && let Some(bh) = client_manager.peek().get_backend(aid) {
                         backend = Some(bh);
                         account_id_resolved = account_id;
                         break;
                     }
-                }
                 if attempt < 19 {
                     // 250 ms × 20 = 5 s budget. WASM-only sleep —
                     // tokio::time isn't available on wasm32 (Instant

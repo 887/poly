@@ -10,7 +10,7 @@
 // DECISION(V-4): VoiceMediaSettings is defined here and re-exported via VoiceState
 // (phase-G.2 of plan-solid-refactor-survey.md). Persistence TBD.
 
-use poly_client::*;
+use poly_client::BackendType;
 
 /// Runtime voice & audio settings (device selection, noise cancellation).
 ///

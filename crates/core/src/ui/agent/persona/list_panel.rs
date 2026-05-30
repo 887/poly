@@ -155,8 +155,8 @@ pub fn PersonaListPanel(
             if let Some(slug) = current_edit {
                 super::edit_modal::PersonaEditModal {
                     slug: slug.clone(),
-                    on_close: move |_| edit_slug.set(None),
-                    on_saved: move |_| {
+                    on_close: move |()| edit_slug.set(None),
+                    on_saved: move |()| {
                         // Reload the list after a save.
                         edit_slug.set(None);
                         let mut p = personas;

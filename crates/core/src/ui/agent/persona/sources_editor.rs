@@ -209,7 +209,7 @@ pub fn PersonaSourcesEditor(props: PersonaSourcesEditorProps) -> Element {
                                         "account_id": n.account_id,
                                         "selector_kind": n.selector_kind,
                                         "selector_value": n.selector_value,
-                                        "include": if n.state == IncludeState::Allow { 1_i32 } else { 0_i32 },
+                                        "include": i32::from(n.state == IncludeState::Allow),
                                     }))
                                     .collect();
                                 match call_persona_mcp("meta_persona_set_sources", serde_json::json!({

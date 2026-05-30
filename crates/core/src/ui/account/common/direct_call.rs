@@ -437,11 +437,10 @@ pub(crate) fn start_direct_call_from_active_account(
                         }
                     })
                     .await;
-                if let Err(e) = result {
-                    if !matches!(e, poly_client::ClientError::NotSupported(_)) {
+                if let Err(e) = result
+                    && !matches!(e, poly_client::ClientError::NotSupported(_)) {
                         tracing::warn!("D.6 add_users_to_group_dm failed: {e:?}");
                     }
-                }
             }
 
             maybe_start_video_camera(request.start_video, voice_state).await;
@@ -478,11 +477,10 @@ pub(crate) fn start_direct_call_from_active_account(
                     b.start_dm_call_transport(&dm_channel_id).await
                 })
                 .await;
-            if let Err(e) = result {
-                if !matches!(e, poly_client::ClientError::NotSupported(_)) {
+            if let Err(e) = result
+                && !matches!(e, poly_client::ClientError::NotSupported(_)) {
                     tracing::warn!("D.5 start_dm_call_transport failed: {e:?}");
                 }
-            }
         }
 
         // D.7 — 30-second outgoing ring timeout (matches Discord client behaviour).
@@ -518,11 +516,10 @@ pub(crate) fn start_direct_call_from_active_account(
                     // Teams DM calls fall through to the pseudo-backend path (Phase D.5
                     // returns NotSupported which is silently accepted). Show a friendly
                     // message so the user understands why the call didn't connect.
-                    if ringing_backend_slug == "teams" {
-                        if let Some(toast_queue) = try_consume_context::<Signal<Vec<ToastMessage>>>() {
+                    if ringing_backend_slug == "teams"
+                        && let Some(toast_queue) = try_consume_context::<Signal<Vec<ToastMessage>>>() {
                             push_toast(toast_queue, ToastMessage::new("voice-teams-coming-soon", ToastTone::Info));
                         }
-                    }
                     // Best-effort cancel on the backend transport (op 4 to channel null).
                     if let Some(dm_ch) = dm_channel_id_for_cancel {
                         let result = client_manager
@@ -531,11 +528,10 @@ pub(crate) fn start_direct_call_from_active_account(
                                 b.start_dm_call_transport(&format!("cancel:{dm_ch}")).await
                             })
                             .await;
-                        if let Err(e) = result {
-                            if !matches!(e, poly_client::ClientError::NotSupported(_)) {
+                        if let Err(e) = result
+                            && !matches!(e, poly_client::ClientError::NotSupported(_)) {
                                 tracing::warn!("D.7 cancel transport failed: {e:?}");
                             }
-                        }
                     }
                 }
             });

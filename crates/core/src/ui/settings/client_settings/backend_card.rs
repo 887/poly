@@ -91,7 +91,7 @@ pub fn BackendCard(
                 current_override: version_override.clone(),
                 on_changed: {
                     let reload = reload_mechs.clone();
-                    move |_| reload()
+                    move |()| reload()
                 },
             }
 

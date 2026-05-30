@@ -223,14 +223,14 @@ pub(super) fn compute_message_virtual_window(
 
 pub(super) async fn read_message_list_viewport_metrics() -> Option<MessageListViewportMetrics> {
     let mut eval = document::eval(
-        r#"
+        r"
             const el = document.getElementById('message-list-scroll');
             if (!el) {
                 dioxus.send('');
             } else {
                 dioxus.send(`${el.scrollTop}|${el.clientHeight}|${el.scrollHeight}`);
             }
-        "#,
+        ",
     );
 
     let Ok(raw) = eval.recv::<String>().await else {
@@ -279,11 +279,11 @@ pub(super) fn set_message_virtual_window(
 
 pub(super) async fn wait_for_next_animation_frame() -> bool {
     let mut eval = document::eval(
-        r#"
+        r"
             requestAnimationFrame(() => {
                 dioxus.send(true);
             });
-        "#,
+        ",
     );
 
     eval.recv::<bool>().await.unwrap_or(false)

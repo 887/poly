@@ -78,14 +78,14 @@ pub fn unread_marker_message_id(messages: &[Message], unread_count: u32) -> Opti
 /// Read the current message-list scroll metrics `(scroll_top, scroll_height)`.
 pub async fn read_message_list_scroll_metrics() -> Option<(f64, f64)> {
     let mut eval = document::eval(
-        r#"
+        r"
             const el = document.getElementById('message-list-scroll');
             if (!el) {
                 dioxus.send('');
             } else {
                 dioxus.send(`${el.scrollTop}|${el.scrollHeight}`);
             }
-        "#,
+        ",
     );
 
     let Ok(raw) = eval.recv::<String>().await else {
@@ -180,10 +180,10 @@ pub fn request_restore_scroll_position_or_bottom(channel_id: &str) {
 pub async fn read_channel_view_anchor(channel_id: &str) -> Option<(String, String, f64)> {
     let encoded = encoded_channel_id(channel_id)?;
     let mut eval = document::eval(&format!(
-        r#"
+        r"
         const a = (window.__polyChannelAnchors || {{}})[{encoded}];
         dioxus.send(a ? `${{a.elementId}}|${{a.messageId}}|${{a.offset}}` : '');
-        "#
+        "
     ));
     let Ok(raw) = eval.recv::<String>().await else {
         return None;

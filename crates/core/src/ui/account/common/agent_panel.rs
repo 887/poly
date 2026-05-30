@@ -380,7 +380,7 @@ pub fn AgentPanel(
             if let Some(session) = current_talk {
                 PersonaTalkToOverlay {
                     session,
-                    on_close: move |_| talk_session.set(None),
+                    on_close: move |()| talk_session.set(None),
                 }
             }
         }

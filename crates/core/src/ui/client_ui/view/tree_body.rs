@@ -74,8 +74,7 @@ pub fn TreeBody(
     let mut loaded_first_page_key = use_signal(String::new);
     let mut loading_more = use_signal(|| false);
     let first_page_key = format!(
-        "{}:{}:{:?}:{:?}:{:?}",
-        channel_id, account_id, sort_id, filter_id, tab_id
+        "{channel_id}:{account_id}:{sort_id:?}:{filter_id:?}:{tab_id:?}"
     );
 
     // Guard against runaway plugins — `max_depth * root_page_size` is a

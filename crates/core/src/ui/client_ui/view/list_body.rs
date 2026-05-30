@@ -150,8 +150,7 @@ pub fn ListBody(
     let mut loaded_first_page_key = use_signal(String::new);
     let mut loading_more = use_signal(|| false);
     let first_page_key = format!(
-        "{}:{}:{:?}:{:?}:{:?}",
-        channel_id, account_id, sort_id, filter_id, tab_id
+        "{channel_id}:{account_id}:{sort_id:?}:{filter_id:?}:{tab_id:?}"
     );
 
     match &*rows_res.read_unchecked() {

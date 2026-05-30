@@ -145,7 +145,7 @@ pub fn EditChannelDialog(
                                             None => Err(poly_client::ClientError::NotSupported("update_channel".to_string())),
                                         }
                                     }).await {
-                                        Ok(_) => {
+                                        Ok(()) => {
                                             submitting.set(false);
                                             success.set(true);
                                             ui_overlays.batch(|o| o.active_moderation_dialog = None);

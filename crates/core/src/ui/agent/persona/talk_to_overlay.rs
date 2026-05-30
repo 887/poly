@@ -393,7 +393,7 @@ pub fn PersonaTalkToOverlay(
                                     phase.set(OverlayPhase::Chatting);
                                 });
                             },
-                            on_new: move |_| {
+                            on_new: move |()| {
                                 let slug = slug_new.clone();
                                 let new_sid = session.session_id.clone();
                                 spawn(async move {
@@ -453,7 +453,7 @@ pub fn PersonaTalkToOverlay(
                         TalkComposer {
                             draft,
                             loading: is_loading,
-                            on_send: move |_| {
+                            on_send: move |()| {
                                 let msg = draft.peek().trim().to_string();
                                 if msg.is_empty() || *loading.peek() {
                                     return;

@@ -219,7 +219,7 @@ fn build_on_complete_inner_with(
                 if cm.sessions.contains_key(&session.id) {
                     let connected = matches!(
                         cm.connection_statuses.get(&session.id),
-                        Some(ConnectionStatus::Connected) | Some(ConnectionStatus::Connecting),
+                        Some(ConnectionStatus::Connected | ConnectionStatus::Connecting),
                     );
                     if connected {
                         tracing::warn!("signup: session '{}' already connected — ignoring duplicate", session.id);

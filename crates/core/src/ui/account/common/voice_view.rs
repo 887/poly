@@ -149,7 +149,7 @@ const JS_REQUEST_AUDIO_PERMISSION: &str = r#"
 "#;
 
 /// Stop all active media streams on disconnect.
-const JS_STOP_ALL_STREAMS: &str = r#"
+const JS_STOP_ALL_STREAMS: &str = r"
 ['__polyCameraStream', '__polyScreenStream'].forEach(k => {
     if (window[k]) { window[k].getTracks().forEach(t => t.stop()); window[k] = null; }
 });
@@ -157,7 +157,7 @@ const JS_STOP_ALL_STREAMS: &str = r#"
     const v = document.getElementById(id);
     if (v) v.srcObject = null;
 });
-"#;
+";
 
 const JS_START_CAMERA: &str = r#"
 (async () => {
@@ -173,7 +173,7 @@ const JS_START_CAMERA: &str = r#"
 })();
 "#;
 
-const JS_STOP_CAMERA: &str = r#"
+const JS_STOP_CAMERA: &str = r"
 if (window.__polyCameraStream) {
     window.__polyCameraStream.getTracks().forEach(t => t.stop());
     window.__polyCameraStream = null;
@@ -182,7 +182,7 @@ if (window.__polyCameraStream) {
     const v = document.getElementById(id);
     if (v) v.srcObject = null;
 });
-"#;
+";
 
 const JS_START_SCREEN: &str = r#"
 (async () => {
@@ -200,7 +200,7 @@ const JS_START_SCREEN: &str = r#"
 })();
 "#;
 
-const JS_STOP_SCREEN: &str = r#"
+const JS_STOP_SCREEN: &str = r"
 if (window.__polyScreenStream) {
     window.__polyScreenStream.getTracks().forEach(t => t.stop());
     window.__polyScreenStream = null;
@@ -209,16 +209,16 @@ if (window.__polyScreenStream) {
     const v = document.getElementById(id);
     if (v) v.srcObject = null;
 });
-"#;
+";
 
 /// Attach local screen stream to the main voice-view element after mount.
-const JS_ATTACH_SCREEN_TO_MAIN: &str = r#"
+const JS_ATTACH_SCREEN_TO_MAIN: &str = r"
 const v = document.getElementById('poly-screenshare-main');
 if (v && window.__polyScreenStream) {
     v.srcObject = window.__polyScreenStream;
     v.play().catch(() => {});
 }
-"#;
+";
 
 // ─── Async join helper ────────────────────────────────────────────────────────
 
@@ -402,13 +402,12 @@ pub fn VoiceChannelView() -> Element {
             .as_deref()
             .and_then(|cid| vs.voice_channel_participants.get(cid).cloned())
             .unwrap_or_default();
-        if let Some(cid) = channel_id.as_deref() {
-            if let Some(speaking) = vs.voice_speaking_map.get(cid) {
+        if let Some(cid) = channel_id.as_deref()
+            && let Some(speaking) = vs.voice_speaking_map.get(cid) {
                 for p in &mut parts {
                     p.is_speaking = speaking.get(&p.user.id).copied().unwrap_or(false);
                 }
             }
-        }
         parts
     };
 
@@ -423,8 +422,8 @@ pub fn VoiceChannelView() -> Element {
     // an event_stream Left fired for self), show self so the user always sees
     // themselves in the tile. Without this the grid is empty after Leave+Rejoin.
     let mut participants = participants;
-    if is_connected && participants.is_empty() {
-        if let Some(ref vc) = voice_conn {
+    if is_connected && participants.is_empty()
+        && let Some(ref vc) = voice_conn {
             let self_session = account_sessions
                 .read() // poly-lint: allow render-time-read — drives self-tile fallback
                 .account_sessions
@@ -441,7 +440,6 @@ pub fn VoiceChannelView() -> Element {
                 });
             }
         }
-    }
 
     let participant_count = participants.len();
 
@@ -907,16 +905,12 @@ fn VoiceChatBar(mut voice_state: BatchedSignal<VoiceState>) -> Element {
                             spawn(async move {
                                 if let Some((_acct, backend)) =
                                     cm.peek().get_backend_for_server(&server_id)
-                                {
-                                    if let Ok(guard) = backend
+                                    && let Ok(guard) = backend
                                         .read_with_timeout(std::time::Duration::from_secs(5))
                                         .await
-                                    {
-                                        if let Some(vt) = guard.as_voice_transport() {
+                                        && let Some(vt) = guard.as_voice_transport() {
                                             let _ = vt.stop_video_capture().await;
                                         }
-                                    }
-                                }
                             });
                         }
                     } else {
@@ -935,16 +929,13 @@ fn VoiceChatBar(mut voice_state: BatchedSignal<VoiceState>) -> Element {
                                 // already works from the JS getUserMedia call above.
                                 if let (Some((server_id, channel_id)), Some(cm)) =
                                     (conn_snapshot, cm_opt)
-                                {
-                                    if let Some((_acct, backend)) =
+                                    && let Some((_acct, backend)) =
                                         cm.peek().get_backend_for_server(&server_id)
-                                    {
-                                        if let Ok(guard) = backend
+                                        && let Ok(guard) = backend
                                             .read_with_timeout(std::time::Duration::from_secs(5))
                                             .await
-                                        {
-                                            if let Some(vt) = guard.as_voice_transport() {
-                                                if let Err(e) =
+                                            && let Some(vt) = guard.as_voice_transport()
+                                                && let Err(e) =
                                                     vt.start_video_capture(&channel_id).await
                                                 {
                                                     tracing::debug!(
@@ -954,10 +945,6 @@ fn VoiceChatBar(mut voice_state: BatchedSignal<VoiceState>) -> Element {
                                                         "VoiceChatBar: backend start_video_capture (non-fatal)"
                                                     );
                                                 }
-                                            }
-                                        }
-                                    }
-                                }
                             }
                         });
                     }

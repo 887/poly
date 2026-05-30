@@ -148,7 +148,7 @@ pub fn CodeExplorerView(#[props(default)] route_channel_id: String) -> Element {
                                     let entry = entry.clone();
                                     let ch_id = channel_id.clone();
                                     let srv_id = server_id.clone();
-                                    EventHandler::new(move |_| {
+                                    EventHandler::new(move |()| {
                                         if entry.kind == poly_client::FileKind::Directory {
                                             current_path.set(entry.path.clone());
                                             selected_file.set(None);

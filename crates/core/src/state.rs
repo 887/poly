@@ -274,6 +274,7 @@ impl Default for UiLayout {
 /// are NOT here — they were removed in G.1. Only the stack-based menu state +
 /// per-modal fields remain.
 #[derive(Debug, Clone, PartialEq)]
+#[derive(Default)]
 pub struct UiOverlays {
     /// Stack of context menus (plan-context-menu-quality-control.md Phase A).
     ///
@@ -307,17 +308,6 @@ pub struct UiOverlays {
     pub pending_direct_call: Option<PendingDirectCallRequest>,
 }
 
-impl Default for UiOverlays {
-    fn default() -> Self {
-        Self {
-            context_menu_stack: Vec::new(),
-            profile_modal_user: None,
-            thread_panel_open: None,
-            active_moderation_dialog: None,
-            pending_direct_call: None,
-        }
-    }
-}
 
 /// User preference state — persisted to storage on change.
 ///

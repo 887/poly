@@ -157,7 +157,7 @@ fn strip_data_href_on_anchors(html: &str) -> String {
         {
             // Find the closing '>'.
             if let Some(end_rel) = html[i..].find('>') {
-                let tag = &html[i..i + end_rel + 1];
+                let tag = &html[i..=(i + end_rel)];
                 let lower = tag.to_ascii_lowercase();
                 if lower.contains("href=\"data:") || lower.contains("href='data:") {
                     // Replace the offending href with href="".
@@ -198,7 +198,7 @@ fn strip_data_href_on_anchors(html: &str) -> String {
 fn replace_href_scheme(tag: &str, scheme: &str) -> String {
     let lower = tag.to_ascii_lowercase();
     for quote in ['"', '\''] {
-        let needle = format!("href={}{}", quote, scheme);
+        let needle = format!("href={quote}{scheme}");
         if let Some(start) = lower.find(&needle) {
             // Find the matching closing quote.
             let after_quote = start + needle.len();
@@ -237,7 +237,7 @@ fn replace_href_scheme(tag: &str, scheme: &str) -> String {
 )]
 #[must_use]
 pub fn prefix_css_selectors(css: &str, scope_class: &str) -> String {
-    let prefix = format!(".{}", scope_class);
+    let prefix = format!(".{scope_class}");
     let mut out = String::with_capacity(css.len() + css.len() / 4);
 
     // Walk top-level rules. A rule = <selector-list> { <body> }. We don't
@@ -269,7 +269,7 @@ pub fn prefix_css_selectors(css: &str, scope_class: &str) -> String {
                     if trimmed.is_empty() {
                         trimmed.to_string()
                     } else {
-                        format!("{} {}", prefix, trimmed)
+                        format!("{prefix} {trimmed}")
                     }
                 })
                 .collect();
@@ -295,7 +295,7 @@ fn next_scope_id() -> u64 {
 /// JS snippet for post-mount shadow-root attach. Kept short; reads the
 /// sanitized payload from `data-*` attrs on the host so we don't have to
 /// interpolate large strings into `eval()`.
-const SHADOW_ATTACH_JS: &str = r#"(function(scope){var host=document.querySelector('.custom-block.'+scope);if(!host||host.dataset.shadowAttached==='1')return;if(typeof host.attachShadow!=='function')return;var html=host.getAttribute('data-sanitized-html')||'';var css=host.getAttribute('data-stylesheet')||'';var fb=host.querySelector('.custom-block-content');if(fb)fb.style.display='none';var root=host.attachShadow({mode:'open'});if(css){var s=document.createElement('style');s.textContent=css;root.appendChild(s);}var w=document.createElement('div');w.className='custom-block-content';w.innerHTML=html;root.appendChild(w);host.dataset.shadowAttached='1';})"#;
+const SHADOW_ATTACH_JS: &str = r"(function(scope){var host=document.querySelector('.custom-block.'+scope);if(!host||host.dataset.shadowAttached==='1')return;if(typeof host.attachShadow!=='function')return;var html=host.getAttribute('data-sanitized-html')||'';var css=host.getAttribute('data-stylesheet')||'';var fb=host.querySelector('.custom-block-content');if(fb)fb.style.display='none';var root=host.attachShadow({mode:'open'});if(css){var s=document.createElement('style');s.textContent=css;root.appendChild(s);}var w=document.createElement('div');w.className='custom-block-content';w.innerHTML=html;root.appendChild(w);host.dataset.shadowAttached='1';})";
 
 /// Stylesheet sanitizer: strip `javascript:` / `expression(...)` / `@import`
 /// / `behavior:` / `-moz-binding` declarations before CSS enters either the
@@ -333,7 +333,7 @@ pub fn sanitize_stylesheet(css: &str) -> String {
 #[component]
 pub fn CustomBlock(block: CustomBlockData) -> Element {
     let scope_id = use_hook(next_scope_id);
-    let scope_class = format!("cb-{}", scope_id);
+    let scope_class = format!("cb-{scope_id}");
 
     // Primary defense: ammonia. Shadow-root is DOM isolation, not
     // sanitization — a `<script>` inside a shadow still runs.
@@ -346,10 +346,10 @@ pub fn CustomBlock(block: CustomBlockData) -> Element {
         Some(prefix_css_selectors(&sanitized_css, &scope_class))
     };
 
-    let root_class = format!("custom-block {}", scope_class);
+    let root_class = format!("custom-block {scope_class}");
     let root_style = block
         .max_height_px
-        .map(|h| format!("max-height: {}px; overflow: auto;", h));
+        .map(|h| format!("max-height: {h}px; overflow: auto;"));
 
     // Post-mount effect: upgrade from scoped-CSS (fallback) to real
     // shadow-root. `document::eval` only does anything on wasm/web;

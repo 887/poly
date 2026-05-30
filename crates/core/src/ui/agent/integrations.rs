@@ -251,7 +251,7 @@ fn McpConfigBlock(mcp_port: Signal<u16>, transport: Signal<McpTransport>) -> Ele
     let config_json = format!(
         "{{\n  \"mcpServers\": {{\n    \"poly\": {{\n      \"url\": \"http://127.0.0.1:{port}{path}\"\n    }}\n  }}\n}}"
     );
-    let copy_js = format!("navigator.clipboard.writeText({:?}).catch(()=>{{}})", config_json);
+    let copy_js = format!("navigator.clipboard.writeText({config_json:?}).catch(()=>{{}})");
     rsx! {
         div { class: "mcp-config-example",
             h4 { class: "settings-subsection-title", "{t(\"settings-mcp-config-title\")}" }

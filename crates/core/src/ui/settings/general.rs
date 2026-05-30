@@ -407,8 +407,8 @@ fn ResetButton(kind: ResetKind, busy: Signal<bool>, on_error: EventHandler<Strin
         if *confirm_open.read() { // poly-lint: allow render-time-read — modal visibility must re-render on toggle
             ResetConfirmModal {
                 kind,
-                on_cancel: move |_| confirm_open.set(false),
-                on_confirm: move |_| {
+                on_cancel: move |()| confirm_open.set(false),
+                on_confirm: move |()| {
                     confirm_open.set(false);
                     busy_signal.set(true);
                     match kind {
@@ -634,11 +634,10 @@ fn LoadDemoButton() -> Element {
             title: "Clears the dev.autoseed_disabled marker and reloads. Next boot re-seeds dev test accounts.",
             onclick: move |_| {
                 spawn(async move {
-                    if let Some(storage) = crate::STORAGE.get() {
-                        if let Err(e) = storage.delete(crate::storage::keys::DEV_AUTOSEED_DISABLED).await {
+                    if let Some(storage) = crate::STORAGE.get()
+                        && let Err(e) = storage.delete(crate::storage::keys::DEV_AUTOSEED_DISABLED).await {
                             tracing::warn!("Failed to clear DEV_AUTOSEED_DISABLED: {e}");
                         }
-                    }
                     document::eval("window.location.reload();");
                 });
             },

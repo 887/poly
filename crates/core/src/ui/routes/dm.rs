@@ -488,9 +488,7 @@ pub(super) fn DmIncomingCall(
         .peek() // poly-lint: allow render-time-read — prop snapshot, subscription not needed
         .dm_channels
         .iter()
-        .find(|dm| dm.account_id == account_id && dm.id == dm_id)
-        .map(|dm| dm.user.display_name.clone())
-        .unwrap_or_else(|| t("call-unknown-caller"));
+        .find(|dm| dm.account_id == account_id && dm.id == dm_id).map_or_else(|| t("call-unknown-caller"), |dm| dm.user.display_name.clone());
 
     let backend_c = backend.clone();
     let instance_id_c = instance_id.clone();

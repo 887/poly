@@ -103,7 +103,7 @@ pub(super) fn ServerHome(
     // prevent the stale Voice channel from triggering VoiceChannelView
     // (the is_voice_channel guard also checks server_matches, so a mismatched
     // current_server can never activate VoiceChannelView for the wrong server).
-    let mut cleared_key: Signal<String> = use_signal(|| String::new());
+    let mut cleared_key: Signal<String> = use_signal(String::new);
     let clear_key = format!("{account_id}|{server_id}");
     if *cleared_key.peek() != clear_key {
         cleared_key.set(clear_key.clone());
@@ -318,7 +318,7 @@ pub(super) fn ServerChat(
 
     let is_forum_backend = chat_view_state.read().current_server.as_ref() // poly-lint: allow render-time-read — render snapshot; subscription intentional
         .is_some_and(|s| client_manager.peek().capabilities_for_slug(s.backend.as_str()).is_forum_layout());
-    let is_voice = matches!(channel_type, Some(ChannelType::Voice) | Some(ChannelType::Video));
+    let is_voice = matches!(channel_type, Some(ChannelType::Voice | ChannelType::Video));
     let is_forum_channel = matches!(channel_type, Some(ChannelType::Forum));
     // Forum-layout backends (Lemmy, demo_forum) use the Lemmy-style ForumView.
     // Non-forum-layout backends (Discord, generic) that carry individual Forum

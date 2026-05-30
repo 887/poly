@@ -170,7 +170,7 @@ fn AccountBarUserInfo(user: AccountBarUserState) -> Element {
                     AccountProfilePopup {
                         user: user.clone(),
                         account_id: account_id.clone(),
-                        on_close: move |_| show_profile.set(false),
+                        on_close: move |()| show_profile.set(false),
                     }
                 }
             }

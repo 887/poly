@@ -176,9 +176,7 @@ pub fn ActiveThreadsBar() -> Element {
                     Some(tb) => tb.get_active_threads(&sid).await,
                     None => Ok(vec![]),
                 }
-            }).await.ok().and_then(|all| {
-                Some(all.into_iter().filter(|t| t.parent_channel_id == cid).collect::<Vec<_>>())
-            })
+            }).await.ok().map(|all| all.into_iter().filter(|t| t.parent_channel_id == cid).collect::<Vec<_>>())
         }
     });
 

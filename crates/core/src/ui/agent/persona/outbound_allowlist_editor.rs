@@ -205,7 +205,7 @@ pub fn PersonaOutboundAllowlistEditor(
             }
             // Update local state optimistically.
             let mut cur = entries.read().clone();
-            for row in cur.iter_mut() {
+            for row in &mut cur {
                 if row.account_id == acct && row.chat_id == chat {
                     row.max_messages_per_day = new_cap;
                 }

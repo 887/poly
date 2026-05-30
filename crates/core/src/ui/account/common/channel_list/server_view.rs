@@ -154,7 +154,7 @@ pub(super) async fn load_channel_data(
     let mut pending = chat_view_state.pending_update();
 
     match channel_type {
-        Some(poly_client::ChannelType::Voice) | Some(poly_client::ChannelType::Video) => {
+        Some(poly_client::ChannelType::Voice | poly_client::ChannelType::Video) => {
             // Voice/video channel — load participant list from backend
             if let Ok(participants) = guard.get_voice_participants(&channel_id).await {
                 let chid = channel_id.clone();
