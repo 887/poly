@@ -329,10 +329,27 @@ cd apps/desktop && dx build --platform web
 
 Three profiles are declared in `Cargo.toml` for agentic development:
 
-- **`dev` (DEFAULT)** — `debug = "line-tables-only"`. Stack traces work
-  (panics / backtraces still show file:line), but no full DWARF. Cuts
-  ~60-80% off `target/` disk per worktree. Use for every `cargo build`
-  / `check` / `test` / agent run that isn't a debugger step-through.
+- **`dev` (DEFAULT)** — `debug = "line-tables-only"`, `incremental = false`.
+  Stack traces work (panics / backtraces still show file:line), but no full
+  DWARF. Cuts ~60-80% off `target/` disk per worktree. Use for every
+  `cargo build` / `check` / `test` / agent run that isn't a debugger
+  step-through.
+  - **`incremental = false` is deliberate.** The incremental-compile cache
+    (`target/debug/incremental/`) was the #1 disk consumer — it ballooned to
+    88G / 7k crate-rebuild dirs across this repo's build history, dwarfing
+    `deps/` (45G). Incremental only pays off for a human iterating one line
+    at a time; our workflow is agentic whole-crate/whole-workspace builds
+    fanned out across parallel `jj workspace add` directories. **Fan-out is
+    the bigger speedup, so per-edit incremental rebuild time doesn't matter**,
+    and the plugin (WASM component) architecture means most iteration is
+    rebuilding a single guest crate anyway. Turning it off stops the 88G
+    re-accumulation; each parallel workspace's own `target/` then fits.
+  - **Purge a stale incremental cache any time:** `rm -rf
+    target/debug/incremental`. Safe, and NOT a cold rebuild — `deps/` stays
+    warm; cargo just recomputes incremental state on the next touch.
+  - **Want the cache back for local human iteration:** set
+    `CARGO_INCREMENTAL=1` in the env for that session (keeps the committed
+    profile lean for agents/CI while letting a human opt in).
 - **`dev-symbols`** — opt-in full `debug = "full"`, `strip = "none"`.
   Use only when you're actually about to attach gdb/lldb. Invoke with
   `cargo build --profile dev-symbols`.

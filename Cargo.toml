@@ -383,11 +383,26 @@ mod_module_files  = "deny"
 # `debug = "line-tables-only"` preserves stack-trace addresses (so panics
 # + backtraces still work) without storing variable / type / file-line
 # metadata for every monomorphization.
+#
+# `incremental = false` (deliberate): the incremental-compile cache in
+# `target/debug/incremental/` ballooned to 88G / 7k crate-rebuild dirs
+# across this repo's build history — it was the #1 disk consumer, dwarfing
+# `deps/`. Incremental only pays off for a human iterating one line at a
+# time; our workflow is agentic whole-crate/whole-workspace builds fanned
+# out across parallel `jj workspace add` directories. Fan-out is the bigger
+# speedup, so per-edit incremental rebuild time doesn't matter, and the
+# plugin (WASM component) architecture means most iteration rebuilds a
+# single guest crate anyway. Turning incremental off stops the 88G
+# re-accumulation; each parallel workspace's own `target/` then fits.
+# Purge a stale cache any time with `rm -rf target/debug/incremental` — it's
+# safe and NOT a cold rebuild (`deps/` stays warm; cargo recomputes
+# incremental state on the next touch). For local human iteration that wants
+# the cache back, set `CARGO_INCREMENTAL=1` in the env for that session.
 
 [profile.dev]
 opt-level       = 0
 debug           = "line-tables-only"
-incremental     = true
+incremental     = false
 split-debuginfo = "unpacked"
 strip           = "debuginfo"
 
