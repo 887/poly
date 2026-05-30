@@ -32,12 +32,9 @@ pub(in super::super) fn use_command_preload_effect(signals: &ChatViewSignals, ch
         let Some(backend) = backend else {
             return;
         };
-        let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
-            Ok(g) => g,
-            Err(_) => {
-                tracing::warn!("chat_view: backend read timed out in get_channel_commands");
-                return;
-            }
+        let Ok(guard) = backend.read_with_timeout(std::time::Duration::from_secs(5)).await else {
+            tracing::warn!("chat_view: backend read timed out in get_channel_commands");
+            return;
         };
         let result = match guard.as_messaging() {
             Some(mb) => mb.get_channel_commands(&cid).await,

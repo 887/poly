@@ -55,12 +55,9 @@ pub(in super::super) fn use_member_list_effect(signals: &ChatViewSignals) {
             });
             return;
         };
-        let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
-            Ok(g) => g,
-            Err(_) => {
-                tracing::warn!("chat_view: backend read timed out in get_channel_members");
-                return;
-            }
+        let Ok(guard) = backend.read_with_timeout(std::time::Duration::from_secs(5)).await else {
+            tracing::warn!("chat_view: backend read timed out in get_channel_members");
+            return;
         };
         match guard.get_channel_members(&active_channel_id).await {
             Ok(members) => {

@@ -48,13 +48,10 @@ pub(in super::super) fn use_pinned_messages_effect(signals: &ChatViewSignals) {
                 pinned_messages.set(Vec::new());
                 return;
             };
-            let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
-                Ok(g) => g,
-                Err(_) => {
-                    tracing::warn!("chat_view: backend read timed out in get_pinned_messages");
-                    pinned_messages.set(Vec::new());
-                    return;
-                }
+            let Ok(guard) = backend.read_with_timeout(std::time::Duration::from_secs(5)).await else {
+                tracing::warn!("chat_view: backend read timed out in get_pinned_messages");
+                pinned_messages.set(Vec::new());
+                return;
             };
             let result = match guard.as_messaging() {
                 Some(mb) => mb.get_pinned_messages(&target_channel_id).await,

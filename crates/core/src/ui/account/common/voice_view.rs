@@ -269,12 +269,9 @@ async fn join_voice_channel(
     // Fetch current participants from backend, then signal the join transport.
     let server_id_for_join = current_server.as_ref().map(|s| s.id.clone()).unwrap_or_default();
     let mut participants = {
-        let guard = match backend.read_with_timeout(std::time::Duration::from_secs(5)).await {
-            Ok(g) => g,
-            Err(_) => {
-                tracing::warn!("voice_view: backend read timed out fetching participants");
-                return;
-            }
+        let Ok(guard) = backend.read_with_timeout(std::time::Duration::from_secs(5)).await else {
+            tracing::warn!("voice_view: backend read timed out fetching participants");
+            return;
         };
         let parts = guard
             .get_voice_participants(&channel_id)

@@ -130,13 +130,12 @@ pub fn AccountServerBar() -> Element {
                         Some(cm) => cm,
                         None => return,
                     };
-                let servers = match client_manager.peek().with_backend_timeout(
+                let Ok(servers) = client_manager.peek().with_backend_timeout(
                     &account_id,
                     std::time::Duration::from_secs(10),
                     async |b| b.get_servers().await,
-                ).await {
-                    Ok(s) => s,
-                    Err(_) => return,
+                ).await else {
+                    return;
                 };
                 if servers.is_empty() {
                     return;

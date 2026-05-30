@@ -65,18 +65,16 @@ mod native_impl {
         /// Return all pending drafts for a specific `account_id` + `chat_id`.
         #[must_use]
         pub fn pending_for_chat(&self, account_id: &str, chat_id: &str) -> Vec<Draft> {
-            let db = match self.db.lock() {
-                Ok(d) => d,
-                Err(_) => return Vec::new(),
+            let Ok(db) = self.db.lock() else {
+                return Vec::new();
             };
-            let mut stmt = match db.prepare(
+            let Ok(mut stmt) = db.prepare(
                 "SELECT id,account_id,chat_id,body,suggested_by,created_at,auto_send_at,status
                  FROM drafts
                  WHERE account_id=?1 AND chat_id=?2 AND status='pending'
                  ORDER BY id"
-            ) {
-                Ok(s) => s,
-                Err(_) => return Vec::new(),
+            ) else {
+                return Vec::new();
             };
             if stmt.bind((1, account_id)).is_err() { return Vec::new(); }
             if stmt.bind((2, chat_id)).is_err()    { return Vec::new(); }
@@ -87,11 +85,10 @@ mod native_impl {
         /// Return all pending drafts for an `account_id` across all chats.
         #[must_use]
         pub fn pending_for_account(&self, account_id: &str) -> Vec<Draft> {
-            let db = match self.db.lock() {
-                Ok(d) => d,
-                Err(_) => return Vec::new(),
+            let Ok(db) = self.db.lock() else {
+                return Vec::new();
             };
-            let mut stmt = match db.prepare(
+            let Ok(mut stmt) = db.prepare(
                 "SELECT id,account_id,chat_id,body,suggested_by,created_at,auto_send_at,status
                  FROM drafts
                  WHERE account_id=?1 AND status='pending'
