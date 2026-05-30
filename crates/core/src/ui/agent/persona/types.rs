@@ -14,7 +14,7 @@ pub struct PersonaSummary {
 }
 
 /// Full persona row returned by `meta_persona_get`.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PersonaDetail {
     pub slug: String,
     pub name: String,

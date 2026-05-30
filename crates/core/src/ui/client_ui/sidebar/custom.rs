@@ -74,7 +74,7 @@ fn CustomSidebarSection(section: SidebarSection) -> Element {
 #[derive(Debug, Clone, PartialEq)]
 struct SidebarNode {
     item: SidebarItem,
-    children: Vec<SidebarNode>,
+    children: Vec<Self>,
 }
 
 /// Build a parent → children tree from a flat list keyed by

@@ -25,7 +25,7 @@ use poly_ui_macros::{context_menu, ui_action};
 struct ForumCommentNode {
     msg: Message,
     depth: u32,
-    children: Vec<ForumCommentNode>,
+    children: Vec<Self>,
 }
 
 fn build_comment_tree(post_id: &str, comments: &[Message]) -> Vec<ForumCommentNode> {

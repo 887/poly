@@ -35,7 +35,7 @@ pub struct OutboundAllowEntry {
 
 impl OutboundAllowEntry {
     fn from_json(v: &serde_json::Value) -> Option<Self> {
-        Some(OutboundAllowEntry {
+        Some(Self {
             account_id: v.get("account_id")?.as_str()?.to_string(),
             chat_id: v.get("chat_id")?.as_str()?.to_string(),
             max_messages_per_day: v
