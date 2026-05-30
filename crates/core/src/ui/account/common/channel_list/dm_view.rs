@@ -78,14 +78,17 @@ pub(super) async fn load_dm_messages(
         .map_or(0, |channel| channel.unread_count);
 
     tracing::info!(channel_id = %channel_id, "load_dm_messages: fetching messages");
-    let Ok((messages, members)) = client_manager.peek().with_backend(&account_id, async |b| {
+    let (messages, members) = match client_manager.peek().with_backend(&account_id, async |b| {
         let messages = b.get_messages(&channel_id, initial_message_query(unread_count)).await.ok();
         let members = b.get_channel_members(&channel_id).await.ok();
         Ok((messages, members))
-    }).await else {
-        tracing::warn!(account_id = %account_id, "load_dm_messages: no backend or timed out");
-        chat_view_state.batch(|cv| cv.loading = false);
-        return;
+    }).await {
+        Ok(pair) => pair,
+        Err(_) => {
+            tracing::warn!(account_id = %account_id, "load_dm_messages: no backend or timed out");
+            chat_view_state.batch(|cv| cv.loading = false);
+            return;
+        }
     };
 
     tracing::info!(
