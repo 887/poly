@@ -652,6 +652,9 @@ impl MatrixClient {
 #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 mod tests {
     use super::*;
+    // `is_authenticated` is provided by the `IsBackend` trait impl in
+    // `is_backend.rs`; bring the trait into scope so the unit tests can call it.
+    use poly_client::IsBackend;
 
     #[test]
     fn default_client_is_not_authenticated() {
