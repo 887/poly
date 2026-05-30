@@ -2,9 +2,9 @@
 //!
 //! Pure structural move — no behaviour change.
 
-use super::super::*;
+use super::super::{permission_bits, DiscordClient, guardrails, api};
 use async_trait::async_trait;
-use poly_client::*;
+use poly_client::{ClientResult, MemberPermissions, BannedMember, UpdateChannelParams, ModerationLogEntry, ModerationAction, User, PresenceStatus, BackendType, Role};
 
 #[cfg(feature = "native")]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
@@ -22,7 +22,7 @@ impl poly_client::ModerationBackend for DiscordClient {
     ) -> ClientResult<MemberPermissions> {
         use twilight_model::id::marker::RoleMarker;
         use twilight_model::id::Id as TwilightId;
-        use permission_bits::*;
+        use permission_bits::{ADMINISTRATOR, MANAGE_GUILD, MANAGE_CHANNELS, MANAGE_ROLES, KICK_MEMBERS, BAN_MEMBERS, MANAGE_MESSAGES, MODERATE_MEMBERS};
 
         let member = self.http.get_guild_member_me(server_id).await?;
         let all_roles = self.http.get_guild_roles(server_id).await?;
@@ -73,7 +73,7 @@ impl poly_client::ModerationBackend for DiscordClient {
                 effective |= bits;
                 if is_member_role && role.position > highest_position {
                     highest_position = role.position;
-                    highest_role_name = role.name.clone();
+                    highest_role_name.clone_from(&role.name);
                 }
             }
         }
@@ -347,7 +347,7 @@ impl poly_client::ModerationBackend for DiscordClient {
         let mut roles: Vec<Role> = discord_roles
             .into_iter()
             .map(|dr| {
-                use permission_bits::*;
+                use permission_bits::{ADMINISTRATOR, MANAGE_GUILD, MANAGE_CHANNELS, MANAGE_ROLES, KICK_MEMBERS, BAN_MEMBERS, MANAGE_MESSAGES, MODERATE_MEMBERS};
                 let perms_bits: i64 = dr.permissions.parse().unwrap_or(0);
                 let is_admin = perms_bits & ADMINISTRATOR != 0;
                 let has = |flag_bit: i64| is_admin || (perms_bits & flag_bit != 0);

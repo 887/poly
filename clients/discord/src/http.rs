@@ -109,12 +109,12 @@ impl DiscordHttpClient {
     ///
     /// The override is also propagated into `super_props.browser_user_agent`
     /// so HTTP and gateway IDENTIFY stay consistent (Phase B.5).
-    pub fn set_user_agent(&self, ua: String) {
+    pub fn set_user_agent(&self, ua: &str) {
         if let Ok(mut lock) = self.ua_override.lock() {
-            *lock = Some(ua.clone());
+            *lock = Some(ua.to_owned());
         }
         if let Ok(mut props) = self.super_props.lock() {
-            props.apply_ua_override(&ua);
+            props.apply_ua_override(ua);
         }
     }
 
@@ -139,17 +139,16 @@ impl DiscordHttpClient {
     /// Return the current effective User-Agent string.
     pub fn ua(&self) -> String {
         // If there's an explicit override, return it directly.
-        if let Ok(lock) = self.ua_override.lock() {
-            if let Some(ref ua) = *lock {
-                return ua.clone();
-            }
+        if let Ok(lock) = self.ua_override.lock()
+            && let Some(ref ua) = *lock
+        {
+            return ua.clone();
         }
         // Otherwise derive from super_props.browser_user_agent.
         self.super_props
             .lock()
             .ok()
-            .map(|p| p.browser_user_agent.clone())
-            .unwrap_or_else(|| DEFAULT_CLIENT_VERSION.to_string())
+            .map_or_else(|| DEFAULT_CLIENT_VERSION.to_string(), |p| p.browser_user_agent.clone())
     }
 
     /// Get a snapshot of the current `SuperProperties` (for gateway IDENTIFY).
@@ -194,8 +193,7 @@ impl DiscordHttpClient {
             .super_props
             .lock()
             .ok()
-            .map(|props| (props.browser_user_agent.clone(), props.to_header_value()))
-            .unwrap_or_else(|| (DEFAULT_CLIENT_VERSION.to_string(), String::new()));
+            .map_or_else(|| (DEFAULT_CLIENT_VERSION.to_string(), String::new()), |props| (props.browser_user_agent.clone(), props.to_header_value()));
 
         // Respect explicit UA override.
         let ua = if let Ok(lock) = self.ua_override.lock() {
@@ -390,7 +388,8 @@ impl DiscordHttpClient {
         let limit = limit.unwrap_or(50);
         let mut path = format!("/api/v10/channels/{channel_id}/messages?limit={limit}");
         if let Some(b) = before {
-            path.push_str(&format!("&before={b}"));
+            path.push_str("&before=");
+            path.push_str(b);
         }
         self.get(&path).await
     }
@@ -495,7 +494,8 @@ impl DiscordHttpClient {
         let limit = limit.unwrap_or(1).min(100);
         let mut path = format!("/api/v10/channels/{thread_id}/messages?limit={limit}");
         if let Some(a) = after {
-            path.push_str(&format!("&after={a}"));
+            path.push_str("&after=");
+            path.push_str(a);
         }
         self.get(&path).await
     }

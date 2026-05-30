@@ -168,7 +168,7 @@ pub struct DiscordMessage {
     #[serde(default)]
     pub edited_timestamp: Option<String>,
     #[serde(default)]
-    pub referenced_message: Option<Box<DiscordMessage>>,
+    pub referenced_message: Option<Box<Self>>,
     /// If this message spawned a thread, the thread channel object is embedded here.
     #[serde(default)]
     pub thread: Option<DiscordChannel>,

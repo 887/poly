@@ -23,7 +23,7 @@ use crate::build_info::BuildInfo;
 ///
 /// Field presence matches what the official 0.0.354 stable client sends per
 /// KhafraDev's discord-verify wiki. `client_event_source` is literal JSON null.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct SuperProperties {
     pub os: String,
     pub browser: String,
@@ -83,15 +83,15 @@ impl SuperProperties {
         Self {
             os: "Linux".into(),
             browser: "Discord Client".into(),
-            device: "".into(),
+            device: String::new(),
             system_locale: locale.to_string(),
             browser_user_agent: ua,
             browser_version: format!("{chromium}.0.0.0"),
-            os_version: "".into(),
-            referrer: "".into(),
-            referring_domain: "".into(),
-            referrer_current: "".into(),
-            referring_domain_current: "".into(),
+            os_version: String::new(),
+            referrer: String::new(),
+            referring_domain: String::new(),
+            referrer_current: String::new(),
+            referring_domain_current: String::new(),
             release_channel: "stable".into(),
             client_build_number: build_number,
             client_event_source: serde_json::Value::Null,
@@ -114,15 +114,15 @@ impl SuperProperties {
         Self {
             os: "Mac OS X".into(),
             browser: "Discord Client".into(),
-            device: "".into(),
+            device: String::new(),
             system_locale: locale.to_string(),
             browser_user_agent: ua,
             browser_version: format!("{chromium}.0.0.0"),
             os_version: "10.15.7".into(),
-            referrer: "".into(),
-            referring_domain: "".into(),
-            referrer_current: "".into(),
-            referring_domain_current: "".into(),
+            referrer: String::new(),
+            referring_domain: String::new(),
+            referrer_current: String::new(),
+            referring_domain_current: String::new(),
             release_channel: "stable".into(),
             client_build_number: build_number,
             client_event_source: serde_json::Value::Null,
@@ -145,15 +145,15 @@ impl SuperProperties {
         Self {
             os: "Windows".into(),
             browser: "Discord Client".into(),
-            device: "".into(),
+            device: String::new(),
             system_locale: locale.to_string(),
             browser_user_agent: ua,
             browser_version: format!("{chromium}.0.0.0"),
             os_version: "10".into(),
-            referrer: "".into(),
-            referring_domain: "".into(),
-            referrer_current: "".into(),
-            referring_domain_current: "".into(),
+            referrer: String::new(),
+            referring_domain: String::new(),
+            referrer_current: String::new(),
+            referring_domain_current: String::new(),
             release_channel: "stable".into(),
             client_build_number: build_number,
             client_event_source: serde_json::Value::Null,
@@ -176,7 +176,7 @@ impl SuperProperties {
     /// HTTP header, without the base64 wrapping.
     #[must_use]
     pub fn to_identify_properties(&self) -> serde_json::Value {
-        serde_json::to_value(self).unwrap_or(serde_json::Value::Object(Default::default()))
+        serde_json::to_value(self).unwrap_or_else(|_| serde_json::Value::Object(serde_json::Map::default()))
     }
 
     /// Apply a User-Agent override.  The UA string is propagated into both

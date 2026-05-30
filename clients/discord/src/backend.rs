@@ -9,26 +9,26 @@
 //! behaviour change relative to the pre-split state.
 
 #[cfg(feature = "native")]
-pub(super) mod context_action;
+mod context_action;
 #[cfg(feature = "native")]
-pub(super) mod dms_groups;
+mod dms_groups;
 #[cfg(feature = "native")]
-pub(super) mod forum;
+mod forum;
 #[cfg(feature = "native")]
-pub(super) mod is_backend;
+mod is_backend;
 #[cfg(feature = "native")]
-pub(super) mod messaging;
+mod messaging;
 #[cfg(feature = "native")]
-pub(super) mod moderation;
+mod moderation;
 #[cfg(feature = "native")]
-pub(super) mod server_admin;
+mod server_admin;
 #[cfg(feature = "native")]
-pub(super) mod settings;
+mod settings;
 #[cfg(feature = "native")]
-pub(super) mod social_graph;
+mod social_graph;
 #[cfg(feature = "native")]
-pub(super) mod threads;
+mod threads;
 #[cfg(feature = "native")]
-pub(super) mod view_descriptor;
+mod view_descriptor;
 #[cfg(feature = "native")]
-pub(super) mod voice_transport;
+mod voice_transport;

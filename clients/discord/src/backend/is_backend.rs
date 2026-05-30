@@ -2,9 +2,9 @@
 //!
 //! Pure structural move — no behaviour change.
 
-use super::super::*;
+use super::super::{DiscordClient, Pin, Stream, stream};
 use async_trait::async_trait;
-use poly_client::*;
+use poly_client::{IsBackend, AuthCredentials, ClientResult, Session, ClientError, User, PresenceStatus, BackendType, PluginManifest, Server, Channel, MessageQuery, Message, Notification, ClientEvent, BackendCapabilities, VideoCaptureCapability, Mechanism, SettingsScope, HostCap, SignupMethod};
 
 #[cfg(feature = "native")]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
@@ -36,7 +36,7 @@ impl IsBackend for DiscordClient {
             id: user_id.clone(),
             user: User {
                 id: user_id,
-                display_name: user.username.clone(),
+                display_name: user.username,
                 avatar_url: None,
                 presence: PresenceStatus::Online,
                 backend: BackendType::from(crate::SLUG),
@@ -254,10 +254,9 @@ impl IsBackend for DiscordClient {
         Ok(vec![])
     }
 
-    /// C.2 — return cached voice participants for `channel_id`.
-    ///
-    /// The cache is populated by `VOICE_STATE_UPDATE` gateway events.
-    /// Returns an empty list if no participants are cached (not an error).
+    // C.2 — return cached voice participants for `channel_id`.
+    // The cache is populated by `VOICE_STATE_UPDATE` gateway events.
+    // Returns an empty list if no participants are cached (not an error).
 
     // ── Moderation methods moved to ModerationBackend (H.3.a) ────────────────
 
@@ -344,7 +343,7 @@ impl IsBackend for DiscordClient {
         BackendType::from(crate::SLUG)
     }
 
-    fn backend_name(&self) -> &str {
+    fn backend_name(&self) -> &'static str {
         "Discord"
     }
 
@@ -383,8 +382,7 @@ impl IsBackend for DiscordClient {
         let captcha_sandbox_enabled = self
             .settings_storage
             .get(SettingsScope::AccountGlobal, "", "captcha-sandbox")
-            .map(|v| v == "true")
-            .unwrap_or(false);
+            .map_or(false, |v| v == "true");
         Ok(vec![
             Mechanism {
                 id: "super-properties".to_string(),
@@ -452,10 +450,10 @@ impl IsBackend for DiscordClient {
     ) -> ClientResult<()> {
         // Phase B.5: UA override propagates into super_props.browser_user_agent.
         if let Ok(mut lock) = self.version_override.lock() {
-            *lock = version_override.clone();
+            lock.clone_from(&version_override);
         }
         match version_override {
-            Some(ua) => self.http.set_user_agent(ua),
+            Some(ua) => self.http.set_user_agent(&ua),
             None => self.http.clear_user_agent_override(),
         }
         Ok(())

@@ -63,7 +63,7 @@ mod guest;
 ///
 /// `lib.rs` keeps the struct + constructors + free functions + mappers;
 /// each trait implementation lives in its own sibling file under `backend/`.
-mod backend;
+pub(crate) mod backend;
 
 /// Return Fluent translations for the given locale.
 #[must_use]
@@ -79,7 +79,7 @@ use futures::stream::{self, Stream};
 #[cfg(feature = "native")]
 use http::DiscordHttpClient;
 #[cfg(feature = "native")]
-use poly_client::*;
+use poly_client::{ChannelType, Channel, Message, ClientEvent, SettingsStorageCell, User, PresenceStatus, BackendType, MessageContent, ThreadMetadata, ThreadInfo, ForumTag};
 #[cfg(feature = "native")]
 use std::collections::HashSet;
 #[cfg(feature = "native")]
@@ -133,12 +133,12 @@ struct DiscordMenuState {
 #[cfg(feature = "native")]
 #[doc(hidden)]
 pub mod test_helpers {
-    use super::*;
+    use super::{ChannelType, DiscordClient, Channel, api, Message, ClientEvent};
     use twilight_model::channel::ChannelType as DC;
 
     /// Map a raw Discord channel type integer to `poly_client::ChannelType`.
     #[must_use]
-    pub fn map_discord_channel_type(raw: u8) -> ChannelType {
+    pub const fn map_discord_channel_type(raw: u8) -> ChannelType {
         let dc = match raw {
             1 => DC::Private,
             2 => DC::GuildVoice,
@@ -385,8 +385,8 @@ impl DiscordClient {
         cdn_base: &str,
     ) -> (Option<String>, Option<String>) {
         let base = cdn_base.trim_end_matches('/');
-        let icon_url = icon.map(|hash| format!("{}/icons/{}/{}.png?size=128", base, guild_id, hash));
-        let banner_url = banner.map(|hash| format!("{}/banners/{}/{}.png", base, guild_id, hash));
+        let icon_url = icon.map(|hash| format!("{base}/icons/{guild_id}/{hash}.png?size=128"));
+        let banner_url = banner.map(|hash| format!("{base}/banners/{guild_id}/{hash}.png"));
         (icon_url, banner_url)
     }
 
@@ -462,7 +462,7 @@ impl DiscordClient {
     }
 
     /// Map a Discord `ChannelType` (twilight-model) to `poly_client::ChannelType`.
-    fn map_channel_type(dc: twilight_model::channel::ChannelType) -> ChannelType {
+    const fn map_channel_type(dc: twilight_model::channel::ChannelType) -> ChannelType {
         use twilight_model::channel::ChannelType as DC;
         match dc {
             DC::GuildVoice | DC::GuildStageVoice => ChannelType::Voice,
@@ -523,6 +523,7 @@ impl DiscordClient {
     /// Handles both regular channels and thread/forum channels — sets
     /// `thread_metadata`, `parent_channel_id`, and `forum_tags` as appropriate.
     fn discord_channel_to_poly(&self, ch: api::DiscordChannel, server_id: &str) -> Channel {
+        let _ = &self; // required by method signature but body uses only associated functions
         let channel_type = Self::map_channel_type(ch.channel_type);
         let thread_metadata = ch
             .thread_metadata
@@ -748,12 +749,11 @@ impl DiscordClient {
                     .get("status")
                     .and_then(|v| v.as_str())
                     .unwrap_or("offline");
-                use poly_client::PresenceStatus;
-                let status = match status_str {
-                    "online" => PresenceStatus::Online,
-                    "idle" => PresenceStatus::Idle,
-                    "dnd" => PresenceStatus::DoNotDisturb,
-                    _ => PresenceStatus::Offline,
+                let status: poly_client::PresenceStatus = match status_str {
+                    "online" => poly_client::PresenceStatus::Online,
+                    "idle" => poly_client::PresenceStatus::Idle,
+                    "dnd" => poly_client::PresenceStatus::DoNotDisturb,
+                    _ => poly_client::PresenceStatus::Offline,
                 };
                 if user_id.is_empty() {
                     vec![]
@@ -1547,7 +1547,7 @@ impl DiscordClient {
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod mechanism_tests {
-    use super::*;
+    use super::{ChannelType, DiscordClient, Channel, api, Message, ClientEvent};
     use poly_client::HostCap;
 
     /// Verify that Discord declares a `captcha-sandbox` mechanism that

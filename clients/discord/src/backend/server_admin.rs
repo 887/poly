@@ -4,9 +4,9 @@
 //! `update_server_banner` is a real write; `create_server` and
 //! `create_channel` are stubs. All three live on the writable trait.
 
-use super::super::*;
+use super::super::DiscordClient;
 use async_trait::async_trait;
-use poly_client::*;
+use poly_client::{ClientResult, ClientError, Server, ChannelType, Channel};
 
 #[cfg(feature = "native")]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]

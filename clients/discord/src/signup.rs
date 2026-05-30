@@ -56,7 +56,7 @@ fn kangaroo_auth(
 
 /// Test accounts for the Discord local dev server (port 9102).
 #[must_use]
-pub fn get_test_accounts() -> &'static [poly_client::TestAccountEntry] {
+pub const fn get_test_accounts() -> &'static [poly_client::TestAccountEntry] {
     use poly_client::TestAccountEntry;
     const ACCOUNTS: &[TestAccountEntry] = &[
         TestAccountEntry {
@@ -95,7 +95,6 @@ pub fn signup_render_fn(on_complete: Callback<SignupCompleted>, ctx: SignupConte
 /// Discord account setup form (token-based auth).
 #[component]
 fn DiscordSignupPage(on_complete: Callback<SignupCompleted>, ctx: SignupContext) -> Element {
-    let _t = ctx.t;
     let mut token = use_signal(String::new);
     let mut submitting = use_signal(|| false);
     let mut error_msg: Signal<Option<String>> = use_signal(|| None);

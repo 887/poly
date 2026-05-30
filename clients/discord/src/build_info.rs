@@ -120,12 +120,7 @@ pub async fn scrape_stable() -> Result<BuildInfo, ScrapeError> {
         let body = match http
             .get(full_url)
             .send()
-            .await
-            .and_then(|r| {
-                // Use a block to avoid async issues — we need to await text()
-                // but we're not in an async context here. We collect the future.
-                Ok(r)
-            }) {
+            .await {
             Ok(resp) => match resp.text().await {
                 Ok(t) => t,
                 Err(_) => continue,
@@ -147,13 +142,16 @@ fn extract_asset_urls(html: &str) -> Vec<String> {
     let mut urls = Vec::new();
     let mut remaining = html;
     while let Some(pos) = remaining.find("src=\"/assets/") {
-        remaining = &remaining[pos + 5..]; // skip past `src="`
+        // skip past `src="` (5 ASCII bytes) — safe: pos from .find(), ASCII stride
+        let Some(after_src) = remaining.get(pos.saturating_add(5)..) else { break };
+        remaining = after_src;
         if let Some(end) = remaining.find('"') {
-            let url = &remaining[..end];
-            if url.ends_with(".js") {
+            let url = remaining.get(..end).unwrap_or("");
+            if url.to_ascii_lowercase().ends_with(".js") {
                 urls.push(url.to_string());
             }
-            remaining = &remaining[end..];
+            let Some(after_end) = remaining.get(end..) else { break };
+            remaining = after_end;
         }
     }
     urls
@@ -166,24 +164,27 @@ fn parse_build_number(body: &str) -> Option<BuildInfo> {
     // Pattern: `Build Number: <digits>, Version Hash: <alphanum>`
     let marker = "Build Number: ";
     let pos = body.find(marker)?;
-    let after_marker = &body[pos + marker.len()..];
+    // Safe: pos is a valid byte index from .find(); marker is all-ASCII so adding
+    // its length stays on a char boundary.
+    let after_marker = body.get(pos.saturating_add(marker.len())..)?;
     // Read digits.
     let num_end = after_marker
         .find(|c: char| !c.is_ascii_digit())
         .unwrap_or(after_marker.len());
-    let build_str = &after_marker[..num_end];
+    let build_str = after_marker.get(..num_end)?;
     let build_number: u32 = build_str.parse().ok()?;
     // Clamp to floor.
     let build_number = build_number.max(LATEST_KNOWN_STABLE_BUILD);
 
     // Read version hash after ", Version Hash: ".
     let hash_marker = ", Version Hash: ";
-    let hash_start = after_marker.find(hash_marker)? + hash_marker.len();
-    let after_hash = &after_marker[hash_start..];
+    let hash_offset = after_marker.find(hash_marker)?;
+    let hash_start = hash_offset.saturating_add(hash_marker.len());
+    let after_hash = after_marker.get(hash_start..)?;
     let hash_end = after_hash
         .find(|c: char| !c.is_ascii_alphanumeric())
         .unwrap_or(after_hash.len());
-    let version_hash = after_hash[..hash_end].to_string();
+    let version_hash = after_hash.get(..hash_end)?.to_string();
 
     let scraped_at = now_secs();
 
@@ -225,18 +226,16 @@ where
     let cached = kv_get().await;
 
     // Return cached if still fresh and not forced.
-    if !force {
-        if let Some(ref info) = cached {
-            let age = now_secs().saturating_sub(info.scraped_at);
-            if age < SEVEN_DAYS_SECS {
-                tracing::debug!(
-                    target: "poly_discord::build_info",
-                    build_number = info.build_number,
-                    age_hours = age / 3600,
-                    "using cached build info"
-                );
-                return info.clone();
-            }
+    if !force && let Some(ref info) = cached {
+        let age = now_secs().saturating_sub(info.scraped_at);
+        if age < SEVEN_DAYS_SECS {
+            tracing::debug!(
+                target: "poly_discord::build_info",
+                build_number = info.build_number,
+                age_hours = age.saturating_div(3600),
+                "using cached build info"
+            );
+            return info.clone();
         }
     }
 
@@ -332,8 +331,8 @@ pub fn check_build_staleness(info: &BuildInfo) -> bool {
         tracing::warn!(
             target: "discord-anti-ban",
             build_number = info.build_number,
-            last_scrape_age_days = last_scrape_age / 86_400,
-            floor_age_days = floor_age / 86_400,
+            last_scrape_age_days = last_scrape_age.saturating_div(86_400),
+            floor_age_days = floor_age.saturating_div(86_400),
             "discord build info is stale — consider updating Poly or refreshing the build number"
         );
         true

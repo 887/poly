@@ -69,7 +69,7 @@ impl RateGuardInner {
     fn refill(&mut self) {
         let now = Instant::now();
         let elapsed = now.duration_since(self.last_refill).as_secs_f64();
-        self.tokens = (self.tokens + elapsed * self.rate_per_sec).min(self.burst);
+        self.tokens = elapsed.mul_add(self.rate_per_sec, self.tokens).min(self.burst);
         self.last_refill = now;
     }
 }
@@ -98,18 +98,23 @@ impl RateGuard {
     ///
     /// In production this should be called before every outbound HTTP helper.
     /// The caller may `tokio::time::sleep` for the returned duration if desired.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss, clippy::as_conversions)]
     pub fn check(&self) -> Result<(), ClientError> {
-        let mut inner = self.inner.lock().expect("RateGuard lock poisoned");
-        inner.refill();
-        if inner.tokens >= 1.0 {
-            inner.tokens -= 1.0;
-            Ok(())
-        } else {
-            let wait_ms = ((1.0 - inner.tokens) / inner.rate_per_sec * 1000.0) as u64;
-            Err(ClientError::Network(format!(
-                "rate limit: too many requests — retry after {wait_ms}ms"
-            )))
-        }
+        let wait_ms = {
+            let mut inner = self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            inner.refill();
+            if inner.tokens >= 1.0_f64 {
+                inner.tokens = inner.tokens.mul_add(1.0_f64, -1.0_f64);
+                return Ok(());
+            }
+            // tokens < 1.0 here; result is a positive millisecond delay.
+            let wait_f = (1.0_f64 - inner.tokens) / inner.rate_per_sec * 1_000.0_f64;
+            drop(inner);
+            wait_f.max(0.0_f64) as u64
+        };
+        Err(ClientError::Network(format!(
+            "rate limit: too many requests — retry after {wait_ms}ms"
+        )))
     }
 
     /// Record a 429 response for the given bucket key and return the
@@ -118,39 +123,40 @@ impl RateGuard {
     /// Implements exponential back-off: second 429 within 60s on the same
     /// bucket doubles `Retry-After`.
     pub fn record_429(&self, bucket: &str, retry_after_secs: u64) -> Duration {
-        let mut inner = self.inner.lock().expect("RateGuard lock poisoned");
-        inner.recent_429_count = inner.recent_429_count.saturating_add(1);
-        let now = Instant::now();
-        inner.last_429_at = Some(now);
+        let multiplier = {
+            let mut inner = self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            inner.recent_429_count = inner.recent_429_count.saturating_add(1);
+            let now = Instant::now();
+            inner.last_429_at = Some(now);
 
-        let multiplier = inner
-            .backoff
-            .get(bucket)
-            .map(|(last, mult)| {
-                if now.duration_since(*last) < Duration::from_secs(60) {
-                    (*mult + 1).min(4) // cap at 4×
-                } else {
-                    1
-                }
-            })
-            .unwrap_or(1);
+            let multiplier = inner
+                .backoff
+                .get(bucket)
+                .map_or(1, |(last, mult)| {
+                    if now.duration_since(*last) < Duration::from_secs(60) {
+                        mult.saturating_add(1).min(4) // cap at 4×
+                    } else {
+                        1
+                    }
+                });
 
-        inner
-            .backoff
-            .insert(bucket.to_string(), (now, multiplier));
-
-        Duration::from_secs(retry_after_secs * u64::from(multiplier))
+            inner
+                .backoff
+                .insert(bucket.to_string(), (now, multiplier));
+            multiplier
+        };
+        Duration::from_secs(retry_after_secs.saturating_mul(u64::from(multiplier)))
     }
 
     /// Reset the 429 counter for a bucket on a successful response.
     pub fn record_success(&self, bucket: &str) {
-        let mut inner = self.inner.lock().expect("RateGuard lock poisoned");
+        let mut inner = self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         inner.backoff.remove(bucket);
     }
 
     /// Return a snapshot of the recent 429 count and last 429 timestamp (D.8).
     pub fn health_snapshot(&self) -> (u32, Option<Instant>) {
-        let inner = self.inner.lock().expect("RateGuard lock poisoned");
+        let inner = self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         (inner.recent_429_count, inner.last_429_at)
     }
 }
@@ -196,26 +202,33 @@ impl SlowModeGuard {
         if rate_limit_per_user == 0 {
             return Ok(());
         }
-        let mut inner = self.inner.lock().expect("SlowModeGuard lock poisoned");
         let now = Instant::now();
         let window = Duration::from_secs(u64::from(rate_limit_per_user));
-        if let Some(last) = inner.last_send.get(channel_id) {
-            let elapsed = now.duration_since(*last);
-            if elapsed < window {
-                let remaining = window - elapsed;
-                return Err(ClientError::Network(format!(
-                    "slow mode: channel is in slow mode — retry in {}s",
-                    remaining.as_secs() + 1
-                )));
+        let error = {
+            let mut inner = self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            let err = inner.last_send.get(channel_id).and_then(|last| {
+                let elapsed = now.duration_since(*last);
+                if elapsed < window {
+                    let remaining = window.saturating_sub(elapsed);
+                    Some(ClientError::Network(format!(
+                        "slow mode: channel is in slow mode — retry in {}s",
+                        remaining.as_secs().saturating_add(1)
+                    )))
+                } else {
+                    None
+                }
+            });
+            if err.is_none() {
+                inner.last_send.insert(channel_id.to_string(), now);
             }
-        }
-        inner.last_send.insert(channel_id.to_string(), now);
-        Ok(())
+            err
+        };
+        error.map_or(Ok(()), Err)
     }
 
     /// Mark a message as sent on `channel_id` (call after successful HTTP send).
     pub fn record_send(&self, channel_id: &str) {
-        let mut inner = self.inner.lock().expect("SlowModeGuard lock poisoned");
+        let mut inner = self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         inner.last_send.insert(channel_id.to_string(), Instant::now());
     }
 }
@@ -251,13 +264,13 @@ impl PermissionGuard {
     /// the role/member objects (e.g. `"8"` for Administrator).
     pub fn update_permissions(&self, guild_id: &str, permissions_str: &str) {
         let bits: i64 = permissions_str.parse().unwrap_or(0);
-        let mut inner = self.inner.lock().expect("PermissionGuard lock poisoned");
+        let mut inner = self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         inner.guild_permissions.insert(guild_id.to_string(), bits);
     }
 
     /// Mark the local user as the owner of `guild_id` (owners bypass all checks).
     pub fn set_owner(&self, guild_id: &str, is_owner: bool) {
-        let mut inner = self.inner.lock().expect("PermissionGuard lock poisoned");
+        let mut inner = self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         if is_owner {
             inner.owned_guilds.insert(guild_id.to_string());
         } else {
@@ -280,7 +293,7 @@ impl PermissionGuard {
     /// defence-in-depth gate to avoid sending requests that will 403 (every
     /// 403 counts toward the 10k/10min IP ban threshold).
     pub fn check(&self, guild_id: &str, required_perm: i64, action: &str) -> Result<(), ClientError> {
-        let inner = self.inner.lock().expect("PermissionGuard lock poisoned");
+        let inner = self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         if inner.owned_guilds.contains(guild_id) {
             return Ok(());
         }
@@ -329,19 +342,19 @@ impl TypingRateCap {
     /// Returns `false` when the previous indicator was sent within the 8 s window;
     /// the caller should silently drop the re-trigger.
     pub fn should_send(&self, channel_id: &str) -> bool {
-        let mut map = self.inner.lock().expect("TypingRateCap lock poisoned");
+        let mut map = self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         let now = Instant::now();
         let entry = map.entry(channel_id.to_string()).or_insert_with(|| {
             // First call — allow and set to a value old enough to not block.
-            now - Self::WINDOW - Duration::from_secs(1)
+            now.checked_sub(Self::WINDOW.saturating_add(Duration::from_secs(1))).unwrap_or(now)
         });
         let elapsed = now.duration_since(*entry);
-        if elapsed >= Self::WINDOW {
+        let should = elapsed >= Self::WINDOW;
+        if should {
             *entry = now;
-            true
-        } else {
-            false
         }
+        drop(map);
+        should
     }
 }
 
@@ -385,8 +398,9 @@ impl VoiceManager {
     /// Returns `Err(ClientError::Network("AlreadyConnected"))` when a session
     /// is already open (matches the spec in Phase D table).
     pub fn connect(&self, channel_id: &str, guild_id: Option<&str>) -> Result<(), ClientError> {
-        let mut guard = self.inner.lock().expect("VoiceManager lock poisoned");
+        let mut guard = self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         if guard.is_some() {
+            drop(guard);
             return Err(ClientError::Network(
                 "AlreadyConnected: voice session already active; disconnect first".into(),
             ));
@@ -396,18 +410,19 @@ impl VoiceManager {
             guild_id: guild_id.map(str::to_string),
             connected_at: Instant::now(),
         });
+        drop(guard);
         Ok(())
     }
 
     /// Disconnect and clear the active session.
     pub fn disconnect(&self) {
-        let mut guard = self.inner.lock().expect("VoiceManager lock poisoned");
+        let mut guard = self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         *guard = None;
     }
 
     /// Return a snapshot of the active session handle, if any.
     pub fn active_session(&self) -> Option<VoiceSessionHandle> {
-        self.inner.lock().expect("VoiceManager lock poisoned").clone()
+        self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone()
     }
 }
 
@@ -631,7 +646,7 @@ impl GuardrailCounters {
     /// Return a point-in-time snapshot of all counters.
     #[must_use]
     pub fn snapshot(&self) -> GuardrailStats {
-        self.inner.lock().map(|s| s.clone()).unwrap_or_default()
+        self.inner.lock().map_or_else(|_| GuardrailStats::default(), |s| (*s).clone())
     }
 }
 
@@ -685,7 +700,7 @@ impl DiscordHealth {
     }
 
     /// Record a 401 response (epoch seconds from caller).
-    pub fn record_401(&mut self, epoch_secs: u64) {
+    pub const fn record_401(&mut self, epoch_secs: u64) {
         self.last_401_at = Some(epoch_secs);
     }
 
@@ -694,7 +709,7 @@ impl DiscordHealth {
     /// `scraped_at` is the Unix epoch seconds from `BuildInfo::scraped_at`
     /// (0 = synthesised floor constant, never actually scraped).
     /// `stale` should be set by [`check_build_staleness`] in `build_info.rs`.
-    pub fn update_build_info(&mut self, build_number: u32, scraped_at: u64, stale: bool) {
+    pub const fn update_build_info(&mut self, build_number: u32, scraped_at: u64, stale: bool) {
         self.build_number_in_use = build_number;
         self.build_info_scraped_at = scraped_at;
         self.build_stale_warning = stale;

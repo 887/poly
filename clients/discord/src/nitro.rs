@@ -52,7 +52,7 @@ impl NitroTier {
     /// Capability rank used by Ord — higher == more privileges.
     /// Distinct from Discord's `premium_type` discriminant on the wire.
     #[must_use]
-    pub fn capability_rank(self) -> u8 {
+    pub const fn capability_rank(self) -> u8 {
         match self {
             Self::None => 0,
             Self::Basic => 1,
@@ -88,13 +88,18 @@ impl From<u8> for NitroTier {
 impl NitroTier {
     /// Return the raw `premium_type` integer value.
     #[must_use]
-    pub fn as_u8(self) -> u8 {
-        self as u8
+    pub const fn as_u8(self) -> u8 {
+        match self {
+            Self::None => 0,
+            Self::Classic => 1,
+            Self::Full => 2,
+            Self::Basic => 3,
+        }
     }
 
     /// Convenience: does the user have ANY active Nitro subscription?
     #[must_use]
-    pub fn has_any_nitro(self) -> bool {
+    pub const fn has_any_nitro(self) -> bool {
         !matches!(self, Self::None)
     }
 }
@@ -164,14 +169,14 @@ impl NitroGate {
     ///
     /// Note: server boost tier overrides the base user-tier limit.
     #[must_use]
-    pub fn max_upload_bytes(tier: NitroTier, guild_boost_level: u8) -> u64 {
+    pub const fn max_upload_bytes(tier: NitroTier, guild_boost_level: u8) -> u64 {
         const MB: u64 = 1024 * 1024;
         match guild_boost_level {
             3 => 100 * MB,
             2 => 50 * MB,
             _ => match tier {
                 NitroTier::Full | NitroTier::Classic => 50 * MB,
-                _ => 8 * MB,
+                NitroTier::None | NitroTier::Basic => 8 * MB,
             },
         }
     }
@@ -188,9 +193,8 @@ impl NitroGate {
         let limit = Self::max_upload_bytes(tier, guild_boost_level);
         if total_bytes > limit {
             Err(ClientError::PermissionDenied(format!(
-                "attachment too large: {} bytes exceeds the {}-byte limit for your Nitro tier \
-                 (Nitro required for larger uploads)",
-                total_bytes, limit
+                "attachment too large: {total_bytes} bytes exceeds the {limit}-byte limit for your Nitro tier \
+                 (Nitro required for larger uploads)"
             )))
         } else {
             Ok(())
@@ -199,23 +203,23 @@ impl NitroGate {
 
     /// Defence-in-depth check: reject GIF avatars without Nitro Full.
     pub fn check_gif_avatar(tier: NitroTier) -> Result<(), ClientError> {
-        if !Self::can_use_gif_avatar(tier) {
+        if Self::can_use_gif_avatar(tier) {
+            Ok(())
+        } else {
             Err(ClientError::PermissionDenied(
                 "GIF avatars require Nitro (not Nitro Classic or Basic)".into(),
             ))
-        } else {
-            Ok(())
         }
     }
 
     /// Defence-in-depth check: reject animated cross-server emoji without Nitro.
     pub fn check_animated_emoji(tier: NitroTier) -> Result<(), ClientError> {
-        if !Self::can_use_animated_emoji(tier) {
+        if Self::can_use_animated_emoji(tier) {
+            Ok(())
+        } else {
             Err(ClientError::PermissionDenied(
                 "animated emoji from other servers requires Nitro Classic or higher".into(),
             ))
-        } else {
-            Ok(())
         }
     }
 }

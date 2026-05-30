@@ -7,9 +7,9 @@
 //! `WritableSocialGraphBackend` carries every mutator; reads stay on
 //! `SocialGraphBackend`.
 
-use super::super::*;
+use super::super::DiscordClient;
 use async_trait::async_trait;
-use poly_client::*;
+use poly_client::{ClientResult, User, ClientError, PresenceStatus};
 
 #[cfg(feature = "native")]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]

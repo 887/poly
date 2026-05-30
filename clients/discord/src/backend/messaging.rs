@@ -2,9 +2,9 @@
 //!
 //! Pure structural move — no behaviour change.
 
-use super::super::*;
+use super::super::DiscordClient;
 use async_trait::async_trait;
-use poly_client::*;
+use poly_client::{ClientResult, MessageContent, Message, MessageSearchQuery, MessageSearchHit, ClientError, ChatCommand, CustomEmoji, StickerItem};
 
 #[cfg(feature = "native")]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
