@@ -511,7 +511,7 @@ pub struct OfflineServerRecord {
 /// A user-added WASM plugin, loaded from a URL.
 ///
 /// Persisted in [`AppSettings::wasm_plugins`].
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct WasmPluginEntry {
     /// The base URL to fetch the plugin from.
     /// The app appends `?wit=<version>` before making the request.

@@ -59,7 +59,7 @@ fn compute_summary(json: &serde_json::Value) -> SourceSummary {
 /// Renders a short human-readable summary of how much data this persona can
 /// observe.  Intentionally non-interactive — the full source management is in
 /// PersonaEditModal > Sources section.
-#[derive(Props, Clone, PartialEq)]
+#[derive(Props, Clone, PartialEq, Eq)]
 pub struct DataExposureSummaryProps {
     pub persona_slug: String,
 }

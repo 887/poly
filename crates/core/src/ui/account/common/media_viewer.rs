@@ -13,7 +13,7 @@ use dioxus::prelude::*;
 use poly_client::Attachment;
 use poly_ui_macros::{context_menu, ui_action};
 
-#[derive(Props, Clone, PartialEq)]
+#[derive(Props, Clone, PartialEq, Eq)]
 pub struct MessageMediaViewerOverlayProps {
     pub channel_id: String,
     pub message_id: String,

@@ -42,7 +42,7 @@ use poly_client::User;
 use serde::{Deserialize, Serialize};
 
 /// Which moderation dialog (if any) is currently open.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ModerationDialog {
     Kick { server_id: String, member_id: String, member_name: String, account_id: String },
     Ban  { server_id: String, member_id: String, member_name: String, account_id: String },
@@ -314,7 +314,7 @@ pub struct UiOverlays {
 /// Provided as a separate `BatchedSignal<UserPrefs>` context (Phase G.5 of
 /// plan-solid-refactor-survey.md). Components that only read member-list
 /// preferences subscribe here and are not re-rendered on nav or overlay changes.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UserPrefs {
     /// Active settings section.
     pub settings_section: SettingsSection,

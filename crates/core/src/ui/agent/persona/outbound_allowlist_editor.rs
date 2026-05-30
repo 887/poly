@@ -26,7 +26,7 @@ use poly_ui_macros::{context_menu, ui_action};
 
 // ─── OutboundAllowRow ─────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OutboundAllowEntry {
     pub account_id: String,
     pub chat_id: String,

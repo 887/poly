@@ -86,7 +86,7 @@ fn AuditRowView(row: AuditRow) -> Element {
 
 // ─── AuditFilters ────────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AuditFilters {
     pub action: String,
     pub time_range: TimeRange,
@@ -133,7 +133,7 @@ impl TimeRange {
 
 // ─── PersonaAuditPanel ───────────────────────────────────────────────────────
 
-#[derive(Props, Clone, PartialEq)]
+#[derive(Props, Clone, PartialEq, Eq)]
 pub struct PersonaAuditPanelProps {
     pub persona_slug: String,
 }

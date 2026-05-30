@@ -150,7 +150,7 @@ async fn call_draft_mcp(tool: &str, args: serde_json::Value) -> bool {
 // ─── DraftBanner ──────────────────────────────────────────────────────────────
 
 /// Props for `DraftBanner`.
-#[derive(Props, Clone, PartialEq)]
+#[derive(Props, Clone, PartialEq, Eq)]
 pub struct DraftBannerProps {
     /// The current account ID.
     pub account_id: String,

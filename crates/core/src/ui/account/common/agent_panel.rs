@@ -44,7 +44,7 @@ fn kv_mcp_access(account_id: &str, chat_id: &str) -> String {
 // ---------------------------------------------------------------------------
 
 /// A stored memory fact for this chat/contact.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AgentFact {
     pub id: i64,
     pub content: String,
