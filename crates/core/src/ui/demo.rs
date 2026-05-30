@@ -43,8 +43,6 @@ use poly_client::IsBackend as _;
 ///
 /// Never call `signal.write().async_method().await` — the `SignalMut` write
 /// guard must never be held across an await boundary.
-// lint-allow-unused: demo bootstrap driver; long cohesive setup flow, arity from injected signal/state handles
-#[allow(clippy::too_many_lines, clippy::too_many_arguments)]
 pub(crate) async fn toggle_demo(
     client_manager: BatchedSignal<ClientManager>,
     voice_state: BatchedSignal<VoiceState>,
@@ -534,8 +532,6 @@ pub(crate) async fn toggle_demo_forum_on(
 ///
 /// Delegates to [`crate::event_stream::spawn_event_stream_listener`].
 /// Kept here for backwards-compat with the demo-toggle call site.
-// lint-allow-unused: thin delegating shim; arity mirrors event_stream::spawn_event_stream_listener
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn spawn_event_stream_listener(
     account_id: String,
     backend: BackendHandle,
