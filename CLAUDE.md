@@ -602,173 +602,80 @@ queued before the wedge are recoverable on the next session.
 
 ### Common WASM-hang causes (ranked by frequency in this codebase)
 
-Each hang class is paired with the active countermeasure — the prescribed
-pattern that makes it mechanically impossible (or very hard) to reintroduce.
-When a new hang matches class #N, check the countermeasure status first:
-if the plan ships as claimed, the bug should be uncatchable — so a fresh
-recurrence means either a missed migration site, an escape-hatch
-`#[allow]`, or a genuinely new hang class worth documenting below.
+Each hang class is paired with its active countermeasure — the pattern/API +
+CI lint that makes it hard to reintroduce. A fresh recurrence of class #N
+means a missed migration site, an escape-hatch `#[allow]`, or a genuinely new
+class worth documenting. (Commit hashes / phase history live in git + the
+referenced plan docs; only the actionable pattern is kept here.)
 
-1. **`Signal::write()` chains in a click handler / loader.** Every `.write()`
-   guard drop schedules a Dioxus reactive re-render. 5–7 consecutive writes
-   → 5–7 cascades on the WASM single-thread → scheduler starves. Historical
-   incidents: commit `1bd6e1fa` (AccountIcon.onclick), the `chat_view.rs`
-   `open_message_hit` batches, `restore_server_channel` PendingUpdate
-   conversion, plus 3 more.
-   **Countermeasure (shipped with CI gate): `BatchedSignal<T>` newtype.**
-   Phases 1-3 (commits `38a9c81b`, `6f4afde0`, `d5e7dbcf`) flipped
-   `Signal<ChatData>` and `Signal<AppState>` — 271 `.write()` sites
-   collapsed to `.batch(|v| …)` / `.pending_update()`. The deprecated
-   shadow `BatchedSignal::write()` fails `#[deny(deprecated)]` so the
-   bug is a compile error on the migrated signals. Phase 5 lint
-   (`b07516dc` — `tools/scripts/forbid-signal-write.sh`) bans raw
-   `Signal::write()` across `crates/core/src/ui/`; allowlisted
-   exceptions live in `tools/scripts/signal-write-allowlist.txt` with
-   rationale comments. `docs/plans/plan-batched-signal.md` Phase 4 (other
-   hot-path signals) remains opportunistic.
+1. **`Signal::write()` chains in a click handler / loader.** Each `.write()`
+   guard-drop schedules a Dioxus re-render; 5–7 in a row starve the WASM
+   single-thread scheduler.
+   **Countermeasure:** `BatchedSignal<T>` newtype — use `.batch(|v| …)` /
+   `.pending_update()` instead of `.write()`. Lint
+   `tools/scripts/forbid-signal-write.sh` bans raw `Signal::write()` in
+   `crates/core/src/ui/`; allowlist `signal-write-allowlist.txt`. Plan:
+   `docs/plans/plan-batched-signal.md`.
 
 2. **Live `Signal::read()` guard across a `.write()` of the same signal.**
-   WASM panics → no panic_hook unwinding → tight loop / unreachable. Wrap
-   reads in tightly-scoped `{ … }` so the guard drops before any write.
-   **Countermeasure (shipped with CI gate, Phases 1+2+5 of `docs/plans/plan-read-guard-scoping.md`):**
-   `BatchedSignal::batch(|v| …)` forces the mutation through a closure
-   (no outer same-signal read can live alongside the write guard), AND
-   `BatchedSignal::with(|v| …)` is the documented preferred read API for
-   multi-statement scopes. Phase 5 lint
-   (commit `6927d2cb` — `tools/scripts/forbid-long-read-guard.sh`) flags
-   long-scoped raw `.read()` bindings followed by `.batch()`/`.write()`
-   calls within 30 lines on the same signal. Inline-allowlist syntax:
-   `// poly-lint: allow long-read-guard — <reason>`. Audit found zero
-   live HIGH incidents (BatchedSignal Phases 2-3 disciplined the
-   codebase); the lint protects against future regressions. Dev-doc
-   canonical patterns at `docs/dev/reactive-state.md`.
+   WASM panics with no unwinding → tight loop. Scope reads in `{ … }` so the
+   guard drops before any write.
+   **Countermeasure:** `BatchedSignal::batch(|v| …)` (mutation through a
+   closure) + `BatchedSignal::with(|v| …)` for multi-statement reads. Lint
+   `forbid-long-read-guard.sh`; inline allow: `// poly-lint: allow
+   long-read-guard — <reason>`. Patterns: `docs/dev/reactive-state.md`.
 
-3. **`.write()` inside a `use_effect` whose body is also a subscriber to
-   that signal** (including indirectly via a spawned async task that
-   writes the signal). Causes infinite re-render loop. Historical
-   incidents: Teams Sheep wedge (fix `453f446a`, ServerHome missing
-   `spawned_for` guard) — the SQLite-persisted BISECT trace captured
-   ~1.2M iterations before sampling.
-   **Countermeasure (shipped with CI gate): `use_spawn_once<K>(key, async_fn)`
-   hook** (commit `99592f7c`). The hook bakes the `spawned_for: Signal<Option<K>>`
-   guard into the call-site API so it can't be forgotten — ~15 lines of
-   preamble collapse to ~3. Phases 2-4 (commit `0b864822`) migrated 10
-   call sites including the 2 HIGH-severity bug-waiting-to-happen sites
-   (`ServerMediaViewerRoute`, `ForumPostView`). Phase 5 lint
-   (`957a17ea` — `tools/scripts/forbid-use-effect-spawn-cycle.sh`) fails
-   CI on any raw `use_effect` + `spawn(async move { … signal.batch(…) })`
-   triple; allowlisted exceptions live in
-   `tools/scripts/use-effect-spawn-cycle-allowlist.txt` with rationale
-   comments. See `docs/plans/plan-use-spawn-once.md`.
+3. **`.write()` inside a `use_effect` that also subscribes to that signal**
+   (directly or via a spawned task) → infinite re-render loop.
+   **Countermeasure:** `use_spawn_once<K>(key, async_fn)` hook bakes in the
+   `spawned_for` guard. Lint `forbid-use-effect-spawn-cycle.sh`; allowlist
+   `use-effect-spawn-cycle-allowlist.txt`. Plan: `plan-use-spawn-once.md`.
 
-4. **`tokio::sync::RwLock::read().await` on a backend that has a perpetual
-   writer.** Single-threaded WASM scheduler can starve readers. **WARNING:**
-   the naive `tokio::time::timeout(Duration::from_secs(5), backend.read())`
-   wrap **panics on WASM** because `Instant::now()` is unimplemented on
-   `wasm32-unknown-unknown`. Four in-tree comments document removed prior
-   attempts (`channel_list.rs:193-195`, `channel_list.rs:360-364`,
-   `routes.rs:1067-1069`, `draft_banner.rs:168-170`).
-   **Countermeasure (shipped with CI gate, Phases 1-3 + 5 of `docs/plans/plan-backend-read-timeout.md`):**
-   `BackendHandleExt::read_with_timeout(dur)` — a cfg-gated helper that
-   uses `tokio::time::timeout` on native and
-   `gloo_timers::future::TimeoutFuture` raced via `futures::select` on
-   WASM. Commits: Phase 1 `b1db8888` (helper), Phase 2 `8e23c6ae`
-   (8 FRAGILE sites, 5s default + 30s for chain loops), Phase 3
-   `2de7434c` (46 SAFE sites for uniformity across 24 files), Phase 5
-   `6ca22cfd` (lint — `tools/scripts/forbid-raw-backend-read.sh` bans
-   raw `backend.read().await` in `crates/core/src/ui/`). Inline
-   allowlist: `// poly-lint: allow raw backend.read().await — <reason>`.
+4. **`tokio::sync::RwLock::read().await` on a backend with a perpetual
+   writer.** WASM scheduler starves readers. **WARNING:** the naive
+   `tokio::time::timeout(_, backend.read())` wrap **panics on WASM**
+   (`Instant::now()` unimplemented on `wasm32-unknown-unknown`).
+   **Countermeasure:** `BackendHandleExt::read_with_timeout(dur)` — cfg-gated
+   (tokio timeout native / `gloo_timers` raced via `futures::select` on WASM).
+   Lint `forbid-raw-backend-read.sh` bans raw `backend.read().await` in
+   `crates/core/src/ui/`; inline allow: `// poly-lint: allow raw
+   backend.read().await — <reason>`. Plan: `plan-backend-read-timeout.md`.
 
 5. **A spawned async task that writes Signals while the spawning closure
-   still holds a guard.** Same root cause as #2 but indirect. Drop the
-   guard before `spawn(async move { … })`.
-   **Countermeasure (closed by #1's type contract):** `BatchedSignal::batch`
-   takes a closure and drops the guard at closure exit, so the outer code
-   cannot hold a guard across a `spawn()` call. `PendingUpdate::apply()`
-   similarly acquires-and-drops its guard atomically. For all migrated
-   signals (post BatchedSignal Phases 1-4), this class is structurally
-   impossible. Unmigrated plain `Signal<T>` locals remain susceptible but
-   are single-component-scoped by definition (no subscribers outside),
-   so the cross-task failure mode doesn't apply.
+   still holds a guard.** Indirect form of #2 — drop the guard before
+   `spawn(async move { … })`.
+   **Countermeasure:** closed by #1's type contract — `BatchedSignal::batch`
+   drops the guard at closure exit; `PendingUpdate::apply()` acquires-and-drops
+   atomically. Unmigrated plain `Signal<T>` locals are single-component-scoped
+   so the cross-task mode doesn't apply.
 
-6. **`use_effect(move || { … })` captures a non-Signal value (prop, local
-   binding) that drifts across re-renders.** Effect runs once with the
-   initial value and never re-fires when the captured value changes,
-   because Dioxus only re-runs effects whose READ signals change.
-   Symptom: "second navigation has no effect" / stale UI / downstream
-   crashes from partially-loaded state. Surfaced 2026-04-25 by the
-   Teams server-switch crash where `use_spawn_once`'s own internal
-   effect captured `key` directly and never re-fired on T001 → T002.
-   **Countermeasure (Phases 1+2+5 shipped with HARD-FAIL CI gate,
-   `docs/plans/plan-use-reactive-effect.md`):**
-   `use_reactive_effect<Deps>(deps, body)` hook (commit `d3d8e891`)
-   mirrors `deps` into a Signal each render so the body re-fires through
-   PartialEq dedup whenever deps change. Plus `use_spawn_once` was
-   patched (commit `94688279`) using the same mirror pattern. Phase 2
-   migration (commit `81d0373`) triaged all 54 raw `use_effect` sites:
-   ~11 migrated to `use_reactive_effect`, 43 KEEP+inline-allowlisted as
-   legitimate Signal-only / one-shot mount cases. Phase 5 lint
-   `tools/scripts/forbid-stale-effect-capture.sh` is now `continue-on-
-   error: false` (hard-fail). Inline allowlist: `// poly-lint: allow
-   stale-effect-capture — <reason>`.
+6. **`use_effect(move || …)` captures a non-Signal value (prop, local) that
+   drifts across re-renders.** Effect runs once with the initial value and
+   never re-fires. Symptom: "second navigation has no effect" / stale UI.
+   **Countermeasure:** `use_reactive_effect<Deps>(deps, body)` mirrors `deps`
+   into a Signal each render so the body re-fires via PartialEq dedup
+   (`use_spawn_once` uses the same pattern). Lint (HARD-FAIL)
+   `forbid-stale-effect-capture.sh`; inline allow: `// poly-lint: allow
+   stale-effect-capture — <reason>`. Plan: `plan-use-reactive-effect.md`.
 
-7. **Render-time `signal.read()` that subscribes the parent to a signal
-   used only for a hook key (or one-shot snapshot).** The `.read()` at
-   the top of a render body silently subscribes the WHOLE component to
-   the signal. Any subsequent write to that signal — even one the
-   component itself triggers via async cascade — re-renders the parent,
-   re-runs the read, infinite loop. Surfaced 2026-04-25 by the Teams
-   server-switch crash: `use_member_list_effect` did
-   `app_state.read().nav.selected_channel.cloned()` for its
-   `use_spawn_once` key. After `load_server_data`'s terminal
-   `pending.apply()` wrote `app_state.nav.selected_channel`, ChatView
-   re-rendered, the read re-fired the subscription. Bisect captured
-   1408× ChatView re-renders for 1× `load_server_data` call.
-   **Countermeasure (Phases 1+2 shipped, `docs/plans/plan-peek-vs-read.md`):**
-   Use `.peek()` instead of `.read()` whenever the value isn't needed
-   reactively (hook keys, one-shot snapshots, values passed unchanged
-   to a child that has its own subscription). Phase 1 lint
-   `tools/scripts/forbid-render-time-read.sh` (commit `800b8b41`)
-   flags every render-time `.read()` in `crates/core/src/ui/` with
-   allowlist exceptions for the legitimate cases (rsx! formatting,
-   conditional rendering, child-component prop threading where
-   subscription IS the intent). Currently `continue-on-error: true`
-   with 988 pre-existing sites allowlisted as MEDIUM (rsx! / cond
-   rendering); 3 HIGH sites already migrated to `.peek()`. Inline
-   allowlist: `// poly-lint: allow render-time-read — <reason>`. Type-
-   system newtype option not viable: `peek` and `read` return identical
-   guards; the difference is a hidden side-effect on the reactive graph
-   that Rust types can't encode without Dioxus internals changes.
+7. **Render-time `signal.read()` for a value used only as a hook key /
+   one-shot snapshot.** The render-body `.read()` subscribes the WHOLE
+   component; any later write to that signal re-renders → re-reads → loop.
+   **Countermeasure:** use `.peek()` whenever the value isn't needed
+   reactively (hook keys, one-shot snapshots, props the child re-subscribes
+   to). Lint `forbid-render-time-read.sh` (continue-on-error; ~988 legit
+   rsx!/cond-render sites allowlisted); inline allow: `// poly-lint: allow
+   render-time-read — <reason>`. (No type-system fix: `peek`/`read` return
+   identical guards.) Plan: `plan-peek-vs-read.md`.
 
-8. **`use_effect` body that subscribes to signal `S` and writes `S` with
-   no value-equality check.** `BatchedSignal::batch` always notifies
-   subscribers regardless of whether the closure actually changed the
-   value. An effect that reads `S` (subscribing) and unconditionally
-   writes `S` will re-fire after its own write — forever — UNLESS the
-   body's early-return guard fires for the steady state. When the guard
-   has a hole (e.g. `messages_loaded` for an empty channel), the loop
-   pegs the WASM scheduler and CDP wedges. Surfaced 2026-04-25 by the
-   Teams T001/CH002 click hang: `use_history_state_effect` early-
-   returned only when `messages_loaded == true`, but for an empty
-   channel `messages.is_empty()` so `messages_loaded` stayed `false`,
-   the effect re-wrote `history_state` every render, every write
-   re-fired the effect. Bisect captured 3162 ChatView re-renders for
-   1× `load_server_data` call. Distinct from #2 (read-guard scoping —
-   that's about borrow-rule panics from a live read across a write of
-   the same signal in one scope) and #6 (stale closure capture — that's
-   about effects NOT re-firing when they should).
-   **Countermeasure (Phases 1+2 shipped with CI gate):**
-   `BatchedSignal::set_if_changed(next)` and
-   `batch_if_changed(|cur| -> next)` — both compare `next` against the
-   current value and skip the write when equal, so subscribers don't
-   re-notify and self-write effects converge. Requires `T: PartialEq`.
-   Phase 1 (commit `16e774a5`): helper API + 2 migration sites in
-   `use_history_state_effect`. Phase 2 lint
-   `tools/scripts/forbid-effect-self-write.sh` flags any `use_effect`
-   body that reads signal `X` and writes `X` via raw `.set(`/`.batch(`
-   instead of `_if_changed`. Currently `continue-on-error: true` with
-   8 known-safe sites allowlisted (converging state machines + spawn-only
-   writes). Inline allowlist convention:
+8. **`use_effect` that subscribes to `S` and writes `S` with no equality
+   check.** `batch` always notifies subscribers, so a self-writing effect
+   re-fires forever unless its early-return guard covers the steady state
+   (classic hole: `messages_loaded` stays false for an empty channel).
+   Distinct from #2 (borrow panic) and #6 (effect NOT re-firing).
+   **Countermeasure:** `BatchedSignal::set_if_changed(next)` /
+   `batch_if_changed(|cur| -> next)` skip the write when unchanged (needs
+   `T: PartialEq`). Lint `forbid-effect-self-write.sh`; inline allow:
    `// poly-lint: allow effect-self-write — <reason>`.
 
 **Last-resort diagnostic path — the out-of-band trace sink.** When a hang
@@ -791,66 +698,31 @@ or ask the user to paste a stack trace from the Sources panel.
 
 ## Persona-subsystem footguns
 
-The persona subsystem (`mcp/chat-mcp/src/persona/`, `mcp/chat-mcp/src/tools.rs`)
-has its own class of footguns analogous to the WASM hang classes above.
-These are **privacy and contract bugs**, not concurrency bugs, but the
-countermeasure pattern is identical: allowlisted regex lints that hard-fail CI.
-All three lints ship with `continue-on-error: false` — the code is new,
-no legacy debt to grandfather.
+Persona subsystem (`mcp/chat-mcp/src/persona/`, `mcp/chat-mcp/src/tools.rs`):
+**privacy and contract bugs** (not concurrency). Same countermeasure shape —
+allowlisted regex lints, all hard-fail CI (`continue-on-error: false`).
+Plan: `docs/plans/plan-persona-quality-gates.md`.
 
-### P1 — Cross-persona memory leak
+- **P1 — Cross-persona memory leak.** DML (`SELECT`/`DELETE`/`UPDATE`) against
+  a persona-scoped table (`persona_facts`, `persona_audit`, `persona_sources`,
+  `persona_tool_whitelist`, `persona_outbound_allowlist`) WITHOUT a
+  `WHERE persona_slug = ?` binding hits the wrong persona's rows — silent, no
+  error. Lint `forbid-cross-persona-memory.sh` (requires a `persona_slug`
+  binding within 10 lines); allowlist `cross-persona-memory-allowlist.txt`;
+  inline: `// poly-lint: allow cross-persona-memory — <reason>`.
 
-**Symptom:** A `SELECT`, `DELETE`, or `UPDATE` against a persona-scoped
-table (`persona_facts`, `persona_audit`, `persona_sources`,
-`persona_tool_whitelist`, `persona_outbound_allowlist`) without a
-`WHERE persona_slug = ?` binding returns or mutates rows belonging to a
-different persona. Silent data corruption — no error, wrong persona gets
-the facts / audit rows.
+- **P2 — Unaudited persona handler.** A `fn handle_meta_persona_*` that mutates
+  persona state but doesn't call `audit()` / `record_persona_audit()` on the
+  success path → the `persona_audit` forensic trail silently loses an event.
+  Lint `forbid-unaudited-persona-tool.sh`; read-only handlers (`_list`,
+  `_recent_actions`) in `unaudited-persona-tool-allowlist.txt`; inline:
+  `// poly-lint: allow unaudited-persona-tool — <reason>`.
 
-**Countermeasure (shipped with CI gate, Phase Q.1 of
-`docs/plans/plan-persona-quality-gates.md`):**
-`tools/scripts/forbid-cross-persona-memory.sh` scans
-`mcp/chat-mcp/src/` for DML targeting persona-scoped tables and
-fails CI if no `persona_slug` binding appears within 10 lines.
-Intentional exceptions (e.g. time-based audit pruning) live in
-`tools/scripts/cross-persona-memory-allowlist.txt` with rationale
-comments. Inline escape: `// poly-lint: allow cross-persona-memory — <reason>`.
-
-### P2 — Unaudited persona handler
-
-**Symptom:** A new `fn handle_meta_persona_*` function in
-`mcp/chat-mcp/src/tools.rs` mutates persona state but does not call
-`audit()` or `record_persona_audit()` on the success path. The
-`persona_audit` table is the forensic trail for "who did what to which
-persona when"; a missing row silently drops an event and makes the
-audit trail incomplete. No runtime error — the call succeeds, data
-changes, audit is dark.
-
-**Countermeasure (shipped with CI gate, Phase Q.2 of
-`docs/plans/plan-persona-quality-gates.md`):**
-`tools/scripts/forbid-unaudited-persona-tool.sh` extracts every
-`handle_meta_persona_*` function body and fails CI if none of
-`audit(mem,` or `record_persona_audit(` appears inside it.
-Read-only handlers that genuinely need no audit row (`_list`,
-`_recent_actions`) are explicitly allowlisted in
-`tools/scripts/unaudited-persona-tool-allowlist.txt` with rationale.
-Inline escape: `// poly-lint: allow unaudited-persona-tool — <reason>`.
-
-### P4 — Raw backend read in persona builder
-
-**Symptom:** `BackendPoolProvider` in `mcp/chat-mcp/src/persona/context.rs`
-calls a chat backend method (e.g. `get_messages`, `get_channels`) without
-wrapping the call in `tokio::time::timeout`. The chat-mcp server is
-native (not WASM), so there is no single-thread scheduler to wedge — but
-an unresponsive backend still blocks the async runtime thread indefinitely,
-hanging the MCP tool call and preventing any further persona invocations.
-
-**Countermeasure (shipped with CI gate, Phase Q.4 of
-`docs/plans/plan-persona-quality-gates.md`):**
-`tools/scripts/forbid-raw-backend-read.sh` now scans BOTH
-`crates/core/src/ui/` (original WASM-hang gate, hang class #4) AND
-`mcp/chat-mcp/src/persona/` (Q.4 extension). All backend calls in
-`BackendPoolProvider` already use `tokio::time::timeout(BACKEND_TIMEOUT,
-…)` (5-second cap). The existing allowlist
-`tools/scripts/raw-backend-read-allowlist.txt` covers both scopes.
-Inline escape: `// poly-lint: allow raw backend.read().await — <reason>`.
+- **P4 — Raw backend read in persona builder.** `BackendPoolProvider`
+  (`persona/context.rs`) calling a backend method without
+  `tokio::time::timeout` blocks the native async runtime thread indefinitely
+  (no WASM scheduler here, but still hangs the MCP call). Use
+  `tokio::time::timeout(BACKEND_TIMEOUT, …)` (5s). Lint
+  `forbid-raw-backend-read.sh` scans `persona/` too; allowlist
+  `raw-backend-read-allowlist.txt`; inline: `// poly-lint: allow raw
+  backend.read().await — <reason>`.
