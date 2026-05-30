@@ -93,9 +93,8 @@ mod native_impl {
                  FROM drafts
                  WHERE account_id=?1 AND status='pending'
                  ORDER BY id"
-            ) {
-                Ok(s) => s,
-                Err(_) => return Vec::new(),
+            ) else {
+                return Vec::new();
             };
             if stmt.bind((1, account_id)).is_err() { return Vec::new(); }
 
