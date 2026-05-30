@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Summary row returned by `meta_persona_list`.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PersonaSummary {
     pub slug: String,
     pub name: String,
@@ -43,7 +43,7 @@ pub struct PersonaDetail {
 }
 
 /// A source binding row.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PersonaSource {
     pub id: i64,
     pub account_id: String,
@@ -53,7 +53,7 @@ pub struct PersonaSource {
 }
 
 /// A persona fact row.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PersonaFact {
     pub id: i64,
     pub category: Option<String>,
@@ -63,7 +63,7 @@ pub struct PersonaFact {
 }
 
 /// An audit log row.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AuditRow {
     pub id: i64,
     pub occurred_at: String,

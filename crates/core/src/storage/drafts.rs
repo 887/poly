@@ -15,7 +15,7 @@
 use serde::{Deserialize, Serialize};
 
 /// A pending draft as stored in the `drafts` table.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Draft {
     pub id:           i64,
     pub account_id:   String,

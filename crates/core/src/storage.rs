@@ -690,7 +690,7 @@ pub struct AccountToken {
 ///
 /// Persisted under the key `"backup_servers"` as a JSON array.
 /// Identified by `url` — upsert replaces the entry with the same URL.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BackupServerRecord {
     /// Base URL (e.g. `"http://backup.example.com:8080"`).
     pub url: String,
