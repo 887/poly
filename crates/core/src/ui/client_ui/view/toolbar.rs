@@ -94,13 +94,13 @@ pub fn ViewToolbar(
     {
         let mut f = selected_filter.write();
         if f.is_none() {
-            *f = default_filter.clone();
+            f.clone_from(&default_filter);
         }
     }
     {
         let mut t = selected_tab.write();
         if t.is_none() {
-            *t = default_tab.clone();
+            t.clone_from(&default_tab);
         }
     }
 
