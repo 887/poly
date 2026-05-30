@@ -73,8 +73,7 @@ fn ensure_wasm_built(crate_name: &str) -> Result<(), Box<dyn std::error::Error>>
         return Err(format!("cargo component build -p {crate_name} failed").into());
     }
 
-    let mut guard = set.lock().map_err(|e| e.to_string())?;
-    guard.insert(crate_name.to_string());
+    set.lock().map_err(|e| e.to_string())?.insert(crate_name.to_string());
     Ok(())
 }
 

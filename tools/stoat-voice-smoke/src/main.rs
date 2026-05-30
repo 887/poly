@@ -65,6 +65,15 @@ async fn main() -> anyhow::Result<()> {
     run_smoke().await
 }
 
+// smoke-test driver: one long linear scenario (spin up mock, run voice
+// session, assert). cognitive_complexity / useless_let_if_seq (repeated
+// assert blocks) / wildcard_enum_match_arm (log-everything-else) are all
+// fine for a test harness; not worth fragmenting.
+#[allow(
+    clippy::cognitive_complexity,
+    clippy::useless_let_if_seq,
+    clippy::wildcard_enum_match_arm
+)]
 async fn run_smoke() -> anyhow::Result<()> {
     info!("Starting test-stoat mock server...");
 
@@ -128,7 +137,7 @@ async fn run_smoke() -> anyhow::Result<()> {
         match ev {
             ClientEvent::VoiceUserJoined { channel_id, participant } => {
                 info!(channel_id = %channel_id, user = %participant.user.id, "VoiceUserJoined received");
-                participant_join_events += 1;
+                participant_join_events = participant_join_events.saturating_add(1);
             }
             ClientEvent::VoiceSpeakingUpdate { user_id, is_speaking, .. } => {
                 info!(user_id = %user_id, is_speaking, "VoiceSpeakingUpdate received");

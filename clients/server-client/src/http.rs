@@ -209,6 +209,9 @@ impl PolyServerHttpClient {
     }
 
     /// `POST /auth/challenge` + `POST /auth/verify` — Ed25519 challenge-response signin.
+    // cognitive_complexity: one linear challenge→sign→verify→parse flow; the
+    // steps share request state and read clearer as a single sequence.
+    #[allow(clippy::cognitive_complexity)]
     pub async fn signin(&self, selected_user_id: Option<&str>) -> Result<AuthResponse> {
         let pk_hex = self.public_key_hex();
 
