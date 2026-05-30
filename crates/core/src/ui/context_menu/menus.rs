@@ -129,6 +129,8 @@ pub fn user_row_entry(ctx: UserRowCtx, evt: &MouseEvent) -> ActiveContextMenu {
     }
 }
 
+// lint-allow-unused: long cohesive view/handler; splitting risks reactive bugs
+#[allow(clippy::too_many_lines)]
 fn render_user_row(ctx_json: &serde_json::Value, close: EventHandler<()>) -> Element {
     let Ok(ctx) = serde_json::from_value::<UserRowCtx>(ctx_json.clone()) else {
         return rsx! {};

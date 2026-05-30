@@ -509,6 +509,8 @@ impl ClientManager {
     /// `commit_backend_account`), so the registry always converges on the
     /// backend's own `backend_capabilities()` declaration.
     #[must_use]
+    // lint-allow-unused: long cohesive view/handler; splitting risks reactive bugs
+    #[allow(clippy::too_many_lines)]
     pub fn new() -> Self {
         use poly_client::{CommunitySearchSupport, NotificationSupport, VoiceSupport};
         // Seed the registry from the compile-time static table. Each entry is

@@ -106,6 +106,8 @@ async fn resolve_direct_message_for_active_account(
 }
 
 /// Resolve/open the DM for a target user and navigate to the pending direct-call route.
+// lint-allow-unused: Dioxus props/handler arity; grouping into a struct adds churn
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn navigate_to_pending_direct_call_from_active_account(
     request: DirectCallRequest,
     nav_state: BatchedSignal<NavState>,
@@ -329,6 +331,8 @@ async fn maybe_start_video_camera(start_video: bool, voice_state: BatchedSignal<
 /// When `allow_add_to_active_temporary` is true and the current active call is
 /// already a temporary call, selecting another user adds them to that call
 /// instead of parking the current call and creating a new one.
+// lint-allow-unused: long cohesive view/handler; splitting risks reactive bugs
+#[allow(clippy::too_many_lines)]
 pub(crate) fn start_direct_call_from_active_account(
     request: DirectCallRequest,
     nav_state: BatchedSignal<NavState>,

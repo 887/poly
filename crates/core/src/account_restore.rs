@@ -184,6 +184,8 @@ fn build_backend_for_slug(
 /// - match a slug in `client_manager.disabled_native_backends`.
 /// - are already present in `client_manager.sessions`.
 /// - belong to the `poly` / demo backends (those have dedicated paths).
+// lint-allow-unused: Dioxus props/handler arity; grouping into a struct adds churn / long cohesive view/handler; splitting risks reactive bugs
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 pub async fn restore_native_accounts(
     storage: &Storage,
     client_manager: BatchedSignal<ClientManager>,

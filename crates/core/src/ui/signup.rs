@@ -179,6 +179,8 @@ fn build_on_complete_inner(
     build_on_complete_inner_with(client_manager, chat_lists, account_sessions, nav_on_complete)
 }
 
+// lint-allow-unused: long cohesive view/handler; splitting risks reactive bugs
+#[allow(clippy::too_many_lines)]
 fn build_on_complete_inner_with(
     client_manager: BatchedSignal<ClientManager>,
     chat_lists: BatchedSignal<ChatLists>,

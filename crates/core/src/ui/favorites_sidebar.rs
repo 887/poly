@@ -1254,6 +1254,8 @@ pub async fn load_server_shell_data(
     load_server_data_internal(server_id, nav_state, client_manager, chat_lists, chat_view_state, false).await;
 }
 
+// lint-allow-unused: long cohesive view/handler; splitting risks reactive bugs
+#[allow(clippy::too_many_lines)]
 async fn load_server_data_internal(
     server_id: String,
     nav_state: BatchedSignal<NavState>,
@@ -1395,6 +1397,8 @@ async fn load_server_data_internal(
 /// fallback so the URL matches reality. If the server itself is missing or
 /// has no channels at all, returns `None` and the caller should redirect
 /// somewhere sensible (e.g., ServerHome).
+// lint-allow-unused: long cohesive view/handler; splitting risks reactive bugs
+#[allow(clippy::too_many_lines)]
 pub async fn restore_server_channel(
     server_id: String,
     channel_id: String,

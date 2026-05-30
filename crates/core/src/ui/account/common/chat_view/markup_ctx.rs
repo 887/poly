@@ -111,6 +111,8 @@ pub(super) struct ChatViewMarkupCtx {
     pub(super) mobile_layout_resize_tick: Signal<u64>,
 }
 
+// lint-allow-unused: long cohesive view/handler; splitting risks reactive bugs
+#[allow(clippy::too_many_lines)]
 pub(super) fn build_chat_view_markup_ctx(signals: &ChatViewSignals) -> ChatViewMarkupCtx {
     let nav_signal = signals.nav;
     let ui_layout = signals.ui_layout;

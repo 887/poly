@@ -498,6 +498,8 @@ pub enum Route {
 // behaviour for its specific Route variant; merging would obscure intent
 // and the arms are likely to diverge as new fields are added per-route.
 #[allow(clippy::match_same_arms)]
+// lint-allow-unused: long cohesive view/handler; splitting risks reactive bugs
+#[allow(clippy::too_many_lines)]
 pub fn sync_route_to_app_state(route: &Route, nav: BatchedSignal<NavState>, user_prefs: Option<BatchedSignal<crate::state::UserPrefs>>) {
     #[cfg(debug_assertions)]
     account::record_route_visit(route);

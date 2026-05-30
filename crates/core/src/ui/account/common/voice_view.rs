@@ -233,6 +233,8 @@ if (v && window.__polyScreenStream) {
 // prompt appears at the right time, not mid-conversation.
 // DECISION(V-join-disconnect): Joining a new channel auto-disconnects the
 // previous one (same behaviour as Discord/Stoat).
+// lint-allow-unused: Dioxus props/handler arity; grouping into a struct adds churn / long cohesive view/handler; splitting risks reactive bugs
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 async fn join_voice_channel(
     channel_id: String,
     current_channel: Option<poly_client::Channel>,

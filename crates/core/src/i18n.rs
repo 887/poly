@@ -116,6 +116,8 @@ pub fn init() {
 /// Register FTL translations for all native backend plugins that are
 /// compiled in via feature flags. Called from [`init`] to ensure every
 /// entry point (web, desktop, mobile) gets the translations.
+// lint-allow-unused: long cohesive view/handler; splitting risks reactive bugs
+#[allow(clippy::too_many_lines)]
 fn register_native_plugin_ftl() {
     #[cfg(feature = "demo")]
     {

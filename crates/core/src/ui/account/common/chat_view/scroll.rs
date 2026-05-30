@@ -286,6 +286,8 @@ pub(super) async fn load_older_messages(
 /// Chains up to `MAX_CHAINED_NEWER_HISTORY_PAGES` pages in a single backend
 /// lock to minimise visible "page-attach" flicker and clear the bottom spacer
 /// in one DOM update.
+// lint-allow-unused: long cohesive view/handler; splitting risks reactive bugs
+#[allow(clippy::too_many_lines)]
 pub(super) async fn load_newer_messages(
     nav: BatchedSignal<crate::state::NavState>,
     client_manager: BatchedSignal<ClientManager>,

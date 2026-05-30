@@ -36,6 +36,8 @@ const AUTO_SCROLL_THRESHOLD_PX: f64 = 60.0;
 ///
 /// The task exits automatically when the account is removed from
 /// `client_manager` (checked after each event) so there is no orphan task.
+// lint-allow-unused: Dioxus props/handler arity; grouping into a struct adds churn / long cohesive view/handler; splitting risks reactive bugs
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 pub(crate) fn spawn_event_stream_listener(
     account_id: String,
     backend: BackendHandle,

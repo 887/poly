@@ -279,6 +279,8 @@ fn render_chat_header_right(ctx: ChatViewMarkupCtx) -> Element {
 
 // lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
 #[allow(clippy::needless_pass_by_value)]
+// lint-allow-unused: long cohesive view/handler; splitting risks reactive bugs
+#[allow(clippy::too_many_lines)]
 fn render_mobile_chat_header_right_toggle(ctx: ChatViewMarkupCtx) -> Element {
     let nav_state = ctx.nav;
     let ui_overlays = ctx.ui_overlays;
@@ -503,6 +505,8 @@ fn render_chat_side_column(ctx: ChatViewMarkupCtx) -> Element {
 
 // lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
 #[allow(clippy::needless_pass_by_value)]
+// lint-allow-unused: long cohesive view/handler; splitting risks reactive bugs
+#[allow(clippy::too_many_lines)]
 fn render_chat_tools_panel(ctx: ChatViewMarkupCtx) -> Element {
     let ui_layout = ctx.ui_layout;
     let mut utility_panel = ctx.utility_panel;

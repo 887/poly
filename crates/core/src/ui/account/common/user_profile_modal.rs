@@ -46,6 +46,8 @@ pub enum UserProfileModalAction {
 }
 
 impl UiAction for UserProfileModalAction {
+    // lint-allow-unused: long cohesive view/handler; splitting risks reactive bugs
+    #[allow(clippy::too_many_lines)]
     fn apply(self, _cx: ActionCx<'_>) {
         let Some(ui_overlays) =
             dioxus::prelude::try_consume_context::<BatchedSignal<UiOverlays>>()

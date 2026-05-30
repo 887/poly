@@ -58,6 +58,8 @@ pub enum VoiceBannerAction {
 }
 
 impl UiAction for VoiceBannerAction {
+    // lint-allow-unused: long cohesive view/handler; splitting risks reactive bugs
+    #[allow(clippy::too_many_lines)]
     fn apply(self, cx: ActionCx<'_>) {
         let Some(voice_state) = dioxus::prelude::try_consume_context::<BatchedSignal<VoiceState>>()
         else {

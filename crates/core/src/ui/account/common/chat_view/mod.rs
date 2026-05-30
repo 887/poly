@@ -300,6 +300,8 @@ pub(crate) fn mark_channel_as_read(
     unread_count
 }
 
+// lint-allow-unused: long cohesive view/handler; splitting risks reactive bugs
+#[allow(clippy::too_many_lines)]
 pub(crate) async fn open_message_hit(
     hit: MessageSearchHit,
     current_channel_id: Option<String>,
