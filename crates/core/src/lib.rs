@@ -50,6 +50,12 @@
     clippy::single_match_else,
     // pedantic taste: `if !cond { A } else { B }` is sometimes the clearer order.
     clippy::if_not_else,
+    // restriction: build-baked FTL locale consts (i18n/baked_locales_*.rs) are
+    // generated single string literals; hash count is mechanical, not a code smell.
+    clippy::needless_raw_string_hashes,
+    // pedantic: short single-char locals (date-component y/mo/d/h/m/s parsing) are
+    // clearer than verbose names in tight numeric-parse scopes.
+    clippy::many_single_char_names,
 )]
 #![cfg_attr(
     test,
