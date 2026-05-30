@@ -603,6 +603,10 @@ fn AddAccountNav(selected_slug: Option<String>) -> Element {
     // guard drops before the rsx! `for` loop — iterating the lazy chain directly
     // would hold the read guard across render.
     #[allow(clippy::needless_collect)]
+    // The collect is load-bearing: it materialises the rows so the `manager.read()`
+    // guard drops before the rsx! `for` loop — iterating the lazy chain directly
+    // would hold the read guard across render.
+    #[allow(clippy::needless_collect)]
     let entries: Vec<(String, String, String, String)> = manager
         .signup_entries
         .iter()
