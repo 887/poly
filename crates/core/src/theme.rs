@@ -16,6 +16,7 @@
 // DECISION(D9b): Each preset has dark+light variant; Monotone replaces Custom.
 
 use std::fmt::Write as _;
+use std::fmt::Write as _;
 use serde::{Deserialize, Serialize};
 
 /// Available theme presets.
