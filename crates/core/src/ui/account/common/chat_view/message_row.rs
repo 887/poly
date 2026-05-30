@@ -250,6 +250,8 @@ fn render_full_message_body(
     }
 }
 
+// lint-allow-unused: owned args are moved into the rsx! closure (clone-into-render pattern)
+#[allow(clippy::needless_pass_by_value)]
 fn render_grouped_message_body(
     ctx: ChatViewMarkupCtx,
     msg: Message,

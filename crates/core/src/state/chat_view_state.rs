@@ -106,6 +106,8 @@ impl ChatViewState {
     /// ```ignore
     /// chat_view.batch(|cv| cv.apply(ChatAction::ClearChannelContext));
     /// ```
+    // lint-allow-unused: ChatAction is consumed by the match; by-value is correct
+    #[allow(clippy::needless_pass_by_value)]
     pub fn apply(&mut self, action: ChatAction) {
         match action {
             ChatAction::ClearChannelContext => {
