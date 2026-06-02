@@ -3,7 +3,7 @@
 # This crate is DELIBERATELY EXCLUDED from the workspace root
 # (see root Cargo.toml → [workspace.exclude]). cargo fuzz requires a
 # nightly toolchain, and pulling this into the stable workspace would
-# force rust-version = "1.85" to be abandoned. The pattern mirrors
+# force rust-version = "1.91" to be abandoned. The pattern mirrors
 # `tools/lints/poly-lints/` which is excluded for the same reason.
 #
 # Local usage:
