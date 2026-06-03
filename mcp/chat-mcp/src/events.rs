@@ -157,8 +157,8 @@ fn channel_id_of(ev: &ClientEvent) -> Option<String> {
         | ClientEvent::TypingStarted { channel_id, .. }
         | ClientEvent::VoiceUserJoined { channel_id, .. }
         | ClientEvent::VoiceUserLeft { channel_id, .. }
-        | ClientEvent::VoiceStateUpdated { channel_id, .. } => Some(channel_id.clone()),
-        ClientEvent::VoiceSpeakingUpdate { channel_id, .. } => Some(channel_id.clone()),
+        | ClientEvent::VoiceStateUpdated { channel_id, .. }
+        | ClientEvent::VoiceSpeakingUpdate { channel_id, .. } => Some(channel_id.clone()),
         ClientEvent::PresenceChanged { .. }
         | ClientEvent::NotificationReceived(_)
         | ClientEvent::ChannelUpdated(_)
@@ -498,7 +498,7 @@ mod tests {
 
         let ev = make_event("acc", EventKind::TypingStarted, None, -500);
         let seq = ev.seq_ms;
-        store.publish(ev.clone());
+        store.publish(ev);
 
         // Poll with since_ms == seq means "strictly after seq", so 0 results.
         let results = store.poll("s", seq, 100).unwrap();

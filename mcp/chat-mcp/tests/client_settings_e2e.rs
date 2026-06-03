@@ -8,7 +8,7 @@
 //! Audit-row assertions query the `MemoryDb` (SQLite in-memory) directly after
 //! each `set_*` tool call.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing, clippy::uninlined_format_args, clippy::significant_drop_tightening)]
 
 use std::{
     collections::HashMap,

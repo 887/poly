@@ -1,4 +1,6 @@
 //! chat_notes and chat_summaries CRUD.
+// MutexGuard held for full function body — intentional for SQLite connection locking.
+#![allow(clippy::significant_drop_tightening)]
 
 use super::helpers::{collect_notes, drain, now_iso8601};
 use super::{MemoryDb, MemoryError};

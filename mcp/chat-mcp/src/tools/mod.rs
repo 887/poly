@@ -231,7 +231,9 @@ pub fn tool_list_for_backend(slug: &str) -> Vec<Value> {
 
 // ─── Tool list ────────────────────────────────────────────────────────────────
 
+// tool_list enumerates every tool — long by design, not a complexity issue.
 #[must_use]
+#[allow(clippy::too_many_lines)]
 pub fn tool_list() -> Vec<Value> {
     vec![
         // Account management
@@ -1404,6 +1406,8 @@ pub fn tool_list() -> Vec<Value> {
 
 // ─── Dispatch ─────────────────────────────────────────────────────────────────
 
+// dispatch is a match over every tool name — cognitive complexity is structural.
+#[allow(clippy::cognitive_complexity)]
 pub async fn dispatch(tool: &str, args: &Value, pool: &mut BackendPool, mem: &MemoryDb) -> Value {
     match tool {
         "login" => chat::handle_login(args, pool).await,

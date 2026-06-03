@@ -1,4 +1,6 @@
 //! Draft queue tool handlers (Phase B).
+// Handlers use match-on-Option for early returns in async contexts.
+#![allow(clippy::manual_let_else, clippy::option_if_let_else)]
 
 use crate::memory::MemoryDb;
 use crate::state::BackendPool;
@@ -17,15 +19,15 @@ pub(super) fn future_iso8601(secs: u64) -> String {
         .unwrap_or_default()
         .as_secs()
         .saturating_add(secs);
-    let s = total % 60;
-    let m = (total / 60) % 60;
-    let h = (total / 3600) % 24;
+    let ss = total % 60;
+    let mm = (total / 60) % 60;
+    let hh = (total / 3600) % 24;
     let days = total / 86400;
 
     // Reuse the Gregorian calendar helper from memory.rs via a local copy.
-    let z = days + 719_468;
-    let era = z / 146_097;
-    let doe = z % 146_097;
+    let zz = days + 719_468;
+    let era = zz / 146_097;
+    let doe = zz % 146_097;
     let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146_096) / 365;
     let y = yoe + era * 400;
     let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
@@ -33,9 +35,11 @@ pub(super) fn future_iso8601(secs: u64) -> String {
     let d = doy - (153 * mp + 2) / 5 + 1;
     let mo = if mp < 10 { mp + 3 } else { mp - 9 };
     let y = if mo <= 2 { y + 1 } else { y };
-    format!("{y:04}-{mo:02}-{d:02}T{h:02}:{m:02}:{s:02}Z")
+    format!("{y:04}-{mo:02}-{d:02}T{hh:02}:{mm:02}:{ss:02}Z")
 }
 
+// No .await in body; kept async for uniformity with other dispatch-arm handlers.
+#[allow(clippy::unused_async)]
 pub(super) async fn handle_draft_create(args: &Value, pool: &BackendPool, mem: &MemoryDb) -> Value {
     let account_id   = match str_arg(args, "account_id")   { Some(v) => v, None => return err_result("missing 'account_id'") };
     let chat_id      = match str_arg(args, "chat_id")      { Some(v) => v, None => return err_result("missing 'chat_id'") };

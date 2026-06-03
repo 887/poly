@@ -293,7 +293,7 @@ impl PersonaBackendProvider for BackendPoolProvider<'_> {
                 ts: m.timestamp.to_rfc3339(),
                 text: match m.content {
                     poly_client::MessageContent::Text(t) => t,
-                    _ => String::new(),
+                    poly_client::MessageContent::WithAttachments { .. } => String::new(),
                 },
             })
             .collect())
@@ -428,6 +428,8 @@ fn selector_matches(row: &PersonaSourceRow, chat_id: &str) -> bool {
 /// - `"channel"` → the channel directly
 /// - `"dm"`      → DM channel directly
 /// - `"tag"`     → future; skipped with a warning for now
+// resolve_sources is a complex multi-case source resolver; structural length/complexity.
+#[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 async fn resolve_sources(
     slug: &str,
     sources: &[Value],
@@ -579,10 +581,7 @@ async fn resolve_sources(
                 }
             }
             "server" => {
-                let server_id = match value {
-                    Some(v) => v,
-                    None => continue,
-                };
+                let Some(server_id) = value else { continue };
                 let channels = match timeout(BACKEND_TIMEOUT, provider.list_channels(&account_id, &server_id)).await {
                     Ok(Ok(c)) => c,
                     Ok(Err(e)) => {
@@ -682,6 +681,8 @@ fn estimate_size(chats: &[ChatEntry]) -> usize {
 ///
 /// This is the function `handle_meta_persona_invoke` in `tools.rs` calls
 /// after Phase B's persona-exists + enabled checks pass.
+// build assembles many context fields — long and complex by design.
+#[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 pub async fn build(
     req: PersonaContextRequest,
     mem: &MemoryDb,
@@ -860,7 +861,7 @@ pub async fn build(
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing, clippy::needless_collect)]
 
     use super::*;
     use crate::memory::MemoryDb;

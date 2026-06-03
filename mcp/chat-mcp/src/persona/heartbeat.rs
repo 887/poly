@@ -3,6 +3,8 @@
 //! `HeartbeatRegistry` owns one tokio task per enabled persona that has
 //! `heartbeat_interval_secs > 0`. Each task runs a wall-clock-aligned
 //! `tokio::time::interval` and calls the built-in summariser on every tick.
+// Complex if-let blocks in the heartbeat loop are clearer than map_or_else chains.
+#![allow(clippy::option_if_let_else)]
 //!
 //! ## Design decision — F.7 polling vs MPSC
 //!
@@ -172,6 +174,8 @@ pub fn in_quiet_hours() -> bool {
 /// 4. Checks rate limit (F.5) and quiet hours (F.6).
 /// 5. Persists outputs based on `proactivity`.
 /// 6. Updates `last_run_at` and writes `heartbeat_run` audit row.
+// Heartbeat event loop — long and complex by design; not a god function.
+#[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 async fn run_heartbeat_task<P>(
     slug: String,
     first_tick: Instant,
@@ -468,7 +472,7 @@ async fn run_heartbeat_task<P>(
 struct HeartbeatEntry {
     handle: JoinHandle<()>,
     /// Dropped to signal the worker to stop.
-    _cancel_tx: oneshot::Sender<()>,
+    cancel_tx: oneshot::Sender<()>,
 }
 
 /// Registry of per-persona heartbeat tasks.
@@ -523,7 +527,7 @@ impl HeartbeatRegistry {
 
         self.entries.insert(
             slug.to_string(),
-            HeartbeatEntry { handle, _cancel_tx: cancel_tx },
+            HeartbeatEntry { handle, cancel_tx },
         );
         info!(slug, interval_secs, "heartbeat started");
     }
@@ -531,8 +535,8 @@ impl HeartbeatRegistry {
     /// Stop the heartbeat task for `slug` if one is running.  No-op otherwise.
     pub fn stop(&mut self, slug: &str) {
         if let Some(entry) = self.entries.remove(slug) {
-            // Drop _cancel_tx → closes channel → worker's select! fires.
-            drop(entry._cancel_tx);
+            // Drop cancel_tx → closes channel → worker's select! fires.
+            drop(entry.cancel_tx);
             entry.handle.abort();
             info!(slug, "heartbeat stopped");
         }
@@ -563,7 +567,7 @@ impl HeartbeatRegistry {
     /// spawns a task for each, and computes the first tick from `last_run_at`
     /// so a restart doesn't burst-fire all heartbeats at once.
     // poly-lint: provider arc passed by value because each spawned task takes its own clone.
-    #[allow(clippy::needless_pass_by_value)]
+    #[allow(clippy::needless_pass_by_value, clippy::cognitive_complexity)]
     pub fn start_all_enabled<P>(&mut self, mem: &MemoryDb, provider: Arc<P>)
     where
         P: PersonaBackendProvider + 'static,
@@ -631,6 +635,7 @@ impl Default for HeartbeatRegistry {
 /// - Otherwise compute `last_run_at + interval_secs`.  If that is in the past,
 ///   fire immediately (the persona is overdue).
 fn compute_first_tick(interval_secs: u64, last_run_at: Option<&str>) -> Instant {
+    use std::time::{SystemTime, UNIX_EPOCH};
     let Some(last_str) = last_run_at else {
         return Instant::now();
     };
@@ -640,7 +645,6 @@ fn compute_first_tick(interval_secs: u64, last_run_at: Option<&str>) -> Instant 
         return Instant::now();
     }
 
-    use std::time::{SystemTime, UNIX_EPOCH};
     let now_unix = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
@@ -676,7 +680,7 @@ fn parse_iso8601_to_unix(s: &str) -> Option<u64> {
     let sec   = parse_u64(&s[17..19])?;
 
     // Days since epoch via Gregorian calendar.
-    let days = ymd_to_days(year, month, day)?;
+    let days = ymd_to_days(year, month, day);
     Some(days * 86400 + hour * 3600 + min * 60 + sec)
 }
 
@@ -687,7 +691,7 @@ fn parse_u64(s: &str) -> Option<u64> {
 /// Convert (year, month, day) to days since 1970-01-01 (Gregorian).
 // poly-lint: textbook Gregorian-calendar algorithm (Hinnant); inputs are validated upstream.
 #[allow(clippy::arithmetic_side_effects, clippy::integer_division)]
-const fn ymd_to_days(y: u64, m: u64, d: u64) -> Option<u64> {
+const fn ymd_to_days(y: u64, m: u64, d: u64) -> u64 {
     // Port of the inverse algorithm used in memory.rs `days_to_ymd`.
     // Reference: https://howardhinnant.github.io/date_algorithms.html
     let (y, m) = if m <= 2 { (y - 1, m + 9) } else { (y, m - 3) };
@@ -695,7 +699,7 @@ const fn ymd_to_days(y: u64, m: u64, d: u64) -> Option<u64> {
     let yoe = y % 400;
     let doy = (153 * m + 2) / 5 + d - 1;
     let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    Some(era * 146_097 + doe - 719_468)
+    era * 146_097 + doe - 719_468
 }
 
 /// Convert Unix seconds to ISO-8601 UTC "YYYY-MM-DDTHH:MM:SSZ".

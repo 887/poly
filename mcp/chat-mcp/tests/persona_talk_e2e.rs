@@ -9,7 +9,7 @@
 //! This is the Rust-side integration (no Playwright/UI driving).
 //! It proves the full wire from overlay "Send" → `meta_persona_invoke` → bundle.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing, clippy::needless_collect)]
 
 use std::sync::Arc;
 

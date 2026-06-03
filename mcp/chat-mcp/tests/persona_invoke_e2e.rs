@@ -9,7 +9,7 @@
 //! The test follows the same pattern as `mcp_integration.rs`'s
 //! `phase_c_discord_message_received_via_poll_events`.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing, clippy::uninlined_format_args, clippy::needless_collect)]
 
 use std::sync::Arc;
 

@@ -34,6 +34,8 @@ pub const RETENTION_DAYS: u64 = 30;
 /// Run the prune loop forever (cancel by aborting the task handle).
 ///
 /// The loop fires immediately on start (prune backlog), then every 24 hours.
+// Prune loop — structural complexity from error handling in the event loop.
+#[allow(clippy::cognitive_complexity)]
 pub async fn run_forever(mem: MemoryDb) {
     let period = Duration::from_secs(24 * 3600);
     let mut ticker = interval(period);
@@ -91,7 +93,7 @@ const fn days_to_ymd(days: u64) -> (u64, u64, u64) {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::needless_collect)]
     use super::*;
 
     #[test]

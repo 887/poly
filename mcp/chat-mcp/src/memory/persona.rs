@@ -4,6 +4,8 @@
 //! replace the 10-parameter and 9-parameter positional signatures with
 //! named-field structs.  The old positional methods remain for compatibility
 //! with existing call sites; they forward to the builder path.
+// MutexGuard held for full function body — intentional for SQLite connection locking.
+#![allow(clippy::significant_drop_tightening)]
 
 use super::helpers::{
     bind_opt_str, collect_persona_audit, collect_persona_facts,
@@ -14,7 +16,7 @@ use super::{MemoryDb, MemoryError};
 // ─── Builder structs ──────────────────────────────────────────────────────────
 
 /// Named-field replacement for the 10-parameter `update_persona` signature.
-#[derive(Default)]
+#[derive(Default, Copy, Clone)]
 pub struct UpdatePersonaArgs<'a> {
     pub name:                    Option<&'a str>,
     pub avatar_emoji:            Option<&'a str>,
@@ -28,7 +30,7 @@ pub struct UpdatePersonaArgs<'a> {
 }
 
 /// Named-field replacement for the 9-parameter `query_persona_audit` signature.
-#[derive(Default)]
+#[derive(Default, Copy, Clone)]
 pub struct QueryPersonaAuditArgs<'a> {
     pub slug:           Option<&'a str>,
     pub action:         Option<&'a str>,
@@ -196,7 +198,7 @@ impl MemoryDb {
         };
         let fin_pro = args.proactivity.map_or(cur_pro, std::string::ToString::to_string);
         let fin_rl  = args.rate_limit_per_hour.unwrap_or(cur_rl);
-        let fin_en  = args.enabled.map_or(cur_enabled, |b| i64::from(b));
+        let fin_en  = args.enabled.map_or(cur_enabled, i64::from);
         let fin_lr: Option<String> = match args.last_run_at {
             Some(Some(v)) => Some(v.to_string()),
             Some(None)    => None,

@@ -153,7 +153,7 @@ struct SimEntry {
     /// Kept alive to signal the worker to abort gracefully.
     /// When dropped (on `stop` or same-chat cancellation), the channel closes
     /// and the worker's `try_recv` returns `Closed` on the next tick.
-    _abort_tx: tokio::sync::oneshot::Sender<()>,
+    abort_tx: tokio::sync::oneshot::Sender<()>,
 }
 
 // ─── Registry ────────────────────────────────────────────────────────────────
@@ -182,8 +182,8 @@ impl SimRegistry {
             .collect();
         for id in to_remove {
             if let Some(entry) = self.sims.remove(&id) {
-                // Drop _abort_tx (closes the channel) then abort the task.
-                drop(entry._abort_tx);
+                // Drop abort_tx (closes the channel) then abort the task.
+                drop(entry.abort_tx);
                 entry.handle.abort();
             }
         }
@@ -197,14 +197,14 @@ impl SimRegistry {
         abort_tx: tokio::sync::oneshot::Sender<()>,
     ) -> String {
         let id = new_sim_id();
-        self.sims.insert(id.clone(), SimEntry { handle, chat_id, _abort_tx: abort_tx });
+        self.sims.insert(id.clone(), SimEntry { handle, chat_id, abort_tx });
         id
     }
 
     /// Abort a simulation by id. Returns `true` if the id was found.
     pub fn stop(&mut self, sim_id: &str) -> bool {
         if let Some(entry) = self.sims.remove(sim_id) {
-            drop(entry._abort_tx);
+            drop(entry.abort_tx);
             entry.handle.abort();
             true
         } else {

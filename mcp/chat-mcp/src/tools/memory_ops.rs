@@ -1,4 +1,6 @@
 //! Memory tool handlers: contact facts, chat notes, summaries, context bundler.
+// Handlers use match-on-Option for early returns in async contexts.
+#![allow(clippy::manual_let_else, clippy::option_if_let_else)]
 
 use crate::memory::MemoryDb;
 use crate::state::BackendPool;

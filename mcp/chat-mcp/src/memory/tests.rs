@@ -1,5 +1,5 @@
 //! Integration tests for MemoryDb — all tables.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing, clippy::no_effect_underscore_binding)]
 
 use super::helpers::now_iso8601;
 use super::MemoryDb;

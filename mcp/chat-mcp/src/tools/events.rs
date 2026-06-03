@@ -1,5 +1,7 @@
 //! Event subscription/poll handlers (Phase C) + typing simulation (Phase D)
 //! + unread summary bundler (Phase F).
+// Handlers use match-on-Option for early returns; MutexGuard held intentionally.
+#![allow(clippy::manual_let_else, clippy::option_if_let_else, clippy::significant_drop_tightening)]
 
 use crate::events::{Subscription, new_subscription_id, parse_opt_event_kinds, parse_opt_string_vec};
 use crate::state::BackendPool;

@@ -17,12 +17,12 @@ pub(super) fn now_iso8601() -> String {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs();
-    let s = secs % 60;
-    let m = (secs / 60) % 60;
-    let h = (secs / 3600) % 24;
+    let ss = secs % 60;
+    let mm = (secs / 60) % 60;
+    let hh = (secs / 3600) % 24;
     let days = secs / 86400;
     let (y, mo, d) = days_to_ymd(days);
-    format!("{y:04}-{mo:02}-{d:02}T{h:02}:{m:02}:{s:02}Z")
+    format!("{y:04}-{mo:02}-{d:02}T{hh:02}:{mm:02}:{ss:02}Z")
 }
 
 /// Convert days since Unix epoch (1970-01-01) to (year, month, day).
@@ -126,6 +126,8 @@ pub(super) fn collect_drafts(
 /// Read a single `chat_style` row from a prepared statement already
 /// positioned at a row.  Column order:
 /// 0=tone 1=formality 2=emoji_allowed 3=signature 4=extra_notes 5=updated_at
+// sqlite::Statement::next()/read() require &mut self — clippy's suggestion is wrong here.
+#[allow(clippy::needless_pass_by_ref_mut)]
 pub(super) fn read_style_row(stmt: &mut sqlite::Statement<'_>) -> Result<serde_json::Value, MemoryError> {
     Ok(serde_json::json!({
         "tone":          stmt.read::<Option<String>, _>(0)?,
@@ -141,6 +143,8 @@ pub(super) fn read_style_row(stmt: &mut sqlite::Statement<'_>) -> Result<serde_j
 /// 0=slug 1=name 2=avatar_emoji 3=system_prompt 4=style_notes
 /// 5=heartbeat_interval_secs 6=proactivity 7=rate_limit_per_hour
 /// 8=created_at 9=updated_at 10=last_run_at 11=enabled 12=quiet_hours_disabled
+// sqlite::Statement::next()/read() require &mut self — clippy's suggestion is wrong here.
+#[allow(clippy::needless_pass_by_ref_mut)]
 pub(super) fn read_persona_row(stmt: &mut sqlite::Statement<'_>) -> Result<serde_json::Value, MemoryError> {
     let style_notes: Option<String> = match stmt.read::<sqlite::Value, _>(4)? {
         sqlite::Value::String(s) => Some(s),

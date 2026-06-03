@@ -8,6 +8,8 @@
 //! Backend IDs are hardcoded (10 slugs) in `client_settings_list` to avoid
 //! taking a live `BackendPool` dependency in the schema layer. New backends must
 //! be added here when they are added to `state.rs::create_backend`.
+// Handlers use match-on-Option for early returns in async contexts.
+#![allow(clippy::manual_let_else, clippy::option_if_let_else)]
 
 use crate::memory::MemoryDb;
 use crate::state::BackendPool;

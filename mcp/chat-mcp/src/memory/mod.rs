@@ -66,6 +66,8 @@ impl MemoryDb {
         Ok(Self { db: Arc::new(Mutex::new(db)) })
     }
 
+    // Migration script — long by nature, not a complexity issue.
+    #[allow(clippy::too_many_lines)]
     pub(crate) fn run_migrations(db: &ConnectionThreadSafe) -> Result<(), MemoryError> {
         db.execute(
             "CREATE TABLE IF NOT EXISTS contact_facts (

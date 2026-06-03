@@ -2,6 +2,8 @@
 //!
 //! All `handle_meta_persona_*` functions live here. The persona-quality-control
 //! lint `forbid_unaudited_persona_tool` scans this file for audit calls.
+// Handlers use match-on-Option for early returns in async contexts.
+#![allow(clippy::manual_let_else, clippy::option_if_let_else)]
 
 use crate::memory::MemoryDb;
 use crate::state::BackendPool;
@@ -148,7 +150,7 @@ pub(super) fn handle_meta_persona_set_sources(args: &Value, mem: &MemoryDb) -> V
         if let Err(e) = mem.add_persona_source(slug, account_id, selector_kind, selector_value, include) {
             return err_result(format!("meta_persona_set_sources failed adding source: {e}"));
         }
-        added += 1;
+        added = added.saturating_add(1);
     }
     audit(mem, slug, "invoke", Some(&format!("{{\"action\":\"set_sources\",\"count\":{added}}}")), "ok", None);
     ok_result(format!("{added} sources set for persona '{slug}'"))
@@ -180,7 +182,7 @@ pub(super) fn handle_meta_persona_set_tool_whitelist(args: &Value, mem: &MemoryD
         if let Err(e) = mem.add_persona_tool(slug, name) {
             return err_result(format!("meta_persona_set_tool_whitelist failed adding tool: {e}"));
         }
-        added += 1;
+        added = added.saturating_add(1);
     }
     audit(mem, slug, "invoke", Some(&format!("{{\"action\":\"set_tool_whitelist\",\"count\":{added}}}")), "ok", None);
     ok_result(format!("{added} tools whitelisted for persona '{slug}'"))

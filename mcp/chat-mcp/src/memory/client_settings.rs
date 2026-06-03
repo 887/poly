@@ -1,4 +1,6 @@
 //! client_settings_audit CRUD (Phase D).
+// MutexGuard held for full function body — intentional for SQLite connection locking.
+#![allow(clippy::significant_drop_tightening)]
 
 use super::helpers::{bind_opt_str, drain, now_iso8601};
 use super::{MemoryDb, MemoryError};

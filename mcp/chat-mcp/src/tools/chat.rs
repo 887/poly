@@ -1,4 +1,7 @@
 //! Chat backend tool handlers: login, logout, list_*, get_*, send_*, test_*.
+// These handlers use match-on-Option to propagate early returns through async
+// contexts where let-else divergence isn't always ergonomic.
+#![allow(clippy::manual_let_else, clippy::option_if_let_else)]
 
 use crate::state::{BackendEntry, BackendPool};
 use serde_json::Value;

@@ -1,6 +1,8 @@
 //! # poly-chat-mcp
 //!
 //! MCP server exposing all Poly chat backends as tools.
+// match-on-Result/Option in async event loops is clearer than map_or_else chains.
+#![allow(clippy::option_if_let_else, clippy::manual_let_else)]
 //!
 //! ## Modes
 //!
@@ -82,6 +84,8 @@ async fn main() -> anyhow::Result<()> {
 
 // ─── HTTP mode ───────────────────────────────────────────────────────────────
 
+// run_http sets up the Axum router — complexity is structural (multiple route types).
+#[allow(clippy::cognitive_complexity)]
 async fn run_http(port: u16) -> anyhow::Result<()> {
     let pool: SharedPool = Arc::new(Mutex::new(state::BackendPool::new()));
     let mem = Arc::new(open_memory_db()?);
@@ -128,13 +132,15 @@ async fn handle_health() -> impl IntoResponse {
     Json(json!({"status": "ok", "server": "poly-chat-mcp"}))
 }
 
+// MutexGuard held across dispatch for the tool call — intentional.
+#[allow(clippy::significant_drop_tightening)]
 async fn handle_mcp_http(
     AxumState(state): AxumState<AppState>,
     Json(req): Json<Value>,
 ) -> impl IntoResponse {
     let method = req.get("method").and_then(|m| m.as_str()).unwrap_or("");
     let id = req.get("id").cloned();
-    let params = req.get("params").cloned().unwrap_or(json!({}));
+    let params = req.get("params").cloned().unwrap_or_else(|| json!({}));
 
     let result = match method {
         "initialize" => {
@@ -152,7 +158,7 @@ async fn handle_mcp_http(
         }
         "tools/call" => {
             let tool_name = params.get("name").and_then(|n| n.as_str()).unwrap_or("");
-            let args = params.get("arguments").cloned().unwrap_or(json!({}));
+            let args = params.get("arguments").cloned().unwrap_or_else(|| json!({}));
             let mut pool = state.pool.lock().await;
             let result = tools::dispatch(tool_name, &args, &mut pool, &state.mem).await;
             mcp_response(id, result)
@@ -176,6 +182,8 @@ async fn handle_mcp_http(
 // The polling tool stays the source of truth for the event ring buffer; SSE
 // is a thin push wrapper on the same broadcast channel, so both paths see
 // the same event ordering.
+// MutexGuard is held in a block to subscribe to the broadcast channel.
+#[allow(clippy::significant_drop_tightening)]
 async fn handle_mcp_sse(
     AxumState(state): AxumState<AppState>,
 ) -> Sse<impl futures_core::Stream<Item = Result<SseEvent, Infallible>>> {
@@ -214,6 +222,8 @@ async fn handle_mcp_sse(
 /// any pending drafts whose `auto_send_at` has passed.
 ///
 /// Shuts down cleanly when `shutdown` fires or is dropped.
+// auto-send engine event loop — complexity is structural.
+#[allow(clippy::cognitive_complexity)]
 async fn run_autosend_engine(
     pool: SharedPool,
     mem:  Arc<MemoryDb>,
@@ -306,6 +316,8 @@ async fn run_autosend_engine(
 
 // ─── stdio mode ──────────────────────────────────────────────────────────────
 
+// stdio dispatch loop — complexity is structural (same shape as run_http).
+#[allow(clippy::cognitive_complexity)]
 async fn run_stdio() -> anyhow::Result<()> {
     use tokio::io::AsyncBufReadExt as _;
     use tokio::io::AsyncWriteExt as _;
@@ -338,7 +350,7 @@ async fn run_stdio() -> anyhow::Result<()> {
 
         let id = req.get("id").cloned();
         let method = req.get("method").and_then(|m| m.as_str()).unwrap_or("");
-        let params = req.get("params").cloned().unwrap_or(json!({}));
+        let params = req.get("params").cloned().unwrap_or_else(|| json!({}));
 
         let resp = match method {
             "initialize" => {
@@ -356,7 +368,7 @@ async fn run_stdio() -> anyhow::Result<()> {
             }
             "tools/call" => {
                 let tool_name = params.get("name").and_then(|n| n.as_str()).unwrap_or("");
-                let args = params.get("arguments").cloned().unwrap_or(json!({}));
+                let args = params.get("arguments").cloned().unwrap_or_else(|| json!({}));
                 let result = tools::dispatch(tool_name, &args, &mut pool, &mem).await;
                 mcp_response(id, result)
             }

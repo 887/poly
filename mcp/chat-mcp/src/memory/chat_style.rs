@@ -1,4 +1,7 @@
 //! Per-chat style CRUD (Phase E).
+// MutexGuard from self.lock() is held for the entire function body so the DB
+// connection stays locked — that is the intended semantics for SQLite.
+#![allow(clippy::significant_drop_tightening)]
 
 use super::helpers::{drain, now_iso8601, read_style_row};
 use super::{MemoryDb, MemoryError};
@@ -26,12 +29,12 @@ impl MemoryDb {
 
         let (cur_tone, cur_formality, cur_emoji, cur_sig, cur_notes) =
             if sel.next()? == sqlite::State::Row {
-                let t  = sel.read::<Option<String>, _>(0)?;
-                let f  = sel.read::<Option<String>, _>(1)?;
-                let e  = sel.read::<Option<i64>, _>(2)?;
-                let s  = sel.read::<Option<String>, _>(3)?;
-                let n  = sel.read::<Option<String>, _>(4)?;
-                (t, f, e, s, n)
+                let tone      = sel.read::<Option<String>, _>(0)?;
+                let formality = sel.read::<Option<String>, _>(1)?;
+                let emoji     = sel.read::<Option<i64>, _>(2)?;
+                let sig       = sel.read::<Option<String>, _>(3)?;
+                let notes     = sel.read::<Option<String>, _>(4)?;
+                (tone, formality, emoji, sig, notes)
             } else {
                 (None, None, None, None, None)
             };
@@ -40,7 +43,7 @@ impl MemoryDb {
         let final_tone      = tone.map(std::string::ToString::to_string).or(cur_tone);
         let final_formality = formality.map(std::string::ToString::to_string).or(cur_formality);
         let final_emoji     = emoji_allowed
-            .map(|b| i64::from(b))
+            .map(i64::from)
             .or(cur_emoji)
             .unwrap_or(1_i64);
         let final_sig       = signature.map(std::string::ToString::to_string).or(cur_sig);

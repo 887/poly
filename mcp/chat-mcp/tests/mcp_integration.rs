@@ -3,7 +3,7 @@
 //! Spins up Discord + Teams + Lemmy + HackerNews + Stoat + Matrix test servers
 //! in-process, then exercises the `poly-chat-mcp` tool dispatch layer end-to-end.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing, clippy::uninlined_format_args, clippy::similar_names)]
 
 use std::sync::Arc;
 

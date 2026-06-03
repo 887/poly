@@ -7,7 +7,13 @@
 //! `heartbeat_run` audit row AND at least one `draft_create` audit row
 //! appeared in the DB.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
+#![allow(
+    clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing,
+    clippy::too_many_lines, clippy::items_after_statements,
+    clippy::implicit_clone, clippy::match_wildcard_for_single_variants,
+    clippy::needless_collect, clippy::single_char_pattern,
+    unused_imports,
+)]
 
 use std::sync::Arc;
 

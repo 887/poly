@@ -1,4 +1,6 @@
 //! Per-chat style tool handlers (Phase E).
+// These handlers use match-on-Option to propagate early returns through async contexts.
+#![allow(clippy::manual_let_else, clippy::option_if_let_else)]
 
 use crate::memory::MemoryDb;
 use serde_json::Value;

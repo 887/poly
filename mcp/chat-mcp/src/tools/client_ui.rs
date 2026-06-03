@@ -1,4 +1,6 @@
 //! Client-provided UI surface handlers (WP 8, plan-client-ui-surface).
+// Handlers use match-on-Option for early returns in async contexts.
+#![allow(clippy::manual_let_else, clippy::option_if_let_else)]
 
 use crate::state::BackendPool;
 use serde_json::Value;
