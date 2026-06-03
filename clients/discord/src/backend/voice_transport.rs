@@ -127,7 +127,7 @@ impl poly_client::VoiceTransportBackend for DiscordClient {
             let account_id = self.account_id();
             let mut guard = self.voice_bridge_client.lock().await;
             if guard.is_none() {
-                *guard = Some(voice_bridge::DiscordVoiceBridgeClient::new(account_id));
+                *guard = Some(crate::voice_bridge::DiscordVoiceBridgeClient::new(account_id));
             }
             let client = guard.as_ref().expect("just initialised above");
             let dummy_audio = poly_audio_backend::fake_backend::FakeAudioBackend::new();

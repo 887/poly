@@ -318,7 +318,7 @@ impl IsBackend for DiscordClient {
                 // that calls `start` (which opens the WS + spawns the receive loop)
                 // then stores the resulting UnboundedSender in `gw_tx_arc`.
                 wasm_bindgen_futures::spawn_local(async move {
-                    match gateway_bridge::start(url, token, creds, local_user_id).await {
+                    match crate::gateway_bridge::start(url, token, creds, local_user_id).await {
                         Ok(sender) => {
                             if let Ok(mut guard) = gw_tx_arc.lock() {
                                 *guard = Some(sender);

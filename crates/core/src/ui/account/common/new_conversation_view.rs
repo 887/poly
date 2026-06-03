@@ -28,12 +28,23 @@ pub fn NewConversationView() -> Element {
     let search_lower = search_filter.read().to_lowercase();
     let active_backend = nav_state.read().active_backend.cloned();
 
+    // The current account's own user id — you can't start a DM with yourself,
+    // so filter it out of the picker (W2 of plan-fresh-user-fixups.md).
+    // .peek() — one-shot snapshot for the filter, not a reactive subscription.
+    let active_account_id = nav_state.peek().active_account_id.cloned().unwrap_or_default();
+    let active_user_id = account_sessions
+        .peek()
+        .account_sessions
+        .get(&active_account_id)
+        .map(|session| session.user.id.clone());
+
     let friends: Vec<_> = chat_lists
         .read()
         .friends
         .values()
         .flatten()
         .filter(|friend| active_backend.as_ref().map_or(true, |backend| backend == &friend.backend))
+        .filter(|friend| active_user_id.as_deref() != Some(friend.id.as_str()))
         .filter(|friend| {
             search_lower.is_empty() || friend.display_name.to_lowercase().contains(&search_lower)
         })

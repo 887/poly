@@ -199,6 +199,14 @@ Bob conversation is *currently open* on the right pane. Opening a
 conversation should clear its own unread counter, not just the
 new-message-divider.
 
+> **2026-06-03 re-check (code):** appears ALREADY FIXED since the 2026-05-25
+> walkthrough. The clear-on-open is wired on both the list-click
+> (`channel_list/items.rs` → `mark_channel_as_read_with_backend`) and history
+> load (`effects/history_state.rs`), and the demo backend now honors a
+> process-local read set (`data::apply_local_read_state_dms`, wired into every
+> DM generator in `flavour.rs`) so a refetch no longer resurrects the badge —
+> which is exactly E.4. Needs a live MCP confirm to tick; left unchecked pending that.
+
 - [ ] **E.1** Repro reliably (open closed DM → confirm badge present
   → confirm badge persists after open).
 - [ ] **E.2** Find the unread-clear hook — probably in the
@@ -626,9 +634,12 @@ Sidebar "+ New Conversation" opens a friends-picker pane.
   again with checkboxes AND avatars. Likely two render-passes overlap, or
   there are two intentionally-distinct sections (recent? all?) that
   aren't visually labeled.
-- [ ] **W.2** "Cat (demo)" — the *current account* — appears mid-list
-  as a selectable contact. You shouldn't be able to start a DM with
-  yourself; filter self-account out of the friend picker.
+- [x] **W.2** ✅ Filter the active account's own user id out of the
+  `NewConversationView` friend picker. `new_conversation_view.rs` now
+  computes `active_user_id` (via `account_sessions` + active account)
+  and `.filter(|f| active_user_id != Some(f.id))`. Snapshot reads use
+  `.peek()` (hang-class #7). Build-verified (`cargo check -p poly-core`
+  clean); live MCP confirm pending (poly-web MCP not loaded this session).
 - [ ] **W.3** The description ends with "Multi-person conversations
   will use this composer once shared group creation is wired." That's
   a half-finished-feature note shown to users. Either ship the feature
@@ -636,6 +647,10 @@ Sidebar "+ New Conversation" opens a friends-picker pane.
 - [ ] **W.4** Clicking "Saved Messages" from the same sidebar did
   nothing (no view change). Either the route is broken or the click
   target is misplaced.
+  > **2026-06-03 re-check (code):** the button in `dm_view.rs:396` now has an
+  > onclick that `nav!(Route::SavedItemsRoute { … })` — appears fixed since the
+  > walkthrough. Needs a live MCP confirm that SavedItemsRoute renders (left
+  > unchecked pending that).
 
 ---
 
