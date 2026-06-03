@@ -118,7 +118,8 @@ This project uses a three-tier agent model:
 ### Rules
 - The orchestrator directs, delegates, and integrates — it does NOT do all the work itself.
 - Spawn coding agents (sonnet-tier) for isolated implementation tasks that can run in
-  parallel, using `isolation: "worktree"` so they work in separate copies.
+  parallel. Isolate them with `jj workspace add` (see "Parallel Agent Work" below) —
+  NOT the harness `isolation: "worktree"` flag (git worktrees are not used here).
 - **Always run tests via a haiku-tier subagent** — pass `TEST_HARNESS.md` as the task.
   Haiku is fast and cheap; use it freely for verification loops.
 - The user may type instructions to the main agent while subagents are running. This is
@@ -451,14 +452,19 @@ browser MCP for a poly MCP — they have different tools (`launch_app`, `rebuild
 If the poly MCPs are not loaded in the current session, say so — do not fall back
 to chrome-devtools as a replacement.
 
-## Parallel Agent Work — `.claude/worktrees/` pattern
+## Parallel Agent Work — jj workspaces ONLY (never git worktrees)
 
-When you spawn an Agent with `isolation: "worktree"`, the runtime creates a
-workspace directory under `.claude/worktrees/agent-<id>/` that the subagent
-edits. The `PreToolUse` hook in `.claude/settings.json` symlinks `target/`
-inside each worktree to `/media/games/workspacemsg-worktree-targets/agent-<id>/`
-so build artifacts live on a separate disk and don't fill `/`. The `Stop` hook
-cleans worktrees older than a day.
+**Use `jj workspace add` for parallel-agent isolation. Do NOT use git worktrees
+or the harness `isolation: "worktree"` flag** — git worktrees are abandoned in
+this repo. One `jj workspace add` directory per concurrent agent:
+
+```bash
+jj workspace add .claude/worktrees/agent-<id> --name agent-<id>
+```
+
+Each workspace is backed by the shared `.jj/repo` but owns its working-copy
+commit, so agents never clobber each other. Each gets its own `target/` (cold
+compile per workspace; sccache shares the dep cache across them).
 
 ### jj workspace isolation — why per-agent workspaces are safe
 
@@ -478,88 +484,41 @@ After a workspace directory is cleaned up, run `jj workspace forget agent-<id>`
 so jj stops tracking its stale working-copy commit. Use `jj workspace list` to
 audit live workspaces.
 
-### MANDATORY before the subagent exits — `jj describe` AND verify the commit landed
+### Integrate each workspace — snapshot from INSIDE first
 
-Worktree directories get cleaned up. The git/jj branch (`worktree-agent-<id>`)
-persists, so committed work survives. **Uncommitted edits do not.** And
-`jj describe` by itself is **not** sufficient proof — concurrent worktree
-operations or a background squash can rewrite the working copy out from under
-the subagent, leaving no commit on the branch even though `jj describe`
-returned zero exit code.
+Agents work in their workspace dir and do **NOT** run jj/git — the orchestrator
+integrates. jj only snapshots a workspace's on-disk edits when a jj command runs
+**with that workspace as cwd**; a missed snapshot silently loses the work. Use
+the land script, which `cd`s in, snapshots, and ABORTS (exit 3) if `@` is empty:
 
-#### Agent-side prompt requirement — the subagent MUST prove the commit landed
+```bash
+CID=$(scripts/jj-ws-land.sh .claude/worktrees/agent-<id> "wave message")  # snapshots-or-aborts
+jj rebase -s "$CID" -d main && <verify> && jj bookmark set main -r @ && jj git push --bookmark main
+```
 
-Every parallel-work subagent prompt **must** include this verification block
-verbatim (adapt the commit message):
+If it aborts EMPTY, the work is un-snapshotted on disk — find it before touching
+jj; do NOT hand-rebase around the guard.
 
-> Before reporting done:
-> 1. Run `jj describe -m "<one-line summary>"`.
-> 2. Then run `jj log -r 'worktree-agent-<your-id> & description(<summary>)'
->    --no-graph -T 'commit_id.short()'` and paste the output in your final
->    message.
-> 3. If that `jj log` returns an empty result, DO NOT report done — your
->    commit did not land. Retry `jj describe` (check for a `jj squash` or
->    `jj abandon` that ran concurrently) and re-verify until the commit
->    appears on the branch.
+**Disjoint-file alternative (no land script):** leave agent edits uncommitted and
+have the orchestrator copy each workspace's changed files into the main tree
+(`diff -rq --exclude=target <ws>/clients/<x> clients/<x>`, then `cp`), then commit
+once. Verify the integration landed either way — never trust a "done" message
+alone; confirm the files/commit are actually in the main tree before cleanup.
 
-The commit-id echo in the subagent's final message is the load-bearing signal —
-it proves the commit is real, not just that `describe` exited 0.
+### Cleanup
 
-#### Orchestrator-side verification — don't trust the "done" message alone
-
-After the subagent returns, before moving on:
-
-1. **Verify the commit exists on the worktree branch:**
-   ```
-   jj log -r 'worktree-agent-<id>' --no-graph -T 'commit_id.short() ++ " | " ++ description.first_line()'
-   ```
-   If this is empty or shows the pre-agent parent commit, the commit did not
-   land. Go to rescue step.
-
-2. **Diff the worktree directory against main as a sanity check:**
-   ```
-   diff -rq --exclude=target --exclude=.jj --exclude=.git \
-     .claude/worktrees/agent-<id>/ /home/laragana/workspcacemsg/
-   ```
-   If this lists changed files but step 1 showed no commit, the work exists
-   only as uncommitted edits in the worktree directory and is about to be
-   cleaned up. **Rescue immediately.**
-
-3. **Rescue path when the subagent lied:**
-   ```
-   # copy uncommitted files out of the worktree back into main
-   for f in <list-from-diff-rq>; do
-     cp -f ".claude/worktrees/agent-<id>/$f" "$f"
-   done
-   # then commit from main normally
-   jj describe -m "<summary>" && jj bookmark set main -r @ && jj git push --bookmark main
-   ```
-
-4. **Normal path when the commit is real:**
-   ```
-   jj rebase -s <commit-id> -d main
-   jj bookmark set main -r @
-   jj git push --bookmark main
-   ```
-
-If the rescue path fires, note in the orchestrator commit message: "Recovered
-from worktree <id> after subagent reported done without a landed commit" so
-the pattern is searchable in history.
-
-**Two real incidents before this rule existed:**
-- Phase 6 of `plan-discord-forums-threads.md`: subagent reported done,
-  worktree path was cleaned, no jj commit, all edits lost except one stray
-  file the LSP had auto-saved.
-- `send_typing` MCP tool sonnet agent: reported "done" with a plausible
-  summary, but `jj log -r 'worktree-agent-<id>'` showed the unchanged
-  parent commit. Recovered by rsync-diff against the worktree dir before
-  the Stop hook cleaned it up.
+```bash
+jj workspace forget agent-<id> && rm -rf .claude/worktrees/agent-<id>
+```
+`jj workspace list` audits live workspaces. The `Stop` hook in
+`.claude/settings.json` forgets + removes workspace dirs older than a day.
 
 ### Disjoint files = parallel-safe
 
-Run multiple worktree-isolated agents in parallel only when their target files
-don't overlap. Each subagent prompt should explicitly list "DO NOT touch X"
-for any file another parallel agent might be editing.
+Partition parallel agents by disjoint crate-groups; shared files (root
+`Cargo.toml`, the lockfile, the composition root, registries) conflict at
+integration time. Each subagent prompt must list "DO NOT touch X" for any file
+another parallel agent edits.
 
 ## Debugging hard WASM hangs in poly-web
 
