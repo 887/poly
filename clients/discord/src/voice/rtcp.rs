@@ -31,7 +31,19 @@
 //! | Screen share| 2 500 000      | Same cap; Discord SFU enforces its own    |
 //! | REMB floor  |   150 000      | Never drop below 150 kbps                 |
 
-#![allow(clippy::indexing_slicing)] // Packet byte-slicing with length guards
+// lint-allow-unused: RTCP/RTP packet parsing uses bounded byte-slice indexing
+#![allow(clippy::indexing_slicing)]
+// Codec/DSP math: as-casts, arithmetic, and numeric literals are intentional in RTCP parsing
+#![allow(
+    clippy::as_conversions,
+    clippy::cast_possible_truncation,
+    clippy::cast_lossless,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::arithmetic_side_effects,
+    clippy::default_numeric_fallback,
+    clippy::unnecessary_cast,
+)]
 
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
@@ -72,7 +84,7 @@ const FMT_TWCC: u8 = 15;
 // ── RTCP packet classification ─────────────────────────────────────────────────
 
 /// Feedback signal extracted from an RTCP packet.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RtcpFeedback {
     /// REMB — explicit bitrate cap from the SFU.
     Remb { bps: u32 },
@@ -165,9 +177,9 @@ pub fn parse_rtcp_feedback(buf: &[u8], current_bps: u32) -> Option<RtcpFeedback>
 /// - bytes 0..4:  `"REMB"` ASCII magic (0x52454D42)
 /// - byte  4:     number of SSRCs (N)
 /// - bytes 5..7:  mantissa exponent packed bitrate (big-endian):
-///                  exponent = bits 23..18 (6 bits)
-///                  mantissa = bits 17..0  (18 bits)
-///                  bitrate  = mantissa << exponent
+///   exponent = bits 23..18 (6 bits)
+///   mantissa = bits 17..0  (18 bits)
+///   bitrate  = mantissa << exponent
 /// - bytes 8..8+4N: SSRC list (N × 4 bytes each)
 ///
 /// The standard 12-byte RTCP header is:
@@ -219,6 +231,7 @@ fn parse_remb(sub: &[u8]) -> Option<u32> {
 /// - variable: status chunks (2-byte each, various encodings)
 ///
 /// We only read the status count and count "not received" bits to estimate loss.
+#[allow(clippy::cognitive_complexity)]
 fn parse_twcc_simple(sub: &[u8], current_bps: u32) -> Option<u32> {
     // Standard RTPFB header = 12 bytes: [header4][SSRC_sender4][SSRC_media4].
     // TWCC body starts at byte 12.
@@ -361,9 +374,9 @@ impl BandwidthController {
     /// Apply an RTCP feedback signal and update the target bitrate.
     ///
     /// Returns the new target bitrate in bps (for logging only).
-    pub fn apply_feedback(&self, feedback: RtcpFeedback) -> u32 {
+    pub fn apply_feedback(&self, feedback: &RtcpFeedback) -> u32 {
         let current = self.target_bps.load(Ordering::Relaxed);
-        let new_target = match feedback {
+        let new_target = match *feedback {
             RtcpFeedback::Remb { bps } => {
                 // Hard REMB: clamp to SFU's estimate.
                 let remb_cap = bps.clamp(MIN_BITRATE_BPS, self.max_bps);
@@ -415,20 +428,15 @@ impl BandwidthController {
 /// failures.
 pub fn handle_rtcp_datagram(buf: &[u8], ctrl: &BandwidthController) {
     let current = ctrl.target_bps.load(Ordering::Relaxed);
-    match parse_rtcp_feedback(buf, current) {
-        Some(fb) => {
-            let new_bps = ctrl.apply_feedback(fb);
-            if new_bps != current {
-                warn!(
-                    target: "poly_discord::voice::rtcp",
-                    old_bps = current,
-                    new_bps,
-                    "RTCP feedback applied — video bitrate adjusted"
-                );
-            }
-        }
-        None => {
-            // SR/RR or other RTCP — no action.
+    if let Some(fb) = parse_rtcp_feedback(buf, current) {
+        let new_bps = ctrl.apply_feedback(&fb);
+        if new_bps != current {
+            warn!(
+                target: "poly_discord::voice::rtcp",
+                old_bps = current,
+                new_bps,
+                "RTCP feedback applied — video bitrate adjusted"
+            );
         }
     }
 }
@@ -531,7 +539,7 @@ mod tests {
     fn bandwidth_controller_applies_remb() {
         let ctrl = BandwidthController::new(MAX_BITRATE_BPS);
         // Current = 1 Mbps.  REMB says 500 kbps — well outside hysteresis band.
-        let new_bps = ctrl.apply_feedback(RtcpFeedback::Remb { bps: 500_000 });
+        let new_bps = ctrl.apply_feedback(&RtcpFeedback::Remb { bps: 500_000 });
         assert_eq!(new_bps, 500_000);
         assert_eq!(ctrl.target_bps.load(Ordering::Relaxed), 500_000);
     }
@@ -542,7 +550,7 @@ mod tests {
         let original = ctrl.target_bps.load(Ordering::Relaxed);
         // A REMB 3% above current — within the 5% hysteresis band.
         let close_bps = (original as f64 * 1.03) as u32;
-        ctrl.apply_feedback(RtcpFeedback::Remb { bps: close_bps });
+        ctrl.apply_feedback(&RtcpFeedback::Remb { bps: close_bps });
         // Should not have changed.
         assert_eq!(ctrl.target_bps.load(Ordering::Relaxed), original);
     }
@@ -550,14 +558,14 @@ mod tests {
     #[test]
     fn bandwidth_controller_clamps_below_floor() {
         let ctrl = BandwidthController::new(MAX_BITRATE_BPS);
-        let new_bps = ctrl.apply_feedback(RtcpFeedback::Remb { bps: 50_000 });
+        let new_bps = ctrl.apply_feedback(&RtcpFeedback::Remb { bps: 50_000 });
         assert_eq!(new_bps, MIN_BITRATE_BPS, "should be clamped to floor");
     }
 
     #[test]
     fn bandwidth_controller_clamps_above_cap() {
         let ctrl = BandwidthController::new(1_000_000);
-        let new_bps = ctrl.apply_feedback(RtcpFeedback::Remb { bps: 5_000_000 });
+        let new_bps = ctrl.apply_feedback(&RtcpFeedback::Remb { bps: 5_000_000 });
         assert_eq!(new_bps, 1_000_000, "should be clamped to max_bps");
     }
 
@@ -565,7 +573,7 @@ mod tests {
     fn bandwidth_controller_ramp_up_increases_bitrate() {
         let ctrl = BandwidthController::new(MAX_BITRATE_BPS);
         // Reduce to 500k first.
-        ctrl.apply_feedback(RtcpFeedback::Remb { bps: 500_000 });
+        ctrl.apply_feedback(&RtcpFeedback::Remb { bps: 500_000 });
         let after_remb = ctrl.target_bps.load(Ordering::Relaxed);
         let after_ramp = ctrl.ramp_up();
         assert!(after_ramp > after_remb, "ramp_up should increase bitrate");

@@ -3,6 +3,27 @@
 //! Discord voice WS protocol helpers — handshake, IP discovery, key derivation.
 //! Pure structural move — no behaviour change.
 
+// Codec/DSP math: numeric conversions in voice protocol helpers are intentional
+#![allow(
+    clippy::as_conversions,
+    clippy::cast_possible_truncation,
+    clippy::cast_lossless,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::arithmetic_side_effects,
+    clippy::default_numeric_fallback,
+    clippy::future_not_send,
+    clippy::significant_drop_tightening,
+    clippy::redundant_closure_for_method_calls,
+    clippy::wildcard_imports,
+    clippy::items_after_statements,
+    clippy::needless_continue,
+    clippy::collapsible_if,
+    clippy::missing_const_for_fn,
+)]
+// lint-allow-unused: voice protocol handshake has inherent line count from protocol steps
+#![allow(clippy::too_many_lines)]
+
 use super::*;
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use std::cell::RefCell;

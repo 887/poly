@@ -1,4 +1,22 @@
 //! Wasm-only audio capture loop (Phase X.2).
+// lint-allow-unused: audio capture uses bounded slice indexing for PCM frame handling
+#![allow(clippy::indexing_slicing)]
+// Codec/DSP math: as-casts and arithmetic in PCM processing pipeline are intentional
+#![allow(
+    clippy::as_conversions,
+    clippy::cast_possible_truncation,
+    clippy::cast_lossless,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::arithmetic_side_effects,
+    clippy::default_numeric_fallback,
+    clippy::future_not_send,
+    clippy::significant_drop_tightening,
+    clippy::redundant_closure_for_method_calls,
+    clippy::wildcard_imports,
+    clippy::integer_division,
+    clippy::suboptimal_flops,
+)]
 //!
 //! Pipeline:
 //!

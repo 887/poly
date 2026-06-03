@@ -160,11 +160,10 @@ impl DiscordHttpClient {
         self.super_props
             .lock()
             .ok()
-            .map(|p| p.clone())
-            .unwrap_or_else(|| SuperProperties::for_platform(
-                &crate::build_info::BuildInfo::default(),
-                "en-US",
-            ))
+            .map_or_else(
+                || SuperProperties::for_platform(&crate::build_info::BuildInfo::default(), "en-US"),
+                |p| (*p).clone(),
+            )
     }
 
     /// Hot-swap the `SuperProperties` (e.g. after a background build refresh).

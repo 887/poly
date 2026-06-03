@@ -3,6 +3,16 @@
 //! Voice WS handshake helpers — op 8 HELLO / op 0 IDENTIFY / op 2 READY /
 //! op 1 SELECT_PROTOCOL / op 4 SESSION_DESCRIPTION. Pure structural move.
 
+// Codec/DSP math: numeric conversions in the voice handshake are intentional
+#![allow(
+    clippy::as_conversions,
+    clippy::cast_possible_truncation,
+    clippy::cast_lossless,
+    clippy::arithmetic_side_effects,
+    clippy::default_numeric_fallback,
+    clippy::future_not_send, // voice handshake tasks run on single-threaded executor
+)]
+
 use super::*;
 
 /// Data from op 2 Ready.

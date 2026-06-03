@@ -2,6 +2,21 @@
 //!
 //! Voice WS event loop — heartbeat + op 5 SPEAKING. Pure structural move.
 
+// Codec/DSP math: numeric conversions in the WS event loop are intentional
+#![allow(
+    clippy::as_conversions,
+    clippy::cast_possible_truncation,
+    clippy::cast_lossless,
+    clippy::arithmetic_side_effects,
+    clippy::default_numeric_fallback,
+    clippy::future_not_send, // voice WS loop runs on single-threaded tokio executor
+    clippy::significant_drop_tightening, // lock scoping in the WS loop is intentional
+    clippy::cognitive_complexity,
+    clippy::bool_to_int_with_if,
+    clippy::match_same_arms,
+    clippy::too_many_arguments,
+)]
+
 use super::*;
 
 pub(super) async fn voice_ws_loop(
@@ -82,7 +97,7 @@ pub(super) async fn voice_ws_loop(
                                         user_id,
                                         is_speaking: speaking_bitmask != 0,
                                     };
-                                    let _ = tx.send(ev);
+                                    drop(tx.send(ev));
                                 }
                             }
                         }

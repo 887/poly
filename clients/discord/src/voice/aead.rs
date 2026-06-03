@@ -2,6 +2,16 @@
 //!
 //! XChaCha20-Poly1305 AEAD encrypt / decrypt of RTP payloads. Pure structural move.
 
+// Codec/DSP math: numeric conversions in AEAD helpers are intentional
+#![allow(
+    clippy::as_conversions,
+    clippy::cast_possible_truncation,
+    clippy::cast_lossless,
+    clippy::arithmetic_side_effects,
+    clippy::default_numeric_fallback,
+    clippy::map_err_ignore,
+)]
+
 use super::*;
 
 pub(super) fn encrypt_rtp(

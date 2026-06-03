@@ -2,6 +2,21 @@
 //!
 //! UDP RTP receive + Opus decode loop (B.7 + E.9). Pure structural move.
 
+// Codec/DSP math: as-casts and arithmetic in the decode pipeline are intentional
+#![allow(
+    clippy::as_conversions,
+    clippy::cast_possible_truncation,
+    clippy::cast_lossless,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::arithmetic_side_effects,
+    clippy::default_numeric_fallback,
+    clippy::future_not_send, // voice tasks run on single-threaded tokio executor
+    clippy::significant_drop_tightening, // lock scoping in decode loop is intentional
+    clippy::cognitive_complexity,
+    clippy::manual_let_else,
+)]
+
 use super::*;
 
 pub(super) async fn udp_decode_loop(

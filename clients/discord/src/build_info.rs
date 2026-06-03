@@ -212,6 +212,7 @@ const SEVEN_DAYS_SECS: u64 = 7 * 24 * 3600;
 ///
 /// * `kv_get` / `kv_set` — async closures that read/write the KV store.
 /// * `force` — if `true`, ignore the TTL and always re-scrape.
+#[allow(clippy::cognitive_complexity)]
 pub async fn load_or_refresh<G, S, GF, SF>(
     kv_get: G,
     kv_set: S,

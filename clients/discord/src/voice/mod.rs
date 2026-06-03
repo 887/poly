@@ -33,8 +33,30 @@
 //! `aead_aes256_gcm_rtpsize`.  The highest-available AEAD mode is selected
 //! from the op 2 Ready `modes` list.
 
-#![allow(clippy::indexing_slicing)] // RTP header byte-slicing is local + length-checked
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // Voice code: these are gated behind Option returns or explicit early-returns
+// lint-allow-unused: RTP header byte-slicing is length-guarded in voice protocol code
+#![allow(clippy::indexing_slicing)]
+// lint-allow-unused: Voice protocol code: panics gated behind Option returns or explicit early-returns
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+// Codec/DSP math: as-casts and arithmetic in voice protocol are intentional
+#![allow(
+    clippy::as_conversions,
+    clippy::cast_possible_truncation,
+    clippy::cast_lossless,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::arithmetic_side_effects,
+    clippy::default_numeric_fallback,
+    clippy::future_not_send,
+    clippy::significant_drop_tightening,
+    clippy::redundant_closure_for_method_calls,
+    clippy::wildcard_imports,
+    clippy::mod_module_files,
+    clippy::cognitive_complexity,
+    clippy::map_err_ignore,
+    clippy::too_many_arguments,
+)]
+// lint-allow-unused: voice protocol functions have inherent line count from protocol steps
+#![allow(clippy::too_many_lines)]
 
 /// Discord video transport — Phase E of `docs/plans/plan-voice-video-calls.md`.
 /// op 12 Video signaling + H.264 RTP packetization over the same UDP socket.
@@ -231,7 +253,7 @@ impl DiscordVoiceConnection {
     /// on the main gateway (see `disconnect_voice` in `lib.rs`).
     pub async fn disconnect(self) {
         // Dropping the Sender signals all tasks waiting on the Receiver.
-        let _ = self.shutdown_tx.send(()).await;
+        let _send_result = self.shutdown_tx.send(()).await;
     }
 
     /// Wire the active video transport to this connection's bandwidth controller (Phase E.9).

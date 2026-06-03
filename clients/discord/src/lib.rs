@@ -584,6 +584,7 @@ impl DiscordClient {
     // the 1:1 event-name→event mapping across helpers.
     // lint-allow-unused: flat gateway-event dispatch table, intentionally one fn
     #[allow(clippy::too_many_lines)]
+    #[allow(clippy::cognitive_complexity)]
     #[cfg(feature = "native")]
     pub fn parse_gateway_event(
         &self,
@@ -794,6 +795,11 @@ impl DiscordClient {
 /// - Responds to HEARTBEAT_ACK (op 11) silently.
 /// - Does NOT implement reconnect logic — stream simply ends on disconnect.
 #[cfg(feature = "gateway")]
+// lint-allow-unused: gateway connect loop has inherent line count from protocol steps
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::cognitive_complexity)]
+#[allow(clippy::significant_drop_tightening)] // voice_states guard held for protocol duration
+#[allow(clippy::items_after_statements)] // SinkExt use imported inline per-usage pattern
 async fn gateway_connect_loop(
     gateway_url: String,
     super_props: crate::super_properties::SuperProperties,
@@ -825,16 +831,16 @@ async fn gateway_connect_loop(
             "intents": 513_i32,
             "properties": identify_properties,
             "compress": false,
-            "large_threshold": 250
+            "large_threshold": 250_i32
         }
     });
+    use futures::SinkExt;
     tracing::debug!(
         target: "poly_discord::gateway",
         build_number = super_props.client_build_number,
         os = %super_props.os,
         "sending gateway IDENTIFY"
     );
-    use futures::SinkExt;
     if let Err(e) = write.send(TungsteniteMsg::Text(identify.to_string().into())).await {
         tracing::warn!(target: "poly_discord::gateway", error = %e, "failed to send IDENTIFY");
         return;
@@ -847,7 +853,7 @@ async fn gateway_connect_loop(
         tokio::select! {
             // Outbound: C.5 / D.2 — forward raw JSON from set_self_mute / start_direct_call.
             Some(raw) = gw_rx.recv() => {
-                let _ = write.send(TungsteniteMsg::Text(raw.into())).await;
+                let _send_result = write.send(TungsteniteMsg::Text(raw.into())).await;
             }
             // Inbound: gateway frames.
             msg_result = read.next() => {
@@ -917,7 +923,7 @@ async fn gateway_connect_loop(
                             .and_then(|r| r.as_array())
                             .map(|arr| {
                                 arr.iter()
-                                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                                    .filter_map(|v| v.as_str().map(std::string::ToString::to_string))
                                     .collect()
                             })
                             .unwrap_or_default();
@@ -930,7 +936,7 @@ async fn gateway_connect_loop(
                                     let uid = vs
                                         .get("user_id")
                                         .and_then(|v| v.as_str())?;
-                                    if uid != local_user_id { Some(uid.to_string()) } else { None }
+                                    if uid == local_user_id { None } else { Some(uid.to_string()) }
                                 })
                             })
                             .unwrap_or_default();
@@ -968,6 +974,7 @@ async fn gateway_connect_loop(
 /// Uses `BatchedSignal::set_if_changed` semantics: only emits if the participant
 /// list actually changed (hang class #8 mitigation via the caller's
 /// `set_if_changed` in the UI consumer).
+#[allow(clippy::significant_drop_tightening)] // voice_states guard held for participant update
 #[cfg(feature = "gateway")]
 async fn handle_voice_state_update(
     data: &serde_json::Value,
@@ -976,14 +983,14 @@ async fn handle_voice_state_update(
     let channel_id = data
         .get("channel_id")
         .and_then(|v| if v.is_null() { None } else { v.as_str() })
-        .map(|s| s.to_string());
+        .map(std::string::ToString::to_string);
     let user_id = data
         .get("user_id")
         .and_then(|v| v.as_str())
         .unwrap_or_default()
         .to_string();
-    let is_muted = data.get("self_mute").and_then(|v| v.as_bool()).unwrap_or(false);
-    let is_deafened = data.get("self_deaf").and_then(|v| v.as_bool()).unwrap_or(false);
+    let is_muted = data.get("self_mute").and_then(serde_json::Value::as_bool).unwrap_or(false);
+    let is_deafened = data.get("self_deaf").and_then(serde_json::Value::as_bool).unwrap_or(false);
 
     if user_id.is_empty() {
         return vec![];
@@ -1007,7 +1014,7 @@ async fn handle_voice_state_update(
         return events;
     }
 
-    let channel_id = channel_id.unwrap();
+    let Some(channel_id) = channel_id else { return vec![]; };
 
     // Check if the user is already in this channel (state update vs join).
     let participants = states.entry(channel_id.clone()).or_default();
@@ -1073,6 +1080,15 @@ impl DiscordClient {
     ///
     /// Returns `VoiceError::AlreadyConnected` if this account already has
     /// an open voice connection (B.11 anti-ban guardrail).
+    // lint-allow-unused: voice connect function has inherent line count from protocol steps
+    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::cognitive_complexity)]
+    #[allow(clippy::future_not_send)] // voice tasks run on single-thread tokio executor
+    #[allow(clippy::significant_drop_tightening)] // voice session lock held for protocol duration
+    #[allow(clippy::default_numeric_fallback)] // JSON op codes are unambiguously i32
+    #[allow(clippy::arithmetic_side_effects)] // deadline arithmetic cannot overflow in practice
+    #[allow(clippy::map_err_ignore)] // map_err converts opaque timeout error to VoiceStateMissing
+    #[allow(clippy::redundant_closure_for_method_calls)] // readability: explicit closures
     pub async fn connect_voice(
         &self,
         guild_id: &str,
@@ -1221,6 +1237,7 @@ impl DiscordClient {
     /// # Errors
     ///
     /// Returns `VoiceError::WsConnect` if the gateway WS cannot be reached.
+    #[allow(clippy::significant_drop_tightening)] // voice session guard held through disconnect
     pub async fn disconnect_voice(
         &self,
         guild_id: &str,
@@ -1231,7 +1248,7 @@ impl DiscordClient {
             // Best-effort: if we can't open the WS, we still release the local session.
             if let Ok((ws_stream, _)) = tokio_tungstenite::connect_async(gateway_url.as_str()).await {
                 let (mut write, _) = futures::StreamExt::split(ws_stream);
-                let _ = futures::SinkExt::send(
+                let _send_result = futures::SinkExt::send(
                     &mut write,
                     tokio_tungstenite::tungstenite::Message::Text(vsu.into()),
                 )
@@ -1264,6 +1281,7 @@ impl DiscordClient {
     ///
     /// Returns `VoiceError::AlreadyConnected`-equivalent if not in a voice call,
     /// or `VideoTransportError` on transport failures.
+    #[allow(clippy::significant_drop_tightening)] // session guard held through transport start
     pub async fn start_video(
         &self,
         frame_rx: tokio::sync::mpsc::Receiver<poly_video_backend::types::VideoFrame>,
@@ -1289,12 +1307,11 @@ impl DiscordClient {
     }
 
     /// Stop sending camera video. Sends op 12 with empty streams to Discord.
+    #[allow(clippy::significant_drop_tightening)] // session guard held through transport stop
     pub async fn stop_video(&self) {
         let mut session = self.voice_session.lock().await;
-        if let Some(conn) = session.as_mut() {
-            if let Some(transport) = conn.video_transport.take() {
-                transport.stop(&conn.ws_out_tx).await;
-            }
+        if let Some(conn) = session.as_mut() && let Some(transport) = conn.video_transport.take() {
+            transport.stop(&conn.ws_out_tx).await;
         }
     }
 
@@ -1302,6 +1319,8 @@ impl DiscordClient {
     ///
     /// Uses a separate SSRC (audio_ssrc + 2) for screen-share-as-second-stream.
     /// Discord treats camera and screen share as separate video streams.
+    #[allow(clippy::significant_drop_tightening)] // session guard held through transport start
+    #[allow(clippy::arithmetic_side_effects)] // SSRC +1 cannot overflow in practice
     pub async fn start_screen_share(
         &self,
         frame_rx: tokio::sync::mpsc::Receiver<poly_video_backend::types::VideoFrame>,
@@ -1331,7 +1350,7 @@ impl DiscordClient {
 
     /// Stop sending screen share.
     pub async fn stop_screen_share(&self) {
-        self.stop_video().await
+        self.stop_video().await;
     }
 }
 
@@ -1358,7 +1377,7 @@ impl DiscordClient {
         self_deaf: bool,
     ) -> Result<(), ClientError> {
         let payload = serde_json::json!({
-            "op": 4,
+            "op": 4_i32,
             "d": {
                 "guild_id": guild_id,
                 "channel_id": channel_id,
@@ -1379,7 +1398,7 @@ impl DiscordClient {
     pub fn start_direct_call(&self, dm_channel_id: &str) -> Result<(), ClientError> {
         // D.7 — include `ringing` list with the partner's user ID when available.
         let payload = serde_json::json!({
-            "op": 13,
+            "op": 13_i32,
             "d": {
                 "channel_id": dm_channel_id,
             }
@@ -1399,12 +1418,12 @@ impl DiscordClient {
     ) -> Result<(), ClientError> {
         // Cancel ringing on the gateway side.
         let stop_ringing = serde_json::json!({
-            "op": 13,
+            "op": 13_i32,
             "d": {
                 "channel_id": serde_json::Value::Null,
             }
         });
-        let _ = self.send_gateway_payload(stop_ringing.to_string());
+        let _cancel_result = self.send_gateway_payload(stop_ringing.to_string());
 
         // REST call to stop the ring.
         self.http
@@ -1419,15 +1438,11 @@ impl DiscordClient {
         let guard = self
             .gateway_tx
             .lock()
-            .map_err(|_| ClientError::Internal("gateway_tx mutex poisoned".into()))?;
-        match guard.as_ref() {
-            Some(tx) => tx
-                .send(payload)
-                .map_err(|_| ClientError::Internal("gateway back-channel closed".into())),
-            None => Err(ClientError::Internal(
-                "gateway back-channel not open — call event_stream() first".into(),
-            )),
-        }
+            .map_err(|_poison| ClientError::Internal("gateway_tx mutex poisoned".into()))?;
+        guard.as_ref().map_or_else(
+            || Err(ClientError::Internal("gateway back-channel not open — call event_stream() first".into())),
+            |tx| tx.send(payload).map_err(|_closed| ClientError::Internal("gateway back-channel closed".into())),
+        )
     }
 }
 

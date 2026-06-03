@@ -1,4 +1,20 @@
 //! Wasm-only audio playback loop (Phase X.3 of plan-voice-media-plane-e2e).
+// lint-allow-unused: playback uses bounded slice indexing for PCM frame handling
+#![allow(clippy::indexing_slicing)]
+// Codec/DSP math: as-casts and arithmetic in PCM playback pipeline are intentional
+#![allow(
+    clippy::as_conversions,
+    clippy::cast_possible_truncation,
+    clippy::cast_lossless,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::arithmetic_side_effects,
+    clippy::default_numeric_fallback,
+    clippy::future_not_send,
+    clippy::significant_drop_tightening,
+    clippy::redundant_closure_for_method_calls,
+    clippy::wildcard_imports,
+)]
 //!
 //! For each connected call:
 //! - Opens `/host/udp/recv_stream/{udp_session}` SSE via
@@ -274,6 +290,7 @@ pub async fn start_audio_playback(
 /// CPAL directly without the host-bridge primitives, so this entry point
 /// is unused on native and returns an error to make accidental calls loud.
 #[cfg(not(target_arch = "wasm32"))]
+#[allow(clippy::unused_async)] // async kept for API parity with the wasm32 implementation
 pub async fn start_audio_playback(
     _params: PlaybackParams,
 ) -> Result<futures::channel::oneshot::Sender<()>, String> {

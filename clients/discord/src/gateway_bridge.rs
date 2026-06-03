@@ -52,7 +52,7 @@ pub struct VoiceServerCreds {
 impl VoiceServerCreds {
     /// Returns `true` when all three credentials are present and non-empty.
     #[must_use]
-    pub fn is_complete(&self) -> bool {
+    pub const fn is_complete(&self) -> bool {
         matches!(
             (&self.endpoint, &self.token, &self.session_id),
             (Some(e), Some(t), Some(s))
@@ -83,6 +83,7 @@ pub type CredsGuard = Arc<Mutex<VoiceServerCreds>>;
 ///
 /// Returns an error string if `WebSocket::open` fails (DNS, TLS, HTTP 101
 /// handshake, or the gateway returning a non-websocket response).
+#[allow(clippy::unused_async)] // async kept for API parity with tokio-tungstenite callers
 pub async fn start(
     gateway_url: String,
     token: String,
@@ -123,6 +124,17 @@ pub async fn start(
 ///
 /// Exits when the WebSocket closes, an error occurs, or op 9 INVALID_SESSION
 /// is received.
+// lint-allow-unused: run_loop has inherent line count from the three-way select protocol
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::cognitive_complexity)]
+#[allow(clippy::await_holding_refcell_ref)] // single-threaded wasm32: RefCell borrow cannot race
+#[allow(clippy::future_not_send)] // gloo_net WebSocket is !Send by design on wasm32
+#[allow(clippy::significant_drop_tightening)] // RefCell borrow scoping is intentional
+#[allow(clippy::default_numeric_fallback)] // JSON op codes are unambiguously i32
+#[allow(clippy::as_conversions)] // heartbeat_interval_ms casting is safe in range
+#[allow(clippy::cast_possible_truncation)] // u64 ms -> u32 for gloo_timers: values <u32::MAX
+#[allow(clippy::unnested_or_patterns)] // nested or-patterns in WS dispatch match are clearer
+#[allow(clippy::match_same_arms)] // outbound-closed and WS-closed arms have same body intentionally
 async fn run_loop(
     mut ws_rx: futures::stream::SplitStream<WebSocket>,
     tx: Rc<RefCell<futures::stream::SplitSink<WebSocket, Message>>>,

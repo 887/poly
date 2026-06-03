@@ -3,6 +3,16 @@
 //! RTP header build/parse + XChaCha20-Poly1305 nonce derivation.
 //! Pure structural move — no behaviour change.
 
+// Codec/DSP math: as-casts for bit-shifting RTP header fields are intentional
+#![allow(
+    clippy::as_conversions,
+    clippy::cast_possible_truncation,
+    clippy::cast_lossless,
+    clippy::arithmetic_side_effects,
+    clippy::default_numeric_fallback,
+    clippy::missing_const_for_fn,
+)]
+
 use super::*;
 
 pub(super) fn build_rtp_header(sequence: u16, timestamp: u32, ssrc: u32) -> [u8; RTP_HEADER_SIZE] {

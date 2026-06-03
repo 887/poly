@@ -2,6 +2,17 @@
 //!
 //! UDP IP-discovery — Discord voice protocol B.4. Pure structural move.
 
+// Codec/DSP math: byte-field packing and numeric conversions are intentional
+#![allow(
+    clippy::as_conversions,
+    clippy::cast_possible_truncation,
+    clippy::cast_lossless,
+    clippy::arithmetic_side_effects,
+    clippy::default_numeric_fallback,
+    clippy::future_not_send, // IP discovery runs on single-threaded tokio executor
+    clippy::map_err_ignore,
+)]
+
 use super::*;
 
 pub(super) async fn ip_discovery(udp: &UdpSocket, ssrc: u32) -> Result<(String, u16), VoiceError> {

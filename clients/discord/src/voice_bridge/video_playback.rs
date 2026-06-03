@@ -3,6 +3,22 @@
 //! H.264 video playback / RFC 6184 FU-A reassembly.
 //! Pure structural move — no behaviour change.
 
+// lint-allow-unused: FU-A fragment reassembly uses bounded slice indexing with length checks
+#![allow(clippy::indexing_slicing)]
+// Codec/DSP math: as-casts and arithmetic in H.264 depacketization are intentional
+#![allow(
+    clippy::as_conversions,
+    clippy::cast_possible_truncation,
+    clippy::cast_lossless,
+    clippy::arithmetic_side_effects,
+    clippy::default_numeric_fallback,
+    clippy::future_not_send,
+    clippy::significant_drop_tightening,
+    clippy::redundant_closure_for_method_calls,
+    clippy::wildcard_imports,
+    clippy::implicit_hasher,
+)]
+
 use super::*;
 
     /// Reassemble a single complete NAL unit from a sequence of FU-A

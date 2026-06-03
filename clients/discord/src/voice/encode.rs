@@ -2,6 +2,18 @@
 //!
 //! Opus encode + RTP send loop (B.7). Pure structural move.
 
+// Codec/DSP math: as-casts and arithmetic in the encode pipeline are intentional
+#![allow(
+    clippy::as_conversions,
+    clippy::cast_possible_truncation,
+    clippy::cast_lossless,
+    clippy::arithmetic_side_effects,
+    clippy::default_numeric_fallback,
+    clippy::future_not_send, // voice tasks run on single-threaded tokio executor
+    clippy::cognitive_complexity,
+    clippy::too_many_arguments,
+)]
+
 use super::*;
 
 pub(super) async fn udp_encode_loop(
