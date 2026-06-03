@@ -78,7 +78,12 @@ poly-audio-backend = { workspace = true, optional = true }
 # gloo-net provides browser WebSocket + HTTP for voice_wasm.rs (B.1).
 # poly-host-bridge provides OpusClient for /host/codec/opus/* codec sessions.
 # tracing and futures are also needed on wasm32 (native has them under the "native" feature).
-[target.'cfg(target_arch = "wasm32")'.dependencies]
+#
+# Browser-only (wasm32-unknown-unknown). NOT wasm32-wasip2: the plugin guest
+# does HTTP via the WIT host-api import (src/guest.rs), so it must NOT pull
+# host-bridge/gloo-net/web-sys — those drag in reqwest → openssl/socket2 and
+# browser-only web APIs that don't exist on the wasip2 component target.
+[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
 web-sys = { workspace = true, features = [
     # B.4 — playback (per-user AudioContext + scheduled AudioBufferSourceNode)
     "AudioContext",

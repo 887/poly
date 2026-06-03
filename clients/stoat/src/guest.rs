@@ -9,8 +9,9 @@ use std::cell::RefCell;
 use std::collections::HashSet;
 
 use crate::wit_bindings::{
-    ActionOutcome, ClientComposerGuest, ClientMenusGuest, ClientSettingsGuest, ClientSidebarGuest,
-    ClientViewsGuest, Cursor, Guest, MenuItem, MenuTargetKind, PendingHandle, PluginMetadataGuest,
+    ActionOutcome, ClientComposerGuest, ClientConfigGuest, ClientMenusGuest, ClientSettingsGuest,
+    ClientSidebarGuest, ClientViewsGuest, Cursor, Guest, MenuItem, MenuTargetKind, PendingHandle,
+    PluginMetadataGuest,
     SidebarDeclaration, SidebarLayoutKind, SettingsScope, export,
     poly::messenger::host_api,
     wit,
@@ -19,6 +20,12 @@ use serde::{Deserialize, Serialize};
 
 const OFFICIAL_STOAT_BASE_URL: &str = "https://api.stoat.chat";
 const STOAT_SESSION_TOKEN_HEADER: &str = "x-session-token";
+/// Default User-Agent / client-version Stoat advertises (mirrors native
+/// `http::DEFAULT_CLIENT_VERSION`, which is not compiled on the wasip2 guest).
+const DEFAULT_CLIENT_VERSION: &str = "poly-stoat/0.0.0";
+/// Host-KV key for the client-version override (mirror of the host-owned
+/// `client.config.<id>.*` namespace).
+const CLIENT_VERSION_OVERRIDE_KEY: &str = "client.config.version_override";
 
 #[derive(Debug, Clone)]
 struct StoredSession {
@@ -369,6 +376,16 @@ const FTL_ES: &str = include_str!("../locales/es/plugin.ftl");
 struct StoatPlugin;
 
 impl Guest for StoatPlugin {
+    fn get_signup_method(
+        server_url: Option<String>,
+    ) -> Result<wit::SignupMethod, wit::ClientError> {
+        // Mirrors native is_backend.rs: Stoat signup is an external web flow.
+        let base = server_url.as_deref().unwrap_or("https://app.stoat.chat");
+        Ok(wit::SignupMethod::External(
+            base.trim_end_matches('/').to_string(),
+        ))
+    }
+
     fn authenticate(credentials: wit::AuthCredentials) -> Result<wit::Session, wit::ClientError> {
         match credentials {
             wit::AuthCredentials::Token(token) => {
@@ -1032,6 +1049,39 @@ fn composite_key(scope: SettingsScope, scope_id: &str, key: &str) -> String {
     format!("settings:{}:{}:{}", scope_label(scope), scope_id, key)
 }
 
+/// Client-config: version-override + mechanism inventory. Stoat exposes no
+/// toggleable mechanisms (empty list is legal per the WIT contract); the
+/// version override is persisted via the host KV store, mirroring native
+/// `is_backend.rs` semantics (host re-injects it on next load).
+impl ClientConfigGuest for StoatPlugin {
+    fn get_client_version() -> String {
+        host_api::storage_get(CLIENT_VERSION_OVERRIDE_KEY)
+            .and_then(|bytes| String::from_utf8(bytes).ok())
+            .unwrap_or_else(|| DEFAULT_CLIENT_VERSION.to_string())
+    }
+
+    fn set_client_version_override(
+        version_override: Option<String>,
+    ) -> Result<(), wit::ClientError> {
+        match version_override {
+            Some(v) => host_api::storage_set(CLIENT_VERSION_OVERRIDE_KEY, v.as_bytes())
+                .map_err(wit::ClientError::Internal),
+            None => host_api::storage_delete(CLIENT_VERSION_OVERRIDE_KEY)
+                .map_err(wit::ClientError::Internal),
+        }
+    }
+
+    fn get_client_mechanisms()
+    -> Result<Vec<crate::wit_bindings::Mechanism>, wit::ClientError> {
+        Ok(Vec::new())
+    }
+
+    fn set_client_mechanism(_id: String, _enabled: bool) -> Result<(), wit::ClientError> {
+        // No mechanisms to toggle; accept silently to honour the contract.
+        Ok(())
+    }
+}
+
 impl ClientSettingsGuest for StoatPlugin {
     fn get_settings_sections(
     ) -> Result<Vec<crate::wit_bindings::SettingsSection>, wit::ClientError> {
@@ -1105,6 +1155,28 @@ impl ClientViewsGuest for StoatPlugin {
         Err(wit::ClientError::NotSupported(
             "stoat does not support view detail".to_string(),
         ))
+    }
+
+    fn get_account_overview_view()
+    -> Result<crate::wit_bindings::exports::poly::messenger::client_views::ViewDescriptor, wit::ClientError>
+    {
+        use crate::wit_bindings::exports::poly::messenger::client_views::{
+            CardSpec, ViewBody, ViewDescriptor, ViewHeader, ViewKind,
+        };
+        // Mirrors the native impl (view_descriptor.rs): a card grid of the
+        // user's joined Stoat servers keyed on the `name` field.
+        Ok(ViewDescriptor {
+            kind: ViewKind::CardGrid,
+            header: Some(ViewHeader {
+                title_key: Some("plugin-stoat-overview-title".to_string()),
+                subtitle_key: Some("plugin-stoat-overview-subtitle".to_string()),
+                info_block: None,
+            }),
+            toolbar: None,
+            body: ViewBody::CardBody(CardSpec {
+                primary_field: "name".to_string(),
+            }),
+        })
     }
 }
 

@@ -20,8 +20,8 @@ use std::collections::HashSet;
 use serde::Deserialize;
 
 use crate::wit_bindings::{
-    ClientComposerGuest, ClientMenusGuest, ClientSettingsGuest, ClientSidebarGuest,
-    ClientViewsGuest, Guest, PluginMetadataGuest, export,
+    ClientComposerGuest, ClientConfigGuest, ClientMenusGuest, ClientSettingsGuest,
+    ClientSidebarGuest, ClientViewsGuest, Guest, Mechanism, PluginMetadataGuest, export,
     poly::messenger::{host_api, types::HttpResponse},
     wit,
 };
@@ -227,7 +227,6 @@ fn graph_message_to_wit(m: GraphMessage) -> wit::Message {
         reply_to: None,
         edited: m.last_modified.is_some(),
         thread: None,
-        preview_image_url: None,
     }
 }
 
@@ -256,6 +255,18 @@ fn split_channel_id(compound: &str) -> Result<(&str, &str), wit::ClientError> {
 struct TeamsPlugin;
 
 impl Guest for TeamsPlugin {
+    fn get_signup_method(
+        _server_url: Option<String>,
+    ) -> Result<wit::SignupMethod, wit::ClientError> {
+        // Teams auth is OAuth — the host drives the OAuth flow and injects
+        // the bearer token. The guest signals this with `External` pointing
+        // at the Microsoft login page; the host substitutes its own OAuth
+        // handler before showing this URL to the user.
+        Ok(wit::SignupMethod::External(
+            "https://login.microsoftonline.com".to_string(),
+        ))
+    }
+
     fn authenticate(credentials: wit::AuthCredentials) -> Result<wit::Session, wit::ClientError> {
         let base_url = resolve_base_url();
         let token = match credentials {
@@ -342,11 +353,6 @@ impl Guest for TeamsPlugin {
                 account_id: session.user_id.clone(),
                 account_display_name: session.display_name.clone(),
                 default_channel_id: None,
-                description: None,
-                star_count: None,
-                language: None,
-                forks_count: None,
-                open_issues_count: None,
             })
             .collect())
     }
@@ -375,11 +381,6 @@ impl Guest for TeamsPlugin {
             account_id: session.user_id,
             account_display_name: session.display_name,
             default_channel_id: None,
-            description: None,
-            star_count: None,
-            language: None,
-            forks_count: None,
-            open_issues_count: None,
         })
     }
 
@@ -1125,6 +1126,25 @@ impl ClientSidebarGuest for TeamsPlugin {
 use crate::wit_bindings::{Cursor, ViewDescriptor, ViewDetail, ViewRowsPage};
 
 impl ClientViewsGuest for TeamsPlugin {
+    fn get_account_overview_view() -> Result<ViewDescriptor, wit::ClientError> {
+        use crate::wit_bindings::exports::poly::messenger::client_views::{
+            CardSpec, ViewBody, ViewHeader, ViewKind,
+        };
+        // Mirrors native view_descriptor.rs: a card grid of joined Teams.
+        Ok(ViewDescriptor {
+            kind: ViewKind::CardGrid,
+            header: Some(ViewHeader {
+                title_key: Some("plugin-teams-overview-title".to_string()),
+                subtitle_key: Some("plugin-teams-overview-subtitle".to_string()),
+                info_block: None,
+            }),
+            toolbar: None,
+            body: ViewBody::CardBody(CardSpec {
+                primary_field: "name".to_string(),
+            }),
+        })
+    }
+
     fn get_channel_view(_channel_id: String) -> Result<ViewDescriptor, wit::ClientError> {
         Err(wit::ClientError::NotSupported(
             "teams has no custom views".to_string(),
@@ -1182,6 +1202,43 @@ impl ClientComposerGuest for TeamsPlugin {
         _message_id: String,
     ) -> Result<ActionOutcome, wit::ClientError> {
         Err(wit::ClientError::NotFound(action_id))
+    }
+}
+
+// ─── Client Config ─────────────────────────────────────────────────
+// Teams exposes no toggleable mechanisms; version override is not used.
+// This impl satisfies the WIT `client-config` contract with no-ops,
+// mirroring stoat guest.rs semantics for backends with no tunable knobs.
+
+const CLIENT_VERSION_OVERRIDE_KEY: &str = "client.config.version_override";
+
+impl ClientConfigGuest for TeamsPlugin {
+    fn get_client_version() -> String {
+        host_api::storage_get(CLIENT_VERSION_OVERRIDE_KEY)
+            .and_then(|bytes| String::from_utf8(bytes).ok())
+            .unwrap_or_else(|| "poly-teams/0.0.0".to_string())
+    }
+
+    fn set_client_version_override(
+        version_override: Option<String>,
+    ) -> Result<(), wit::ClientError> {
+        match version_override {
+            Some(v) => host_api::storage_set(CLIENT_VERSION_OVERRIDE_KEY, v.as_bytes())
+                .map_err(wit::ClientError::Internal),
+            None => host_api::storage_delete(CLIENT_VERSION_OVERRIDE_KEY)
+                .map_err(wit::ClientError::Internal),
+        }
+    }
+
+    fn get_client_mechanisms() -> Result<Vec<Mechanism>, wit::ClientError> {
+        // Teams Graph API exposes no toggleable mechanism knobs — empty list is
+        // legal per the WIT contract.
+        Ok(Vec::new())
+    }
+
+    fn set_client_mechanism(_id: String, _enabled: bool) -> Result<(), wit::ClientError> {
+        // No mechanisms to toggle; accept silently to honour the contract.
+        Ok(())
     }
 }
 

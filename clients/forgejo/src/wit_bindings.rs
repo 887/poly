@@ -1,4 +1,4 @@
-//! WIT bindings for the Matrix messenger plugin.
+//! WIT bindings for the Forgejo messenger plugin.
 //!
 //! This module isolates the `wit-bindgen` code generation, which produces unsafe FFI stubs.
 //! The `#![allow(unsafe_code)]` is confined to this module only.
@@ -22,26 +22,16 @@ pub use exports::poly::messenger::client_config::Mechanism;
 pub use exports::poly::messenger::client_menus::ActionOutcome;
 pub use exports::poly::messenger::client_menus::Guest as ClientMenusGuest;
 pub use exports::poly::messenger::client_menus::MenuItem;
-pub use exports::poly::messenger::client_menus::MenuItemVariant;
-pub use exports::poly::messenger::client_menus::MenuSlot;
 pub use exports::poly::messenger::client_menus::MenuTargetKind;
 pub use exports::poly::messenger::client_menus::PendingHandle;
 pub use exports::poly::messenger::client_settings::Guest as ClientSettingsGuest;
 pub use exports::poly::messenger::client_settings::SettingsScope;
 pub use exports::poly::messenger::client_settings::SettingsSection;
 pub use exports::poly::messenger::client_sidebar::Guest as ClientSidebarGuest;
-pub use exports::poly::messenger::client_sidebar::IconSource as SidebarIconSource;
 pub use exports::poly::messenger::client_sidebar::SidebarDeclaration;
-pub use exports::poly::messenger::client_sidebar::SidebarItem;
 pub use exports::poly::messenger::client_sidebar::SidebarLayoutKind;
-pub use exports::poly::messenger::client_sidebar::SidebarRouteKind;
-pub use exports::poly::messenger::client_sidebar::SidebarSection;
 pub use exports::poly::messenger::client_views::Cursor;
 pub use exports::poly::messenger::client_views::Guest as ClientViewsGuest;
-pub use exports::poly::messenger::client_views::ViewDescriptor;
-pub use exports::poly::messenger::client_views::ViewDetail;
-pub use exports::poly::messenger::client_views::ViewRowsPage;
-pub use exports::poly::messenger::client_composer::ComposerButton;
 pub use exports::poly::messenger::messenger_client::Guest;
 pub use exports::poly::messenger::plugin_metadata::Guest as PluginMetadataGuest;
 pub use exports::poly::messenger::plugin_metadata::PluginManifest;

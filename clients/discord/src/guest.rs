@@ -12,11 +12,18 @@ use std::collections::HashSet;
 use serde::Deserialize;
 
 use crate::wit_bindings::{
-    ActionOutcome, ClientComposerGuest, ClientMenusGuest, ClientSettingsGuest, ClientSidebarGuest,
-    ClientViewsGuest, Guest, MenuItem, MenuItemVariant, MenuSlot, MenuTargetKind, PendingHandle,
-    PluginManifest, PluginMetadataGuest, SettingsScope, SidebarDeclaration, SidebarLayoutKind,
-    export, poly::messenger::host_api, wit,
+    ActionOutcome, ClientComposerGuest, ClientConfigGuest, ClientMenusGuest, ClientSettingsGuest,
+    ClientSidebarGuest, ClientViewsGuest, Guest, Mechanism, MenuItem, MenuItemVariant, MenuSlot,
+    MenuTargetKind, PendingHandle, PluginManifest, PluginMetadataGuest, SettingsScope,
+    SidebarDeclaration, SidebarLayoutKind, export, poly::messenger::host_api, wit,
 };
+
+/// Host-KV key for the Discord client-version override (mirrors the host-owned
+/// `client.config.<id>.*` namespace and is read back on next load).
+const CLIENT_VERSION_OVERRIDE_KEY: &str = "client.config.version_override";
+/// Default "client version" string Discord sends in the X-Super-Properties header.
+/// Mirrors native `super_properties::DEFAULT_CLIENT_VERSION` (not compiled on wasip2).
+const DEFAULT_CLIENT_VERSION: &str = "poly-discord/0.0.0";
 
 // ─── Authenticated session state ──────────────────────────────────────────
 
@@ -145,6 +152,16 @@ fn wasm_thread_to_info(t: &WasmDiscordChannel) -> wit::ThreadInfo {
 struct DiscordPlugin;
 
 impl Guest for DiscordPlugin {
+    fn get_signup_method(
+        _server_url: Option<String>,
+    ) -> Result<wit::SignupMethod, wit::ClientError> {
+        // Mirrors native is_backend.rs: Discord signup is an external web flow.
+        // Users must create accounts on discord.com; there is no in-app signup path.
+        Ok(wit::SignupMethod::External(
+            "https://discord.com/register".to_string(),
+        ))
+    }
+
     fn authenticate(_credentials: wit::AuthCredentials) -> Result<wit::Session, wit::ClientError> {
         Err(wit::ClientError::Internal(
             "Discord client not yet implemented".into(),
@@ -1068,6 +1085,60 @@ impl ClientViewsGuest for DiscordPlugin {
         Err(wit::ClientError::NotSupported(
             "discord has no custom views".to_string(),
         ))
+    }
+
+    fn get_account_overview_view()
+    -> Result<crate::wit_bindings::exports::poly::messenger::client_views::ViewDescriptor, wit::ClientError>
+    {
+        use crate::wit_bindings::exports::poly::messenger::client_views::{
+            CardSpec, ViewBody, ViewDescriptor, ViewHeader, ViewKind,
+        };
+        // Mirrors native view_descriptor.rs: a card grid of the user's joined
+        // Discord servers keyed on the `name` field.
+        Ok(ViewDescriptor {
+            kind: ViewKind::CardGrid,
+            header: Some(ViewHeader {
+                title_key: Some("plugin-discord-overview-title".to_string()),
+                subtitle_key: Some("plugin-discord-overview-subtitle".to_string()),
+                info_block: None,
+            }),
+            toolbar: None,
+            body: ViewBody::CardBody(CardSpec {
+                primary_field: "name".to_string(),
+            }),
+        })
+    }
+}
+
+/// Client-config: version-override + mechanism inventory for the Discord WASM plugin.
+/// Mirrors native `is_backend.rs` semantics: the version override is persisted via
+/// the host KV store so the host can re-inject it on next load.
+impl ClientConfigGuest for DiscordPlugin {
+    fn get_client_version() -> String {
+        host_api::storage_get(CLIENT_VERSION_OVERRIDE_KEY)
+            .and_then(|bytes| String::from_utf8(bytes).ok())
+            .unwrap_or_else(|| DEFAULT_CLIENT_VERSION.to_string())
+    }
+
+    fn set_client_version_override(
+        version_override: Option<String>,
+    ) -> Result<(), wit::ClientError> {
+        match version_override {
+            Some(v) => host_api::storage_set(CLIENT_VERSION_OVERRIDE_KEY, v.as_bytes())
+                .map_err(wit::ClientError::Internal),
+            None => host_api::storage_delete(CLIENT_VERSION_OVERRIDE_KEY)
+                .map_err(wit::ClientError::Internal),
+        }
+    }
+
+    fn get_client_mechanisms() -> Result<Vec<Mechanism>, wit::ClientError> {
+        // Discord does not currently expose user-toggleable mechanisms.
+        Ok(Vec::new())
+    }
+
+    fn set_client_mechanism(_id: String, _enabled: bool) -> Result<(), wit::ClientError> {
+        // No mechanisms to toggle; accept silently to honour the contract.
+        Ok(())
     }
 }
 

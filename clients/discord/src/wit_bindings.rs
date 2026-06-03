@@ -26,6 +26,8 @@ pub use exports::poly::messenger::client_menus::MenuItemVariant;
 pub use exports::poly::messenger::client_menus::MenuSlot;
 pub use exports::poly::messenger::client_menus::MenuTargetKind;
 pub use exports::poly::messenger::client_menus::PendingHandle;
+pub use exports::poly::messenger::client_config::Guest as ClientConfigGuest;
+pub use exports::poly::messenger::client_config::Mechanism;
 pub use exports::poly::messenger::client_settings::{Guest as ClientSettingsGuest, SettingsScope, SettingsSection};
 pub use exports::poly::messenger::client_sidebar::Guest as ClientSidebarGuest;
 pub use exports::poly::messenger::client_sidebar::SidebarDeclaration;

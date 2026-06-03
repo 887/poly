@@ -106,29 +106,29 @@ pub(crate) mod voice_noise_filter;
 /// Stoat voice transport — WASM target (Phase B of `plan-stoat-voice-wasm.md`).
 /// Sibling to `voice.rs`; uses `gloo_net` WS + `/host/codec/opus/*` instead of
 /// `tokio_tungstenite` + `audiopus`.
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 pub(crate) mod voice_wasm;
 
 /// Stoat WASM mic capture (Phase B.3). Stub until B.3 agent lands the real
 /// `MediaStreamTrackProcessor` implementation.
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 pub(crate) mod voice_wasm_audio_capture;
 
 /// Stoat WASM speaker playback (Phase B.4). Stub until B.4 agent lands the real
 /// `AudioContext` + `AudioBufferSourceNode` implementation.
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 pub(crate) mod voice_wasm_audio_playback;
 
 /// Stoat WASM video capture (Phase B.3 of `plan-stoat-video-wasm.md`).
 /// Camera → WebCodecs H.264 encoder → FU-A fragmentation → Vortex WS with
 /// `FrameKind::Video` discriminator. Shares the WS opened by `voice_wasm`.
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 pub(crate) mod video_wasm_capture;
 
 /// Stoat WASM video playback (Phase B.4 of `plan-stoat-video-wasm.md`).
 /// Per-user FU-A reassembly → WebCodecs H.264 decoder → canvas draw.
 /// Receives frames dispatched by `voice_wasm` after kind-byte routing.
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 pub(crate) mod video_wasm_playback;
 
 /// Stoat WASM video transport surface (Phase B.5 of `plan-stoat-video-wasm.md`).
@@ -140,7 +140,7 @@ pub(crate) mod video_wasm_playback;
 /// from the live [`voice_wasm::StoatVoiceConnection`]. The returned
 /// [`video_wasm_capture::StoatVideoCaptureHandle`] is stored in `self.video_wasm_conn`
 /// so the camera stays open for the session lifetime.
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 mod video_transport;
 
 /// WIT bindings for the WASM plugin (WASI targets only).
@@ -236,7 +236,7 @@ pub struct StoatClient {
     /// The `StoatVoiceConnection` must be stored here (not dropped) or all
     /// background tasks (encode/decode/event loops) immediately stop.
     /// Analogous to discord's `voice_bridge_client` field.
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
     pub(crate) voice_wasm_conn: std::sync::Arc<std::sync::Mutex<Option<voice_wasm::StoatVoiceConnection>>>,
     /// B.8 — runtime noise-cancellation toggle.
     ///
@@ -248,7 +248,7 @@ pub struct StoatClient {
     /// `VoiceMediaSettings.noise_cancel_enabled` and a `use_reactive_effect`
     /// in voice settings forwards changes here (deferred to UI-layer work;
     /// wiring tracked at crates/core/src/ui/account/settings/voice_settings.rs).
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
     pub(crate) voice_noise_cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
     /// B.5 — live WASM video capture handle.
     ///
@@ -256,7 +256,7 @@ pub struct StoatClient {
     /// Set by `start_video_capture`; cleared by `stop_video_capture` or when
     /// the voice connection is torn down.  The `StoatVideoCaptureHandle` must
     /// be stored here (not dropped) or the camera is released immediately.
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
     pub(crate) video_wasm_conn: std::sync::Arc<std::sync::Mutex<Option<video_wasm_capture::StoatVideoCaptureHandle>>>,
     /// H.2/H.5 — transient voice channels created for DM calls.
     ///
@@ -304,11 +304,11 @@ impl StoatClient {
             voice_guard: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
             #[cfg(feature = "voice")]
             voice_participants: std::sync::Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new())),
-            #[cfg(target_arch = "wasm32")]
+            #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
             voice_wasm_conn: std::sync::Arc::new(std::sync::Mutex::new(None)),
-            #[cfg(target_arch = "wasm32")]
+            #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
             voice_noise_cancel: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true)),
-            #[cfg(target_arch = "wasm32")]
+            #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
             video_wasm_conn: std::sync::Arc::new(std::sync::Mutex::new(None)),
             #[cfg(feature = "native")]
             transient_dm_channels: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
@@ -439,7 +439,7 @@ impl StoatClient {
     /// The UI layer calls this from a `use_reactive_effect` that watches
     /// `VoiceMediaSettings.noise_cancel_enabled` (wired in
     /// `crates/core/src/ui/account/settings/voice_settings.rs`).
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
     pub fn set_noise_cancel(&self, enabled: bool) {
         self.voice_noise_cancel
             .store(enabled, std::sync::atomic::Ordering::Relaxed);

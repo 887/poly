@@ -15,6 +15,15 @@
 /// The backend slug used in all [`poly_client::BackendType`] constructions for this crate.
 pub const SLUG: &str = "forgejo";
 
+/// WIT bindings for the WASM plugin (WASI targets only).
+/// This module isolates the `wit-bindgen` macros for FFI.
+#[cfg(target_os = "wasi")]
+mod wit_bindings;
+
+/// WASM plugin guest implementation (WASI targets only).
+#[cfg(target_os = "wasi")]
+mod guest;
+
 #[cfg(feature = "native")]
 mod api;
 #[cfg(feature = "native")]

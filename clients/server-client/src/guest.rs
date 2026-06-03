@@ -9,10 +9,15 @@
 #![allow(unsafe_code)]
 
 use crate::wit_bindings::{
-    ClientComposerGuest, ClientMenusGuest, ClientSettingsGuest, ClientSidebarGuest,
-    ClientViewsGuest, MessengerClientGuest, PluginManifest, PluginMetadataGuest, SettingsScope,
-    export, poly::messenger::host_api, wit,
+    ClientComposerGuest, ClientConfigGuest, ClientMenusGuest, ClientSettingsGuest,
+    ClientSidebarGuest, ClientViewsGuest, Mechanism, MessengerClientGuest, PluginManifest,
+    PluginMetadataGuest, SettingsScope, export, poly::messenger::host_api, wit,
 };
+
+/// KV key for the client-version override.
+const CLIENT_VERSION_OVERRIDE_KEY: &str = "client.config.version_override";
+/// Default client version string (mirrors native `client_version()`).
+const DEFAULT_CLIENT_VERSION: &str = "poly-server/0.0.0";
 
 // ─── Plugin struct ─────────────────────────────────────────────────
 
@@ -252,6 +257,67 @@ impl MessengerClientGuest for PolyServerPlugin {
             "create_forum_post not implemented".to_string(),
         ))
     }
+
+    fn join_voice_channel_transport(
+        _server_id: String,
+        _channel_id: String,
+    ) -> Result<(), wit::ClientError> {
+        Ok(())
+    }
+
+    fn start_dm_call_transport(
+        _dm_channel_id: String,
+    ) -> Result<(), wit::ClientError> {
+        Err(wit::ClientError::NotSupported(
+            "start_dm_call_transport not yet implemented".to_string(),
+        ))
+    }
+
+    fn set_voice_mute(
+        _server_id: String,
+        _channel_id: String,
+        _self_mute: bool,
+        _self_deaf: bool,
+    ) -> Result<(), wit::ClientError> {
+        Ok(())
+    }
+
+    fn get_signup_method(
+        _server_url: Option<String>,
+    ) -> Result<wit::SignupMethod, wit::ClientError> {
+        // Poly Server signup is done in-app at /signup/poly.
+        Ok(wit::SignupMethod::InApp("/signup/poly".to_string()))
+    }
+}
+
+// ─── client-config ────────────────────────────────────────────────
+
+impl ClientConfigGuest for PolyServerPlugin {
+    fn get_client_version() -> String {
+        host_api::storage_get(CLIENT_VERSION_OVERRIDE_KEY)
+            .and_then(|bytes| String::from_utf8(bytes).ok())
+            .unwrap_or_else(|| DEFAULT_CLIENT_VERSION.to_string())
+    }
+
+    fn set_client_version_override(
+        version_override: Option<String>,
+    ) -> Result<(), wit::ClientError> {
+        match version_override {
+            Some(v) => host_api::storage_set(CLIENT_VERSION_OVERRIDE_KEY, v.as_bytes())
+                .map_err(wit::ClientError::Internal),
+            None => host_api::storage_delete(CLIENT_VERSION_OVERRIDE_KEY)
+                .map_err(wit::ClientError::Internal),
+        }
+    }
+
+    fn get_client_mechanisms() -> Result<Vec<Mechanism>, wit::ClientError> {
+        Ok(Vec::new())
+    }
+
+    fn set_client_mechanism(_id: String, _enabled: bool) -> Result<(), wit::ClientError> {
+        // No mechanisms to toggle; accept silently.
+        Ok(())
+    }
 }
 
 // ─── client-menus ─────────────────────────────────────────────────
@@ -382,6 +448,23 @@ impl ClientViewsGuest for PolyServerPlugin {
         Err(views::ClientError::NotFound(format!(
             "{channel_id}/{row_id}"
         )))
+    }
+
+    fn get_account_overview_view() -> Result<views::ViewDescriptor, views::ClientError> {
+        // Mirrors the native impl (backend.rs): a card grid of the user's
+        // joined Poly Server instances keyed on the `name` field.
+        Ok(views::ViewDescriptor {
+            kind: views::ViewKind::CardGrid,
+            header: Some(views::ViewHeader {
+                title_key: Some("plugin-poly-overview-title".to_string()),
+                subtitle_key: Some("plugin-poly-overview-subtitle".to_string()),
+                info_block: None,
+            }),
+            toolbar: None,
+            body: views::ViewBody::CardBody(views::CardSpec {
+                primary_field: "name".to_string(),
+            }),
+        })
     }
 }
 

@@ -19,6 +19,8 @@ wit_bindgen::generate!({
 pub use exports::poly::messenger::messenger_client::Guest;
 pub use exports::poly::messenger::plugin_metadata::Guest as PluginMetadataGuest;
 pub use exports::poly::messenger::plugin_metadata::PluginManifest;
+pub use exports::poly::messenger::client_config::Guest as ClientConfigGuest;
+pub use exports::poly::messenger::client_config::Mechanism;
 pub use exports::poly::messenger::client_menus::Guest as ClientMenusGuest;
 pub use exports::poly::messenger::client_menus::{
     ActionOutcome, MenuItem, MenuItemVariant, MenuSlot, MenuTargetKind, PendingHandle,

@@ -65,6 +65,12 @@ fn ensure_wasm_built(crate_name: &str) -> Result<(), Box<dyn std::error::Error>>
             crate_name,
             "--target",
             "wasm32-wasip2",
+            // The plugin guests build for wasip2 with default features OFF: the
+            // `native` feature pulls host-bridge/tokio/reqwest (→ openssl/socket2)
+            // which don't cross-compile to wasip2. The guest WIT-export path is
+            // cfg(target_os = "wasi"), independent of features. See
+            // docs/plans/plan-wasm-plugin-wasip2-build.md.
+            "--no-default-features",
         ])
         .current_dir(workspace_root())
         .status()?;

@@ -9,8 +9,8 @@ use std::cell::RefCell;
 use std::collections::HashSet;
 
 use crate::wit_bindings::{
-    ActionOutcome, ClientComposerGuest, ClientMenusGuest, ClientSettingsGuest,
-    ClientSidebarGuest, ClientViewsGuest, Guest, MenuItem, MenuItemVariant, MenuSlot,
+    ActionOutcome, ClientComposerGuest, ClientConfigGuest, ClientMenusGuest, ClientSettingsGuest,
+    ClientSidebarGuest, ClientViewsGuest, Guest, Mechanism, MenuItem, MenuItemVariant, MenuSlot,
     MenuTargetKind, PluginMetadataGuest, SidebarIconSource, SidebarItem, SidebarRouteKind,
     SidebarSection, export, wit,
 };
@@ -399,6 +399,15 @@ fn fetch_profile(
 struct MatrixPlugin;
 
 impl Guest for MatrixPlugin {
+    fn get_signup_method(server_url: Option<String>) -> Result<wit::SignupMethod, wit::ClientError> {
+        // Mirrors native is_backend.rs: Matrix signup is an external web flow.
+        let base = server_url.as_deref().unwrap_or("https://matrix.org");
+        Ok(wit::SignupMethod::External(format!(
+            "{}/_matrix/client/v3/register",
+            base.trim_end_matches('/')
+        )))
+    }
+
     fn authenticate(credentials: wit::AuthCredentials) -> Result<wit::Session, wit::ClientError> {
         match credentials {
             wit::AuthCredentials::Token(token) => {
@@ -1047,6 +1056,27 @@ impl ClientSidebarGuest for MatrixPlugin {
 }
 
 impl ClientViewsGuest for MatrixPlugin {
+    fn get_account_overview_view()
+    -> Result<crate::wit_bindings::exports::poly::messenger::client_views::ViewDescriptor, wit::ClientError>
+    {
+        use crate::wit_bindings::exports::poly::messenger::client_views::{
+            CardSpec, ViewBody, ViewDescriptor, ViewHeader, ViewKind,
+        };
+        // Mirrors native view_descriptor.rs: a card-grid of the user's joined spaces/rooms.
+        Ok(ViewDescriptor {
+            kind: ViewKind::CardGrid,
+            header: Some(ViewHeader {
+                title_key: Some("plugin-matrix-overview-title".to_string()),
+                subtitle_key: Some("plugin-matrix-overview-subtitle".to_string()),
+                info_block: None,
+            }),
+            toolbar: None,
+            body: ViewBody::CardBody(CardSpec {
+                primary_field: "name".to_string(),
+            }),
+        })
+    }
+
     fn get_channel_view(
         _channel_id: String,
     ) -> Result<crate::wit_bindings::ViewDescriptor, wit::ClientError> {
@@ -1104,6 +1134,49 @@ impl ClientComposerGuest for MatrixPlugin {
         _message_id: String,
     ) -> Result<crate::wit_bindings::ActionOutcome, wit::ClientError> {
         Err(wit::ClientError::NotFound(action_id))
+    }
+}
+
+/// Host-KV key for the Matrix client-version override (mirrors native is_backend.rs semantics).
+const CLIENT_VERSION_OVERRIDE_KEY: &str = "client.config.version_override";
+/// Default Matrix client version string (mirrors native http::DEFAULT_CLIENT_VERSION).
+const DEFAULT_CLIENT_VERSION: &str = "poly-matrix/0.0.0";
+
+/// Client-config: version-override + mechanism inventory. Matrix exposes no
+/// toggleable mechanisms (empty list is legal per the WIT contract); the
+/// version override is persisted via the host KV store, mirroring native
+/// `is_backend.rs` semantics (host re-injects it on next load).
+impl ClientConfigGuest for MatrixPlugin {
+    fn get_client_version() -> String {
+        crate::wit_bindings::poly::messenger::host_api::storage_get(CLIENT_VERSION_OVERRIDE_KEY)
+            .and_then(|bytes| String::from_utf8(bytes).ok())
+            .unwrap_or_else(|| DEFAULT_CLIENT_VERSION.to_string())
+    }
+
+    fn set_client_version_override(
+        version_override: Option<String>,
+    ) -> Result<(), wit::ClientError> {
+        match version_override {
+            Some(v) => crate::wit_bindings::poly::messenger::host_api::storage_set(
+                CLIENT_VERSION_OVERRIDE_KEY,
+                v.as_bytes(),
+            )
+            .map_err(wit::ClientError::Internal),
+            None => crate::wit_bindings::poly::messenger::host_api::storage_delete(
+                CLIENT_VERSION_OVERRIDE_KEY,
+            )
+            .map_err(wit::ClientError::Internal),
+        }
+    }
+
+    fn get_client_mechanisms() -> Result<Vec<Mechanism>, wit::ClientError> {
+        // Matrix exposes no toggleable mechanisms in v1.
+        Ok(Vec::new())
+    }
+
+    fn set_client_mechanism(_id: String, _enabled: bool) -> Result<(), wit::ClientError> {
+        // No mechanisms to toggle; accept silently to honour the contract.
+        Ok(())
     }
 }
 

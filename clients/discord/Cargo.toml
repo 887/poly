@@ -151,7 +151,13 @@ serde_json = { workspace = true }
 # audio_capture.rs / audio_playback.rs. Adds web-sys features needed for
 # getUserMedia + MediaStreamTrackProcessor + AudioContext + AudioBufferSourceNode,
 # plus js-sys / wasm-bindgen-futures / wasm-bindgen.
-[target.'cfg(target_arch = "wasm32")'.dependencies]
+#
+# Narrowed to `cfg(all(target_arch = "wasm32", target_os = "unknown"))` to
+# exclude wasm32-wasip2 (WASI component) targets. wasm32-wasip2 has
+# target_os = "wasi", not "unknown", so browser-only deps (web-sys, gloo-net,
+# wasm-bindgen) must NOT be pulled in — they drag in reqwest → openssl/socket2
+# and browser-only Web APIs unavailable on the wasip2 component target.
+[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
 web-sys = { workspace = true, features = [
     # X.2 — capture (getUserMedia → MSTP → AudioData)
     "Navigator",
