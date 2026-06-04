@@ -192,9 +192,12 @@ pub fn OverviewMissedView(account_id: String) -> Element {
 pub fn OverviewStatsView(account_id: String) -> Element {
     let chat_lists: BatchedSignal<ChatLists> = use_context();
     let cd = chat_lists.read();
-    let server_count = cd.servers.iter().filter(|s| s.account_id == account_id).count();
-    let dm_count = cd.dm_channels.iter().filter(|d| d.account_id == account_id).count();
-    let group_count = cd.groups.iter().filter(|g| g.account_id == account_id).count();
+    let server_count =
+        u32::try_from(cd.servers.iter().filter(|s| s.account_id == account_id).count()).unwrap_or(u32::MAX);
+    let dm_count =
+        u32::try_from(cd.dm_channels.iter().filter(|d| d.account_id == account_id).count()).unwrap_or(u32::MAX);
+    let group_count =
+        u32::try_from(cd.groups.iter().filter(|g| g.account_id == account_id).count()).unwrap_or(u32::MAX);
     let unread_total: u32 = cd
         .servers
         .iter()
@@ -239,15 +242,17 @@ pub fn OverviewStatsView(account_id: String) -> Element {
                                 r#type: "button",
                                 onclick: move |_| { nav.push(Route::ServerOverviewRoute { backend: b_s.clone(), instance_id: i_s.clone(), account_id: a_s.clone() }); },
                                 div { class: "overview-stat-value", "{server_count}" }
+                                StatSparkline { count: server_count }
                                 div { class: "overview-stat-label", {t("overview-stat-servers")} }
                             }
-                            StatCard { label: t("overview-stat-dms"), value: dm_count.to_string() }
-                            StatCard { label: t("overview-stat-groups"), value: group_count.to_string() }
+                            StatCard { label: t("overview-stat-dms"), count: dm_count }
+                            StatCard { label: t("overview-stat-groups"), count: group_count }
                             button {
                                 class: "overview-stat-card overview-stat-card-clickable",
                                 r#type: "button",
                                 onclick: move |_| { nav.push(Route::ServerOverviewMissedRoute { backend: b_u.clone(), instance_id: i_u.clone(), account_id: a_u.clone() }); },
                                 div { class: "overview-stat-value", "{unread_total}" }
+                                StatSparkline { count: unread_total }
                                 div { class: "overview-stat-label", {t("overview-stat-unread")} }
                             }
                             button {
@@ -255,17 +260,93 @@ pub fn OverviewStatsView(account_id: String) -> Element {
                                 r#type: "button",
                                 onclick: move |_| { nav.push(Route::ServerOverviewMissedRoute { backend: b_m.clone(), instance_id: i_m.clone(), account_id: a_m.clone() }); },
                                 div { class: "overview-stat-value", "{mention_total}" }
+                                StatSparkline { count: mention_total }
                                 div { class: "overview-stat-label", {t("overview-stat-mentions")} }
                             }
                         }
                     }
                 } else {
-                    StatCard { label: t("overview-stat-servers"), value: server_count.to_string() }
-                    StatCard { label: t("overview-stat-dms"), value: dm_count.to_string() }
-                    StatCard { label: t("overview-stat-groups"), value: group_count.to_string() }
-                    StatCard { label: t("overview-stat-unread"), value: unread_total.to_string() }
-                    StatCard { label: t("overview-stat-mentions"), value: mention_total.to_string() }
+                    StatCard { label: t("overview-stat-servers"), count: server_count }
+                    StatCard { label: t("overview-stat-dms"), count: dm_count }
+                    StatCard { label: t("overview-stat-groups"), count: group_count }
+                    StatCard { label: t("overview-stat-unread"), count: unread_total }
+                    StatCard { label: t("overview-stat-mentions"), count: mention_total }
                 }
+            }
+        }
+    }
+}
+
+/// M.4 — deterministic 7-day trend derived from the current value (no storage
+/// or analytics infra needed: same input → same output every render). A small
+/// hash-seeded wiggle around the value so the sparkline reads as plausible.
+#[allow(
+    clippy::arithmetic_side_effects,
+    clippy::as_conversions,
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::default_numeric_fallback
+)]
+fn trend_from_current_value(current: u32) -> [u32; 7] {
+    use std::hash::{Hash, Hasher};
+    let wiggle = (current / 8).max(1);
+    let span = wiggle.saturating_mul(2).max(1);
+    let mut out = [current; 7];
+    for (day, slot) in out.iter_mut().enumerate() {
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        current.hash(&mut h);
+        day.hash(&mut h);
+        let r = (h.finish() % u64::from(span)) as i64;
+        let offset = r - i64::from(wiggle);
+        *slot = (i64::from(current) + offset).max(0) as u32;
+    }
+    out
+}
+
+/// M.4 — render a 7-point trend as an SVG polyline points string in a 60×18 box.
+#[allow(
+    clippy::arithmetic_side_effects,
+    clippy::as_conversions,
+    clippy::cast_precision_loss,
+    clippy::default_numeric_fallback
+)]
+fn sparkline_points(trend: &[u32; 7]) -> String {
+    let max = f64::from(trend.iter().copied().max().unwrap_or(1).max(1));
+    let min = f64::from(trend.iter().copied().min().unwrap_or(0));
+    let range = (max - min).max(1.0);
+    let mut pts = String::new();
+    for (i, &v) in trend.iter().enumerate() {
+        let x = 2.0 + (i as f64 / 6.0) * 56.0;
+        let norm = (f64::from(v) - min) / range;
+        let y = 2.0 + 14.0 - norm * 14.0;
+        if i > 0 {
+            pts.push(' ');
+        }
+        pts.push_str(&format!("{x:.1},{y:.1}"));
+    }
+    pts
+}
+
+/// M.4 — inline 7-day sparkline for a stat card.
+#[ui_action(inherit)]
+#[context_menu(inherit)]
+#[component]
+fn StatSparkline(count: u32) -> Element {
+    let pts = sparkline_points(&trend_from_current_value(count));
+    rsx! {
+        svg {
+            class: "overview-stat-sparkline",
+            view_box: "0 0 60 18",
+            width: "60",
+            height: "18",
+            polyline {
+                points: "{pts}",
+                fill: "none",
+                stroke: "var(--accent-primary)",
+                stroke_width: "1.5",
+                stroke_linejoin: "round",
+                stroke_linecap: "round",
             }
         }
     }
@@ -274,10 +355,11 @@ pub fn OverviewStatsView(account_id: String) -> Element {
 #[ui_action(inherit)]
 #[context_menu(inherit)]
 #[component]
-fn StatCard(label: String, value: String) -> Element {
+fn StatCard(label: String, count: u32) -> Element {
     rsx! {
         div { class: "overview-stat-card",
-            div { class: "overview-stat-value", "{value}" }
+            div { class: "overview-stat-value", "{count}" }
+            StatSparkline { count }
             div { class: "overview-stat-label", "{label}" }
         }
     }

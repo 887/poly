@@ -33,7 +33,7 @@
     align-items: center;
     width: 100%;
     padding: 12px 0;
-    gap: 8px;
+    gap: 6px;
     overflow-y: auto;
     overflow-x: hidden;
     min-height: 0;
@@ -94,10 +94,12 @@
 }
 
 .server-icon {
-    width: 48px;
-    height: 48px;
-    min-width: 48px;
-    min-height: 48px;
+    /* H — denser rail: 40px (was 48) packs ~25% more icons per screen for
+       users with many accounts/servers, with a hover-grow for affordance. */
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
     flex-shrink: 0;
     /* prevent icons from shrinking into pills when the sidebar gets a scrollbar or slightly resizes */
     border-radius: var(--radius-full);
@@ -106,9 +108,9 @@
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: border-radius var(--transition-fast), background-color var(--transition-fast);
+    transition: border-radius var(--transition-fast), background-color var(--transition-fast), transform var(--transition-fast);
     position: relative;
-    font-size: 20px;
+    font-size: 18px;
     /* Allow absolutely-positioned status dots to render outside the icon
        boundary without being clipped by the border-radius or any ancestor
        overflow rule. */
@@ -118,6 +120,7 @@
 .server-icon:hover {
     border-radius: var(--radius-lg);
     background-color: var(--sidebar-icon-hover);
+    transform: scale(1.12);
 }
 
 .server-icon.active {
@@ -222,7 +225,7 @@
     flex-direction: column;
     align-items: center;
     padding: 12px 0;
-    gap: 8px;
+    gap: 6px;
     overflow-y: auto;
     overflow-x: hidden;
     /* hide horizontal scrollbars caused by rounding/zoom */

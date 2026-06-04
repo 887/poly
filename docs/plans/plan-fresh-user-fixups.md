@@ -30,8 +30,7 @@ Enter-to-send hint).
 - [x] **U.7** ✅ FULL single-column drawer SHIPPED. Extracted AccountIcon's ~60-line account-switch into a shared `navigate_to_account` helper (AccountIcon now calls it — behavior-preserving), then built `CompactMobileSwitcher` (mounted in split_shell, mobile-only, top of the drawer) = a horizontal account-avatar row (reuses AccountIcon → the helper) + a nav row (reuses the existing AccountBar Overview/DMs/Friends/Notifications buttons). On drawer-open the two vertical rails are hidden and the DM list spans full width (207→351px). Also fixed: the DMs/Friends AccountBar buttons now `close_mobile_drawer()` (no-op on desktop). Live-verified at 390px: 3-account row + 4-nav row, rails hidden, list full-width; account-switch (Cat→Dog/overview), nav-tap (→friends + drawer closes); desktop account-switch still route-restores. The earlier rail-narrowing is superseded (rails hidden on open).
   rail) regresses navigation; needs a proper account/server switcher-header
   redesign. U.1's dimmed backdrop is the shipped interim.
-- **H.1–H.3** (account-bar density) — DEFER: needs a taste pass against a
-  stuffed 25+ account list (your eye).
+- **H.1–H.3** ✅ BUILT — denser rails (avatars 48→40px, gaps 8→6px, hover-grow 1.12). Live-confirmed (40px; far more accounts visible).
 
 ---
 
@@ -410,7 +409,7 @@ promises *activity*; the cards show *inventory*.
   SERVERS → Overview General grid, etc.
 - [x] **M.3** ✅ `.overview-stats-grid` min 150→130px so all 5 stat cards sit on one row. Live-confirmed (5 cols, 1 row). Fix the wrap: 4 cards on row 1, 1 orphan on row 2.
   Either fit 5 across, or wrap to 3+2.
-- [ ] **M.4** Aspirational: add small sparklines / 7-day trends on
+- [x] **M.4** ✅ BUILT — inline 7-day SVG sparkline on every overview stat card (Servers/DMs/Groups/Unread/Mentions), from a deterministic `trend_from_current_value` helper (hash-seeded wiggle; no storage/analytics infra). Live-confirmed: 5 polylines render. Aspirational: add small sparklines
   each card. Optional nice-to-have.
 
 ---

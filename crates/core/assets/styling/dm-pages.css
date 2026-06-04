@@ -1233,6 +1233,15 @@
     gap: 4px;
 }
 
+/* M.4 — 7-day trend sparkline on each stat card. */
+.overview-stat-sparkline {
+    display: block;
+    width: 60px;
+    height: 18px;
+    margin: 4px 0 2px;
+    opacity: 0.7;
+}
+
 /* M.2 — clickable stat cards (Servers / Unread / Mentions). */
 button.overview-stat-card-clickable {
     cursor: pointer;
