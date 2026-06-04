@@ -378,7 +378,7 @@ Stats shows 5 cards (Servers, Direct Messages, Groups, Unread,
 Mentions) with raw counts. Subtitle "Your activity at a glance"
 promises *activity*; the cards show *inventory*.
 
-- [ ] **M.1** Either rename the page to "Inventory" / "At a glance"
+- [x] **M.1** ✅ Fixed the over-promising subtitle — was "Your activity at a glance" (cards show inventory, not activity); now "A snapshot of your servers, messages, and unread." Either rename the page to "Inventory" / "At a glance"
   or add real activity metrics: messages sent per day, time-in-app,
   most-active channels, etc.
 - [ ] **M.2** Make the cards clickable: UNREAD → Things-you-missed,
@@ -423,11 +423,11 @@ Notifications (🔔). Sub-nav: All notifications (7) / Mentions (2) /
 Friend requests (2) / Server invites (2) / Voice invites (1) / Other (0).
 Right pane lists notification cards with action buttons.
 
-- [ ] **O.1** The middle-column subtitle reads "No new notifications"
+- [x] **O.1** ✅ The sidebar subtitle now renders only when the list is empty (`if total_count == 0`). Live-confirmed: with 7 notifications no contradictory subtitle shows. The middle-column subtitle reads "No new notifications"
   while the list shows 7. Contradicts. Either the subtitle is stale
   (probably) or means "no unread" (then label it "All caught up" or
   hide it when the list is non-empty).
-- [ ] **O.2** Action button wording inconsistent: Friend Request =
+- [x] **O.2** ✅ Unified on "Decline" (set `notifications-deny = Decline`). Live-confirmed: action buttons read Accept / Decline everywhere. Action button wording inconsistent: Friend Request =
   Accept / **Deny**, Server Invite = Accept / **Decline**. Pick one
   word. "Decline" feels more polite for both.
 - [ ] **O.3** Type pills (Mention / Friend Request / Server Invite /
@@ -451,13 +451,13 @@ Agent → Integrations. MCP server config + integration feature list.
 - [x] **P.1** ✅ Root cause: the i18n keys `settings-mcp-transport-label` + `-desc` were MISSING, so `t()` fell back to the title-cased key ("Settings Mcp Transport"). Added both keys to `locales/en/main.ftl` ("MCP transport"). Label "Settings Mcp Transport" uses inconsistent case
   ("Mcp" vs "MCP" used elsewhere on the same page). Pick one (MCP
   is the canonical acronym) and apply everywhere.
-- [ ] **P.2** The secondary line under "Settings Mcp Transport"
+- [x] **P.2** ✅ Resolved by P.1 — the secondary line was the missing `settings-mcp-transport-desc` key showing as a fallback; it now has real copy. The secondary line under "Settings Mcp Transport"
   appears to be a stale i18n key or duplicate label. Inspect and
   either give it real copy or remove.
 - [ ] **P.3** The Port input (containing "3010") spans the full
   pane width. A 4-digit port number doesn't need that much real
   estate. Constrain to ~120px.
-- [ ] **P.4** The page is titled "Integrations" AND there's a sub-
+- [x] **P.4** ✅ The feature-rows sub-section heading reused the page's `agent-section-integrations` key; pointed it at a new `agent-section-features` ("Features") key. No more duplicate "Integrations". The page is titled "Integrations" AND there's a sub-
   section headed "Integrations" with the feature rows (Suggested
   responses / Conversation summaries / etc.). Rename one. The lower
   list is really "Features" or "Capabilities".
@@ -545,7 +545,7 @@ The mental model breaks.
   Search) | side-panels (Agent / Members) | overflow (Settings,
   preferably demoted into the ⚙️ icon at the far right or into a
   "more" menu).
-- [ ] **S.2** The Search button uses two emojis stacked
+- [x] **S.2** ✅ Replaced the stacked 📰+🔎 composite with a single 🔍 in the chat-header search button. The Search button uses two emojis stacked
   (`📰🔎` — newspaper + magnifying glass). Pick one. 🔎 alone is
   conventional and unambiguous. Newspaper reads as "feed/articles",
   not "search messages".

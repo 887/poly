@@ -479,10 +479,7 @@ pub(super) fn render_search_tab_button(
                     });
                 }
             },
-            span { class: "chat-search-tab-icon",
-                span { class: "chat-search-tab-icon-base", "📰" }
-                span { class: "chat-search-tab-icon-overlay", "🔎" }
-            }
+            span { class: "chat-search-tab-icon", "🔍" }
         }
     }
 }

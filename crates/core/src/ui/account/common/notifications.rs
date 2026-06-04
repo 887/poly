@@ -317,7 +317,12 @@ pub fn NotificationsView(account_id: String, backend_slug: String) -> Element {
             sidebar: rsx! {
                 div { class: "special-page-sidebar-header",
                     h2 { class: "special-page-sidebar-title", "{notifications_title}" }
-                    p { class: "special-page-sidebar-description", "{notifications_empty}" }
+                    // O.1 — only show the "No new notifications" line when the
+                    // list is actually empty; it previously showed even with
+                    // items present, contradicting the count.
+                    if total_count == 0 {
+                        p { class: "special-page-sidebar-description", "{notifications_empty}" }
+                    }
                 }
                 if needs_reauth {
                     {

@@ -323,7 +323,7 @@ pub(super) fn Integrations() -> Element {
             McpTransportRow { transport: mcp_transport }
             McpConfigBlock { mcp_port, transport: mcp_transport }
 
-            h3 { class: "settings-subsection-title", "{t(\"agent-section-integrations\")}" }
+            h3 { class: "settings-subsection-title", "{t(\"agent-section-features\")}" }
             div { class: "setup-features",
                 IntegrationItem {
                     icon: "💬",
