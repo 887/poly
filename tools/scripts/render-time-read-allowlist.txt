@@ -129,11 +129,11 @@ crates/core/src/ui/account/common/friends_panel.rs:191 # MEDIUM — rsx! string 
 crates/core/src/ui/account/common/friends_panel.rs:274 # MEDIUM — render-time read drives output or child prop, subscription is intent
 crates/core/src/ui/account/common/new_conversation_view.rs:28 # MEDIUM — render-time read drives output or child prop, subscription is intent
 crates/core/src/ui/account/common/new_conversation_view.rs:29 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/new_conversation_view.rs:42 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/new_conversation_view.rs:54 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/new_conversation_view.rs:83 # MEDIUM — rsx! string interpolation, subscription is intent
-crates/core/src/ui/account/common/new_conversation_view.rs:97 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/new_conversation_view.rs:135 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/new_conversation_view.rs:48 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/new_conversation_view.rs:62 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/new_conversation_view.rs:91 # MEDIUM — rsx! string interpolation, subscription is intent
+crates/core/src/ui/account/common/new_conversation_view.rs:105 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/new_conversation_view.rs:143 # MEDIUM — render-time read drives output or child prop, subscription is intent
 crates/core/src/ui/account/common/notifications.rs:176 # MEDIUM — render-time read drives output or child prop, subscription is intent
 crates/core/src/ui/account/common/notifications.rs:187 # MEDIUM — render-time read drives output or child prop, subscription is intent
 crates/core/src/ui/account/common/notifications.rs:198 # MEDIUM — render-time read drives output or child prop, subscription is intent

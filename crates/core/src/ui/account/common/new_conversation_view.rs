@@ -38,16 +38,24 @@ pub fn NewConversationView() -> Element {
         .get(&active_account_id)
         .map(|session| session.user.id.clone());
 
+    // Scope to the ACTIVE account's friends only — this is "new DM from the
+    // active account context" (W1 of plan-fresh-user-fixups.md). The old
+    // `.values().flatten()` merged every active account's list, so two demo
+    // accounts that share contacts produced each shared friend twice. `seen`
+    // dedups defensively by id in case a single list ever repeats.
+    let mut seen = std::collections::HashSet::new();
     let friends: Vec<_> = chat_lists
         .read()
         .friends
-        .values()
+        .get(&active_account_id)
+        .into_iter()
         .flatten()
         .filter(|friend| active_backend.as_ref().map_or(true, |backend| backend == &friend.backend))
         .filter(|friend| active_user_id.as_deref() != Some(friend.id.as_str()))
         .filter(|friend| {
             search_lower.is_empty() || friend.display_name.to_lowercase().contains(&search_lower)
         })
+        .filter(|friend| seen.insert(friend.id.clone()))
         .cloned()
         .collect();
 

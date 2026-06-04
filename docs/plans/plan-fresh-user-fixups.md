@@ -192,33 +192,35 @@ is no way to know what most of them do without hovering each one.
 
 ---
 
-## Phase E — Unread badge stays on the open DM
+## Phase E — Unread badge stays on the open DM ✅ DONE (change `yryqkmll`)
 
 The DM list shows Bob with a red `(1)` unread badge even while the
 Bob conversation is *currently open* on the right pane. Opening a
 conversation should clear its own unread counter, not just the
 new-message-divider.
 
-> **2026-06-03 re-check (code):** appears ALREADY FIXED since the 2026-05-25
-> walkthrough. The clear-on-open is wired on both the list-click
-> (`channel_list/items.rs` → `mark_channel_as_read_with_backend`) and history
-> load (`effects/history_state.rs`), and the demo backend now honors a
-> process-local read set (`data::apply_local_read_state_dms`, wired into every
-> DM generator in `flavour.rs`) so a refetch no longer resurrects the badge —
-> which is exactly E.4. Needs a live MCP confirm to tick; left unchecked pending that.
+> **2026-06-03 re-check (code):** claimed ALREADY FIXED — **wrong**. Live MCP
+> repro on 2026-06-04 confirmed the badge persists on open. The clear-on-open
+> wiring was fine; the bug was in `mark_channel_as_read` itself.
+> **Real root cause:** the demo backend reuses dm ids across accounts (Dog's
+> `dm_channels()` in `flavour.rs:577` takes the first 3 of `demo_dm_channels()`
+> and only swaps `account_id`, keeping `id = dm-user-alice/bob/charlie`). So
+> `chat_lists.dm_channels` holds two entries with the same id, and
+> `mark_channel_as_read` (a) `.find()`-ed the FIRST match — early-returning if
+> that sibling's unread was 0 — and (b) `break`-ed after zeroing one entry, so
+> the active account's displayed entry was never cleared.
 
-- [ ] **E.1** Repro reliably (open closed DM → confirm badge present
-  → confirm badge persists after open).
-- [ ] **E.2** Find the unread-clear hook — probably in the
-  `open_message_hit` / channel-select path in
-  `crates/core/src/ui/account/common/chat_view/` or in the per-channel
-  read-state writer.
-- [ ] **E.3** Wire the clear-on-select. Don't add a new effect for
-  this — the existing channel-select path already touches state, the
-  unread-clear belongs in that batch.
-- [ ] **E.4** Confirm the demo backend supports an unread-write at
-  all (if it's a backend-NotSupported, the badge will reappear on
-  next sync; gate the badge on backend capability).
+- [x] **E.1** Repro reliably — live MCP: Iris/Alice/Bob each showed `(1)`;
+  opening kept the badge. Shipped in change `yryqkmll`.
+- [x] **E.2** Found the hook: `chat_view/mod.rs::mark_channel_as_read`
+  (called via `mark_channel_as_read_with_backend` from the list-click). Shipped in `yryqkmll`.
+- [x] **E.3** Fixed in the existing batch (no new effect): take MAX unread
+  across all id matches (so a 0-unread sibling can't trigger the early-return),
+  and drop the `break` so EVERY entry sharing the id is zeroed. Live-verified:
+  opening Iris cleared her badge. Shipped in `yryqkmll`.
+- [x] **E.4** Demo backend read-write already honored via
+  `data::apply_local_read_state_dms` (process-local read set); the fix is
+  UI-layer so it's backend-agnostic. Shipped in `yryqkmll`.
 
 ---
 
@@ -628,29 +630,31 @@ Mostly good. One thing to note:
 
 Sidebar "+ New Conversation" opens a friends-picker pane.
 
-- [ ] **W.1** The friend list shows duplicates: Charlie, Diana, Eve,
-  Frank, Grace, Henry appear once with no checkbox / no avatar, then
-  Alice, Bob, Charlie, Diana, Eve, Frank, Grace, Henry, Dog (demo) appear
-  again with checkboxes AND avatars. Likely two render-passes overlap, or
-  there are two intentionally-distinct sections (recent? all?) that
-  aren't visually labeled.
+- [x] **W.1** ✅ Duplicates fixed (change `yryqkmll`). **Root cause:** the
+  picker did `chat_lists.friends.values().flatten()` — merging EVERY active
+  account's friend list. With demo-cat + demo-dog both active and sharing 6
+  contacts (Charlie…Henry), each shared friend rendered twice. **Fix:** scope
+  to the active account only (`friends.get(&active_account_id)`) — this is "new
+  DM from the active account context" — plus a defensive `seen` HashSet dedup
+  by id. Live-verified: picker now shows exactly 9 unique rows (Alice…Henry +
+  Dog), no repeats.
 - [x] **W.2** ✅ Filter the active account's own user id out of the
   `NewConversationView` friend picker. `new_conversation_view.rs` now
   computes `active_user_id` (via `account_sessions` + active account)
   and `.filter(|f| active_user_id != Some(f.id))`. Snapshot reads use
-  `.peek()` (hang-class #7). Build-verified (`cargo check -p poly-core`
-  clean); live MCP confirm pending (poly-web MCP not loaded this session).
+  `.peek()` (hang-class #7). **Live MCP confirmed 2026-06-04** (change
+  `yryqkmll`): no "Cat (demo)" self entry in the picker. The self-filter is now
+  belt-and-braces behind the W.1 active-account scoping (Cat's own list never
+  contains Cat anyway; the earlier self-appearance was the cross-account
+  `.values().flatten()` pulling Dog's Cat-as-friend entry).
 - [ ] **W.3** The description ends with "Multi-person conversations
   will use this composer once shared group creation is wired." That's
   a half-finished-feature note shown to users. Either ship the feature
   or hide the copy until it lands.
-- [ ] **W.4** Clicking "Saved Messages" from the same sidebar did
-  nothing (no view change). Either the route is broken or the click
-  target is misplaced.
-  > **2026-06-03 re-check (code):** the button in `dm_view.rs:396` now has an
-  > onclick that `nav!(Route::SavedItemsRoute { … })` — appears fixed since the
-  > walkthrough. Needs a live MCP confirm that SavedItemsRoute renders (left
-  > unchecked pending that).
+- [x] **W.4** ✅ **Live MCP confirmed 2026-06-04**: clicking "Saved Messages"
+  navigates to `/demo/demo/demo-cat/saved` and renders the "Saved Messages"
+  view. The `dm_view.rs:396` onclick (`nav!(Route::SavedItemsRoute { … })`)
+  works; this was fixed since the walkthrough — now verified live, not just code.
 
 ---
 

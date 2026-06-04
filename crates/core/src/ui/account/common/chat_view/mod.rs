@@ -226,11 +226,19 @@ pub(crate) fn mark_channel_as_read(
     let (unread_count, mention_count, current_server_id) = {
         let cl = chat_lists.read();
         let cv = chat_view_state.read();
+        // Multiple accounts can carry the SAME channel id (e.g. the demo
+        // backend reuses dm-user-* ids across accounts), so take the MAX
+        // unread across all matches rather than the first — otherwise a
+        // sibling entry with 0 unread short-circuits the early-return below
+        // and the badge never clears (bug E of plan-fresh-user-fixups.md).
         let (unread_count, mention_count) = cl
             .dm_channels
             .iter()
-            .find(|dm| dm.id == channel_id)
-            .map(|dm| (dm.unread_count, 0u32))
+            .filter(|dm| dm.id == channel_id)
+            .map(|dm| dm.unread_count)
+            .max()
+            .filter(|count| *count > 0)
+            .map(|count| (count, 0u32))
             .or_else(|| {
                 cl.channels
                     .iter()
@@ -271,18 +279,20 @@ pub(crate) fn mark_channel_as_read(
     });
 
     chat_lists.batch(|cl| {
+        // No `break` — zero EVERY entry sharing this channel id across all
+        // accounts so the active account's list badge clears (bug E). Demo
+        // reuses dm ids across accounts; the first match isn't necessarily
+        // the one the visible badge is rendered from.
         for channel in &mut cl.channels {
             if channel.id == channel_id {
                 channel.unread_count = 0;
                 channel.mention_count = 0;
-                break;
             }
         }
 
         for dm in &mut cl.dm_channels {
             if dm.id == channel_id {
                 dm.unread_count = 0;
-                break;
             }
         }
 
