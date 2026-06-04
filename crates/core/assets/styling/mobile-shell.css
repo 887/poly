@@ -370,6 +370,28 @@
     flex-wrap: wrap;
 }
 
+/* U.6 — mobile chat-header overflow (⋯) menu giving access to Search/Threads/
+   Pinned/Settings/Agent, which the mobile header otherwise drops. */
+.poly-app.poly-mobile-runtime-active .chat-header-overflow-anchor {
+    position: relative;
+    flex: 0 0 auto;
+}
+.poly-app.poly-mobile-runtime-active .chat-header-overflow-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 480;
+    min-width: 190px;
+    padding: 8px;
+    border: 1px solid var(--border-primary);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--bg-secondary) 96%, black);
+    box-shadow: 0 16px 32px rgb(0 0 0 / 28%);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
 .poly-app.poly-mobile-runtime-active .chat-header-search-inline {
     width: 100%;
     min-width: 0;

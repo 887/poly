@@ -297,6 +297,10 @@ fn render_mobile_chat_header_right_toggle(ctx: ChatViewMarkupCtx) -> Element {
     let client_manager = ctx.client_manager;
     let is_dm_channel = ctx.is_dm_channel;
     let is_group_channel = ctx.is_group_channel;
+    // U.6 — reuse the existing menu-open Signal (no use_signal here: this helper
+    // is called conditionally, so a hook would break ordering).
+    let mut header_actions_menu_open = ctx.header_actions_menu_open;
+    let menu_open = *header_actions_menu_open.read(); // poly-lint: allow render-time-read — reactive: mobile header overflow menu
     let active_dm_call = voice_state
         .read()
         .voice_connection
@@ -432,6 +436,85 @@ fn render_mobile_chat_header_right_toggle(ctx: ChatViewMarkupCtx) -> Element {
                     }
                 } else {
                     span { class: "mobile-server-icon-fallback", "{toggle_fallback}" }
+                }
+            }
+            // U.6 — overflow menu giving mobile access to the tools the desktop
+            // header has (Search / Threads / Pinned / Settings / Agent), which
+            // otherwise have no mobile entry point. Each item opens its panel AND
+            // the right wing (ui_layout + the open-JS), mirroring the toggle above.
+            div { class: "chat-header-overflow-anchor",
+                button {
+                    class: if menu_open { "header-btn active chat-header-btn-overflow" } else { "header-btn chat-header-btn-overflow" },
+                    title: t("action-more"),
+                    onclick: move |_| {
+                        let open = *header_actions_menu_open.peek();
+                        header_actions_menu_open.set(!open);
+                    },
+                    "⋯"
+                }
+                if menu_open {
+                    div { class: "chat-header-overflow-menu",
+                        button { class: "chat-header-overflow-item",
+                            onclick: move |_| {
+                                header_actions_menu_open.set(false);
+                                show_search_filters.set(false);
+                                utility_panel.set(Some(ChatUtilityPanel::Search));
+                                ui_layout.batch(|l| { if is_dm_channel || is_group_channel { l.dm_right_sidebar_visible = true; } else { l.right_sidebar_visible = true; } });
+                                #[cfg(target_arch = "wasm32")]
+                                { let _ = document::eval(MOBILE_RIGHT_WING_OPEN_JS); }
+                            },
+                            span { class: "chat-header-overflow-icon", "🔍" }
+                            span { class: "chat-header-overflow-label", {t("search-messages")} }
+                        }
+                        button { class: "chat-header-overflow-item",
+                            onclick: move |_| {
+                                header_actions_menu_open.set(false);
+                                show_search_filters.set(false);
+                                utility_panel.set(Some(ChatUtilityPanel::Threads));
+                                ui_layout.batch(|l| { if is_dm_channel || is_group_channel { l.dm_right_sidebar_visible = true; } else { l.right_sidebar_visible = true; } });
+                                #[cfg(target_arch = "wasm32")]
+                                { let _ = document::eval(MOBILE_RIGHT_WING_OPEN_JS); }
+                            },
+                            span { class: "chat-header-overflow-icon", "🧵" }
+                            span { class: "chat-header-overflow-label", {t("threads")} }
+                        }
+                        button { class: "chat-header-overflow-item",
+                            onclick: move |_| {
+                                header_actions_menu_open.set(false);
+                                show_search_filters.set(false);
+                                utility_panel.set(Some(ChatUtilityPanel::Pinned));
+                                ui_layout.batch(|l| { if is_dm_channel || is_group_channel { l.dm_right_sidebar_visible = true; } else { l.right_sidebar_visible = true; } });
+                                #[cfg(target_arch = "wasm32")]
+                                { let _ = document::eval(MOBILE_RIGHT_WING_OPEN_JS); }
+                            },
+                            span { class: "chat-header-overflow-icon", "📌" }
+                            span { class: "chat-header-overflow-label", {t("pinned-messages")} }
+                        }
+                        button { class: "chat-header-overflow-item",
+                            onclick: move |_| {
+                                header_actions_menu_open.set(false);
+                                show_search_filters.set(false);
+                                utility_panel.set(Some(ChatUtilityPanel::Settings));
+                                ui_layout.batch(|l| { if is_dm_channel || is_group_channel { l.dm_right_sidebar_visible = true; } else { l.right_sidebar_visible = true; } });
+                                #[cfg(target_arch = "wasm32")]
+                                { let _ = document::eval(MOBILE_RIGHT_WING_OPEN_JS); }
+                            },
+                            span { class: "chat-header-overflow-icon", "⚙️" }
+                            span { class: "chat-header-overflow-label", {t("chat-settings")} }
+                        }
+                        button { class: "chat-header-overflow-item",
+                            onclick: move |_| {
+                                header_actions_menu_open.set(false);
+                                show_search_filters.set(false);
+                                utility_panel.set(Some(ChatUtilityPanel::Agent));
+                                ui_layout.batch(|l| { if is_dm_channel || is_group_channel { l.dm_right_sidebar_visible = true; } else { l.right_sidebar_visible = true; } });
+                                #[cfg(target_arch = "wasm32")]
+                                { let _ = document::eval(MOBILE_RIGHT_WING_OPEN_JS); }
+                            },
+                            span { class: "chat-header-overflow-icon", "🤖" }
+                            span { class: "chat-header-overflow-label", {t("agent-panel-toggle")} }
+                        }
+                    }
                 }
             }
         }
