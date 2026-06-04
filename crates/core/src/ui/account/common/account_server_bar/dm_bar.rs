@@ -9,6 +9,7 @@ use super::super::super::super::routes::Route;
 use crate::state::{ChatAction, ChatLists, ChatViewState, View};
 use crate::i18n::t;
 use crate::ui::favorites_sidebar::SidebarTooltip;
+use crate::ui::main_layout::close_mobile_drawer;
 use dioxus::prelude::*;
 use poly_ui_macros::{context_menu, ui_action};
 
@@ -44,6 +45,7 @@ pub fn AccountBarDmsButton(
                         instance_id: instance_id.clone(),
                         account_id: account_id.clone(),
                     });
+                close_mobile_drawer();
             },
             div { class: "icon-dms", "💬" }
             SidebarTooltip {
@@ -86,6 +88,7 @@ pub fn AccountBarFriendsButton(
                     instance_id: instance_id.clone(),
                     account_id: account_id.clone(),
                 });
+                close_mobile_drawer();
             },
             div { class: "icon-dms", "👥" }
             SidebarTooltip {

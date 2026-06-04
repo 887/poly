@@ -44,6 +44,9 @@ use crate::ui::account::common::chat_history::{
 };
 use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::main_layout::{close_mobile_drawer, mobile_left_drawer_open};
+use crate::ui::account::common::account_server_bar::{
+    AccountBarDmsButton, AccountBarFriendsButton, AccountBarNotifsButton, AccountBarOverviewButton,
+};
 use dioxus::prelude::*;
 use poly_client::{AccountPresence, ConnectionStatus};
 use poly_ui_macros::{context_menu, ui_action};
@@ -297,6 +300,101 @@ pub(crate) fn navigate_to_account(
         }
     };
     navigator().push(fallback_route);
+}
+
+/// U.7 — compact single-column mobile drawer header. Mounted at the top of the
+/// drawer panel on mobile (split_shell); the two vertical desktop rails are
+/// hidden when the drawer is open (mobile-shell.css). A horizontal account row
+/// (reusing `AccountIcon` → `navigate_to_account`) + a nav row (reusing the
+/// existing `AccountBar*` buttons) replace the rails — no handler duplication.
+#[context_menu(inherit)]
+#[rustfmt::skip]
+#[ui_action(inherit)]
+#[component]
+pub(crate) fn CompactMobileSwitcher() -> Element {
+    let nav_state: BatchedSignal<NavState> = use_context();
+    let account_sessions: BatchedSignal<AccountSessions> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
+    let chat_lists: BatchedSignal<ChatLists> = use_context();
+
+    let live: Vec<String> =
+        client_manager.with(super::super::client_manager::ClientManager::active_account_ids);
+    let account_ids: Vec<String> = account_sessions.with(|as_| {
+        let live_set: std::collections::HashSet<_> = live.iter().cloned().collect();
+        let mut ordered: Vec<String> = as_
+            .account_order
+            .iter()
+            .filter(|id| live_set.contains(*id))
+            .cloned()
+            .collect();
+        let placed: std::collections::HashSet<_> = ordered.iter().cloned().collect();
+        let mut rest: Vec<String> =
+            live.iter().filter(|id| !placed.contains(*id)).cloned().collect();
+        rest.sort();
+        ordered.extend(rest);
+        ordered
+    });
+
+    let (active_account, active_backend, active_instance, current_view) = nav_state.with(|n| {
+        (
+            n.active_account_id.cloned(),
+            n.active_backend.cloned(),
+            n.active_instance_id.cloned(),
+            *n.view,
+        )
+    });
+    let Some(account_id) = active_account else {
+        return rsx! {};
+    };
+    let backend_slug = active_backend.map_or_else(|| "demo".to_string(), |b| b.slug().to_string());
+    let instance_id = active_instance.unwrap_or_else(|| "demo".to_string());
+    let caps = client_manager.peek().capabilities_for_slug(&backend_slug);
+    let show_dms = caps.should_show_dms();
+    let show_friends = caps.should_show_friends();
+    let show_notifs = caps.should_show_notifications();
+    let notif_count = chat_lists.with(|cl| {
+        cl.notifications
+            .iter()
+            .filter(|n| !n.read && n.account_id == account_id)
+            .count()
+    });
+
+    rsx! {
+        div { class: "mobile-compact-switcher",
+            div { class: "compact-account-row",
+                for aid in account_ids {
+                    AccountIcon { account_id: aid.clone(), is_active: aid == account_id }
+                }
+            }
+            div { class: "compact-nav-row",
+                AccountBarOverviewButton {
+                    current_view,
+                    backend_slug: backend_slug.clone(),
+                    instance_id: instance_id.clone(),
+                    account_id: account_id.clone(),
+                }
+                if show_dms {
+                    AccountBarDmsButton {
+                        current_view,
+                        backend_slug: backend_slug.clone(),
+                        instance_id: instance_id.clone(),
+                        account_id: account_id.clone(),
+                    }
+                }
+                if show_friends {
+                    AccountBarFriendsButton {
+                        current_view,
+                        backend_slug: backend_slug.clone(),
+                        instance_id: instance_id.clone(),
+                        account_id: account_id.clone(),
+                    }
+                }
+                if show_notifs {
+                    AccountBarNotifsButton { current_view, notif_count }
+                }
+            }
+        }
+    }
 }
 
 /// Avatar block for `FavoriteServerIcon` (B.1 — avatar/badge split).

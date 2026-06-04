@@ -113,6 +113,55 @@
     box-shadow: none;
 }
 
+/* U.7 — single-column drawer: when the drawer is open, hide the two vertical
+   rails (the CompactMobileSwitcher in the drawer replaces them) and let the
+   drawer panel span the full reveal width. Overrides the rail-offset layout. */
+.poly-app.poly-mobile-runtime-active.poly-mobile-left-wing-open .server-sidebar,
+.poly-app.poly-mobile-runtime-active.poly-mobile-left-wing-open .account-server-bar,
+.poly-app.poly-mobile-runtime-active.poly-mobile-left-wing-dragging .server-sidebar,
+.poly-app.poly-mobile-runtime-active.poly-mobile-left-wing-dragging .account-server-bar {
+    display: none;
+}
+.poly-app.poly-mobile-runtime-active.poly-mobile-left-wing-open .poly-split-sidebar,
+.poly-app.poly-mobile-runtime-active.poly-mobile-left-wing-dragging .poly-split-sidebar {
+    left: 0;
+    width: var(--poly-mobile-left-reveal-px);
+    min-width: var(--poly-mobile-left-reveal-px);
+    max-width: var(--poly-mobile-left-reveal-px);
+    overflow-y: auto;
+}
+
+/* U.7 — the compact switcher header inside the drawer panel. */
+.poly-app.poly-mobile-runtime-active .mobile-compact-switcher {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 8px;
+    border-bottom: 1px solid var(--border-primary);
+    background: color-mix(in srgb, var(--bg-secondary) 96%, black);
+}
+.poly-app.poly-mobile-runtime-active .mobile-compact-switcher .compact-account-row {
+    display: flex;
+    flex-direction: row;
+    gap: 8px;
+    overflow-x: auto;
+    align-items: center;
+}
+.poly-app.poly-mobile-runtime-active .mobile-compact-switcher .compact-nav-row {
+    display: flex;
+    flex-direction: row;
+    gap: 6px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+/* The reused AccountIcon / AccountBar* buttons are vertical-bar-sized; keep
+   them compact and inline in the horizontal switcher rows. */
+.poly-app.poly-mobile-runtime-active .mobile-compact-switcher .server-icon,
+.poly-app.poly-mobile-runtime-active .mobile-compact-switcher .account-icon {
+    flex: 0 0 auto;
+    margin: 0;
+}
+
 /* Left drawer shadow overlay — matches the right panel's gradient edge shadow */
 .poly-app.poly-mobile-runtime-active .poly-split-sidebar::after {
     content: "";
