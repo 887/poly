@@ -186,7 +186,9 @@
  * =========================== */
 .client-view-cards {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    /* K.1 — narrower min so server cards pack 4-across on a typical pane
+       instead of leaving the 4th card alone on its own row. */
+    grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
     gap: 12px;
     padding: 16px;
 }

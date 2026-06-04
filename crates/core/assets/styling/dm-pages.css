@@ -1180,13 +1180,18 @@
 
 .overview-card-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    /* K.1 — narrower min so server cards balance the row (4 fit across a
+       typical pane) instead of leaving the 4th card alone on its own row. */
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 12px;
 }
 
 .overview-stats-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    /* M.3 — smaller min tips the 5 stat cards onto one row (5-across) at
+       desktop widths instead of the lopsided 4+1 wrap; collapses to 3+2
+       then 2+… on narrower panes via auto-fit. */
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
     gap: 12px;
 }
 
@@ -1220,7 +1225,9 @@
 }
 .overview-page-search-input-fullwidth {
     width: 100%;
-    flex: 1 1 100%;
+    /* K.2 — cap the search field so it doesn't dominate the pane. */
+    max-width: 500px;
+    flex: 1 1 auto;
     background: var(--bg-tertiary);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);

@@ -29,6 +29,7 @@ pub fn SetupWizard(on_complete: EventHandler<String>) -> Element {
     rsx! {
         div { class: "setup-wizard",
             div { class: "setup-step setup-welcome",
+                div { class: "setup-wordmark", "poly" }
                 h1 { class: "setup-title", "{t(\"setup-welcome-title\")}" }
                 p { class: "setup-description setup-tagline",
                     "{t(\"setup-welcome-tagline\")}"
@@ -46,7 +47,7 @@ pub fn SetupWizard(on_complete: EventHandler<String>) -> Element {
                         body: t("setup-card-ai-body"),
                     }
                     FeatureCard {
-                        icon: "🔑".to_string(),
+                        icon: "🔒".to_string(),
                         title: t("setup-card-byoa-title"),
                         body: t("setup-card-byoa-body"),
                     }

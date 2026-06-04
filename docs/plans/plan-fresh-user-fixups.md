@@ -299,17 +299,17 @@ Reached the real Welcome wizard via the in-app nuke. Observations:
   is probably fine for a true first-launch since the next step is
   picking a backend to connect anyway.
 
-- [ ] **I.1** Tighten the vertical layout — push the content up so
+- [x] **I.1** ✅ `.setup-wizard` now anchors content ~15vh from the top (flex-start column) instead of dead-center. Tighten the vertical layout — push the content up so
   the h1 sits at roughly 15–20% from the top, not 30%. Leave the
   CTA with healthy breathing room but stop the page from looking
   half-empty.
-- [ ] **I.2** Replace the 🔑 emoji with a privacy-coded glyph
+- [x] **I.2** ✅ 🔑 → 🔒 (privacy-coded) in `setup_wizard.rs`. Replace the 🔑 emoji with a privacy-coded glyph
   (🔒 or an inline SVG shield) — and verify the cards' icons all
   share a visual weight (the 🤖 emoji is heavier than the other
   two; consider unifying with a flat-icon set).
-- [ ] **I.3** Make "Get Started" prominent: ~200px min-width, larger
+- [x] **I.3** ✅ `.setup-start-btn` now min-width 200px, larger/bolder font, subtle lift-on-hover. Make "Get Started" prominent: ~200px min-width, larger
   font, maybe a subtle motion/glow hover.
-- [ ] **I.4** Add a Poly wordmark or logo above "Welcome to Poly".
+- [x] **I.4** ✅ Added a `poly` wordmark above the welcome title (`setup_wizard.rs` + `.setup-wordmark`).
 
 ---
 
@@ -321,13 +321,12 @@ Inspected the `.server-icon` elements in the second-from-left column
 small avatar circles (~48px) without text — first-time users would
 have no way to learn which server is which without clicking.
 
-- [ ] **J.1** Add `title="<server-name>"` to every `.server-icon`
+- [x] **J.1** ✅ (change `kytwwqpn`+) `title` added to every server-icon + account-icon render site in `favorites_sidebar.rs`. Live-confirmed: all rail icons expose names (servers + accounts).
   render site. Probably in
   `crates/core/src/ui/account/common/account_server_bar/server_list.rs`
   (saw the `on_context_menu` handler there earlier; the render is
   nearby).
-- [ ] **J.2** Add `aria-label` matching the title for screen
-  readers.
+- [x] **J.2** ✅ `aria-label` mirrors the title on every icon. Live-confirmed.
 - [ ] **J.3** Consider a hover-tooltip card that shows server name,
   unread count, and "last active" — more useful than the bare name.
 
@@ -341,10 +340,10 @@ its own row, left-aligned, looking lonely. The Search field above
 the grid is full-width and very tall — disproportionate for a
 search input.
 
-- [ ] **K.1** Make the card grid balance the last row: either fill
+- [x] **K.1** ✅ `.client-view-cards` min column 240→175px so server cards pack 4-across (no lonely 4th-row orphan). Live-confirmed: 4 cards, 1 row. Make the card grid balance the last row: either fill
   the row by stretching cards, or center the orphan card if it's a
   partial row.
-- [ ] **K.2** Constrain the "Search…" input width to ~500px and
+- [x] **K.2** ✅ `.overview-page-search-input-fullwidth` capped at max-width 500px. Live-confirmed (was full-width). Constrain the "Search…" input width to ~500px and
   reduce vertical padding — it currently dominates the right pane.
 - [ ] **K.3** Each card shows `N members · M unread · @K mentions`
   as inline text — break into a visual chip row so the metrics read
@@ -384,7 +383,7 @@ promises *activity*; the cards show *inventory*.
   most-active channels, etc.
 - [ ] **M.2** Make the cards clickable: UNREAD → Things-you-missed,
   SERVERS → Overview General grid, etc.
-- [ ] **M.3** Fix the wrap: 4 cards on row 1, 1 orphan on row 2.
+- [x] **M.3** ✅ `.overview-stats-grid` min 150→130px so all 5 stat cards sit on one row. Live-confirmed (5 cols, 1 row). Fix the wrap: 4 cards on row 1, 1 orphan on row 2.
   Either fit 5 across, or wrap to 3+2.
 - [ ] **M.4** Aspirational: add small sparklines / 7-day trends on
   each card. Optional nice-to-have.
@@ -449,7 +448,7 @@ Right pane lists notification cards with action buttons.
 
 Agent → Integrations. MCP server config + integration feature list.
 
-- [ ] **P.1** Label "Settings Mcp Transport" uses inconsistent case
+- [x] **P.1** ✅ Root cause: the i18n keys `settings-mcp-transport-label` + `-desc` were MISSING, so `t()` fell back to the title-cased key ("Settings Mcp Transport"). Added both keys to `locales/en/main.ftl` ("MCP transport"). Label "Settings Mcp Transport" uses inconsistent case
   ("Mcp" vs "MCP" used elsewhere on the same page). Pick one (MCP
   is the canonical acronym) and apply everywhere.
 - [ ] **P.2** The secondary line under "Settings Mcp Transport"

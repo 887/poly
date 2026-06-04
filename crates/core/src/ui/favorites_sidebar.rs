@@ -756,10 +756,15 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
     let aid_for_click = account_id.clone();
     let display_name = as_snap.display_name.clone();
     let backend_name = as_snap.backend_name.clone();
+    // Dedicated clone for the a11y labels (J.1/J.2) — display_name and
+    // menu_display are both moved later in this component.
+    let icon_title = as_snap.display_name.clone();
 
     rsx! {
         div {
             class: "{account_item_class}",
+            title: "{icon_title}",
+            "aria-label": "{icon_title}",
             draggable: "true",
             oncontextmenu: on_account_contextmenu,
             ondragstart: on_account_drag_start,
@@ -1047,6 +1052,8 @@ fn FavoriteServerIcon(
     rsx! {
         div {
             class: "{item_class}",
+            title: "{server_name}",
+            "aria-label": "{server_name}",
             draggable: "true",
             // Click → navigate to server
             onclick: {

@@ -11,7 +11,12 @@
     flex: 1;
     width: 100%;
     align-items: center;
-    justify-content: center;
+    /* I.1 — anchor content near the top (~15% from the top) instead of dead
+       center, so a tall viewport doesn't read as half-empty. */
+    justify-content: flex-start;
+    flex-direction: column;
+    padding-top: 15vh;
+    box-sizing: border-box;
     height: 100vh;
     background-color: var(--bg-primary);
 }
@@ -20,6 +25,16 @@
     max-width: 520px;
     padding: 32px;
     text-align: center;
+}
+
+/* I.4 — small Poly wordmark above the welcome title to brand the moment. */
+.setup-wordmark {
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: lowercase;
+    color: var(--accent-primary);
+    margin-bottom: 10px;
 }
 
 .setup-title {
@@ -111,8 +126,16 @@
 }
 
 .setup-start-btn {
-    font-size: 16px;
-    padding: 12px 32px;
+    /* I.3 — the only CTA on the first screen; make it prominent. */
+    font-size: 17px;
+    font-weight: 600;
+    min-width: 200px;
+    padding: 14px 36px;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.setup-start-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
 }
 
 .setup-description {
