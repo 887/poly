@@ -508,13 +508,15 @@ fn NotificationItemContent(
     time_ago: String,
 ) -> Element {
     let nav_state: BatchedSignal<NavState> = use_context();
-    let (kind_icon, kind_label) = match &kind {
-        NotificationKind::Mention { .. } => ("💬", "Mention"),
-        NotificationKind::FriendRequest { .. } => ("👤", "Friend Request"),
-        NotificationKind::ServerInvite { .. } => ("🏠", "Server Invite"),
-        NotificationKind::VoiceChannelInvite { .. } => ("🔊", "Voice Invite"),
-        NotificationKind::ReauthRequired { .. } => ("🔑", "Reconnect"),
-        NotificationKind::Other(_) => ("🔔", "Notification"),
+    // O.3 — kind_slug feeds a per-type colour class on the pill so the eye can
+    // chunk notification types instead of a wall of identical grey pills.
+    let (kind_icon, kind_label, kind_slug) = match &kind {
+        NotificationKind::Mention { .. } => ("💬", "Mention", "mention"),
+        NotificationKind::FriendRequest { .. } => ("👤", "Friend Request", "friend"),
+        NotificationKind::ServerInvite { .. } => ("🏠", "Server Invite", "server"),
+        NotificationKind::VoiceChannelInvite { .. } => ("🔊", "Voice Invite", "voice"),
+        NotificationKind::ReauthRequired { .. } => ("🔑", "Reconnect", "reauth"),
+        NotificationKind::Other(_) => ("🔔", "Notification", "other"),
     };
 
     rsx! {
@@ -522,7 +524,7 @@ fn NotificationItemContent(
         div { class: "notification-body",
             div { class: "notification-meta",
                 span { class: "notification-source", "{badge}" }
-                span { class: "notification-kind-label", "{kind_label}" }
+                span { class: "notification-kind-label kind-{kind_slug}", "{kind_label}" }
                 span { class: "notification-time", "{time_ago}" }
             }
             p { class: "notification-text", "{preview}" }

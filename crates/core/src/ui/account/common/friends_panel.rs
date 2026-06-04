@@ -326,8 +326,8 @@ fn FriendsGrid(friends: Vec<poly_client::User>, backend_slug: String) -> Element
                             poly_client::PresenceStatus::Idle => "presence-dot idle",
                             poly_client::PresenceStatus::DoNotDisturb => "presence-dot dnd",
                             poly_client::PresenceStatus::Offline
-                            | poly_client::PresenceStatus::Invisible
-                            | poly_client::PresenceStatus::Unknown => "",
+                            | poly_client::PresenceStatus::Invisible => "presence-dot offline",
+                            poly_client::PresenceStatus::Unknown => "",
                         };
                         rsx! {
                             button {

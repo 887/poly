@@ -410,7 +410,7 @@ Message button).
 - [x] **N.3** ✅ `.friend-account` ("demo") now `opacity: 0.6` so the redundant per-friend handle recedes. Every friend card shows the same handle ("demo") since
   they're all on the demo backend. Looks redundant in this view. If
   it must stay, gray it heavily so the eye skips it.
-- [ ] **N.4** Status dot consistency: some cards show a green dot,
+- [x] **N.4** ✅ `friends_panel.rs` returned an empty class for Offline (no dot at all); now renders a grey `presence-dot offline` (matching the member-row helper + existing `.presence-dot.offline` CSS). Invisible stays hidden; Unknown (no presence info) stays dotless. Status dot consistency: some cards show a green dot,
   some don't. If "no dot" means offline, that's a usability fail —
   there should be a visible "offline" indicator (grey dot) so the
   reader knows the state was checked.
@@ -430,7 +430,7 @@ Right pane lists notification cards with action buttons.
 - [x] **O.2** ✅ Unified on "Decline" (set `notifications-deny = Decline`). Live-confirmed: action buttons read Accept / Decline everywhere. Action button wording inconsistent: Friend Request =
   Accept / **Deny**, Server Invite = Accept / **Decline**. Pick one
   word. "Decline" feels more polite for both.
-- [ ] **O.3** Type pills (Mention / Friend Request / Server Invite /
+- [x] **O.3** ✅ Notification type pills are now colour-coded by kind (mention=blue, friend=green, server=purple, voice=orange, reauth=red) via a `kind-<slug>` class + small pill background. Live-confirmed. Type pills (Mention / Friend Request / Server Invite /
   Voice Invite) are all neutral grey. Color-code by type so the eye
   can chunk them.
 - [x] **O.4** ✅ Notifications now sorted newest-first by timestamp (was type-grouped, mixing a 1h voice invite below 3h/6h invites). Live-confirmed: 5m→20m→45m→1h→2h→3h→6h. Ordering: items are grouped by type then time, not
@@ -616,7 +616,7 @@ Clicked into Poly Development → Dev Voice. View is clean:
 
 Mostly good. One thing to note:
 
-- [ ] **V.1** Member-row indicators are inconsistent: Alice has a green
+- [x] **V.1** ✅ Verified: member rows already use the shared `dm_user_sidebar::presence_dot_class` which renders Offline/Invisible as a grey dot (Unknown suppressed). With N.4 the friends panel now matches the same convention. Member-row indicators are inconsistent: Alice has a green
   presence dot, Charlie has a mic icon (mute?), Grace has a screen icon.
   Three different visual languages for what should be parallel status
   indicators. Pick a consistent grammar — e.g. always show a presence

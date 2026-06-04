@@ -423,7 +423,19 @@
 .notification-kind-label {
     font-weight: 600;
     color: var(--text-secondary);
+    /* O.3 — render as a small pill so the per-type colour below reads as a tag. */
+    font-size: 11px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: color-mix(in srgb, currentColor 14%, transparent);
 }
+/* O.3 — colour-code by notification type so the eye can chunk them. */
+.notification-kind-label.kind-mention { color: #4aa3ff; }
+.notification-kind-label.kind-friend  { color: #3fb950; }
+.notification-kind-label.kind-server  { color: #a371f7; }
+.notification-kind-label.kind-voice   { color: #ff9f43; }
+.notification-kind-label.kind-reauth  { color: #f85149; }
+.notification-kind-label.kind-other   { color: var(--text-secondary); }
 
 .notification-time {
     margin-left: auto;
