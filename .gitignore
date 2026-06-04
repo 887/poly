@@ -83,6 +83,8 @@ clients/demo/assets/animals.png
 devtools-screenshots/
 # Local devtools app log created by the devtools launcher
 .devtools-app.log
+# Ad-hoc lint/cranky capture logs (scratch output, never committed)
+cranky*.log
 .playwright-mcp/
 rust_out
 

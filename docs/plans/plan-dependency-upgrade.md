@@ -1,5 +1,15 @@
 ## Status: ✅ DONE — all phases shipped
 
+> ## ⚠️ TOOLING PIN — `dx` CLI must match the `dioxus` runtime version
+> The `dioxus` runtime crate is **0.7.9** (this upgrade). The `dx` CLI is a
+> **global tool install**, NOT pinned by the repo, so it can silently drift.
+> A mismatch (e.g. `dx` 0.7.3 serving a 0.7.9 runtime) builds fine but traps
+> at render with **`RuntimeError: unreachable`** — a blank/crashed app, no
+> compiler error. The dx serve build log warns about the version skew
+> explicitly; trust it. **Fix:** `cargo install dioxus-cli --version 0.7.9
+> --locked`. When bumping `dioxus` in the future, bump `dx` to the SAME
+> version in the same change. (Diagnosed 2026-06-04 — cost a full bisect.)
+
 # Plan: Dependency upgrade sweep + edition/MSRV check
 
 > Goal: bring all workspace deps to latest reasonable versions (major
