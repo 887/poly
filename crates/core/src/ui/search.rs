@@ -292,6 +292,7 @@ fn AccountFilterAllToggle(
 #[component]
 fn NodeRow(
     icon: String,
+    #[props(default)] icon_title: Option<String>,
     label: String,
     highlight_terms: Vec<String>,
     sublabel: String,
@@ -300,7 +301,7 @@ fn NodeRow(
     rsx! {
         div { class: "search-node-row",
             onclick: move |evt| on_click.call(evt),
-            span { class: "search-node-icon", "{icon}" }
+            span { class: "search-node-icon", title: icon_title, "{icon}" }
             div { class: "search-node-info",
                 HighlightedSearchText {
                     class_name: "search-node-label".to_string(),
@@ -468,15 +469,16 @@ fn ServerNode(
                                 || ch_name.to_lowercase().contains(&q_lower)
                                 || name_matches;
                             if ch_matches {
-                                let icon = match ch.channel_type {
+                                // R.4 — icon_title gives each channel-type glyph a hover label.
+                                let (icon, icon_title) = match ch.channel_type {
                                     poly_client::ChannelType::Text
                                     | poly_client::ChannelType::Thread
-                                    | poly_client::ChannelType::Announcement => "#".to_string(),
-                                    poly_client::ChannelType::Voice => "🔊".to_string(),
-                                    poly_client::ChannelType::Video => "📹".to_string(),
+                                    | poly_client::ChannelType::Announcement => ("#".to_string(), "Text channel"),
+                                    poly_client::ChannelType::Voice => ("🔊".to_string(), "Voice channel"),
+                                    poly_client::ChannelType::Video => ("📹".to_string(), "Video channel"),
                                     poly_client::ChannelType::Forum
-                                    | poly_client::ChannelType::HackerNews => "📋".to_string(),
-                                    poly_client::ChannelType::Code => "📁".to_string(),
+                                    | poly_client::ChannelType::HackerNews => ("📋".to_string(), "Forum channel"),
+                                    poly_client::ChannelType::Code => ("📁".to_string(), "Code channel"),
                                 };
                                 let sid_c = server_id.clone();
                                 let chid = ch.id.clone();
@@ -486,6 +488,7 @@ fn ServerNode(
                                 rsx! {
                                     NodeRow {
                                         icon,
+                                        icon_title: Some(icon_title.to_string()),
                                         label: ch_name,
                                         highlight_terms: highlight_terms.clone(),
                                         sublabel: String::new(),

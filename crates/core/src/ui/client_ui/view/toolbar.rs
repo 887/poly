@@ -232,8 +232,8 @@ pub fn ViewToolbar(
             button {
                 class: "forum-refresh-btn",
                 r#type: "button",
-                "aria-label": "Refresh",
-                title: "Refresh",
+                "aria-label": "Reload posts",
+                title: "Reload posts",
                 onclick: move |_| {
                     let n = *refresh_sig.read();
                     refresh_sig.set(n.wrapping_add(1));

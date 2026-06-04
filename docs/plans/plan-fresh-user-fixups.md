@@ -282,7 +282,7 @@ labeled. Same problem as Phase D but in a different surface.
 
 - [x] **G.1** ✅ Inventoried the bottom-left voice/account bar icons: all already have `title` (mute/deafen/settings/disconnect/etc.). Snapshot the DOM, list each icon's `title` /
   `aria-label`. Anything missing gets one.
-- [ ] **G.2** The refresh-arrow specifically is suspicious — what
+- [x] **G.2** ✅ The ↻ button (forum/feed toolbar) re-fetches the current view's rows; relabeled its title/aria-label from generic "Refresh" to "Reload posts" so its purpose is clear. The refresh-arrow specifically is suspicious — what
   does it refresh? If it's "reconnect this account", the icon should
   read as a reconnect (not a generic reload). If it's "switch
   account", it shouldn't be an arrow at all.
@@ -551,7 +551,7 @@ plus an ACCOUNTS filter column on the left.
   or on a query match.
 - [x] **R.3** ✅ `.search-page-input` capped at max-width 600px. Search input is full-pane-wide; constrain to ~600px
   for readability.
-- [ ] **R.4** Mixed channel icons (`#` text, voice glyph, forum
+- [x] **R.4** ✅ Added per-type hover labels to search channel icons via an `icon_title` NodeRow prop (#→"Text channel", 🔊→"Voice channel", 📋→"Forum channel", etc.). Live-confirmed. Mixed channel icons (`#` text, voice glyph, forum
   glyph) — verify each has a visible legend or hover label so
   first-timers can tell text from voice without trial-and-error.
 
@@ -588,11 +588,11 @@ Memory, Pending Drafts, Reply Style — each shows the same string
 "Agent is disabled for this chat" repeated 3×, plus a "Catch me up
 → Copy last 20 messages" section that DOES work without the agent.
 
-- [ ] **T.1** Consolidate the disabled-state copy. Instead of
+- [x] **T.1** ✅ Agent panel now shows ONE disabled banner (gated at the panel level) instead of repeating the message in Memory/Drafts/Style; copy made actionable ("Agent is off for this chat. Turn it on with the toggle above…"). Live-confirmed: 1 banner. Consolidate the disabled-state copy. Instead of
   printing "Agent is disabled for this chat" three times, show ONE
   empty state at the top of the panel: "Agent is off for this chat
   · Turn on to see memory, drafts, and reply style. [Enable]".
-- [ ] **T.2** The 240px panel width forces every label to wrap. On
+- [ ] **T.2** [deferred — mobile pass] The 240px panel width forces every label to wrap. On
   desktop, give it min-width 320px. On mobile (Phase U) the panel
   should be full-screen overlay, not an inline column.
 

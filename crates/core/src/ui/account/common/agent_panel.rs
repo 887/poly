@@ -347,14 +347,20 @@ pub fn AgentPanel(
                     chat_id: chat_id.clone(),
                     enabled: access_enabled,
                 }
-                AgentMemorySection {
-                    facts,
-                    account_id: account_id.clone(),
-                    chat_id: chat_id.clone(),
-                    access_enabled: *access_enabled.read(),
-                }
-                AgentDraftsSection {
-                    access_enabled: *access_enabled.read(),
+                // T.1 — one disabled banner for the whole panel instead of
+                // repeating the same "agent is off" line inside every section.
+                if *access_enabled.read() {
+                    AgentMemorySection {
+                        facts,
+                        account_id: account_id.clone(),
+                        chat_id: chat_id.clone(),
+                        access_enabled: true,
+                    }
+                    AgentDraftsSection { access_enabled: true }
+                } else {
+                    div { class: "agent-panel-disabled-state agent-panel-disabled-banner",
+                        {t("agent-panel-disabled-state")}
+                    }
                 }
 
                 AgentCatchUpSection {
@@ -369,8 +375,8 @@ pub fn AgentPanel(
                 // it belongs as a button in the chat composer or a
                 // global keyboard shortcut, not in this panel.
 
-                AgentStyleSection {
-                    access_enabled: *access_enabled.read(),
+                if *access_enabled.read() {
+                    AgentStyleSection { access_enabled: true }
                 }
             }
 
