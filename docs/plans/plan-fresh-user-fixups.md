@@ -352,7 +352,7 @@ have no way to learn which server is which without clicking.
   (saw the `on_context_menu` handler there earlier; the render is
   nearby).
 - [x] **J.2** ✅ `aria-label` mirrors the title on every icon. Live-confirmed.
-- [ ] **J.3** [DEFER] The feasible part (unread in the tooltip) just duplicates the icon's existing unread badge; the valuable part (last-active) needs a `last_activity` timestamp the Server type doesn't have. Low net value over J.1 (titles) + the badge. Revisit if Server gains last-activity. Consider a hover-tooltip
+- [x] **J.3** ✅ BUILT (contained): the server hover card now adds a consolidated activity line — "N unread · @M mentions" — below name/account/backend (SidebarTooltip gains an optional line4; FavoriteServerIcon computes it). NOTE: last-active was NOT built — it needs a timestamp field on the `Server` type (~40 literal construction sites across all 8 backends, no `..Default`), a ripple disproportionate to a hover card; scoped separately. The activity line is dormant in the current demo (favorited servers carry no unread) but correct for any server with unread/mentions. Consider a hover-tooltip
   unread count, and "last active" — more useful than the bare name.
 
 ---

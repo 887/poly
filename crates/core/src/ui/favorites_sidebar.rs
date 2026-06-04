@@ -134,6 +134,9 @@ pub(crate) fn SidebarTooltip(
     line2: Option<String>,
     /// Optional third row: backend type (only for server icons)
     line3: Option<String>,
+    /// J.3 — optional activity row (e.g. "5 unread · 2 mentions"), styled
+    /// distinctly. Optional prop, so the account-icon caller is unaffected.
+    line4: Option<String>,
     /// Override the CSS class (e.g. to add `sidebar-tooltip-visible` for signal-driven visibility)
     extra_class: Option<String>,
 ) -> Element {
@@ -146,6 +149,9 @@ pub(crate) fn SidebarTooltip(
             }
             if let Some(ref l3) = line3 {
                 span { class: "sidebar-tooltip-line sidebar-tooltip-type", "{l3}" }
+            }
+            if let Some(ref l4) = line4 {
+                span { class: "sidebar-tooltip-line sidebar-tooltip-meta", "{l4}" }
             }
         }
     }
@@ -1233,6 +1239,15 @@ fn FavoriteServerIcon(
                 line1: server_name.clone(),
                 line2: Some(account_display_name.clone()),
                 line3: Some(backend_name.clone()),
+                line4: {
+                    // J.3 — consolidated activity line on the hover card.
+                    let mut parts: Vec<String> = Vec::new();
+                    if unread > 0 { parts.push(format!("{unread} unread")); }
+                    if mention > 0 {
+                        parts.push(format!("@{mention} mention{}", if mention == 1 { "" } else { "s" }));
+                    }
+                    if parts.is_empty() { None } else { Some(parts.join(" · ")) }
+                },
             }
         }
     }
