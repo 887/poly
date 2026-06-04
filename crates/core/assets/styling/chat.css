@@ -578,6 +578,16 @@
     flex-wrap: nowrap;
 }
 
+/* D.3 / S.1 — chunk the header actions into visual clusters (voice call/video |
+   panel toggles agent/members | content threads/pinned/search | app
+   settings/overflow) by widening the gap before each cluster's first button,
+   so an 8-control row reads as four groups instead of an undifferentiated bar. */
+.chat-header-actions-primary .chat-header-btn-agent,
+.chat-header-actions-primary .chat-header-btn-threads,
+.chat-header-actions-primary .chat-header-btn-settings {
+    margin-left: 10px;
+}
+
 .chat-header-actions-primary.is-measuring {
     position: absolute;
     visibility: hidden;

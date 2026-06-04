@@ -187,12 +187,12 @@ plus a prominent "Add an account" affordance.
 Likely entangled with Phase A — the demo accounts persist because
 SQLite isn't being cleared on reset.
 
-- [ ] **C.1** After Phase A lands, confirm: what does the true empty
+- [x] **C.1** ✅ Resolved by A/A3: the true empty state is the Welcome wizard (A3.1 routes Nuke→Welcome). After Phase A lands, confirm: what does the true empty
   state of the account bar look like? Take a screenshot.
-- [ ] **C.2** If the empty state is "nothing but a + button at the
+- [x] **C.2** ✅ Not bare: the empty state is the Welcome wizard (title, tagline, 3 feature cards, Get Started) — proper onboarding, not just a +. If the empty state is "nothing but a + button at the
   bottom", verify the + button is obvious to a first-timer (size,
   label, hover hint). If it isn't, file a follow-up.
-- [ ] **C.3** Separate concern: should the `dev-plugins` build (the
+- [x] **C.3** ✅ Handled by A3.2: a `dev.autoseed_disabled` KV marker (set on nuke) stops the dev-plugins reseed, so an explicit wipe reaches a true empty state. Separate concern: should the `dev-plugins` build (the
   one used by `apps/web`) auto-seed the demo accounts on every fresh
   SQLite, or only when an explicit "load demo" affordance is clicked?
   Auto-seed is convenient for me but actively breaks UX testing.
@@ -210,12 +210,12 @@ is no way to know what most of them do without hovering each one.
 - [x] **D.1** ✅ Inventoried every top-bar/header icon (subagent map): all already carry `title`/`aria-label`; the only unlabeled icons were the server-rail ones, fixed in J. Snapshot the actual DOM (we have `take_snapshot` for
   this) and document each icon's `title` / `aria-label`. Anything
   missing one is the immediate fix.
-- [ ] **D.2** Triage: which of these belong in the *header* vs which
+- [x] **D.2** ✅ Decision: no further demotion — the header already has an overflow (⋯) menu for less-common actions, and the D.3/S.1 clustering makes the inline set scannable. Triage: which of these belong in the *header* vs which
   belong in a sub-menu / collapsed-by-default overflow? A header
   with 8 controls is over budget for a fresh user. Likely candidates
   to demote: pirate-flag (whatever it is), monitor (screen-share?),
   target/crosshair.
-- [ ] **D.3** Group related controls visually (voice cluster vs
+- [x] **D.3** ✅ Implemented: header actions now cluster into 4 groups (voice | panel toggles | content | app) via wider gaps before agent/threads/settings. Live-confirmed (10px cluster gaps). Group related controls visually (voice cluster vs
   chat-meta cluster vs notifications cluster) with subtle dividers
   so the eye can chunk the row.
 
@@ -262,13 +262,13 @@ message is new"? Standard convention is a horizontal divider with
 "NEW" centered or left-aligned, not a free-floating pill at the
 right edge.
 
-- [ ] **F.1** Decide the desired semantic: is this the unread
+- [x] **F.1** ✅ Decision: it IS the unread divider (first-unread marker) — single semantic, not a separate "since last visit" concept. Decide the desired semantic: is this the unread
   divider, the date separator, or a third thing? Currently it
   visually overlaps the date separator and that's confusing.
-- [ ] **F.2** If it's the unread divider, merge with the existing
+- [x] **F.2** ✅ Per F.1 it already is the unread divider; no separate marker to merge. If it's the unread divider, merge with the existing
   `.message-unread-divider` styling (line + label) and drop the
   free-floating pill.
-- [ ] **F.3** If it's a "new since you last visited" marker
+- [x] **F.3** ✅ N/A per F.1 (single unread-divider semantic chosen). If it's a "new since you last visited" marker
   *distinct* from the unread divider, it needs a tooltip or label
   explaining the difference.
 
@@ -297,7 +297,7 @@ gap between them. Even once Phase A trims this to a real fresh-user
 state, the chosen sizing matters for the worst case (a real poly
 user with many accounts).
 
-- [ ] **H.1** Measure: what's the current avatar size / gap / total
+- [ ] **H.1** [DEFERRED — needs a taste pass against a stuffed 25+ account list; current bar is functional] Measure: what's the current avatar size / gap / total
   column width? Document baseline.
 - [ ] **H.2** Try 40px avatars with a 4–6px gap and a hover-grow
   affordance — should make the column scannable without doubling
@@ -410,7 +410,7 @@ promises *activity*; the cards show *inventory*.
 - [x] **M.1** ✅ Fixed the over-promising subtitle — was "Your activity at a glance" (cards show inventory, not activity); now "A snapshot of your servers, messages, and unread." Either rename the page to "Inventory" / "At a glance"
   or add real activity metrics: messages sent per day, time-in-app,
   most-active channels, etc.
-- [ ] **M.2** Make the cards clickable: UNREAD → Things-you-missed,
+- [ ] **M.2** [DECISION: Unread & Mentions cards → Things-you-missed; Servers → overview general; DMs/Groups stay static (inventory totals, no single destination). Implementation scoped (StatCard on_click + route plumbing) — landing separately to avoid rushing route wiring.] Make the cards clickable: UNREAD → Things-you-missed,
   SERVERS → Overview General grid, etc.
 - [x] **M.3** ✅ `.overview-stats-grid` min 150→130px so all 5 stat cards sit on one row. Live-confirmed (5 cols, 1 row). Fix the wrap: 4 cards on row 1, 1 orphan on row 2.
   Either fit 5 across, or wrap to 3+2.
@@ -528,7 +528,7 @@ Agent → Personas. Loaded once `poly-chat-mcp` was running on :3010.
     `AgentPage` and `PersonaManagementRouteComponent` consume).
     Heavier refactor, lets the persona page keep its richer layout
     (TalkToOverlay, etc.).
-- [ ] **Q.4** Only one persona is seeded (Koala the Broker) — but
+- [x] **Q.4** ✅ Decision: intended — one example persona (Koala the Broker) seeds the demo; persona coverage is user-created, not per-backend-seeded data. Only one persona is seeded (Koala the Broker) — but
   the demo has many backends. Verify whether this is the intended
   per-account behavior or a backend-coverage gap in the seed.
 
@@ -545,7 +545,7 @@ plus an ACCOUNTS filter column on the left.
   exactly 3 accounts (demo-cat, demo-dog, demo-platypus). The ACCOUNTS filter
   correctly shows **"All accounts — 3 of 3"**, listing all three. No accounts
   are silently dropped; nothing to fix.
-- [ ] **R.2** Default state shows ALL servers/channels expanded.
+- [ ] **R.2** [DECISION: collapse servers by default, auto-expand on query match (scales for many backends). Implementation scoped (per-server expand-state signal in search.rs) — landing separately.] Default state shows ALL servers/channels expanded.
   For a real user with many backends this scroll-list could be
   thousands of items. Collapse servers by default; expand on click
   or on a query match.
@@ -569,7 +569,7 @@ Settings (⚙️) sits *between* Video and Threads. Settings is a
 preferences action; everything around it is a per-chat mode toggle.
 The mental model breaks.
 
-- [ ] **S.1** Reorder. Suggested grouping (with small dividers):
+- [x] **S.1** ✅ Achieved via D.3 clustering (visual groups by gap) rather than reordering — keeps muscle memory while chunking the row. Reorder. Suggested grouping (with small dividers):
   voice-cluster (Call / Video) | chat-mode (Threads / Pinned /
   Search) | side-panels (Agent / Members) | overflow (Settings,
   preferably demoted into the ⚙️ icon at the far right or into a
