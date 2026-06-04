@@ -14,28 +14,28 @@ X, plus D.1/G.1 (verified already-labeled) and L (verified already-interactive).
 All real/functional bugs are closed. ~11 commits; every lint-gate baseline
 desync handled with NEW=0.
 
-### Remaining — triaged (needs your call, not blocked-objective)
+### Remaining (everything else shipped + verified — ~14 commits)
 
-**Needs a product / design decision** (recommendation noted; UX-shape change):
-- **D.2 / D.3 / S.1** — chat header has 8 controls; demote some to overflow
-  and/or add cluster dividers. *Which controls demote?*
-- **F.1–F.3** — the "NEW" pill semantic (unread divider vs since-last-visit).
-- **C.1–C.3** — true empty-state design after a nuke (depends on autoseed flow).
-- **H.1–H.3** — account-bar density taste pass against a 25+ account list.
-- **R.2** — collapse servers-by-default in global search.
-- **M.2** — clickable stat cards; needs target mapping for DMs/Groups/Mentions.
-- **N.2** — permanent "Add friend" CTA — deferred until the add-friend feature
-  itself lands (currently a coming-soon affordance).
-- **Q.4** — only one persona seeded; verify intended vs seed gap.
+**Design calls all MADE.** Implemented: D.3/S.1 (header clustering), T.1, R.4,
+G.2, O.3, N.4/V.1, B, etc. Decided-no-code: D.2 (overflow + clustering suffice),
+C.1–C.3 (empty state = Welcome wizard via A3), Q.4 (single example persona is
+intended), F.1–F.3 (NEW pill = unread divider, single semantic).
 
-**Quick-objective backlog** (ready on your word — no decision needed):
-- **T.1** consolidate agent-panel disabled copy · **R.4** channel-type icon
-  legend/labels in search · **G.2** identify + label the refresh-arrow.
+**Decided + scoped — clean code change pending** (behaviour/route plumbing I'm
+landing separately, not rushing):
+- **M.2** — clickable stat cards: Unread/Mentions → Things-you-missed,
+  Servers → overview; DMs/Groups stay static. (Needs an `Option<EventHandler>`
+  prop pattern this codebase doesn't yet use → land deliberately.)
+- **R.2** — search servers collapse-by-default, expand-on-query-match.
 
-**Mobile — needs a device/viewport pass:** T.2, U.1–U.6.
+**Deferred — needs your eye / a device:**
+- **H.1–H.3** — account-bar density taste pass against a stuffed 25+ list.
+- **T.2, U.1–U.6** — mobile/viewport pass (drawer columns, blank band, missing
+  Send button, NEW-pill placement, persistent tooltip, header 8→3).
 
 **Aspirational / larger:** M.4 (stat sparklines), J.3 (hover server card),
-K.3 (card metrics as chips — plugin grid), A.5 (fresh-user smoke test).
+K.3 (card metrics as chips — plugin grid), A.5 (fresh-user smoke test),
+N.2 (Add-friend CTA — gated on the add-friend feature landing).
 
 ---
 
