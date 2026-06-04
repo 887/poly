@@ -443,9 +443,17 @@ fn ServerNode(
         }
     }
 
+    // R.2 — collapse a server's channels by default; a non-empty query
+    // force-expands so matches are always visible. Each server node owns its
+    // own expand state (no global store needed).
+    let mut expanded = use_signal(|| false);
+    let show_channels = *expanded.read() || !q_lower.is_empty(); // poly-lint: allow render-time-read — reactive: server-section expand toggle
+
     rsx! {
         div { class: "search-server-node",
-            div { class: "search-server-header",
+            div { class: "search-server-header search-server-header-toggle",
+                onclick: move |_| { let cur = *expanded.peek(); expanded.set(!cur); },
+                span { class: "search-server-chevron", if show_channels { "▾" } else { "▸" } }
                 AvatarIcon {
                     url: icon_url,
                     label: server_name.clone(),
@@ -460,7 +468,7 @@ fn ServerNode(
                     span { class: "search-node-account-badge", "{account_attribution}" }
                 }
             }
-            if let Some(channels) = server_channels.read().as_ref() {
+            if show_channels && let Some(channels) = server_channels.read().as_ref() {
                 div { class: "search-server-channels",
                     for ch in channels.iter() {
                         {

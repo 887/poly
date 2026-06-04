@@ -51,6 +51,19 @@
     gap: 8px;
 }
 
+/* R.2 — collapsible server sections in global search. */
+.search-server-header-toggle {
+    cursor: pointer;
+}
+.search-server-chevron {
+    display: inline-flex;
+    align-items: center;
+    width: 14px;
+    flex-shrink: 0;
+    color: var(--text-tertiary);
+    font-size: 11px;
+}
+
 .search-page-input {
     flex: 1;
     /* R.3 — cap the global-search field so it doesn't span the whole pane. */

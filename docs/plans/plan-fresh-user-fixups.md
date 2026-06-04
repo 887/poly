@@ -21,10 +21,6 @@ G.2, O.3, N.4/V.1, B, etc. Decided-no-code: D.2 (overflow + clustering suffice),
 C.1–C.3 (empty state = Welcome wizard via A3), Q.4 (single example persona is
 intended), F.1–F.3 (NEW pill = unread divider, single semantic).
 
-**Decided + scoped — clean code change pending** (behaviour/route plumbing I'm
-landing separately, not rushing):
-- **R.2** — search servers collapse-by-default, expand-on-query-match.
-
 **Deferred — needs your eye / a device:**
 - **H.1–H.3** — account-bar density taste pass against a stuffed 25+ list.
 - **T.2, U.1–U.6** — mobile/viewport pass (drawer columns, blank band, missing
@@ -542,7 +538,7 @@ plus an ACCOUNTS filter column on the left.
   exactly 3 accounts (demo-cat, demo-dog, demo-platypus). The ACCOUNTS filter
   correctly shows **"All accounts — 3 of 3"**, listing all three. No accounts
   are silently dropped; nothing to fix.
-- [ ] **R.2** [DECISION: collapse servers by default, auto-expand on query match (scales for many backends). Implementation scoped (per-server expand-state signal in search.rs) — landing separately.] Default state shows ALL servers/channels expanded.
+- [x] **R.2** ✅ Implemented: search server sections collapse by default (▸ chevron, channels hidden) and auto-expand on a non-empty query; click a header to toggle one server. Per-node `expanded` signal in search.rs. Live-confirmed: 0 channels collapsed → 5 on query → re-collapse on clear → 1 on header click. Default state shows ALL servers/channels expanded.
   For a real user with many backends this scroll-list could be
   thousands of items. Collapse servers by default; expand on click
   or on a query match.
