@@ -53,6 +53,8 @@
 
 .search-page-input {
     flex: 1;
+    /* R.3 — cap the global-search field so it doesn't span the whole pane. */
+    max-width: 600px;
     padding: 8px 12px;
     border-radius: var(--radius-md);
     border: 1px solid var(--border-color);

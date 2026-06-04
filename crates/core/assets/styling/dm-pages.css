@@ -943,6 +943,9 @@
 .friend-account {
     font-size: 0.75rem;
     color: var(--text-tertiary);
+    /* N.3 — the handle is the same ("demo") for every demo friend; recede it
+       so the eye skips the redundant text and lands on the name. */
+    opacity: 0.6;
 }
 
 .empty-state {

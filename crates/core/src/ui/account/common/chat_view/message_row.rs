@@ -48,7 +48,12 @@ pub(super) fn render_message_row(
     let msg_id = msg.id.clone();
     let time_str = format_timestamp(msg.timestamp);
     let date_str = if show_date_sep {
-        msg.timestamp.format("%B %d, %Y").to_string()
+        // B.1/B.2 — match the per-message stamp convention (local tz, DD/MM/YYYY)
+        // with a leading day-name for scanability: "Mon 25/05/2026".
+        msg.timestamp
+            .with_timezone(&chrono::Local)
+            .format("%a %d/%m/%Y")
+            .to_string()
     } else {
         String::new()
     };

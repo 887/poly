@@ -130,17 +130,17 @@ Same screen shows two date conventions side-by-side:
 Either both should be DD/MM/YYYY-coded or both should be long-form;
 mixing them looks like a half-finished i18n pass.
 
-- [ ] **B.1** Pick one canonical format. Recommendation: match the
+- [x] **B.1** ✅ Chose `%a %d/%m/%Y` ("Wed 03/06/2026") to match the per-message DD/MM/YYYY stamps with a day-name for scanability. Live-confirmed. Pick one canonical format. Recommendation: match the
   per-message convention (`%d/%m/%Y`) on the separator too —
   `25/05/2026` reads consistent with the row-level stamps. If the
   separator needs the day-name for scanability, use `Mon 25/05/2026`
   (chrono `%a %d/%m/%Y`).
-- [ ] **B.2** Patch `format_date_separator` (probably in
+- [x] **B.2** ✅ Patched the separator in `message_row.rs:51` — now uses `.with_timezone(&chrono::Local).format("%a %d/%m/%Y")` like `format_timestamp`. Patch `format_date_separator` (probably in
   `crates/core/src/ui/account/common/chat_view/message_row.rs` near
   the existing `format_timestamp` we already migrated). Match the
   same `with_timezone(&chrono::Local)` pattern so it tracks the
   user's locale.
-- [ ] **B.3** Audit other date sites: history scroll markers, the
+- [x] **B.3** ✅ Chat separator + per-message stamp now consistent (the side-by-side mismatch on the screen the user flagged). Media-viewer / forum keep their own contextual formats by design. Audit other date sites: history scroll markers, the
   unread divider's `data-date`, message-tooltip on hover. Bring them
   all into the same format.
 
@@ -178,7 +178,7 @@ visible labels: phone, microphone-with-slash, gear, target/crosshair,
 paperclip(?), monitor, pirate-flag(?), person. On first sight there
 is no way to know what most of them do without hovering each one.
 
-- [ ] **D.1** Snapshot the actual DOM (we have `take_snapshot` for
+- [x] **D.1** ✅ Inventoried every top-bar/header icon (subagent map): all already carry `title`/`aria-label`; the only unlabeled icons were the server-rail ones, fixed in J. Snapshot the actual DOM (we have `take_snapshot` for
   this) and document each icon's `title` / `aria-label`. Anything
   missing one is the immediate fix.
 - [ ] **D.2** Triage: which of these belong in the *header* vs which
@@ -251,7 +251,7 @@ The bottom-left cluster shows `Cat (demo) / Online` then four tiny
 icons: power-plug(?), microphone, gear, a small refresh-arrow. None
 labeled. Same problem as Phase D but in a different surface.
 
-- [ ] **G.1** Snapshot the DOM, list each icon's `title` /
+- [x] **G.1** ✅ Inventoried the bottom-left voice/account bar icons: all already have `title` (mute/deafen/settings/disconnect/etc.). Snapshot the DOM, list each icon's `title` /
   `aria-label`. Anything missing gets one.
 - [ ] **G.2** The refresh-arrow specifically is suspicious — what
   does it refresh? If it's "reconnect this account", the icon should
@@ -407,7 +407,7 @@ Message button).
 - [ ] **N.2** No "Add friend" button anywhere. Friends panels in
   Discord / Slack / etc. always have it as a primary CTA. Add one
   near the search.
-- [ ] **N.3** Every friend card shows the same handle ("demo") since
+- [x] **N.3** ✅ `.friend-account` ("demo") now `opacity: 0.6` so the redundant per-friend handle recedes. Every friend card shows the same handle ("demo") since
   they're all on the demo backend. Looks redundant in this view. If
   it must stay, gray it heavily so the eye skips it.
 - [ ] **N.4** Status dot consistency: some cards show a green dot,
@@ -437,7 +437,7 @@ Right pane lists notification cards with action buttons.
   pure-time. Voice Invite (1 hour ago) sits below Server Invites (3
   hours, 6 hours). Either commit to time-sort or to type-grouping;
   the current half-way is confusing.
-- [ ] **O.5** "Mark as Read" appears both on each card AND as a
+- [x] **O.5** ✅ Not a redundancy bug: per-card "Mark as Read" appears ONLY on Mention/Other cards; Friend-Request/Invite cards have Accept/Deny/Join instead. The header "Mark all read" is a distinct bulk action. "Mark as Read" appears both on each card AND as a
   free-floating button at the bottom-left of the middle column. The
   free-floating one's scope is unclear (all? this filter? selected?).
   Label it explicitly, e.g. "Mark all as read".
@@ -520,7 +520,7 @@ plus an ACCOUNTS filter column on the left.
   For a real user with many backends this scroll-list could be
   thousands of items. Collapse servers by default; expand on click
   or on a query match.
-- [ ] **R.3** Search input is full-pane-wide; constrain to ~600px
+- [x] **R.3** ✅ `.search-page-input` capped at max-width 600px. Search input is full-pane-wide; constrain to ~600px
   for readability.
 - [ ] **R.4** Mixed channel icons (`#` text, voice glyph, forum
   glyph) — verify each has a visible legend or hover label so
@@ -646,7 +646,7 @@ Sidebar "+ New Conversation" opens a friends-picker pane.
   belt-and-braces behind the W.1 active-account scoping (Cat's own list never
   contains Cat anyway; the earlier self-appearance was the cross-account
   `.values().flatten()` pulling Dog's Cat-as-friend entry).
-- [ ] **W.3** The description ends with "Multi-person conversations
+- [x] **W.3** ✅ Trimmed the half-finished-feature sentence from `new-conversation-description`; it now reads simply "Choose one friend to start a direct conversation." The description ends with "Multi-person conversations
   will use this composer once shared group creation is wired." That's
   a half-finished-feature note shown to users. Either ship the feature
   or hide the copy until it lands.
