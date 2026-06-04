@@ -343,6 +343,18 @@ impl<F: DemoFlavour> poly_client::DiscoverBackend for DemoClientGeneric<F> {
 // `get_friends` return fixture data; `respond_to_friend_request` returns success
 // so the notifications UI can exercise that flow.
 
+/// N.2 — process-local store of friends added at runtime, keyed by account id.
+/// Demo fixtures are static; this lets the in-app "Add friend" form actually
+/// surface a new friend. Resets on process restart (acceptable for a demo).
+#[cfg(feature = "native")]
+fn demo_added_friends()
+-> &'static std::sync::Mutex<std::collections::HashMap<String, Vec<User>>> {
+    static ADDED: std::sync::OnceLock<
+        std::sync::Mutex<std::collections::HashMap<String, Vec<User>>>,
+    > = std::sync::OnceLock::new();
+    ADDED.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
+}
+
 #[cfg(feature = "native")]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
@@ -355,7 +367,18 @@ impl<F: DemoFlavour> poly_client::SocialGraphBackend for DemoClientGeneric<F> {
     }
 
     async fn get_friends(&self) -> ClientResult<Vec<User>> {
-        Ok(F::friends())
+        // Static fixtures + any friends added at runtime via `add_friend` (N.2).
+        let mut friends = F::friends();
+        if let Ok(map) = demo_added_friends().lock() {
+            if let Some(added) = map.get(F::account_id()) {
+                for u in added {
+                    if !friends.iter().any(|f| f.id == u.id) {
+                        friends.push(u.clone());
+                    }
+                }
+            }
+        }
+        Ok(friends)
     }
 
     async fn get_presence(&self, _user_id: &str) -> ClientResult<PresenceStatus> {
@@ -375,7 +398,26 @@ impl<F: DemoFlavour> poly_client::SocialGraphBackend for DemoClientGeneric<F> {
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl<F: DemoFlavour> poly_client::WritableSocialGraphBackend for DemoClientGeneric<F> {
-    async fn add_friend(&self, _user_id: &str) -> ClientResult<()> {
+    async fn add_friend(&self, user_id: &str) -> ClientResult<()> {
+        // N.2 — resolve by id OR (case-insensitive) display name so the demo
+        // "Add friend" form accepts e.g. "Iris" or "user-iris", then store it
+        // per-account so get_friends() surfaces it.
+        let needle = user_id.trim().to_lowercase();
+        if needle.is_empty() {
+            return Err(ClientError::NotFound("Enter a user name or id".to_string()));
+        }
+        let user = F::users()
+            .into_iter()
+            .find(|u| {
+                u.id.to_lowercase() == needle || u.display_name.to_lowercase() == needle
+            })
+            .ok_or_else(|| ClientError::NotFound(format!("No user matches \"{user_id}\"")))?;
+        if let Ok(mut map) = demo_added_friends().lock() {
+            let bucket = map.entry(F::account_id().to_string()).or_default();
+            if !bucket.iter().any(|u| u.id == user.id) {
+                bucket.push(user);
+            }
+        }
         Ok(())
     }
 

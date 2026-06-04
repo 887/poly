@@ -107,6 +107,11 @@ enum FriendsManagementTab {
 pub fn FriendsPanel(account_id: String, backend_slug: String) -> Element {
     let chat_lists: BatchedSignal<ChatLists> = use_context();
     let account_sessions: BatchedSignal<AccountSessions> = use_context();
+    let client_manager: BatchedSignal<ClientManager> = use_context();
+    // N.2 — "Add friend" inline form state.
+    let mut show_add_friend = use_signal(|| false);
+    let mut add_friend_input = use_signal(String::new);
+    let mut add_friend_error = use_signal(|| None::<String>);
     let friends = chat_lists.read().friends.get(&account_id).cloned().unwrap_or_default(); // poly-lint: allow render-time-read — render snapshot; subscription intentional
     let blocked_users = account_sessions.read().blocked_users.get(&account_id).cloned().unwrap_or_default(); // poly-lint: allow render-time-read — render snapshot; subscription intentional
 
@@ -128,6 +133,10 @@ pub fn FriendsPanel(account_id: String, backend_slug: String) -> Element {
         FriendsManagementTab::Ignored => ignored_title.clone(),
         FriendsManagementTab::Blocked => blocked_title.clone(),
     };
+
+    let add_open = *show_add_friend.read(); // poly-lint: allow render-time-read — reactive: add-friend form open
+    let add_err = add_friend_error.read().clone(); // poly-lint: allow render-time-read — reactive: add-friend error
+    let add_val = add_friend_input.read().clone(); // poly-lint: allow render-time-read — reactive: add-friend input
 
     let mut backend_names: Vec<String> = friends
         .iter()
@@ -201,7 +210,70 @@ pub fn FriendsPanel(account_id: String, backend_slug: String) -> Element {
                         account_filter,
                         backend_names,
                     }
-                    if *active_tab.read() == FriendsManagementTab::Friends {
+                    if active_tab_now == FriendsManagementTab::Friends {
+                        div { class: "add-friend-bar",
+                            if add_open {
+                                div { class: "add-friend-form",
+                                    input {
+                                        class: "add-friend-input",
+                                        placeholder: "{t(\"friends-add-placeholder\")}",
+                                        value: "{add_val}",
+                                        oninput: move |e| { add_friend_input.set(e.value()); add_friend_error.set(None); },
+                                    }
+                                    button {
+                                        class: "btn btn-primary btn-sm",
+                                        onclick: {
+                                            let aid = account_id.clone();
+                                            move |_| {
+                                                let uid = add_friend_input.peek().trim().to_string();
+                                                if uid.is_empty() { return; }
+                                                let aid = aid.clone();
+                                                spawn(async move {
+                                                    let res = client_manager.peek().with_backend(&aid, async move |b| {
+                                                        if let Some(sg) = b.as_social_graph() {
+                                                            sg.add_friend(&uid).await
+                                                        } else {
+                                                            Err(poly_client::ClientError::NotFound("social graph unavailable".to_string()))
+                                                        }
+                                                    }).await;
+                                                    match res {
+                                                        Ok(()) => {
+                                                            let refreshed = client_manager.peek().with_backend(&aid, async |b| {
+                                                                if let Some(sg) = b.as_social_graph() { sg.get_friends().await } else { Ok(Vec::<poly_client::User>::new()) }
+                                                            }).await;
+                                                            if let Ok(list) = refreshed {
+                                                                chat_lists.batch(move |c| { c.friends.insert(aid.clone(), list); });
+                                                            }
+                                                            add_friend_input.set(String::new());
+                                                            add_friend_error.set(None);
+                                                            show_add_friend.set(false);
+                                                        }
+                                                        Err(e) => { add_friend_error.set(Some(e.to_string())); }
+                                                    }
+                                                });
+                                            }
+                                        },
+                                        "{t(\"friends-add-submit\")}"
+                                    }
+                                    button {
+                                        class: "btn btn-secondary btn-sm",
+                                        onclick: move |_| { show_add_friend.set(false); add_friend_error.set(None); },
+                                        "{t(\"action-cancel\")}"
+                                    }
+                                }
+                            } else {
+                                button {
+                                    class: "btn btn-secondary btn-sm add-friend-toggle",
+                                    onclick: move |_| show_add_friend.set(true),
+                                    "{t(\"friends-add-friend\")}"
+                                }
+                            }
+                            if let Some(ref err) = add_err {
+                                p { class: "add-friend-error", "{err}" }
+                            }
+                        }
+                    }
+                    if active_tab_now == FriendsManagementTab::Friends {
                         FriendsGrid { friends: filtered_friends, backend_slug: backend_slug.clone() }
                     } else if *active_tab.read() == FriendsManagementTab::Blocked {
                         BlockedUsersGrid { blocked_users: filtered_blocked }

@@ -429,7 +429,7 @@ Message button).
   `Blocked`) via a reactive `active_tab_title` — removes the duplication and
   makes the header informative. Live-confirmed: sidebar "People", content
   "Friends", and switching to Ignored updates the content header to "Ignored".
-- [ ] **N.2** No "Add friend" button anywhere. Friends panels in
+- [x] **N.2** ✅ BUILT: permanent "+ Add Friend" affordance above the friends grid opens an inline form (name/id input + Add/Cancel) that calls the backend `add_friend` via `with_backend`/`as_social_graph`, then refreshes `get_friends` into chat_lists. Implemented the minimal demo backend (was a no-op): a per-account store + `add_friend` resolving by id OR display name + `get_friends` merging. Live-confirmed: added "Iris" → friends 9→10, she appears, form closes. Errors show inline. No "Add friend" button anywhere. Friends panels in
   Discord / Slack / etc. always have it as a primary CTA. Add one
   near the search.
 - [x] **N.3** ✅ `.friend-account` ("demo") now `opacity: 0.6` so the redundant per-friend handle recedes. Every friend card shows the same handle ("demo") since

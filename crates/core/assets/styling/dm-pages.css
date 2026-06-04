@@ -940,6 +940,31 @@
     padding: 0 20px 20px;
 }
 
+/* N.2 — inline "Add friend" form above the friends grid. */
+.add-friend-bar {
+    padding: 0 16px 8px;
+}
+.add-friend-form {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.add-friend-input {
+    flex: 1;
+    max-width: 320px;
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-size: 14px;
+}
+.add-friend-error {
+    margin: 6px 0 0;
+    font-size: 0.8rem;
+    color: #f85149;
+}
+
 .friend-account {
     font-size: 0.75rem;
     color: var(--text-tertiary);
