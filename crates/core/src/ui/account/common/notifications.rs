@@ -278,10 +278,13 @@ pub fn NotificationsView(account_id: String, backend_slug: String) -> Element {
     let nav_state: BatchedSignal<NavState> = use_context();
     let mut kind_filter = use_signal(|| NotificationMenuFilter::All);
     use_context_provider(|| kind_filter);
-    let notifications = chat_lists.read().notifications.iter()
+    let mut notifications = chat_lists.read().notifications.iter()
         .filter(|n| n.account_id == account_id)
         .cloned()
         .collect::<Vec<_>>();
+    // O.4 — sort newest-first by time. The source groups by type, which put a
+    // 1h-old voice invite below 3h/6h server invites; pure-time is clearer.
+    notifications.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
     let notifications_title = t("notifications-title");
     let notifications_empty = t("notifications-empty");
     let notifications_mark_read = t("notifications-mark-read");

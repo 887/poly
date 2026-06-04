@@ -433,7 +433,7 @@ Right pane lists notification cards with action buttons.
 - [ ] **O.3** Type pills (Mention / Friend Request / Server Invite /
   Voice Invite) are all neutral grey. Color-code by type so the eye
   can chunk them.
-- [ ] **O.4** Ordering: items are grouped by type then time, not
+- [x] **O.4** ✅ Notifications now sorted newest-first by timestamp (was type-grouped, mixing a 1h voice invite below 3h/6h invites). Live-confirmed: 5m→20m→45m→1h→2h→3h→6h. Ordering: items are grouped by type then time, not
   pure-time. Voice Invite (1 hour ago) sits below Server Invites (3
   hours, 6 hours). Either commit to time-sort or to type-grouping;
   the current half-way is confusing.
