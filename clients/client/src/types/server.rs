@@ -67,6 +67,11 @@ pub struct Server {
     /// Always `None` for non-repo backends.
     #[serde(default)]
     pub open_issues_count: Option<u64>,
+    /// Most recent activity timestamp on this server/community (J.3). Used by
+    /// the server hover card to show "active X ago". `None` for backends that
+    /// don't track it.
+    #[serde(default)]
+    pub last_activity: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// A category/folder that groups channels within a server.

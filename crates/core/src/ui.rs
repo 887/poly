@@ -1253,6 +1253,7 @@ async fn restore_poly_accounts(
                         language: None,
                         forks_count: None,
                         open_issues_count: None,
+                        last_activity: None,
                     })
                     .collect();
                 if !account_servers.is_empty() {

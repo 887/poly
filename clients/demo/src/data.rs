@@ -325,6 +325,7 @@ pub fn demo3_servers() -> Vec<Server> {
     vec![
         Server {
             id: "comm-rust-lang".to_string(),
+            last_activity: Some(ago_minutes(8)),
             name: "rust_lang".to_string(),
             icon_url: Some(themed_server_icon("🦀", "#b7410e", "#e07b39")),
             banner_url: Some(themed_banner("#3b1208", "#5c2010", "#fca97d", "🦀")),
@@ -351,6 +352,7 @@ pub fn demo3_servers() -> Vec<Server> {
         },
         Server {
             id: "comm-linux".to_string(),
+            last_activity: Some(ago_hours(2)),
             name: "linux".to_string(),
             icon_url: Some(themed_server_icon("🐧", "#222222", "#e8e8e8")),
             banner_url: Some(themed_banner("#1a1a2e", "#16213e", "#a8b8d8", "🐧")),
@@ -377,6 +379,7 @@ pub fn demo3_servers() -> Vec<Server> {
         },
         Server {
             id: "comm-programming".to_string(),
+            last_activity: Some(ago_hm(5, 30)),
             name: "programming".to_string(),
             icon_url: Some(themed_server_icon("💻", "#4f46e5", "#818cf8")),
             banner_url: Some(themed_banner("#1e1b4b", "#312e81", "#c7d2fe", "💻")),
@@ -430,6 +433,7 @@ pub fn demo3_discover_servers() -> Vec<Server> {
     for (id, name, emoji, bg1, bg2, desc) in extras {
         all.push(Server {
             id: (*id).to_string(),
+            last_activity: Some(ago_hours(19)),
             name: (*name).to_string(),
             icon_url: Some(themed_server_icon(emoji, bg1, bg2)),
             banner_url: None,
@@ -1508,6 +1512,7 @@ pub fn demo_server_description(server_id: &str) -> &'static str {
 pub fn cat_dog_shared_server(account_id: &str, account_display_name: &str) -> Server {
     Server {
         id: "cat-dog-arena".to_string(),
+        last_activity: Some(ago_dh(1, 4)),
         name: "Cat ↔ Dog Arena".to_string(),
         icon_url: Some(themed_server_icon("🐾", "#fb923c", "#a78bfa")),
         banner_url: Some(themed_banner("#3b1d4f", "#7e22ce", "#fde68a", "🐾")),
@@ -1614,6 +1619,7 @@ pub fn demo_servers() -> Vec<Server> {
     vec![
         Server {
             id: "server-poly-dev".to_string(),
+            last_activity: Some(ago_minutes(2)),
             name: "Poly Development".to_string(),
             icon_url: Some(themed_server_icon("⌘", "#6d5efc", "#2ac3ff")),
             banner_url: Some(themed_banner("#0f1f52", "#182f7a", "#5eead4", "⌘")),
@@ -1647,6 +1653,7 @@ pub fn demo_servers() -> Vec<Server> {
         },
         Server {
             id: "server-gaming".to_string(),
+            last_activity: Some(ago_hours(7)),
             name: "Gaming Lounge".to_string(),
             icon_url: Some(themed_server_icon("🎮", "#6d28d9", "#ec4899")),
             banner_url: Some(themed_banner("#2f174d", "#601a7f", "#f472b6", "🎮")),
@@ -1673,6 +1680,7 @@ pub fn demo_servers() -> Vec<Server> {
         },
         Server {
             id: "server-music".to_string(),
+            last_activity: Some(ago_dh(3, 2)),
             name: "Music Enthusiasts".to_string(),
             icon_url: Some(themed_server_icon("♪", "#0ea5e9", "#14b8a6")),
             banner_url: Some(themed_banner("#0f3150", "#125f73", "#f8fafc", "♪")),
@@ -1712,6 +1720,7 @@ pub fn demo2_servers() -> Vec<Server> {
     vec![
         Server {
             id: "server-opensource".to_string(),
+            last_activity: Some(ago_minutes(23)),
             name: "Open Source Hub".to_string(),
             icon_url: Some(themed_server_icon("⎇", "#22c55e", "#0ea5e9")),
             banner_url: Some(themed_banner("#113a24", "#0f4c64", "#86efac", "⎇")),
@@ -1745,6 +1754,7 @@ pub fn demo2_servers() -> Vec<Server> {
         },
         Server {
             id: "server-bookclub".to_string(),
+            last_activity: Some(ago_hm(11, 15)),
             name: "Book Club".to_string(),
             icon_url: Some(themed_server_icon("📚", "#f59e0b", "#f97316")),
             banner_url: Some(themed_banner("#5b3213", "#8a4d18", "#fde68a", "📚")),
@@ -1771,6 +1781,7 @@ pub fn demo2_servers() -> Vec<Server> {
         },
         Server {
             id: "server-cooking".to_string(),
+            last_activity: Some(ago_dhm(2, 6, 45)),
             name: "Cooking Corner".to_string(),
             icon_url: Some(themed_server_icon("🍳", "#f97316", "#ef4444")),
             banner_url: Some(themed_banner("#5f2213", "#8b2d2d", "#fdba74", "🍳")),
@@ -1797,6 +1808,7 @@ pub fn demo2_servers() -> Vec<Server> {
         },
         Server {
             id: "server-fitness".to_string(),
+            last_activity: Some(ago_hours(34)),
             name: "Fitness Crew".to_string(),
             icon_url: Some(themed_server_icon("💪", "#10b981", "#0f766e")),
             banner_url: Some(themed_banner("#0f3d31", "#105248", "#6ee7b7", "💪")),

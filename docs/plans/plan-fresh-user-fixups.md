@@ -351,7 +351,7 @@ have no way to learn which server is which without clicking.
   (saw the `on_context_menu` handler there earlier; the render is
   nearby).
 - [x] **J.2** ✅ `aria-label` mirrors the title on every icon. Live-confirmed.
-- [x] **J.3** ✅ BUILT (contained): the server hover card now adds a consolidated activity line — "N unread · @M mentions" — below name/account/backend (SidebarTooltip gains an optional line4; FavoriteServerIcon computes it). NOTE: last-active was NOT built — it needs a timestamp field on the `Server` type (~40 literal construction sites across all 8 backends, no `..Default`), a ripple disproportionate to a hover card; scoped separately. The activity line is dormant in the current demo (favorited servers carry no unread) but correct for any server with unread/mentions. Consider a hover-tooltip
+- [x] **J.3** ✅ FULLY BUILT — server hover card now shows name/account/backend + an activity line: "N unread · @M mentions · active X ago". Added `Server.last_activity: Option<DateTime<Utc>>` (clients/client) + rippled `last_activity` into every Server literal across all backend crates + poly-core (workspace compiles), demo fixtures (varied ago_* timestamps), made `format_time_ago` pub(crate), and extended the FavoriteServerIcon line4. Live-confirmed: "Open Source Hub … 14 unread · @3 mentions · active 23 minutes ago".
   unread count, and "last active" — more useful than the bare name.
 
 ---

@@ -116,6 +116,7 @@ impl IsBackend for DiscordClient {
                 language: None,
                 forks_count: None,
                 open_issues_count: None,
+                last_activity: None,
             }
         }).collect())
     }
@@ -146,6 +147,7 @@ impl IsBackend for DiscordClient {
             language: None,
             forks_count: None,
             open_issues_count: None,
+            last_activity: None,
         })
     }
 

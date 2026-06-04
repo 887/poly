@@ -654,7 +654,7 @@ fn NotificationItemContent(
 }
 
 /// Format a timestamp as relative time (e.g., "5 minutes ago").
-fn format_time_ago(ts: chrono::DateTime<chrono::Utc>) -> String {
+pub(crate) fn format_time_ago(ts: chrono::DateTime<chrono::Utc>) -> String {
     use crate::i18n::{t, t_args};
 
     let now = chrono::Utc::now();

@@ -100,6 +100,7 @@ impl IsBackend for MatrixClient {
                     language: None,
                     forks_count: None,
                     open_issues_count: None,
+                    last_activity: None,
                 });
             }
         }
@@ -130,6 +131,7 @@ impl IsBackend for MatrixClient {
             forks_count: None,
             open_issues_count: None,
             account_display_name: display_name,
+            last_activity: None,
         })
     }
 

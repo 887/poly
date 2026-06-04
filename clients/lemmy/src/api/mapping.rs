@@ -98,6 +98,7 @@ pub fn map_community_to_server(view: &CommunityView, account_id: &str, account_d
         language: None,
         forks_count: None,
         open_issues_count: None,
+        last_activity: None,
     }
 }
 

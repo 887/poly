@@ -269,6 +269,7 @@ pub(crate) fn from_wit_server(s: wit::Server) -> pc::Server {
         language: None,
         forks_count: None,
         open_issues_count: None,
+        last_activity: None,
     }
 }
 

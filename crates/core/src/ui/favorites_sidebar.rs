@@ -44,6 +44,7 @@ use crate::ui::account::common::chat_history::{
 };
 use crate::ui::actions::{ActionCx, UiAction};
 use crate::ui::main_layout::{close_mobile_drawer, mobile_left_drawer_open};
+use crate::ui::account::common::notifications::format_time_ago;
 use crate::ui::account::common::account_server_bar::{
     AccountBarDmsButton, AccountBarFriendsButton, AccountBarNotifsButton, AccountBarOverviewButton,
 };
@@ -679,6 +680,7 @@ pub fn FavoritesBar() -> Element {
                                 unread: if client_manager.peek().capabilities_for_slug(server.backend.as_str()).is_forum_layout() { 0 } else { server.unread_count },
                                 mention: if client_manager.peek().capabilities_for_slug(server.backend.as_str()).is_forum_layout() { 0 } else { server.mention_count },
                                 icon_url: server.icon_url.clone(),
+                                last_activity: server.last_activity,
                             }
                         }
                     }
@@ -1110,6 +1112,9 @@ fn FavoriteServerIcon(
     /// Optional server icon URL. When `Some`, rendered as an `<img>`; when
     /// `None`, falls back to a colored first-letter placeholder.
     icon_url: Option<String>,
+    /// J.3 — most recent activity timestamp; shown as "active X ago" on the
+    /// hover card when present.
+    last_activity: Option<chrono::DateTime<chrono::Utc>>,
 ) -> Element {
     let nav_state: BatchedSignal<NavState> = use_context();
     let ui_overlays: BatchedSignal<UiOverlays> = use_context();
@@ -1366,6 +1371,9 @@ fn FavoriteServerIcon(
                     if unread > 0 { parts.push(format!("{unread} unread")); }
                     if mention > 0 {
                         parts.push(format!("@{mention} mention{}", if mention == 1 { "" } else { "s" }));
+                    }
+                    if let Some(ts) = last_activity {
+                        parts.push(format!("active {}", format_time_ago(ts)));
                     }
                     if parts.is_empty() { None } else { Some(parts.join(" · ")) }
                 },

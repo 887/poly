@@ -146,6 +146,7 @@ impl PolyServerBackend {
             language: None,
             forks_count: None,
             open_issues_count: None,
+            last_activity: None,
         }
     }
 

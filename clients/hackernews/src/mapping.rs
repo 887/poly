@@ -55,6 +55,7 @@ pub fn build_server(account_id: &str) -> Server {
         language: None,
         forks_count: None,
         open_issues_count: None,
+        last_activity: None,
     }
 }
 
