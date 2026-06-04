@@ -6,7 +6,36 @@
 > at the setup wizard, so every subsequent screen is contaminated by
 > demo-seed state. Phase A unblocks the rest.
 
-## Status: 🚧 IN PROGRESS — observations only, no fixes shipped yet
+## Status: 🚧 IN PROGRESS — all real bugs + objective polish shipped (2026-06-04); remainder is judgment-calls / mobile / aspirational
+
+**Shipped & live-verified 2026-06-04** (on `main`): A, A2, A3, E, J, I, K,
+M.1/M.3, N.1/N.3/N.4, O.1–O.5, P.1–P.5, Q.1–Q.3, R.1/R.3, B, V.1, W.1/W.2/W.4,
+X, plus D.1/G.1 (verified already-labeled) and L (verified already-interactive).
+All real/functional bugs are closed. ~11 commits; every lint-gate baseline
+desync handled with NEW=0.
+
+### Remaining — triaged (needs your call, not blocked-objective)
+
+**Needs a product / design decision** (recommendation noted; UX-shape change):
+- **D.2 / D.3 / S.1** — chat header has 8 controls; demote some to overflow
+  and/or add cluster dividers. *Which controls demote?*
+- **F.1–F.3** — the "NEW" pill semantic (unread divider vs since-last-visit).
+- **C.1–C.3** — true empty-state design after a nuke (depends on autoseed flow).
+- **H.1–H.3** — account-bar density taste pass against a 25+ account list.
+- **R.2** — collapse servers-by-default in global search.
+- **M.2** — clickable stat cards; needs target mapping for DMs/Groups/Mentions.
+- **N.2** — permanent "Add friend" CTA — deferred until the add-friend feature
+  itself lands (currently a coming-soon affordance).
+- **Q.4** — only one persona seeded; verify intended vs seed gap.
+
+**Quick-objective backlog** (ready on your word — no decision needed):
+- **T.1** consolidate agent-panel disabled copy · **R.4** channel-type icon
+  legend/labels in search · **G.2** identify + label the refresh-arrow.
+
+**Mobile — needs a device/viewport pass:** T.2, U.1–U.6.
+
+**Aspirational / larger:** M.4 (stat sparklines), J.3 (hover server card),
+K.3 (card metrics as chips — plugin grid), A.5 (fresh-user smoke test).
 
 ---
 
