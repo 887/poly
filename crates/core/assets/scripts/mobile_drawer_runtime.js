@@ -41,7 +41,9 @@ if (!window.__polyMobileDrawerInit) {
     }
 
     function railOffsetPx() {
-        return document.querySelector('.account-server-bar') ? 144 : 72;
+        // U.7 — matches the narrowed mobile rail widths in mobile-shell.css
+        // (56px each) so the drawer panel starts right after them.
+        return document.querySelector('.account-server-bar') ? 112 : 56;
     }
 
     function computeLeftRevealPx() {

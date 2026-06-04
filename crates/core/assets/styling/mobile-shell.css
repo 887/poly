@@ -60,17 +60,21 @@
        the mouseover handler to escape the sidebar's stacking context. */
 }
 
+/* U.7 — narrow the two rails on mobile (72→56px each) so the DM/channel
+   list gets ~32px more room (was cramped at ~207px). The JS railOffsetPx()
+   is updated to match (112 instead of 144). Reuses every existing rail
+   component + handler; no reimplementation. */
 .poly-app.poly-mobile-runtime-active .server-sidebar {
     left: 0;
-    width: 72px;
-    min-width: 72px;
+    width: 56px;
+    min-width: 56px;
     border-right: 1px solid var(--border-primary);
 }
 
 .poly-app.poly-mobile-runtime-active .account-server-bar {
-    left: 72px;
-    width: 72px;
-    min-width: 72px;
+    left: 56px;
+    width: 56px;
+    min-width: 56px;
     padding-bottom: 64px;
     scroll-padding-bottom: 64px;
 }

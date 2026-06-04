@@ -27,7 +27,7 @@ Enter-to-send hint).
 - **J.3** (rich hover server card) — DEFER: the feasible half (unread) just
   duplicates the icon's existing badge; the valuable half (last-active) needs a
   `last_activity` field the Server type lacks.
-- **U.7** (single-column mobile drawer) — DEFER: the cheap fix (hide the nav
+- [x] **U.7** ✅ SHIPPED (safe un-cramp): narrowed the two mobile rails 72→56px each (CSS + railOffsetPx JS) so the drawer DM/channel list gets +32px (~207→239px), reusing every existing rail component + handler (zero reimplementation). Live-confirmed: rails 0-56/56-112, list 112-351 w=239, clean alignment. The FULL single-column-with-switcher redesign is SCOPED but not rushed — it needs the ~60-line account-switch + nav handlers extracted into a shared helper (the workflow produced the complete spec); reimplementing them on the most-used mobile surface is real regression risk best done in a focused pass. U.1's dimmed backdrop + this widening are the shipped interim.
   rail) regresses navigation; needs a proper account/server switcher-header
   redesign. U.1's dimmed backdrop is the shipped interim.
 - **H.1–H.3** (account-bar density) — DEFER: needs a taste pass against a
