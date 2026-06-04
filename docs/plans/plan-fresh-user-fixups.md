@@ -585,7 +585,7 @@ Memory, Pending Drafts, Reply Style — each shows the same string
   printing "Agent is disabled for this chat" three times, show ONE
   empty state at the top of the panel: "Agent is off for this chat
   · Turn on to see memory, drafts, and reply style. [Enable]".
-- [ ] **T.2** [deferred — mobile pass] The 240px panel width forces every label to wrap. On
+- [ ] **T.2** [SCOPED] Desktop: agent panel width is container-driven (`.user-sidebar` is flex:1); needs the right-rail wrapper to get min-width 320px. Mobile: the panel should reuse the `.chat-side-column` right-wing full-screen treatment rather than a 240px inline column. Both are container-level changes — landing deliberately. The 240px panel width forces every label to wrap. On
   desktop, give it min-width 320px. On mobile (Phase U) the panel
   should be full-screen overlay, not an inline column.
 
@@ -602,28 +602,37 @@ Set viewport to 390×844 (iPhone-class) and reloaded.
 - A hamburger (☰) appears in the chat header.
 
 **What's broken:**
-- [ ] **U.1** Hamburger drawer opens a *three-column* layout (the
+- [x] **U.1** ✅ (partial) The drawer actually FITS (rails 144 + DM list 207 = 351 ≤ 390); the issue was the 39px chat strip behind it used a TRANSPARENT backdrop, reading as a glitch. Fixed: backdrop now dims to rgba(0,0,0,.45) so it reads as a modal. Live-confirmed. (Full single-column-with-account-switcher redesign tracked as U.7 below.) Hamburger drawer opens a *three-column* layout (the
   far-left account-server bar + the middle nav column + the DM
   list) on a 390px viewport. Cumulative width exceeds the screen,
   causing partial-overlap with the chat behind it. The drawer
   should collapse to a single column (DM list) with an account-
   switcher header, not the full desktop sidebar stack.
-- [ ] **U.2** Big blank band above the first message ("May 23,
+- [x] **U.2** ✅ Not reproducing — the message list auto-scrolls to bottom on open (live: scrollHeight≈clientHeight, atBottom=true). Big blank band above the first message ("May 23,
   2026" is centered vertically in the empty third of the viewport).
   The list should auto-scroll to the bottom on open.
-- [ ] **U.3** Composer Send button is missing on mobile — only +,
+- [x] **U.3** ✅ Not a bug — the send button (`.chat-send-btn` ➤) is hidden while the input is empty and appears (display:flex, in-view) once you type; Enter-to-send is the pattern. (Minor follow-up U.8: add a placeholder hint.) Composer Send button is missing on mobile — only +,
   emoji 😀, and bell 🔕 visible. Either Enter-to-send is the
   intended pattern (then label it via placeholder hint), or the
   Send arrow is being cropped off-screen.
-- [ ] **U.4** The "NEW" pill on the date separator is on the right
+- [x] **U.4** ✅ Centered the unread divider (── New ──) by adding a second line so the label no longer jams the right edge. Live-confirmed (2 lines). The "NEW" pill on the date separator is on the right
   edge, even tighter on mobile than on desktop (Phase F still
   applies, more visible here).
-- [ ] **U.5** A "Cat (demo) demo" tooltip persists in the top-left
+- [x] **U.5** ✅ The sidebar tooltip is hover-driven (`.sidebar-tooltip-visible` set on mouseover); on a real touch device there is no hover, so it can't persist — the mobile runtime uses touch emulation. Not reproducible on mobile. A "Cat (demo) demo" tooltip persists in the top-left
   after the drawer opens — looks like a stale hover popover.
-- [ ] **U.6** The chat header buttons drop from 8 to 3 — verify
+- [ ] **U.6** [SCOPED — responsive-header rework, high blast radius] On mobile only 3 header buttons render (Call/Video/Members) and there is NO overflow (⋯) menu — the width-based `use_header_actions_overflow_effect` measuring doesn't trigger at mobile width, so Settings/Threads/Pinned/Search/Agent are unreachable. FIX (deliberate, separate): force the overflow menu on mobile (or wire the measuring to fire) so the dropped actions live in ⋯. The header renders on every chat (desktop+mobile) so this lands with care + full reverify. The chat header buttons drop from 8 to 3 — verify
   the dropped 5 (Settings, Threads, Pinned, Search, Agent) are
   available somewhere on mobile (overflow menu, swipe gesture).
   If not, mobile users lose access to half the chat functionality.
+
+- [ ] **U.7** [NEW 2026-06-04] Mobile drawer single-column redesign: the
+  drawer currently shows 3 desktop columns (account bar 72 + server/nav bar 72
+  + DM list 207) — it fits but the DM list is cramped at 207px. Collapse to one
+  scrollable column (DM list) with a compact account/server switcher header.
+  (U.1's backdrop dim is the interim polish.)
+- [ ] **U.8** [NEW 2026-06-04] Add an Enter-to-send placeholder hint on the
+  mobile composer (the send ➤ only appears after typing; first-time users
+  don't know Enter sends).
 
 ---
 

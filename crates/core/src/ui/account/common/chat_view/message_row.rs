@@ -76,6 +76,9 @@ pub(super) fn render_message_row(
             div { class: "message-unread-divider",
                 div { class: "message-unread-divider-line" }
                 span { class: "message-unread-divider-label", "{t(\"chat-unread-divider\")}" }
+                // U.4 — second line so the NEW label centres ( ── NEW ── ) instead
+                // of being jammed against the right edge (worse on mobile).
+                div { class: "message-unread-divider-line" }
             }
         }
         div {

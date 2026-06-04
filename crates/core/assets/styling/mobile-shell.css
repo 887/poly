@@ -222,6 +222,9 @@
 .poly-app.poly-mobile-runtime-active.poly-mobile-left-wing-open .mobile-left-wing-backdrop,
 .poly-app.poly-mobile-runtime-active.poly-mobile-left-wing-dragging .mobile-left-wing-backdrop {
     display: block;
+    /* U.1 — dim the chat strip behind the open drawer so it reads as a modal
+       backdrop (tap to close), not an awkward un-dimmed sliver of the chat. */
+    background: rgb(0 0 0 / 45%);
 }
 
 /* Hide the left ☰ burger when the right wing panel is open or dragging */
