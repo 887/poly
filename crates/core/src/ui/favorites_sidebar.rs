@@ -157,6 +157,148 @@ pub(crate) fn SidebarTooltip(
     }
 }
 
+/// Shared account-switch navigation (U.7 — extracted from `AccountIcon` so the
+/// mobile compact switcher reuses the exact same logic with no drift). Honors
+/// the reauth gate, clears stale channel context, restores the account's last
+/// route when NOT opening from the drawer, and otherwise lands on the backend's
+/// preferred landing page. `preserve_drawer_context` = true when invoked from an
+/// open mobile drawer (skips last-route restoration).
+pub(crate) fn navigate_to_account(
+    aid: String,
+    preserve_drawer_context: bool,
+    client_manager: BatchedSignal<ClientManager>,
+    account_sessions: BatchedSignal<AccountSessions>,
+    chat_view_state: BatchedSignal<ChatViewState>,
+    chat_lists: BatchedSignal<ChatLists>,
+    nav_state: BatchedSignal<NavState>,
+) {
+    let needs_reauth = {
+        let cm = client_manager.peek();
+        cm.connection_statuses
+            .get(&aid)
+            .is_some_and(ConnectionStatus::needs_reauth)
+    };
+    if needs_reauth {
+        let info = account_sessions
+            .peek()
+            .account_sessions
+            .get(&aid)
+            .map(|s| (s.backend.slug().to_string(), s.instance_id.clone()));
+        if let Some((slug, instance_id)) = info {
+            let instance_id = instance_id
+                .trim_start_matches("https://")
+                .trim_start_matches("http://")
+                .trim_end_matches('/')
+                .to_string();
+            crate::nav!(Route::ReauthAccount {
+                backend: slug,
+                instance_id,
+                account_id: aid.clone(),
+            });
+            return;
+        }
+    }
+
+    chat_view_state.batch(|cv| cv.apply(ChatAction::ClearChannelContext));
+    chat_lists.batch(|cl| cl.set_channels(Vec::new()));
+
+    if !preserve_drawer_context {
+        let last_route_url = nav_state
+            .peek()
+            .account_last_routes
+            .get(&aid)
+            .cloned();
+        if let Some(url) = last_route_url
+            && let Ok(route) = url.parse::<Route>()
+        {
+            let backend_slug_for_route_check = account_sessions
+                .peek()
+                .account_sessions
+                .get(&aid)
+                .map(|s| s.backend.slug().to_string());
+            let route_is_compatible = if let Some(slug) = backend_slug_for_route_check {
+                let caps = client_manager.peek().capabilities_for_slug(&slug);
+                let path = url.as_str();
+                let dm_path = path.contains("/dms");
+                let friends_path = path.contains("/friends");
+                let notif_path = path.contains("/notifications");
+                let needs_dms = dm_path && !caps.should_show_dms();
+                let needs_friends = friends_path && !caps.should_show_friends();
+                let needs_notif = notif_path && !caps.should_show_notifications();
+                !(needs_dms || needs_friends || needs_notif)
+            } else {
+                true
+            };
+            if route_is_compatible {
+                navigator().push(route);
+                return;
+            }
+        }
+    }
+
+    let (backend_slug, instance_id, first_server_id) = {
+        let (slug, inst) = if let Some(session) =
+            account_sessions.peek().account_sessions.get(&aid).cloned()
+        {
+            (session.backend.slug().to_string(), session.instance_id.clone())
+        } else {
+            let slug = chat_lists
+                .peek()
+                .servers
+                .iter()
+                .find(|s| s.account_id == aid)
+                .map_or_else(|| "demo".to_string(), |s| s.backend.slug().to_string());
+            (slug, "demo".to_string())
+        };
+        let first_server = chat_lists
+            .peek()
+            .servers
+            .iter()
+            .find(|s| s.account_id == aid)
+            .map(|s| s.id.clone());
+        (slug, inst, first_server)
+    };
+    let instance_id = instance_id
+        .trim_start_matches("https://")
+        .trim_start_matches("http://")
+        .trim_end_matches('/')
+        .to_string();
+    let caps = client_manager.peek().capabilities_for_slug(&backend_slug);
+    let fallback_route = match caps.landing {
+        poly_client::LandingPage::Overview => {
+            Route::ServerOverviewRoute {
+                backend: backend_slug,
+                instance_id,
+                account_id: aid,
+            }
+        }
+        poly_client::LandingPage::FirstServer => {
+            if let Some(server_id) = first_server_id {
+                Route::ServerHome {
+                    backend: backend_slug,
+                    instance_id,
+                    account_id: aid,
+                    server_id,
+                }
+            } else {
+                Route::NotificationsRoute {
+                    backend: backend_slug,
+                    instance_id,
+                    account_id: aid,
+                }
+            }
+        }
+        poly_client::LandingPage::DirectMessages => {
+            Route::DmsHome {
+                backend: backend_slug,
+                instance_id,
+                account_id: aid,
+            }
+        }
+    };
+    navigator().push(fallback_route);
+}
+
 /// Avatar block for `FavoriteServerIcon` (B.1 — avatar/badge split).
 ///
 /// Renders the server icon image (or first-letter fallback) plus the
@@ -779,134 +921,15 @@ fn AccountIcon(account_id: String, is_active: bool) -> Element {
             ondrop: on_account_drop,
             ondragend: on_account_drag_end,
             onclick: move |_| {
-                let aid = aid_for_click.clone();
-                let preserve_drawer_context = mobile_left_drawer_open();
-
-                let needs_reauth = {
-                    let cm = client_manager.peek();
-                    cm.connection_statuses
-                        .get(&aid)
-                        .is_some_and(ConnectionStatus::needs_reauth)
-                };
-                if needs_reauth {
-                    let info = account_sessions
-                        .peek()
-                        .account_sessions
-                        .get(&aid)
-                        .map(|s| (s.backend.slug().to_string(), s.instance_id.clone()));
-                    if let Some((slug, instance_id)) = info {
-                        let instance_id = instance_id
-                            .trim_start_matches("https://")
-                            .trim_start_matches("http://")
-                            .trim_end_matches('/')
-                            .to_string();
-                        crate::nav!(Route::ReauthAccount {
-                            backend: slug,
-                            instance_id,
-                            account_id: aid.clone(),
-                        });
-                        return;
-                    }
-                }
-
-                chat_view_state.batch(|cv| cv.apply(ChatAction::ClearChannelContext));
-                chat_lists.batch(|cl| cl.set_channels(Vec::new()));
-
-                if !preserve_drawer_context {
-                    let last_route_url = nav_state
-                        .peek()
-                        .account_last_routes
-                        .get(&aid)
-                        .cloned();
-                    if let Some(url) = last_route_url
-                        && let Ok(route) = url.parse::<Route>()
-                    {
-                        let backend_slug_for_route_check = account_sessions
-                            .peek()
-                            .account_sessions
-                            .get(&aid)
-                            .map(|s| s.backend.slug().to_string());
-                        let route_is_compatible = if let Some(slug) = backend_slug_for_route_check {
-                            let caps = client_manager.peek().capabilities_for_slug(&slug);
-                            let path = url.as_str();
-                            let dm_path = path.contains("/dms");
-                            let friends_path = path.contains("/friends");
-                            let notif_path = path.contains("/notifications");
-                            let needs_dms = dm_path && !caps.should_show_dms();
-                            let needs_friends = friends_path && !caps.should_show_friends();
-                            let needs_notif = notif_path && !caps.should_show_notifications();
-                            !(needs_dms || needs_friends || needs_notif)
-                        } else {
-                            true
-                        };
-                        if route_is_compatible {
-                            navigator().push(route);
-                            return;
-                        }
-                    }
-                }
-
-                let (backend_slug, instance_id, first_server_id) = {
-                    let (slug, inst) = if let Some(session) =
-                        account_sessions.peek().account_sessions.get(&aid).cloned()
-                    {
-                        (session.backend.slug().to_string(), session.instance_id.clone())
-                    } else {
-                        let slug = chat_lists
-                            .peek()
-                            .servers
-                            .iter()
-                            .find(|s| s.account_id == aid)
-                            .map_or_else(|| "demo".to_string(), |s| s.backend.slug().to_string());
-                        (slug, "demo".to_string())
-                    };
-                    let first_server = chat_lists
-                        .peek()
-                        .servers
-                        .iter()
-                        .find(|s| s.account_id == aid)
-                        .map(|s| s.id.clone());
-                    (slug, inst, first_server)
-                };
-                let instance_id = instance_id
-                    .trim_start_matches("https://")
-                    .trim_start_matches("http://")
-                    .trim_end_matches('/')
-                    .to_string();
-                let caps = client_manager.peek().capabilities_for_slug(&backend_slug);
-                let fallback_route = match caps.landing {
-                    poly_client::LandingPage::Overview => {
-                        Route::ServerOverviewRoute {
-                            backend: backend_slug,
-                            instance_id,
-                            account_id: aid,
-                        }
-                    }
-                    poly_client::LandingPage::FirstServer => {
-                        if let Some(server_id) = first_server_id {
-                            Route::ServerHome {
-                                backend: backend_slug,
-                                instance_id,
-                                account_id: aid,
-                                server_id,
-                            }
-                        } else {
-                            Route::NotificationsRoute {
-                                backend: backend_slug,
-                                instance_id,
-                                account_id: aid,
-                            }
-                        }
-                    }
-                    poly_client::LandingPage::DirectMessages => {
-                        Route::DmsHome {
-                            backend: backend_slug,
-                            instance_id,
-                            account_id: aid,
-                        }
-                    }
-                };
-                navigator().push(fallback_route);
+                navigate_to_account(
+                    aid_for_click.clone(),
+                    mobile_left_drawer_open(),
+                    client_manager,
+                    account_sessions,
+                    chat_view_state,
+                    chat_lists,
+                    nav_state,
+                );
             },
             // Render image avatar if available.
             if let Some(url) = &as_snap.avatar_url {
