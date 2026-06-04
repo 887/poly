@@ -120,6 +120,14 @@ pub fn FriendsPanel(account_id: String, backend_slug: String) -> Element {
     let friends_title = t("friends-title");
     let ignored_title = t("friends-ignored-title");
     let blocked_title = t("content-social-blocked");
+    // Content-pane header reflects the ACTIVE tab rather than repeating the
+    // sidebar's section title — fixes N.1 (the "People" title rendered twice).
+    let active_tab_now = *active_tab.read(); // poly-lint: allow render-time-read — reactive: header must update on tab switch
+    let active_tab_title = match active_tab_now {
+        FriendsManagementTab::Friends => friends_title.clone(),
+        FriendsManagementTab::Ignored => ignored_title.clone(),
+        FriendsManagementTab::Blocked => blocked_title.clone(),
+    };
 
     let mut backend_names: Vec<String> = friends
         .iter()
@@ -186,7 +194,7 @@ pub fn FriendsPanel(account_id: String, backend_slug: String) -> Element {
             content: rsx! {
                 div { class: "special-page-panel",
                     div { class: "special-page-header",
-                        h2 { class: "special-page-title", "{friends_management_title}" }
+                        h2 { class: "special-page-title", "{active_tab_title}" }
                     }
                     FriendsFilterBar {
                         search_filter,

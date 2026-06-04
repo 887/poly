@@ -352,26 +352,24 @@ search input.
 
 ---
 
-## Phase L — "Things you missed" cards are non-interactive
+## Phase L — "Things you missed" cards are non-interactive ✅ DONE (already fixed; live-confirmed 2026-06-04)
 
 The Things-you-missed panel lists unread DMs + notifications as
-cards but none of the cards have action buttons. The Notifications
-panel (🔔) shows the SAME items with Accept/Deny/Join/Dismiss
-buttons. So the user gets two surfaces showing the same data, one
-useful and one not. Either the cards here should be actionable, or
-the panel should be removed in favor of just linking to
-Notifications.
+cards but none of the cards have action buttons.
 
-- [ ] **L.1** Decide whether "Things you missed" is a *summary* (no
-  actions, just counts and links into the real screens) or a
-  *parallel inbox* (full actions). Pick one — don't be the half-way
-  thing it is now.
-- [ ] **L.2** If summary: each card should be a link that opens the
-  source conversation. Add `cursor: pointer` and a hover state.
-- [ ] **L.3** If parallel inbox: copy the Accept/Deny/Join buttons
-  from the Notifications panel onto these cards. But then we have
-  state-sync questions — accepting a friend request in Things-you-
-  missed needs to update the Notifications count too.
+> **2026-06-04 live MCP re-check:** RESOLVED since the walkthrough. The cards
+> are now `<button class="overview-card-clickable">` with `crate::nav!` onclick
+> handlers (`overview_subpages.rs:74-92` DMs, `:114+` notifications). Clicked
+> the Alice card live → navigated to `/dms/dm-user-alice`. The design landed as
+> **summary-that-links** (L.1 decided): each card opens its source (DM →
+> DmChat; notification → FriendsRoute / ServerHome / ServerChat by kind).
+
+- [x] **L.1** Decided: **summary that links into the real screens** (not a
+  parallel inbox) — each card navigates to its source. Live-confirmed.
+- [x] **L.2** Cards are `<button>`s (cursor/hover via `overview-card-clickable`)
+  that nav to the source conversation. Live-confirmed (Alice → DmChat).
+- [x] **L.3** N/A — went with the summary design (L.1), so no duplicated
+  Accept/Deny buttons and no cross-surface state-sync to maintain.
 
 ---
 
@@ -399,10 +397,14 @@ Clicked 👥 (People). Sub-nav: Friends / Ignored / Blocked Users.
 Right pane is a grid of friend cards (avatar + name + handle +
 Message button).
 
-- [ ] **N.1** The "Friends" sub-nav label appears to render twice
-  visually — once as a label/tooltip floating near the top of the
-  middle column, once as the highlighted nav item. Inspect the DOM
-  and either kill the tooltip on this page or fix the stacking.
+- [x] **N.1** ✅ Fixed (change `kytwwqpn`). **Root cause:** not a tooltip —
+  `friends_panel.rs` rendered the section title `friends_management_title`
+  ("People") in BOTH the sidebar header (`special-page-sidebar-title`, line 164)
+  AND the content-pane header (`special-page-title`, line 189). **Fix:** the
+  content header now shows the ACTIVE TAB's title (`Friends` / `Ignored` /
+  `Blocked`) via a reactive `active_tab_title` — removes the duplication and
+  makes the header informative. Live-confirmed: sidebar "People", content
+  "Friends", and switching to Ignored updates the content header to "Ignored".
 - [ ] **N.2** No "Add friend" button anywhere. Friends panels in
   Discord / Slack / etc. always have it as a primary CTA. Add one
   near the search.
@@ -510,13 +512,11 @@ Clicked 🔍 in the global rail. Right pane is "Search servers,
 channels, DMs, groups…" with toggles for Servers / DMs / Groups,
 plus an ACCOUNTS filter column on the left.
 
-- [ ] **R.1** ACCOUNTS filter shows only 3 entries (Cat (demo), Dog
-  (demo), Platypus (demo_forum)) even though the user has ~15
-  connected accounts. Verify: is the search index per-backend
-  capability-gated (e.g. only `dev-plugins` backends are indexed)
-  or is this silently dropping accounts? If the latter, surface the
-  reason — "this backend doesn't support search" — instead of
-  hiding the account.
+- [x] **R.1** ✅ Not a bug (live-confirmed 2026-06-04). The "~15 accounts"
+  premise was stale — the fresh-user demo seed was reduced (Phase A3/C work) to
+  exactly 3 accounts (demo-cat, demo-dog, demo-platypus). The ACCOUNTS filter
+  correctly shows **"All accounts — 3 of 3"**, listing all three. No accounts
+  are silently dropped; nothing to fix.
 - [ ] **R.2** Default state shows ALL servers/channels expanded.
   For a real user with many backends this scroll-list could be
   thousands of items. Collapse servers by default; expand on click
