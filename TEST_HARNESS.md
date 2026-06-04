@@ -107,6 +107,37 @@ interaction responds as expected.
 
 ---
 
+## 5a. Fresh-user smoke test — setup wizard (Phase A.5)
+
+> Run after any change affecting the setup wizard, app startup, or storage
+> init (`reset_app`, the `dev.autoseed_disabled` marker, AppBody mount, or the
+> `SetupWizard` component). Safe to run on all other changes too. Uses the
+> **poly-web** MCP; if it is not loaded, report SKIP (do not substitute another
+> browser MCP).
+
+1. `mcp__poly-web__reset_app` — wipes `poly_kv` via `/host/kv/clear`, clears
+   browser storage, sets `dev.autoseed_disabled=true`, and reloads.
+2. Poll `mcp__poly-web__list_console_messages` once to confirm no critical
+   errors after reload.
+3. `mcp__poly-web__evaluate_script` — assert the setup wizard is shown:
+   ```js
+   () => !!document.querySelector('.setup-wizard') &&
+          (document.querySelector('.setup-title')?.textContent || '').includes('Welcome to Poly')
+   ```
+   Expected `true`. FAIL if the wizard title isn't visible.
+4. `mcp__poly-web__evaluate_script` — assert NO demo seed was re-loaded:
+   ```js
+   () => document.querySelectorAll('.channel-item').length === 0
+   ```
+   Expected `true`. FAIL if any `.channel-item` is present (autoseed should be
+   disabled).
+
+Pass criteria: `reset_app` succeeds, the wizard title "Welcome to Poly" is
+visible, `.channel-item` count is 0, and no storage/init error-level console
+messages.
+
+---
+
 ## 6. Persona e2e mock smoke
 
 > Run after any change that touches `mcp/chat-mcp/src/persona/`, `crates/core/src/ui/agent/persona/`,
@@ -208,6 +239,7 @@ After running all applicable steps, respond with a table:
 | 3. WASM build | PASS/FAIL | ... |
 | 4. unit tests | PASS/FAIL | N tests passed |
 | 5. poly-web MCP | PASS/SKIP/FAIL | ... |
+| 5a. fresh-user smoke | PASS/SKIP/FAIL | setup wizard shown, 0 channel-items |
 | 6. persona e2e smoke | PASS/SKIP/FAIL | ... |
 | 7. Discord voice smoke | PASS/SKIP/FAIL | SKIP if RUN_VOICE_SMOKE not set |
 | 8. Stoat voice smoke | PASS/SKIP/FAIL | SKIP if RUN_STOAT_VOICE_SMOKE not set |

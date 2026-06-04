@@ -849,9 +849,9 @@ chat-settings-sort-join-order = Join order
 chat-settings-show-offline = Show offline members
 user-all-offline-hidden = All members are offline and hidden
 filter = Filter
-chat-type-message-channel = Message #{ $channel }
-chat-type-message-user = Message { $user }
-chat-type-message-group = Message { $group }
+chat-type-message-channel = Message #{ $channel } · Enter to send
+chat-type-message-user = Message { $user } · Enter to send
+chat-type-message-group = Message { $group } · Enter to send
 chat-markdown-formatting = Markdown formatting
 
 # Users extras

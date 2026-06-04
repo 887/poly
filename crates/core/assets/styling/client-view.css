@@ -170,6 +170,30 @@
     line-height: 1.35;
 }
 
+/* K.3 — server-card metrics rendered as scannable chips instead of one
+   comma-separated run. */
+.client-view-card-meta-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+}
+.card-meta-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+.card-meta-chip-mention {
+    background: color-mix(in srgb, var(--accent-primary) 18%, transparent);
+    color: var(--accent-primary);
+}
+
 .view-row-badge,
 .client-view-row-badge {
     flex: 0 0 auto;

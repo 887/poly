@@ -148,6 +148,13 @@
     position: relative;
 }
 
+/* T.2 — the agent panel packs more (Access toggle, Memory, Drafts, Catch-up,
+   Style); give it a wider min so labels stop wrapping at the 240px default.
+   Mobile full-screen is already handled by .chat-side-column's mobile rule. */
+.chat-side-column:has(.agent-panel-sidebar) {
+    min-width: 320px;
+}
+
 /* Drag handle on the left edge of the right panel — desktop only */
 .right-panel-resizer {
     position: absolute;

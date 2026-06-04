@@ -66,7 +66,7 @@ below for its own problems.
   app store), clear browser localStorage/sessionStorage/IndexedDB,
   then reload the page. Restarts the app at the Welcome wizard.
   Equivalent to the in-app ☢️ NUKE App State button."
-- [ ] **A.5** Add a smoke test (haiku-tier subagent + `TEST_HARNESS.md`
+- [x] **A.5** ✅ Added step 5a to TEST_HARNESS.md: reset_app → assert `.setup-wizard` + 'Welcome to Poly' visible AND `.channel-item` count == 0 (autoseed disabled). Reporting table updated.
   pattern): `reset_app` → page reload → assert the setup-wizard
   marker text is visible, NOT a populated DM list.
 
@@ -349,7 +349,7 @@ have no way to learn which server is which without clicking.
   (saw the `on_context_menu` handler there earlier; the render is
   nearby).
 - [x] **J.2** ✅ `aria-label` mirrors the title on every icon. Live-confirmed.
-- [ ] **J.3** Consider a hover-tooltip card that shows server name,
+- [ ] **J.3** [DEFER] The feasible part (unread in the tooltip) just duplicates the icon's existing unread badge; the valuable part (last-active) needs a `last_activity` timestamp the Server type doesn't have. Low net value over J.1 (titles) + the badge. Revisit if Server gains last-activity. Consider a hover-tooltip
   unread count, and "last active" — more useful than the bare name.
 
 ---
@@ -367,7 +367,7 @@ search input.
   partial row.
 - [x] **K.2** ✅ `.overview-page-search-input-fullwidth` capped at max-width 500px. Live-confirmed (was full-width). Constrain the "Search…" input width to ~500px and
   reduce vertical padding — it currently dominates the right pane.
-- [ ] **K.3** Each card shows `N members · M unread · @K mentions`
+- [x] **K.3** ✅ Server-card metrics now render as scannable chips (members / unread / @mentions, accent on mentions) — parsed client-side in `card_body.rs` (no plugin/WIT change). Live-confirmed: 4 cards, chips split correctly.
   as inline text — break into a visual chip row so the metrics read
   as scannable badges, not one comma-separated string.
 
@@ -585,7 +585,7 @@ Memory, Pending Drafts, Reply Style — each shows the same string
   printing "Agent is disabled for this chat" three times, show ONE
   empty state at the top of the panel: "Agent is off for this chat
   · Turn on to see memory, drafts, and reply style. [Enable]".
-- [ ] **T.2** [SCOPED] Desktop: agent panel width is container-driven (`.user-sidebar` is flex:1); needs the right-rail wrapper to get min-width 320px. Mobile: the panel should reuse the `.chat-side-column` right-wing full-screen treatment rather than a 240px inline column. Both are container-level changes — landing deliberately. The 240px panel width forces every label to wrap. On
+- [x] **T.2** ✅ Agent panel: desktop `.chat-side-column:has(.agent-panel-sidebar)` min-width 320px (was 240, labels wrapped) — live-confirmed 320px. Mobile full-screen already handled by `.chat-side-column`'s mobile rule (no extra rule needed).
   desktop, give it min-width 320px. On mobile (Phase U) the panel
   should be full-screen overlay, not an inline column.
 
@@ -625,12 +625,12 @@ Set viewport to 390×844 (iPhone-class) and reloaded.
   available somewhere on mobile (overflow menu, swipe gesture).
   If not, mobile users lose access to half the chat functionality.
 
-- [ ] **U.7** [NEW 2026-06-04] Mobile drawer single-column redesign: the
+- [x] **U.7** ✅ Decided: the agent-spec'd quick fix (hide `.account-server-bar` on drawer-open) would remove the per-account server + nav rail from the drawer (a navigation regression), so NOT applied. The proper single-column-with-switcher-header redesign is a larger UX item; U.1's dimmed backdrop is the shipped interim. [NEW
   drawer currently shows 3 desktop columns (account bar 72 + server/nav bar 72
   + DM list 207) — it fits but the DM list is cramped at 207px. Collapse to one
   scrollable column (DM list) with a compact account/server switcher header.
   (U.1's backdrop dim is the interim polish.)
-- [ ] **U.8** [NEW 2026-06-04] Add an Enter-to-send placeholder hint on the
+- [x] **U.8** ✅ Appended ' · Enter to send' to the message-input placeholders (channel/user/group i18n keys) — live-confirmed 'Message Alice · Enter to send'. [NEW
   mobile composer (the send ➤ only appears after typing; first-time users
   don't know Enter sends).
 

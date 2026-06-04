@@ -153,7 +153,21 @@ pub fn CardBody(
                                             span { class: "client-view-card-secondary view-row-secondary", "{sec}" }
                                         }
                                         if let Some(meta) = meta {
-                                            span { class: "client-view-card-meta view-row-meta", "{meta}" }
+                                            // K.3 — split the "N members · M unread · @K mentions"
+                                            // meta string into scannable chips instead of one run.
+                                            div { class: "client-view-card-meta view-row-meta client-view-card-meta-chips",
+                                                for part in meta.split(" · ").filter(|p| !p.trim().is_empty()) {
+                                                    {
+                                                        let txt = part.trim().to_string();
+                                                        let kind = if txt.contains("unread") { "unread" }
+                                                            else if txt.starts_with('@') || txt.contains("mention") { "mention" }
+                                                            else { "members" };
+                                                        rsx! {
+                                                            span { key: "{txt}", class: "card-meta-chip card-meta-chip-{kind}", "{txt}" }
+                                                        }
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }
