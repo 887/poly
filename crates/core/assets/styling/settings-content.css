@@ -1134,8 +1134,12 @@
     text-decoration: underline;
 }
 
+/* P.3 — higher specificity than `.settings-text-input { width: 100% }`
+   (which loads later and otherwise wins) so a 4-digit port field stays
+   compact instead of spanning the whole pane. */
+.settings-text-input.settings-input-short,
 .settings-input-short {
-    width: 100px;
+    width: 120px;
 }
 
 /* Persona list rows (rendered inside the agent settings page).

@@ -454,14 +454,14 @@ Agent → Integrations. MCP server config + integration feature list.
 - [x] **P.2** ✅ Resolved by P.1 — the secondary line was the missing `settings-mcp-transport-desc` key showing as a fallback; it now has real copy. The secondary line under "Settings Mcp Transport"
   appears to be a stale i18n key or duplicate label. Inspect and
   either give it real copy or remove.
-- [ ] **P.3** The Port input (containing "3010") spans the full
+- [x] **P.3** ✅ `.settings-text-input { width:100% }` (loaded later) was overriding `.settings-input-short`; added a higher-specificity rule so the port field is 120px. Live-confirmed (827px → 120px). The Port input (containing "3010") spans the full
   pane width. A 4-digit port number doesn't need that much real
   estate. Constrain to ~120px.
 - [x] **P.4** ✅ The feature-rows sub-section heading reused the page's `agent-section-integrations` key; pointed it at a new `agent-section-features` ("Features") key. No more duplicate "Integrations". The page is titled "Integrations" AND there's a sub-
   section headed "Integrations" with the feature rows (Suggested
   responses / Conversation summaries / etc.). Rename one. The lower
   list is really "Features" or "Capabilities".
-- [ ] **P.5** Feature rows (Suggested responses, etc.) have no
+- [x] **P.5** ✅ The rows are informational (no per-feature toggle); the section is now clearly headed "Features" (P.4) so it reads as a capability list, not a settings group with hidden toggles. Feature rows (Suggested responses, etc.) have no
   on/off toggle visible — looks read-only. If they're settable, add
   the toggle on the right. If they're informational, label the
   section "What MCP unlocks" or similar.
