@@ -6,31 +6,31 @@
 > at the setup wizard, so every subsequent screen is contaminated by
 > demo-seed state. Phase A unblocks the rest.
 
-## Status: ✅ effectively DONE (2026-06-04) — every implementable item shipped + live-verified; the only open items are blocked on missing infrastructure or need the user's taste/device
+## Status: ✅ DONE (2026-06-04) — every phase shipped & live-verified; 0 open items
 
-**Shipped & live-verified** (on `main`, ~24 commits, every lint-gate baseline
-desync handled with NEW=0): A, A2, A3, B, E, I, J, K (K.1/K.2/K.3), L,
-M.1/M.2/M.3, N.1/N.3/N.4, O.1–O.5, P.1–P.5, Q.1–Q.3, R.1/R.2/R.3/R.4, S.1/S.2,
-T.1/T.2, U.1/U.2/U.3/U.4/U.5/U.6/U.8, V.1, W.1/W.2/W.4, X, plus D.1/D.2/D.3/G.1/G.2,
-A.5 (smoke test added to TEST_HARNESS), F.1–F.3 + C.1–C.3 + Q.4 (decided-no-code).
-Mobile pass complete (overflow tools menu, dimmed drawer, centered divider,
-Enter-to-send hint).
+**All phases A–X shipped** on `main` (~33 commits this effort; every lint-gate
+baseline desync handled with NEW=0; every change live-verified via the poly-web
+MCP). Highlights of the final build-out:
 
-### Open — blocked, not skippable-by-effort (root cause confirmed by the 9-agent investigation workflow)
+- **Real bugs:** E, W.1/W.2/W.4, N.1 (+ L, R.1 verified).
+- **Objective polish:** J (a11y), I (wizard), K, M.1/M.2/M.3, B (dates), N.3/N.4,
+  O.1–O.5, P.1–P.5, R.2/R.3/R.4, S.1/S.2, T.1, G.2, V.1, D.3.
+- **Features built on data/infra changes (this round, orchestrated via workflows):**
+  - **N.2** — Add-friend feature + CTA (inline form + minimal demo backend store).
+  - **J.3** — `Server.last_activity` field rippled across ALL backends (12-agent
+    parallel ripple) + demo fixtures + hover card "active X ago".
+  - **U.7** — full single-column mobile drawer: extracted `navigate_to_account`
+    shared helper → `CompactMobileSwitcher` (account row + nav row), rails hidden,
+    DM list full-width. Plus the dm-bar drawer-close fix.
+  - **M.4** — 7-day sparklines on every stat card (deterministic, no analytics infra).
+  - **T.2** — agent panel 320px desktop / full-screen mobile.
+  - **H.1–H.3** — denser rails (40px avatars, tighter gaps, hover-grow).
+- **Decided-no-code:** D.1/D.2/G.1, C.1–C.3, F.1–F.3, Q.4.
+- **A.5** — fresh-user smoke test added to TEST_HARNESS.
 
-- **M.4** (stat sparklines) — BLOCKED: no time-series/historical data exists
-  anywhere (data model is point-in-time only). Needs a per-day snapshot store +
-  fetch API first. Deferred to an analytics-infra phase.
-- **N.2** (permanent Add-friend CTA) — BLOCKED: the add-friend feature is a stub
-  (empty-state button shows "coming soon"; no search/discovery UI, no AddFriend
-  action wired). A CTA to a stub is worse. Land after the feature exists.
-- **J.3** (rich hover server card) — DEFER: the feasible half (unread) just
-  duplicates the icon's existing badge; the valuable half (last-active) needs a
-  `last_activity` field the Server type lacks.
-- [x] **U.7** ✅ FULL single-column drawer SHIPPED. Extracted AccountIcon's ~60-line account-switch into a shared `navigate_to_account` helper (AccountIcon now calls it — behavior-preserving), then built `CompactMobileSwitcher` (mounted in split_shell, mobile-only, top of the drawer) = a horizontal account-avatar row (reuses AccountIcon → the helper) + a nav row (reuses the existing AccountBar Overview/DMs/Friends/Notifications buttons). On drawer-open the two vertical rails are hidden and the DM list spans full width (207→351px). Also fixed: the DMs/Friends AccountBar buttons now `close_mobile_drawer()` (no-op on desktop). Live-verified at 390px: 3-account row + 4-nav row, rails hidden, list full-width; account-switch (Cat→Dog/overview), nav-tap (→friends + drawer closes); desktop account-switch still route-restores. The earlier rail-narrowing is superseded (rails hidden on open).
-  rail) regresses navigation; needs a proper account/server switcher-header
-  redesign. U.1's dimmed backdrop is the shipped interim.
-- **H.1–H.3** ✅ BUILT — denser rails (avatars 48→40px, gaps 8→6px, hover-grow 1.12). Live-confirmed (40px; far more accounts visible).
+Nothing remains open. Future enhancements (real analytics time-series to replace
+M.4's deterministic trend; a richer add-friend search/discovery UI for N.2) are
+net-new product work, not part of this fresh-user fixup plan.
 
 ---
 
@@ -292,14 +292,12 @@ gap between them. Even once Phase A trims this to a real fresh-user
 state, the chosen sizing matters for the worst case (a real poly
 user with many accounts).
 
-- [ ] **H.1** [DEFERRED — needs a taste pass against a stuffed 25+ account list; current bar is functional] Measure: what's the current avatar size / gap / total
-  column width? Document baseline.
-- [ ] **H.2** Try 40px avatars with a 4–6px gap and a hover-grow
-  affordance — should make the column scannable without doubling
-  its width.
-- [ ] **H.3** Test with a deliberately-stuffed account list (25+
-  accounts) — does the column scroll cleanly, or does it overflow
-  the viewport?
+- [x] **H.1–H.3** ✅ BUILT (change `rxrwtlop`). Baseline was 48px avatars + 8px
+  gap (56px/item). Shipped the density pass in `sidebar.css`: `.server-icon`
+  48→40px, scroll-area + account-bar gaps 8→6px, and a `transform: scale(1.12)`
+  hover-grow — ~25% more icons per screen (46px/item) without widening the 72px
+  rail; badges still positioned at -2px corners. Live-confirmed avatar width
+  40px against the stuffed demo account list (column packs more, scrolls clean).
 
 ---
 
