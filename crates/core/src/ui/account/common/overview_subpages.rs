@@ -208,6 +208,19 @@ pub fn OverviewStatsView(account_id: String) -> Element {
         .map(|s| s.mention_count)
         .sum();
 
+    // M.2 — make the count cards navigate: Servers → overview general,
+    // Unread/Mentions → Things-you-missed. DMs/Groups are inventory totals
+    // with no single destination, so they stay static.
+    let account_sessions: BatchedSignal<AccountSessions> = use_context();
+    let nav_state: BatchedSignal<crate::state::NavState> = use_context();
+    let nav = navigator();
+    let backend_slug = nav_state.peek().active_backend.cloned().map(|b| b.slug().to_string());
+    let instance_id = account_sessions
+        .peek()
+        .account_sessions
+        .get(&account_id)
+        .map(|s| s.instance_id.clone());
+
     rsx! {
         div { class: "overview-page overview-stats-page",
             header { class: "overview-page-header",
@@ -215,11 +228,44 @@ pub fn OverviewStatsView(account_id: String) -> Element {
                 p { class: "overview-page-subtitle", "{t(\"overview-page-stats-subtitle\")}" }
             }
             div { class: "overview-stats-grid",
-                StatCard { label: t("overview-stat-servers"), value: server_count.to_string() }
-                StatCard { label: t("overview-stat-dms"), value: dm_count.to_string() }
-                StatCard { label: t("overview-stat-groups"), value: group_count.to_string() }
-                StatCard { label: t("overview-stat-unread"), value: unread_total.to_string() }
-                StatCard { label: t("overview-stat-mentions"), value: mention_total.to_string() }
+                if let (Some(b), Some(i)) = (backend_slug.clone(), instance_id.clone()) {
+                    {
+                        let (a_s, b_s, i_s) = (account_id.clone(), b.clone(), i.clone());
+                        let (a_u, b_u, i_u) = (account_id.clone(), b.clone(), i.clone());
+                        let (a_m, b_m, i_m) = (account_id.clone(), b.clone(), i.clone());
+                        rsx! {
+                            button {
+                                class: "overview-stat-card overview-stat-card-clickable",
+                                r#type: "button",
+                                onclick: move |_| { nav.push(Route::ServerOverviewRoute { backend: b_s.clone(), instance_id: i_s.clone(), account_id: a_s.clone() }); },
+                                div { class: "overview-stat-value", "{server_count}" }
+                                div { class: "overview-stat-label", {t("overview-stat-servers")} }
+                            }
+                            StatCard { label: t("overview-stat-dms"), value: dm_count.to_string() }
+                            StatCard { label: t("overview-stat-groups"), value: group_count.to_string() }
+                            button {
+                                class: "overview-stat-card overview-stat-card-clickable",
+                                r#type: "button",
+                                onclick: move |_| { nav.push(Route::ServerOverviewMissedRoute { backend: b_u.clone(), instance_id: i_u.clone(), account_id: a_u.clone() }); },
+                                div { class: "overview-stat-value", "{unread_total}" }
+                                div { class: "overview-stat-label", {t("overview-stat-unread")} }
+                            }
+                            button {
+                                class: "overview-stat-card overview-stat-card-clickable",
+                                r#type: "button",
+                                onclick: move |_| { nav.push(Route::ServerOverviewMissedRoute { backend: b_m.clone(), instance_id: i_m.clone(), account_id: a_m.clone() }); },
+                                div { class: "overview-stat-value", "{mention_total}" }
+                                div { class: "overview-stat-label", {t("overview-stat-mentions")} }
+                            }
+                        }
+                    }
+                } else {
+                    StatCard { label: t("overview-stat-servers"), value: server_count.to_string() }
+                    StatCard { label: t("overview-stat-dms"), value: dm_count.to_string() }
+                    StatCard { label: t("overview-stat-groups"), value: group_count.to_string() }
+                    StatCard { label: t("overview-stat-unread"), value: unread_total.to_string() }
+                    StatCard { label: t("overview-stat-mentions"), value: mention_total.to_string() }
+                }
             }
         }
     }

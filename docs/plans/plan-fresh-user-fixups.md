@@ -23,9 +23,6 @@ intended), F.1–F.3 (NEW pill = unread divider, single semantic).
 
 **Decided + scoped — clean code change pending** (behaviour/route plumbing I'm
 landing separately, not rushing):
-- **M.2** — clickable stat cards: Unread/Mentions → Things-you-missed,
-  Servers → overview; DMs/Groups stay static. (Needs an `Option<EventHandler>`
-  prop pattern this codebase doesn't yet use → land deliberately.)
 - **R.2** — search servers collapse-by-default, expand-on-query-match.
 
 **Deferred — needs your eye / a device:**
@@ -410,7 +407,7 @@ promises *activity*; the cards show *inventory*.
 - [x] **M.1** ✅ Fixed the over-promising subtitle — was "Your activity at a glance" (cards show inventory, not activity); now "A snapshot of your servers, messages, and unread." Either rename the page to "Inventory" / "At a glance"
   or add real activity metrics: messages sent per day, time-in-app,
   most-active channels, etc.
-- [ ] **M.2** [DECISION: Unread & Mentions cards → Things-you-missed; Servers → overview general; DMs/Groups stay static (inventory totals, no single destination). Implementation scoped (StatCard on_click + route plumbing) — landing separately to avoid rushing route wiring.] Make the cards clickable: UNREAD → Things-you-missed,
+- [x] **M.2** ✅ Implemented: Servers → overview general, Unread/Mentions → Things-you-missed (clickable buttons; DMs/Groups stay static — inventory totals with no single destination). Live-confirmed: Unread card → /overview/missed. Make the cards clickable: UNREAD → Things-you-missed,
   SERVERS → Overview General grid, etc.
 - [x] **M.3** ✅ `.overview-stats-grid` min 150→130px so all 5 stat cards sit on one row. Live-confirmed (5 cols, 1 row). Fix the wrap: 4 cards on row 1, 1 orphan on row 2.
   Either fit 5 across, or wrap to 3+2.

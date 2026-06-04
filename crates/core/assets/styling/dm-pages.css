@@ -1208,6 +1208,18 @@
     gap: 4px;
 }
 
+/* M.2 — clickable stat cards (Servers / Unread / Mentions). */
+button.overview-stat-card-clickable {
+    cursor: pointer;
+    text-align: left;
+    font: inherit;
+    transition: border-color 0.12s ease, transform 0.12s ease;
+}
+button.overview-stat-card-clickable:hover {
+    border-color: var(--accent-primary);
+    transform: translateY(-1px);
+}
+
 .overview-stat-value {
     font-size: 24px;
     font-weight: 700;
