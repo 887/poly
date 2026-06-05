@@ -13,8 +13,6 @@
 //! hand-rolling its own shell.
 
 use crate::i18n::t;
-use crate::ui::favorites_sidebar::CompactMobileSwitcher;
-use crate::ui::main_layout::runtime_mobile_ui_active;
 use dioxus::prelude::*;
 use poly_ui_macros::{context_menu, ui_action};
 #[cfg(target_arch = "wasm32")]
@@ -116,12 +114,6 @@ pub(crate) fn SplitMenuShell(props: SplitMenuShellProps) -> Element {
     rsx! {
         div { class: "{root_class}",
             div { class: "{sidebar_class}",
-                // U.7 — single-column mobile drawer: a compact account/server-nav
-                // switcher header replaces the two vertical rails (hidden via CSS
-                // when the drawer is open on mobile).
-                if runtime_mobile_ui_active() {
-                    CompactMobileSwitcher {}
-                }
                 {props.sidebar}
             }
             button {
