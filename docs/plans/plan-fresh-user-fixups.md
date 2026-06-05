@@ -19,9 +19,13 @@ MCP). Highlights of the final build-out:
   - **N.2** — Add-friend feature + CTA (inline form + minimal demo backend store).
   - **J.3** — `Server.last_activity` field rippled across ALL backends (12-agent
     parallel ripple) + demo fixtures + hover card "active X ago".
-  - **U.7** — full single-column mobile drawer: extracted `navigate_to_account`
-    shared helper → `CompactMobileSwitcher` (account row + nav row), rails hidden,
-    DM list full-width. Plus the dm-bar drawer-close fix.
+  - **U.7** — REVERTED. The single-column drawer (hide rails →
+    `CompactMobileSwitcher`) was a navigation+layout regression: it dropped the
+    server/account rails AND the bottom account bar on mobile. Intended behavior
+    confirmed by the user — the mobile drawer must reveal the SAME rails + channel
+    list + bottom account bar as desktop, just slid in. Reverted in `8591721e`;
+    mobile keeps the 144px rail-offset reveal. The `navigate_to_account` helper
+    extraction + the dm-bar drawer-close fix were kept (harmless, reused).
   - **M.4** — 7-day sparklines on every stat card (deterministic, no analytics infra).
   - **T.2** — agent panel 320px desktop / full-screen mobile.
   - **H.1–H.3** — denser rails (40px avatars, tighter gaps, hover-grow).
