@@ -116,6 +116,14 @@ This project uses a three-tier agent model:
 | **Testing agent** | `model: "haiku"` | Running TEST_HARNESS.md, smoke tests, deterministic checks |
 
 ### Rules
+- **Orchestrate by default — don't launch one agent and block on it.** Prefer dispatching
+  agents non-blocking / in parallel (`run_in_background`, or a Workflow) and keep working
+  and talking to the user while they run. Launching a single subagent and awaiting it for
+  20–35 min freezes the conversation — the user can't interact and the session looks hung
+  (a real foundlings incident: a 35-min single-blocking-agent run locked the user out).
+  Only block on one agent when there's a genuine sequential dependency where you truly
+  cannot proceed without its result; even then, prefer a backgrounded agent you can check
+  on so the user keeps the floor.
 - The orchestrator directs, delegates, and integrates — it does NOT do all the work itself.
 - Spawn coding agents (sonnet-tier) for isolated implementation tasks that can run in
   parallel. Isolate them with `jj workspace add` (see "Parallel Agent Work" below) —
