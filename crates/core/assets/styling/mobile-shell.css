@@ -274,11 +274,14 @@
 }
 
 .poly-app.poly-mobile-runtime-active .voice-account-footer {
-    /* Extend left over the account-server-bar (72px) only, NOT over the
-       favorites server-sidebar. Matches desktop where the footer covers one
-       rail's worth of column. */
-    width: calc(100% + 72px);
-    margin-left: -72px;
+    /* Extend left over the account-server-bar only, NOT over the favorites
+       server-sidebar. Matches desktop where the footer covers one rail's worth
+       of column. The overhang must equal the real account-bar width — the H
+       density pass renders it ~56px, so a hardcoded 72px poked into the server
+       rail. mobile_drawer_runtime.js measures it into --poly-mobile-account-bar-px
+       (72px fallback if unset). */
+    width: calc(100% + var(--poly-mobile-account-bar-px, 72px));
+    margin-left: calc(-1 * var(--poly-mobile-account-bar-px, 72px));
 }
 
 .poly-app.poly-mobile-runtime-active .account-view-main,

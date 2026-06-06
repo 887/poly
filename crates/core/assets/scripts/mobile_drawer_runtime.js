@@ -61,6 +61,21 @@ if (!window.__polyMobileDrawerInit) {
         return Math.round(offset);
     }
 
+    function accountBarWidthPx() {
+        // The bottom account footer overhangs left to cover the account-server-bar
+        // (one rail) but NOT the favorites server-sidebar. Measure the real
+        // account-bar width so the overhang matches it exactly — the H density pass
+        // renders it ~56px, and a hardcoded 72px overhang poked into the server rail.
+        const account = document.querySelector('.account-server-bar');
+        if (account instanceof HTMLElement) {
+            const width = account.getBoundingClientRect().width;
+            if (width > 0) {
+                return Math.round(width);
+            }
+        }
+        return 72;
+    }
+
     function computeLeftRevealPx() {
         return Math.min(window.innerWidth * 0.9, 420);
     }
@@ -254,6 +269,7 @@ if (!window.__polyMobileDrawerInit) {
 
             root.classList.remove(LEFT_OPEN_CLASS, RIGHT_OPEN_CLASS, LEFT_DRAGGING_CLASS, RIGHT_DRAGGING_CLASS);
             root.style.removeProperty('--poly-mobile-rail-offset');
+            root.style.removeProperty('--poly-mobile-account-bar-px');
             root.style.removeProperty('--poly-mobile-left-progress');
             root.style.removeProperty('--poly-mobile-right-progress');
             root.style.removeProperty('--poly-mobile-left-offset-px');
@@ -274,6 +290,7 @@ if (!window.__polyMobileDrawerInit) {
         }
 
         root.style.setProperty('--poly-mobile-rail-offset', `${railOffsetPx()}px`);
+        root.style.setProperty('--poly-mobile-account-bar-px', `${accountBarWidthPx()}px`);
         root.style.setProperty('--poly-mobile-left-reveal-px', `${computeLeftRevealPx()}px`);
         root.style.setProperty('--poly-mobile-right-reveal-px', `${computeRightRevealPx()}px`);
         if (!wasMobileActive) {
