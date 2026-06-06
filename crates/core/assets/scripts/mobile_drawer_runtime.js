@@ -41,7 +41,24 @@ if (!window.__polyMobileDrawerInit) {
     }
 
     function railOffsetPx() {
-        return document.querySelector('.account-server-bar') ? 144 : 72;
+        // Measure the actual rendered rail widths so the drawer panel sits flush
+        // against them. The rails are not a fixed 72px — the H density pass renders
+        // them narrower (~56px), and hardcoding 72/144 left a dead gap between the
+        // account-server-bar and the drawer panel. Sum the real widths instead.
+        const server = document.querySelector('.server-sidebar');
+        const account = document.querySelector('.account-server-bar');
+        let offset = 0;
+        if (server instanceof HTMLElement) {
+            offset += server.getBoundingClientRect().width;
+        }
+        if (account instanceof HTMLElement) {
+            offset += account.getBoundingClientRect().width;
+        }
+        // Fallback to the legacy fixed widths if the rails aren't laid out yet.
+        if (offset <= 0) {
+            offset = account ? 144 : 72;
+        }
+        return Math.round(offset);
     }
 
     function computeLeftRevealPx() {
