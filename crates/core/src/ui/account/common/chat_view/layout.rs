@@ -291,8 +291,13 @@ fn render_mobile_chat_header_right_toggle(ctx: ChatViewMarkupCtx) -> Element {
     let current_server = ctx.current_server.clone();
     let current_channel = ctx.current_channel.clone();
     let dm_user = ctx.dm_user.clone();
-    let chat_lists: BatchedSignal<ChatLists> = use_context();
-    let account_sessions: BatchedSignal<AccountSessions> = use_context();
+    // NOT use_context() here: this helper is called conditionally (only on the
+    // mobile branch of render_chat_header_right), so a hook would shift the
+    // parent's hook indices and panic on resize across the breakpoint with the
+    // right wing open. consume_context() walks the context tree without
+    // registering a hook.
+    let chat_lists: BatchedSignal<ChatLists> = consume_context();
+    let account_sessions: BatchedSignal<AccountSessions> = consume_context();
     let voice_state = ctx.voice_state;
     let client_manager = ctx.client_manager;
     let is_dm_channel = ctx.is_dm_channel;
