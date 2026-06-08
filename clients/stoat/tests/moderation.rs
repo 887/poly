@@ -208,7 +208,7 @@ async fn test_untimeout_member() {
 
     let key = StoatState::member_key("SRV001", "RACCOON01");
     let mod_state = state.member_mod.get(&key);
-    let timed_out = mod_state.map(|m| m.timeout.is_some()).unwrap_or(false);
+    let timed_out = mod_state.is_some_and(|m| m.timeout.is_some());
     assert!(!timed_out, "timeout should be cleared after untimeout");
 }
 

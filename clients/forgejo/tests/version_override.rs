@@ -95,8 +95,7 @@ async fn test_version_override_reaches_wire() {
     let found = entries.iter().any(|e| {
         e["headers"]["user-agent"]
             .as_str()
-            .map(|ua| ua == "test-version/1.2.3")
-            .unwrap_or(false)
+            .is_some_and(|ua| ua == "test-version/1.2.3")
     });
 
     assert!(
@@ -135,8 +134,7 @@ async fn test_version_override_clear_restores_default() {
     let found = entries.iter().any(|e| {
         e["headers"]["user-agent"]
             .as_str()
-            .map(|ua| ua == DEFAULT_UA)
-            .unwrap_or(false)
+            .is_some_and(|ua| ua == DEFAULT_UA)
     });
 
     assert!(

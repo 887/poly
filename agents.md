@@ -114,10 +114,10 @@ Someone should be able to build Poly with only `discord + teams` or any other co
 
 ### 7. Code Quality
 
-- Run `cargo cranky --workspace` — zero warnings/errors policy (uses `cranky.toml` in each crate)
-  - `cranky` is a `cargo clippy` wrapper that reads `cranky.toml` for denied/warned lints
-  - Every crate and the workspace root has a `cranky.toml` denying: `warnings`, `unsafe_code`, `clippy::unwrap_used`, `clippy::expect_used`, `clippy::panic`, `clippy::indexing_slicing`, `clippy::print_stdout`, `clippy::print_stderr`
-  - Install once: `cargo install cranky`
+- Run `cargo clippy --workspace -- -D warnings` — zero warnings/errors policy
+  - Lint policy lives in `[workspace.lints]` (root `Cargo.toml`); every crate opts in via `[lints] workspace = true`. `cargo clippy`, `cargo build`, and rust-analyzer all honour it — no extra tool to install.
+  - Denied workspace-wide includes: `unsafe_code`, `clippy::unwrap_used`, `clippy::expect_used`, `clippy::panic`, `clippy::indexing_slicing`, `clippy::print_stdout`, `clippy::print_stderr`, `clippy::todo`, `clippy::unimplemented`, `clippy::dbg_macro`, and the complexity trio `too_many_lines`/`cognitive_complexity`/`too_many_arguments` (thresholds in `clippy.toml`).
+  - (Historical: previously enforced by `cargo cranky` + per-crate `cranky.toml`. cargo-cranky was archived upstream and retired here 2026-06-08; the policy moved into `[workspace.lints]`.)
 - Run `cargo check --workspace` — verify all crates compile
 - **After any change to `poly-core` or `poly-web`**: run the VS Code task **"Check: poly-web (WASM)"** (or `cargo check -p poly-web --target wasm32-unknown-unknown`) to verify WASM compatibility. The desktop build does NOT catch WASM-only breakage.
 - Run `cargo fmt --all` — consistent formatting
@@ -129,8 +129,8 @@ Someone should be able to build Poly with only `discord + teams` or any other co
 
 **NEVER** add `#[allow(clippy::...)]`, `#[allow(warnings)]`, or any other lint suppression attribute to source code.
 
-This applies to **all** Clippy lints in every `cranky.toml`:
-- `warnings = true` — all compiler warnings are errors
+This applies to **all** lints denied in `[workspace.lints]` (root `Cargo.toml`):
+- compiler `warnings` (CI runs `cargo clippy -- -D warnings`)
 - `unsafe_code`
 - `clippy::unwrap_used`
 - `clippy::expect_used`
@@ -138,7 +138,7 @@ This applies to **all** Clippy lints in every `cranky.toml`:
 - `clippy::indexing_slicing`
 - `clippy::print_stdout` / `clippy::print_stderr`
 
-When `cargo cranky` reports a lint violation, **FIX THE CODE**. Never suppress it with an allow attribute.
+When `cargo clippy` reports a lint violation, **FIX THE CODE**. Never suppress it with an allow attribute.
 
 **The ONLY exception** — inside `#[cfg(test)]` modules:
 - `#[allow(clippy::unwrap_used)]` is permitted for test assertions (e.g. `result.unwrap()`)
@@ -240,7 +240,7 @@ When making architectural decisions:
 **Default verification steps after ANY change to poly-core:**
 
 1. `cargo check --workspace` — must be error-free
-2. `cargo cranky --workspace` — must be zero warnings/errors
+2. `cargo clippy --workspace` — must be zero warnings/errors
 3. `cargo check -p poly-web --target wasm32-unknown-unknown` — verify WASM compat
 4. Launch `poly-web` via the Web DevTools MCP
 5. Poll `get_last_build_status` until `Succeeded`
@@ -433,7 +433,7 @@ At the START of each coding session:
 5. Check `docs/overall-plan.md` for any open decisions
 
 At the END of each session:
-1. Run `cargo cranky --workspace` — fix ALL lint errors before committing
+1. Run `cargo clippy --workspace` — fix ALL lint errors before committing
 2. Run `cargo fmt --all` — format all code
 3. Update phase plan checkboxes for completed items
 4. Update relevant `agents.md` files with new learnings

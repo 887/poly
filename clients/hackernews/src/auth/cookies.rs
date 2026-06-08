@@ -29,10 +29,8 @@ mod tests {
 
     #[test]
     fn extract_user_cookie_picks_user() {
-        let headers = vec![
-            "__cf_bm=abc; path=/",
-            "user=alice&AAAAAAAAAA; expires=Tue, 01-Jan-2030 00:00:00 GMT; path=/",
-        ];
+        let headers = ["__cf_bm=abc; path=/",
+            "user=alice&AAAAAAAAAA; expires=Tue, 01-Jan-2030 00:00:00 GMT; path=/"];
         let got = extract_user_cookie(headers.iter().copied()).unwrap();
         assert_eq!(got, "user=alice&AAAAAAAAAA");
     }
@@ -41,7 +39,7 @@ mod tests {
     fn extract_user_cookie_rejects_empty() {
         // HN sets `user=` (empty) when logging out — must not be treated
         // as a successful login.
-        let headers = vec!["user=; expires=Thu, 01-Jan-1970 00:00:00 GMT; path=/"];
+        let headers = ["user=; expires=Thu, 01-Jan-1970 00:00:00 GMT; path=/"];
         assert!(extract_user_cookie(headers.iter().copied()).is_none());
     }
 }

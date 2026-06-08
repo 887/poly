@@ -203,6 +203,7 @@ impl RedditState {
 
     /// Issue a fresh session cookie for a user. Returns the cookie value
     /// the test client should set on subsequent requests.
+    #[must_use]
     pub fn issue_session(&self, username: &str) -> String {
         // Mock cookie format: `mock_session_<username>_<random>`. Real
         // Reddit issues a JWT; for the mock the only guarantee is
@@ -215,6 +216,7 @@ impl RedditState {
 
     /// Add a DM to the recipient's inbox + sender's sent folder.
     /// Returns the synthesised t4_ id (without prefix).
+    #[must_use]
     pub fn record_dm(&self, from: &str, to: &str, subject: &str, body: &str) -> String {
         let id = format!("dm{}", self.dm_seq.fetch_add(1, Ordering::SeqCst));
         let dm = MockDm {
@@ -250,6 +252,7 @@ impl RedditState {
 
     /// Record a top-level submission. Returns the synthesised t3_ id
     /// (without prefix).
+    #[must_use]
     pub fn record_submission(
         &self,
         sub: &str,
@@ -275,6 +278,7 @@ impl RedditState {
 
     /// Record a comment under a parent (`t1_` or `t3_`). Returns the
     /// synthesised t1_ id (without prefix).
+    #[must_use]
     pub fn record_comment(&self, parent_id: &str, author: &str, body: &str) -> String {
         let id = format!("c{}", self.comment_seq.fetch_add(1, Ordering::SeqCst));
         let c = MockComment {

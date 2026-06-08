@@ -70,6 +70,7 @@ impl Default for TransmitMode {
 
 impl TransmitMode {
     /// Returns `true` if the current mode allows transmitting the given PCM frame.
+    #[must_use] 
     pub fn should_transmit(&self, pcm: &[i16]) -> bool {
         match self {
             Self::Vad { threshold_db } => rms_db(pcm) >= *threshold_db,
@@ -79,6 +80,7 @@ impl TransmitMode {
 }
 
 /// Compute the RMS level in dBFS for an i16 PCM slice.
+#[must_use] 
 pub fn rms_db(pcm: &[i16]) -> f32 {
     if pcm.is_empty() {
         return -96.0;

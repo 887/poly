@@ -46,11 +46,13 @@
 
 /// Returns true when the canary env vars are set and the `discord-canary` feature
 /// is enabled.  All tests in this file call this first and skip when false.
+#[cfg(feature = "discord-canary")]
 fn canary_enabled() -> bool {
     std::env::var("DISCORD_CANARY_TOKEN").is_ok()
 }
 
 /// Helper: read a required env var, panic with a helpful message if missing.
+#[cfg(feature = "discord-canary")]
 fn require_env(key: &str) -> String {
     std::env::var(key).unwrap_or_else(|_| {
         panic!(

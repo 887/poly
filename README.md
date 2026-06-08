@@ -216,7 +216,7 @@ dx serve --platform web --fullstack \
 cargo check --workspace
 
 # Lints (zero-warning policy)
-cargo cranky --workspace
+cargo clippy --workspace
 
 # Unit tests
 cargo test --workspace
@@ -339,7 +339,7 @@ See [docs/INDEX.md](docs/INDEX.md) for architecture documentation. Read the rele
 
 **Before committing:**
 - [ ] `cargo check --workspace` passes
-- [ ] `cargo cranky --workspace` has zero warnings
+- [ ] `cargo clippy --workspace` has zero warnings
 - [ ] `cargo fmt --all` applied
 - [ ] Changes tested manually (especially poly-core via DevTools)
 

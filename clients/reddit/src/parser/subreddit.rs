@@ -90,6 +90,7 @@ pub fn extract_next_after(html: &str) -> Option<String> {
     }
 }
 
+#[must_use] 
 pub fn post_selector() -> Selector {
     // Lints: parser-internal selector strings are static and known-good.
     #[allow(clippy::unwrap_used)] // lint-allow-unused: static selector literal infallible

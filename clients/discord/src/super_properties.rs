@@ -241,7 +241,7 @@ mod tests {
         assert!(json.get("release_channel").is_some(), "release_channel missing");
         assert!(
             json.get("client_event_source")
-                .is_some_and(|v| v.is_null()),
+                .is_some_and(serde_json::Value::is_null),
             "client_event_source must be JSON null"
         );
     }

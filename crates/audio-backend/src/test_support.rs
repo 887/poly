@@ -122,6 +122,7 @@ impl MockAudioBackend {
     }
 
     /// Drain all recorded events since the last call.
+    #[must_use]
     pub fn drain_events(&self) -> Vec<MockEvent> {
         self.state
             .lock()

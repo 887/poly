@@ -56,8 +56,10 @@ pub(super) async fn voice_ws_loop(
             }
             _ = ramp_up_tick.tick() => {
                 // E.9: slow ramp-up — recover bitrate gradually after congestion.
-                // No-op if already at max.
-                bandwidth_ctrl.ramp_up();
+                // No-op if already at max. The encode task reads the new target
+                // via the shared atomic (`share_target`), so the returned value
+                // is intentionally discarded here.
+                let _new_target = bandwidth_ctrl.ramp_up();
             }
             msg = read.next() => {
                 let text = match msg {

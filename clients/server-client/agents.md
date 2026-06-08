@@ -78,8 +78,8 @@ cargo component build -p poly-server-client --target wasm32-wasip2 --no-default-
   `cargo test -p poly-server-client -- --test-threads=1` (tests are
   currently serialized to avoid SurrealKV collisions).
 
-- **Linting:** This crate has its own `cranky.toml` with the workspace lints.
-  Run `cargo cranky -p poly-server-client` frequently; the workspace CI will
+- **Linting:** This crate inherits the workspace lint policy via `[lints] workspace = true`.
+  Run `cargo clippy -p poly-server-client` frequently; the workspace CI will
   treat any clippy warning as an error.
 
 - **Hot-reload:** Not required—HTTP/WS client code rarely changes—but any
@@ -114,7 +114,7 @@ clients/server-client/
 1. Ensure workspace is up-to-date:
    ```sh
    cargo update
-   cargo cranky --workspace
+   cargo clippy --workspace
    cargo check --workspace
    cargo check -p poly-web --target wasm32-unknown-unknown
    ```

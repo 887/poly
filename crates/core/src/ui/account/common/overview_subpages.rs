@@ -290,7 +290,7 @@ pub fn OverviewStatsView(account_id: String) -> Element {
 )]
 fn trend_from_current_value(current: u32) -> [u32; 7] {
     use std::hash::{Hash, Hasher};
-    let wiggle = (current / 8).max(1);
+    let wiggle = current.div_euclid(8).max(1);
     let span = wiggle.saturating_mul(2).max(1);
     let mut out = [current; 7];
     for (day, slot) in out.iter_mut().enumerate() {

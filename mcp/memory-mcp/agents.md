@@ -102,7 +102,7 @@ If a monolithic `tasks.json` is found on startup it is **automatically migrated*
 The memory MCP embeds reminders to follow `agents.md` rules. When the server
 sends `task_start_reminders`, the response includes:
 - Read `agents.md` and the relevant crate's `agents.md`.
-- Run `cargo cranky --workspace` before declaring any coding task done.
+- Run `cargo clippy --workspace` before declaring any coding task done.
 - Run `cargo check -p poly-web --target wasm32-unknown-unknown` for UI changes.
 
 ---
@@ -129,4 +129,4 @@ poly-memory-mcp
 3. Add a match arm in `mcp::dispatch_inner()`.
 4. Add a CLI command in `cli::dispatch_*()`.
 5. Document in README.md.
-6. Run `cargo cranky -p poly-memory-mcp` — zero warnings policy.
+6. Run `cargo clippy -p poly-memory-mcp` — zero warnings policy.

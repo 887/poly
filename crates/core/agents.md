@@ -376,7 +376,7 @@ onchange: move |e: Event<FormData>| {
 4. If a component's RSX is too complex for fmt to handle even with `#[rustfmt::skip]`, it's a sign the component is > 150 lines and needs refactoring
 
 **Status:** As of 2026-03-08, this is being rolled out across all poly-core components.
-**Enforcement:** `cargo cranky` already enforces 100-line limits per component.
+**Enforcement:** `cargo clippy` already enforces 100-line limits per component.
 
 ## Testing
 
@@ -606,7 +606,7 @@ Key generation step added:
 ## ABSOLUTE PROHIBITION — `#[allow(...)]` is FORBIDDEN
 
 **NEVER** add `#[allow(clippy::...)]`, `#[allow(warnings)]`, or any other lint suppression
-attribute to source code. When `cargo cranky` reports a violation, **fix the code**.
+attribute to source code. When `cargo clippy` reports a violation, **fix the code**.
 
 **The ONLY exception**: inside `#[cfg(test)]` modules, `#[allow(clippy::unwrap_used)]`
 and `#[allow(clippy::expect_used)]` are permitted for test assertions — nothing else.
@@ -636,7 +636,7 @@ and is redundant.
 ## CRITICAL: `ui/settings.rs` Brace Matching
 
 The backup settings UI is deeply nested (Dioxus RSX inside async closures inside onclick
-handlers). Brace mismatches only show up in the **WASM build** — `cargo cranky --workspace`
+handlers). Brace mismatches only show up in the **WASM build** — `cargo clippy --workspace`
 (which targets the host) may pass while `cargo build -p poly-web --target wasm32-unknown-unknown`
 fails. **Always run both checks after editing settings.rs.**
 
@@ -652,7 +652,7 @@ Do NOT declare any change complete without visual confirmation.
 
 **Verification checklist:**
 1. `cargo check --workspace` — error-free
-2. `cargo cranky --workspace` — zero warnings
+2. `cargo clippy --workspace` — zero warnings
 3. `cargo check -p poly-web --target wasm32-unknown-unknown` — WASM compat
 4. `mcp_poly-web_launch_app` → poll build status → `mcp_poly-web_connect_cdp`
 5. `mcp_poly-web_take_screenshot` — enable 🧪 demo when relevant, navigate to affected views
@@ -667,7 +667,7 @@ Do NOT declare any change complete without visual confirmation.
 
 **Lesson learned (2025-03-01):** RSX macro syntax errors cause misleading Rust diagnostics.
 Two syntax bugs (a `},` instead of `;` and a misplaced closing brace before `else`) passed
-`cargo cranky --workspace` but would have produced broken runtime behavior. Always verify visually.
+`cargo clippy --workspace` but would have produced broken runtime behavior. Always verify visually.
 
 ## Phase 2.5 New Components (Verified 2025-03-01)
 

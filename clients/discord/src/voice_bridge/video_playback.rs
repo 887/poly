@@ -84,7 +84,7 @@ use super::*;
         #[test]
         fn reassemble_round_trips_fragmented_nal() {
             let mut nal = vec![0x65u8]; // IDR slice header
-            nal.extend(std::iter::repeat(0xABu8).take(2500));
+            nal.extend(std::iter::repeat_n(0xABu8, 2500));
             let frags = super::super::video_capture::fragment_nal_units_to_fua(&nal, 800);
             assert!(frags.len() > 1);
             let recovered = reassemble_fua(&frags).expect("reassembly failed");

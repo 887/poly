@@ -100,7 +100,7 @@ fn required_fields(spec: &Value, schema: &Value) -> Vec<String> {
         .and_then(|v| v.as_array())
         .map(|arr| {
             arr.iter()
-                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                .filter_map(|v| v.as_str().map(std::string::ToString::to_string))
                 .collect()
         })
         .unwrap_or_default();
@@ -127,7 +127,7 @@ fn schema_type(spec: &Value, schema: &Value) -> Option<String> {
     schema
         .get("type")
         .and_then(|v| v.as_str())
-        .map(|s| s.to_string())
+        .map(std::string::ToString::to_string)
 }
 
 // ---------------------------------------------------------------------------

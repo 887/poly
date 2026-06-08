@@ -81,6 +81,120 @@ pub mod fake_backend;
 /// configurable device lists. Used by `tests/contract.rs` (Phase K.1).
 pub mod test_support;
 
+pub use error::AudioError;
+pub use types::{AudioDevice, AudioDeviceKind, AudioFormat, SampleRate};
+
+use futures::Stream;
+use std::pin::Pin;
+
+/// A stream of PCM frames from a microphone / input device.
+///
+/// Each `Vec<i16>` is one frame of interleaved samples:
+/// - Mono (1 channel): `samples[n]` is sample n.
+/// - Stereo (2 channels): `samples[2n]` is left, `samples[2n+1]` is right.
+///
+/// Frame duration is determined by the backend implementation. For Discord
+/// voice, 20 ms frames at 48 kHz stereo = 1920 i16 samples per vec.
+/// Downstream Opus encoders (Phase B) slice these into 20 ms packets.
+pub type AudioInputFrame = Vec<i16>;
+
+/// A pinned, heap-allocated stream of PCM input frames.
+pub type BoxInputStream = Pin<Box<dyn Stream<Item = AudioInputFrame> + Send>>;
+
+/// An audio output sink. Call [`AudioOutputStream::push`] to render PCM.
+///
+/// The implementation handles buffering, resampling, and device I/O
+/// internally. `push` is non-blocking from the caller's perspective; frames
+/// are queued to the audio thread's ring buffer.
+#[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
+pub trait AudioOutputStream: Send + Sync {
+    /// Push a slice of interleaved PCM samples for playback.
+    ///
+    /// `frame` layout matches the format used to open the stream
+    /// (see [`AudioFormat`]).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AudioError::DeviceLost`] if the output device has been
+    /// removed since the stream was opened.
+    async fn push(&self, frame: &[i16]) -> Result<(), AudioError>;
+
+    /// Signal that no more frames will be pushed and the stream should
+    /// drain / flush any buffered audio before closing.
+    async fn close(&self) -> Result<(), AudioError>;
+}
+
+/// The primary audio abstraction.
+///
+/// Implementations are expected to be cheaply cloneable (e.g. `Arc`-wrapped)
+/// so they can be shared between the encode and decode loops in Phase B.
+///
+/// On WASM the trait is `?Send`; on native it is `Send + Sync`.
+#[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
+pub trait AudioBackend {
+    // ── Device enumeration ───────────────────────────────────────────────
+
+    /// List all available microphone / line-in devices.
+    ///
+    /// IDs MUST be stable across enumerations (used as KV keys for
+    /// "remember last device" — see Phase A.6 / Phase J.4).
+    async fn list_input_devices(&self) -> Result<Vec<AudioDevice>, AudioError>;
+
+    /// List all available speaker / headphone output devices.
+    async fn list_output_devices(&self) -> Result<Vec<AudioDevice>, AudioError>;
+
+    // ── Current device accessors ─────────────────────────────────────────
+
+    /// Return the currently-selected input device, if any.
+    fn current_input_device(&self) -> Option<AudioDevice>;
+
+    /// Return the currently-selected output device, if any.
+    fn current_output_device(&self) -> Option<AudioDevice>;
+
+    // ── Stream lifecycle ─────────────────────────────────────────────────
+
+    /// Open a PCM capture stream from `device_id`.
+    ///
+    /// Returns a [`BoxInputStream`] that yields interleaved `i16` frames
+    /// in the given `format`. The stream runs until dropped.
+    ///
+    /// Passing `""` (empty string) selects the system default input device.
+    async fn open_input(
+        &self,
+        device_id: &str,
+        format: AudioFormat,
+    ) -> Result<BoxInputStream, AudioError>;
+
+    /// Open a PCM playback stream to `device_id`.
+    ///
+    /// Passing `""` selects the system default output device.
+    async fn open_output(
+        &self,
+        device_id: &str,
+        format: AudioFormat,
+    ) -> Result<Box<dyn AudioOutputStream>, AudioError>;
+
+    // ── Mid-call device switching ────────────────────────────────────────
+
+    /// Switch the active input device without dropping the encode pipeline.
+    ///
+    /// Implementations MUST seamlessly hand off the PCM stream to the new
+    /// device. If the underlying platform cannot do this atomically, a brief
+    /// silence is acceptable, but the `BoxInputStream` returned by the
+    /// previous [`open_input`] call MUST continue yielding frames without
+    /// the caller needing to reopen.
+    ///
+    /// Phase J.3 exercises this from the device-picker UI.
+    ///
+    /// [`open_input`]: AudioBackend::open_input
+    async fn switch_input(&self, device_id: &str) -> Result<(), AudioError>;
+
+    /// Switch the active output device without dropping the decode pipeline.
+    async fn switch_output(&self, device_id: &str) -> Result<(), AudioError>;
+}
+
 // ── Tests ────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -212,118 +326,4 @@ mod tests {
             "expected DeviceNotFound"
         );
     }
-}
-
-pub use error::AudioError;
-pub use types::{AudioDevice, AudioDeviceKind, AudioFormat, SampleRate};
-
-use futures::Stream;
-use std::pin::Pin;
-
-/// A stream of PCM frames from a microphone / input device.
-///
-/// Each `Vec<i16>` is one frame of interleaved samples:
-/// - Mono (1 channel): `samples[n]` is sample n.
-/// - Stereo (2 channels): `samples[2n]` is left, `samples[2n+1]` is right.
-///
-/// Frame duration is determined by the backend implementation. For Discord
-/// voice, 20 ms frames at 48 kHz stereo = 1920 i16 samples per vec.
-/// Downstream Opus encoders (Phase B) slice these into 20 ms packets.
-pub type AudioInputFrame = Vec<i16>;
-
-/// A pinned, heap-allocated stream of PCM input frames.
-pub type BoxInputStream = Pin<Box<dyn Stream<Item = AudioInputFrame> + Send>>;
-
-/// An audio output sink. Call [`AudioOutputStream::push`] to render PCM.
-///
-/// The implementation handles buffering, resampling, and device I/O
-/// internally. `push` is non-blocking from the caller's perspective; frames
-/// are queued to the audio thread's ring buffer.
-#[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
-#[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
-pub trait AudioOutputStream: Send + Sync {
-    /// Push a slice of interleaved PCM samples for playback.
-    ///
-    /// `frame` layout matches the format used to open the stream
-    /// (see [`AudioFormat`]).
-    ///
-    /// # Errors
-    ///
-    /// Returns [`AudioError::DeviceLost`] if the output device has been
-    /// removed since the stream was opened.
-    async fn push(&self, frame: &[i16]) -> Result<(), AudioError>;
-
-    /// Signal that no more frames will be pushed and the stream should
-    /// drain / flush any buffered audio before closing.
-    async fn close(&self) -> Result<(), AudioError>;
-}
-
-/// The primary audio abstraction.
-///
-/// Implementations are expected to be cheaply cloneable (e.g. `Arc`-wrapped)
-/// so they can be shared between the encode and decode loops in Phase B.
-///
-/// On WASM the trait is `?Send`; on native it is `Send + Sync`.
-#[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
-#[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
-pub trait AudioBackend {
-    // ── Device enumeration ───────────────────────────────────────────────
-
-    /// List all available microphone / line-in devices.
-    ///
-    /// IDs MUST be stable across enumerations (used as KV keys for
-    /// "remember last device" — see Phase A.6 / Phase J.4).
-    async fn list_input_devices(&self) -> Result<Vec<AudioDevice>, AudioError>;
-
-    /// List all available speaker / headphone output devices.
-    async fn list_output_devices(&self) -> Result<Vec<AudioDevice>, AudioError>;
-
-    // ── Current device accessors ─────────────────────────────────────────
-
-    /// Return the currently-selected input device, if any.
-    fn current_input_device(&self) -> Option<AudioDevice>;
-
-    /// Return the currently-selected output device, if any.
-    fn current_output_device(&self) -> Option<AudioDevice>;
-
-    // ── Stream lifecycle ─────────────────────────────────────────────────
-
-    /// Open a PCM capture stream from `device_id`.
-    ///
-    /// Returns a [`BoxInputStream`] that yields interleaved `i16` frames
-    /// in the given `format`. The stream runs until dropped.
-    ///
-    /// Passing `""` (empty string) selects the system default input device.
-    async fn open_input(
-        &self,
-        device_id: &str,
-        format: AudioFormat,
-    ) -> Result<BoxInputStream, AudioError>;
-
-    /// Open a PCM playback stream to `device_id`.
-    ///
-    /// Passing `""` selects the system default output device.
-    async fn open_output(
-        &self,
-        device_id: &str,
-        format: AudioFormat,
-    ) -> Result<Box<dyn AudioOutputStream>, AudioError>;
-
-    // ── Mid-call device switching ────────────────────────────────────────
-
-    /// Switch the active input device without dropping the encode pipeline.
-    ///
-    /// Implementations MUST seamlessly hand off the PCM stream to the new
-    /// device. If the underlying platform cannot do this atomically, a brief
-    /// silence is acceptable, but the `BoxInputStream` returned by the
-    /// previous [`open_input`] call MUST continue yielding frames without
-    /// the caller needing to reopen.
-    ///
-    /// Phase J.3 exercises this from the device-picker UI.
-    ///
-    /// [`open_input`]: AudioBackend::open_input
-    async fn switch_input(&self, device_id: &str) -> Result<(), AudioError>;
-
-    /// Switch the active output device without dropping the decode pipeline.
-    async fn switch_output(&self, device_id: &str) -> Result<(), AudioError>;
 }

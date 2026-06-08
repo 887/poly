@@ -364,7 +364,7 @@ pub async fn task_start_reminders(data_dir: &Path, id_or_name: &str) -> anyhow::
             Do NOT wait until the end — if the session crashes, findings are lost.\n\
          4. **Store intermediate progress** as memories every few steps.\n\
          5. **Check off items** as you complete them: `check_task_item {task_id} <item_id>`.\n\
-         6. **Follow agents.md** rules: run `cargo cranky --workspace` before declaring done.\n\
+         6. **Follow agents.md** rules: run `cargo clippy --workspace` before declaring done.\n\
          7. **Mark task complete** when done: `set_task_status {task_id} completed`.\n\
          \n\
          Start by loading memories and findings, then begin work.",
@@ -398,7 +398,7 @@ pub async fn work_plan(data_dir: &Path, count: usize) -> anyhow::Result<String> 
          1. Call `task_start_reminders <id>` — loads context + prints mandatory rules.\n\
          2. Call `load_memories <id>` — read previously stored memories.\n\
          3. Call `load_findings <id>` — read previously stored research findings.\n\
-         4. Do the work (follow agents.md: cargo cranky, cargo check, etc.).\n\
+         4. Do the work (follow agents.md: cargo clippy, cargo check, etc.).\n\
          5. As you research: call `store_finding <id> \"...\"` — do NOT wait until the end.\n\
          6. As you implement: call `store_memory <id> \"title\" \"...\"` for key decisions.\n\
          7. Check off items: `check_task_item <id> <item_id>` as each is completed.\n\

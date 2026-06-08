@@ -257,7 +257,7 @@ mod tests {
     fn fragment_long_nal_produces_fua_with_s_and_e_bits() {
         // NAL header 0x65 → F=0, NRI=11, Type=5 (IDR slice).
         let mut nal = vec![0x65u8];
-        nal.extend(std::iter::repeat(0xDDu8).take(3000));
+        nal.extend(std::iter::repeat_n(0xDDu8, 3000));
         let mtu = 1200;
         let frags = fragment_nal_units_to_fua(&nal, mtu);
         assert!(frags.len() >= 3, "expected >=3 fragments for 3001-byte NAL");
@@ -282,7 +282,7 @@ mod tests {
     #[test]
     fn reassemble_round_trips_fragmented_nal() {
         let mut nal = vec![0x65u8]; // IDR slice header
-        nal.extend(std::iter::repeat(0xABu8).take(2500));
+        nal.extend(std::iter::repeat_n(0xABu8, 2500));
         let frags = fragment_nal_units_to_fua(&nal, 800);
         assert!(frags.len() > 1);
         let recovered = reassemble_fua(&frags).expect("reassembly failed");

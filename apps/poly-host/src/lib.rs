@@ -1294,6 +1294,86 @@ fn void_response(result: Result<(), String>) -> KvVoidResponse {
     }
 }
 
+// ─── Sandbox redirect shim (C.1) ─────────────────────────────────────────────
+//
+// GET /sandbox/{id}?<any-captured-fragment>
+//
+// This is the OAuth/captcha redirect target that the OAuth provider sends the
+// browser back to after the user completes the challenge. It serves a tiny
+// HTML page that:
+//   1. Posts the captured URL (window.location.href) back to the opener via
+//      `postMessage`, tagged with the sandbox `id` so the WASM listener can
+//      match it.
+//   2. Closes the popup window.
+//
+// Constraint: the OAuth provider MUST be configured to redirect to
+// `<host-origin>/sandbox/<id>` (same-origin requirement so postMessage can
+// use `location.origin` as the target, preventing cross-origin message leaks).
+// See docs/plans/plan-host-sandbox-impl.md Phase C, task C.4.
+//
+// The handler is state-less — it only uses the `id` path segment to echo back
+// so the WASM listener can match the right pending sandbox future.
+async fn sandbox_shim(AxumPath(id): AxumPath<String>) -> impl IntoResponse {
+    // Basic validation: id must be non-empty and contain only URL-safe chars.
+    if id.is_empty() || !id.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
+        return (StatusCode::BAD_REQUEST, HeaderMap::new(), "invalid sandbox id".to_string());
+    }
+
+    let html = format!(
+        r#"<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Poly sandbox redirect</title></head>
+<body>
+<script>
+(function() {{
+  var id = {id_json};
+  var url = window.location.href;
+  if (window.opener) {{
+    window.opener.postMessage({{ type: 'sandbox-captured', id: id, url: url }}, window.location.origin);
+  }}
+  window.close();
+}})();
+</script>
+<p>Redirecting&hellip;</p>
+</body>
+</html>"#,
+        id_json = serde_json::to_string(&id).unwrap_or_else(|_| "\"\"".to_string()),
+    );
+
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("text/html; charset=utf-8"),
+    );
+    // No caching — each sandbox id is ephemeral.
+    headers.insert(
+        header::CACHE_CONTROL,
+        HeaderValue::from_static("no-store"),
+    );
+    (StatusCode::OK, headers, html)
+}
+
+#[allow(clippy::cognitive_complexity)] // signal dispatch: cfg branches inflate score artificially
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        drop(tokio::signal::ctrl_c().await);
+    };
+    #[cfg(unix)]
+    let terminate = async {
+        if let Ok(mut sig) =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+        {
+            sig.recv().await;
+        }
+    };
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+    tokio::select! {
+        () = ctrl_c => tracing::info!("received ctrl-c, shutting down"),
+        () = terminate => tracing::info!("received SIGTERM, shutting down"),
+    }
+}
+
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -1717,8 +1797,7 @@ mod tests {
         assert!(
             settings["wasm_plugins"]
                 .as_array()
-                .map(|v| v.is_empty())
-                .unwrap_or(true)
+                .map_or(true, std::vec::Vec::is_empty)
         );
         let removed = settings["removed_bundled_plugins"]
             .as_array()
@@ -2192,85 +2271,5 @@ mod tests {
             StatusCode::BAD_REQUEST,
             "valid http URL must not be 400: {body}"
         );
-    }
-}
-
-// ─── Sandbox redirect shim (C.1) ─────────────────────────────────────────────
-//
-// GET /sandbox/{id}?<any-captured-fragment>
-//
-// This is the OAuth/captcha redirect target that the OAuth provider sends the
-// browser back to after the user completes the challenge. It serves a tiny
-// HTML page that:
-//   1. Posts the captured URL (window.location.href) back to the opener via
-//      `postMessage`, tagged with the sandbox `id` so the WASM listener can
-//      match it.
-//   2. Closes the popup window.
-//
-// Constraint: the OAuth provider MUST be configured to redirect to
-// `<host-origin>/sandbox/<id>` (same-origin requirement so postMessage can
-// use `location.origin` as the target, preventing cross-origin message leaks).
-// See docs/plans/plan-host-sandbox-impl.md Phase C, task C.4.
-//
-// The handler is state-less — it only uses the `id` path segment to echo back
-// so the WASM listener can match the right pending sandbox future.
-async fn sandbox_shim(AxumPath(id): AxumPath<String>) -> impl IntoResponse {
-    // Basic validation: id must be non-empty and contain only URL-safe chars.
-    if id.is_empty() || !id.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
-        return (StatusCode::BAD_REQUEST, HeaderMap::new(), "invalid sandbox id".to_string());
-    }
-
-    let html = format!(
-        r#"<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><title>Poly sandbox redirect</title></head>
-<body>
-<script>
-(function() {{
-  var id = {id_json};
-  var url = window.location.href;
-  if (window.opener) {{
-    window.opener.postMessage({{ type: 'sandbox-captured', id: id, url: url }}, window.location.origin);
-  }}
-  window.close();
-}})();
-</script>
-<p>Redirecting&hellip;</p>
-</body>
-</html>"#,
-        id_json = serde_json::to_string(&id).unwrap_or_else(|_| "\"\"".to_string()),
-    );
-
-    let mut headers = HeaderMap::new();
-    headers.insert(
-        header::CONTENT_TYPE,
-        HeaderValue::from_static("text/html; charset=utf-8"),
-    );
-    // No caching — each sandbox id is ephemeral.
-    headers.insert(
-        header::CACHE_CONTROL,
-        HeaderValue::from_static("no-store"),
-    );
-    (StatusCode::OK, headers, html)
-}
-
-#[allow(clippy::cognitive_complexity)] // signal dispatch: cfg branches inflate score artificially
-async fn shutdown_signal() {
-    let ctrl_c = async {
-        drop(tokio::signal::ctrl_c().await);
-    };
-    #[cfg(unix)]
-    let terminate = async {
-        if let Ok(mut sig) =
-            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-        {
-            sig.recv().await;
-        }
-    };
-    #[cfg(not(unix))]
-    let terminate = std::future::pending::<()>();
-    tokio::select! {
-        () = ctrl_c => tracing::info!("received ctrl-c, shutting down"),
-        () = terminate => tracing::info!("received SIGTERM, shutting down"),
     }
 }

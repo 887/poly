@@ -20,7 +20,7 @@ use tower_http::trace::TraceLayer;
 
 use poly_client::{
     IsBackend,
-    ServerAdminBackend, AuthCredentials, ViewBody, ViewKind,
+    AuthCredentials, ViewBody, ViewKind,
 };
 use poly_server::{AppState, Config, api, auth, db, ws};
 use poly_server_client::PolyServerBackend;

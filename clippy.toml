@@ -1,5 +1,5 @@
 # Clippy threshold configuration.
-# Pairs with the lint denials in every cranky.toml.
+# Pairs with the complexity denials in [workspace.lints.clippy] (root Cargo.toml).
 # If you are hitting one of these limits, the answer is ALWAYS to split
 # the function/component into smaller pieces — not to raise the threshold.
 

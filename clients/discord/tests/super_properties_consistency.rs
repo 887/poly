@@ -264,8 +264,7 @@ async fn wire_ua_must_not_contain_discordbot() {
     let bad = entries.iter().find(|e| {
         e["headers"]["user-agent"]
             .as_str()
-            .map(|ua| ua.contains("DiscordBot"))
-            .unwrap_or(false)
+            .is_some_and(|ua| ua.contains("DiscordBot"))
     });
 
     assert!(

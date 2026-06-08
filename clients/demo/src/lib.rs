@@ -369,15 +369,14 @@ impl<F: DemoFlavour> poly_client::SocialGraphBackend for DemoClientGeneric<F> {
     async fn get_friends(&self) -> ClientResult<Vec<User>> {
         // Static fixtures + any friends added at runtime via `add_friend` (N.2).
         let mut friends = F::friends();
-        if let Ok(map) = demo_added_friends().lock() {
-            if let Some(added) = map.get(F::account_id()) {
+        if let Ok(map) = demo_added_friends().lock()
+            && let Some(added) = map.get(F::account_id()) {
                 for u in added {
                     if !friends.iter().any(|f| f.id == u.id) {
                         friends.push(u.clone());
                     }
                 }
             }
-        }
         Ok(friends)
     }
 

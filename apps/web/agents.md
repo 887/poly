@@ -115,7 +115,7 @@ Run: `./scripts/web-cleanup.sh` if stuck
 
 ## WASM Compatibility Check
 
-The standard `cargo build --workspace` / `cargo cranky --workspace` only compiles for the host target.
+The standard `cargo build --workspace` / `cargo clippy --workspace` only compiles for the host target.
 WASM-specific breakage is invisible until the web build is attempted.
 
 **After any change to `poly-core` or `poly-web`, run:**
@@ -130,7 +130,7 @@ This is a `check` (no link step), so it's fast. The task does NOT run automatica
 ## ABSOLUTE PROHIBITION — `#[allow(...)]` is FORBIDDEN
 
 **NEVER** add `#[allow(clippy::...)]`, `#[allow(warnings)]`, or any other lint suppression
-attribute to source code. When `cargo cranky` reports a violation, **fix the code**.
+attribute to source code. When `cargo clippy` reports a violation, **fix the code**.
 
 **The ONLY exception**: inside `#[cfg(test)]` modules, `#[allow(clippy::unwrap_used)]`
 and `#[allow(clippy::expect_used)]` are permitted for test assertions — nothing else.

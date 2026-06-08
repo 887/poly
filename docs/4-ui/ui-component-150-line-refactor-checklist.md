@@ -558,7 +558,7 @@
 2. **Extract as separate `#[component]` functions** in new files
 3. **Pass state via props** (maintain reactivity)
 4. **Keep module organization clean** (use `mod.rs` or side-by-side files)
-5. **Run `cargo cranky --workspace`** after each file
+5. **Run `cargo clippy --workspace`** after each file
 6. **Test hot-reload** after structural changes
 
 ### File Naming:
@@ -684,7 +684,7 @@ Then assess whether to tackle the 600+ line monsters or defer.
 1. Re-run `cargo check --workspace` to verify clean state
 2. Pick one Tier 2 file and systematicaly extract sub-components
 3. Use the patterns established (data-driven menu items, component extraction)
-4. Test after each file with `cargo cranky --workspace`
+4. Test after each file with `cargo clippy --workspace`
 
 ## Notes on the Architecture Issues
 

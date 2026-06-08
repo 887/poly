@@ -5,7 +5,7 @@
     clippy::enum_variant_names,
     // ── Curated, defensible crate-wide allows for this Dioxus/WASM UI crate ──
     // Each is a false-positive class or a genuinely-N/A lint for this crate's
-    // domain — NOT a blanket "make cranky quiet" dump. Everything else is
+    // domain — NOT a blanket "make clippy quiet" dump. Everything else is
     // fixed per-site or scoped+marked at its definition.
     //
     // rsx! closures clone captured values; clippy can't see through the macro's

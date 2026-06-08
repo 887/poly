@@ -10,6 +10,7 @@ use poly_client::{ClientError, ClientResult, FileKind};
 /// Map an API `type` / `kind` string to [`FileKind`].
 ///
 /// Used by both GitHub (`/contents` API) and Forgejo (`/repos/{owner}/{repo}/git/trees`).
+#[must_use] 
 pub fn kind_from_string(s: &str) -> FileKind {
     match s {
         "dir" => FileKind::Directory,
@@ -35,6 +36,7 @@ pub fn split_owner_repo(s: &str) -> ClientResult<(String, String)> {
 /// GitHub and Forgejo both return file contents as base64 with embedded
 /// newlines (every 60 or 76 chars). This function strips all whitespace
 /// before decoding.
+#[must_use] 
 pub fn decode_b64(s: &str) -> Vec<u8> {
     let cleaned: String = s.chars().filter(|c| !c.is_whitespace()).collect();
     decode_b64_simple(&cleaned)
@@ -44,6 +46,7 @@ pub fn decode_b64(s: &str) -> Vec<u8> {
 ///
 /// Uses a hand-rolled lookup table to avoid pulling in an external `base64`
 /// crate. Invalid characters are silently skipped; padding `=` stops decoding.
+#[must_use] 
 pub fn decode_b64_simple(input: &str) -> Vec<u8> {
     const TABLE: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut lookup = [255u8; 256];

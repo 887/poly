@@ -1012,10 +1012,8 @@ mod tests {
 
     #[test]
     fn preferred_modes_list() {
-        let modes = vec![
-            "xsalsa20_poly1305".to_string(),
-            "aead_xchacha20_poly1305_rtpsize".to_string(),
-        ];
+        let modes = ["xsalsa20_poly1305".to_string(),
+            "aead_xchacha20_poly1305_rtpsize".to_string()];
         let selected = PREFERRED_AEAD_MODES
             .iter()
             .find(|&&m| modes.iter().any(|s| s == m))

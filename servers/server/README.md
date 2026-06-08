@@ -169,7 +169,7 @@ RUST_LOG=debug,poly_server=trace cargo run -p poly-server
 cargo test -p poly-server
 
 # Lint
-cargo cranky -p poly-server
+cargo clippy -p poly-server
 ```
 
 ---

@@ -32,7 +32,7 @@
     },
     {
       "detail": "banned #[allow(clippy::indexing_slicing)]",
-      "line": 180,
+      "line": 182,
       "path": "clients/stoat/src/voice_common.rs",
       "rule": "allow_ban"
     },

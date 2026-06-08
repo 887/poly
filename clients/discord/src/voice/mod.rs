@@ -537,6 +537,7 @@ fn ws_text(
 ///
 /// Send this on the main Discord gateway WS to join a voice channel.
 /// Set `channel_id = None` to leave.
+#[must_use] 
 pub fn voice_state_update_payload(
     guild_id: &str,
     channel_id: Option<&str>,

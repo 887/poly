@@ -360,9 +360,7 @@ mod tests {
     #[test]
     fn parse_build_number_clamps_to_floor() {
         // A hypothetical old build number below the floor constant.
-        let body = format!(
-            "Build Number: 1, Version Hash: oldold"
-        );
+        let body = "Build Number: 1, Version Hash: oldold".to_string();
         let info = parse_build_number(&body).expect("should parse");
         assert_eq!(info.build_number, LATEST_KNOWN_STABLE_BUILD);
     }

@@ -300,8 +300,11 @@ poly-ui-macros = { path = "crates/ui-macros" }
 poly-ui-types = { path = "crates/ui-types" }
 
 # ── Workspace-wide lint policy ───────────────────────────────────────────────
-# rust-analyzer, cargo clippy, and cargo cranky all respect these.
+# rust-analyzer, cargo clippy, and `cargo build` all respect these.
 # Each crate's Cargo.toml opts in via `[lints] workspace = true`.
+# (cargo-cranky was retired 2026-06-08 — it is archived upstream; its
+# config-file policy is now expressed directly in this table. See
+# docs/plans/plan-cranky-to-lints-migration.md.)
 [workspace.lints.rust]
 unsafe_code = "deny"
 
@@ -365,6 +368,18 @@ integer_division         = "deny"  # silent floor — usually a bug
 print_stdout      = "deny"
 print_stderr      = "deny"
 mod_module_files  = "deny"
+# Folded in from the retired per-crate cranky.toml files (2026-06-08).
+todo              = "deny"
+unimplemented     = "deny"
+dbg_macro         = "deny"
+
+# ── Complexity — no giant functions, no spaghetti nesting ──────────────
+# Thresholds live in clippy.toml (too-many-lines=100, cognitive=15, args=6).
+# If you hit one of these, split the function — do not raise the threshold.
+# Folded in from the retired per-crate cranky.toml files (2026-06-08).
+too_many_lines        = "deny"
+cognitive_complexity  = "deny"
+too_many_arguments    = "deny"
 
 # ── Profiles ─────────────────────────────────────────────────────────
 #

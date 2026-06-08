@@ -101,6 +101,7 @@ pub enum RtcpFeedback {
 /// RTCP payloads types are in the range 192–223 (RFC 5761).
 /// We also check the version field (must be 2) and require the packet length
 /// to satisfy the RTCP `length` field.
+#[must_use] 
 pub fn is_rtcp_packet(buf: &[u8]) -> bool {
     if buf.len() < RTCP_HEADER_SIZE {
         return false;
@@ -134,6 +135,7 @@ pub fn is_rtcp_packet(buf: &[u8]) -> bool {
 /// We walk each sub-packet and return the first meaningful feedback signal.
 ///
 /// Returns `None` if the packet contains no REMB or TWCC feedback.
+#[must_use] 
 pub fn parse_rtcp_feedback(buf: &[u8], current_bps: u32) -> Option<RtcpFeedback> {
     let mut offset = 0;
     while offset + RTCP_HEADER_SIZE <= buf.len() {
@@ -355,6 +357,7 @@ pub struct BandwidthController {
 
 impl BandwidthController {
     /// Create a new controller starting at `DEFAULT_BITRATE_BPS`.
+    #[must_use] 
     pub fn new(max_bps: u32) -> Self {
         let target = DEFAULT_BITRATE_BPS.min(max_bps).max(MIN_BITRATE_BPS);
         Self {
@@ -367,6 +370,7 @@ impl BandwidthController {
     ///
     /// Used by the encode task to read the current target without a separate
     /// channel — the task calls `target_bps.load(Relaxed)` on each frame.
+    #[must_use] 
     pub fn share_target(&self) -> Arc<AtomicU32> {
         Arc::clone(&self.target_bps)
     }
@@ -407,6 +411,7 @@ impl BandwidthController {
     ///
     /// Call this periodically (e.g. once per second) when no congestion feedback
     /// has arrived, so the encoder can recover from earlier throttling.
+    #[must_use] 
     pub fn ramp_up(&self) -> u32 {
         let current = self.target_bps.load(Ordering::Relaxed);
         if current >= self.max_bps {

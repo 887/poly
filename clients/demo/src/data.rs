@@ -230,72 +230,6 @@ pub fn forum_humanize_age(ts: chrono::DateTime<chrono::Utc>) -> String {
     ts.format("%b %-d, %Y").to_string()
 }
 
-#[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
-mod forum_helper_tests {
-    use super::*;
-
-    fn msg_with(reactions: Vec<(&str, u32)>) -> Message {
-        Message {
-            id: "m".into(),
-            author: User {
-                id: "u".into(),
-                display_name: "U".into(),
-                avatar_url: None,
-                presence: PresenceStatus::Online,
-                backend: BackendType::from(crate::SLUG),
-            },
-            content: MessageContent::Text(String::new()),
-            timestamp: Utc::now(),
-            attachments: vec![],
-            reactions: reactions
-                .into_iter()
-                .map(|(e, c)| Reaction { emoji: e.into(), count: c, me: false })
-                .collect(),
-            reply_to: None,
-            edited: false,
-            thread: None,
-            preview_image_url: None,
-        }
-    }
-
-    #[test]
-    fn score_max_of_up_reactions_minus_down() {
-        let m = msg_with(vec![("\u{1f525}", 7), ("\u{1f44d}", 3), ("\u{1f44e}", 2)]);
-        assert_eq!(forum_post_score(&m), 7 - 2);
-    }
-
-    #[test]
-    fn score_no_reactions_is_zero() {
-        let m = msg_with(vec![]);
-        assert_eq!(forum_post_score(&m), 0);
-    }
-
-    #[test]
-    fn score_pure_downvotes_is_negative() {
-        let m = msg_with(vec![("\u{1f44e}", 4)]);
-        assert_eq!(forum_post_score(&m), -4);
-    }
-
-    #[test]
-    fn humanize_age_recent_is_just_now() {
-        let ts = Utc::now();
-        assert_eq!(forum_humanize_age(ts), "just now");
-    }
-
-    #[test]
-    fn humanize_age_hours_uses_h_ago() {
-        let ts = ago_hours(5);
-        assert_eq!(forum_humanize_age(ts), "5h ago");
-    }
-
-    #[test]
-    fn humanize_age_days_uses_d_ago() {
-        let ts = ago_days(3);
-        assert_eq!(forum_humanize_age(ts), "3d ago");
-    }
-}
-
 /// Generate a demo session for the platypus account (demo_forum).
 #[must_use] 
 pub fn demo3_session() -> Session {
@@ -5856,6 +5790,7 @@ pub fn demo_available_stickers(channel_id: &str) -> Vec<StickerItem> {
 /// posts from other Lemmy-style instances. Post IDs are namespaced with
 /// `fpost-fed-` so they never collide with handcrafted local IDs in
 /// `demo3_messages`.
+#[must_use] 
 pub fn demo_federated_posts(channel_id: &str) -> Vec<Message> {
     fn mk(id: &str, name: &str, body: &str, age_h: i64, score: u32) -> Message {
         Message {
@@ -5898,5 +5833,71 @@ pub fn demo_federated_posts(channel_id: &str) -> Vec<Message> {
                8, 52),
         ],
         _ => vec![],
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
+mod forum_helper_tests {
+    use super::*;
+
+    fn msg_with(reactions: Vec<(&str, u32)>) -> Message {
+        Message {
+            id: "m".into(),
+            author: User {
+                id: "u".into(),
+                display_name: "U".into(),
+                avatar_url: None,
+                presence: PresenceStatus::Online,
+                backend: BackendType::from(crate::SLUG),
+            },
+            content: MessageContent::Text(String::new()),
+            timestamp: Utc::now(),
+            attachments: vec![],
+            reactions: reactions
+                .into_iter()
+                .map(|(e, c)| Reaction { emoji: e.into(), count: c, me: false })
+                .collect(),
+            reply_to: None,
+            edited: false,
+            thread: None,
+            preview_image_url: None,
+        }
+    }
+
+    #[test]
+    fn score_max_of_up_reactions_minus_down() {
+        let m = msg_with(vec![("\u{1f525}", 7), ("\u{1f44d}", 3), ("\u{1f44e}", 2)]);
+        assert_eq!(forum_post_score(&m), 7 - 2);
+    }
+
+    #[test]
+    fn score_no_reactions_is_zero() {
+        let m = msg_with(vec![]);
+        assert_eq!(forum_post_score(&m), 0);
+    }
+
+    #[test]
+    fn score_pure_downvotes_is_negative() {
+        let m = msg_with(vec![("\u{1f44e}", 4)]);
+        assert_eq!(forum_post_score(&m), -4);
+    }
+
+    #[test]
+    fn humanize_age_recent_is_just_now() {
+        let ts = Utc::now();
+        assert_eq!(forum_humanize_age(ts), "just now");
+    }
+
+    #[test]
+    fn humanize_age_hours_uses_h_ago() {
+        let ts = ago_hours(5);
+        assert_eq!(forum_humanize_age(ts), "5h ago");
+    }
+
+    #[test]
+    fn humanize_age_days_uses_d_ago() {
+        let ts = ago_days(3);
+        assert_eq!(forum_humanize_age(ts), "3d ago");
     }
 }

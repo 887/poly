@@ -387,7 +387,7 @@ See the tool descriptions in `src/main.rs:extension_tools()` for full cross-plat
 ## ABSOLUTE PROHIBITION — `#[allow(...)]` is FORBIDDEN
 
 **NEVER** add `#[allow(clippy::...)]`, `#[allow(warnings)]`, or any other lint suppression
-attribute to source code. When `cargo cranky` reports a violation, **fix the code**.
+attribute to source code. When `cargo clippy` reports a violation, **fix the code**.
 
 **The ONLY exception**: inside `#[cfg(test)]` modules, `#[allow(clippy::unwrap_used)]`
 and `#[allow(clippy::expect_used)]` are permitted for test assertions — nothing else.
