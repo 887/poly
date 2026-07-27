@@ -262,8 +262,7 @@ impl ChromeCdpBackend {
                 .timeout(std::time::Duration::from_secs(2))
                 .send()
                 .await
-                .map(|r| r.status().as_u16())
-                .unwrap_or(0);
+                .map_or(0, |r| r.status().as_u16());
             if bundle_status == 200 {
                 return Ok(());
             }
@@ -277,8 +276,7 @@ impl ChromeCdpBackend {
                 .timeout(std::time::Duration::from_secs(2))
                 .send()
                 .await
-                .map(|r| r.status().is_success())
-                .unwrap_or(false);
+                .is_ok_and(|r| r.status().is_success());
             if port_up && port_up_since.is_none() {
                 port_up_since = Some(std::time::Instant::now());
             }
@@ -1001,14 +999,12 @@ impl ChromeCdpBackend {
             let wasm_mtime = std::fs::metadata(&wasm_bin)
                 .and_then(|m| m.modified())
                 .ok();
-            let any_css_newer = std::fs::read_dir(&css_dir)
-                .map(|rd| {
-                    rd.flatten().any(|e| {
-                        e.path().extension().is_some_and(|x| x == "css")
-                            && e.metadata().and_then(|m| m.modified()).ok() > wasm_mtime
-                    })
+            let any_css_newer = std::fs::read_dir(&css_dir).is_ok_and(|rd| {
+                rd.flatten().any(|e| {
+                    e.path().extension().is_some_and(|x| x == "css")
+                        && e.metadata().and_then(|m| m.modified()).ok() > wasm_mtime
                 })
-                .unwrap_or(false);
+            });
             if any_css_newer {
                 drop(
                     tokio::process::Command::new("cargo")
@@ -1896,8 +1892,7 @@ fn find_chrome() -> String {
         if std::process::Command::new("which")
             .arg(c)
             .output()
-            .map(|o| o.status.success())
-            .unwrap_or(false)
+            .is_ok_and(|o| o.status.success())
         {
             return c.to_string();
         }

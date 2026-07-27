@@ -119,8 +119,7 @@ impl poly_client::ViewDescriptorBackend for TeamsClient {
             let channel_count = self
                 .get_channels(&server.id)
                 .await
-                .map(|chs| chs.len())
-                .unwrap_or(0);
+                .map_or(0, |chs| chs.len());
 
             let meta = format!(
                 "{} channel{} · {} unread · @{} mentions",

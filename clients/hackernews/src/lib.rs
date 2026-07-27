@@ -174,10 +174,28 @@ impl IsBackend for HackerNewsClient {
                 self.session = Some(session);
                 Ok(session_out)
             }
-            // Anonymous fallback (Token(""), OAuth{token:""}, or anything else
-            // we don't have a real login flow for) — guest session, read-only.
-            AuthCredentials::Token(_)
-            | AuthCredentials::EmailPassword { .. }
+            // Account restore: the host persists `Session.token` (the HN
+            // `user=<name>&<opaque>` cookie) and hands it back as
+            // `AuthCredentials::Token`. Rebuild the NAMED session from it —
+            // falling through to the guest arm silently downgrades a signed-in
+            // account to anonymous, empties the write cookie, and flips the
+            // account id from `hn-<name>` to `hn-anonymous`.
+            AuthCredentials::Token(token) => match auth::username_from_cookie(&token) {
+                Some(username) => {
+                    let mut session = self.named_session(username);
+                    session.token = token;
+                    let session_out = session.clone();
+                    self.session = Some(session);
+                    Ok(session_out)
+                }
+                // Token("") or anything that is not a populated `user=`
+                // cookie: there is no identity to restore, so guest is the
+                // only honest answer.
+                None => Ok(self.guest_session()),
+            },
+            // Anonymous fallback (OAuth{token:""} or anything else we don't
+            // have a real login flow for) — guest session, read-only.
+            AuthCredentials::EmailPassword { .. }
             | AuthCredentials::OAuth { .. }
             | AuthCredentials::DeviceCode { .. }
             | AuthCredentials::PolyServer { .. } => Ok(self.guest_session()),

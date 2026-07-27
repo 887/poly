@@ -57,7 +57,7 @@ use std::sync::{
 use super::rtcp;
 
 use base64::Engine as _;
-use chacha20poly1305::{aead::{Aead, KeyInit, Payload}, XChaCha20Poly1305, XNonce};
+use chacha20poly1305::{aead::KeyInit, XChaCha20Poly1305};
 use tokio::{net::UdpSocket, sync::{broadcast, mpsc, RwLock}};
 use tracing::{info, warn};
 
@@ -82,6 +82,19 @@ const KEYFRAME_INTERVAL_FRAMES: u32 = 60;
 
 /// Video SSRC offset from audio SSRC (Discord convention: video_ssrc = audio_ssrc + 1).
 const VIDEO_SSRC_OFFSET: u32 = 1;
+
+/// RTP clock rate for H.264 (RFC 6184).
+const VIDEO_CLOCK_HZ: u32 = 90_000;
+
+/// Nominal capture rate — matches the `max_framerate` we advertise in op 12.
+const VIDEO_NOMINAL_FPS: u32 = 30;
+
+/// RTP timestamp step per **access unit** (encoded frame), not per NAL unit.
+///
+/// RFC 3550 / RFC 6184 require every RTP packet belonging to one access unit to
+/// carry the same timestamp; advancing per NAL made a SPS+PPS+IDR keyframe look
+/// like three separate pictures and inflated the 90 kHz clock by 2-3× real time.
+const VIDEO_TS_INCREMENT: u32 = VIDEO_CLOCK_HZ.div_euclid(VIDEO_NOMINAL_FPS);
 
 // ── Error ──────────────────────────────────────────────────────────────────────
 
@@ -120,23 +133,29 @@ pub struct DiscordVideoTransport {
     stop_tx: mpsc::Sender<()>,
     /// E.9: current bitrate target in bps, read by the encode loop on every frame.
     ///
-    /// Initialized to `rtcp::DEFAULT_BITRATE_BPS` (1 Mbps).  To wire REMB/TWCC
-    /// feedback into this transport, call [`link_bandwidth_ctrl`] after creation,
-    /// or use [`start_with_bandwidth_ctrl`] which creates the link automatically.
-    ///
-    /// The voice connection (`DiscordVoiceConnection`) owns a `BandwidthController`
-    /// whose RTCP-fed `target_bps` should be linked here via
-    /// `conn.link_video_bandwidth_ctrl()` after `conn.video_transport` is set.
+    /// This is the *same* `Arc<AtomicU32>` as the voice connection's
+    /// `BandwidthController::target_bps` whenever a controller was passed to
+    /// [`Self::start`], so every REMB/TWCC update parsed by the decode loop is
+    /// visible to the encoder immediately.  Only when no controller is supplied
+    /// does it fall back to a private atomic pinned at
+    /// `rtcp::DEFAULT_BITRATE_BPS`.
     pub bw_target: Arc<AtomicU32>,
 }
 
 impl DiscordVideoTransport {
-    /// Start sending video frames from `frame_rx` over the voice UDP socket.
+    /// Start the video transport on an existing voice connection.
     ///
     /// `frame_rx` yields BGRA `VideoFrame`s from the local camera / screen capture.
     /// The transport encodes each frame to H.264 via the host-bridge, packetizes
-    /// NAL units as RTP (STAP-A or FU-A), encrypts with the AEAD key, and sends
-    /// on the shared UDP socket.
+    /// NAL units as RTP (single-NAL or FU-A), encrypts with the AEAD key, and
+    /// sends on the shared UDP socket.
+    ///
+    /// `bandwidth_ctrl` is the voice connection's `BandwidthController`: its
+    /// `target_bps` `Arc<AtomicU32>` is shared (not copied) into the encode
+    /// loop, so REMB/TWCC feedback parsed by the decode loop reaches the
+    /// encoder live.  `aead_nonce` is the connection's shared `_rtpsize` nonce
+    /// counter — audio and video use one session key and therefore must not
+    /// draw nonces from independent counters.
     ///
     /// Returns a `DiscordVideoTransport` handle. Drop to stop.
     // lint-allow-unused: video transport requires all these params by protocol design
@@ -149,47 +168,12 @@ impl DiscordVideoTransport {
         encryption_mode: String,
         ws_out_tx: mpsc::Sender<serde_json::Value>,
         bridge_base_url: String,
-        frame_rx: mpsc::Receiver<VideoFrame>,
-    ) -> Result<Self, VideoTransportError> {
-        Self::start_with_bandwidth_ctrl(
-            audio_ssrc,
-            is_screen_share,
-            udp,
-            secret_key,
-            encryption_mode,
-            ws_out_tx,
-            bridge_base_url,
-            frame_rx,
-            None,
-        )
-        .await
-    }
-
-    /// Start the video transport with an explicit bandwidth controller (Phase E.9).
-    ///
-    /// Used by [`super::DiscordVoiceConnection`] when it has an active `BandwidthController`
-    /// (always the case after Phase E.9 lands — the controller is created alongside the
-    /// voice connection and shared into the video transport).  The encode loop reads
-    /// `target_bps` on each frame and forwards it to the host-bridge H.264 encoder so
-    /// REMB/TWCC feedback from the Discord SFU adapts the output bitrate dynamically.
-    ///
-    /// Callers that don't have a controller (existing `lib.rs` call sites, `voice_bridge.rs`)
-    /// continue to use [`Self::start`] which passes `None`; the encoder defaults to 2 Mbps.
-    // lint-allow-unused: video transport with bandwidth ctrl requires all these params by protocol design
-    #[allow(clippy::too_many_arguments)]
-    pub async fn start_with_bandwidth_ctrl(
-        audio_ssrc: u32,
-        is_screen_share: bool,
-        udp: Arc<UdpSocket>,
-        secret_key: [u8; 32],
-        encryption_mode: String,
-        ws_out_tx: mpsc::Sender<serde_json::Value>,
-        bridge_base_url: String,
         mut frame_rx: mpsc::Receiver<VideoFrame>,
-        // E.9: optional shared bandwidth controller.  When `Some`, the encode loop
-        // reads `target_bps` on every frame and forwards it to the host-bridge encoder
-        // for dynamic bitrate adaptation via REMB/TWCC RTCP feedback.
+        // E.9: shared bandwidth controller.  The encode loop reads `target_bps`
+        // on every frame and forwards it to the host-bridge encoder for dynamic
+        // bitrate adaptation via REMB/TWCC RTCP feedback.
         bandwidth_ctrl: Option<Arc<rtcp::BandwidthController>>,
+        aead_nonce: Arc<AtomicU32>,
     ) -> Result<Self, VideoTransportError> {
         let video_ssrc = audio_ssrc + VIDEO_SSRC_OFFSET;
         let session_id = format!("discord-video-{video_ssrc}");
@@ -237,6 +221,7 @@ impl DiscordVideoTransport {
             .unwrap_or_else(|| Arc::new(AtomicU32::new(rtcp::DEFAULT_BITRATE_BPS)));
         // Clone for the encode task (bw_target_arc is also stored on the struct below).
         let bw_target_for_loop = Arc::clone(&bw_target_arc);
+        let aead_nonce_for_loop = Arc::clone(&aead_nonce);
 
         tokio::spawn(async move {
             let sequence = Arc::new(AtomicU16::new(0));
@@ -290,24 +275,40 @@ impl DiscordVideoTransport {
                             }
                         };
 
-                        // Decode NAL units from base64.
-                        for nal_b64 in &resp.nal_units_b64 {
-                            let nal = match base64::engine::general_purpose::STANDARD.decode(nal_b64) {
-                                Ok(n) => n,
-                                Err(_) => continue,
-                            };
+                        // Decode NAL units from base64.  All NALs of one encoder
+                        // response belong to the SAME access unit, so they share
+                        // one RTP timestamp and only the very last packet of the
+                        // very last NAL carries the marker bit.
+                        let nals: Vec<Vec<u8>> = resp
+                            .nal_units_b64
+                            .iter()
+                            .filter_map(|nal_b64| {
+                                base64::engine::general_purpose::STANDARD.decode(nal_b64).ok()
+                            })
+                            .collect();
+                        if nals.is_empty() {
+                            continue;
+                        }
+                        let ts = timestamp.fetch_add(VIDEO_TS_INCREMENT, Ordering::Relaxed);
+                        let last_nal_idx = nals.len().saturating_sub(1);
 
-                            // Packetize: STAP-A if small, FU-A if large.
-                            let packets = rtp_packetize_h264(&nal, VIDEO_MTU);
+                        for (nal_idx, nal) in nals.iter().enumerate() {
+                            // Packetize: single NAL if small, FU-A if large.
+                            let packets = rtp_packetize_h264(nal, VIDEO_MTU);
                             let last_idx = packets.len().saturating_sub(1);
 
                             for (i, payload) in packets.into_iter().enumerate() {
                                 let seq = sequence.fetch_add(1, Ordering::Relaxed);
-                                let ts = timestamp.load(Ordering::Relaxed);
-                                let is_last = i == last_idx;
+                                // Marker = end of the access unit, not end of a NAL.
+                                let is_last = nal_idx == last_nal_idx && i == last_idx;
                                 let header = build_video_rtp_header(seq, ts, video_ssrc, is_last);
 
-                                let encrypted = match encrypt_video_rtp(&cipher, &header, &payload, &enc_mode) {
+                                // Nonce counter is shared with the audio transport:
+                                // both streams use the same voice session key.
+                                let nonce_counter = aead_nonce_for_loop.fetch_add(1, Ordering::Relaxed);
+                                let encrypted = match encrypt_video_rtp(
+                                    &cipher, &header, &payload, &enc_mode, nonce_counter,
+                                ) {
                                     Ok(e) => e,
                                     Err(_) => {
                                         warn!(target: "poly_discord::voice::video", "AEAD encrypt failed");
@@ -323,10 +324,6 @@ impl DiscordVideoTransport {
                                     warn!(target: "poly_discord::voice::video", "UDP send: {e}");
                                 }
                             }
-
-                            // Advance timestamp after the last NAL of a frame.
-                            // 90kHz RTP clock for video, ~3000 per 30fps frame.
-                            timestamp.fetch_add(3000, Ordering::Relaxed);
                         }
                     }
                 }
@@ -345,29 +342,6 @@ impl DiscordVideoTransport {
             stop_tx,
             bw_target: bw_target_arc,
         })
-    }
-
-    /// Link an external `BandwidthController` to this transport (Phase E.9).
-    ///
-    /// After calling this, the encode loop will read `target_bps` from the
-    /// controller's shared `AtomicU32` on every frame.  Call this immediately
-    /// after the transport is created — before the first frame arrives — to
-    /// avoid a brief window of unconstrained encoding.
-    ///
-    /// This is only needed when the transport was created via the legacy `start`
-    /// path (which doesn't accept a controller).  `start_with_bandwidth_ctrl`
-    /// links automatically during construction.
-    pub fn link_bandwidth_ctrl(&self, ctrl: &rtcp::BandwidthController) {
-        let new_target = ctrl.target_bps.load(Ordering::Relaxed);
-        self.bw_target.store(new_target, Ordering::Relaxed);
-        // Note: `bw_target` is a distinct AtomicU32 from `ctrl.target_bps` — we
-        // can't swap the Arc itself on a live transport.  Instead we copy the
-        // current value here, and the caller should ensure `ctrl` is updated
-        // whenever RTCP feedback arrives (already done via `handle_rtcp_datagram`
-        // in the decode loop + the `bw_target` stored in the transport).
-        //
-        // For full live-linking (every RTCP update flowing to the encode loop),
-        // use `start_with_bandwidth_ctrl` which shares the underlying Arc.
     }
 
     /// Stop the video transport — closes the encode loop and sends op 12 with empty streams.
@@ -499,27 +473,20 @@ fn build_video_rtp_header(sequence: u16, timestamp: u32, ssrc: u32, marker: bool
 
 // ── AEAD helpers ──────────────────────────────────────────────────────────────
 
+/// Encrypt one video RTP payload.
+///
+/// Delegates to [`super::aead::encrypt_rtp`] so video and audio cannot drift on
+/// the wire format — the previous private copy here derived the nonce from the
+/// RTP header instead of using the `_rtpsize` counter.
 fn encrypt_video_rtp(
     cipher: &XChaCha20Poly1305,
     rtp_header: &[u8],
     plaintext: &[u8],
     mode: &str,
+    nonce_counter: u32,
 ) -> Result<Vec<u8>, VideoTransportError> {
-    if mode.contains("xchacha20") {
-        let nonce = rtp_header_to_xchacha_nonce(rtp_header);
-        cipher
-            .encrypt(&nonce, Payload { msg: plaintext, aad: rtp_header })
-            .map_err(|_| VideoTransportError::Aead)
-    } else {
-        Err(VideoTransportError::Aead)
-    }
-}
-
-fn rtp_header_to_xchacha_nonce(rtp_header: &[u8]) -> XNonce {
-    let mut nonce = [0u8; 24];
-    let len = rtp_header.len().min(24);
-    nonce[..len].copy_from_slice(&rtp_header[..len]);
-    XNonce::from(nonce)
+    super::aead::encrypt_rtp(cipher, rtp_header, plaintext, mode, nonce_counter)
+        .map_err(|_| VideoTransportError::Aead)
 }
 
 // ── Unit tests ────────────────────────────────────────────────────────────────

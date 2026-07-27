@@ -247,8 +247,7 @@ impl VideoState {
 fn now_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0)
+        .map_or(0, |d| d.as_millis() as u64)
 }
 
 fn b64_encode(bytes: &[u8]) -> String {
@@ -576,8 +575,7 @@ pub async fn decode_h264(
 
         let ts = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_millis() as u64)
-            .unwrap_or(0);
+            .map_or(0, |d| d.as_millis() as u64);
 
         let mut frames = Vec::new();
 
@@ -652,13 +650,11 @@ pub async fn close_session(
     let enc_removed = state
         .encoders
         .lock()
-        .map(|mut m| m.remove(&req.session_id).is_some())
-        .unwrap_or(false);
+        .is_ok_and(|mut m| m.remove(&req.session_id).is_some());
     let dec_removed = state
         .decoders
         .lock()
-        .map(|mut m| m.remove(&req.session_id).is_some())
-        .unwrap_or(false);
+        .is_ok_and(|mut m| m.remove(&req.session_id).is_some());
 
     (
         StatusCode::OK,

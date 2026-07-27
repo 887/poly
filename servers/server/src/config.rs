@@ -40,8 +40,7 @@ impl Config {
             server_name: std::env::var("SERVER_NAME")
                 .unwrap_or_else(|_| "My Poly Server".to_owned()),
             invite_only: std::env::var("INVITE_ONLY")
-                .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-                .unwrap_or(false),
+                .is_ok_and(|v| v == "1" || v.eq_ignore_ascii_case("true")),
             jwt_secret: std::env::var("JWT_SECRET").unwrap_or_else(|_| {
                 "change-me-in-production-please-use-a-long-random-string".to_owned()
             }),

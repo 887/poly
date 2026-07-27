@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Kind of a file system entry returned by [`crate::ClientBackend::list_files`].
+/// Kind of a file system entry returned by [`crate::CodeRepoBackend::list_files`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FileKind {
     /// Regular file.
@@ -15,7 +15,7 @@ pub enum FileKind {
     Submodule,
 }
 
-/// One entry in a directory listing returned by [`crate::ClientBackend::list_files`].
+/// One entry in a directory listing returned by [`crate::CodeRepoBackend::list_files`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FileEntry {
     /// Repository-relative path of the entry (e.g. `"src/lib.rs"`).
@@ -28,7 +28,7 @@ pub struct FileEntry {
     pub size: u64,
 }
 
-/// Raw file content returned by [`crate::ClientBackend::read_file`].
+/// Raw file content returned by [`crate::CodeRepoBackend::read_file`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FileContent {
     /// Repository-relative path of the file.

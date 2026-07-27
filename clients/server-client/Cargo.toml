@@ -98,6 +98,12 @@ tempfile = { workspace = true }
 rand = { workspace = true }
 tracing-subscriber = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }
+# poly-server signs JWTs with jsonwebtoken 10; the single crypto-provider
+# feature is pinned in the workspace dependency table (see the comment there).
+# Do NOT add a provider feature here — feature unification would turn the
+# workspace's `aws_lc_rs` into `aws_lc_rs + rust_crypto`, which panics exactly
+# like enabling neither.
+jsonwebtoken = { workspace = true }
 
 [lints]
 workspace = true

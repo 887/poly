@@ -256,7 +256,26 @@ impl IsBackend for TeamsClient {
         Some(self)
     }
 
+    /// Fetch the newest page of a channel or chat.
+    ///
+    /// Microsoft Graph pages message lists with an opaque `$skiptoken` handed
+    /// back in `@odata.nextLink`; there is no `before=<id>` / `after=<id>` /
+    /// `around=<id>` filter to translate a poly cursor into. Silently ignoring
+    /// those fields made scrollback look frozen — the loader kept asking for
+    /// history and kept receiving the same head page, burning a Graph request
+    /// against the throttle budget each time. Refuse the cursor forms we cannot
+    /// honour instead (LSP: don't return data that answers a different
+    /// question than the caller asked).
     async fn get_messages(&self, channel_id: &str, query: MessageQuery) -> ClientResult<Vec<Message>> {
+        if let Some(cursor) = ["before", "after", "around"]
+            .into_iter()
+            .zip([&query.before, &query.after, &query.around])
+            .find_map(|(name, value)| value.as_ref().map(|_| name))
+        {
+            return Err(ClientError::NotSupported(format!(
+                "Teams: Microsoft Graph has no message cursor for `{cursor}` — only the newest page is addressable"
+            )));
+        }
         let msgs = if let Some((team_id, ch_id)) = channel_id.split_once('/') {
             self.http.get_channel_messages(team_id, ch_id, query.limit).await?
         } else {

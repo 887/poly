@@ -28,6 +28,11 @@ impl IsBackend for DiscordClient {
             }
         };
         self.http.set_token(token.clone());
+        // Phase A — adopt the real `client_build_number` before the first
+        // authenticated request so `X-Super-Properties` / UA / gateway IDENTIFY
+        // don't ship the hard-coded floor build forever.  Cached for 7 days and
+        // skipped entirely for non-Discord hosts.
+        self.refresh_build_info().await;
         let user = self.http.get_me().await?;
         let user_id = user.id.to_string();
         self.account_id = Some(user_id.clone());

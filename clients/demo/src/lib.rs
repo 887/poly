@@ -29,6 +29,13 @@ pub mod data;
 #[cfg(feature = "native")]
 pub mod flavour;
 
+/// In-memory moderation state + `ModerationBackend` / `WritableModerationBackend`
+/// impls backing the moderation capability flags the demo backends declare.
+///
+/// Private: the substrate contract is the trait impls, not the store.
+#[cfg(feature = "native")]
+mod moderation;
+
 /// WASM plugin guest implementation.
 ///
 /// When compiled to `wasm32-wasip2`, this module exports the WIT
@@ -170,12 +177,14 @@ impl<F: DemoFlavour> IsBackend for DemoClientGeneric<F> {
     }
 
     async fn get_channels(&self, server_id: &str) -> ClientResult<Vec<Channel>> {
-        Ok(data::apply_local_read_state(F::channels(server_id)))
+        Ok(moderation::apply_channel_overrides(
+            data::apply_local_read_state(F::channels(server_id)),
+        ))
     }
 
     async fn get_channel(&self, id: &str) -> ClientResult<Channel> {
         for server in F::servers() {
-            for channel in F::channels(&server.id) {
+            for channel in moderation::apply_channel_overrides(F::channels(&server.id)) {
                 if channel.id == id {
                     return Ok(channel);
                 }
@@ -189,7 +198,7 @@ impl<F: DemoFlavour> IsBackend for DemoClientGeneric<F> {
         channel_id: &str,
         query: MessageQuery,
     ) -> ClientResult<Vec<Message>> {
-        Ok(F::messages(channel_id, &query))
+        Ok(moderation::filter_deleted(F::messages(channel_id, &query)))
     }
 
     // ── Messaging extras (H.4.a — moved to MessagingBackend) ────────────────
@@ -277,6 +286,18 @@ impl<F: DemoFlavour> IsBackend for DemoClientGeneric<F> {
     }
 
     fn as_server_admin(&self) -> Option<&dyn poly_client::ServerAdminBackend> {
+        Some(self)
+    }
+
+    // ── H.3.a — ModerationBackend ───────────────────────────────────────────
+    //
+    // The per-slug capability tables declare `demo` / `poly` / `demo_forum`
+    // with `has_roles` / `has_kick` / `has_ban` / `has_timed_ban` /
+    // `has_channel_mgmt` / `has_moderation_log`. Returning `None` here made
+    // every one of those flags a lie — the Roles / Bans / Mod-Log tabs
+    // rendered and each fetch failed with `NotSupported`. See
+    // `crate::moderation` for the in-memory implementation.
+    fn as_moderation(&self) -> Option<&dyn poly_client::ModerationBackend> {
         Some(self)
     }
 

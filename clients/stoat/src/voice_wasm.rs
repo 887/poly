@@ -6,9 +6,13 @@
 //!
 //! # Protocol
 //!
-//! 1. POST `{base_url}/channels/{channel_id}/join_call` → `VortexServerInfo`
+//! 1. POST `{base_url}/channels/{channel_id}/join_call` (header `x-session-token`,
+//!    NOT `Authorization: Bearer`) → `VortexServerInfo`
 //! 2. Open `gloo_net::websocket::futures::WebSocket` to the returned WS URL.
-//! 3. Receive `{"type":"Authenticated","user_id":"…"}` on connect (server sends it).
+//! 3. Send `{"type":"Authenticate","token":"…"}` (as the native `voice.rs` does),
+//!    then receive `{"type":"Authenticated","user_id":"…"}` back. The token is
+//!    required in-band — the test fixture also accepts it via the WS query
+//!    string, but a real Vortex server does not.
 //! 4. Spawn encode loop: mic PCM (from B.3) → OpusClient encode → 8-byte uid prefix + opus bytes → WS binary.
 //! 5. Spawn decode loop: WS binary → strip 8-byte uid → OpusClient decode → push_pcm (B.4).
 //! 6. Spawn event loop: WS text → parse VortexEvent → emit ClientEvent.
@@ -73,6 +77,7 @@ use poly_client::{ClientEvent, VoiceParticipant};
 use super::voice_common::{
     build_outbound_frame, parse_inbound_frame, FrameKind,
     StoatVoiceError, TransmitMode, VortexServerInfo, OPUS_FRAME_SAMPLES,
+    SESSION_TOKEN_HEADER,
 };
 
 // ── Live connection handle ────────────────────────────────────────────────────
@@ -140,9 +145,10 @@ impl StoatVoiceConnection {
 
 /// Connect to a Stoat voice channel (WASM path).
 ///
-/// 1. POST `{base_url}/channels/{channel_id}/join_call` with `Authorization: Bearer {auth_token}`.
+/// 1. POST `{base_url}/channels/{channel_id}/join_call` with `x-session-token: {auth_token}`.
 /// 2. Parse `VortexServerInfo` from the JSON response.
-/// 3. Open a `gloo_net::websocket::futures::WebSocket` to the WS URL.
+/// 3. Open a `gloo_net::websocket::futures::WebSocket` to the WS URL and send
+///    the in-band `Authenticate` frame.
 /// 4. Spawn encode, decode, and event loops.
 ///
 /// `noise_cancel_enabled` — shared `Arc<AtomicBool>` from `StoatClient::voice_noise_cancel`.
@@ -161,8 +167,11 @@ pub async fn connect_voice_wasm(
     // ── Step 1: POST /channels/{channel_id}/join_call ─────────────────────────
     let join_url = format!("{}/channels/{}/join_call", base_url.trim_end_matches('/'), channel_id);
 
+    // Stoat authenticates with `x-session-token`, NOT `Authorization: Bearer`
+    // (`http.rs::authenticated_request` and the native voice path both do this;
+    // sending Bearer makes every join_call 401).
     let resp = gloo_net::http::Request::post(&join_url)
-        .header("Authorization", &format!("Bearer {auth_token}"))
+        .header(SESSION_TOKEN_HEADER, &auth_token)
         .header("Content-Type", "application/json")
         .body("{}")
         .map_err(|e| StoatVoiceError::JoinCallFailed(format!("build request: {e:?}")))?
@@ -207,6 +216,21 @@ pub async fn connect_voice_wasm(
     info!(channel_id = %channel_id, url = %server_info.ws_url, "Stoat WASM voice WS connected");
 
     let (mut ws_sink, ws_source) = ws.split();
+
+    // ── Step 2b: Authenticate on the Vortex WS ────────────────────────────────
+    // Real Vortex requires the token in-band; it does NOT infer identity from
+    // the WS URL. (The test fixture smuggles it through the query string, which
+    // is why the omission went unnoticed.) Mirrors the native path in
+    // `voice.rs` — send Authenticate BEFORE spawning the pump tasks.
+    let auth_frame = serde_json::json!({
+        "type": "Authenticate",
+        "token": server_info.token,
+    })
+    .to_string();
+    ws_sink
+        .send(WsMessage::Text(auth_frame))
+        .await
+        .map_err(|e| StoatVoiceError::WsConnect(format!("Vortex Authenticate send failed: {e:?}")))?;
 
     // ── Step 3: Opus encoder session via host-bridge ──────────────────────────
     let opus = OpusClient::from_origin();

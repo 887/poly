@@ -120,6 +120,20 @@ pub async fn start(
 
 // ── run_loop ──────────────────────────────────────────────────────────────────
 
+/// What woke `run_loop` this iteration.
+///
+/// Materialising the select result into an owned value ends the borrows of the
+/// three pinned futures, which is what lets the heartbeat timer live *across*
+/// loop iterations instead of being rebuilt (and therefore reset) every time.
+enum GatewayWake {
+    /// The heartbeat deadline elapsed.
+    Heartbeat,
+    /// A payload arrived on the caller's outbound channel (`None` = closed).
+    Outbound(Option<String>),
+    /// A frame arrived on the WebSocket (`None` = stream ended).
+    Inbound(Option<Result<Message, gloo_net::websocket::WebSocketError>>),
+}
+
 /// Inner receive + forward loop — drives the gateway protocol on wasm32.
 ///
 /// Exits when the WebSocket closes, an error occurs, or op 9 INVALID_SESSION
@@ -150,6 +164,18 @@ async fn run_loop(
     let mut heartbeat_interval_ms: u64 = 45_000;
     let mut identified = false;
 
+    // The heartbeat deadline MUST outlive a single loop iteration.  Building a
+    // fresh `TimeoutFuture` inside the loop meant every inbound dispatch (and a
+    // live gateway streams PRESENCE_UPDATE / TYPING_START / MESSAGE_CREATE
+    // continuously) cancelled the pending timeout and restarted the interval
+    // from zero — so op 1 was never sent and Discord closed the socket with
+    // 4009 after ~45 s, permanently killing VOICE_STATE_UPDATE /
+    // VOICE_SERVER_UPDATE delivery for the session.  It is only re-armed after
+    // it actually fires, or when op 10 HELLO changes the interval.
+    let mut hb_pinned = Box::pin(gloo_timers::future::TimeoutFuture::new(
+        heartbeat_interval_ms as u32,
+    ));
+
     loop {
         use futures::future::Either;
 
@@ -158,40 +184,53 @@ async fn run_loop(
         // Each future must be pinned to a named binding before being passed to
         // `futures::future::select` — std::pin::pin! temporaries don't live
         // long enough when chained across two select calls.
-        let hb_fut = gloo_timers::future::TimeoutFuture::new(heartbeat_interval_ms as u32);
         let outbound_fut = outbound_rx.recv();
         let inbound_fut = ws_rx.next();
 
-        let mut hb_pinned = std::pin::pin!(hb_fut);
         let mut outbound_pinned = std::pin::pin!(outbound_fut);
         let mut inbound_pinned = std::pin::pin!(inbound_fut);
 
-        // First select: heartbeat vs (outbound | inbound)
-        let rest_fut = futures::future::select(outbound_pinned.as_mut(), inbound_pinned.as_mut());
-        match futures::future::select(hb_pinned.as_mut(), std::pin::pin!(rest_fut)).await {
+        // First select: heartbeat vs (outbound | inbound).  The result is
+        // materialised into an owned `GatewayWake` so the borrow of
+        // `hb_pinned` ends here and the arms below can re-arm the timer.
+        let wake = {
+            let rest_fut =
+                futures::future::select(outbound_pinned.as_mut(), inbound_pinned.as_mut());
+            match futures::future::select(hb_pinned.as_mut(), std::pin::pin!(rest_fut)).await {
+                Either::Left(((), _)) => GatewayWake::Heartbeat,
+                Either::Right((Either::Left((payload, _)), _)) => GatewayWake::Outbound(payload),
+                Either::Right((Either::Right((msg, _)), _)) => GatewayWake::Inbound(msg),
+            }
+        };
+
+        match wake {
             // ── Heartbeat timer fired ─────────────────────────────────────
-            Either::Left(((), _)) => {
+            GatewayWake::Heartbeat => {
                 let hb = serde_json::json!({ "op": 1, "d": serde_json::Value::Null });
                 if tx.borrow_mut().send(Message::Text(hb.to_string())).await.is_err() {
                     break;
                 }
+                // Re-arm for the next interval — a completed TimeoutFuture must
+                // not be polled again.
+                hb_pinned = Box::pin(gloo_timers::future::TimeoutFuture::new(
+                    heartbeat_interval_ms as u32,
+                ));
             }
 
             // ── Outbound payload from caller ──────────────────────────────
-            Either::Right((Either::Left((Some(payload), _)), _)) => {
+            GatewayWake::Outbound(Some(payload)) => {
                 if tx.borrow_mut().send(Message::Text(payload)).await.is_err() {
                     break;
                 }
             }
 
             // ── Outbound channel closed ───────────────────────────────────
-            Either::Right((Either::Left((None, _)), _)) => {
+            GatewayWake::Outbound(None) => {
                 // All senders dropped — nobody will send op 4 anymore; keep running.
             }
 
             // ── WS closed or error ────────────────────────────────────────
-            Either::Right((Either::Right((None, _)), _))
-            | Either::Right((Either::Right((Some(Err(_)), _)), _)) => {
+            GatewayWake::Inbound(None) | GatewayWake::Inbound(Some(Err(_))) => {
                 tracing::info!(
                     target: "poly_discord::gateway_bridge",
                     "gateway-bridge: WebSocket closed or errored"
@@ -200,7 +239,7 @@ async fn run_loop(
             }
 
             // ── WS message ────────────────────────────────────────────────
-            Either::Right((Either::Right((Some(Ok(msg)), _)), _)) => {
+            GatewayWake::Inbound(Some(Ok(msg))) => {
                 let text = match msg {
                     Message::Text(t) => t,
                     Message::Bytes(_) => continue,
@@ -222,6 +261,11 @@ async fn run_loop(
                             .and_then(Value::as_u64)
                         {
                             heartbeat_interval_ms = ms;
+                            // Re-arm immediately: the timer currently in flight
+                            // was built with the 45 s default.
+                            hb_pinned = Box::pin(gloo_timers::future::TimeoutFuture::new(
+                                heartbeat_interval_ms as u32,
+                            ));
                         }
                         if !identified {
                             let identify = serde_json::json!({

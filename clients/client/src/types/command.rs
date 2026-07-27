@@ -15,7 +15,7 @@ pub enum CommandScope {
 
 /// A slash command available in a channel.
 ///
-/// Returned by [`crate::ClientBackend::get_channel_commands`] to populate the `/`
+/// Returned by [`crate::MessagingBackend::get_channel_commands`] to populate the `/`
 /// autocomplete popup in the composer. Built-in Poly commands are added by the
 /// UI layer; backend- or bot-provided commands are injected by each client.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

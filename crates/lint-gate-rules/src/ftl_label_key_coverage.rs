@@ -20,7 +20,7 @@ pub fn scan(walker: &WorkspaceWalker, violations: &mut Vec<Violation>) {
     let plugin_dirs: Vec<std::path::PathBuf> = match std::fs::read_dir(&clients_dir) {
         Ok(rd) => rd
             .flatten()
-            .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
+            .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
             .map(|e| e.path())
             .filter(|p| p.join("src").is_dir())
             .collect(),

@@ -23,6 +23,7 @@ mod tests {
     use std::sync::Arc;
     use tokio::net::UdpSocket;
     use tokio::sync::mpsc;
+    use serde_json::json;
 
     /// Smoke test: verifies op 12 Video signaling and RTP packetization
     /// over a real Discord voice connection.
@@ -31,7 +32,7 @@ mod tests {
     #[tokio::test]
     async fn video_transport_sends_rtp_frames() {
         if std::env::var("RUN_DISCORD_VIDEO_SMOKE").unwrap_or_default() != "1" {
-            eprintln!("Skipping video_smoke (RUN_DISCORD_VIDEO_SMOKE != 1)");
+            tracing::info!("Skipping video_smoke (RUN_DISCORD_VIDEO_SMOKE != 1)");
             return;
         }
 
@@ -78,24 +79,31 @@ mod tests {
             ws_out_tx,
             bridge_url,
             frame_rx,
+            None, // no bandwidth controller in this smoke test
+            Arc::new(std::sync::atomic::AtomicU32::new(0)),
         )
         .await
         .expect("transport start");
 
         // Verify op 12 was sent.
         let op12 = ws_out_rx.recv().await.expect("op 12");
-        assert_eq!(op12["op"], 12, "first message should be op 12");
-        assert_eq!(op12["d"]["audio_ssrc"], 1000u32);
-        assert_eq!(op12["d"]["video_ssrc"], 1001u32);
-        let streams = op12["d"]["streams"].as_array().expect("streams array");
+        assert_eq!(op12.get("op"), Some(&json!(12u32)), "first message should be op 12");
+        let d12 = op12.get("d").expect("op 12 payload");
+        assert_eq!(d12.get("audio_ssrc"), Some(&json!(1000u32)));
+        assert_eq!(d12.get("video_ssrc"), Some(&json!(1001u32)));
+        let streams = d12
+            .get("streams")
+            .and_then(serde_json::Value::as_array)
+            .expect("streams array");
         assert_eq!(streams.len(), 1);
-        assert_eq!(streams[0]["rid"], "100");
+        let first = streams.first().expect("one stream");
+        assert_eq!(first.get("rid"), Some(&json!("100")));
 
         // Verify op 14 was sent.
         let op14 = ws_out_rx.recv().await.expect("op 14");
-        assert_eq!(op14["op"], 14, "second message should be op 14");
+        assert_eq!(op14.get("op"), Some(&json!(14u32)), "second message should be op 14");
 
-        println!("video_smoke: op 12 + op 14 verified — transport started successfully");
+        tracing::info!("video_smoke: op 12 + op 14 verified — transport started successfully");
     }
 
     /// Unit test: FU-A packetization always sets start/end bits correctly.
@@ -106,9 +114,9 @@ mod tests {
         let _nal = vec![0x65u8; 3000];
         // Access the rtp_packetize_h264 function via the module's tests above.
         // For this test we replicate the logic directly.
-        let _mtu = 1100;
+        let _mtu: usize = 1100;
         // Simple packetization check via the transport's internal logic.
         // (The function is module-private; we verify indirectly via smoke above.)
-        println!("video_packetization_unit: FU-A logic verified in unit tests in video.rs");
+        tracing::info!("video_packetization_unit: FU-A logic verified in unit tests in video.rs");
     }
 }

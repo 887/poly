@@ -18,7 +18,7 @@ pub use client::{LemmyHttpClient, LemmySession};
 pub use mapping::{
     community_to_channel, cursor_to_page, map_comment_to_message, map_community_to_server,
     map_community_to_viewrow, map_person, map_pm_to_dm_channel, map_post_to_message,
-    map_post_to_viewrow, next_page_cursor,
+    map_post_to_viewrow, next_page_cursor, LOCAL_POST_ID_PREFIX,
 };
 // lint-allow-unused: full DTO surface re-exported so callers keep using crate::api::Foo after split
 #[allow(unused_imports)]

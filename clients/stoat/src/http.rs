@@ -22,7 +22,9 @@ mod social;
 /// Default User-Agent for Stoat API requests.
 pub const DEFAULT_CLIENT_VERSION: &str = "poly-stoat/0.0.0";
 
-const STOAT_SESSION_TOKEN_HEADER: &str = "x-session-token";
+/// Re-export of the single canonical definition in `voice_common` (cfg-free) so
+/// native HTTP and the wasm32 voice/video paths cannot drift apart.
+const STOAT_SESSION_TOKEN_HEADER: &str = crate::voice_common::SESSION_TOKEN_HEADER;
 
 /// Minimal authenticated Stoat session state.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -100,8 +102,7 @@ impl StoatHttpClient {
     pub fn is_authenticated(&self) -> bool {
         self.session
             .read()
-            .map(|session| session.is_some())
-            .unwrap_or(false)
+            .is_ok_and(|session| session.is_some())
     }
 
     /// Read the current session state, if present.

@@ -150,7 +150,9 @@ The inline comment token is:
 // poly-lint: allow long-read-guard — <reason>
 ```
 
-The reason is mandatory. The CI script (`tools/scripts/forbid-long-read-guard.sh`)
+The reason is mandatory. The scanner
+(`crates/lint-gate-rules/src/forbid_long_read_guard.rs`, run by
+`cargo check -p poly-lint-gate`)
 skips any `let` line that contains this token. For multi-site suppressions, add a
 `path:line # reason` entry to `tools/scripts/long-read-guard-allowlist.txt` instead.
 
@@ -161,7 +163,8 @@ skips any `let` line that contains this token. For multi-site suppressions, add 
 - `crates/core/src/state/batched_signal.rs` — `BatchedSignal<T>` implementation.
 - `docs/plans/plan-read-guard-scoping.md` — audit findings + migration plan.
 - `docs/plans/plan-batched-signal.md` — migration history for hang class 1.
-- `tools/scripts/forbid-long-read-guard.sh` — CI enforcement script.
+- `crates/lint-gate-rules/src/forbid_long_read_guard.rs` — the scanner.
+  Reproduce locally with `cargo check -p poly-lint-gate`.
 - `tools/scripts/long-read-guard-allowlist.txt` — file/line allowlist.
 - CLAUDE.md "Common WASM-hang causes" section — ranked frequency list.
 
@@ -249,7 +252,8 @@ stales the UI.
 
 ### CI lint
 
-`tools/scripts/forbid-stale-effect-capture.sh` flags every `use_effect(move ||`
+`crates/lint-gate-rules/src/forbid_stale_effect_capture.rs` (run via
+`cargo check -p poly-lint-gate`) flags every `use_effect(move ||`
 site in `crates/core/src/ui/**`. Existing sites that have been manually
 verified as safe are listed in `tools/scripts/stale-effect-capture-allowlist.txt`.
 Inline suppression: `// poly-lint: allow stale-effect-capture — <reason>`.
@@ -335,7 +339,8 @@ The guard does NOT implement `Clone` itself — you cannot write
 
 ### CI lint
 
-`tools/scripts/forbid-render-time-read.sh` flags every `.read()` site in
+`crates/lint-gate-rules/src/forbid_render_time_read.rs` (run via
+`cargo check -p poly-lint-gate`) flags every `.read()` site in
 `crates/core/src/ui/**` that is not clearly inside a safe same-line context
 (`use_effect(move ||`, event handlers, `.read().await`). MEDIUM and LOW sites
 are listed in `tools/scripts/render-time-read-allowlist.txt`. HIGH sites must

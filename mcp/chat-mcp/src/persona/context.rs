@@ -672,7 +672,7 @@ fn apply_size_cap(chats: &mut Vec<ChatEntry>) {
 }
 
 fn estimate_size(chats: &[ChatEntry]) -> usize {
-    serde_json::to_string(chats).map(|s| s.len()).unwrap_or(usize::MAX)
+    serde_json::to_string(chats).map_or(usize::MAX, |s| s.len())
 }
 
 // ─── Orchestrator ─────────────────────────────────────────────────────────────

@@ -446,8 +446,7 @@ pub fn filter_active_repos(repos: Vec<GhRepo>, years: i64) -> Vec<GhRepo> {
         .into_iter()
         .filter(|r| r.pushed_at.as_ref().is_none_or(|s| {
             DateTime::parse_from_rfc3339(s)
-                .map(|dt| dt.with_timezone(&Utc) >= cutoff)
-                .unwrap_or(true)
+                .map_or(true, |dt| dt.with_timezone(&Utc) >= cutoff)
         }))
         .filter(|r| !r.archived)
         .collect()

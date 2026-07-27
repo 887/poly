@@ -239,27 +239,27 @@ pub(crate) async fn toggle_demo(
             };
 
             // Build the server→account map from our locally-owned backend handles.
-            // tokio RwLock reads are fine to await here — they are NOT Dioxus Signal locks.
+            // Bounded reads (hang class #4) — defence in depth: these handles are
             let mut server_map = std::collections::HashMap::new();
             {
-                let guard = cat_handle.read().await;
-                if let Ok(servers) = guard.get_servers().await {
+                if let Ok(guard) = cat_handle.read_with_timeout(std::time::Duration::from_secs(5)).await
+                    && let Ok(servers) = guard.get_servers().await {
                     for server in servers {
                         server_map.insert(server.id, "demo-cat".to_string());
                     }
                 }
             }
             {
-                let guard = dog_handle.read().await;
-                if let Ok(servers) = guard.get_servers().await {
+                if let Ok(guard) = dog_handle.read_with_timeout(std::time::Duration::from_secs(5)).await
+                    && let Ok(servers) = guard.get_servers().await {
                     for server in servers {
                         server_map.insert(server.id, "demo-dog".to_string());
                     }
                 }
             }
             {
-                let guard = platypus_handle.read().await;
-                if let Ok(servers) = guard.get_servers().await {
+                if let Ok(guard) = platypus_handle.read_with_timeout(std::time::Duration::from_secs(5)).await
+                    && let Ok(servers) = guard.get_servers().await {
                     for server in servers {
                         server_map.insert(server.id, "demo-platypus".to_string());
                     }
@@ -488,10 +488,10 @@ pub(crate) async fn toggle_demo_forum_on(
         }
     };
 
-    // Fetch servers (no Signal lock — plain tokio RwLock).
-    let servers = {
-        let guard = handle.read().await;
-        guard.get_servers().await.unwrap_or_default()
+    // Bounded read (hang class #4); empty-on-timeout matches unwrap_or_default.
+    let servers = match handle.read_with_timeout(std::time::Duration::from_secs(5)).await {
+        Ok(guard) => guard.get_servers().await.unwrap_or_default(),
+        Err(_timeout) => Vec::new(),
     };
     let server_map: std::collections::HashMap<String, String> = servers
         .iter()

@@ -51,6 +51,14 @@ wit-bindgen = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 
+# Browser-only timer. `tokio::time::sleep` and `std::time::Instant::now()` are
+# unimplemented on wasm32-unknown-unknown and panic at runtime (CLAUDE.md hang
+# class #4) — `crate::timing::sleep` routes through gloo's setTimeout future
+# there instead. Narrowed to `target_os = "unknown"` so the wasm32-wasip2 guest
+# component build (target_os = "wasi") never pulls in wasm-bindgen/js-sys.
+[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
+gloo-timers = { version = "0.3", features = ["futures"] }
+
 [dev-dependencies]
 poly-test-teams = { path = "../../servers/test-teams" }
 axum = { workspace = true }

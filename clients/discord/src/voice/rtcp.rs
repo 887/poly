@@ -210,7 +210,13 @@ fn parse_remb(sub: &[u8]) -> Option<u32> {
     let b2 = sub[19] as u32;
     let exp = (b0 >> 2) & 0x3F; // top 6 bits of b0
     let mantissa = ((b0 & 0x03) << 16) | (b1 << 8) | b2;
-    let bps = mantissa << exp;
+    // `exp` is attacker-controlled (0..=63).  A plain `mantissa << exp` panics
+    // with "attempt to shift left with overflow" in debug builds for exp >= 32
+    // and silently masks to `exp & 31` in release, so a single malformed RTCP
+    // datagram would kill the decode task (all inbound audio) or corrupt the
+    // congestion controller.  Saturate instead — `apply_feedback` clamps to
+    // `max_bps` anyway.
+    let bps = mantissa.checked_shl(exp).unwrap_or(u32::MAX);
     Some(bps)
 }
 
@@ -254,8 +260,8 @@ fn parse_twcc_simple(sub: &[u8], current_bps: u32) -> Option<u32> {
 
     // Walk status chunks and count "not received" symbols.
     // Two chunk types:
-    //   - Run-length chunk (bit 15 = 0): [0][symbol:1][count:14]
-    //     symbol 0 = not received, symbol 1 = received small delta
+    //   - Run-length chunk (bit 15 = 0): [0][symbol:2][run_length:13]
+    //     symbol 0 = not received, 1 = received small delta, 2 = received large delta
     //   - Status vector chunk (bit 15 = 1): [1][symbol_size:1][14 symbols]
     //     symbol_size 0 → 1-bit symbols (0=not-rcvd, 1=rcvd), 14 symbols per chunk
     //     symbol_size 1 → 2-bit symbols (0=not-rcvd, 1=rcvd-small, 2=rcvd-large, 3=?), 7 symbols per chunk
@@ -269,8 +275,12 @@ fn parse_twcc_simple(sub: &[u8], current_bps: u32) -> Option<u32> {
         pos += 2;
 
         if chunk & 0x8000 == 0 {
-            // Run-length chunk.
-            let symbol = (chunk >> 14) & 0x1;
+            // Run-length chunk: [0][symbol:2][run_length:13].
+            // The symbol is TWO bits (0 = not received, 1 = received/small delta,
+            // 2 = received/large delta).  Reading only the high bit made symbol 1
+            // — the overwhelmingly common "received" case — decode as "not
+            // received", so a healthy stream reported 100 % loss.
+            let symbol = (chunk >> 13) & 0x3;
             let count = (chunk & 0x1FFF) as usize;
             let count = count.min(packet_count - covered);
             if symbol == 0 {
@@ -594,6 +604,99 @@ mod tests {
         ctrl.target_bps.store(1_000_000, Ordering::Relaxed);
         let after = ctrl.ramp_up();
         assert_eq!(after, 1_000_000, "ramp_up should not exceed max_bps");
+    }
+
+    /// Build a minimal TWCC (RTPFB / FMT=15) packet carrying a single
+    /// run-length chunk of `count` packets with status `symbol`.
+    fn make_twcc_run_length_packet(symbol: u16, count: u16) -> Vec<u8> {
+        let chunk: u16 = ((symbol & 0x3) << 13) | (count & 0x1FFF);
+        let mut pkt = vec![
+            // byte 0: V=2, P=0, FMT=15 → 0x8F
+            0x8F,
+            // byte 1: PT=205 (RTPFB)
+            PT_RTPFB,
+            // bytes 2-3: length in words - 1; total 24 bytes → 5
+            0x00, 0x05,
+            // bytes 4-7: SSRC_sender
+            0x00, 0x00, 0x00, 0x01,
+            // bytes 8-11: SSRC_media
+            0x00, 0x00, 0x00, 0x02,
+            // bytes 12-13: base sequence number
+            0x00, 0x00,
+            // bytes 14-15: packet status count
+            (count >> 8) as u8, count as u8,
+            // bytes 16-18: reference time (24-bit)
+            0x00, 0x00, 0x00,
+            // byte 19: feedback packet count
+            0x00,
+        ];
+        // bytes 20-21: the single status chunk.
+        pkt.push((chunk >> 8) as u8);
+        pkt.push(chunk as u8);
+        // Pad to a 4-byte boundary (24 bytes total).
+        pkt.push(0x00);
+        pkt.push(0x00);
+        pkt
+    }
+
+    #[test]
+    fn twcc_run_length_received_small_delta_is_not_loss() {
+        // symbol 1 = "received, small delta" — the common healthy case.
+        // The old `(chunk >> 14) & 0x1` decode read this as symbol 0 and
+        // reported 100 % loss, halving the bitrate on every feedback packet.
+        let pkt = make_twcc_run_length_packet(1, 200);
+        assert!(is_rtcp_packet(&pkt));
+        assert_eq!(
+            parse_rtcp_feedback(&pkt, DEFAULT_BITRATE_BPS),
+            None,
+            "a loss-free run must produce no congestion signal"
+        );
+    }
+
+    #[test]
+    fn twcc_run_length_received_large_delta_is_not_loss() {
+        let pkt = make_twcc_run_length_packet(2, 64);
+        assert_eq!(parse_rtcp_feedback(&pkt, DEFAULT_BITRATE_BPS), None);
+    }
+
+    #[test]
+    fn twcc_run_length_not_received_is_loss() {
+        let pkt = make_twcc_run_length_packet(0, 100);
+        match parse_rtcp_feedback(&pkt, DEFAULT_BITRATE_BPS) {
+            Some(RtcpFeedback::Twcc { suggested_bps }) => {
+                assert!(
+                    suggested_bps < DEFAULT_BITRATE_BPS,
+                    "total loss must throttle, got {suggested_bps}"
+                );
+            }
+            other => panic!("expected TWCC congestion signal, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn remb_huge_exponent_does_not_overflow() {
+        // exp = 63, mantissa = 1 → `mantissa << exp` panics in debug builds.
+        // Bytes 17..20 are the packed [EXP:6][MAN:18] bitrate field.
+        let mut pkt = make_remb_packet(1_000_000);
+        pkt[17] = 0xFC; // exp = 0b111111 = 63, mantissa high bits = 0
+        pkt[18] = 0x00;
+        pkt[19] = 0x01;
+        let fb = parse_rtcp_feedback(&pkt, DEFAULT_BITRATE_BPS);
+        assert!(
+            matches!(fb, Some(RtcpFeedback::Remb { .. })),
+            "must saturate, not panic"
+        );
+    }
+
+    #[test]
+    fn remb_huge_exponent_clamps_to_max_after_apply() {
+        let mut pkt = make_remb_packet(1_000_000);
+        pkt[17] = 0xFC;
+        pkt[18] = 0x00;
+        pkt[19] = 0x01;
+        let ctrl = BandwidthController::new(MAX_BITRATE_BPS);
+        handle_rtcp_datagram(&pkt, &ctrl);
+        assert_eq!(ctrl.target_bps.load(Ordering::Relaxed), MAX_BITRATE_BPS);
     }
 
     #[test]

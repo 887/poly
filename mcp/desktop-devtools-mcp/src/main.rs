@@ -54,8 +54,7 @@ const SILENT_HANG_THRESHOLD_SECS: u64 = 60;
 /// Check if legacy hotpatch mode is enabled.
 fn is_legacy_mode() -> bool {
     std::env::var("POLY_DESKTOP_LEGACY")
-        .map(|v| v == "1")
-        .unwrap_or(false)
+        .is_ok_and(|v| v == "1")
 }
 
 // ─── HTTP helpers ─────────────────────────────────────────────────────────────
@@ -409,8 +408,7 @@ impl DesktopHttpBackend {
             .timeout(std::time::Duration::from_secs(2))
             .send()
             .await
-            .map(|r| r.status().is_success())
-            .unwrap_or(false)
+            .is_ok_and(|r| r.status().is_success())
     }
 
     /// Poll the eval bridge until it responds, a crash is detected, or timeout.
@@ -468,8 +466,7 @@ impl DesktopHttpBackend {
                 .timeout(std::time::Duration::from_secs(2))
                 .send()
                 .await
-                .map(|r| r.status().as_u16())
-                .unwrap_or(0);
+                .map_or(0, |r| r.status().as_u16());
             if bundle_status == 200 {
                 return Ok(());
             }
@@ -479,8 +476,7 @@ impl DesktopHttpBackend {
                 .timeout(std::time::Duration::from_secs(2))
                 .send()
                 .await
-                .map(|r| r.status().is_success())
-                .unwrap_or(false);
+                .is_ok_and(|r| r.status().is_success());
             if port_up && port_up_since.is_none() {
                 port_up_since = Some(std::time::Instant::now());
             }
@@ -812,8 +808,7 @@ impl DesktopHttpBackend {
             .post(format!("{BASE}/reload"))
             .send()
             .await
-            .map(|r| r.status().is_success())
-            .unwrap_or(false);
+            .is_ok_and(|r| r.status().is_success());
 
         self.finish_build_record(
             BuildLifecycleState::Succeeded,

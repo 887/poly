@@ -257,7 +257,10 @@ mod tests {
             .expect("base64 decode");
         let json: serde_json::Value =
             serde_json::from_slice(&decoded).expect("json parse");
-        let bn = json["client_build_number"].as_u64().expect("u64");
+        let bn = json
+            .get("client_build_number")
+            .and_then(serde_json::Value::as_u64)
+            .expect("client_build_number must be a u64");
         assert_eq!(
             bn,
             u64::from(build.build_number),

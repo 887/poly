@@ -1,6 +1,7 @@
 //! `ContentPolicyBackend` capability sub-trait (Phase H.1).
 //!
-//! Carved out of [`ClientBackend`] in Phase H.1.  No backend currently
+//! Carved out of the former `ClientBackend` god-trait (replaced by
+//! [`IsBackend`]) in Phase H.1.  No backend currently
 //! implements this — every implementation in the pre-H.1 world returned the
 //! `NotSupported` / `Ok(vec![])` default.  The methods live here so that a
 //! future backend can opt in by implementing this trait and overriding
@@ -15,7 +16,7 @@
 //! }
 //! ```
 //!
-//! [`ClientBackend`]: crate::ClientBackend
+//! [`IsBackend`]: crate::IsBackend
 //! [`IsBackend::as_content_policy`]: crate::IsBackend::as_content_policy
 
 use async_trait::async_trait;
@@ -31,7 +32,7 @@ use crate::{BlockedUser, ClientResult, ContentPolicy};
 ///
 /// No default impls: presence of `impl ContentPolicyBackend` is the opt-in
 /// signal.  Backends that do not support content policy simply leave
-/// [`IsBackend::as_content_policy`] returning `None` (the default).
+/// [`crate::IsBackend::as_content_policy`] returning `None` (the default).
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 pub trait ContentPolicyBackend: Send + Sync {

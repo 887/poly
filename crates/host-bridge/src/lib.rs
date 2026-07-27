@@ -43,6 +43,11 @@ pub mod client_config;
 pub mod http;
 pub mod route;
 
+// Outbound-destination guard (SSRF filter) shared by `/host/http` and
+// `/host/udp/*`. Native-only — it resolves DNS, which wasm32 cannot do.
+#[cfg(not(target_arch = "wasm32"))]
+pub mod net_guard;
+
 // Video H.264 encode/decode service — server-side handlers (non-wasm, feature-gated).
 // WASM targets call the endpoint via HTTP; openh264-rs never links into the WASM bundle.
 #[cfg(all(not(target_arch = "wasm32"), feature = "video"))]
@@ -882,6 +887,24 @@ async fn exec_command(program: String, args: Vec<String>) -> HostResponse {
     }
 }
 
+/// Maximum number of redirects the guarded proxy will follow. Matches
+/// reqwest's own default; each hop is re-validated by [`net_guard::check_url`].
+#[cfg(not(target_arch = "wasm32"))]
+const MAX_REDIRECT_HOPS: u8 = 10;
+
+/// Headers that must never survive a cross-origin redirect.
+#[cfg(not(target_arch = "wasm32"))]
+const CREDENTIAL_HEADERS: &[&str] = &["authorization", "cookie", "proxy-authorization"];
+
+/// One outbound request, re-buildable across redirect hops.
+#[cfg(not(target_arch = "wasm32"))]
+struct OutboundRequest {
+    method: reqwest::Method,
+    url: reqwest::Url,
+    headers: Vec<(String, String)>,
+    body: Option<Vec<u8>>,
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 async fn http_request(
     method: String,
@@ -902,32 +925,137 @@ async fn http_request(
         Err(e) => return HostResponse::Err(format!("invalid method: {e}")),
     };
 
-    let mut req = reqwest::Client::new().request(method_parsed, &url);
-    for (k, v) in &headers {
-        req = req.header(k, v);
-    }
-    if let Some(body) = body {
-        req = req.body(body);
-    }
+    let parsed_url = match reqwest::Url::parse(&url) {
+        Ok(u) => u,
+        Err(e) => return HostResponse::Err(format!("invalid url: {e}")),
+    };
 
-    match req.send().await {
-        Ok(resp) => {
-            let status = resp.status().as_u16();
-            let resp_headers: Vec<(String, String)> = resp
-                .headers()
-                .iter()
-                .map(|(k, v)| (k.as_str().to_string(), v.to_str().unwrap_or("").to_string()))
-                .collect();
-            match resp.bytes().await {
-                Ok(bytes) => HostResponse::Ok(HostOk::HttpResponse {
-                    status,
-                    headers: resp_headers,
-                    body_b64: b64_encode(&bytes),
-                }),
-                Err(e) => HostResponse::Err(format!("read body: {e}")),
+    // Redirects are followed by hand so every hop passes the SSRF guard —
+    // reqwest's built-in follower would only ever validate the first URL.
+    let client = match reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+    {
+        Ok(c) => c,
+        Err(e) => return HostResponse::Err(format!("http client build failed: {e}")),
+    };
+
+    let request = OutboundRequest {
+        method: method_parsed,
+        url: parsed_url,
+        headers,
+        body,
+    };
+    let policy = net_guard::PrivateNetworkPolicy::from_env();
+
+    match send_guarded(&client, request, policy).await {
+        Ok(resp) => collect_response(resp).await,
+        Err(e) => HostResponse::Err(e),
+    }
+}
+
+/// Send `request`, following redirects manually and re-validating the
+/// destination of every hop.
+#[cfg(not(target_arch = "wasm32"))]
+async fn send_guarded(
+    client: &reqwest::Client,
+    mut request: OutboundRequest,
+    policy: net_guard::PrivateNetworkPolicy,
+) -> Result<reqwest::Response, String> {
+    let mut hops: u8 = 0;
+    loop {
+        net_guard::check_url(&request.url, policy).await?;
+
+        let mut builder = client.request(request.method.clone(), request.url.clone());
+        for (k, v) in &request.headers {
+            builder = builder.header(k, v);
+        }
+        if let Some(bytes) = request.body.clone() {
+            builder = builder.body(bytes);
+        }
+        let resp = builder
+            .send()
+            .await
+            .map_err(|e| format!("http request failed: {e}"))?;
+
+        match next_hop(&resp, &request)? {
+            None => return Ok(resp),
+            Some(next) => {
+                hops = hops
+                    .checked_add(1)
+                    .ok_or_else(|| "redirect counter overflowed".to_string())?;
+                if hops > MAX_REDIRECT_HOPS {
+                    return Err(format!("too many redirects (> {MAX_REDIRECT_HOPS})"));
+                }
+                request = next;
             }
         }
-        Err(e) => HostResponse::Err(format!("http request failed: {e}")),
+    }
+}
+
+/// Build the follow-up request for a 3xx response, or `None` when the
+/// response is final.
+#[cfg(not(target_arch = "wasm32"))]
+fn next_hop(
+    resp: &reqwest::Response,
+    current: &OutboundRequest,
+) -> Result<Option<OutboundRequest>, String> {
+    let status = resp.status();
+    if !status.is_redirection() {
+        return Ok(None);
+    }
+    let Some(location) = resp.headers().get(reqwest::header::LOCATION) else {
+        return Ok(None);
+    };
+    let location = location
+        .to_str()
+        .map_err(|e| format!("redirect Location header is not valid ASCII: {e}"))?;
+    let target = current
+        .url
+        .join(location)
+        .map_err(|e| format!("invalid redirect Location `{location}`: {e}"))?;
+
+    // 303 (and, per browser behaviour, 301/302) degrade to GET without a
+    // body; 307/308 replay the original method and body verbatim.
+    let replay = status == reqwest::StatusCode::TEMPORARY_REDIRECT
+        || status == reqwest::StatusCode::PERMANENT_REDIRECT;
+    let (method, body) = if replay || current.method == reqwest::Method::HEAD {
+        (current.method.clone(), current.body.clone())
+    } else {
+        (reqwest::Method::GET, None)
+    };
+
+    let same_origin = target.origin() == current.url.origin();
+    let headers = current
+        .headers
+        .iter()
+        .filter(|(k, _)| same_origin || !CREDENTIAL_HEADERS.contains(&k.to_ascii_lowercase().as_str()))
+        .cloned()
+        .collect();
+
+    Ok(Some(OutboundRequest {
+        method,
+        url: target,
+        headers,
+        body,
+    }))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+async fn collect_response(resp: reqwest::Response) -> HostResponse {
+    let status = resp.status().as_u16();
+    let resp_headers: Vec<(String, String)> = resp
+        .headers()
+        .iter()
+        .map(|(k, v)| (k.as_str().to_string(), v.to_str().unwrap_or("").to_string()))
+        .collect();
+    match resp.bytes().await {
+        Ok(bytes) => HostResponse::Ok(HostOk::HttpResponse {
+            status,
+            headers: resp_headers,
+            body_b64: b64_encode(&bytes),
+        }),
+        Err(e) => HostResponse::Err(format!("read body: {e}")),
     }
 }
 
@@ -970,5 +1098,54 @@ mod tests {
     #[test]
     fn bundled_plugin_slug_set_is_locked() {
         assert_eq!(BUNDLED_PLUGIN_SLUGS, &["discord", "teams"]);
+    }
+
+    /// `/host/http` must not be usable as an SSRF proxy into the host's own
+    /// loopback services or the cloud metadata endpoint. The default policy
+    /// is deny; only `POLY_ALLOW_PRIVATE_NETWORK=1` re-opens it.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn dispatch_blocks_internal_http_targets() {
+        for url in [
+            "http://127.0.0.1:3000/host/kv/get",
+            "http://[::1]:9333/host/exec",
+            "http://169.254.169.254/latest/meta-data/",
+            "http://10.0.0.1/admin",
+        ] {
+            let resp = dispatch(HostCall::HttpRequest {
+                method: "GET".into(),
+                url: url.into(),
+                headers: Vec::new(),
+                body_b64: None,
+            })
+            .await;
+            match resp {
+                HostResponse::Err(msg) => assert!(
+                    msg.contains("loopback/private/reserved"),
+                    "{url} rejected for the wrong reason: {msg}"
+                ),
+                HostResponse::Ok(_) => panic!("{url} must not be proxied"),
+            }
+        }
+    }
+
+    /// Only http/https may be proxied — `file://` would turn the bridge into
+    /// an arbitrary-file reader.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[tokio::test]
+    async fn dispatch_blocks_non_http_schemes() {
+        let resp = dispatch(HostCall::HttpRequest {
+            method: "GET".into(),
+            url: "file:///etc/passwd".into(),
+            headers: Vec::new(),
+            body_b64: None,
+        })
+        .await;
+        match resp {
+            HostResponse::Err(msg) => {
+                assert!(msg.contains("blocked URL scheme"), "unexpected: {msg}");
+            }
+            HostResponse::Ok(_) => panic!("file:// must not be proxied"),
+        }
     }
 }

@@ -44,7 +44,7 @@ use crate::{ClientResult, Message, MessageContent};
 ///
 /// * Returns `Ok(Message)` echoing what the backend persisted, with
 ///   any backend-assigned ID/timestamp filled in.
-/// * May fail with [`ClientError::Network`], [`ClientError::Auth`], or
+/// * May fail with [`ClientError::Network`], [`ClientError::AuthFailed`], or
 ///   a backend-specific [`ClientError::NotSupported`] explaining why
 ///   *this particular channel kind* refuses writes (e.g. GitHub
 ///   forum-index channels).
@@ -53,7 +53,7 @@ use crate::{ClientResult, Message, MessageContent};
 /// [`IsBackend`]: crate::IsBackend
 /// [`IsBackend::as_writable_messaging`]: crate::IsBackend::as_writable_messaging
 /// [`ClientError::Network`]: crate::ClientError::Network
-/// [`ClientError::Auth`]: crate::ClientError::Auth
+/// [`ClientError::AuthFailed`]: crate::ClientError::AuthFailed
 /// [`ClientError::NotSupported`]: crate::ClientError::NotSupported
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]

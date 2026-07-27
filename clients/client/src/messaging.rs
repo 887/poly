@@ -1,6 +1,7 @@
 //! `MessagingBackend` capability sub-trait (Phase H.4.a).
 //!
-//! Carved out of [`ClientBackend`] in Phase H.4.a.  Groups the messaging
+//! Carved out of the former `ClientBackend` god-trait (replaced by
+//! [`IsBackend`]) in Phase H.4.a.  Groups the messaging
 //! capabilities that are optional on some backends: typing indicators, reply
 //! threading, message search, pin management, and composer extras (commands,
 //! emojis, stickers).
@@ -19,7 +20,7 @@
 //! [`IsBackend::as_messaging`] returning `None` (the default) and the host
 //! will hide or grey-out the corresponding UI affordances.
 //!
-//! [`ClientBackend`]: crate::ClientBackend
+//! [`IsBackend`]: crate::IsBackend
 //! [`IsBackend::as_messaging`]: crate::IsBackend::as_messaging
 
 use async_trait::async_trait;

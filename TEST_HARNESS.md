@@ -30,6 +30,9 @@ cargo clippy \
   -p poly-lemmy \
   -p poly-hackernews \
   -p poly-github \
+  -p poly-forgejo \
+  -p poly-reddit \
+  -p poly-common-forge \
   -p poly-server-client \
   -p poly-chat-mcp \
   -- -D warnings 2>&1
@@ -51,8 +54,23 @@ Expected: `Client build completed successfully!`
 
 ## 4. Unit tests
 
-`cargo test --workspace` does not work because the repo mixes native and WASM targets
-(dependency conflicts). Run each testable crate individually instead:
+Primary form — this is exactly what CI runs as its whole test gate
+(`.github/workflows/lint-test.yml`, job `test`, step "Run tests"), so it is the
+authoritative command:
+
+```bash
+cargo test --workspace 2>&1
+```
+
+Expected: all tests pass. Report any failures with test name + stderr.
+
+**Fallback (only if the workspace form fails to resolve on this machine).**
+An older revision of this file claimed `cargo test --workspace` "does not work
+because the repo mixes native and WASM targets"; CI has run the workspace form
+green since, so treat a local failure as a real finding to report, **not** as
+expected. If you do fall back, say so explicitly in the report table — the
+hand-maintained list below drifts out of sync with `[workspace] members` in the
+root `Cargo.toml` and is not a substitute for the workspace form:
 
 ```bash
 cargo test \
@@ -66,14 +84,15 @@ cargo test \
   -p poly-lemmy \
   -p poly-hackernews \
   -p poly-github \
+  -p poly-forgejo \
+  -p poly-reddit \
+  -p poly-common-forge \
   -p poly-server-client \
   -p poly-plugin-host 2>&1
 cargo test -p poly-plugin-loader-tests --tests 2>&1
 cargo test -p poly-chat-mcp --test mcp_integration 2>&1
 cargo test -p poly-chat-mcp --lib 2>&1
 ```
-
-Expected: all tests pass. Report any failures with test name + stderr.
 
 ---
 

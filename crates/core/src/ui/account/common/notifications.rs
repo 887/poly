@@ -284,7 +284,7 @@ pub fn NotificationsView(account_id: String, backend_slug: String) -> Element {
         .collect::<Vec<_>>();
     // O.4 — sort newest-first by time. The source groups by type, which put a
     // 1h-old voice invite below 3h/6h server invites; pure-time is clearer.
-    notifications.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+    notifications.sort_by_key(|n| std::cmp::Reverse(n.timestamp));
     let notifications_title = t("notifications-title");
     let notifications_empty = t("notifications-empty");
     let notifications_mark_read = t("notifications-mark-read");

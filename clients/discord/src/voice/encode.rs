@@ -26,6 +26,8 @@ pub(super) async fn udp_encode_loop(
     timestamp: Arc<AtomicU32>,
     is_speaking: Arc<AtomicBool>,
     transmit_mode: TransmitMode,
+    aead_nonce: Arc<AtomicU32>,
+    mut shutdown: ShutdownRx,
 ) {
     let encoder = match OpusEncoder::new(
         OpusSampleRate::Hz48000,
@@ -50,7 +52,18 @@ pub(super) async fn udp_encode_loop(
     let mut opus_buf = vec![0u8; 4000];
     let mut pcm_accumulator: Vec<i16> = Vec::with_capacity(OPUS_FRAME_SAMPLES * 2);
 
-    while let Some(frame) = input_stream.next().await {
+    loop {
+        // Race the mic against the shutdown signal.  `changed()` also resolves
+        // (with an error) when the sender is dropped, so a dropped
+        // DiscordVoiceConnection tears this loop down too.
+        let frame = tokio::select! {
+            biased;
+            _ = shutdown.changed() => break,
+            next = input_stream.next() => match next {
+                Some(f) => f,
+                None => break,
+            },
+        };
         pcm_accumulator.extend_from_slice(&frame);
 
         while pcm_accumulator.len() >= OPUS_FRAME_SAMPLES {
@@ -75,13 +88,17 @@ pub(super) async fn udp_encode_loop(
 
             // Build RTP header (B.6).
             let seq = sequence.fetch_add(1, Ordering::Relaxed);
-            let ts = timestamp.fetch_add(OPUS_FRAME_SAMPLES as u32, Ordering::Relaxed);
+            // Per-channel sample-frame count (960), not the interleaved sample
+            // count (1920) — see OPUS_TIMESTAMP_INCREMENT.
+            let ts = timestamp.fetch_add(OPUS_TIMESTAMP_INCREMENT, Ordering::Relaxed);
             let rtp_header = build_rtp_header(seq, ts, local_ssrc);
 
             // AEAD encrypt (B.6).
-            // aead_xchacha20_poly1305_rtpsize: nonce = RTP header (first 12 bytes),
-            // zero-padded to 24 bytes for XChaCha20.
-            let encrypted = match encrypt_rtp(&cipher, &rtp_header, opus_data, &mode) {
+            // aead_xchacha20_poly1305_rtpsize: the nonce is a 32-bit counter,
+            // appended unencrypted to the packet; the RTP header is AAD only.
+            // The counter is shared with the video transport (same session key).
+            let nonce_counter = aead_nonce.fetch_add(1, Ordering::Relaxed);
+            let encrypted = match encrypt_rtp(&cipher, &rtp_header, opus_data, &mode, nonce_counter) {
                 Ok(e) => e,
                 Err(e) => {
                     warn!(target: "poly_discord::voice", error = %e, "AEAD encrypt error");

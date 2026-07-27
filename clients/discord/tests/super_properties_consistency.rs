@@ -226,7 +226,7 @@ async fn wire_x_super_properties_non_empty_and_valid() {
         .await
         .expect("authenticate");
 
-    let _ = client.get_servers().await;
+    let _servers = client.get_servers().await;
     tokio::time::sleep(std::time::Duration::from_millis(20)).await;
 
     let entries = srv.captured_headers().await;
@@ -257,7 +257,7 @@ async fn wire_ua_must_not_contain_discordbot() {
         .await
         .expect("authenticate");
 
-    let _ = client.get_servers().await;
+    let _servers = client.get_servers().await;
     tokio::time::sleep(std::time::Duration::from_millis(20)).await;
 
     let entries = srv.captured_headers().await;

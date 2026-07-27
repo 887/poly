@@ -5,7 +5,7 @@
 
 use async_trait::async_trait;
 use poly_client::{
-    ActionOutcome, ClientError, ClientResult, Cursor, CustomBlock, ListSpec, RowTemplate,
+    ActionOutcome, ClientError, ClientResult, Cursor, CursorKind, CustomBlock, ListSpec, RowTemplate,
     SettingsScope, SidebarDeclaration, SidebarItem, SidebarLayoutKind, SidebarRouteKind,
     SidebarSection, ViewBody, ViewDescriptor, ViewDetail, ViewKind, ViewRowsPage,
 };
@@ -169,7 +169,7 @@ impl poly_client::ViewDescriptorBackend for RedditBackend {
     async fn get_view_rows(
         &self,
         channel_id: &str,
-        _cursor: Option<Cursor>,
+        cursor: Option<Cursor>,
         _sort_id: Option<&str>,
         _filter_id: Option<&str>,
         _tab_id: Option<&str>,
@@ -177,9 +177,14 @@ impl poly_client::ViewDescriptorBackend for RedditBackend {
         let sub = sub_from_channel_id(channel_id)
             .ok_or_else(|| ClientError::NotFound(format!("channel not found: {channel_id}")))?;
 
-        let posts = self
+        // old.reddit serves 25 posts per listing page and hands back an
+        // opaque `after` token for the next one. Threading the cursor through
+        // is what makes the "Load more" affordance appear at all — ListBody
+        // gates it on `next_cursor.is_some()`.
+        let after = cursor.as_ref().map(|c| c.value.as_str());
+        let (posts, next_after) = self
             .client
-            .list_subreddit(sub, self.current_sort())
+            .list_subreddit_page(sub, self.current_sort(), after)
             .await
             .map_err(ClientError::from)?;
 
@@ -190,7 +195,12 @@ impl poly_client::ViewDescriptorBackend for RedditBackend {
             .map(|p| raw_post_to_viewrow(p, show_previews))
             .collect();
 
-        Ok(ViewRowsPage { rows, next_cursor: None })
+        let next_cursor = next_after.map(|value| Cursor {
+            kind: CursorKind::Opaque,
+            value,
+        });
+
+        Ok(ViewRowsPage { rows, next_cursor })
     }
 
     // lint-allow-unused: single-responsibility HTML render fn; splitting it into

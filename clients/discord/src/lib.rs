@@ -215,8 +215,6 @@ pub struct DiscordClient {
     gateway_url: Option<String>,
     /// Stored version override (None = use DEFAULT_CLIENT_VERSION).
     version_override: Mutex<Option<String>>,
-    /// Phase D — token-bucket rate guard (D.2).
-    rate_guard: guardrails::RateGuard,
     /// Phase D — per-channel slow-mode guard (D.5).
     slow_mode_guard: guardrails::SlowModeGuard,
     /// Phase D — permission pre-flight guard (D.4).
@@ -323,7 +321,6 @@ impl DiscordClient {
             menu_state: Mutex::new(DiscordMenuState::default()),
             gateway_url,
             version_override: Mutex::new(None),
-            rate_guard: guardrails::RateGuard::new(),
             slow_mode_guard: guardrails::SlowModeGuard::new(),
             permission_guard: guardrails::PermissionGuard::new(),
             typing_cap: guardrails::TypingRateCap::new(),
@@ -402,8 +399,66 @@ impl DiscordClient {
             .lock()
             .map(|g| g.clone())
             .unwrap_or_default();
-        h.update_from_rate_guard(&self.rate_guard);
+        // The rate guard lives on the HTTP client — that is the only layer that
+        // can actually gate an outbound request, so it is also the only layer
+        // that ever records a 429.
+        h.update_from_rate_guard(&self.http.rate_guard);
         h
+    }
+
+    /// Phase A — refresh the Discord `client_build_number` used in
+    /// `X-Super-Properties`, the derived `User-Agent`, and gateway IDENTIFY.
+    ///
+    /// Reads the 7-day KV cache (`client.config.discord.build_info`) and only
+    /// re-scrapes when it is stale, then feeds the result into the HTTP client
+    /// and the F.2 health panel (including the F.4 staleness warning).
+    ///
+    /// No-op against Spacebar / self-hosted / test servers: their build numbers
+    /// are unrelated to Discord's, and a scrape of `discord.com` from a test
+    /// run would be both slow and wrong.
+    ///
+    /// Best-effort — a failed scrape falls back to the cache or the floor
+    /// constant and increments `GuardrailStats.scrape_fail`.
+    pub async fn refresh_build_info(&self) {
+        if !self.http.base_url().contains("discord.com") {
+            return;
+        }
+        let kv = poly_host_bridge::Client::new();
+        let kv_reader = &kv;
+        let kv_writer = &kv;
+        let loaded = build_info::load_or_refresh(
+            || async move {
+                kv_reader
+                    .kv_get(build_info::KV_KEY_BUILD_INFO)
+                    .await
+                    .ok()
+                    .flatten()
+                    .and_then(|v| serde_json::from_value::<build_info::BuildInfo>(v).ok())
+            },
+            |info: build_info::BuildInfo| async move {
+                if let Ok(value) = serde_json::to_value(&info) {
+                    let _set = kv_writer.kv_set(build_info::KV_KEY_BUILD_INFO, value).await;
+                }
+            },
+            false,
+        )
+        .await;
+
+        if loaded.scrape_failed {
+            self.http.counters.inc_scrape_fail(
+                loaded.failure_reason.as_deref().unwrap_or("unknown"),
+            );
+        }
+        self.http.apply_build_info(&loaded.info);
+
+        let stale = build_info::check_build_staleness(&loaded.info);
+        if let Ok(mut health) = self.discord_health.lock() {
+            health.update_build_info(
+                self.http.build_number_in_use(),
+                loaded.info.scraped_at,
+                stale,
+            );
+        }
     }
 
     /// F.1 — Return a snapshot of all telemetry counters for the "Backend health" panel.
@@ -419,8 +474,7 @@ impl DiscordClient {
     pub fn nitro_tier(&self) -> nitro::NitroTier {
         self.account_info
             .lock()
-            .map(|info| info.tier())
-            .unwrap_or(nitro::NitroTier::None)
+            .map_or(nitro::NitroTier::None, |info| info.tier())
     }
 
     fn discord_user_to_poly(&self, u: api::DiscordUser) -> User {
@@ -525,7 +579,11 @@ impl DiscordClient {
     /// Handles both regular channels and thread/forum channels — sets
     /// `thread_metadata`, `parent_channel_id`, and `forum_tags` as appropriate.
     fn discord_channel_to_poly(&self, ch: api::DiscordChannel, server_id: &str) -> Channel {
-        let _ = &self; // required by method signature but body uses only associated functions
+        // D.5 — cache the channel's real slow-mode interval so the send path can
+        // enforce it client-side instead of letting Discord answer with a 429
+        // (every 429 counts toward the 10k-invalid-requests/10 min IP-ban budget).
+        self.slow_mode_guard
+            .set_rate_limit(&ch.id.to_string(), ch.rate_limit_per_user.unwrap_or(0));
         let channel_type = Self::map_channel_type(ch.channel_type);
         let thread_metadata = ch
             .thread_metadata
@@ -1259,7 +1317,7 @@ impl DiscordClient {
         // Drop the voice session — this signals the encode/decode/WS tasks.
         let mut session = self.voice_session.lock().await;
         if let Some(conn) = session.take() {
-            conn.disconnect().await;
+            conn.disconnect();
         }
         Ok(())
     }
@@ -1290,6 +1348,9 @@ impl DiscordClient {
         let mut session = self.voice_session.lock().await;
         let conn = session.as_mut().ok_or(voice::video::VideoTransportError::WsChannelClosed)?;
 
+        // E.9: share the connection's BandwidthController (not a one-shot copy)
+        // so REMB/TWCC feedback from the decode loop reaches the encoder live,
+        // and share the `_rtpsize` AEAD nonce counter with the audio transport.
         let transport = voice::video::DiscordVideoTransport::start(
             conn.local_ssrc,
             false, // camera
@@ -1299,6 +1360,8 @@ impl DiscordClient {
             conn.ws_out_tx.clone(),
             bridge_base_url,
             frame_rx,
+            conn.bandwidth_ctrl.clone(),
+            std::sync::Arc::clone(&conn.aead_nonce),
         )
         .await?;
 
@@ -1341,6 +1404,8 @@ impl DiscordClient {
             conn.ws_out_tx.clone(),
             bridge_base_url,
             frame_rx,
+            conn.bandwidth_ctrl.clone(),
+            std::sync::Arc::clone(&conn.aead_nonce),
         )
         .await?;
 

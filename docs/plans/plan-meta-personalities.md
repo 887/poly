@@ -1,6 +1,11 @@
 # Plan — Meta-Personalities (Personas Above Accounts)
 
-## Status: ✅ DONE — all phases shipped (A through H + J; commits f1ba6a6e, 59f69e64 + earlier)
+## Status: ✅ SHIPPED — Phases A–H + J complete (commits f1ba6a6e, 59f69e64 + earlier); **Phase I is a future-ideas list, not shipped**
+
+> Phase I (I.1 shared fact pools, I.2 "council mode", I.3 cross-persona conflict
+> detection) is marked 📋 — speculative follow-ups that were never carved into
+> real work packages. They are NOT part of this plan's delivered scope; promote
+> them to their own plan if they are ever wanted.
 
 > **Created:** 2026-04-29
 > **Depends on:** `plan-claude-desktop-agent.md` (shipped Phases A-F: memory, drafts, events, typing, style, catch-me-up)

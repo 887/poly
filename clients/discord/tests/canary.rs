@@ -179,7 +179,7 @@ async fn canary_human_shaped_session_no_429_no_401() {
 #[cfg(not(feature = "discord-canary"))]
 #[test]
 fn canary_requires_discord_canary_feature() {
-    eprintln!(
+    tracing::info!(
         "SKIP — canary tests require `--features discord-canary`. \
          Run with: DISCORD_CANARY_TOKEN=<token> cargo test -p poly-discord \
          --test canary --features discord-canary -- --ignored"

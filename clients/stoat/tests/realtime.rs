@@ -243,3 +243,49 @@ async fn get_token(base_url: &str) -> String {
         .expect("token field")
         .to_string()
 }
+
+/// Stoat authenticates with `x-session-token`, NOT `Authorization: Bearer`.
+///
+/// The wasm32 voice path (`voice_wasm::connect_voice_wasm`, and the WASM arm of
+/// `voice_transport::set_voice_mute`) hand-rolls these requests instead of going
+/// through `StoatHttpClient::authenticated_request`, and used to send a Bearer
+/// header — so every WASM voice join 401'd. This pins the contract those call
+/// sites now follow.
+#[tokio::test]
+async fn join_call_requires_the_session_token_header_not_bearer() {
+    let (base_url, _shutdown) = start_test_server().await;
+    let token = get_token(&base_url).await;
+    let http_client = reqwest::Client::new();
+    let url = format!("{base_url}/channels/CHVOICE001/join_call");
+
+    // Bearer auth is NOT accepted.
+    let bearer = http_client
+        .post(&url)
+        .header("Authorization", format!("Bearer {token}"))
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .expect("bearer join_call request");
+    assert_eq!(
+        bearer.status().as_u16(),
+        401,
+        "Authorization: Bearer must be rejected by Stoat"
+    );
+
+    // `x-session-token` is.
+    let session = http_client
+        .post(&url)
+        .header(poly_stoat::voice_common::SESSION_TOKEN_HEADER, &token)
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .expect("x-session-token join_call request");
+    assert!(
+        session.status().is_success(),
+        "x-session-token join_call should succeed, got {}",
+        session.status()
+    );
+    let body: serde_json::Value = session.json().await.expect("join_call json");
+    assert!(body.get("token").and_then(|v| v.as_str()).is_some());
+    assert!(body.get("url").and_then(|v| v.as_str()).is_some());
+}

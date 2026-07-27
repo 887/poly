@@ -198,7 +198,7 @@ impl IsBackend for LemmyClient {
             let resp = self.http.fetch_posts(community_id).await?;
             let mut messages: Vec<Message> =
                 resp.posts.iter().map(map_post_to_message).collect();
-            messages.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
+            messages.sort_by_key(|m| m.timestamp);
             return Ok(messages);
         }
 
@@ -207,7 +207,7 @@ impl IsBackend for LemmyClient {
             let resp = self.http.fetch_comments(post_id).await?;
             let mut messages: Vec<Message> =
                 resp.comments.iter().map(map_comment_to_message).collect();
-            messages.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
+            messages.sort_by_key(|m| m.timestamp);
             return Ok(messages);
         }
 

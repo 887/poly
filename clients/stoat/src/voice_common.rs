@@ -25,6 +25,15 @@ pub const DEFAULT_VAD_THRESHOLD_DB: f32 = -45.0;
 /// Maximum decoded PCM samples per Opus frame (120ms @ 48kHz mono).
 pub const OPUS_MAX_DECODE_SAMPLES: usize = 5760;
 
+/// The HTTP header Stoat/Revolt authenticates with.
+///
+/// **Not** `Authorization: Bearer` — the session token is sent verbatim in
+/// `x-session-token`. This lives in the cfg-free module so the native HTTP
+/// client (`http.rs`) and the wasm32 voice/video paths (`voice_wasm.rs`,
+/// `voice_transport.rs`) all name the same constant instead of hand-rolling a
+/// header per call site.
+pub const SESSION_TOKEN_HEADER: &str = "x-session-token";
+
 // ── Error type ────────────────────────────────────────────────────────────────
 
 /// Errors produced by the Stoat voice transport.
@@ -210,6 +219,32 @@ pub fn parse_inbound_frame(bytes: &[u8]) -> Option<ParsedFrame<'_>> {
         }
         None
     }
+}
+
+// ── Browser event-loop yield (wasm32 only) ────────────────────────────────────
+
+/// Park the current task for `ms` milliseconds by scheduling a browser
+/// **macrotask** (`setTimeout`).
+///
+/// This is the ONLY sanctioned way for a wasm32 loop in this crate to wait.
+/// `JsFuture::from(Promise::resolve(..)).await` schedules a *microtask*, and the
+/// browser drains the whole microtask queue before returning to the event loop —
+/// so a loop that re-enqueues one every iteration starves rendering, input,
+/// timers and the WASM scheduler. That is the CLAUDE.md "tight CPU loop the
+/// Chrome scheduler can't preempt" hang class, and it wedges the tab across
+/// reloads.
+///
+/// If `window` or `setTimeout` is unavailable the future never resolves, which
+/// parks the task — still strictly better than spinning the main thread.
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+pub async fn sleep_ms(ms: i32) {
+    let Some(window) = web_sys::window() else {
+        return;
+    };
+    let promise = js_sys::Promise::new(&mut |resolve, _reject| {
+        let _timeout_id = window.set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, ms);
+    });
+    let _resolved = wasm_bindgen_futures::JsFuture::from(promise).await;
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────

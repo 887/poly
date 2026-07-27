@@ -34,7 +34,7 @@ mod register_link;
 use register_link::RegisterLink;
 
 use crate::state::BatchedSignal;
-use crate::client_manager::{BackendHandle, ClientManager};
+use crate::client_manager::{BackendHandle, BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::state::{AccountSessions, ChatLists};
 use crate::ui::actions::{ActionCx, UiAction};
@@ -258,8 +258,8 @@ fn build_on_complete_inner_with(
             // Build server→account map (async, no Signal lock held).
             let mut server_map = HashMap::new();
             {
-                let guard = backend_handle.read().await;
-                if let Ok(servers) = guard.get_servers().await {
+                if let Ok(guard) = backend_handle.read_with_timeout(std::time::Duration::from_secs(5)).await
+                    && let Ok(servers) = guard.get_servers().await {
                     for srv in &servers {
                         server_map.insert(srv.id.clone(), account_id.clone());
                     }
@@ -278,8 +278,8 @@ fn build_on_complete_inner_with(
             }
             // Phase 3: async data load — no Signal lock held during awaits.
             {
-                let guard = backend_handle.read().await;
-                if let Ok(servers) = guard.get_servers().await {
+                if let Ok(guard) = backend_handle.read_with_timeout(std::time::Duration::from_secs(5)).await
+                    && let Ok(servers) = guard.get_servers().await {
                     let cache_records: Vec<crate::storage::OfflineServerRecord> =
                         servers
                             .iter()
@@ -309,8 +309,8 @@ fn build_on_complete_inner_with(
                     }
                 }
             }
-            {
-                let guard = backend_handle.read().await;
+            'hydrate: {
+                let Ok(guard) = backend_handle.read_with_timeout(std::time::Duration::from_secs(5)).await else { break 'hydrate; };
                 let (dms, groups) = if let Some(dg) = guard.as_dms_and_groups() {
                     (dg.get_dm_channels().await.ok(), dg.get_groups().await.ok())
                 } else {
@@ -458,8 +458,8 @@ fn build_on_complete_reauth(
             // Rebuild server→account map (may have changed if server list did).
             let mut server_map = HashMap::new();
             {
-                let guard = backend_handle.read().await;
-                if let Ok(servers) = guard.get_servers().await {
+                if let Ok(guard) = backend_handle.read_with_timeout(std::time::Duration::from_secs(5)).await
+                    && let Ok(servers) = guard.get_servers().await {
                     for srv in &servers {
                         server_map.insert(srv.id.clone(), account_id.clone());
                     }

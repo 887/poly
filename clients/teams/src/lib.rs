@@ -20,6 +20,10 @@ mod http;
 pub mod signup;
 #[cfg(feature = "native")]
 pub mod types;
+/// Cross-target async sleep — see [`timing`] for why `tokio::time` is banned
+/// on the browser build.
+#[cfg(feature = "native")]
+mod timing;
 /// Teams voice stub — see [`voice::TeamsVoiceClient`] and Phase I of
 /// `docs/plans/plan-voice-video-calls.md`.
 pub mod voice;

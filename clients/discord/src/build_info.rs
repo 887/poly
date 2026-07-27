@@ -204,6 +204,21 @@ const SEVEN_DAYS_SECS: u64 = 7 * 24 * 3600;
 
 // ── load_or_refresh ───────────────────────────────────────────────────────────
 
+/// Outcome of [`load_or_refresh`].
+///
+/// Carries whether the scrape leg actually failed so the caller can feed
+/// `GuardrailCounters::inc_scrape_fail` — returning a bare `BuildInfo` made
+/// that indistinguishable from a cache hit.
+#[derive(Debug, Clone)]
+pub struct BuildInfoLoad {
+    /// The build info to use (fresh scrape, cache hit, or floor constant).
+    pub info: BuildInfo,
+    /// `true` when a scrape was attempted and failed.
+    pub scrape_failed: bool,
+    /// Failure reason, for telemetry. `None` unless `scrape_failed`.
+    pub failure_reason: Option<String>,
+}
+
 /// Load cached `BuildInfo` from `client_config_store`, or scrape fresh if
 /// stale / absent.  Always returns *something* — on total failure, returns the
 /// floor constant.
@@ -217,7 +232,7 @@ pub async fn load_or_refresh<G, S, GF, SF>(
     kv_get: G,
     kv_set: S,
     force: bool,
-) -> BuildInfo
+) -> BuildInfoLoad
 where
     G: FnOnce() -> GF,
     GF: std::future::Future<Output = Option<BuildInfo>>,
@@ -236,7 +251,11 @@ where
                 age_hours = age.saturating_div(3600),
                 "using cached build info"
             );
-            return info.clone();
+            return BuildInfoLoad {
+                info: info.clone(),
+                scrape_failed: false,
+                failure_reason: None,
+            };
         }
     }
 
@@ -250,16 +269,25 @@ where
                 "scraped fresh Discord build info"
             );
             kv_set(fresh.clone()).await;
-            fresh
+            BuildInfoLoad {
+                info: fresh,
+                scrape_failed: false,
+                failure_reason: None,
+            }
         }
         Err(e) => {
+            let reason = e.to_string();
             tracing::warn!(
                 target: "poly_discord::build_info",
-                error = %e,
+                error = %reason,
                 "Discord build-number scrape failed; falling back"
             );
             // Return cached if any; otherwise floor.
-            cached.unwrap_or_default()
+            BuildInfoLoad {
+                info: cached.unwrap_or_default(),
+                scrape_failed: true,
+                failure_reason: Some(reason),
+            }
         }
     }
 }
@@ -274,8 +302,7 @@ fn now_secs() -> u64 {
     {
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0)
+            .map_or(0, |d| d.as_secs())
     }
     #[cfg(not(feature = "native"))]
     {
@@ -400,8 +427,7 @@ mod tests {
         // A build info scraped just now is not stale.
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
+            .map_or(0, |d| d.as_secs());
         let info = BuildInfo {
             build_number: LATEST_KNOWN_STABLE_BUILD,
             version_hash: "abc123".to_string(),
@@ -427,7 +453,7 @@ mod tests {
         // In tests run before 2026-06-10 this will be false → warning suppressed.
         // That's correct behaviour: if the floor is fresh, we don't warn.
         // This test verifies the logic compiles and runs without panic.
-        let _ = check_build_staleness(&info);
+        let _stale = check_build_staleness(&info);
     }
 
     #[cfg(feature = "native")]
@@ -435,6 +461,6 @@ mod tests {
     fn check_build_staleness_zero_scraped_at_no_crash() {
         // The default BuildInfo (scraped_at = 0) must not panic.
         let info = BuildInfo::default();
-        let _ = check_build_staleness(&info);
+        let _stale = check_build_staleness(&info);
     }
 }

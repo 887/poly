@@ -293,13 +293,13 @@ and Teams (Phase D.3 of `docs/plans/plan-host-sandbox-impl.md`).
 
 ```bash
 # Enable captcha-sandbox on Discord
-poly-cli client-settings set-mechanism \
+poly-cli call client_settings_set_mechanism \
   --backend_id=discord \
   --mechanism_id=captcha-sandbox \
   --enabled=true
 
 # Disable it again
-poly-cli client-settings set-mechanism \
+poly-cli call client_settings_set_mechanism \
   --backend_id=discord \
   --mechanism_id=captcha-sandbox \
   --enabled=false

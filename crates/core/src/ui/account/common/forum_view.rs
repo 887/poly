@@ -3,7 +3,7 @@
 //! `ChannelType::HackerNews` channels.
 
 use crate::state::BatchedSignal;
-use crate::client_manager::ClientManager;
+use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::state::chat_data::user_color;
 use crate::state::{ChatLists, VoiceState, PostsOrComments, use_spawn_once};
 use crate::ui::account::common::forum_composer::{ComposerMode, ForumComposer, SubmitPayload};
@@ -453,11 +453,11 @@ pub fn ForumPostView(channel_id: String, post_id: String) -> Element {
             }
 
             // Fetch comments (same in both paths).
-            if let Some(b) = backend {
+            'comments: { let Some(b) = backend else { break 'comments; };
                 let comment_channel = format!("hn-post-{pid}");
-                let result = b
-                    .read()
-                    .await
+                // Hang class #4 — bounded read (was a multi-line `b.read().await`).
+                let Ok(bg) = b.read_with_timeout(std::time::Duration::from_secs(5)).await else { break 'comments; };
+                let result = bg
                     .get_messages(
                         &comment_channel,
                         MessageQuery { limit: Some(200), ..Default::default() },

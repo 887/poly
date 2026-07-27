@@ -86,7 +86,7 @@ impl TestServer {
         // test-discord which would otherwise hit the guard before reaching
         // the mock's mutating endpoints.
         for guild in ["100", "101"] {
-            let _ = client.get_my_permissions(guild, None).await;
+            let _perms = client.get_my_permissions(guild, None).await;
         }
         client
     }

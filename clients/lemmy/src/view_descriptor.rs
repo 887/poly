@@ -8,7 +8,7 @@ use poly_client::{ClientResult, SidebarDeclaration, SidebarLayoutKind, ActionOut
 use crate::LemmyClient;
 use crate::api::{
     cursor_to_page, map_comment_to_message, map_community_to_viewrow, map_post_to_viewrow,
-    next_page_cursor,
+    next_page_cursor, LOCAL_POST_ID_PREFIX,
 };
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
@@ -196,15 +196,15 @@ impl poly_client::ViewDescriptorBackend for LemmyClient {
                 .replace('"', "&quot;")
         }
 
+        // Row ids carry the LOCAL post id (see `LOCAL_POST_ID_PREFIX`). Never
+        // recover an id from a URL's trailing segment: for a federated post
+        // that segment is the ORIGIN instance's primary key, and resolving it
+        // against our own instance silently returns an unrelated post.
         let post_id = row_id
+            .strip_prefix(LOCAL_POST_ID_PREFIX)
+            .unwrap_or(row_id)
             .parse::<i64>()
             .ok()
-            .or_else(|| {
-                row_id
-                    .rsplit('/')
-                    .next()
-                    .and_then(|last| last.parse::<i64>().ok())
-            })
             .ok_or_else(|| {
                 ClientError::NotFound(format!("get_view_detail: cannot parse row id: {row_id}"))
             })?;

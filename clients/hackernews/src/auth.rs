@@ -69,6 +69,24 @@ pub async fn login(
     Ok(cookie)
 }
 
+/// Recover the HN username from a persisted `user=` session cookie.
+///
+/// The cookie's `name=value` form is `user=<username>&<opaque-token>` (see
+/// [`cookies::extract_user_cookie`]), so the username is everything between
+/// `user=` and the first `&`. Returns `None` for anything that is not a
+/// populated `user=` cookie — the caller then has no identity to restore and
+/// must fall back to a guest session.
+#[must_use]
+pub fn username_from_cookie(cookie: &str) -> Option<&str> {
+    let value = cookie.trim().strip_prefix("user=")?;
+    let username = value.split('&').next().unwrap_or("");
+    if username.is_empty() {
+        None
+    } else {
+        Some(username)
+    }
+}
+
 /// Fetch the per-form `hmac` CSRF token for replying to `parent_id`.
 /// HN renders this token freshly on each page load and binds it to the
 /// authenticated user.
@@ -201,6 +219,21 @@ fn percent_encode(s: &str) -> String {
 #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn username_from_cookie_parses_the_login_cookie() {
+        assert_eq!(
+            username_from_cookie("user=alice&AAAABBBBCCCC"),
+            Some("alice")
+        );
+        // No opaque tail (older HN responses) still yields the username.
+        assert_eq!(username_from_cookie("user=bob"), Some("bob"));
+        // HN's logout cookie and anything that isn't a user cookie carry no
+        // identity — the caller must fall back to a guest session.
+        assert_eq!(username_from_cookie("user="), None);
+        assert_eq!(username_from_cookie(""), None);
+        assert_eq!(username_from_cookie("session=xyz"), None);
+    }
 
     #[test]
     fn extract_hmac_finds_field() {

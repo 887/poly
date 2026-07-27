@@ -95,7 +95,7 @@ fn build_saved_sources(items: &[SavedPinnedItem]) -> Vec<SavedSourceSummary> {
         });
     }
 
-    sources.sort_by(|a, b| b.latest_timestamp.cmp(&a.latest_timestamp));
+    sources.sort_by_key(|s| std::cmp::Reverse(s.latest_timestamp));
     sources
 }
 
@@ -194,7 +194,7 @@ pub fn SavedItemsView() -> Element {
                     }
                 }
 
-                items.sort_by(|a, b| b.hit.message.timestamp.cmp(&a.hit.message.timestamp));
+                items.sort_by_key(|i| std::cmp::Reverse(i.hit.message.timestamp));
                 } // end if let Some(mb)
                 Ok(items)
             }).await.unwrap_or_default()

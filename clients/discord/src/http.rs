@@ -12,7 +12,7 @@ use crate::api::{
     DiscordUser,
 };
 use crate::super_properties::SuperProperties;
-use crate::guardrails::GuardrailCounters;
+use crate::guardrails::{GuardrailCounters, RateGuard};
 
 /// Default User-Agent — the browser-style UA that the Linux Discord desktop
 /// client sends.  This is NOT a bot UA; it must never contain "DiscordBot".
@@ -39,6 +39,13 @@ pub struct DiscordHttpClient {
     /// so the same `Arc<Mutex<GuardrailStats>>` is exposed via
     /// `DiscordClient::guardrail_stats()`.
     pub(crate) counters: GuardrailCounters,
+    /// Phase D.2 — outbound token-bucket rate guard.
+    ///
+    /// Lives here, not on `DiscordClient`, because this is the only type that
+    /// can actually gate an outbound request; owning it one level up left it
+    /// permanently unconsulted (and `DiscordHealth.recent_429_count` stuck at 0
+    /// because nothing ever called `record_429`).
+    pub(crate) rate_guard: RateGuard,
 }
 
 impl DiscordHttpClient {
@@ -54,34 +61,45 @@ impl DiscordHttpClient {
             super_props: Arc::new(Mutex::new(props)),
             ua_override: Arc::new(Mutex::new(None)),
             counters: GuardrailCounters::new(),
+            rate_guard: RateGuard::new(),
         }
     }
 
-    /// Construct with a pre-scraped `BuildInfo` (Phase A.5).
+    /// Adopt a freshly scraped / cached `BuildInfo` (Phase A.5).
     ///
-    /// Speculative: kept for the planned `DiscordClientBuilder::scrape_first()`
-    /// path that pre-scrapes before constructing the HTTP client.  The current
-    /// builder path scrapes lazily inside `set_token`, so this is unused today.
-    // lint-allow-unused: Phase A.5 hot-swap constructor — kept for the planned scrape-first builder path.
-    #[allow(dead_code)]
-    #[must_use]
-    pub fn with_build_info(
-        base_url: String,
-        build_info: &crate::build_info::BuildInfo,
-        version_override: Option<String>,
-    ) -> Self {
-        let mut props = SuperProperties::for_platform(build_info, "en-US");
-        if let Some(ref ua) = version_override {
+    /// Rebuilds `super_props` from `build_info` — so `X-Super-Properties` and
+    /// the derived `User-Agent` both carry the real `client_build_number` —
+    /// and re-applies any explicit UA override on top.
+    ///
+    /// Called by `DiscordClient::refresh_build_info` after
+    /// `build_info::load_or_refresh`.  Before this existed the scraper had no
+    /// call site at all and every request shipped the hard-coded floor build
+    /// number forever, which is exactly the stale-client signal Discord flags.
+    pub fn apply_build_info(&self, build_info: &crate::build_info::BuildInfo) {
+        let locale = self
+            .super_props
+            .lock()
+            .ok()
+            .map_or_else(|| "en-US".to_string(), |p| p.system_locale.clone());
+        let mut props = SuperProperties::for_platform(build_info, &locale);
+        if let Ok(lock) = self.ua_override.lock()
+            && let Some(ref ua) = *lock
+        {
             props.apply_ua_override(ua);
         }
-        Self {
-            base_url,
-            token: Mutex::new(None),
-            http: HttpClient::new(),
-            super_props: Arc::new(Mutex::new(props)),
-            ua_override: Arc::new(Mutex::new(version_override)),
-            counters: GuardrailCounters::new(),
+        if let Ok(mut lock) = self.super_props.lock() {
+            *lock = props;
         }
+    }
+
+    /// The `client_build_number` currently being advertised.
+    pub fn build_number_in_use(&self) -> u32 {
+        self.super_props
+            .lock()
+            .ok()
+            .map_or(crate::build_info::LATEST_KNOWN_STABLE_BUILD, |p| {
+                p.client_build_number
+            })
     }
 
     pub fn base_url(&self) -> &str {
@@ -166,19 +184,6 @@ impl DiscordHttpClient {
             )
     }
 
-    /// Hot-swap the `SuperProperties` (e.g. after a background build refresh).
-    ///
-    /// Speculative: the background-refresh task that would call this lives in
-    /// the deferred Phase A.6 plan (periodic re-scrape).  Kept so the refresh
-    /// loop can land without re-introducing a private helper.
-    // lint-allow-unused: Phase A.6 background-refresh hook — not wired yet.
-    #[allow(dead_code)]
-    pub fn update_super_properties(&self, new_props: SuperProperties) {
-        if let Ok(mut lock) = self.super_props.lock() {
-            *lock = new_props;
-        }
-    }
-
     /// Apply version headers (User-Agent + X-Super-Properties) to a request.
     ///
     /// Both values are derived from `super_props` — single source of truth
@@ -230,67 +235,121 @@ impl DiscordHttpClient {
         format!("{}{}", self.base_url, path)
     }
 
-    /// D.7 + F.1 — central response handler.
+    /// Default `PermissionDenied` message for read routes.
+    const FORBIDDEN_READ: &'static str =
+        "You need the VIEW_CHANNEL permission to read this channel.";
+
+    /// Returns `true` when this client is talking to real Discord infrastructure.
     ///
-    /// Maps HTTP status codes to `ClientError` variants and emits telemetry via
-    /// `counters`.  Specifically:
-    /// - 429: emits a `tracing::warn!` via `counters.inc_429` with the
-    ///   `Retry-After` value; returns `ClientError::Network("HTTP 429 retry-after=Ns")`.
-    /// - 401: increments `counters.inc_401`; returns `ClientError::AuthFailed`.
-    /// - 403: increments `counters.inc_403`; returns `ClientError::PermissionDenied`.
-    /// - 404: increments `counters.inc_404`; returns `ClientError::NotFound`.
-    /// - 5xx: increments `counters.inc_5xx`; returns `ClientError::Network`.
-    fn map_error_status(
-        counters: &GuardrailCounters,
-        status: u16,
-        retry_after_header: Option<u64>,
+    /// The anti-ban budget (10 000 invalid requests / 10 min → IP ban) only
+    /// exists on Discord's own hosts.  Spacebar / self-hosted / test servers
+    /// have their own limits and must not be throttled by the Discord token
+    /// bucket — otherwise the local test server would trip the guard.
+    fn targets_real_discord(&self) -> bool {
+        self.base_url.contains("discord.com") || self.base_url.contains("discordapp.com")
+    }
+
+    /// Coarse rate-limit bucket key for `path` (query string stripped).
+    fn bucket_key(path: &str) -> &str {
+        path.split('?').next().unwrap_or(path)
+    }
+
+    /// D.2 — pre-flight token-bucket gate applied to every outbound request.
+    ///
+    /// Previously `RateGuard::check` had no production call site at all, so the
+    /// 10-burst / 5-per-second budget was never enforced and
+    /// `GuardrailStats.rate_guard_trips` was permanently 0.
+    fn guard_outbound(&self, _path: &str) -> Result<(), ClientError> {
+        if !self.targets_real_discord() {
+            return Ok(());
+        }
+        if let Err(e) = self.rate_guard.check() {
+            self.counters.inc_rate_guard_trip();
+            return Err(e);
+        }
+        Ok(())
+    }
+
+    /// Begin an outbound request: rate gate → version headers → auth header.
+    ///
+    /// Single choke point so no helper can accidentally skip the guard or the
+    /// anti-ban headers (`login` is the one deliberate exception — it must not
+    /// send an `Authorization` header).
+    fn begin(
+        &self,
         path: &str,
-    ) -> ClientError {
-        match status {
+        req: poly_host_bridge::http::RequestBuilder,
+    ) -> Result<poly_host_bridge::http::RequestBuilder, ClientError> {
+        self.guard_outbound(path)?;
+        Ok(self
+            .apply_version_headers(req)
+            .header("Authorization", self.token_header()))
+    }
+
+    /// D.7 + F.1 + D.2 — the single place where a response status becomes a result.
+    ///
+    /// Every helper routes through here, so 401/403/404/429/5xx telemetry, the
+    /// per-bucket exponential 429 back-off, and the route-specific
+    /// `PermissionDenied` message all live in one place.  Fourteen helpers used
+    /// to match statuses inline without ever touching `counters`, which meant a
+    /// throttled kick/ban was invisible to the health panel and its
+    /// `Retry-After` header was discarded.
+    ///
+    /// `forbidden_msg` is the human-readable message used for 403 on this route.
+    fn classify(
+        &self,
+        resp: &poly_host_bridge::http::Response,
+        path: &str,
+        forbidden_msg: &str,
+    ) -> Result<(), ClientError> {
+        let bucket = Self::bucket_key(path);
+        if resp.status().is_success() {
+            self.counters.inc_2xx();
+            self.rate_guard.record_success(bucket);
+            return Ok(());
+        }
+        let status = resp.status().as_u16();
+        let retry_after = resp
+            .headers()
+            .get("Retry-After")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|s| s.parse::<u64>().ok());
+        Err(match status {
             429 => {
-                let secs = retry_after_header.unwrap_or(1);
-                counters.inc_429(path, secs);
+                // Feed the exponential per-bucket back-off and report the
+                // effective (multiplied) delay, not the raw header value.
+                let backoff = self.rate_guard.record_429(bucket, retry_after.unwrap_or(1));
+                let secs = backoff.as_secs();
+                self.counters.inc_429(path, secs);
                 ClientError::Network(format!("HTTP 429 retry-after={secs}s"))
             }
             401 => {
-                counters.inc_401();
+                self.counters.inc_401();
                 ClientError::AuthFailed("Unauthorized".into())
             }
             403 => {
-                counters.inc_403(path);
-                ClientError::PermissionDenied(
-                    "You need the VIEW_CHANNEL permission to read this channel.".into(),
-                )
+                self.counters.inc_403(path);
+                ClientError::PermissionDenied(forbidden_msg.to_string())
             }
             404 => {
-                counters.inc_404();
+                self.counters.inc_404();
                 ClientError::NotFound(format!("{path} not found"))
             }
             s if s >= 500 => {
-                counters.inc_5xx(s);
+                self.counters.inc_5xx(s);
                 ClientError::Network(format!("HTTP {s}"))
             }
-            _ => ClientError::Network(format!("HTTP {status}")),
-        }
+            s => ClientError::Network(format!("HTTP {s}")),
+        })
     }
 
     async fn get<T: serde::de::DeserializeOwned>(&self, path: &str) -> Result<T, ClientError> {
         let resp = self
-            .apply_version_headers(self.http.get(self.api_url(path)))
-            .header("Authorization", self.token_header())
+            .begin(path, self.http.get(self.api_url(path)))?
             .send()
             .await
             .map_err(|e| ClientError::Network(e.to_string()))?;
-        if !resp.status().is_success() {
-            let status = resp.status().as_u16();
-            let retry_after = resp
-                .headers()
-                .get("Retry-After")
-                .and_then(|v| v.to_str().ok())
-                .and_then(|s| s.parse::<u64>().ok());
-            return Err(Self::map_error_status(&self.counters, status, retry_after, path));
-        }
-        self.counters.inc_2xx();
+        self.classify(&resp, path, Self::FORBIDDEN_READ)?;
         resp.json::<T>().await.map_err(|e| ClientError::Internal(e.to_string()))
     }
 
@@ -304,22 +363,12 @@ impl DiscordHttpClient {
         body: &B,
     ) -> Result<T, ClientError> {
         let resp = self
-            .apply_version_headers(self.http.post(self.api_url(path)))
-            .header("Authorization", self.token_header())
+            .begin(path, self.http.post(self.api_url(path)))?
             .json(body)
             .send()
             .await
             .map_err(|e| ClientError::Network(e.to_string()))?;
-        if !resp.status().is_success() {
-            let status = resp.status().as_u16();
-            let retry_after = resp
-                .headers()
-                .get("Retry-After")
-                .and_then(|v| v.to_str().ok())
-                .and_then(|s| s.parse::<u64>().ok());
-            return Err(Self::map_error_status(&self.counters, status, retry_after, path));
-        }
-        self.counters.inc_2xx();
+        self.classify(&resp, path, Self::FORBIDDEN_READ)?;
         resp.json::<T>().await.map_err(|e| ClientError::Internal(e.to_string()))
     }
 
@@ -448,21 +497,16 @@ impl DiscordHttpClient {
     ) -> Result<DiscordGuild, ClientError> {
         let path = format!("/api/v10/guilds/{guild_id}");
         let resp = self
-            .apply_version_headers(self.http.patch(self.api_url(&path)))
-            .header("Authorization", self.token_header())
+            .begin(&path, self.http.patch(self.api_url(&path)))?
             .json(&body)
             .send()
             .await
             .map_err(|e| ClientError::Network(e.to_string()))?;
-        if !resp.status().is_success() {
-            let status = resp.status().as_u16();
-            if status == 403 {
-                return Err(ClientError::PermissionDenied(
-                    "Guild banner requires the BANNER feature (Boost Tier 2 or higher).".into(),
-                ));
-            }
-            return Err(ClientError::Network(format!("PATCH guild HTTP {status}")));
-        }
+        self.classify(
+            &resp,
+            &path,
+            "Guild banner requires the BANNER feature (Boost Tier 2 or higher).",
+        )?;
         resp.json::<DiscordGuild>()
             .await
             .map_err(|e| ClientError::Internal(e.to_string()))
@@ -473,17 +517,11 @@ impl DiscordHttpClient {
     pub async fn trigger_typing(&self, channel_id: &str) -> Result<(), ClientError> {
         let path = format!("/api/v10/channels/{channel_id}/typing");
         let resp = self
-            .apply_version_headers(self.http.post(self.api_url(&path)))
-            .header("Authorization", self.token_header())
+            .begin(&path, self.http.post(self.api_url(&path)))?
             .send()
             .await
             .map_err(|e| ClientError::Network(e.to_string()))?;
-        let status = resp.status().as_u16();
-        if status == 204 || resp.status().is_success() {
-            Ok(())
-        } else {
-            Err(ClientError::Network(format!("trigger_typing returned HTTP {status}")))
-        }
+        self.classify(&resp, &path, "Missing SEND_MESSAGES permission")
     }
 
     /// Fetch messages from a thread channel. Uses the same messages endpoint —
@@ -528,20 +566,12 @@ impl DiscordHttpClient {
         reason: Option<&str>,
     ) -> Result<(), ClientError> {
         let path = format!("/api/v10/guilds/{guild_id}/members/{user_id}");
-        let mut req = self
-            .apply_version_headers(self.http.delete(self.api_url(&path)))
-            .header("Authorization", self.token_header());
+        let mut req = self.begin(&path, self.http.delete(self.api_url(&path)))?;
         if let Some(r) = reason {
             req = req.header("X-Audit-Log-Reason", r);
         }
         let resp = req.send().await.map_err(|e| ClientError::Network(e.to_string()))?;
-        let status = resp.status().as_u16();
-        match status {
-            204 | 200 => Ok(()),
-            401 => Err(ClientError::AuthFailed("Unauthorized".into())),
-            403 => Err(ClientError::PermissionDenied("Missing KICK_MEMBERS permission".into())),
-            _ => Err(ClientError::Network(format!("kick_member HTTP {status}"))),
-        }
+        self.classify(&resp, &path, "Missing KICK_MEMBERS permission")
     }
 
     /// `PUT /guilds/{guild_id}/bans/{user_id}` — permanently ban a member.
@@ -565,20 +595,13 @@ impl DiscordHttpClient {
             );
         }
         let mut req = self
-            .apply_version_headers(self.http.put(self.api_url(&path)))
-            .header("Authorization", self.token_header())
+            .begin(&path, self.http.put(self.api_url(&path)))?
             .json(&body);
         if let Some(r) = reason {
             req = req.header("X-Audit-Log-Reason", r);
         }
         let resp = req.send().await.map_err(|e| ClientError::Network(e.to_string()))?;
-        let status = resp.status().as_u16();
-        match status {
-            204 | 200 => Ok(()),
-            401 => Err(ClientError::AuthFailed("Unauthorized".into())),
-            403 => Err(ClientError::PermissionDenied("Missing BAN_MEMBERS permission".into())),
-            _ => Err(ClientError::Network(format!("ban_member HTTP {status}"))),
-        }
+        self.classify(&resp, &path, "Missing BAN_MEMBERS permission")
     }
 
     /// `DELETE /guilds/{guild_id}/bans/{user_id}` — unban a member.
@@ -590,18 +613,11 @@ impl DiscordHttpClient {
     ) -> Result<(), ClientError> {
         let path = format!("/api/v10/guilds/{guild_id}/bans/{user_id}");
         let resp = self
-            .apply_version_headers(self.http.delete(self.api_url(&path)))
-            .header("Authorization", self.token_header())
+            .begin(&path, self.http.delete(self.api_url(&path)))?
             .send()
             .await
             .map_err(|e| ClientError::Network(e.to_string()))?;
-        let status = resp.status().as_u16();
-        match status {
-            204 | 200 => Ok(()),
-            401 => Err(ClientError::AuthFailed("Unauthorized".into())),
-            403 => Err(ClientError::PermissionDenied("Missing BAN_MEMBERS permission".into())),
-            _ => Err(ClientError::Network(format!("unban_member HTTP {status}"))),
-        }
+        self.classify(&resp, &path, "Missing BAN_MEMBERS permission")
     }
 
     /// `GET /guilds/{guild_id}/bans` — list all bans (paginated; fetches first page).
@@ -620,21 +636,12 @@ impl DiscordHttpClient {
         let path = format!("/api/v10/guilds/{guild_id}/members/{user_id}");
         let body = serde_json::json!({ "communication_disabled_until": until_iso8601 });
         let resp = self
-            .apply_version_headers(self.http.patch(self.api_url(&path)))
-            .header("Authorization", self.token_header())
+            .begin(&path, self.http.patch(self.api_url(&path)))?
             .json(&body)
             .send()
             .await
             .map_err(|e| ClientError::Network(e.to_string()))?;
-        let status = resp.status().as_u16();
-        match status {
-            200 | 204 => Ok(()),
-            401 => Err(ClientError::AuthFailed("Unauthorized".into())),
-            403 => Err(ClientError::PermissionDenied(
-                "Missing MODERATE_MEMBERS permission".into(),
-            )),
-            _ => Err(ClientError::Network(format!("set_member_timeout HTTP {status}"))),
-        }
+        self.classify(&resp, &path, "Missing MODERATE_MEMBERS permission")
     }
 
     /// `DELETE /channels/{channel_id}/messages/{message_id}` — delete a single message.
@@ -646,21 +653,11 @@ impl DiscordHttpClient {
     ) -> Result<(), ClientError> {
         let path = format!("/api/v10/channels/{channel_id}/messages/{message_id}");
         let resp = self
-            .apply_version_headers(self.http.delete(self.api_url(&path)))
-            .header("Authorization", self.token_header())
+            .begin(&path, self.http.delete(self.api_url(&path)))?
             .send()
             .await
             .map_err(|e| ClientError::Network(e.to_string()))?;
-        let status = resp.status().as_u16();
-        match status {
-            204 | 200 => Ok(()),
-            401 => Err(ClientError::AuthFailed("Unauthorized".into())),
-            403 => Err(ClientError::PermissionDenied(
-                "Missing MANAGE_MESSAGES permission".into(),
-            )),
-            404 => Err(ClientError::NotFound("message not found".into())),
-            _ => Err(ClientError::Network(format!("delete_message HTTP {status}"))),
-        }
+        self.classify(&resp, &path, "Missing MANAGE_MESSAGES permission")
     }
 
     /// `PATCH /channels/{channel_id}` — update channel metadata.
@@ -672,21 +669,12 @@ impl DiscordHttpClient {
     ) -> Result<DiscordChannel, ClientError> {
         let path = format!("/api/v10/channels/{channel_id}");
         let resp = self
-            .apply_version_headers(self.http.patch(self.api_url(&path)))
-            .header("Authorization", self.token_header())
+            .begin(&path, self.http.patch(self.api_url(&path)))?
             .json(&body)
             .send()
             .await
             .map_err(|e| ClientError::Network(e.to_string()))?;
-        if !resp.status().is_success() {
-            let status = resp.status().as_u16();
-            if status == 403 {
-                return Err(ClientError::PermissionDenied(
-                    "Missing MANAGE_CHANNELS permission".into(),
-                ));
-            }
-            return Err(ClientError::Network(format!("patch_channel HTTP {status}")));
-        }
+        self.classify(&resp, &path, "Missing MANAGE_CHANNELS permission")?;
         resp.json::<DiscordChannel>()
             .await
             .map_err(|e| ClientError::Internal(e.to_string()))
@@ -701,21 +689,12 @@ impl DiscordHttpClient {
     ) -> Result<(), ClientError> {
         let path = format!("/api/v10/guilds/{guild_id}/channels");
         let resp = self
-            .apply_version_headers(self.http.patch(self.api_url(&path)))
-            .header("Authorization", self.token_header())
+            .begin(&path, self.http.patch(self.api_url(&path)))?
             .json(ordering)
             .send()
             .await
             .map_err(|e| ClientError::Network(e.to_string()))?;
-        let status = resp.status().as_u16();
-        match status {
-            204 | 200 => Ok(()),
-            401 => Err(ClientError::AuthFailed("Unauthorized".into())),
-            403 => Err(ClientError::PermissionDenied(
-                "Missing MANAGE_CHANNELS permission".into(),
-            )),
-            _ => Err(ClientError::Network(format!("reorder_channels HTTP {status}"))),
-        }
+        self.classify(&resp, &path, "Missing MANAGE_CHANNELS permission")
     }
 
     /// `GET /guilds/{guild_id}/audit-logs` — fetch recent audit log entries.
@@ -757,38 +736,23 @@ impl DiscordHttpClient {
         let path = format!("/api/v10/users/@me/relationships/{user_id}");
         let body = serde_json::json!({ "type": relationship_type });
         let resp = self
-            .apply_version_headers(self.http.put(self.api_url(&path)))
-            .header("Authorization", self.token_header())
+            .begin(&path, self.http.put(self.api_url(&path)))?
             .json(&body)
             .send()
             .await
             .map_err(|e| ClientError::Network(e.to_string()))?;
-        let status = resp.status().as_u16();
-        match status {
-            200 | 201 | 204 => Ok(()),
-            401 => Err(ClientError::AuthFailed("Unauthorized".into())),
-            403 => Err(ClientError::PermissionDenied("Forbidden".into())),
-            _ => Err(ClientError::Network(format!("put_relationship HTTP {status}"))),
-        }
+        self.classify(&resp, &path, "Forbidden")
     }
 
     /// `DELETE /users/@me/relationships/{user_id}` — remove friend or unblock.
     pub async fn delete_relationship(&self, user_id: &str) -> Result<(), ClientError> {
         let path = format!("/api/v10/users/@me/relationships/{user_id}");
         let resp = self
-            .apply_version_headers(self.http.delete(self.api_url(&path)))
-            .header("Authorization", self.token_header())
+            .begin(&path, self.http.delete(self.api_url(&path)))?
             .send()
             .await
             .map_err(|e| ClientError::Network(e.to_string()))?;
-        let status = resp.status().as_u16();
-        match status {
-            200 | 204 => Ok(()),
-            401 => Err(ClientError::AuthFailed("Unauthorized".into())),
-            403 => Err(ClientError::PermissionDenied("Forbidden".into())),
-            404 => Err(ClientError::NotFound("relationship not found".into())),
-            _ => Err(ClientError::Network(format!("delete_relationship HTTP {status}"))),
-        }
+        self.classify(&resp, &path, "Forbidden")
     }
 
     /// `PUT /users/@me/notes/{user_id}` — set or clear a private user note.
@@ -796,19 +760,12 @@ impl DiscordHttpClient {
         let path = format!("/api/v10/users/@me/notes/{user_id}");
         let body = serde_json::json!({ "note": note });
         let resp = self
-            .apply_version_headers(self.http.put(self.api_url(&path)))
-            .header("Authorization", self.token_header())
+            .begin(&path, self.http.put(self.api_url(&path)))?
             .json(&body)
             .send()
             .await
             .map_err(|e| ClientError::Network(e.to_string()))?;
-        let status = resp.status().as_u16();
-        match status {
-            200 | 204 => Ok(()),
-            401 => Err(ClientError::AuthFailed("Unauthorized".into())),
-            404 => Err(ClientError::NotFound("user not found".into())),
-            _ => Err(ClientError::Network(format!("put_user_note HTTP {status}"))),
-        }
+        self.classify(&resp, &path, "Forbidden")
     }
 
     // ── DM / channel lifecycle ────────────────────────────────────────────────
@@ -817,19 +774,11 @@ impl DiscordHttpClient {
     pub async fn delete_channel(&self, channel_id: &str) -> Result<(), ClientError> {
         let path = format!("/api/v10/channels/{channel_id}");
         let resp = self
-            .apply_version_headers(self.http.delete(self.api_url(&path)))
-            .header("Authorization", self.token_header())
+            .begin(&path, self.http.delete(self.api_url(&path)))?
             .send()
             .await
             .map_err(|e| ClientError::Network(e.to_string()))?;
-        let status = resp.status().as_u16();
-        match status {
-            200 | 204 => Ok(()),
-            401 => Err(ClientError::AuthFailed("Unauthorized".into())),
-            403 => Err(ClientError::PermissionDenied("Forbidden".into())),
-            404 => Err(ClientError::NotFound("channel not found".into())),
-            _ => Err(ClientError::Network(format!("delete_channel HTTP {status}"))),
-        }
+        self.classify(&resp, &path, "Forbidden")
     }
 
     /// `PUT /channels/{channel_id}/recipients/{user_id}` — add a user to a group DM.
@@ -840,19 +789,12 @@ impl DiscordHttpClient {
     ) -> Result<(), ClientError> {
         let path = format!("/api/v10/channels/{channel_id}/recipients/{user_id}");
         let resp = self
-            .apply_version_headers(self.http.put(self.api_url(&path)))
-            .header("Authorization", self.token_header())
+            .begin(&path, self.http.put(self.api_url(&path)))?
             .json(&serde_json::json!({}))
             .send()
             .await
             .map_err(|e| ClientError::Network(e.to_string()))?;
-        let status = resp.status().as_u16();
-        match status {
-            200 | 204 => Ok(()),
-            401 => Err(ClientError::AuthFailed("Unauthorized".into())),
-            403 => Err(ClientError::PermissionDenied("Forbidden".into())),
-            _ => Err(ClientError::Network(format!("add_group_dm_recipient HTTP {status}"))),
-        }
+        self.classify(&resp, &path, "Forbidden")
     }
 
     /// `POST /channels/{channel_id}/invites` — create a new invite.
@@ -871,16 +813,12 @@ impl DiscordHttpClient {
             "unique": true,
         });
         let resp = self
-            .apply_version_headers(self.http.post(self.api_url(&path)))
-            .header("Authorization", self.token_header())
+            .begin(&path, self.http.post(self.api_url(&path)))?
             .json(&body)
             .send()
             .await
             .map_err(|e| ClientError::Network(e.to_string()))?;
-        let status = resp.status().as_u16();
-        if !resp.status().is_success() {
-            return Err(ClientError::Network(format!("create_invite HTTP {status}")));
-        }
+        self.classify(&resp, &path, "Missing CREATE_INSTANT_INVITE permission")?;
         let value: serde_json::Value = resp
             .json()
             .await
@@ -899,16 +837,12 @@ impl DiscordHttpClient {
         let path = "/api/v10/users/@me/channels";
         let body = serde_json::json!({ "recipient_id": user_id });
         let resp = self
-            .apply_version_headers(self.http.post(self.api_url(path)))
-            .header("Authorization", self.token_header())
+            .begin(path, self.http.post(self.api_url(path)))?
             .json(&body)
             .send()
             .await
             .map_err(|e| ClientError::Network(e.to_string()))?;
-        let status = resp.status().as_u16();
-        if !resp.status().is_success() {
-            return Err(ClientError::Network(format!("open_dm HTTP {status}")));
-        }
+        self.classify(&resp, path, "Forbidden")?;
         let value: serde_json::Value = resp
             .json()
             .await
@@ -928,16 +862,94 @@ impl DiscordHttpClient {
     #[cfg(feature = "gateway")]
     pub async fn post_empty(&self, path: &str) -> Result<(), ClientError> {
         let resp = self
-            .apply_version_headers(self.http.post(self.api_url(path)))
-            .header("Authorization", self.token_header())
+            .begin(path, self.http.post(self.api_url(path)))?
             .send()
             .await
             .map_err(|e| ClientError::Network(e.to_string()))?;
-        let status = resp.status().as_u16();
-        if status == 204 || resp.status().is_success() {
-            Ok(())
-        } else {
-            Err(ClientError::Network(format!("post_empty {path} returned HTTP {status}")))
+        self.classify(&resp, path, "Forbidden")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+    use super::*;
+
+    #[test]
+    fn bucket_key_strips_query_string() {
+        assert_eq!(
+            DiscordHttpClient::bucket_key("/api/v10/channels/1/messages?limit=50&before=9"),
+            "/api/v10/channels/1/messages"
+        );
+        assert_eq!(
+            DiscordHttpClient::bucket_key("/api/v10/guilds/7/bans/9"),
+            "/api/v10/guilds/7/bans/9"
+        );
+    }
+
+    #[test]
+    fn rate_guard_gates_real_discord_only() {
+        // The 10k-invalid-requests/10 min IP-ban budget only exists on
+        // Discord's own hosts; Spacebar / self-hosted / test servers must not
+        // be throttled by the Discord token bucket.
+        let local = DiscordHttpClient::new("http://127.0.0.1:9102".to_string());
+        assert!(!local.targets_real_discord());
+        for _ in 0..50_u32 {
+            assert!(
+                local.guard_outbound("/api/v10/users/@me").is_ok(),
+                "test server must not be rate-gated"
+            );
         }
+
+        let real = DiscordHttpClient::new("https://discord.com".to_string());
+        assert!(real.targets_real_discord());
+        // Burst is 10; the 11th call within the same instant must trip.
+        let mut tripped = false;
+        for _ in 0..20_u32 {
+            if real.guard_outbound("/api/v10/users/@me").is_err() {
+                tripped = true;
+                break;
+            }
+        }
+        assert!(tripped, "outbound token bucket must actually gate real Discord");
+        assert!(
+            real.counters.snapshot().rate_guard_trips > 0,
+            "a trip must be recorded in GuardrailStats"
+        );
+    }
+
+    #[test]
+    fn apply_build_info_updates_advertised_build_number() {
+        let http = DiscordHttpClient::new("https://discord.com".to_string());
+        assert_eq!(
+            http.build_number_in_use(),
+            crate::build_info::LATEST_KNOWN_STABLE_BUILD
+        );
+        let fresh = crate::build_info::BuildInfo {
+            build_number: 999_999,
+            version_hash: "deadbee".to_string(),
+            scraped_at: 1_800_000_000,
+        };
+        http.apply_build_info(&fresh);
+        assert_eq!(http.build_number_in_use(), 999_999);
+        assert!(
+            http.ua().contains("999999"),
+            "the derived UA must track the build number, got {}",
+            http.ua()
+        );
+    }
+
+    #[test]
+    fn apply_build_info_preserves_explicit_ua_override() {
+        let http = DiscordHttpClient::new("https://discord.com".to_string());
+        http.set_user_agent("custom-agent/1.0");
+        let fresh = crate::build_info::BuildInfo {
+            build_number: 888_888,
+            version_hash: "cafe".to_string(),
+            scraped_at: 1_800_000_000,
+        };
+        http.apply_build_info(&fresh);
+        assert_eq!(http.ua(), "custom-agent/1.0");
+        assert_eq!(http.build_number_in_use(), 888_888);
     }
 }

@@ -80,8 +80,7 @@ fn new_session_id() -> String {
         use std::time::{SystemTime, UNIX_EPOCH};
         let ts = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_nanos())
-            .unwrap_or(0);
+            .map_or(0, |d| d.as_nanos());
         // Mix in the thread ID for pseudo-uniqueness.
         let tid = format!("{:?}", std::thread::current().id());
         // lint-allow-unused: u128→u64 truncation is intentional — only need

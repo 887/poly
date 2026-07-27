@@ -266,10 +266,23 @@ fn TeamsOAuthTab(on_complete: Callback<SignupCompleted>) -> Element {
                                     code.set(Some(dc));
                                     polling.set(true);
                                     starting.set(false);
-                                    let started = std::time::Instant::now();
+                                    // Budget the poll window by summing the
+                                    // sleeps we actually performed rather than
+                                    // reading a clock: `std::time::Instant::now()`
+                                    // is unimplemented on wasm32-unknown-unknown
+                                    // and panics there (CLAUDE.md hang class #4),
+                                    // and this closure runs on the browser main
+                                    // thread in the web / Electron shells. The
+                                    // accumulator under-counts by the round-trip
+                                    // time of each poll, which only makes the
+                                    // local expiry check more lenient — Graph
+                                    // itself answers `expired_token`, surfaced by
+                                    // the `Err` arm below.
+                                    let mut waited_secs: u64 = 0;
                                     loop {
-                                        tokio::time::sleep(std::time::Duration::from_secs(interval)).await;
-                                        if started.elapsed().as_secs() > expires_in {
+                                        crate::timing::sleep(std::time::Duration::from_secs(interval)).await;
+                                        waited_secs = waited_secs.saturating_add(interval);
+                                        if waited_secs > expires_in {
                                             error_msg.set(Some("Sign-in code expired — try again.".into()));
                                             polling.set(false);
                                             code.set(None);

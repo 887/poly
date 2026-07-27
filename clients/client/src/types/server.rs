@@ -16,7 +16,7 @@ pub struct Server {
     pub icon_url: Option<String>,
     /// Optional URL for a server banner image displayed at the top of the
     /// channel list sidebar. Wide-format image (e.g. 960×360) recommended.
-    /// Sourced via [`crate::ClientBackend::get_server`]; `None` falls back to a
+    /// Sourced via [`crate::IsBackend::get_server`]; `None` falls back to a
     /// gradient derived from the server's color.
     #[serde(default)]
     pub banner_url: Option<String>,
@@ -30,7 +30,7 @@ pub struct Server {
     ///
     /// Only increments when the current user is directly @mentioned
     /// (by @username, @here, @everyone, or a group they belong to),
-    /// distinct from [`unread_count`] which counts all unread messages.
+    /// distinct from [`Self::unread_count`] which counts all unread messages.
     #[serde(default)]
     pub mention_count: u32,
     /// Which account this server comes from (multi-account support).
@@ -199,7 +199,7 @@ pub struct Channel {
     ///
     /// Only increments when the current user is directly @mentioned
     /// (by @username, @here, @everyone, or a group they belong to),
-    /// distinct from [`unread_count`] which counts all unread messages.
+    /// distinct from [`Self::unread_count`] which counts all unread messages.
     /// Displayed as a red badge in the channel list; plain unread_count
     /// is shown as bold text only.
     #[serde(default)]

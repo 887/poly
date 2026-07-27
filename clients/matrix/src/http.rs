@@ -20,6 +20,21 @@ use std::sync::{Arc, RwLock};
 /// Default User-Agent for Matrix API requests.
 pub const DEFAULT_CLIENT_VERSION: &str = "poly-matrix/0.0.0";
 
+/// Derive the app-wide account key from a `/account/whoami` response.
+///
+/// `device_id` is OPTIONAL in the Matrix spec — homeservers omit it for
+/// appservice users and some only return it on newer spec versions. It becomes
+/// `Session::id` and therefore the account key every `Server` / `DmChannel` is
+/// stamped with, so defaulting it to `""` collapsed every token-authenticated
+/// account onto the SAME key: a second restored account overwrote the first and
+/// their servers cross-attributed. Synthesize a stable, account-unique key
+/// instead.
+fn account_key_from_whoami(device_id: Option<&str>, user_id: &str, homeserver_url: &str) -> String {
+    device_id
+        .filter(|id| !id.is_empty())
+        .map_or_else(|| format!("{user_id}@{homeserver_url}"), str::to_string)
+}
+
 /// Matrix session state persisted across requests.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MatrixSessionState {
@@ -206,7 +221,10 @@ impl MatrixHttpClient {
         Ok(login)
     }
 
-    /// Validate an existing access token via `GET /_matrix/client/v3/account/whoami`
+    /// Validate an existing access token via `GET /_matrix/client/v3/account/whoami`.
+    ///
+    /// See [`account_key_from_whoami`] for why `device_id` is not defaulted to
+    /// the empty string.
     /// and populate the session.
     pub async fn authenticate_with_token(
         &self,
@@ -225,9 +243,15 @@ impl MatrixHttpClient {
 
         let whoami: WhoAmIResponse = response.json().await.map_err(|e| Self::network_error(&e))?;
 
+        let device_id = account_key_from_whoami(
+            whoami.device_id.as_deref(),
+            &whoami.user_id,
+            self.homeserver_url(),
+        );
+
         self.set_session(MatrixSessionState {
             access_token,
-            device_id: whoami.device_id.clone().unwrap_or_default(),
+            device_id,
             user_id: whoami.user_id.clone(),
             display_name: None,
             avatar_url: None,
@@ -1298,6 +1322,25 @@ mod tests {
 
         client.clear_session().unwrap();
         assert!(!client.is_authenticated());
+    }
+
+    #[test]
+    fn account_key_falls_back_when_whoami_omits_device_id() {
+        // Homeserver returned a device_id — use it verbatim.
+        assert_eq!(
+            account_key_from_whoami(Some("DEV42"), "@a:x.test", "https://x.test"),
+            "DEV42"
+        );
+        // Absent or empty must NOT become "" — that collapsed every
+        // token-authenticated account onto the same account key.
+        let absent = account_key_from_whoami(None, "@a:x.test", "https://x.test");
+        let empty = account_key_from_whoami(Some(""), "@a:x.test", "https://x.test");
+        assert_eq!(absent, empty);
+        assert!(!absent.is_empty());
+        assert!(absent.contains("@a:x.test"));
+        // Two different accounts must not collide.
+        let other = account_key_from_whoami(None, "@b:y.test", "https://y.test");
+        assert_ne!(absent, other);
     }
 
     #[test]

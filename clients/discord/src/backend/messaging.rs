@@ -29,19 +29,20 @@ impl poly_client::MessagingBackend for DiscordClient {
     ) -> ClientResult<Message> {
         // Discord reply threading not yet wired through the HTTP client.
         // Fall back to a top-level send so the message is not lost.
-        // D.5 — slow-mode guard (rate_limit_per_user=0 → no slow mode).
-        // We don't have the cached channel here, so we check with 0 (permissive);
-        // the SlowModeGuard only records sends when rate_limit_per_user > 0.
-        if let Err(e) = self.slow_mode_guard.check(channel_id, 0) {
+        // D.5 — slow-mode guard against the channel's real `rate_limit_per_user`
+        // (cached when the channel object was mapped).  The previous hard-coded
+        // `0` hit the guard's no-op early-return, so it could never block.
+        if let Err(e) = self.slow_mode_guard.check_channel(channel_id) {
             self.http.counters.inc_slow_mode_trip(channel_id);
             return Err(e);
         }
-        self.slow_mode_guard.record_send(channel_id);
         let text = match content {
             MessageContent::Text(t) => t,
             MessageContent::WithAttachments { text, .. } => text,
         };
         let m = self.http.send_message(channel_id, &text).await?;
+        // Only a send that actually reached Discord consumes the slow-mode window.
+        self.slow_mode_guard.record_send(channel_id);
         Ok(self.discord_message_to_poly(m))
     }
 
@@ -85,18 +86,19 @@ impl poly_client::MessagingBackend for DiscordClient {
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl poly_client::WritableMessagingBackend for DiscordClient {
     async fn send_message(&self, channel_id: &str, content: MessageContent) -> ClientResult<Message> {
-        // D.5 — slow-mode guard.  `rate_limit_per_user` of 0 means no restriction.
-        // We record the send unconditionally; the guard only blocks when a window is set.
-        if let Err(e) = self.slow_mode_guard.check(channel_id, 0) {
+        // D.5 — slow-mode guard against the channel's real `rate_limit_per_user`
+        // (cached when the channel object was mapped).
+        if let Err(e) = self.slow_mode_guard.check_channel(channel_id) {
             self.http.counters.inc_slow_mode_trip(channel_id);
             return Err(e);
         }
-        self.slow_mode_guard.record_send(channel_id);
         let text = match content {
             MessageContent::Text(t) => t,
             MessageContent::WithAttachments { text, .. } => text,
         };
         let m = self.http.send_message(channel_id, &text).await?;
+        // Only a send that actually reached Discord consumes the slow-mode window.
+        self.slow_mode_guard.record_send(channel_id);
         Ok(self.discord_message_to_poly(m))
     }
 }

@@ -107,6 +107,59 @@ pub struct WsInboundData {
     pub data: Vec<u8>,
 }
 
+/// Handshake headers tungstenite generates itself. A guest that overrode any
+/// of these would corrupt the upgrade, so they are rejected rather than
+/// appended (which would emit a duplicate).
+const RESERVED_WS_HEADERS: &[&str] = &[
+    "host",
+    "connection",
+    "upgrade",
+    "sec-websocket-key",
+    "sec-websocket-version",
+];
+
+/// Build the WebSocket handshake request for `url` with the guest-supplied
+/// `headers` applied.
+///
+/// `wit/messenger-plugin.wit` (`websocket-connect`) states the host opens the
+/// connection with the caller's headers. Dropping them silently — as the
+/// previous `let _ = &headers;` placeholder did — handed the guest a valid
+/// handle for an unauthenticated socket, which surfaces much later as
+/// "connected but no events".
+///
+/// # Errors
+///
+/// Returns a message when the URL is not a valid WebSocket URL, a header name
+/// or value cannot be encoded, or a reserved handshake header was supplied.
+fn build_ws_request(
+    url: &str,
+    headers: &[(String, String)],
+) -> Result<tokio_tungstenite::tungstenite::handshake::client::Request, String> {
+    use tokio_tungstenite::tungstenite::client::IntoClientRequest as _;
+    use tokio_tungstenite::tungstenite::http::header::{HeaderName, HeaderValue};
+
+    let mut request = url
+        .into_client_request()
+        .map_err(|e| format!("invalid WebSocket URL `{url}`: {e}"))?;
+
+    let target = request.headers_mut();
+    for (name, value) in headers {
+        let lowered = name.to_ascii_lowercase();
+        if RESERVED_WS_HEADERS.contains(&lowered.as_str()) {
+            return Err(format!(
+                "header `{name}` is managed by the WebSocket handshake and cannot be overridden"
+            ));
+        }
+        let header_name = HeaderName::from_bytes(name.as_bytes())
+            .map_err(|e| format!("invalid WebSocket header name `{name}`: {e}"))?;
+        let header_value = HeaderValue::from_str(value)
+            .map_err(|e| format!("invalid WebSocket header value for `{name}`: {e}"))?;
+        target.append(header_name, header_value);
+    }
+
+    Ok(request)
+}
+
 impl PluginHostState {
     /// Create a new host state for a plugin instance with default in-memory storage.
     #[must_use]
@@ -235,12 +288,14 @@ impl host_api::Host for PluginHostState {
     ) -> Result<u64, String> {
         use tokio_tungstenite::connect_async;
 
+        // Build the handshake request BEFORE handing out a handle: the WIT
+        // contract promises these headers are sent, so a header we cannot
+        // encode must fail loudly here rather than silently vanish (the
+        // connect itself runs in the spawned task and can only log).
+        let request = build_ws_request(&url, &headers)?;
+
         let handle_id = self.next_ws_handle;
         self.next_ws_handle = self.next_ws_handle.wrapping_add(1);
-
-        // Build the request with custom headers
-        // TODO(phase-2.14.3): implement full WS with custom headers
-        let _ = &headers;
 
         // Spawn the actual WebSocket handler
         let plugin_id = self.plugin_id.clone();
@@ -248,7 +303,7 @@ impl host_api::Host for PluginHostState {
         let inbound_tx = self.ws_inbound_tx.clone();
 
         tokio::spawn(async move {
-            match connect_async(&url).await {
+            match connect_async(request).await {
                 Ok((ws_stream, _)) => {
                     use futures_util::{SinkExt, StreamExt};
                     let (mut write, mut read) = ws_stream.split();
@@ -627,5 +682,92 @@ mod tests {
             .build_route(host_api::RouteKind::SidebarItem, vec![])
             .await;
         assert_unknown_kind(&result, "SidebarItem");
+    }
+
+    // ── websocket-connect header contract ──────────────────────────────
+
+    /// The WIT contract promises guest headers reach the handshake. They must
+    /// actually be on the request, not dropped.
+    #[test]
+    fn ws_request_carries_guest_headers() {
+        let request = build_ws_request(
+            "wss://gateway.example/socket",
+            &[
+                ("Authorization".to_string(), "Bearer tok-123".to_string()),
+                ("X-Client".to_string(), "poly".to_string()),
+            ],
+        )
+        .expect("valid url + headers");
+
+        assert_eq!(
+            request
+                .headers()
+                .get("authorization")
+                .and_then(|v| v.to_str().ok()),
+            Some("Bearer tok-123"),
+        );
+        assert_eq!(
+            request.headers().get("x-client").and_then(|v| v.to_str().ok()),
+            Some("poly"),
+        );
+        // The generated handshake headers must survive untouched.
+        assert!(request.headers().get("sec-websocket-key").is_some());
+    }
+
+    /// A header the host cannot encode must fail the call, not vanish.
+    #[test]
+    fn ws_request_rejects_unencodable_headers() {
+        let err = build_ws_request(
+            "wss://gateway.example/socket",
+            &[("Bad Name".to_string(), "v".to_string())],
+        )
+        .expect_err("invalid header name must be rejected");
+        assert!(err.contains("invalid WebSocket header name"), "{err}");
+
+        let err = build_ws_request(
+            "wss://gateway.example/socket",
+            &[("X-Ok".to_string(), "line\nbreak".to_string())],
+        )
+        .expect_err("invalid header value must be rejected");
+        assert!(err.contains("invalid WebSocket header value"), "{err}");
+    }
+
+    /// Overriding a handshake-managed header would emit a duplicate and break
+    /// the upgrade — reject it instead.
+    #[test]
+    fn ws_request_rejects_reserved_handshake_headers() {
+        for name in ["Host", "connection", "Sec-WebSocket-Key"] {
+            let err = build_ws_request(
+                "wss://gateway.example/socket",
+                &[(name.to_string(), "x".to_string())],
+            )
+            .expect_err("reserved header must be rejected");
+            assert!(err.contains("managed by the WebSocket handshake"), "{err}");
+        }
+    }
+
+    #[test]
+    fn ws_request_rejects_invalid_urls() {
+        let err = build_ws_request("not a url", &[]).expect_err("bad url must be rejected");
+        assert!(err.contains("invalid WebSocket URL"), "{err}");
+    }
+
+    /// The handle handed back must not outlive a rejected request — a failed
+    /// build must not consume a handle id or register a dead session.
+    #[tokio::test]
+    async fn websocket_connect_rejects_bad_headers_without_allocating_a_handle() {
+        let mut state = PluginHostState::new("test");
+        let before = state.next_ws_handle;
+
+        let result = state
+            .websocket_connect(
+                "wss://gateway.example/socket".to_string(),
+                vec![("Bad Name".to_string(), "v".to_string())],
+            )
+            .await;
+
+        assert!(result.is_err(), "invalid header must fail the call");
+        assert_eq!(state.next_ws_handle, before, "handle id must not be consumed");
+        assert!(state.ws_handles.is_empty(), "no handle may be registered");
     }
 }

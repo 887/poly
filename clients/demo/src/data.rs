@@ -78,8 +78,7 @@ pub fn mark_channel_read_local(channel_id: &str) {
 pub fn channel_is_read_local(channel_id: &str) -> bool {
     read_channel_set()
         .lock()
-        .map(|r| r.contains(channel_id))
-        .unwrap_or(false)
+        .is_ok_and(|r| r.contains(channel_id))
 }
 
 /// Zero `unread_count` / `mention_count` on any channel the user has
@@ -5619,7 +5618,7 @@ fn search_demo_messages(query: &MessageSearchQuery, demo2: bool) -> Vec<MessageS
         })
         .collect::<Vec<_>>();
 
-    hits.sort_by(|left, right| right.message.timestamp.cmp(&left.message.timestamp));
+    hits.sort_by_key(|hit| std::cmp::Reverse(hit.message.timestamp));
 
     let limit = usize::try_from(query.limit.unwrap_or(25)).unwrap_or(25);
     hits.truncate(limit);

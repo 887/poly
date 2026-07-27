@@ -172,20 +172,27 @@ impl RedditClient {
     }
 }
 
-/// Percent-encode characters that would break URL query parameter values.
+/// Percent-encode a URL query-parameter VALUE.
 ///
-/// Only encodes `&`, `?`, `#`, `%`, and space — enough for query strings
-/// without a full-blown percent-encoding library dependency on WASM.
+/// RFC 3986 unreserved set (`A-Za-z0-9-._~`) passes through; every other byte
+/// is escaped as `%XX`. Escaping the whole complement rather than a hand-picked
+/// list is load-bearing: the previous version left `+` and `=` untouched, so a
+/// query like `c++` decoded server-side as `c  ` (two spaces) and a
+/// base64-ish `after` cursor containing `+`/`=` advanced to the wrong page.
+///
+/// No dependency on a percent-encoding crate — this must build on WASM.
+#[must_use]
 pub fn urlencoding_simple(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for ch in s.chars() {
-        match ch {
-            ' ' => out.push('+'),
-            '&' => out.push_str("%26"),
-            '?' => out.push_str("%3F"),
-            '#' => out.push_str("%23"),
-            '%' => out.push_str("%25"),
-            c => out.push(c),
+    use std::fmt::Write as _;
+
+    // Worst case every byte expands to three characters.
+    let mut out = String::with_capacity(s.len().saturating_mul(3));
+    for b in s.bytes() {
+        if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.' | b'_' | b'~') {
+            out.push(char::from(b));
+        } else {
+            out.push('%');
+            write!(out, "{b:02X}").ok();
         }
     }
     out
@@ -205,6 +212,30 @@ mod tests {
 
         let c2 = RedditClient::with_base_url("http://127.0.0.1:9108".to_string()).unwrap();
         assert_eq!(c2.resolve_url("/api/me.json"), "http://127.0.0.1:9108/api/me.json");
+    }
+
+    /// `+` and `=` MUST be escaped: a raw `+` decodes server-side as a space
+    /// (so a search for `c++` became `c  `), and a raw `=` can be misread as a
+    /// parameter boundary in a base64-ish `after` cursor.
+    #[test]
+    fn urlencoding_escapes_plus_and_equals() {
+        assert_eq!(urlencoding_simple("c++"), "c%2B%2B");
+        assert_eq!(urlencoding_simple("dGVzdA=="), "dGVzdA%3D%3D");
+        assert_eq!(urlencoding_simple("a+b=c"), "a%2Bb%3Dc");
+    }
+
+    #[test]
+    fn urlencoding_keeps_the_unreserved_set_and_escapes_everything_else() {
+        assert_eq!(
+            urlencoding_simple("aZ09-._~"),
+            "aZ09-._~",
+            "the RFC 3986 unreserved set must pass through untouched"
+        );
+        assert_eq!(urlencoding_simple("a b"), "a%20b");
+        assert_eq!(urlencoding_simple("a&b?c#d%e"), "a%26b%3Fc%23d%25e");
+        assert_eq!(urlencoding_simple("t3_abc123"), "t3_abc123", "cursors are unchanged");
+        // Non-ASCII is percent-encoded per UTF-8 byte.
+        assert_eq!(urlencoding_simple("ü"), "%C3%BC");
     }
 
     #[test]

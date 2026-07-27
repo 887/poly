@@ -10,11 +10,11 @@
 //! params (per the github backend doc-comment) so users get the full code
 //! search experience without us having to host an index.
 
-use crate::state::{BatchedSignal, use_reactive_effect};
+use crate::client_manager::BackendHandleExt;
 use dioxus::prelude::*;
 use poly_client::FileEntry;
 
-use crate::state::{AccountSessions, ChatViewState};
+use crate::state::{AccountSessions, BatchedSignal, ChatViewState, use_reactive_effect};
 use poly_ui_macros::{context_menu, ui_action};
 
 /// Two-pane explorer rendered when the current channel is `ChannelType::Code`.
@@ -81,10 +81,10 @@ pub fn CodeExplorerView(#[props(default)] route_channel_id: String) -> Element {
                     loading.set(false);
                     return;
                 };
-                let guard = handle.read().await;
-                // H.2.a — capability-gate: only backends that impl CodeRepoBackend
-                // have code channels; if accessor returns None, the channel type
-                // would never have been ChannelType::Code, so this is defensive.
+                // Hang class #4 — bounded read; a sync writer would otherwise wedge
+                // this task and pin `loading`. H.2.a below — capability-gate: only
+                // CodeRepoBackend impls have code channels, so None is defensive.
+                let Ok(guard) = handle.read_with_timeout(std::time::Duration::from_secs(5)).await else { error_msg.set(Some("backend busy — try again".into())); loading.set(false); return; };
                 match guard.as_code_repo() {
                     Some(cr) => match cr.list_files(&ch_id, &path).await {
                         Ok(list) => entries.set(list),
@@ -165,8 +165,8 @@ pub fn CodeExplorerView(#[props(default)] route_channel_id: String) -> Element {
                                                     file_text.set(Some("backend not loaded".into()));
                                                     return;
                                                 };
-                                                let guard = handle.read().await;
-                                                // H.2.a — capability-gate via CodeRepoBackend accessor.
+                                                // Hang class #4 — bounded read. H.2.a — capability-gate via CodeRepoBackend.
+                                                let Ok(guard) = handle.read_with_timeout(std::time::Duration::from_secs(5)).await else { file_text.set(Some("backend busy — try again".into())); return; };
                                                 match guard.as_code_repo() {
                                                     Some(cr) => match cr.read_file(&ch_id, &path).await {
                                                         Ok(content) => {

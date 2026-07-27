@@ -10,7 +10,7 @@ use super::user::User;
 /// Updated by the event-stream consumer in each backend. The `ClientManager`
 /// stores one entry per active account and exposes it for UI overlay dots.
 // DECISION(DX-2.12.1): Connection status stored in ClientManager, not inside
-// each ClientBackend, because the UI needs a synchronous non-async read path.
+// each IsBackend impl, because the UI needs a synchronous non-async read path.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ConnectionStatus {
     /// Successfully authenticated and event stream / WebSocket is live.

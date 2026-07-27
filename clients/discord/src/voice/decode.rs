@@ -26,6 +26,7 @@ pub(super) async fn udp_decode_loop(
     _ssrc_user_map: SsrcUserMap,
     output: Box<dyn poly_audio_backend::AudioOutputStream>,
     bandwidth_ctrl: Option<Arc<rtcp::BandwidthController>>,
+    mut shutdown: ShutdownRx,
 ) {
     let cipher = match XChaCha20Poly1305::new_from_slice(&secret_key) {
         Ok(c) => c,
@@ -41,12 +42,18 @@ pub(super) async fn udp_decode_loop(
     let mut pcm_buf = vec![0i16; OPUS_FRAME_SAMPLES * 2];
 
     loop {
-        let n = match udp.recv(&mut recv_buf).await {
-            Ok(n) => n,
-            Err(e) => {
-                warn!(target: "poly_discord::voice", error = %e, "UDP recv error");
-                break;
-            }
+        // Race the socket against the shutdown signal so `disconnect()` (or a
+        // dropped connection handle) actually stops this task.
+        let n = tokio::select! {
+            biased;
+            _ = shutdown.changed() => break,
+            received = udp.recv(&mut recv_buf) => match received {
+                Ok(n) => n,
+                Err(e) => {
+                    warn!(target: "poly_discord::voice", error = %e, "UDP recv error");
+                    break;
+                }
+            },
         };
 
         let packet = &recv_buf[..n];

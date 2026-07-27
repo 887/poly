@@ -168,8 +168,13 @@ pub struct LemmyPost {
     pub url: Option<String>,
     pub published: DateTime<Utc>,
     pub updated: Option<DateTime<Utc>>,
-    #[serde(default)]
-    pub ap_id: Option<String>,
+    // NOTE: `ap_id` (the ActivityPub canonical URL) is deliberately NOT
+    // deserialized. For a federated post it is the ORIGIN instance's permalink
+    // and its trailing path segment is that instance's primary key — unrelated
+    // to `id` above. It was previously used as the `ViewRow` id, which made
+    // `get_view_detail` resolve an unrelated local post. serde ignores the
+    // extra key; re-add it only alongside a UI field that treats it as an
+    // outbound link, never as an identifier.
     /// Preview thumbnail URL — set by pict-rs when the post URL's Open Graph
     /// image is available. Verified present in real Lemmy API responses:
     /// `curl https://lemmy.world/api/v3/post/list?limit=1` returns
