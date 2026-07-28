@@ -17,6 +17,7 @@ use crate::state::{
 use crate::state::chat_data::{backend_badge, user_color};
 use poly_client::{MessageSearchHit, PresenceStatus};
 
+use super::ctx::{ChatViewCore, HeaderCtx};
 use super::markup_ctx::ChatViewMarkupCtx;
 use super::ChatUtilityPanel;
 use super::header::{ChatHeaderActions, render_agent_toggle_button, render_search_tab_button};
@@ -112,8 +113,8 @@ pub(super) fn sync_mobile_side_column_open(open: bool) {
 #[cfg(not(target_arch = "wasm32"))]
 pub(super) fn sync_mobile_side_column_open(_open: bool) {}
 
-pub(super) fn mobile_server_right_wing_active(ctx: &ChatViewMarkupCtx) -> bool {
-    runtime_mobile_ui_active() && !ctx.is_dm_channel && !ctx.is_group_channel
+pub(super) fn mobile_server_right_wing_active(header: &HeaderCtx) -> bool {
+    runtime_mobile_ui_active() && !header.is_dm_channel && !header.is_group_channel
 }
 
 pub(super) fn close_chat_side_column_state(
@@ -145,15 +146,19 @@ pub(super) fn close_chat_side_column_state(
     });
 }
 
-pub(super) fn render_chat_layout_shell(ctx: ChatViewMarkupCtx) -> Element {
-    let show_side_column = ctx.utility_panel.read().is_some()
-        || ctx.member_list_visible
-        || mobile_server_right_wing_active(&ctx);
+pub(super) fn render_chat_layout_shell(
+    ctx: ChatViewMarkupCtx,
+    core: &ChatViewCore,
+    header: &HeaderCtx,
+) -> Element {
+    let show_side_column = header.utility_panel.read().is_some()
+        || header.member_list_visible
+        || mobile_server_right_wing_active(header);
     let mobile_layout = runtime_mobile_ui_active();
 
     rsx! {
         div { class: "chat-layout-shell",
-            {render_chat_main_column(ctx.clone())}
+            {render_chat_main_column(ctx.clone(), core, header)}
             if mobile_layout && show_side_column {
                 {render_chat_side_column(ctx)}
             }
@@ -161,35 +166,36 @@ pub(super) fn render_chat_layout_shell(ctx: ChatViewMarkupCtx) -> Element {
     }
 }
 
-fn render_chat_main_column(ctx: ChatViewMarkupCtx) -> Element {
+fn render_chat_main_column(
+    ctx: ChatViewMarkupCtx,
+    core: &ChatViewCore,
+    header: &HeaderCtx,
+) -> Element {
     rsx! {
         div { class: "chat-main-column",
-            {render_chat_header(ctx.clone())}
+            {render_chat_header(core, header)}
             {render_chat_body_shell(ctx)}
         }
     }
 }
 
-fn render_chat_header(ctx: ChatViewMarkupCtx) -> Element {
+fn render_chat_header(core: &ChatViewCore, header: &HeaderCtx) -> Element {
     rsx! {
         div { class: "chat-header",
-            {render_chat_header_info(ctx.clone())}
-            {render_chat_header_right(ctx)}
+            {render_chat_header_info(header)}
+            {render_chat_header_right(core, header)}
         }
     }
 }
 
-// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
-#[allow(clippy::needless_pass_by_value)]
-fn render_chat_header_info(ctx: ChatViewMarkupCtx) -> Element {
-    let current_channel = ctx.current_channel.clone();
-    let current_server = ctx.current_server.clone();
-    let dm_user_avatar = ctx.dm_user_avatar.clone();
-    let dm_user_presence = ctx.dm_user_presence;
-    let is_dm_channel = ctx.is_dm_channel;
-    let is_group_channel = ctx.is_group_channel;
-    let group_count = ctx.group_members.len();
-    let dm_presence_dot_class = match dm_user_presence {
+fn render_chat_header_info(header: &HeaderCtx) -> Element {
+    let current_channel = header.current_channel.as_ref();
+    let current_server = header.current_server.as_ref();
+    let dm_user_avatar = header.dm_user_avatar.as_deref();
+    let is_dm_channel = header.is_dm_channel;
+    let is_group_channel = header.is_group_channel;
+    let group_count = header.group_member_count;
+    let dm_presence_dot_class = match header.dm_user_presence {
         PresenceStatus::Online => "presence-dot online",
         PresenceStatus::Idle => "presence-dot idle",
         PresenceStatus::DoNotDisturb => "presence-dot dnd",
@@ -197,11 +203,11 @@ fn render_chat_header_info(ctx: ChatViewMarkupCtx) -> Element {
     };
 
     rsx! {
-        if let Some(ref ch) = current_channel {
+        if let Some(ch) = current_channel {
             if is_dm_channel {
                 div { class: "dm-chat-header-info",
                     div { class: "dm-chat-avatar-wrap",
-                        if let Some(ref avatar) = dm_user_avatar {
+                        if let Some(avatar) = dm_user_avatar {
                             img {
                                 class: "dm-chat-avatar",
                                 src: "{avatar}",
@@ -236,7 +242,7 @@ fn render_chat_header_info(ctx: ChatViewMarkupCtx) -> Element {
             } else {
                 div { class: "server-chat-header-info",
                     span { class: "chat-channel-name", "# {ch.name}" }
-                    if let Some(ref server) = current_server {
+                    if let Some(server) = current_server {
                         span { class: "chat-source-badge",
                             "{backend_badge(&server.backend)} {server.backend.display_name()}"
                         }
@@ -249,48 +255,46 @@ fn render_chat_header_info(ctx: ChatViewMarkupCtx) -> Element {
     }
 }
 
-fn render_chat_header_right(ctx: ChatViewMarkupCtx) -> Element {
+fn render_chat_header_right(core: &ChatViewCore, header: &HeaderCtx) -> Element {
     let mobile_right_wing = runtime_mobile_ui_active();
 
     rsx! {
         div { class: "chat-header-right",
             if mobile_right_wing {
-                {render_mobile_chat_header_right_toggle(ctx)}
+                {render_mobile_chat_header_right_toggle(core, header)}
             } else {
                 ChatHeaderActions {
-                    utility_panel: ctx.utility_panel,
-                    notifications_muted: ctx.notifications_muted,
-                    show_search_filters: ctx.show_search_filters,
-                    header_actions_menu_open: ctx.header_actions_menu_open,
-                    header_actions_overflow: ctx.header_actions_overflow,
-                    voice_state: ctx.voice_state,
-                    client_manager: ctx.client_manager,
-                    mobile_layout_resize_tick: ctx.mobile_layout_resize_tick,
-                    is_group_channel: ctx.is_group_channel,
-                    is_dm_channel: ctx.is_dm_channel,
-                    dm_user: ctx.dm_user.clone(),
-                    channel_id: ctx.channel_id.clone(),
-                    member_list_visible: ctx.member_list_visible,
+                    utility_panel: header.utility_panel,
+                    notifications_muted: header.notifications_muted,
+                    show_search_filters: header.show_search_filters,
+                    header_actions_menu_open: header.header_actions_menu_open,
+                    header_actions_overflow: header.header_actions_overflow,
+                    voice_state: core.voice_state,
+                    client_manager: core.client_manager,
+                    mobile_layout_resize_tick: header.mobile_layout_resize_tick,
+                    is_group_channel: header.is_group_channel,
+                    is_dm_channel: header.is_dm_channel,
+                    dm_user: header.dm_user.clone(),
+                    channel_id: header.channel_id.clone(),
+                    member_list_visible: header.member_list_visible,
                 }
             }
         }
     }
 }
 
-// lint-allow-unused: by-value capture into rsx!/spawn closures (clone-into-spawn pattern)
-#[allow(clippy::needless_pass_by_value)]
 // lint-allow-unused: long cohesive view/handler; splitting risks reactive bugs
 #[allow(clippy::too_many_lines)]
-fn render_mobile_chat_header_right_toggle(ctx: ChatViewMarkupCtx) -> Element {
-    let nav_state = ctx.nav;
-    let ui_overlays = ctx.ui_overlays;
-    let ui_layout = ctx.ui_layout;
-    let mut utility_panel = ctx.utility_panel;
-    let mut show_search_filters = ctx.show_search_filters;
-    let right_wing_open = ctx.member_list_visible || ctx.utility_panel.read().is_some();
-    let current_server = ctx.current_server.clone();
-    let current_channel = ctx.current_channel.clone();
-    let dm_user = ctx.dm_user.clone();
+fn render_mobile_chat_header_right_toggle(core: &ChatViewCore, header: &HeaderCtx) -> Element {
+    let nav_state = core.nav;
+    let ui_overlays = core.ui_overlays;
+    let ui_layout = core.ui_layout;
+    let mut utility_panel = header.utility_panel;
+    let mut show_search_filters = header.show_search_filters;
+    let right_wing_open = header.member_list_visible || header.utility_panel.read().is_some();
+    let current_server = header.current_server.clone();
+    let current_channel = header.current_channel.clone();
+    let dm_user = header.dm_user.clone();
     // NOT use_context() here: this helper is called conditionally (only on the
     // mobile branch of render_chat_header_right), so a hook would shift the
     // parent's hook indices and panic on resize across the breakpoint with the
@@ -298,19 +302,19 @@ fn render_mobile_chat_header_right_toggle(ctx: ChatViewMarkupCtx) -> Element {
     // registering a hook.
     let chat_lists: BatchedSignal<ChatLists> = consume_context();
     let account_sessions: BatchedSignal<AccountSessions> = consume_context();
-    let voice_state = ctx.voice_state;
-    let client_manager = ctx.client_manager;
-    let is_dm_channel = ctx.is_dm_channel;
-    let is_group_channel = ctx.is_group_channel;
+    let voice_state = core.voice_state;
+    let client_manager = core.client_manager;
+    let is_dm_channel = header.is_dm_channel;
+    let is_group_channel = header.is_group_channel;
     // U.6 — reuse the existing menu-open Signal (no use_signal here: this helper
     // is called conditionally, so a hook would break ordering).
-    let mut header_actions_menu_open = ctx.header_actions_menu_open;
+    let mut header_actions_menu_open = header.header_actions_menu_open;
     let menu_open = *header_actions_menu_open.read(); // poly-lint: allow render-time-read — reactive: mobile header overflow menu
     let active_dm_call = voice_state
         .read()
         .voice_connection
         .clone()
-        .filter(|connection| connection.dm_id.as_deref() == ctx.channel_id.as_deref());
+        .filter(|connection| connection.dm_id.as_deref() == header.channel_id.as_deref());
     // For DMs, don't use the avatar — always show "@" on mobile
     let toggle_icon_url = if is_dm_channel {
         None
@@ -735,10 +739,11 @@ fn render_chat_utility_rail(
     let pinned_hit_channel = ctx.pinned_hit_channel.clone();
     let nav_for_search = ctx.nav_for_search;
     let nav_for_pinned = ctx.nav_for_pinned;
-    let nav_state_for_search = ctx.nav;
-    let nav_state_for_pinned = ctx.nav;
-    let client_manager = ctx.client_manager;
-    let chat_view_state = ctx.chat_view_state;
+    let core = ctx.core();
+    let nav_state_for_search = core.nav;
+    let nav_state_for_pinned = core.nav;
+    let client_manager = core.client_manager;
+    let chat_view_state = core.chat_view_state;
     let notifications_muted = ctx.notifications_muted;
     let pinned_filter_open = ctx.pinned_filter_open;
     let pinned_filter_query = ctx.pinned_filter_query;

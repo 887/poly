@@ -1,6 +1,6 @@
 # Plan: Split `ChatViewMarkupCtx` — the 74-field god-struct cloned 18x per render
 
-## Status: 📋 PLANNED
+## Status: 🔄 IN PROGRESS — Phases A + B shipped in this PR; C–G open
 
 > Opened 2026-07-28 from the multi-agent review fan-out. SOLID pre-merge gate
 > **item 4 (ISP)** and **item 6 (no god-objects)** — verified against the tree,
@@ -72,33 +72,79 @@ schedule extra reactive passes, it makes each pass more expensive.
 
 ---
 
-## Phase A — Introduce `ChatViewCore` and the region-ctx module, no call-site changes
+## Phase A — Introduce `ChatViewCore` and the region-ctx module, no call-site changes — shipped in this PR
 
-- [ ] **A.1** Create `crates/core/src/ui/account/common/chat_view/ctx/mod.rs`
+- [x] **A.1** Create `crates/core/src/ui/account/common/chat_view/ctx/mod.rs`
   with `pub(super) struct ChatViewCore` holding only the `Copy`
   `BatchedSignal` fields currently at `.../markup_ctx.rs:31-37`
   (`nav`, `ui_layout`, `ui_overlays`, `client_manager`, `chat_lists`,
   `chat_view_state`, `voice_state`). Derive `Copy, Clone` — it is signal handles
   only, so cloning it is free and by-value passing stays fine.
-- [ ] **A.2** Add `fn core(&self) -> ChatViewCore` to `ChatViewMarkupCtx` so both
+- [x] **A.2** Add `fn core(&self) -> ChatViewCore` to `ChatViewMarkupCtx` so both
   representations coexist during the migration.
-- [ ] **A.3** Add `build_core(signals: &ChatViewSignals) -> ChatViewCore`
+- [x] **A.3** Add `build_core(signals: &ChatViewSignals) -> ChatViewCore`
   alongside `build_chat_view_markup_ctx` (`.../markup_ctx.rs:116`).
-- [ ] **A.4** `cargo check -p poly-core` green; lands as a no-op.
+- [x] **A.4** `cargo check -p poly-core` green; lands as a no-op.
 
-## Phase B — `HeaderCtx` (smallest region, proves the pattern)
+**As-built notes (Phase A).** `ChatViewCore` lives in
+`crates/core/src/ui/account/common/chat_view/ctx/mod.rs` and is `Copy` — a
+`#[test]` asserts `size_of::<ChatViewCore>() == 7 * size_of::<BatchedSignal<_>>()`
+so an owned `String`/`Vec` field can never be added without the guard failing.
+`ChatViewMarkupCtx::core()` (A.2) is the migration bridge and is genuinely
+exercised: `layout::render_chat_utility_rail` still only holds the old bundle
+and now sources `nav` / `client_manager` / `chat_view_state` through it.
+`build_core` (A.3) is called from the composition root (`render_chat_view`),
+which is the Phase-F shape.
 
-- [ ] **B.1** Define `pub(super) struct HeaderCtx` in `.../chat_view/ctx/header.rs`:
+## Phase B — `HeaderCtx` (smallest region, proves the pattern) — shipped in this PR
+
+- [x] **B.1** Define `pub(super) struct HeaderCtx` in `.../chat_view/ctx/header.rs`:
   channel / server / DM identity fields, `utility_panel`, and the
   `header_actions_*` fields. Derive `Clone` only if a consumer genuinely needs
   an owned copy — prefer not to.
-- [ ] **B.2** `fn build_header_ctx(signals: &ChatViewSignals) -> HeaderCtx`.
-- [ ] **B.3** Convert `crates/core/src/ui/account/common/chat_view/header.rs`
-  (572 lines) and the header region of `layout.rs:173-527` to take
-  `(&ChatViewCore, &HeaderCtx)`. Delete the corresponding `ctx.clone()` sites in
-  `layout.rs`.
-- [ ] **B.4** Remove the now-unused header fields from `ChatViewMarkupCtx`.
-- [ ] **B.5** `cargo check -p poly-core` + `cargo check -p poly-core --target wasm32-unknown-unknown` green.
+- [x] **B.2** `fn build_header_ctx(signals: &ChatViewSignals) -> HeaderCtx`.
+- [x] **B.3** Convert the header region of `layout.rs:173-527` to take
+  `(&ChatViewCore, &HeaderCtx)`. Deleted the two header `ctx.clone()` sites
+  (`layout.rs:167` and `:176`); 18 clone sites → 16.
+  **Plan correction:** `chat_view/header.rs` needed no conversion — it never
+  took `ChatViewMarkupCtx`. It is a `#[component]` (`ChatHeaderActions`) plus two
+  prop-taking button helpers, so it was already ISP-clean; the god-struct only
+  reached it through `layout::render_chat_header_right`, which now feeds it from
+  `HeaderCtx`.
+- [x] **B.4** Removed the seven header-exclusive fields from `ChatViewMarkupCtx`
+  (`group_members`, `dm_user`, `dm_user_avatar`, `dm_user_presence`,
+  `header_actions_overflow`, `header_actions_menu_open`,
+  `mobile_layout_resize_tick`): 74 fields → 67.
+  **Plan correction:** `current_server` could *not* be removed — it is also read
+  by `chat_view/effects/search_messages.rs:16`. It stays on the markup bundle but
+  is now copied from `HeaderCtx` instead of being re-read, so the signal read
+  happens once. The other shared identity fields (`channel_id`,
+  `current_channel`, `is_dm_channel`, `is_group_channel`, `member_list_visible`,
+  `utility_panel`, `notifications_muted`, `show_search_filters`) likewise stay
+  until their own regions land in Phases C–E.
+- [x] **B.5** `cargo check -p poly-core` + `cargo check -p poly-core --target
+  wasm32-unknown-unknown` green; `cargo test -p poly-core` 268/4/2 passed;
+  `cargo check -p poly-lint-gate` rc=0 with **zero entries added**.
+
+**As-built notes (Phase B).** `build_chat_view_markup_ctx` now takes
+`(&ChatViewSignals, &HeaderCtx)`: the channel / server / right-wing snapshot is
+taken exactly once per render, in `build_header_ctx`, and flows from there.
+`markup_ctx.rs` lost its three near-duplicate `dm_channels` lookups
+(`current_dm_user`, `current_dm_user_avatar`, `current_dm_user_presence` — three
+`chat_lists.read()` passes for peer, avatar and presence); `ctx/header.rs` does
+one lookup and derives all three. Net signal reads in the ChatView render scope
+went **down**, and the subscription set is unchanged because `build_header_ctx`
+runs in the same component scope `build_chat_view_markup_ctx` always did.
+
+**Lint-gate line-key bookkeeping (Phase B).** `crates/lint-gate/baseline.json`
+was **re-pointed, never regenerated**: each surviving entry in `mod.rs`,
+`layout.rs` and `markup_ctx.rs` was mapped old-line → new-line by an
+order-preserving diff of the pre-edit snapshot against the post-edit file (a
+`.read()` that survived a re-worded line keeps its entry). 37 entries moved, 9
+were dropped — exactly the nine reads that relocated into `ctx/header.rs`, where
+each carries a documented `// poly-lint: allow render-time-read — <reason>`
+inline allow. **Zero entries added.** The gate reports 764 grandfathered and 0
+new, i.e. the live violation set equals the baseline set exactly.
 
 ## Phase C — `ComposerCtx`
 
