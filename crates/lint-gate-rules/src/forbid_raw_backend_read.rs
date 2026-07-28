@@ -258,6 +258,39 @@ mod tests {
         }
     }
 
+    /// Anti-tautology guard, inherited from the deleted
+    /// `crates/core/tests/no_raw_backend_read.rs` (plan Phase A.5).
+    ///
+    /// A receiver-agnostic matcher is worthless if the **scan scope** resolves
+    /// to nothing: `scan` returns silently when a directory is missing, so a
+    /// renamed path would make this rule inert again without a single test
+    /// failing. That is precisely how the rule sat at zero baseline rows.
+    /// Assert against the real workspace walk, not a fixture.
+    #[test]
+    fn scan_scope_resolves_to_real_files_in_this_workspace() {
+        let ws_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(Path::parent)
+            .expect("crates/lint-gate-rules sits two levels below the workspace root");
+        let walker = WorkspaceWalker::new(ws_root);
+        let count = |needle: &str| {
+            walker
+                .files
+                .iter()
+                .filter(|p| p.to_string_lossy().contains(needle))
+                .count()
+        };
+        assert!(
+            count(SCAN_SUBDIR_UI) > 50,
+            "hang-class #4 UI scope ({SCAN_SUBDIR_UI}) resolved to {} files — the rule is inert",
+            count(SCAN_SUBDIR_UI)
+        );
+        assert!(
+            count(SCAN_SUBDIR_PERSONA) > 0,
+            "persona P4 scope ({SCAN_SUBDIR_PERSONA}) resolved to zero files — the rule is inert"
+        );
+    }
+
     /// Verify that non-voice client files are NOT in scope (avoid over-scanning).
     #[test]
     fn non_voice_client_paths_not_in_scope() {
