@@ -94,7 +94,7 @@ async fn test_version_override_reaches_wire() {
         .expect("set_client_version_override");
 
     // get_servers triggers an HTTP request to the mock server.
-    let _ = client.get_servers().await;
+    let _servers = client.get_servers().await;
     tokio::time::sleep(std::time::Duration::from_millis(20)).await;
 
     let entries = srv.captured_headers().await;
@@ -132,7 +132,7 @@ async fn test_version_override_clear_restores_default() {
         .await
         .expect("clear override");
 
-    let _ = client.get_servers().await;
+    let _servers = client.get_servers().await;
     tokio::time::sleep(std::time::Duration::from_millis(20)).await;
 
     let entries = srv.captured_headers().await;

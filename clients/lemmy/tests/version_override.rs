@@ -75,7 +75,8 @@ async fn test_version_override_reaches_wire() {
         "client_version() must return the override string"
     );
 
-    let _ = client.get_servers().await;
+    // Result deliberately unused — the assertion is on the captured UA header.
+    let _servers = client.get_servers().await;
     tokio::time::sleep(std::time::Duration::from_millis(20)).await;
 
     let entries = captured_headers(&base_url).await;
@@ -114,7 +115,8 @@ async fn test_version_override_clear_restores_default() {
         "client_version() must return the default after clearing"
     );
 
-    let _ = client.get_servers().await;
+    // Result deliberately unused — the assertion is on the captured UA header.
+    let _servers = client.get_servers().await;
     tokio::time::sleep(std::time::Duration::from_millis(20)).await;
 
     let entries = captured_headers(&base_url).await;

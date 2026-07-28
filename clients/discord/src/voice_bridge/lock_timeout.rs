@@ -53,12 +53,9 @@ pub async fn read_with_timeout<T>(
 }
 
 #[cfg(test)]
-#[expect(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::panic,
-    reason = "test module"
-)]
+// No `#[expect(unwrap_used/expect_used/panic)]` header here: these tests use
+// only `assert!` / `assert_eq!`, so the expectation was unfulfilled (which is
+// itself a clippy error under `-D warnings`).
 mod tests {
     use super::*;
 

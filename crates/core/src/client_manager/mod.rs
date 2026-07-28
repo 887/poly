@@ -262,65 +262,6 @@ const BUILTIN_BACKENDS: [BuiltinBackendDescriptor; 8] = [
     },
 ];
 
-#[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-mod builtin_backend_registry_tests {
-    use super::*;
-
-    /// User policy lock-in: Discord and Teams must never be a built-in plugin.
-    /// They ship as sideloadable WASM plugins only.
-    #[test]
-    fn discord_and_teams_are_never_builtin() {
-        let slugs: Vec<&str> = builtin_backend_slugs();
-        assert!(
-            !slugs.contains(&"discord"),
-            "discord must NOT be a built-in plugin — sideloaded WASM only"
-        );
-        assert!(
-            !slugs.contains(&"teams"),
-            "teams must NOT be a built-in plugin — sideloaded WASM only"
-        );
-    }
-
-    /// Sanity: the registry is non-empty and the demo descriptor is always
-    /// present (its availability flips with the `demo` feature, but the
-    /// entry itself is unconditional so the row renders even when disabled).
-    #[test]
-    fn registry_lists_demo() {
-        let slugs: Vec<&str> = builtin_backend_slugs();
-        assert!(slugs.contains(&"demo"));
-    }
-
-    #[test]
-    fn available_backend_slugs_unions_builtins_and_bundled() {
-        use crate::storage::AppSettings;
-        let mut settings = AppSettings::default();
-        // Empty bundled list → only built-ins are available.
-        let slugs = available_backend_slugs(&settings);
-        assert!(slugs.contains(&"demo"));
-        assert!(!slugs.contains(&"discord"));
-        assert!(!slugs.contains(&"teams"));
-
-        // Inject + enable bundled defaults → Discord and Teams join.
-        let _ = crate::bundled_plugins::inject_bundled_into_settings(&mut settings);
-        let slugs = available_backend_slugs(&settings);
-        assert!(slugs.contains(&"demo"));
-        assert!(slugs.contains(&"discord"));
-        assert!(slugs.contains(&"teams"));
-
-        // Disable Teams → it's filtered out, Discord still present.
-        let teams = settings
-            .wasm_plugins
-            .iter_mut()
-            .find(|e| e.url == "bundled://teams")
-            .unwrap();
-        teams.enabled = false;
-        let slugs = available_backend_slugs(&settings);
-        assert!(slugs.contains(&"discord"));
-        assert!(!slugs.contains(&"teams"));
-    }
-}
-
 // ── DIP — BackendLookup trait (Phase B.3) ───────────────────────────────────
 //
 // Read-only consumers that only need to resolve an account ID to a backend
@@ -1166,5 +1107,64 @@ impl ClientManager {
             .map_err(|e| poly_client::ClientError::Internal(e.to_string()))?;
 
         f(&account_id, guard.as_ref()).await
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod builtin_backend_registry_tests {
+    use super::*;
+
+    /// User policy lock-in: Discord and Teams must never be a built-in plugin.
+    /// They ship as sideloadable WASM plugins only.
+    #[test]
+    fn discord_and_teams_are_never_builtin() {
+        let slugs: Vec<&str> = builtin_backend_slugs();
+        assert!(
+            !slugs.contains(&"discord"),
+            "discord must NOT be a built-in plugin — sideloaded WASM only"
+        );
+        assert!(
+            !slugs.contains(&"teams"),
+            "teams must NOT be a built-in plugin — sideloaded WASM only"
+        );
+    }
+
+    /// Sanity: the registry is non-empty and the demo descriptor is always
+    /// present (its availability flips with the `demo` feature, but the
+    /// entry itself is unconditional so the row renders even when disabled).
+    #[test]
+    fn registry_lists_demo() {
+        let slugs: Vec<&str> = builtin_backend_slugs();
+        assert!(slugs.contains(&"demo"));
+    }
+
+    #[test]
+    fn available_backend_slugs_unions_builtins_and_bundled() {
+        use crate::storage::AppSettings;
+        let mut settings = AppSettings::default();
+        // Empty bundled list → only built-ins are available.
+        let slugs = available_backend_slugs(&settings);
+        assert!(slugs.contains(&"demo"));
+        assert!(!slugs.contains(&"discord"));
+        assert!(!slugs.contains(&"teams"));
+
+        // Inject + enable bundled defaults → Discord and Teams join.
+        let _ = crate::bundled_plugins::inject_bundled_into_settings(&mut settings);
+        let slugs = available_backend_slugs(&settings);
+        assert!(slugs.contains(&"demo"));
+        assert!(slugs.contains(&"discord"));
+        assert!(slugs.contains(&"teams"));
+
+        // Disable Teams → it's filtered out, Discord still present.
+        let teams = settings
+            .wasm_plugins
+            .iter_mut()
+            .find(|e| e.url == "bundled://teams")
+            .unwrap();
+        teams.enabled = false;
+        let slugs = available_backend_slugs(&settings);
+        assert!(slugs.contains(&"discord"));
+        assert!(!slugs.contains(&"teams"));
     }
 }

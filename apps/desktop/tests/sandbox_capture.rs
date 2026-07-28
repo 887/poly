@@ -73,8 +73,14 @@ fn should_skip() -> bool {
 #[tokio::test]
 async fn sandbox_captures_redirect_url() {
     if should_skip() {
-        eprintln!("sandbox_capture: skipping — set POLY_SANDBOX_RUN_DISPLAY_TEST=1 to enable");
-        eprintln!("  On Linux with broken Wayland: GDK_BACKEND=x11 POLY_SANDBOX_RUN_DISPLAY_TEST=1 cargo test ...");
+        // stderr, not `tracing` — this test binary installs no subscriber, so a
+        // `tracing::warn!` would vanish and the skip would be silent.
+        // `cargo test -- --nocapture` shows this.
+        #[allow(clippy::print_stderr)]
+        {
+            eprintln!("sandbox_capture: skipping — set POLY_SANDBOX_RUN_DISPLAY_TEST=1 to enable");
+            eprintln!("  On Linux with broken Wayland: GDK_BACKEND=x11 POLY_SANDBOX_RUN_DISPLAY_TEST=1 cargo test ...");
+        }
         return;
     }
 

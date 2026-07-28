@@ -6,17 +6,26 @@
 use super::*;
 use crate::types::{HnFeed, HnItem, HnItemType};
 
-fn story(id: u64, title: &str, url: Option<&str>, by: &str, score: u32, descendants: u32, time: u64) -> HnItem {
+/// The score / comment-count / timestamp triple every fixture story carries.
+/// Bundled so the builders below stay under the 6-argument limit.
+#[derive(Clone, Copy)]
+struct Stats {
+    score: u32,
+    descendants: u32,
+    time: u64,
+}
+
+fn story(id: u64, title: &str, url: Option<&str>, by: &str, stats: Stats) -> HnItem {
     HnItem {
         id,
         item_type: HnItemType::Story,
         by: Some(by.to_string()),
-        time: Some(time),
+        time: Some(stats.time),
         text: None,
         url: url.map(str::to_string),
         title: Some(title.to_string()),
-        score: Some(score),
-        descendants: Some(descendants),
+        score: Some(stats.score),
+        descendants: Some(stats.descendants),
         kids: None,
         parent: None,
         dead: None,
@@ -24,17 +33,17 @@ fn story(id: u64, title: &str, url: Option<&str>, by: &str, score: u32, descenda
     }
 }
 
-fn ask_hn_story(id: u64, title: &str, text: &str, by: &str, score: u32, descendants: u32, time: u64) -> HnItem {
+fn ask_hn_story(id: u64, title: &str, text: &str, by: &str, stats: Stats) -> HnItem {
     HnItem {
         id,
         item_type: HnItemType::Story,
         by: Some(by.to_string()),
-        time: Some(time),
+        time: Some(stats.time),
         text: Some(text.to_string()),
         url: None,
         title: Some(title.to_string()),
-        score: Some(score),
-        descendants: Some(descendants),
+        score: Some(stats.score),
+        descendants: Some(stats.descendants),
         kids: None,
         parent: None,
         dead: None,
@@ -70,7 +79,13 @@ fn feed_unknown_channel_id_returns_none() {
 
 #[test]
 fn map_story_with_url_to_viewrow() {
-    let item = story(42, "Rust 2.0 Released", Some("https://example.com"), "pg", 500, 200, 1_700_000_000);
+    let item = story(
+        42,
+        "Rust 2.0 Released",
+        Some("https://example.com"),
+        "pg",
+        Stats { score: 500, descendants: 200, time: 1_700_000_000 },
+    );
     let row = hn_item_to_view_row(&item);
 
     assert_eq!(row.id, "42");
@@ -84,7 +99,13 @@ fn map_story_with_url_to_viewrow() {
 #[test]
 fn map_ask_hn_story_secondary_is_by() {
     // Ask HN stories have no URL — secondary_text should be "by <author>"
-    let item = ask_hn_story(99, "Ask HN: Best Rust books?", "Post body here", "tptacek", 200, 80, 1_700_000_000);
+    let item = ask_hn_story(
+        99,
+        "Ask HN: Best Rust books?",
+        "Post body here",
+        "tptacek",
+        Stats { score: 200, descendants: 80, time: 1_700_000_000 },
+    );
     let row = hn_item_to_view_row(&item);
 
     assert_eq!(row.id, "99");
@@ -94,7 +115,13 @@ fn map_ask_hn_story_secondary_is_by() {
 
 #[test]
 fn map_story_id_is_string() {
-    let item = story(1234567, "Test", None, "anon", 1, 0, 1_700_000_000);
+    let item = story(
+        1234567,
+        "Test",
+        None,
+        "anon",
+        Stats { score: 1, descendants: 0, time: 1_700_000_000 },
+    );
     let row = hn_item_to_view_row(&item);
     assert_eq!(row.id, "1234567");
 }
@@ -109,7 +136,7 @@ fn humanize_age_none_returns_question_mark() {
 #[test]
 fn humanize_age_recent() {
     use chrono::Utc;
-    let now = Utc::now().timestamp() as u64;
+    let now = u64::try_from(Utc::now().timestamp()).expect("wall clock is after the unix epoch");
     // 30 seconds ago
     assert_eq!(humanize_age(Some(now - 30)), "30s");
     // 90 seconds = 1 minute

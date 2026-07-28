@@ -44,37 +44,53 @@ pub async fn channel_view_descriptor_well_formed(
     };
 
     if let Some(toolbar) = &desc.toolbar {
-        for o in toolbar
-            .sort_options
-            .iter()
-            .chain(toolbar.filter_options.iter())
-            .chain(toolbar.tabs.iter())
-        {
-            assert!(!o.id.is_empty(), "toolbar option id must be non-empty");
-            assert!(
-                !o.label_key.is_empty(),
-                "toolbar option label_key must be non-empty (option id={})",
-                o.id
-            );
-        }
+        assert_toolbar_options_well_formed(toolbar);
     }
 
     if let Some(header) = &desc.header {
-        if let Some(title_key) = &header.title_key {
-            assert!(
-                !title_key.is_empty(),
-                "header.title_key, when Some, must be non-empty"
-            );
-        }
-        if let Some(subtitle_key) = &header.subtitle_key {
-            assert!(
-                !subtitle_key.is_empty(),
-                "header.subtitle_key, when Some, must be non-empty"
-            );
-        }
+        assert_header_keys_well_formed(header);
     }
 
-    match &desc.body {
+    assert_body_spec_well_formed(&desc.body);
+    Ok(())
+}
+
+/// Every toolbar option (sort / filter / tab) carries a non-empty `id` and `label_key`.
+fn assert_toolbar_options_well_formed(toolbar: &poly_client::ViewToolbar) {
+    for o in toolbar
+        .sort_options
+        .iter()
+        .chain(toolbar.filter_options.iter())
+        .chain(toolbar.tabs.iter())
+    {
+        assert!(!o.id.is_empty(), "toolbar option id must be non-empty");
+        assert!(
+            !o.label_key.is_empty(),
+            "toolbar option label_key must be non-empty (option id={})",
+            o.id
+        );
+    }
+}
+
+/// A header that sets a title / subtitle key must not set it to the empty string.
+fn assert_header_keys_well_formed(header: &poly_client::ViewHeader) {
+    if let Some(title_key) = &header.title_key {
+        assert!(
+            !title_key.is_empty(),
+            "header.title_key, when Some, must be non-empty"
+        );
+    }
+    if let Some(subtitle_key) = &header.subtitle_key {
+        assert!(
+            !subtitle_key.is_empty(),
+            "header.subtitle_key, when Some, must be non-empty"
+        );
+    }
+}
+
+/// Per-engine body-spec invariants (page sizes > 0, required template fields set).
+fn assert_body_spec_well_formed(body: &ViewBody) {
+    match body {
         ViewBody::ListBody(spec) => {
             assert!(
                 spec.page_size > 0,
@@ -112,7 +128,6 @@ pub async fn channel_view_descriptor_well_formed(
             );
         }
     }
-    Ok(())
 }
 
 /// Fetch the first page of rows, then the next page using the returned cursor, and assert

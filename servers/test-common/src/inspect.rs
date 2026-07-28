@@ -219,10 +219,10 @@ mod tests {
         h.insert("user-agent".to_string(), "MyClient/1.0".to_string());
         h.insert("x-super-properties".to_string(), "base64data".to_string());
         h.insert("authorization".to_string(), "Bot test-token".to_string());
-        buf_record_and_check(h);
+        buf_record_and_check(&h);
     }
 
-    fn buf_record_and_check(headers: HashMap<String, String>) {
+    fn buf_record_and_check(headers: &HashMap<String, String>) {
         let buf = HeaderInspectBuffer::new();
         buf.record("GET", "/api/test", headers.clone());
         let entries = buf.recent();
@@ -230,7 +230,7 @@ mod tests {
         let entry = &entries[0];
         assert_eq!(entry.method, "GET");
         assert_eq!(entry.path, "/api/test");
-        for (k, v) in &headers {
+        for (k, v) in headers {
             assert_eq!(entry.headers.get(k).unwrap(), v, "header {k} missing or wrong");
         }
     }

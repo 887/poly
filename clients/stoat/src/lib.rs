@@ -694,106 +694,106 @@ mod tests {
         captured_uploads: Arc<Mutex<Vec<serde_json::Value>>>,
     }
 
+    async fn send_friend_request() -> impl IntoResponse {
+        Json(json!({
+            "_id": "user_2",
+            "username": "otterpal",
+            "discriminator": "0002",
+            "display_name": "Otter Pal",
+            "online": true
+        }))
+    }
+
+    async fn upload_attachment(
+        State(state): State<TestServerState>,
+        headers: HeaderMap,
+    ) -> impl IntoResponse {
+        if let Some(token) = headers
+            .get("x-session-token")
+            .and_then(|value| value.to_str().ok())
+            .map(std::string::ToString::to_string)
+            && let Ok(mut tokens) = state.captured_tokens.lock()
+        {
+            tokens.push(token);
+        }
+
+        if let Ok(mut uploads) = state.captured_uploads.lock() {
+            uploads.push(json!({ "ok": true }));
+        }
+
+        Json(json!({ "id": "uploaded-file-1" }))
+    }
+
+    async fn send_message(
+        State(state): State<TestServerState>,
+        headers: HeaderMap,
+        Json(payload): Json<serde_json::Value>,
+    ) -> impl IntoResponse {
+        let response_content = payload
+            .get("content")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default()
+            .to_string();
+        let response_replies = payload.get("replies").cloned();
+
+        if let Ok(mut requests) = state.captured_requests.lock() {
+            requests.push(payload);
+        }
+
+        if let Some(token) = headers
+            .get("x-session-token")
+            .and_then(|value| value.to_str().ok())
+            .map(std::string::ToString::to_string)
+            && let Ok(mut tokens) = state.captured_tokens.lock()
+        {
+            tokens.push(token);
+        }
+
+        Json(json!({
+            "_id": "01HZZZZZZZZZZZZZZZZZZZZZZZ",
+            "channel": "channel_1",
+            "author": "user_1",
+            "content": response_content,
+            "user": {
+                "_id": "user_1",
+                "username": "stoaty",
+                "discriminator": "0001",
+                "display_name": "Stoaty",
+                "online": true
+            },
+            "replies": response_replies.map(|replies| {
+                replies
+                    .as_array()
+                    .map(|entries| {
+                        entries
+                            .iter()
+                            .filter_map(|entry| entry.get("id").cloned())
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default()
+            })
+        }))
+    }
+
+    async fn fetch_message() -> impl IntoResponse {
+        Json(json!({
+            "_id": "01HYYYYYYYYYYYYYYYYYYYYYYY",
+            "channel": "channel_1",
+            "author": "user_2",
+            "content": "Original reply target",
+            "user": {
+                "_id": "user_2",
+                "username": "other",
+                "discriminator": "0002",
+                "display_name": "Other User",
+                "online": false
+            }
+        }))
+    }
+
     async fn launch_test_server(
         state: TestServerState,
     ) -> Result<(String, tokio::task::JoinHandle<()>), Box<dyn std::error::Error>> {
-        async fn send_friend_request() -> impl IntoResponse {
-            Json(json!({
-                "_id": "user_2",
-                "username": "otterpal",
-                "discriminator": "0002",
-                "display_name": "Otter Pal",
-                "online": true
-            }))
-        }
-
-        async fn upload_attachment(
-            State(state): State<TestServerState>,
-            headers: HeaderMap,
-        ) -> impl IntoResponse {
-            if let Some(token) = headers
-                .get("x-session-token")
-                .and_then(|value| value.to_str().ok())
-                .map(std::string::ToString::to_string)
-                && let Ok(mut tokens) = state.captured_tokens.lock()
-            {
-                tokens.push(token);
-            }
-
-            if let Ok(mut uploads) = state.captured_uploads.lock() {
-                uploads.push(json!({ "ok": true }));
-            }
-
-            Json(json!({ "id": "uploaded-file-1" }))
-        }
-
-        async fn send_message(
-            State(state): State<TestServerState>,
-            headers: HeaderMap,
-            Json(payload): Json<serde_json::Value>,
-        ) -> impl IntoResponse {
-            let response_content = payload
-                .get("content")
-                .and_then(serde_json::Value::as_str)
-                .unwrap_or_default()
-                .to_string();
-            let response_replies = payload.get("replies").cloned();
-
-            if let Ok(mut requests) = state.captured_requests.lock() {
-                requests.push(payload);
-            }
-
-            if let Some(token) = headers
-                .get("x-session-token")
-                .and_then(|value| value.to_str().ok())
-                .map(std::string::ToString::to_string)
-                && let Ok(mut tokens) = state.captured_tokens.lock()
-            {
-                tokens.push(token);
-            }
-
-            Json(json!({
-                "_id": "01HZZZZZZZZZZZZZZZZZZZZZZZ",
-                "channel": "channel_1",
-                "author": "user_1",
-                "content": response_content,
-                "user": {
-                    "_id": "user_1",
-                    "username": "stoaty",
-                    "discriminator": "0001",
-                    "display_name": "Stoaty",
-                    "online": true
-                },
-                "replies": response_replies.map(|replies| {
-                    replies
-                        .as_array()
-                        .map(|entries| {
-                            entries
-                                .iter()
-                                .filter_map(|entry| entry.get("id").cloned())
-                                .collect::<Vec<_>>()
-                        })
-                        .unwrap_or_default()
-                })
-            }))
-        }
-
-        async fn fetch_message() -> impl IntoResponse {
-            Json(json!({
-                "_id": "01HYYYYYYYYYYYYYYYYYYYYYYY",
-                "channel": "channel_1",
-                "author": "user_2",
-                "content": "Original reply target",
-                "user": {
-                    "_id": "user_2",
-                    "username": "other",
-                    "discriminator": "0002",
-                    "display_name": "Other User",
-                    "online": false
-                }
-            }))
-        }
-
         let addr_holder = Arc::new(Mutex::new(String::new()));
         let root_addr_holder = addr_holder.clone();
 
@@ -949,7 +949,7 @@ mod tests {
         let requests = state
             .captured_requests
             .lock()
-            .map_err(|_| "captured request lock poisoned")?;
+            .map_err(|e| format!("captured request lock poisoned: {e}"))?;
         let first_request = requests.first().ok_or("missing captured request")?;
         let nonce_present = first_request
             .get("nonce")
@@ -967,7 +967,7 @@ mod tests {
         let tokens = state
             .captured_tokens
             .lock()
-            .map_err(|_| "captured token lock poisoned")?;
+            .map_err(|e| format!("captured token lock poisoned: {e}"))?;
         assert_eq!(tokens.first().map(String::as_str), Some("token_123"));
 
         Ok(())
@@ -1000,7 +1000,7 @@ mod tests {
         let requests = state
             .captured_requests
             .lock()
-            .map_err(|_| "captured request lock poisoned")?;
+            .map_err(|e| format!("captured request lock poisoned: {e}"))?;
         let first_request = requests.first().ok_or("missing captured request")?;
         assert_eq!(first_request.get("content"), Some(&json!("Reply text")));
         assert_eq!(
@@ -1062,13 +1062,13 @@ mod tests {
         let uploads = state
             .captured_uploads
             .lock()
-            .map_err(|_| "captured upload lock poisoned")?;
+            .map_err(|e| format!("captured upload lock poisoned: {e}"))?;
         assert_eq!(uploads.len(), 1);
 
         let requests = state
             .captured_requests
             .lock()
-            .map_err(|_| "captured request lock poisoned")?;
+            .map_err(|e| format!("captured request lock poisoned: {e}"))?;
         let first_request = requests.first().ok_or("missing captured request")?;
         assert_eq!(first_request.get("content"), Some(&json!("Hello Stoat")));
         assert_eq!(

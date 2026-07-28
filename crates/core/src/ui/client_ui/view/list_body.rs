@@ -599,6 +599,26 @@ pub(crate) fn append_page(
     (accum, page.next_cursor)
 }
 
+/// Fetch the first page of rows for this view. P4 — sort/filter/tab ids
+/// are passed through so toolbar selection changes re-fetch (use_resource
+/// re-runs when any captured value changes). P5 handles the next-cursor
+/// load-more flow separately.
+pub(super) fn fetch_first_page(
+    channel_id: String,
+    account_id: String,
+    sort_id: Option<String>,
+    filter_id: Option<String>,
+    tab_id: Option<String>,
+) -> Resource<ClientResult<ViewRowsPage>> {
+    use_view_resource(FirstPageQuery {
+        account_id,
+        channel_id,
+        sort_id,
+        filter_id,
+        tab_id,
+    })
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod tests {
@@ -811,24 +831,4 @@ mod tests {
         assert_eq!(acc[0].id, "a");
         assert!(cursor.is_none());
     }
-}
-
-/// Fetch the first page of rows for this view. P4 — sort/filter/tab ids
-/// are passed through so toolbar selection changes re-fetch (use_resource
-/// re-runs when any captured value changes). P5 handles the next-cursor
-/// load-more flow separately.
-pub(super) fn fetch_first_page(
-    channel_id: String,
-    account_id: String,
-    sort_id: Option<String>,
-    filter_id: Option<String>,
-    tab_id: Option<String>,
-) -> Resource<ClientResult<ViewRowsPage>> {
-    use_view_resource(FirstPageQuery {
-        account_id,
-        channel_id,
-        sort_id,
-        filter_id,
-        tab_id,
-    })
 }

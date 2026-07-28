@@ -36,7 +36,7 @@ struct TestServer {
 
 impl TestServer {
     async fn start() -> Self {
-        let _ = tracing_subscriber::fmt()
+        let _already_installed = tracing_subscriber::fmt()
             .with_env_filter("warn")
             .with_test_writer()
             .try_init();

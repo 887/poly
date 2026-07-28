@@ -1797,7 +1797,7 @@ mod tests {
         assert!(
             settings["wasm_plugins"]
                 .as_array()
-                .map_or(true, std::vec::Vec::is_empty)
+                .is_none_or(std::vec::Vec::is_empty)
         );
         let removed = settings["removed_bundled_plugins"]
             .as_array()

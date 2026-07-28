@@ -256,7 +256,8 @@ impl CallingTransport for MockCallingTransport {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+    // indexing_slicing extended onto the sanctioned test header: fixed-size fixture vectors.
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
     use super::*;
 
     #[test]
@@ -432,7 +433,21 @@ mod tests {
             CallingCommand::Init { acs_endpoint, .. } => {
                 assert_eq!(acs_endpoint, "https://x");
             }
-            other => panic!("unexpected variant: {other:?}"),
+            other @ (CallingCommand::ConnectVoice { .. }
+            | CallingCommand::StartDirectCall { .. }
+            | CallingCommand::Disconnect { .. }
+            | CallingCommand::SetMute { .. }
+            | CallingCommand::StartVideo { .. }
+            | CallingCommand::StopVideo { .. }
+            | CallingCommand::ShareScreen { .. }
+            | CallingCommand::StopScreenShare { .. }
+            | CallingCommand::Hold { .. }
+            | CallingCommand::Resume { .. }
+            | CallingCommand::AcceptIncoming { .. }
+            | CallingCommand::RejectIncoming { .. }
+            | CallingCommand::QueryParticipants { .. }) => {
+                panic!("unexpected variant: {other:?}")
+            }
         }
     }
 }

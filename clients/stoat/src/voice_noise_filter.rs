@@ -150,13 +150,25 @@ pub fn apply_rnnoise(samples: &mut [f32], filter: &mut NoiseFilter) {
 mod tests {
     use super::*;
 
+    /// A 440 Hz sine burst of `n` samples at 48 kHz, amplitude 16384.
+    ///
+    /// The index is widened through `u16` so the sample position reaches `f32`
+    /// without a silent `as` cast; `n` never exceeds a few thousand samples in
+    /// these tests.
+    fn sine_burst(n: usize) -> Vec<f32> {
+        (0..n)
+            .map(|i| {
+                let pos = f32::from(u16::try_from(i).expect("test sample count fits in u16"));
+                (pos * 440.0 * 2.0 * std::f32::consts::PI / 48_000.0).sin() * 16384.0
+            })
+            .collect()
+    }
+
     #[test]
     fn filter_preserves_length() {
         let mut filter = NoiseFilter::new();
         // 960 samples = two 480-sample chunks (one Opus frame at 48 kHz mono)
-        let mut samples: Vec<f32> = (0..960)
-            .map(|i| (i as f32 * 440.0 * 2.0 * std::f32::consts::PI / 48_000.0).sin() * 16384.0)
-            .collect();
+        let mut samples: Vec<f32> = sine_burst(960);
         let original_len = samples.len();
         apply_rnnoise(&mut samples, &mut filter);
         assert_eq!(
@@ -170,9 +182,7 @@ mod tests {
     fn filter_first_frame_is_zeroed() {
         let mut filter = NoiseFilter::new();
         // Non-zero input: a 480-sample sine burst.
-        let mut samples: Vec<f32> = (0..DENOISE_FRAME)
-            .map(|i| (i as f32 * 440.0 * 2.0 * std::f32::consts::PI / 48_000.0).sin() * 16384.0)
-            .collect();
+        let mut samples: Vec<f32> = sine_burst(DENOISE_FRAME);
         apply_rnnoise(&mut samples, &mut filter);
         // The first frame output should be replaced with zeros due to look-ahead.
         assert!(
@@ -185,7 +195,7 @@ mod tests {
     fn filter_partial_chunk_passthrough() {
         let mut filter = NoiseFilter::new();
         // 300 samples < 480 — should pass through unchanged.
-        let input: Vec<f32> = (0..300).map(|i| i as f32).collect();
+        let input: Vec<f32> = (0_u16..300_u16).map(f32::from).collect();
         let mut samples = input.clone();
         apply_rnnoise(&mut samples, &mut filter);
         assert_eq!(samples, input, "partial chunk must pass through unmodified");

@@ -714,7 +714,9 @@ async fn test_get_account_overview_view_descriptor() {
         ViewBody::CardBody(spec) => {
             assert_eq!(spec.primary_field, "name", "primary_field must be 'name'");
         }
-        other => panic!("expected CardBody, got {other:?}"),
+        other @ (ViewBody::ListBody(_) | ViewBody::TreeBody(_) | ViewBody::SplitBody(_)) => {
+            panic!("expected CardBody, got {other:?}")
+        }
     }
     let header = descriptor.header.expect("header must be present");
     assert_eq!(

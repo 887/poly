@@ -35,7 +35,7 @@ async fn start_server() -> (String, tokio::sync::oneshot::Sender<()>) {
     let (tx, rx) = tokio::sync::oneshot::channel::<()>();
     tokio::spawn(async move {
         axum::serve(base.listener, app)
-            .with_graceful_shutdown(async { let _ = rx.await; })
+            .with_graceful_shutdown(async { let _shutdown = rx.await; })
             .await
             .expect("serve");
     });
@@ -89,7 +89,7 @@ async fn test_version_override_reaches_wire() {
     );
 
     // Trigger any authenticated request.
-    let _ = client.get_servers().await;
+    let _servers = client.get_servers().await;
     tokio::time::sleep(std::time::Duration::from_millis(20)).await;
 
     let entries = captured_headers(&base_url).await;
@@ -128,7 +128,7 @@ async fn test_version_override_clear_restores_default() {
         "client_version() must return the default after clearing"
     );
 
-    let _ = client.get_servers().await;
+    let _servers = client.get_servers().await;
     tokio::time::sleep(std::time::Duration::from_millis(20)).await;
 
     let entries = captured_headers(&base_url).await;

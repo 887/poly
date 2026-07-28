@@ -302,8 +302,8 @@ mod tests {
 
     #[test]
     fn should_use_sort_select_threshold_is_five_or_more() {
-        let four: Vec<_> = (0..4).map(|i| opt(&format!("s{i}"), false)).collect();
-        let five: Vec<_> = (0..5).map(|i| opt(&format!("s{i}"), false)).collect();
+        let four: Vec<_> = (0_u32..4_u32).map(|i| opt(&format!("s{i}"), false)).collect();
+        let five: Vec<_> = (0_u32..5_u32).map(|i| opt(&format!("s{i}"), false)).collect();
         assert!(!should_use_sort_select(&four));
         assert!(should_use_sort_select(&five));
     }

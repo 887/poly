@@ -173,7 +173,7 @@ mod tests {
                 }
             };
             // Five "renders" with the same key.
-            for _ in 0..5 {
+            for _ in 0_u32..5_u32 {
                 simulate_render(&mut spawned_for, "srv-A".to_string(), factory.clone());
             }
             // Exactly one spawn observed (the spawned future may not
@@ -242,7 +242,7 @@ mod tests {
                     async move {}
                 }
             };
-            for _ in 0..50 {
+            for _ in 0_u32..50_u32 {
                 simulate_render(&mut spawned_for, 42_u32, factory.clone());
             }
             assert_eq!(call_count.get(), 1, "50 renders, same key → 1 spawn");

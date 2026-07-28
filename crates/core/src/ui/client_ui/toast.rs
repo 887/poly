@@ -188,7 +188,6 @@ async fn schedule_dismiss(id: u64, delay_ms: u64) {
 // ─── Unit tests ──────────────────────────────────────────────────────
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
     use super::*;
@@ -271,7 +270,7 @@ mod tests {
 
     #[test]
     fn toast_overlay_renders_expected_count() {
-        let items = vec![
+        let items = [
             ToastMessage::new("a", ToastTone::Info),
             ToastMessage::new("b", ToastTone::Error),
         ];

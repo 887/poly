@@ -41,8 +41,8 @@ struct TestServer {
 
 impl TestServer {
     async fn start() -> Self {
-        let _ = tracing_subscriber::fmt()
-            .with_env_filter("poly_server=debug,poly_client=debug,warn")
+        let _subscriber_init = tracing_subscriber::fmt()
+            .with_env_filter("poly_server=debug,poly_client=debug,integration=info,warn")
             .with_test_writer()
             .try_init();
 
@@ -437,7 +437,24 @@ async fn test_websocket_message_event() {
                 break;
             }
             ServerEvent::Ping => continue,
-            other => unreachable!("Unexpected event before MessageCreated: {:?}", other),
+            other @ (ServerEvent::MessageEdited(..)
+            | ServerEvent::MessageDeleted { .. }
+            | ServerEvent::ReactionAdded { .. }
+            | ServerEvent::ReactionRemoved { .. }
+            | ServerEvent::TypingStart { .. }
+            | ServerEvent::PresenceUpdate { .. }
+            | ServerEvent::DeviceRevoked
+            | ServerEvent::VoiceStateUpdate { .. }
+            | ServerEvent::FriendRequestReceived { .. }
+            | ServerEvent::FriendRequestAccepted { .. }
+            | ServerEvent::ServerMemberJoined { .. }
+            | ServerEvent::ServerMemberLeft { .. }
+            | ServerEvent::ServerUpdated { .. }
+            | ServerEvent::ChannelCreated { .. }
+            | ServerEvent::ChannelDeleted { .. }
+            | ServerEvent::VoiceSignalRelay { .. }) => {
+                unreachable!("Unexpected event before MessageCreated: {other:?}")
+            }
         }
     }
 
@@ -656,7 +673,7 @@ async fn test_debug_raw_server_response() {
         .json()
         .await
         .expect("json");
-    eprintln!(
+    tracing::info!(
         "\n=== RAW /servers/:id ===\n{}\n",
         serde_json::to_string_pretty(&raw_detail).unwrap()
     );
@@ -671,7 +688,7 @@ async fn test_debug_raw_server_response() {
         .json()
         .await
         .expect("json");
-    eprintln!(
+    tracing::info!(
         "\n=== RAW /servers ===\n{}\n",
         serde_json::to_string_pretty(&raw_list).unwrap()
     );

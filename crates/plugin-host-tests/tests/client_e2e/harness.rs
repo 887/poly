@@ -56,8 +56,8 @@ pub async fn authenticate_does_not_use_stub_path(
 // ─── Identity Tests ────────────────────────────────────────────────
 
 /// Verify the plugin reports the expected backend type.
-pub fn assert_backend_type(backend: &PluginBackend, expected: BackendType) {
-    assert_eq!(backend.backend_type(), expected, "backend_type() mismatch");
+pub fn assert_backend_type(backend: &PluginBackend, expected: &BackendType) {
+    assert_eq!(&backend.backend_type(), expected, "backend_type() mismatch");
 }
 
 /// Verify the plugin reports the expected backend name.
@@ -122,7 +122,7 @@ pub async fn logout_succeeds(backend: &mut PluginBackend) {
     let result = backend.logout().await;
     // Both Ok(()) and Err(Internal("not implemented")) are acceptable
     // — we just verify it doesn't panic/trap
-    let _ = result;
+    let _ignored = result;
 }
 
 // ─── Data Retrieval: Servers ───────────────────────────────────────

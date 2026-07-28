@@ -1,4 +1,6 @@
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+// indexing_slicing extended onto the sanctioned test header: serde_json::Value
+// key/index assertions against fixed handshake payloads.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 //! Phase X.0 F.7 — voice bridge handshake foundation tests.
 //!
 //! Verifies that the test-discord mock implements the Discord voice
@@ -70,12 +72,12 @@ async fn handshake_emits_session_description_with_secret_key() {
     // op 8 HELLO
     let hello = next_text(&mut ws).await;
     let v: serde_json::Value = serde_json::from_str(&hello).unwrap();
-    assert_eq!(v["op"], 8);
+    assert_eq!(v["op"], 8_u64);
 
     // op 0 IDENTIFY
     ws.send(Message::Text(
         serde_json::json!({
-            "op": 0,
+            "op": 0_u64,
             "d": {
                 "server_id": "G001",
                 "user_id": "U001",
@@ -92,8 +94,8 @@ async fn handshake_emits_session_description_with_secret_key() {
     // op 2 READY
     let ready = next_text(&mut ws).await;
     let v: serde_json::Value = serde_json::from_str(&ready).unwrap();
-    assert_eq!(v["op"], 2);
-    assert_eq!(v["d"]["ssrc"], 1);
+    assert_eq!(v["op"], 2_u64);
+    assert_eq!(v["d"]["ssrc"], 1_u64);
     assert!(v["d"]["modes"]
         .as_array()
         .unwrap()
@@ -103,7 +105,7 @@ async fn handshake_emits_session_description_with_secret_key() {
     // op 1 SELECT_PROTOCOL
     ws.send(Message::Text(
         serde_json::json!({
-            "op": 1,
+            "op": 1_u64,
             "d": {
                 "protocol": "udp",
                 "data": {
@@ -203,7 +205,9 @@ where
         {
             Message::Text(t) => return t.to_string(),
             Message::Ping(_) | Message::Pong(_) => continue,
-            other => panic!("unexpected WS frame: {other:?}"),
+            other @ (Message::Binary(..) | Message::Close(..) | Message::Frame(..)) => {
+                panic!("unexpected WS frame: {other:?}")
+            }
         }
     }
 }

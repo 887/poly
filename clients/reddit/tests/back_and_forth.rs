@@ -18,7 +18,7 @@
 //! ```
 
 #![cfg(feature = "native")]
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
 use poly_reddit::{RedditClient, SortKind};
 use std::sync::Arc;

@@ -36,7 +36,7 @@ struct TestServer {
 impl TestServer {
     async fn start() -> Self {
         // Initialize tracing for debug output in tests.
-        let _ = tracing_subscriber::fmt()
+        let _subscriber_init = tracing_subscriber::fmt()
             .with_env_filter("poly_server=debug,warn")
             .with_test_writer()
             .try_init();

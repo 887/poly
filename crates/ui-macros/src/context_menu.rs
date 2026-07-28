@@ -258,7 +258,7 @@ mod tests {
         let arg = parse_arg(quote!(ChannelMenu)).unwrap();
         match arg {
             Arg::Menu(p) => assert!(p.is_ident("ChannelMenu")),
-            _ => panic!("expected Arg::Menu"),
+            Arg::None | Arg::AllowDefault | Arg::Inherit => panic!("expected Arg::Menu"),
         }
     }
 

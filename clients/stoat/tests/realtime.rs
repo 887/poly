@@ -18,6 +18,29 @@ use poly_stoat::StoatClient;
 use poly_test_common::TestServerBase;
 use poly_test_stoat::{StoatState, router};
 
+/// Every `ClientEvent` variant other than the three these tests handle
+/// (`MessageReceived`, `TypingStarted`, `ConnectionStateChanged`).
+///
+/// Spelled out rather than matched with `_` so that adding a variant to
+/// `ClientEvent` is a compile error here (clippy::wildcard_enum_match_arm).
+macro_rules! other_client_events {
+    () => {
+        poly_client::ClientEvent::MessageEdited { .. }
+            | poly_client::ClientEvent::MessageDeleted { .. }
+            | poly_client::ClientEvent::PresenceChanged { .. }
+            | poly_client::ClientEvent::NotificationReceived(..)
+            | poly_client::ClientEvent::ChannelUpdated(..)
+            | poly_client::ClientEvent::ServerUpdated(..)
+            | poly_client::ClientEvent::FriendRequestReceived { .. }
+            | poly_client::ClientEvent::VoiceUserJoined { .. }
+            | poly_client::ClientEvent::VoiceUserLeft { .. }
+            | poly_client::ClientEvent::VoiceStateUpdated { .. }
+            | poly_client::ClientEvent::SidebarInvalidated
+            | poly_client::ClientEvent::IncomingCall { .. }
+            | poly_client::ClientEvent::VoiceSpeakingUpdate { .. }
+    };
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -36,7 +59,7 @@ async fn start_test_server() -> (String, tokio::sync::oneshot::Sender<()>) {
     tokio::spawn(async move {
         axum::serve(base.listener, app)
             .with_graceful_shutdown(async {
-                let _ = shutdown_rx.await;
+                let _shutdown = shutdown_rx.await;
             })
             .await
             .expect("test-stoat serve");
@@ -99,7 +122,8 @@ async fn test_event_stream_receives_message_in_server_channel() {
                 break (channel_id, message);
             }
             poly_client::ClientEvent::ConnectionStateChanged { .. } => continue,
-            other => panic!("expected MessageReceived, got: {other:?}"),
+            other @ (poly_client::ClientEvent::TypingStarted { .. }
+            | other_client_events!()) => panic!("expected MessageReceived, got: {other:?}"),
         }
     };
     assert_eq!(channel_id, "CH001", "wrong channel_id");
@@ -145,7 +169,8 @@ async fn test_event_stream_receives_typing_started() {
         match event {
             poly_client::ClientEvent::TypingStarted { channel_id, .. } => break channel_id,
             poly_client::ClientEvent::ConnectionStateChanged { .. } => continue,
-            other => panic!("expected TypingStarted, got: {other:?}"),
+            other @ (poly_client::ClientEvent::MessageReceived { .. }
+            | other_client_events!()) => panic!("expected TypingStarted, got: {other:?}"),
         }
     };
     assert_eq!(channel_id, "CH001");
@@ -185,7 +210,8 @@ async fn test_event_stream_receives_message_in_dm_channel() {
                 break (channel_id, message);
             }
             poly_client::ClientEvent::ConnectionStateChanged { .. } => continue,
-            other => panic!("expected MessageReceived for DM, got: {other:?}"),
+            other @ (poly_client::ClientEvent::TypingStarted { .. }
+            | other_client_events!()) => panic!("expected MessageReceived for DM, got: {other:?}"),
         }
     };
     assert_eq!(channel_id, "CHDM001", "wrong channel_id for DM");

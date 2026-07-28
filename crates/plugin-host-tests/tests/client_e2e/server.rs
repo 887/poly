@@ -16,7 +16,7 @@ async fn load_server() -> Result<poly_plugin_host::PluginBackend, Box<dyn std::e
 #[tokio::test]
 async fn server_backend_type() -> TestResult {
     let backend = load_server().await?;
-    harness::assert_backend_type(&backend, BackendType::from("poly"));
+    harness::assert_backend_type(&backend, &BackendType::from("poly"));
     Ok(())
 }
 

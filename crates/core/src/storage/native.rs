@@ -135,16 +135,20 @@ impl StorageInner {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::{Mutex, OnceLock};
+    use std::sync::OnceLock;
+    use tokio::sync::{Mutex, MutexGuard};
 
-    fn env_guard() -> std::sync::MutexGuard<'static, ()> {
+    /// Serialises the storage tests. Async-aware (`tokio::sync::Mutex`) so the
+    /// guard may legally be held across the `.await` points in each test body —
+    /// a `std::sync::MutexGuard` there trips `clippy::await_holding_lock`.
+    async fn env_guard() -> MutexGuard<'static, ()> {
         static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(())).lock().expect("lock")
+        LOCK.get_or_init(|| Mutex::new(())).lock().await
     }
 
     #[tokio::test]
     async fn sqlite_storage_round_trips_values() {
-        let _guard = env_guard();
+        let _guard = env_guard().await;
         let dir = tempfile::tempdir().expect("tempdir");
 
         let storage = StorageInner::init_with_path(dir.path().to_path_buf())
@@ -172,8 +176,8 @@ mod tests {
         storage.delete("app_settings").await.expect("delete");
         assert_eq!(storage.get("app_settings").await.expect("get3"), None);
 
-        storage.set("a", serde_json::json!(1)).await.expect("set a");
-        storage.set("b", serde_json::json!(2)).await.expect("set b");
+        storage.set("a", serde_json::json!(1_i64)).await.expect("set a");
+        storage.set("b", serde_json::json!(2_i64)).await.expect("set b");
         storage.clear_all().await.expect("clear");
         assert_eq!(storage.get("a").await.expect("geta"), None);
         assert_eq!(storage.get("b").await.expect("getb"), None);
@@ -181,7 +185,7 @@ mod tests {
 
     #[tokio::test]
     async fn sqlite_storage_handles_various_types() {
-        let _guard = env_guard();
+        let _guard = env_guard().await;
         let dir = tempfile::tempdir().expect("tempdir");
 
         let storage = StorageInner::init_with_path(dir.path().to_path_buf())
@@ -193,7 +197,7 @@ mod tests {
             .await
             .expect("set");
         storage
-            .set("number", serde_json::json!(42.5))
+            .set("number", serde_json::json!(42.5_f64))
             .await
             .expect("set");
         storage
@@ -201,7 +205,7 @@ mod tests {
             .await
             .expect("set");
         storage
-            .set("array", serde_json::json!([1, 2, 3]))
+            .set("array", serde_json::json!([1_i64, 2_i64, 3_i64]))
             .await
             .expect("set");
         storage
@@ -219,7 +223,7 @@ mod tests {
         );
         assert_eq!(
             storage.get("number").await.expect("get"),
-            Some(serde_json::json!(42.5))
+            Some(serde_json::json!(42.5_f64))
         );
         assert_eq!(
             storage.get("boolean").await.expect("get"),
@@ -227,7 +231,7 @@ mod tests {
         );
         assert_eq!(
             storage.get("array").await.expect("get"),
-            Some(serde_json::json!([1, 2, 3]))
+            Some(serde_json::json!([1_i64, 2_i64, 3_i64]))
         );
         assert_eq!(
             storage.get("object").await.expect("get"),
@@ -241,7 +245,7 @@ mod tests {
 
     #[tokio::test]
     async fn sqlite_storage_handles_large_values() {
-        let _guard = env_guard();
+        let _guard = env_guard().await;
         let dir = tempfile::tempdir().expect("tempdir");
 
         let storage = StorageInner::init_with_path(dir.path().to_path_buf())
@@ -261,7 +265,7 @@ mod tests {
 
     #[tokio::test]
     async fn sqlite_storage_nonexistent_key_returns_none() {
-        let _guard = env_guard();
+        let _guard = env_guard().await;
         let dir = tempfile::tempdir().expect("tempdir");
 
         let storage = StorageInner::init_with_path(dir.path().to_path_buf())
@@ -273,7 +277,7 @@ mod tests {
 
     #[tokio::test]
     async fn sqlite_storage_delete_nonexistent_key_is_noop() {
-        let _guard = env_guard();
+        let _guard = env_guard().await;
         let dir = tempfile::tempdir().expect("tempdir");
 
         let storage = StorageInner::init_with_path(dir.path().to_path_buf())

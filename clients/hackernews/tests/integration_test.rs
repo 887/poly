@@ -696,7 +696,9 @@ async fn test_get_account_overview_view_returns_list_body() {
             assert!(spec.page_size > 0, "page_size must be positive");
             assert!(!spec.row_template.primary_field.is_empty(), "primary_field must not be empty");
         }
-        other => panic!("expected ListBody, got {other:?}"),
+        other @ (ViewBody::CardBody(_) | ViewBody::TreeBody(_) | ViewBody::SplitBody(_)) => {
+            panic!("expected ListBody, got {other:?}")
+        }
     }
 }
 

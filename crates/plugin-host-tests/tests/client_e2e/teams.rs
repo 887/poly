@@ -7,11 +7,18 @@
 //!
 //! Enable with: `--features test-teams`
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::indexing_slicing
+)]
+
 use std::sync::Arc;
 
 
 use poly_client::{
-    AuthCredentials, BackendType, DmsAndGroupsBackend, IsBackend, MessageContent, MessageQuery,
+    AuthCredentials, BackendType, IsBackend, MessageContent, MessageQuery,
     SocialGraphBackend,
 };
 use poly_plugin_host::{
@@ -98,7 +105,7 @@ async fn load_teams_with_server(
 #[tokio::test]
 async fn teams_backend_type() -> TestResult {
     let backend = poly_plugin_loader_tests::load_plugin("teams", "poly_teams.wasm").await?;
-    harness::assert_backend_type(&backend, BackendType::from("teams"));
+    harness::assert_backend_type(&backend, &BackendType::from("teams"));
     Ok(())
 }
 

@@ -77,13 +77,25 @@ fn b64_decode(s: &str) -> Vec<u8> {
 /// Generate a synthetic BGRA frame with a simple gradient pattern.
 /// Width * height * 4 bytes total.
 fn make_bgra_frame(width: u32, height: u32, seed: u8) -> Vec<u8> {
-    let mut frame = Vec::with_capacity((width * height * 4) as usize);
+    let capacity = usize::try_from(width)
+        .expect("width fits in usize")
+        .saturating_mul(usize::try_from(height).expect("height fits in usize"))
+        .saturating_mul(4);
+    let mut frame = Vec::with_capacity(capacity);
     for row in 0..height {
         for col in 0..width {
             // Simple gradient: varies by position + seed so consecutive frames differ.
-            let b = ((col * 255 / width) as u8).wrapping_add(seed);
-            let g = ((row * 255 / height) as u8).wrapping_add(seed / 2);
-            let r = seed.wrapping_add((col + row) as u8);
+            // `col < width` and `row < height`, so both ratios are < 255 and fit in u8.
+            let b = u8::try_from(col.saturating_mul(255).div_euclid(width))
+                .expect("col gradient is < 255")
+                .wrapping_add(seed);
+            let g = u8::try_from(row.saturating_mul(255).div_euclid(height))
+                .expect("row gradient is < 255")
+                .wrapping_add(seed.div_euclid(2));
+            // Deliberate wrap-around on the low byte (was `(col + row) as u8`).
+            let r = seed.wrapping_add(
+                u8::try_from(col.wrapping_add(row) & 0xFF).expect("masked to one byte"),
+            );
             let a = 255u8;
             frame.extend_from_slice(&[b, g, r, a]);
         }
@@ -185,7 +197,13 @@ async fn round_trip_encode_decode() {
             height
         );
         // The YUV data must be at least the unpadded planar size.
-        let min_expected = (width * height + 2 * (width / 2) * (height / 2)) as usize;
+        let chroma_plane = width.div_euclid(2).saturating_mul(height.div_euclid(2));
+        let min_expected = usize::try_from(
+            width
+                .saturating_mul(height)
+                .saturating_add(chroma_plane.saturating_mul(2)),
+        )
+        .expect("planar size fits in usize");
         assert!(
             data.len() >= min_expected,
             "decoded frame data {} bytes is less than minimum unpadded size {} for {}x{}",
