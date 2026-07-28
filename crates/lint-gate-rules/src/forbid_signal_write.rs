@@ -46,6 +46,7 @@ pub fn scan(walker: &WorkspaceWalker, ws_root: &Path, violations: &mut Vec<Viola
             .to_string_lossy()
             .into_owned();
 
+        let all_lines: Vec<&str> = content.lines().collect();
         for (line_idx, line) in content.lines().enumerate() {
             let line_no = (line_idx as u32) + 1;
 
@@ -72,7 +73,7 @@ pub fn scan(walker: &WorkspaceWalker, ws_root: &Path, violations: &mut Vec<Viola
             // Actually `.write()` IS a suffix of `.write().await`, but we excluded that above.
             // Inline allowlist check: the bash script doesn't have a line-level inline allow for
             // this lint; it uses receiver matching. We do a simple per-line check.
-            if allowlist::has_inline_allow(line, RULE) {
+            if allowlist::has_inline_allow_near(&all_lines, line_idx, RULE) {
                 continue;
             }
 
