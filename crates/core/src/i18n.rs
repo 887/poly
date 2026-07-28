@@ -547,6 +547,39 @@ pub fn title_case_fallback(key: &str) -> String {
         .join(" ")
 }
 
+// ── Dioxus reactive hooks ─────────────────────────────────────────────────────
+
+/// Provide a reactive locale [`Signal<String>`] as Dioxus context.
+///
+/// **Call once from the root [`crate::ui::App`] component.** Child components
+/// can access the signal via [`use_locale`] and will automatically re-render
+/// when the locale changes.
+///
+/// ```rust,ignore
+/// // In App component:
+/// provide_locale_context();
+/// ```
+pub fn provide_locale_context() {
+    let sig: Signal<String> = use_signal(current_locale);
+    provide_context(sig);
+}
+
+/// Access the reactive locale [`Signal<String>`] from Dioxus context.
+///
+/// Must be called inside a component (after [`provide_locale_context`] was
+/// called in the root). Reading `sig.read()` subscribes the component —
+/// it re-renders whenever the locale changes.
+///
+/// ```rust,ignore
+/// let mut locale = use_locale();
+/// let current = locale.read().clone(); // subscribes
+/// locale.set("de".to_string());         // updates + triggers re-render
+/// ```
+#[must_use] 
+pub fn use_locale() -> Signal<String> {
+    use_context::<Signal<String>>()
+}
+
 #[cfg(test)]
 mod tests_title_case {
     #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
@@ -600,37 +633,4 @@ mod tests_title_case {
     fn trailing_desc_stripped() {
         assert_eq!(title_case_fallback("my-cool-feature-desc"), "My Cool Feature");
     }
-}
-
-// ── Dioxus reactive hooks ─────────────────────────────────────────────────────
-
-/// Provide a reactive locale [`Signal<String>`] as Dioxus context.
-///
-/// **Call once from the root [`crate::ui::App`] component.** Child components
-/// can access the signal via [`use_locale`] and will automatically re-render
-/// when the locale changes.
-///
-/// ```rust,ignore
-/// // In App component:
-/// provide_locale_context();
-/// ```
-pub fn provide_locale_context() {
-    let sig: Signal<String> = use_signal(current_locale);
-    provide_context(sig);
-}
-
-/// Access the reactive locale [`Signal<String>`] from Dioxus context.
-///
-/// Must be called inside a component (after [`provide_locale_context`] was
-/// called in the root). Reading `sig.read()` subscribes the component —
-/// it re-renders whenever the locale changes.
-///
-/// ```rust,ignore
-/// let mut locale = use_locale();
-/// let current = locale.read().clone(); // subscribes
-/// locale.set("de".to_string());         // updates + triggers re-render
-/// ```
-#[must_use] 
-pub fn use_locale() -> Signal<String> {
-    use_context::<Signal<String>>()
 }

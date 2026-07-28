@@ -43,7 +43,7 @@ async fn start_test_server() -> (String, tokio::sync::oneshot::Sender<()>) {
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
     tokio::spawn(async move {
         axum::serve(base.listener, app)
-            .with_graceful_shutdown(async { let _ = shutdown_rx.await; })
+            .with_graceful_shutdown(async { let _shutdown = shutdown_rx.await; })
             .await
             .expect("test-stoat serve");
     });

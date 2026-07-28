@@ -12,7 +12,12 @@
 //! - `open_output` → `push` → `close` event sequence is observable.
 //! - Hot-swap event emission: calling `switch_input` emits `MockEvent::SwitchInput`.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::indexing_slicing
+)]
 
 use futures::StreamExt;
 use poly_audio_backend::{
@@ -32,7 +37,7 @@ async fn switch_input_without_open_updates_current() {
     //  drain that before we start asserting on the switch event.)
     let pre = {
         let r = mock.current_input_device();
-        let _ = mock.drain_events(); // discard the CurrentInputDevice event
+        let _discarded = mock.drain_events(); // discard the CurrentInputDevice event
         r
     };
     assert!(pre.is_none(), "expected no current input before any open/switch");
@@ -47,9 +52,9 @@ async fn switch_input_without_open_updates_current() {
     );
 
     // current_input_device should now reflect the switched-to device.
-    let _ = mock.drain_events(); // discard CurrentInputDevice event from previous call
+    let _discarded = mock.drain_events(); // discard CurrentInputDevice event from previous call
     let cur = mock.current_input_device();
-    let _ = mock.drain_events();
+    let _discarded = mock.drain_events();
     assert_eq!(
         cur.map(|d| d.id),
         Some("mock-mic-b".into()),
@@ -63,7 +68,7 @@ async fn switch_input_without_open_updates_current() {
 async fn switch_output_without_open_updates_current() {
     let mock = MockAudioBackend::new();
 
-    let _ = mock.drain_events();
+    let _discarded = mock.drain_events();
     mock.switch_output("mock-speaker-b").await.unwrap();
 
     let events = mock.drain_events();
@@ -73,7 +78,7 @@ async fn switch_output_without_open_updates_current() {
     );
 
     let cur = mock.current_output_device();
-    let _ = mock.drain_events();
+    let _discarded = mock.drain_events();
     assert_eq!(
         cur.map(|d| d.id),
         Some("mock-speaker-b".into()),
@@ -114,7 +119,7 @@ async fn hot_swap_emits_switch_event_after_open() {
         .open_input("mock-mic-a", AudioFormat::DISCORD_VOICE)
         .await
         .unwrap();
-    let _ = mock.drain_events(); // discard OpenInput
+    let _discarded = mock.drain_events(); // discard OpenInput
 
     // Hot-swap to mock-mic-b while the "stream" is still alive.
     mock.switch_input("mock-mic-b").await.unwrap();
@@ -128,7 +133,7 @@ async fn hot_swap_emits_switch_event_after_open() {
 
     // Current device updated.
     let cur = mock.current_input_device();
-    let _ = mock.drain_events();
+    let _discarded = mock.drain_events();
     assert_eq!(cur.map(|d| d.id), Some("mock-mic-b".into()));
 }
 
@@ -184,7 +189,7 @@ async fn output_stream_push_and_close_events() {
         .open_output("mock-speaker-a", AudioFormat::DISCORD_VOICE)
         .await
         .unwrap();
-    let _ = mock.drain_events(); // discard OpenOutput
+    let _discarded = mock.drain_events(); // discard OpenOutput
 
     // Discord 20 ms stereo frame = 1920 samples.
     let frame: Vec<i16> = vec![0i16; 1920];
@@ -273,7 +278,7 @@ async fn custom_device_list_is_advertised() {
     // switch_input to one of the custom devices should succeed.
     mock.switch_input("bt-headset").await.unwrap();
     let cur = mock.current_input_device();
-    let _ = mock.drain_events();
+    let _discarded = mock.drain_events();
     assert_eq!(cur.map(|d| d.id), Some("bt-headset".into()));
 }
 
@@ -289,7 +294,7 @@ async fn empty_device_id_selects_default_input() {
 
     // The default input is mock-mic-a.
     let cur = mock.current_input_device();
-    let _ = mock.drain_events();
+    let _discarded = mock.drain_events();
     assert_eq!(
         cur.map(|d| d.id),
         Some("mock-mic-a".into()),
@@ -306,7 +311,7 @@ async fn empty_device_id_selects_default_output() {
         .unwrap();
 
     let cur = mock.current_output_device();
-    let _ = mock.drain_events();
+    let _discarded = mock.drain_events();
     assert_eq!(
         cur.map(|d| d.id),
         Some("mock-speaker-a".into()),

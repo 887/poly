@@ -164,7 +164,7 @@ mod tests {
             };
 
             // Five "renders" with the same deps value.
-            for _ in 0..5 {
+            for _ in 0_u32..5_u32 {
                 simulate_render(&mut deps_sig, "server-A".to_string(), &body);
             }
 
@@ -256,7 +256,7 @@ mod tests {
             assert_eq!(fire_count.get(), 1);
 
             // 20 more "renders" from unrelated parent changes — same deps, no fire.
-            for _ in 0..20 {
+            for _ in 0_u32..20_u32 {
                 simulate_render(&mut deps_sig, 42_u32, &body);
             }
             assert_eq!(

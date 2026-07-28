@@ -7,7 +7,7 @@
 //! Enable with: `--features test-stoat`
 
 
-use poly_client::{BackendType, DmsAndGroupsBackend, IsBackend, MessageContent, MessageQuery};
+use poly_client::{BackendType, DmsAndGroupsBackend, IsBackend};
 use poly_plugin_host::host_impl::{MockHttpResponse, PluginHostState};
 
 use super::harness;
@@ -18,9 +18,11 @@ async fn load_stoat() -> Result<poly_plugin_host::PluginBackend, Box<dyn std::er
     poly_plugin_loader_tests::load_plugin("stoat", "poly_stoat.wasm").await
 }
 
-async fn load_stoat_with_auth_mocks(
-) -> Result<poly_plugin_host::PluginBackend, Box<dyn std::error::Error>> {
-    let host_state = PluginHostState::new("stoat")
+/// Session + user + DM lookups the guest performs during login.
+fn with_session_mocks(
+    state: PluginHostState,
+) -> Result<PluginHostState, Box<dyn std::error::Error>> {
+    Ok(state
         .with_mock_http_response(
             "POST",
             "https://api.stoat.chat/auth/session/login",
@@ -99,7 +101,12 @@ async fn load_stoat_with_auth_mocks(
                 }))
                 .map_err(|e| format!("json serialization failed: {e:?}"))?,
             }),
-        )
+        ))
+}
+
+/// Group-recipient add/remove endpoints exercised by the DMs-and-groups tests.
+fn with_group_recipient_mocks(state: PluginHostState) -> PluginHostState {
+    state
         .with_mock_http_response(
             "PUT",
             "https://api.stoat.chat/channels/group_1/recipients/user_4",
@@ -117,7 +124,13 @@ async fn load_stoat_with_auth_mocks(
                 headers: vec![],
                 body: vec![],
             }),
-        );
+        )
+}
+
+async fn load_stoat_with_auth_mocks(
+) -> Result<poly_plugin_host::PluginBackend, Box<dyn std::error::Error>> {
+    let host_state =
+        with_group_recipient_mocks(with_session_mocks(PluginHostState::new("stoat"))?);
 
     poly_plugin_loader_tests::load_plugin_with_host_state("stoat", "poly_stoat.wasm", host_state)
         .await
@@ -126,7 +139,7 @@ async fn load_stoat_with_auth_mocks(
 #[tokio::test]
 async fn stoat_backend_type() -> TestResult {
     let backend = load_stoat().await?;
-    harness::assert_backend_type(&backend, BackendType::from("stoat"));
+    harness::assert_backend_type(&backend, &BackendType::from("stoat"));
     Ok(())
 }
 

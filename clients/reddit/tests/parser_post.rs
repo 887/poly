@@ -43,10 +43,9 @@ fn comments_have_timestamp_and_score() {
 }
 
 fn count_recursive(comments: &[poly_reddit::parser::RawComment]) -> usize {
-    let mut total = 0;
-    for c in comments {
-        total += 1;
-        total += count_recursive(&c.replies);
-    }
-    total
+    comments.iter().fold(0_usize, |total, c| {
+        total
+            .saturating_add(1)
+            .saturating_add(count_recursive(&c.replies))
+    })
 }

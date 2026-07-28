@@ -765,7 +765,9 @@ async fn test_get_account_overview_view_descriptor() {
     assert!(desc.toolbar.is_none(), "overview has no toolbar");
     match desc.body {
         ViewBody::CardBody(spec) => assert_eq!(spec.primary_field, "name"),
-        other => panic!("expected CardBody, got {other:?}"),
+        other @ (ViewBody::ListBody(_) | ViewBody::TreeBody(_) | ViewBody::SplitBody(_)) => {
+            panic!("expected CardBody, got {other:?}")
+        }
     }
 }
 

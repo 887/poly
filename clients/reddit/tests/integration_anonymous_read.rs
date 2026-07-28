@@ -20,6 +20,13 @@
 
 use poly_reddit::{RedditClient, SortKind};
 
+/// Install a stderr `tracing` subscriber so the progress diagnostics below
+/// are visible on a manual `-- --ignored --nocapture` run. Idempotent: a
+/// second call in the same test binary is a no-op.
+fn init_diagnostics() {
+    let _already_installed = tracing_subscriber::fmt().with_test_writer().try_init();
+}
+
 #[tokio::test]
 #[ignore = "live network — run manually with --ignored"]
 async fn lists_r_rust_hot_anonymously() {
@@ -54,10 +61,11 @@ async fn fetches_a_post_with_comments_anonymously() {
         .expect("post fetch + parse");
     assert_eq!(op.id, post.id, "OP id matches the listing entry");
     // Comment count is non-strict — could be 0 for a brand-new post.
-    eprintln!(
-        "fetched post {} ({} top-level comments)",
-        op.id,
-        comments.len()
+    init_diagnostics();
+    tracing::info!(
+        post_id = %op.id,
+        top_level_comments = comments.len(),
+        "fetched post"
     );
 }
 
@@ -76,7 +84,12 @@ async fn fetches_a_user_overview_anonymously() {
         .await
         .expect("user fetch + parse");
     assert!(!profile.name.is_empty());
-    eprintln!("fetched user {} with {} recent items", profile.name, profile.recent_items.len());
+    init_diagnostics();
+    tracing::info!(
+        user = %profile.name,
+        recent_items = profile.recent_items.len(),
+        "fetched user"
+    );
 }
 
 #[tokio::test]

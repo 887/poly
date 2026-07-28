@@ -22,7 +22,12 @@
 //! plan's K.5 entry together. A proper Playwright UI test that exercises
 //! the actual `voice_state.batch(…)` call is the follow-up.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::indexing_slicing
+)]
 
 use poly_client::{BackendType, VoiceConnection, VoiceConnectionKind};
 use poly_core::state::voice_state::VoiceState;
@@ -85,10 +90,11 @@ fn k5_discord_voice_then_stoat_dm_holds_and_swaps_back() {
     );
     let stoat_dm = vc("stoat-dm-1", "stoat", VoiceConnectionKind::TemporaryCall);
 
-    let mut state = VoiceState::default();
-
     // Step 1: start Discord voice channel call → active.
-    state.voice_connection = Some(discord.clone());
+    let mut state = VoiceState {
+        voice_connection: Some(discord.clone()),
+        ..VoiceState::default()
+    };
     assert_eq!(
         state.voice_connection.as_ref().unwrap().channel_id,
         "discord-voice-1"

@@ -4,7 +4,7 @@
 //! `docs/plans/plan-reddit-stub.md` Phase F.2).
 
 #![cfg(feature = "native")]
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
 use poly_reddit::parser::subreddit::parse_listing;
 

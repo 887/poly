@@ -113,7 +113,7 @@ mod tests {
         let arg = parse(quote!(ChatAction)).unwrap();
         match arg {
             Arg::Action(p) => assert!(p.is_ident("ChatAction")),
-            _ => panic!("expected Arg::Action"),
+            Arg::None | Arg::Inherit => panic!("expected Arg::Action"),
         }
     }
 

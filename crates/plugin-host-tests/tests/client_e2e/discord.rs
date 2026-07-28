@@ -16,7 +16,7 @@ async fn load_discord() -> Result<poly_plugin_host::PluginBackend, Box<dyn std::
 #[tokio::test]
 async fn discord_backend_type() -> TestResult {
     let backend = load_discord().await?;
-    harness::assert_backend_type(&backend, BackendType::from("discord"));
+    harness::assert_backend_type(&backend, &BackendType::from("discord"));
     Ok(())
 }
 

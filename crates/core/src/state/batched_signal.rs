@@ -557,11 +557,11 @@ mod tests {
             let b = a; // Copy
             #[allow(clippy::clone_on_copy)]
             let c = a.clone(); // Clone
-            a.batch(|v| *v = 5);
-            assert_eq!(*b.peek(), 5, "Copy handle sees the mutation");
-            assert_eq!(*c.peek(), 5, "Clone handle sees the mutation");
-            b.batch(|v| *v = 9);
-            assert_eq!(*a.peek(), 9, "mutation via Copy handle visible on original");
+            a.batch(|v| *v = 5_i32);
+            assert_eq!(*b.peek(), 5_i32, "Copy handle sees the mutation");
+            assert_eq!(*c.peek(), 5_i32, "Clone handle sees the mutation");
+            b.batch(|v| *v = 9_i32);
+            assert_eq!(*a.peek(), 9_i32, "mutation via Copy handle visible on original");
         });
     }
 
@@ -571,7 +571,7 @@ mod tests {
             let bs = BatchedSignal::from_signal(Signal::new(42_u8));
             // The Deref target is `Signal<T>`; this line only
             // typechecks if Deref is wired correctly.
-            let sig: &Signal<u8> = &*bs;
+            let sig: &Signal<u8> = &bs;
             assert_eq!(*sig.peek(), 42);
             assert_eq!(*bs.peek(), *sig.peek());
         });
@@ -595,14 +595,14 @@ mod tests {
     fn with_and_map_read_without_holding_guard_past_scope() {
         with_runtime(|| {
             let bs = BatchedSignal::from_signal(Signal::new(String::from("hello")));
-            let len = bs.with(|s| s.len());
+            let len = bs.with(String::len);
             assert_eq!(len, 5);
-            let owned = bs.map(|s| s.clone());
+            let owned = bs.map(String::clone);
             assert_eq!(owned, "hello");
             // After both reads return, the guard is gone and we can
             // freely batch-mutate.
             bs.batch(|s| s.push_str(" world"));
-            assert_eq!(bs.map(|s| s.clone()), "hello world");
+            assert_eq!(bs.map(String::clone), "hello world");
         });
     }
 }

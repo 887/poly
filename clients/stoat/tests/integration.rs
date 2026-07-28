@@ -39,6 +39,7 @@ struct TestState {
     addr: String,
 }
 
+#[derive(Clone, Copy)]
 struct StoatUserJsonParams {
     user_id: &'static str,
     username: &'static str,
@@ -418,7 +419,7 @@ async fn fetch_user(
                 "tag": "avatars",
                 "filename": "avatar.png",
                 "content_type": "image/png",
-                "size": 1234
+                "size": 1234_u32
             },
             "status": { "presence": "Focus" },
             "online": true
@@ -487,7 +488,7 @@ async fn fetch_server(
                     "channels": ["ch_text", "ch_voice"]
                 }
             ],
-            "default_permissions": 0,
+            "default_permissions": 0_u32,
             "icon": null,
             "banner": null
         }))),
@@ -522,7 +523,7 @@ async fn fetch_server_members(
                         "tag": "avatars",
                         "filename": "member.png",
                         "content_type": "image/png",
-                        "size": 2345
+                        "size": 2345_u32
                     }
                 },
                 {
@@ -542,7 +543,7 @@ async fn fetch_server_members(
                         "tag": "avatars",
                         "filename": "avatar.png",
                         "content_type": "image/png",
-                        "size": 1234
+                        "size": 1234_u32
                     },
                     "status": { "presence": "Focus" },
                     "online": true
@@ -586,7 +587,7 @@ async fn fetch_channel(
             "name": "general",
             "description": "General testing chat",
             "last_message_id": "msg_2",
-            "default_permissions": { "a": 0, "d": 0 },
+            "default_permissions": { "a": 0_u32, "d": 0_u32 },
             "role_permissions": {},
             "nsfw": false,
             "voice": null
@@ -598,10 +599,10 @@ async fn fetch_channel(
             "name": "voice lounge",
             "description": "Voice-enabled room",
             "last_message_id": null,
-            "default_permissions": { "a": 0, "d": 0 },
+            "default_permissions": { "a": 0_u32, "d": 0_u32 },
             "role_permissions": {},
             "nsfw": false,
-            "voice": { "max_users": 12 }
+            "voice": { "max_users": 12_u32 }
         }),
         "dm_1" => json!({
             "channel_type": "DirectMessage",
@@ -770,23 +771,17 @@ async fn fetch_unreads(headers: HeaderMap) -> Result<Json<Value>, (StatusCode, J
     ])))
 }
 
-async fn fetch_messages(
-    headers: HeaderMap,
-    Path(target): Path<String>,
-) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
-    let token = headers
-        .get("x-session-token")
-        .and_then(|value| value.to_str().ok())
-        .unwrap_or_default();
+/// Message-list fixture bodies keyed by channel id.
+///
+/// Split out of `fetch_messages` (and further split by channel family) so
+/// every helper stays under the `clippy::too_many_lines` threshold.
+fn messages_fixture_body(target: &str) -> Option<Value> {
+    server_channel_messages_fixture(target).or_else(|| dm_messages_fixture(target))
+}
 
-    if token != "test-session-token" && token != "restored-token" {
-        return Err((
-            StatusCode::UNAUTHORIZED,
-            Json(json!({ "type": "InvalidSession" })),
-        ));
-    }
-
-    let body = match target.as_str() {
+/// Fixtures for server text/array channels.
+fn server_channel_messages_fixture(target: &str) -> Option<Value> {
+    let body = match target {
         "ch_text" => json!({
             "messages": [
                 {
@@ -807,7 +802,7 @@ async fn fetch_messages(
                             "filename": "diagram.png",
                             "metadata": null,
                             "content_type": "image/png",
-                            "size": 2048
+                            "size": 2048_u32
                         }
                     ],
                     "edited": null,
@@ -881,6 +876,14 @@ async fn fetch_messages(
                 "reactions": {}
             }
         ]),
+        _ => return None,
+    };
+    Some(body)
+}
+
+/// Fixtures for DM, group-DM and saved-notes channels.
+fn dm_messages_fixture(target: &str) -> Option<Value> {
+    let body = match target {
         "dm_1" => json!({
             "messages": [
                 {
@@ -962,10 +965,29 @@ async fn fetch_messages(
             "users": [],
             "members": []
         }),
-        _ => {
-            return Err((StatusCode::NOT_FOUND, Json(json!({ "type": "NotFound" }))));
-        }
+        _ => return None,
     };
+    Some(body)
+}
+
+async fn fetch_messages(
+    headers: HeaderMap,
+    Path(target): Path<String>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let token = headers
+        .get("x-session-token")
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default();
+
+    if token != "test-session-token" && token != "restored-token" {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "type": "InvalidSession" })),
+        ));
+    }
+
+    let body = messages_fixture_body(target.as_str())
+        .ok_or_else(|| (StatusCode::NOT_FOUND, Json(json!({ "type": "NotFound" }))))?;
 
     Ok(Json(body))
 }

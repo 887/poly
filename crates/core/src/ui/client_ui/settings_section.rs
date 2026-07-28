@@ -548,7 +548,7 @@ fn resolve_backend(
 /// underlying `Vec<ToastMessage>` so unit tests don't need a Dioxus
 /// `VirtualDom` to construct a `Signal`.
 #[cfg(test)]
-fn push_save_outcome_toast(queue: &mut Vec<ToastMessage>, result: Result<(), ClientError>) {
+fn push_save_outcome_toast(queue: &mut Vec<ToastMessage>, result: &Result<(), ClientError>) {
     match result {
         Ok(()) => queue.push(ToastMessage::new("ui-settings-saved", ToastTone::Success)),
         Err(_) => queue.push(ToastMessage::new(
@@ -587,7 +587,7 @@ mod tests {
     #[test]
     fn save_ok_pushes_success_toast() {
         let mut queue: Vec<ToastMessage> = Vec::new();
-        push_save_outcome_toast(&mut queue, Ok(()));
+        push_save_outcome_toast(&mut queue, &Ok(()));
         assert_eq!(queue.len(), 1, "Ok save should push exactly one toast");
         assert_eq!(queue[0].label_key, "ui-settings-saved");
         assert_eq!(queue[0].tone, ToastTone::Success);
@@ -600,7 +600,7 @@ mod tests {
         let mut queue: Vec<ToastMessage> = Vec::new();
         push_save_outcome_toast(
             &mut queue,
-            Err(ClientError::NotFound("plugin unavailable".into())),
+            &Err(ClientError::NotFound("plugin unavailable".into())),
         );
         assert_eq!(queue.len(), 1, "Err save should push exactly one toast");
         assert_eq!(queue[0].label_key, "ui-settings-save-failed");
@@ -612,8 +612,8 @@ mod tests {
     #[test]
     fn repeated_saves_grow_queue() {
         let mut queue: Vec<ToastMessage> = Vec::new();
-        for _ in 0..3 {
-            push_save_outcome_toast(&mut queue, Ok(()));
+        for _ in 0_u32..3_u32 {
+            push_save_outcome_toast(&mut queue, &Ok(()));
         }
         assert_eq!(queue.len(), 3);
         assert!(

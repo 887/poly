@@ -381,6 +381,6 @@ mod tests {
             max_depth: u32::MAX,
         };
         let v = max_visible_rows(&spec);
-        assert!(v >= u32::MAX as usize);
+        assert!(v >= usize::try_from(u32::MAX).expect("u32 fits in usize"));
     }
 }

@@ -204,7 +204,7 @@ mod tests {
         // Pure preconditions on the vector the body engine iterates. The
         // card body renders one article per row in the source vector
         // without filtering or reordering.
-        let rows = vec![row("a", "First"), row("b", "Second")];
+        let rows = [row("a", "First"), row("b", "Second")];
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0].id, "a");
         assert_eq!(rows[1].id, "b");

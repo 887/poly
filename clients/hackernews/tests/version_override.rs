@@ -70,7 +70,9 @@ async fn test_version_override_reaches_wire() {
 
     // Trigger a request to the mock server.
     // get_servers() is in-memory; get_messages() with "hn-top" fires get_feed_ids() via HTTP.
-    let _ = client.get_messages("hn-top", MessageQuery::default()).await;
+    // Result deliberately unused — the assertion is on the UA header the mock
+    // server captured, not on the payload.
+    let _response = client.get_messages("hn-top", MessageQuery::default()).await;
     tokio::time::sleep(std::time::Duration::from_millis(20)).await;
 
     let entries = captured_headers(&server).await;
@@ -109,7 +111,9 @@ async fn test_version_override_clear_restores_default() {
         "client_version() must return the default after clearing"
     );
 
-    let _ = client.get_messages("hn-top", MessageQuery::default()).await;
+    // Result deliberately unused — the assertion is on the UA header the mock
+    // server captured, not on the payload.
+    let _response = client.get_messages("hn-top", MessageQuery::default()).await;
     tokio::time::sleep(std::time::Duration::from_millis(20)).await;
 
     let entries = captured_headers(&server).await;

@@ -16,7 +16,7 @@ async fn load_matrix() -> Result<poly_plugin_host::PluginBackend, Box<dyn std::e
 #[tokio::test]
 async fn matrix_backend_type() -> TestResult {
     let backend = load_matrix().await?;
-    harness::assert_backend_type(&backend, BackendType::from("matrix"));
+    harness::assert_backend_type(&backend, &BackendType::from("matrix"));
     Ok(())
 }
 

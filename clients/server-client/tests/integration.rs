@@ -41,7 +41,7 @@ struct TestServer {
 impl TestServer {
     async fn start() -> Self {
         // Initialize tracing (once).
-        let _ = tracing_subscriber::fmt()
+        let _already_installed = tracing_subscriber::fmt()
             .with_env_filter("poly_server=debug,poly_server_client=debug,warn")
             .with_test_writer()
             .try_init();
@@ -537,6 +537,7 @@ async fn test_websocket_events() {
         .expect("send_message");
 
     // Wait for the MessageCreated event (skip Pings and other events).
+    use poly_server_client::models::ServerEvent as SE;
     let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
     loop {
         let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
@@ -555,7 +556,26 @@ async fn test_websocket_events() {
             poly_server_client::models::ServerEvent::Ping => {
                 continue; // Skip keepalive pings.
             }
-            other => unreachable!("Unexpected event before MessageCreated: {:?}", other),
+            // Enumerated rather than wildcarded so a newly added ServerEvent
+            // variant breaks this match instead of silently landing here.
+            other @ (SE::MessageEdited(_)
+            | SE::MessageDeleted { .. }
+            | SE::ReactionAdded { .. }
+            | SE::ReactionRemoved { .. }
+            | SE::TypingStart { .. }
+            | SE::PresenceUpdate { .. }
+            | SE::DeviceRevoked
+            | SE::VoiceStateUpdate { .. }
+            | SE::FriendRequestReceived { .. }
+            | SE::FriendRequestAccepted { .. }
+            | SE::ServerMemberJoined { .. }
+            | SE::ServerMemberLeft { .. }
+            | SE::ServerUpdated { .. }
+            | SE::ChannelCreated { .. }
+            | SE::ChannelDeleted { .. }
+            | SE::VoiceSignalRelay { .. }) => {
+                unreachable!("Unexpected event before MessageCreated: {:?}", other)
+            }
         }
     }
 

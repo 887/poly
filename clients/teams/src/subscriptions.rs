@@ -305,7 +305,8 @@ mod webhook_flag {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+    // indexing_slicing extended onto the sanctioned test header: serde_json::Value key assertions.
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
     use super::*;
 
     #[test]

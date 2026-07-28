@@ -124,7 +124,7 @@ impl TestServer {
 
         tokio::spawn(async move {
             // Ignore serve error — test will fail naturally if server dies.
-            let _ = axum::serve(
+            let _served = axum::serve(
                 listener,
                 router.into_make_service_with_connect_info::<SocketAddr>(),
             )
@@ -179,7 +179,7 @@ impl TestServer {
         let addr = listener.local_addr().context("local addr")?;
 
         tokio::spawn(async move {
-            let _ = axum::serve(
+            let _served = axum::serve(
                 listener,
                 router.into_make_service_with_connect_info::<SocketAddr>(),
             )
@@ -217,7 +217,7 @@ fn solve_pow(nonce: &str, difficulty: u32) -> u64 {
 fn leading_zero_bits(hash: &[u8]) -> u32 {
     let mut bits = 0u32;
     for byte in hash {
-        bits += byte.leading_zeros();
+        bits = bits.saturating_add(byte.leading_zeros());
         if *byte != 0 {
             break;
         }

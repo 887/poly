@@ -11,6 +11,13 @@ use poly_client::{
 use poly_plugin_host::PluginRegistry;
 use poly_plugin_loader_tests::wasm_dir;
 
+/// `(plugin id, wasm file name, optional exact (backend_type, backend_name))`.
+///
+/// `None` in the third slot means the manifest name is not asserted exactly —
+/// the plugin is still loaded, instantiated, and required to report a
+/// non-empty name.
+type PluginExpectation = (&'static str, &'static str, Option<(BackendType, &'static str)>);
+
 /// Load all 8 WASM plugin files and verify they can be instantiated
 /// (load + unload) and report a backend type and name. The 6 plugins with
 /// stable manifest names also assert their exact `backend_type`/`backend_name`.
@@ -32,7 +39,7 @@ async fn load_all_wasm_plugins() {
     // (id, file, expected_type, expected_name). expected_name is None for
     // plugins whose manifest name is not asserted exactly — we still prove
     // they load, instantiate, and report a non-empty name.
-    let plugins: [(&str, &str, Option<(BackendType, &str)>); 8] = [
+    let plugins: [PluginExpectation; 8] = [
         ("demo", "poly_demo.wasm", Some((BackendType::from("demo"), "Demo"))),
         ("stoat", "poly_stoat.wasm", Some((BackendType::from("stoat"), "Stoat"))),
         ("matrix", "poly_matrix.wasm", Some((BackendType::from("matrix"), "Matrix"))),
@@ -49,7 +56,13 @@ async fn load_all_wasm_plugins() {
     for (_, file, _) in &plugins {
         let path = wasm_dir.join(file);
         if !path.exists() {
-            eprintln!("SKIP load_all_wasm_plugins: {file} not found (run `cargo component build --target wasm32-wasip2 --no-default-features` to produce it)");
+            // stderr, not `tracing` — this test binary installs no subscriber,
+            // so a `tracing::warn!` would vanish and the early return would be
+            // an invisible vacuous pass. `cargo test -- --nocapture` shows this.
+            #[allow(clippy::print_stderr)]
+            {
+                eprintln!("SKIP load_all_wasm_plugins: {file} not found (run `cargo component build --target wasm32-wasip2 --no-default-features` to produce it)");
+            }
             return;
         }
     }

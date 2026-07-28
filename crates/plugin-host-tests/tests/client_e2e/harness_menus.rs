@@ -124,7 +124,7 @@ pub async fn menu_pending_action_polls(
     };
     // Loop at most 10 times with a minimal delay; stop when non-pending.
     let mut current = handle;
-    for _ in 0..10 {
+    for _ in 0_u32..10_u32 {
         match backend.poll_action(current.clone()).await {
             Ok(ActionOutcome::Pending(next)) => current = next,
             Ok(_) => return Ok(()),

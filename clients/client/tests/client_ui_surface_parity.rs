@@ -13,7 +13,7 @@
 #[test]
 #[ignore = "WP 1: WIT surface not yet defined"]
 fn every_backend_declares_all_five_ui_surfaces() {
-    todo!("WP 1: implement per plan")
+    panic!("WP 1: not implemented — see docs/plans/plan-client-ui-surface.md")
 }
 
 /// WP 2: For every backend that declares `groups: true` in its
@@ -22,7 +22,7 @@ fn every_backend_declares_all_five_ui_surfaces() {
 #[test]
 #[ignore = "WP 2: context-menu WIT surface not yet defined"]
 fn server_menu_never_empty_when_groups_supported() {
-    todo!("WP 2: implement per plan")
+    panic!("WP 2: not implemented — see docs/plans/plan-client-ui-surface.md")
 }
 
 /// WP 2: For every backend that declares `dms: true` in its
@@ -31,7 +31,7 @@ fn server_menu_never_empty_when_groups_supported() {
 #[test]
 #[ignore = "WP 2: context-menu WIT surface not yet defined"]
 fn user_menu_has_block_action_if_blocking_supported() {
-    todo!("WP 2: implement per plan")
+    panic!("WP 2: not implemented — see docs/plans/plan-client-ui-surface.md")
 }
 
 /// WP 3: Every settings section returned by `get-settings-sections` has a
@@ -41,7 +41,7 @@ fn user_menu_has_block_action_if_blocking_supported() {
 #[test]
 #[ignore = "WP 3: settings WIT surface not yet defined"]
 fn settings_sections_respect_scope() {
-    todo!("WP 3: implement per plan")
+    panic!("WP 3: not implemented — see docs/plans/plan-client-ui-surface.md")
 }
 
 /// WP 4: The sidebar declaration returned by `get-sidebar-declaration` for
@@ -52,7 +52,7 @@ fn settings_sections_respect_scope() {
 #[test]
 #[ignore = "WP 4: sidebar WIT surface not yet defined"]
 fn sidebar_layout_matches_capabilities_mapping() {
-    todo!("WP 4: implement per plan")
+    panic!("WP 4: not implemented — see docs/plans/plan-client-ui-surface.md")
 }
 
 /// WP 4 / Pack B.2 P28: Every `route-kind` value referenced inside a sidebar
@@ -114,7 +114,7 @@ fn sidebar_route_kinds_have_host_handlers() {
 #[test]
 #[ignore = "WP 5: view-descriptor WIT surface not yet defined"]
 fn view_descriptor_cursor_kind_matches_declaration() {
-    todo!("WP 5: implement per plan")
+    panic!("WP 5: not implemented — see docs/plans/plan-client-ui-surface.md")
 }
 
 /// WP 6 / Pack A.3: Every composer-toolbar button declared via `get-composer-buttons`
@@ -164,5 +164,5 @@ fn composer_buttons_match_backend_features() {
 #[test]
 #[ignore = "WP 7: cleanup pass not yet run"]
 fn no_dead_per_backend_files() {
-    todo!("WP 7: implement per plan")
+    panic!("WP 7: not implemented — see docs/plans/plan-client-ui-surface.md")
 }

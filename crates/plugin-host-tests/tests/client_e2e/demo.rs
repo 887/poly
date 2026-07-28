@@ -32,7 +32,7 @@ async fn load_demo() -> Result<poly_plugin_host::PluginBackend, Box<dyn std::err
 #[tokio::test]
 async fn demo_backend_type() -> TestResult {
     let backend = load_demo().await?;
-    harness::assert_backend_type(&backend, BackendType::from("demo"));
+    harness::assert_backend_type(&backend, &BackendType::from("demo"));
     Ok(())
 }
 

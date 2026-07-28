@@ -254,7 +254,7 @@ mod tests {
         };
         let d =
             AcsTokenAcquirer::seconds_until_refresh(&tok, now, &|| 0);
-        let secs = d.as_secs() as i64;
+        let secs = i64::try_from(d.as_secs()).expect("refresh delay fits in i64");
         // 22h ± 5s slack for clock drift in test runtime.
         assert!(
             (22 * 3600 - 5..=22 * 3600 + 5).contains(&secs),

@@ -220,16 +220,18 @@ mod tests {
         let ast: DeriveInput = syn::parse2(ts).unwrap();
         let vars: Vec<&Variant> = match &ast.data {
             Data::Enum(e) => e.variants.iter().collect(),
-            _ => panic!("expected enum"),
+            Data::Struct(_) | Data::Union(_) => panic!("expected enum"),
         };
-        assert_eq!(vars.len(), 3);
+        let [root, dms_home, reauth] = vars.as_slice() else {
+            panic!("expected 3 variants, got {}", vars.len())
+        };
         // Root
-        assert!(!variant_has_account_id_field(vars[0]));
+        assert!(!variant_has_account_id_field(root));
         // DmsHome
-        assert!(variant_has_account_id_field(vars[1]));
-        assert!(!variant_has_skip_account_id_attr(vars[1]));
+        assert!(variant_has_account_id_field(dms_home));
+        assert!(!variant_has_skip_account_id_attr(dms_home));
         // ReauthAccount
-        assert!(variant_has_account_id_field(vars[2]));
-        assert!(variant_has_skip_account_id_attr(vars[2]));
+        assert!(variant_has_account_id_field(reauth));
+        assert!(variant_has_skip_account_id_attr(reauth));
     }
 }

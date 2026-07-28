@@ -4,7 +4,12 @@
 //! contract passes a fixed set of assertions. When real impls land (Phase E.3
 //! `native` / `web` features), run the same tests against them.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::indexing_slicing
+)]
 
 use poly_video_backend::{
     test_support::{generate_gradient_frame, mock_stream, MockVideoBackend},
@@ -97,7 +102,10 @@ async fn open_camera_frames_have_correct_format() {
     assert_eq!(frame.format, VideoPixelFormat::Bgra, "mock frame must be BGRA");
     assert_eq!(frame.width, 480);
     assert_eq!(frame.height, 360);
-    let expected_len = frame.width as usize * frame.height as usize * 4;
+    let expected_len = usize::try_from(frame.width)
+        .expect("frame width fits in usize")
+        .saturating_mul(usize::try_from(frame.height).expect("frame height fits in usize"))
+        .saturating_mul(4);
     assert_eq!(
         frame.data.len(),
         expected_len,
@@ -148,7 +156,7 @@ fn video_frame_expected_len_yuv420p() {
     use poly_video_backend::VideoPixelFormat;
     // YUV420p: Y = w*h, U = w/2*h/2, V = w/2*h/2 → total = w*h * 3/2
     let len = poly_video_backend::VideoFrame::expected_len(480, 360, VideoPixelFormat::Yuv420p);
-    assert_eq!(len, 480 * 360 * 3 / 2);
+    assert_eq!(len, (480_usize * 360 * 3).div_euclid(2));
 }
 
 // ── gradient frame generation ─────────────────────────────────────────────────

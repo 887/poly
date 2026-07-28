@@ -327,7 +327,7 @@ mod tests {
         };
         // No Dioxus context available; exercise via format! only to ensure
         // the fields are constructible.
-        let tag = format!("{}", m.modal_id);
+        let tag = m.modal_id.to_string();
         assert!(!tag.is_empty());
     }
 }
