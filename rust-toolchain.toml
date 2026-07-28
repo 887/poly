@@ -6,5 +6,11 @@
 # compiler so `[workspace.lints]` denies fire identically everywhere.
 channel = "1.97.1"
 components = ["rustfmt", "clippy"]
-targets = ["wasm32-unknown-unknown"]
+# wasm32-unknown-unknown — the Dioxus WASM client bundle.
+# wasm32-wasip1        — the WASM Component Model plugin guests. Required by
+#   `.cargo/config.toml` and `crates/plugin-host-tests`, which reads
+#   `target/wasm32-wasip1/debug`. Without it listed here rustup auto-installs
+#   it on first use, turning a plugin-host test run into a network fetch that
+#   can (and did) fail mid-suite on a corrupted partial download.
+targets = ["wasm32-unknown-unknown", "wasm32-wasip1"]
 profile = "minimal"
