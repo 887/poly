@@ -49,6 +49,20 @@ use tokio_tungstenite::tungstenite::Message;
 /// asset server, so we use 3000 here to avoid the conflict when both MCPs run
 /// simultaneously.
 const WEB_SERVER_PORT: u16 = 3000;
+
+/// Build an `Authorization: Bearer <token>` header map, or an empty one when
+/// no token was obtainable. Returning a map rather than an `Option<String>`
+/// keeps the request-builder call sites branch-free.
+fn bearer(token: Option<&str>) -> reqwest::header::HeaderMap {
+    let mut headers = reqwest::header::HeaderMap::new();
+    if let Some(tok) = token
+        && let Ok(value) = reqwest::header::HeaderValue::from_str(&format!("Bearer {tok}"))
+    {
+        let _prev = headers.insert(reqwest::header::AUTHORIZATION, value);
+    }
+    headers
+}
+
 /// Path the dx-serve fullstack server uses to serve the compiled WASM loader.
 /// A 200 here is the load-bearing "wasm bundle is actually ready" signal —
 /// the server half (port 3000) can bind and start replying to `/host/status`
@@ -222,6 +236,30 @@ fn cdp_f64_to_i64(v: f64) -> i64 {
 }
 
 impl ChromeCdpBackend {
+    /// Fetch this shell's `/host/*` bearer token from `GET /host/session`.
+    ///
+    /// Returns `None` when the shell refuses or is too old to serve the
+    /// route — callers then send the request unauthenticated, which is
+    /// exactly what a pre-Phase-A shell (or one started with
+    /// `POLY_HOST_AUTH_INSECURE_DISABLE=1`) expects.
+    async fn host_session_token(&self) -> Option<String> {
+        let resp = self
+            .client
+            .get(format!("http://127.0.0.1:{WEB_SERVER_PORT}/host/session"))
+            .timeout(std::time::Duration::from_secs(5))
+            .send()
+            .await
+            .ok()?;
+        if !resp.status().is_success() {
+            return None;
+        }
+        let body: Value = resp.json().await.ok()?;
+        body.get("token")
+            .and_then(|v| v.as_str())
+            .filter(|t| !t.is_empty())
+            .map(str::to_string)
+    }
+
     fn new(headless: bool) -> Self {
         Self {
             ws: Arc::new(Mutex::new(None)),
@@ -1509,10 +1547,20 @@ impl DevtoolsBackend for ChromeCdpBackend {
         //
         // Keep the legacy localStorage/sessionStorage/IndexedDB clears as
         // belt-and-suspenders in case any shell mode lands data there.
+        //
+        // Since `plan-host-substrate-capability-gating.md` Phase A every
+        // `/host/*` route except `/host/status` and `/host/caps` requires the
+        // shell's bearer token, and `/host/kv/clear` is additionally
+        // shell-only. This MCP is a same-user local process, so `GET
+        // /host/session` mints for it (no `Origin` / `Sec-Fetch-Site`, and it
+        // dials loopback by literal). Without the header the clear comes back
+        // 401 and the reset aborts.
+        let token = self.host_session_token().await;
         let resp = self
             .client
             .post(format!("http://127.0.0.1:{WEB_SERVER_PORT}/host/kv/clear"))
             .header("Content-Type", "application/json")
+            .headers(bearer(token.as_deref()))
             .body("{}")
             .timeout(std::time::Duration::from_secs(10))
             .send()
@@ -1531,6 +1579,7 @@ impl DevtoolsBackend for ChromeCdpBackend {
             self.client
                 .post(format!("http://127.0.0.1:{WEB_SERVER_PORT}/host/kv/set"))
                 .header("Content-Type", "application/json")
+                .headers(bearer(token.as_deref()))
                 .body(r#"{"key":"dev.autoseed_disabled","value":true}"#)
                 .timeout(std::time::Duration::from_secs(5))
                 .send()

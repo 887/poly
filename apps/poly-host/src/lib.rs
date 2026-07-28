@@ -31,11 +31,18 @@ use std::sync::{Arc, Mutex};
 use anyhow::{Context, Result};
 use axum::{
     Json, Router,
-    extract::{Path as AxumPath, State},
+    extract::{Extension, Path as AxumPath, State},
     http::{HeaderMap, HeaderValue, StatusCode, header},
     response::IntoResponse,
     routing::{get, post},
 };
+use poly_host_bridge::exec_policy::{
+    ConsentPrompt, ExecDenied, ExecPolicy, TracingConsentPrompt,
+};
+use poly_host_bridge::host_auth::{
+    AUTH_DISABLE_ENV, CallerId, HostAuth, HostSessionResponse, PLUGIN_HEADER, ROUTE_SESSION,
+};
+use poly_host_bridge::secret_seal::{SEAL_PREFIX, SecretSealer, XChaChaSealer};
 use poly_host_bridge::{
     AccountAddRequest, AccountAddResponse, AccountListEntry, AccountListResponse,
     AccountRemoveRequest, AccountRemoveResponse, HostCall, HostResponse, KvDeleteRequest,
@@ -59,7 +66,7 @@ use poly_host_bridge::teams_webhook::{
     router as teams_webhook_router,
 };
 use sqlite::{Connection, ConnectionThreadSafe, State as SqlState};
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::CorsLayer;
 
 /// Shared daemon state — a SQLite handle plus the path we opened it from
 /// (kept around so `GET /host/status` can report where storage lives).
@@ -67,6 +74,13 @@ use tower_http::cors::{Any, CorsLayer};
 /// Optionally holds the list of host capability strings advertised to the
 /// WASM client via `GET /host/caps`. Call [`HostState::with_caps`] after
 /// [`HostState::open`] to set them; defaults to an empty list.
+///
+/// Since `plan-host-substrate-capability-gating.md` it also carries the
+/// three policy objects that make `/host/*` a confined surface rather than
+/// an open one: the session-token verifier ([`HostAuth`]), the exec
+/// allowlist/consent store ([`ExecPolicy`]) and the at-rest sealer for
+/// credential rows ([`SecretSealer`]). All three are trait objects so a
+/// test can substitute an in-memory implementation (SOLID item 7).
 #[derive(Clone)]
 pub struct HostState {
     db: Arc<Mutex<ConnectionThreadSafe>>,
@@ -74,6 +88,16 @@ pub struct HostState {
     /// Capability strings returned by `GET /host/caps`.
     /// Each entry is a `HostCap` variant name (`"SandboxBrowser"` etc.).
     caps: Arc<Vec<String>>,
+    /// Per-shell bearer-token verifier for every `/host/*` route.
+    auth: Arc<HostAuth>,
+    /// Origins the CORS layer and the token-mint route accept.
+    origins: Arc<Vec<String>>,
+    /// Declared-program + consent store backing `/host/exec`.
+    exec_policy: Arc<dyn ExecPolicy>,
+    /// Where a missing-consent denial is surfaced.
+    consent_prompt: Arc<dyn ConsentPrompt>,
+    /// Seals credential-bearing rows before they hit SQLite.
+    sealer: Arc<dyn SecretSealer>,
 }
 
 impl HostState {
@@ -96,10 +120,26 @@ impl HostState {
             "CREATE TABLE IF NOT EXISTS poly_kv (key TEXT PRIMARY KEY NOT NULL, payload TEXT NOT NULL)",
         )
         .context("create poly_kv table")?;
+        let db = Arc::new(Mutex::new(db));
+        let sealer = XChaChaSealer::from_key_file(&XChaChaSealer::key_path_for(&db_path))
+            .context("open at-rest sealing key")?;
+        let auth = HostAuth::mint().context("mint host session token")?;
+        if !auth.enforced() {
+            tracing::error!(
+                "{AUTH_DISABLE_ENV}=1 — /host/* bearer authentication is DISABLED. \
+                 Every local process (and every web page in the user's browser) can \
+                 reach exec, KV and the plugin admin routes. Never ship with this set."
+            );
+        }
         Ok(Self {
-            db: Arc::new(Mutex::new(db)),
+            db: Arc::clone(&db),
             db_path,
             caps: Arc::new(Vec::new()),
+            auth: Arc::new(auth),
+            origins: Arc::new(default_shell_origins()),
+            exec_policy: Arc::new(SqliteExecPolicy::new(db)),
+            consent_prompt: Arc::new(TracingConsentPrompt),
+            sealer: Arc::new(sealer),
         })
     }
 
@@ -125,6 +165,94 @@ impl HostState {
     pub fn db_path(&self) -> &Path {
         &self.db_path
     }
+
+    /// The bearer token this shell's own WASM bundle must present on every
+    /// `/host/*` request.
+    ///
+    /// A shell that composes [`router`] into its own axum server shares a
+    /// process with the client, so it can inject this value into the page
+    /// instead of paying for a [`ROUTE_SESSION`] round trip.
+    #[must_use]
+    pub fn session_token(&self) -> &str {
+        self.auth.token()
+    }
+
+    /// Derived token to hand a specific plugin. Confines that plugin to
+    /// its own `plugin:{id}:` KV namespace and its own exec declarations.
+    #[must_use]
+    pub fn plugin_token(&self, plugin_id: &str) -> String {
+        self.auth.derive_plugin_token(plugin_id)
+    }
+
+    /// Add `port` (on both `127.0.0.1` and `localhost`) to the accepted
+    /// origin list.
+    ///
+    /// [`serve`] calls this with the address it actually bound, which is
+    /// what Phase A.4 means by "derived from the bound port": the
+    /// hard-coded defaults only cover the three fullstack shells, which
+    /// mount [`router`] directly and never call [`serve`].
+    #[must_use]
+    pub fn with_bound_port(mut self, port: u16) -> Self {
+        let mut origins = (*self.origins).clone();
+        for host in ["127.0.0.1", "localhost", "[::1]"] {
+            let origin = format!("http://{host}:{port}");
+            if !origins.contains(&origin) {
+                origins.push(origin);
+            }
+        }
+        self.origins = Arc::new(origins);
+        self
+    }
+
+    /// Replace the whole accepted-origin list. Empty means "no browser
+    /// origin is accepted", which is the right setting for a headless
+    /// deployment.
+    #[must_use]
+    pub fn with_origins(mut self, origins: Vec<String>) -> Self {
+        self.origins = Arc::new(origins);
+        self
+    }
+
+    /// Substitute the exec allowlist/consent store — the seam tests use.
+    #[must_use]
+    pub fn with_exec_policy(mut self, policy: Arc<dyn ExecPolicy>) -> Self {
+        self.exec_policy = policy;
+        self
+    }
+
+    /// Substitute where consent prompts are surfaced.
+    #[must_use]
+    pub fn with_consent_prompt(mut self, prompt: Arc<dyn ConsentPrompt>) -> Self {
+        self.consent_prompt = prompt;
+        self
+    }
+
+    /// Substitute the at-rest sealer.
+    #[must_use]
+    pub fn with_sealer(mut self, sealer: Arc<dyn SecretSealer>) -> Self {
+        self.sealer = sealer;
+        self
+    }
+
+    /// Replace the token verifier — used by tests that need a known token.
+    #[must_use]
+    pub fn with_auth(mut self, auth: HostAuth) -> Self {
+        self.auth = Arc::new(auth);
+        self
+    }
+}
+
+/// Loopback origins the shells are known to bind (see the platform table
+/// in `CLAUDE.md`). Every entry is `http://` on loopback: a `https://`
+/// or non-loopback origin is never one of ours.
+fn default_shell_origins() -> Vec<String> {
+    let mut out = Vec::new();
+    for port in [3000_u16, 3001, 3002, poly_host_bridge::BRIDGE_PORT] {
+        for host in ["127.0.0.1", "localhost", "[::1]"] {
+            out.push(format!("http://{host}:{port}"));
+        }
+    }
+    out
 }
 
 /// Build the full `/host/*` router over an already-open [`HostState`].
@@ -135,13 +263,14 @@ impl HostState {
 /// as before).
 #[must_use = "the Router must be merged into the Dioxus router or served directly"]
 pub fn router(state: HostState) -> Router {
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
+    let cors = cors_layer(&state);
 
     let base = Router::new()
         .route("/host/status", get(status))
+        // Phase A.2: the one route exempt from bearer verification — it is
+        // how the shell's own bundle *learns* the bearer token. Gated on
+        // request provenance instead; see `host_session`.
+        .route(ROUTE_SESSION, get(host_session))
         // D.3: Host capabilities — lets the WASM UI ask which sandbox/host-cap
         // features the running shell supports. Response: `{ "caps": [...] }`.
         .route("/host/caps", get(host_caps))
@@ -153,6 +282,8 @@ pub fn router(state: HostState) -> Router {
         .route("/host/plugin-kv/set", post(plugin_kv_set))
         .route("/host/plugin-kv/delete", post(plugin_kv_delete))
         .route("/host/exec", post(host_exec))
+        .route("/host/exec/declare", post(host_exec_declare))
+        .route("/host/exec/consent", post(host_exec_consent))
         .route("/host/http", post(host_http))
         .route("/host/plugins/add", post(plugins_add))
         .route("/host/plugins/remove", post(plugins_remove))
@@ -169,25 +300,18 @@ pub fn router(state: HostState) -> Router {
         // as the redirect target (see docs/plans/plan-host-sandbox-impl.md C.4).
         .route("/sandbox/{id}", get(sandbox_shim))
         .route("/poly-service-worker.js", get(poly_service_worker))
-        .with_state(state)
-        .layer(cors);
+        .with_state(state.clone());
 
     // Mount video H.264 encode/decode routes when the `video` feature is enabled.
     // Video state is separate from HostState (no SQLite needed — it's all in-memory
     // encoder/decoder maps) so we use .merge() with its own with_state call.
     #[cfg(feature = "video")]
     let base = {
-        // New cors layer for this feature router — same settings, separate instance.
-        let cors = CorsLayer::new()
-            .allow_origin(Any)
-            .allow_methods(Any)
-            .allow_headers(Any);
         let video_router = Router::new()
             .route("/host/video/encode_h264", post(encode_h264))
             .route("/host/video/decode_h264", post(decode_h264))
             .route("/host/video/close_session", post(close_session))
-            .with_state(VideoState::new())
-            .layer(cors);
+            .with_state(VideoState::new());
         base.merge(video_router)
     };
 
@@ -196,13 +320,9 @@ pub fn router(state: HostState) -> Router {
     // (WS handshake, RTP framing) runs in the discord plugin, not here.
     #[cfg(feature = "voice")]
     let base = {
-        let cors = CorsLayer::new()
-            .allow_origin(Any)
-            .allow_methods(Any)
-            .allow_headers(Any);
-        let udp_r = udp_router(UdpState::new()).layer(cors.clone());
-        let opus_r = opus_router(OpusState::new()).layer(cors.clone());
-        let aead_r = aead_router(AeadState::new()).layer(cors);
+        let udp_r = udp_router(UdpState::new());
+        let opus_r = opus_router(OpusState::new());
+        let aead_r = aead_router(AeadState::new());
         base.merge(udp_r).merge(opus_r).merge(aead_r)
     };
 
@@ -213,19 +333,221 @@ pub fn router(state: HostState) -> Router {
     // docs/plans/plan-teams-graph-subscriptions.md Phase C.
     #[cfg(feature = "teams-webhook")]
     let base = {
-        let cors = CorsLayer::new()
-            .allow_origin(Any)
-            .allow_methods(Any)
-            .allow_headers(Any);
         let webhook_state = TeamsWebhookState::new(
             std::sync::Arc::new(InMemoryClientStateStore::default()),
             std::sync::Arc::new(TracingNotificationSink),
         );
-        let teams_r = teams_webhook_router(webhook_state).layer(cors);
+        let teams_r = teams_webhook_router(webhook_state);
         base.merge(teams_r)
     };
 
-    base
+    // Layer order matters and is load-bearing:
+    //
+    //   CORS (outermost) → bearer verification → routes
+    //
+    // A CORS preflight (`OPTIONS`, no `Authorization` header by
+    // specification) must be answered by the CORS layer and must never
+    // reach the verifier, or every cross-origin-looking request from the
+    // shell's own page would 401 on the preflight. `Router::layer` makes
+    // the last-applied layer outermost, so CORS is applied last.
+    base.layer(axum::middleware::from_fn_with_state(
+        state,
+        require_host_auth,
+    ))
+    .layer(cors)
+}
+
+/// Explicit-origin CORS. `Any` must not appear anywhere in this crate
+/// (Phase A.4): with `allow_origin(Any)` every page in the user's browser
+/// could read `/host/*` replies cross-origin.
+fn cors_layer(state: &HostState) -> CorsLayer {
+    use axum::http::Method;
+
+    let origins: Vec<HeaderValue> = state
+        .origins
+        .iter()
+        .filter_map(|o| HeaderValue::from_str(o).ok())
+        .collect();
+    CorsLayer::new()
+        .allow_origin(origins)
+        .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+        .allow_headers([
+            header::CONTENT_TYPE,
+            header::AUTHORIZATION,
+            header::ACCEPT,
+            axum::http::HeaderName::from_static(PLUGIN_HEADER),
+        ])
+}
+
+/// Reject every `/host/*` request that does not carry a valid session
+/// token, and stamp the verified [`CallerId`] into the request extensions
+/// so downstream handlers scope on identity rather than on request fields.
+///
+/// Non-`/host` routes on this router (`/sandbox/{id}`, the service worker)
+/// are top-level browser navigations that cannot carry an `Authorization`
+/// header; they are deliberately untouched — neither reads or writes any
+/// state.
+async fn require_host_auth(
+    State(state): State<HostState>,
+    mut req: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    let path = req.uri().path().to_string();
+    let guarded = path == "/host" || path.starts_with("/host/");
+    if !guarded {
+        return next.run(req).await;
+    }
+    // Anti-DNS-rebinding. A page served from `http://evil.test:3000` whose
+    // DNS has been rebound to 127.0.0.1 is *same-origin* with itself, so
+    // neither `Origin` nor `Sec-Fetch-Site` marks it as foreign — but its
+    // `Host` header still says `evil.test`. Every legitimate caller reaches
+    // this router over loopback by name or by literal.
+    if let Some(host) = header_str(req.headers(), header::HOST.as_str())
+        && !is_loopback_host(&host)
+    {
+        tracing::warn!(path = %path, host = %host, "rejected non-loopback Host header");
+        return deny(
+            StatusCode::FORBIDDEN,
+            &format!("Host `{host}` is not a loopback name; refusing /host/* request"),
+        );
+    }
+    if path == ROUTE_SESSION || UNAUTHENTICATED_ROUTES.contains(&path.as_str()) {
+        return next.run(req).await;
+    }
+    match resolve_caller(&state, &path, req.headers()) {
+        Ok(caller) => {
+            let _prev = req.extensions_mut().insert(caller);
+            next.run(req).await
+        }
+        Err(refusal) => *refusal,
+    }
+}
+
+/// Verify the presented credentials and apply the shell-only route rule.
+fn resolve_caller(
+    state: &HostState,
+    path: &str,
+    headers: &HeaderMap,
+) -> Result<CallerId, Box<axum::response::Response>> {
+    let authorization = header_str(headers, header::AUTHORIZATION.as_str());
+    let plugin = header_str(headers, PLUGIN_HEADER);
+    let caller = state
+        .auth
+        .verify(authorization.as_deref(), plugin.as_deref())
+        .map_err(|e| {
+            tracing::warn!(path = %path, error = %e, "rejected unauthenticated /host/* request");
+            Box::new(deny(StatusCode::UNAUTHORIZED, &e.to_string()))
+        })?;
+    if caller != CallerId::Shell && is_shell_only_route(path) {
+        tracing::warn!(path = %path, caller = %caller.label(), "rejected non-shell caller");
+        return Err(Box::new(deny(
+            StatusCode::FORBIDDEN,
+            &format!("{} may not call {path}", caller.label()),
+        )));
+    }
+    Ok(caller)
+}
+
+fn deny(status: StatusCode, err: &str) -> axum::response::Response {
+    (
+        status,
+        Json(serde_json::json!({ "ok": false, "err": err })),
+    )
+        .into_response()
+}
+
+/// Probe routes deliberately left outside bearer verification.
+///
+/// Both are read-only, carry no user data and have no side effect, and the
+/// development MCPs (`mcp/*-devtools-mcp`) poll `/host/status` to decide
+/// when a shell's server half is up — before any WASM has run, so before
+/// any token could have been fetched. The cross-origin *read* of their
+/// replies is still blocked by the origin allowlist in [`cors_layer`].
+const UNAUTHENTICATED_ROUTES: &[&str] = &["/host/status", "/host/caps"];
+
+/// Hostnames that can only ever resolve to this machine.
+fn is_loopback_host(host: &str) -> bool {
+    let name = host
+        .rsplit_once(':')
+        .map_or(host, |(name, _port)| name)
+        .trim_matches(|c| c == '[' || c == ']');
+    matches!(name, "127.0.0.1" | "localhost" | "::1")
+        || name.starts_with("127.")
+        || name.ends_with(".localhost")
+}
+
+/// Routes only the shell itself may call.
+///
+/// Plugin administration, account-token mutation, opening a system
+/// browser and recording exec declarations/consent are all decisions the
+/// *user* makes through the app's own UI. A plugin holding a valid derived
+/// token has no business in any of them — most obviously
+/// `/host/accounts/*`, which would otherwise let a plugin enumerate or
+/// delete another backend's credentials.
+///
+/// Note `/host/exec` itself is deliberately absent: plugins may ask to run
+/// their own declared, consented programs. Only `/host/exec/declare` and
+/// `/host/exec/consent` — the routes that *widen* that authority — are
+/// shell-only.
+fn is_shell_only_route(path: &str) -> bool {
+    path.starts_with("/host/plugins/")
+        || path.starts_with("/host/accounts/")
+        || path.starts_with("/host/exec/")
+        || path == "/host/open-external"
+        || path == "/host/kv/clear"
+}
+
+fn header_str(headers: &HeaderMap, name: &str) -> Option<String> {
+    headers
+        .get(name)
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_string)
+}
+
+/// `GET /host/session` — hand the caller this shell's bearer token.
+///
+/// Provenance gate (see the `host_auth` module docs for the full threat
+/// model): a browser sets `Sec-Fetch-Site` itself and page script cannot
+/// override it, and any cross-origin `fetch` also carries an `Origin`. We
+/// require both to look like the shell's own page. A non-browser caller
+/// (no `Origin`, no `Sec-Fetch-Site`) is a same-user local process, which
+/// is outside this module's threat model and is allowed.
+async fn host_session(
+    State(state): State<HostState>,
+    headers: HeaderMap,
+) -> (StatusCode, Json<HostSessionResponse>) {
+    if let Some(origin) = header_str(&headers, header::ORIGIN.as_str())
+        && !state.origins.contains(&origin)
+    {
+        return refuse_session(&format!(
+            "origin `{origin}` is not one of this shell's origins"
+        ));
+    }
+    if let Some(site) = header_str(&headers, "sec-fetch-site")
+        && !matches!(site.as_str(), "same-origin" | "same-site" | "none")
+    {
+        return refuse_session(&format!("cross-site fetch (`Sec-Fetch-Site: {site}`)"));
+    }
+    (
+        StatusCode::OK,
+        Json(HostSessionResponse {
+            ok: true,
+            token: state.auth.token().to_string(),
+            err: None,
+        }),
+    )
+}
+
+fn refuse_session(reason: &str) -> (StatusCode, Json<HostSessionResponse>) {
+    tracing::warn!(reason = %reason, "refused to mint a host session token");
+    (
+        StatusCode::FORBIDDEN,
+        Json(HostSessionResponse {
+            ok: false,
+            token: String::new(),
+            err: Some(format!("session token refused: {reason}")),
+        }),
+    )
 }
 
 // ─── Default ClientStateStore / NotificationSink for the daemon ─────────────
@@ -342,7 +664,9 @@ async fn poly_service_worker() -> impl IntoResponse {
 /// existing axum server instead.
 pub async fn serve(addr: SocketAddr, state: HostState) -> Result<()> {
     let db_path_str = state.db_path().to_string_lossy().into_owned();
-    let app = router(state);
+    // Phase A.4: the CORS allowlist tracks the port we actually bound, not
+    // a hard-coded guess.
+    let app = router(state.with_bound_port(addr.port()));
     let listener = tokio::net::TcpListener::bind(addr)
         .await
         .with_context(|| format!("bind {addr}"))?;
@@ -421,10 +745,97 @@ async fn host_caps(State(state): State<HostState>) -> Json<serde_json::Value> {
     }))
 }
 
+// ─── KV namespacing (Phase C.1 / C.2) ────────────────────────────────────────
+//
+// Every `poly_kv` key belongs to exactly one of three namespaces:
+//
+//   host:…       host-internal. No `/host/kv/*` or `/host/plugin-kv/*`
+//                request may name one, whoever the caller is. The exec
+//                declaration and consent records live here, which is what
+//                makes B.4's "a key the KV surface cannot rewrite" true.
+//   plugin:{id}: one plugin's private storage.
+//   anything     the app's own rows (`app_settings`, `account_tokens`,
+//   else         notification settings, …).
+//
+// A `CallerId::Plugin` is confined to its own `plugin:{id}:` prefix. The
+// prefix comes from the *verified* identity, never from the request body,
+// so forging the `plugin` field buys nothing.
+//
+// Deviation from the plan's literal C.2 wording, recorded here because the
+// code disagreed with it: the plan asks that *no* `/host/kv/*` request be
+// able to name `account_tokens` / `app_settings`. But the shell's own
+// storage backend (`crates/core/src/storage/host_bridge.rs`) reads and
+// writes exactly those two rows through `/host/kv/*` — they are the app's
+// own data, and blocking the shell would delete the feature rather than
+// secure it. The boundary that matters is caller-scoped: plugins and
+// unauthenticated callers cannot name them, and the row is sealed at rest
+// (C.3) so naming it without the key yields ciphertext.
+
+/// Prefix reserved for rows only the host itself may touch.
+const HOST_INTERNAL_PREFIX: &str = "host:";
+
+/// Refuse `key` unless `caller` owns the namespace it lives in.
+fn check_kv_key(caller: &CallerId, key: &str) -> Result<(), String> {
+    if key.is_empty() {
+        return Err("kv key must not be empty".to_string());
+    }
+    if key.starts_with(HOST_INTERNAL_PREFIX) {
+        return Err(format!(
+            "kv key `{key}` is host-internal and cannot be named by any /host/kv/* caller"
+        ));
+    }
+    match caller.kv_prefix() {
+        None => Ok(()),
+        Some(prefix) if key.starts_with(&prefix) => Ok(()),
+        Some(prefix) => Err(format!(
+            "kv key `{key}` is outside {}'s namespace `{prefix}`",
+            caller.label()
+        )),
+    }
+}
+
+/// Resolve which plugin namespace a plugin-KV request actually addresses.
+///
+/// A verified plugin gets its own id, full stop; naming a different one is
+/// an error rather than a silent redirect so the denial is visible in
+/// logs. The shell may address any plugin's namespace: WASM guests run
+/// in-process inside the shell, which proxies their storage calls, so
+/// "shell acting for a plugin" is the normal path.
+fn effective_plugin(caller: &CallerId, requested: &str) -> Result<String, String> {
+    match *caller {
+        CallerId::Shell => {
+            if requested.trim().is_empty() {
+                Err("plugin id is required".to_string())
+            } else {
+                Ok(requested.to_string())
+            }
+        }
+        CallerId::Plugin { ref id } => {
+            if requested.trim().is_empty() || requested == id {
+                // `id` is verified (see `HostAuth::verify`), which also
+                // rejects `:` — so it cannot forge a nested namespace.
+                Ok(id.clone())
+            } else {
+                Err(format!(
+                    "plugin `{id}` may not address plugin `{requested}`'s storage namespace"
+                ))
+            }
+        }
+    }
+}
+
 async fn kv_get(
     State(state): State<HostState>,
+    Extension(caller): Extension<CallerId>,
     Json(req): Json<KvGetRequest>,
 ) -> Json<KvGetResponse> {
+    if let Err(e) = check_kv_key(&caller, &req.key) {
+        return Json(KvGetResponse {
+            ok: false,
+            value: None,
+            err: Some(e),
+        });
+    }
     Json(match sqlite_get(&state, &req.key) {
         Ok(value) => KvGetResponse {
             ok: true,
@@ -441,19 +852,41 @@ async fn kv_get(
 
 async fn kv_set(
     State(state): State<HostState>,
+    Extension(caller): Extension<CallerId>,
     Json(req): Json<KvSetRequest>,
 ) -> Json<KvVoidResponse> {
-    Json(void_response(sqlite_set(&state, &req.key, &req.value)))
+    Json(void_response(
+        check_kv_key(&caller, &req.key).and_then(|()| sqlite_set(&state, &req.key, &req.value)),
+    ))
 }
 
 async fn kv_delete(
     State(state): State<HostState>,
+    Extension(caller): Extension<CallerId>,
     Json(req): Json<KvDeleteRequest>,
 ) -> Json<KvVoidResponse> {
-    Json(void_response(sqlite_delete(&state, &req.key)))
+    Json(void_response(
+        check_kv_key(&caller, &req.key).and_then(|()| sqlite_delete(&state, &req.key)),
+    ))
 }
 
-async fn kv_clear(State(state): State<HostState>) -> Json<KvVoidResponse> {
+/// Wiping the whole table is shell-only: a plugin clearing every other
+/// plugin's storage (and the account tokens) is exactly the cross-namespace
+/// write C.1 exists to stop, and there is no per-namespace `clear` in the
+/// wire protocol to scope it to.
+async fn kv_clear(
+    State(state): State<HostState>,
+    Extension(caller): Extension<CallerId>,
+) -> Json<KvVoidResponse> {
+    if caller != CallerId::Shell {
+        return Json(KvVoidResponse {
+            ok: false,
+            err: Some(format!(
+                "{} may not clear the shared KV table",
+                caller.label()
+            )),
+        });
+    }
     Json(void_response(sqlite_clear(&state)))
 }
 
@@ -461,9 +894,20 @@ async fn kv_clear(State(state): State<HostState>) -> Json<KvVoidResponse> {
 
 async fn plugin_kv_get(
     State(state): State<HostState>,
+    Extension(caller): Extension<CallerId>,
     Json(req): Json<PluginKvGetRequest>,
 ) -> Json<PluginKvGetResponse> {
-    let k = plugin_kv_key(&req.plugin, req.account.as_deref(), &req.key);
+    let plugin = match effective_plugin(&caller, &req.plugin) {
+        Ok(p) => p,
+        Err(e) => {
+            return Json(PluginKvGetResponse {
+                ok: false,
+                value_b64: None,
+                err: Some(e),
+            });
+        }
+    };
+    let k = plugin_kv_key(&plugin, req.account.as_deref(), &req.key);
     match sqlite_get(&state, &k) {
         Ok(Some(serde_json::Value::String(s))) => Json(PluginKvGetResponse {
             ok: true,
@@ -492,6 +936,7 @@ async fn plugin_kv_get(
 
 async fn plugin_kv_set(
     State(state): State<HostState>,
+    Extension(caller): Extension<CallerId>,
     Json(req): Json<PluginKvSetRequest>,
 ) -> Json<KvVoidResponse> {
     use base64::Engine as _;
@@ -501,16 +946,25 @@ async fn plugin_kv_set(
             err: Some(format!("invalid base64: {e}")),
         });
     }
-    let k = plugin_kv_key(&req.plugin, req.account.as_deref(), &req.key);
+    let plugin = match effective_plugin(&caller, &req.plugin) {
+        Ok(p) => p,
+        Err(e) => return Json(KvVoidResponse { ok: false, err: Some(e) }),
+    };
+    let k = plugin_kv_key(&plugin, req.account.as_deref(), &req.key);
     let value = serde_json::Value::String(req.value_b64);
     Json(void_response(sqlite_set(&state, &k, &value)))
 }
 
 async fn plugin_kv_delete(
     State(state): State<HostState>,
+    Extension(caller): Extension<CallerId>,
     Json(req): Json<PluginKvDeleteRequest>,
 ) -> Json<KvVoidResponse> {
-    let k = plugin_kv_key(&req.plugin, req.account.as_deref(), &req.key);
+    let plugin = match effective_plugin(&caller, &req.plugin) {
+        Ok(p) => p,
+        Err(e) => return Json(KvVoidResponse { ok: false, err: Some(e) }),
+    };
+    let k = plugin_kv_key(&plugin, req.account.as_deref(), &req.key);
     Json(void_response(sqlite_delete(&state, &k)))
 }
 
@@ -526,14 +980,173 @@ pub fn plugin_kv_key(plugin: &str, account: Option<&str>, key: &str) -> String {
     )
 }
 
+/// `POST /host` — the legacy tagged-union endpoint.
+///
+/// Phase B.5: `dispatch` no longer executes anything, so the only call
+/// this still serves is `HttpRequest`. An `ExecCommand` posted here comes
+/// back as an error, not a subprocess — there is exactly one exec entry
+/// point now and it is [`host_exec`].
 async fn host_legacy(Json(call): Json<HostCall>) -> Json<HostResponse> {
     Json(dispatch(call).await)
 }
 
-async fn host_exec(Json(call): Json<HostCall>) -> Result<Json<HostResponse>, StatusCode> {
-    match &call {
-        HostCall::ExecCommand { .. } => Ok(Json(dispatch(call).await)),
-        HostCall::HttpRequest { .. } => Err(StatusCode::BAD_REQUEST),
+/// `POST /host/exec` — the single gated subprocess entry point.
+///
+/// The identity comes from the verified [`CallerId`] the auth middleware
+/// stamped on the request, never from the body, and the program must be
+/// declared *and* consented for that identity.
+async fn host_exec(
+    State(state): State<HostState>,
+    Extension(caller): Extension<CallerId>,
+    Json(call): Json<HostCall>,
+) -> (StatusCode, Json<HostResponse>) {
+    let HostCall::ExecCommand { program, args } = call else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(HostResponse::Err(
+                "/host/exec accepts only the exec-command shape".to_string(),
+            )),
+        );
+    };
+    match poly_host_bridge::dispatch_exec(state.exec_policy.as_ref(), &caller, &program, &args)
+        .await
+    {
+        Ok(resp) => (StatusCode::OK, Json(resp)),
+        Err(denied) => {
+            if let ExecDenied::NoConsent { ref program, .. } = denied {
+                state
+                    .consent_prompt
+                    .prompt(&caller, Path::new(program.as_str()));
+            }
+            tracing::warn!(caller = %caller.label(), error = %denied, "exec denied");
+            (
+                StatusCode::FORBIDDEN,
+                Json(HostResponse::Err(denied.to_string())),
+            )
+        }
+    }
+}
+
+/// `POST /host/exec/declare` — register the absolute program paths a
+/// caller is *allowed to ask for*. Shell-only.
+///
+/// This is the host-side landing point for a plugin manifest's declared
+/// program list: whoever parses the manifest (the plugin registry) pushes
+/// the parsed absolute paths here. Declaring is not consenting — the user
+/// still has to approve each pair through [`host_exec_consent`].
+async fn host_exec_declare(
+    State(state): State<HostState>,
+    Extension(caller): Extension<CallerId>,
+    Json(req): Json<ExecDeclareRequest>,
+) -> (StatusCode, Json<KvVoidResponse>) {
+    if caller != CallerId::Shell {
+        return shell_only(&caller);
+    }
+    let subject = req.subject();
+    let programs: Vec<PathBuf> = req.programs.iter().map(PathBuf::from).collect();
+    match state.exec_policy.declare_for(&subject, &programs) {
+        Ok(()) => (
+            StatusCode::OK,
+            Json(KvVoidResponse { ok: true, err: None }),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(KvVoidResponse {
+                ok: false,
+                err: Some(e),
+            }),
+        ),
+    }
+}
+
+/// `POST /host/exec/consent` — record the user's approval for one
+/// `(caller, program)` pair. Shell-only: consent is a decision the user
+/// makes in the UI, so only the UI's own identity may record it.
+async fn host_exec_consent(
+    State(state): State<HostState>,
+    Extension(caller): Extension<CallerId>,
+    Json(req): Json<ExecConsentRequest>,
+) -> (StatusCode, Json<KvVoidResponse>) {
+    if caller != CallerId::Shell {
+        return shell_only(&caller);
+    }
+    let subject = req.subject();
+    let program = match std::fs::canonicalize(&req.program) {
+        Ok(p) => p,
+        Err(e) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(KvVoidResponse {
+                    ok: false,
+                    err: Some(format!("cannot resolve `{}`: {e}", req.program)),
+                }),
+            );
+        }
+    };
+    match state.exec_policy.grant_consent(&subject, &program) {
+        Ok(()) => (
+            StatusCode::OK,
+            Json(KvVoidResponse { ok: true, err: None }),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(KvVoidResponse {
+                ok: false,
+                err: Some(e),
+            }),
+        ),
+    }
+}
+
+fn shell_only(caller: &CallerId) -> (StatusCode, Json<KvVoidResponse>) {
+    (
+        StatusCode::FORBIDDEN,
+        Json(KvVoidResponse {
+            ok: false,
+            err: Some(format!("{} may not call this route", caller.label())),
+        }),
+    )
+}
+
+/// Body of `POST /host/exec/declare`.
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct ExecDeclareRequest {
+    /// Plugin id the declaration is for; omit for the shell itself.
+    #[serde(default)]
+    pub plugin: Option<String>,
+    /// Absolute program paths.
+    #[serde(default)]
+    pub programs: Vec<String>,
+}
+
+impl ExecDeclareRequest {
+    fn subject(&self) -> CallerId {
+        subject_of(self.plugin.as_deref())
+    }
+}
+
+/// Body of `POST /host/exec/consent`.
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct ExecConsentRequest {
+    /// Plugin id the consent is for; omit for the shell itself.
+    #[serde(default)]
+    pub plugin: Option<String>,
+    /// Absolute path of the approved program.
+    pub program: String,
+}
+
+impl ExecConsentRequest {
+    fn subject(&self) -> CallerId {
+        subject_of(self.plugin.as_deref())
+    }
+}
+
+fn subject_of(plugin: Option<&str>) -> CallerId {
+    match plugin {
+        Some(id) if !id.trim().is_empty() => CallerId::Plugin {
+            id: id.trim().to_string(),
+        },
+        _shell => CallerId::Shell,
     }
 }
 
@@ -1200,20 +1813,113 @@ impl PluginAddDefault for PluginAddResponse {
     }
 }
 
+// ─── SQLite-backed ExecPolicy (Phase B.4) ────────────────────────────────────
+
+/// Host-internal row holding `{ "<caller label>": ["/abs/path", …] }`.
+const EXEC_DECLARED_KEY: &str = "host:exec:declared";
+/// Host-internal row holding `{ "<caller label>": ["/abs/path", …] }` of
+/// approved pairs.
+const EXEC_CONSENT_KEY: &str = "host:exec:consent";
+
+/// Persists exec declarations and consent in `poly_kv` under the
+/// `host:` prefix, which [`check_kv_key`] makes unnameable from
+/// `/host/kv/*`. That is what Phase B.4 means by "a key the KV surface
+/// cannot rewrite": a caller who could rewrite these rows could grant
+/// itself consent.
+///
+/// Holds its own handle on the connection rather than a `HostState` so
+/// the policy is not circularly owned by the state that owns it.
+struct SqliteExecPolicy {
+    db: Arc<Mutex<ConnectionThreadSafe>>,
+}
+
+impl SqliteExecPolicy {
+    const fn new(db: Arc<Mutex<ConnectionThreadSafe>>) -> Self {
+        Self { db }
+    }
+
+    fn read_map(&self, key: &str) -> serde_json::Map<String, serde_json::Value> {
+        raw_get(&self.db, key)
+            .ok()
+            .flatten()
+            .and_then(|v| v.as_object().cloned())
+            .unwrap_or_default()
+    }
+
+    fn paths_for(&self, key: &str, caller: &CallerId) -> Vec<PathBuf> {
+        self.read_map(key)
+            .get(&caller.label())
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(PathBuf::from))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    fn write_paths(&self, key: &str, caller: &CallerId, paths: &[PathBuf]) -> Result<(), String> {
+        let mut map = self.read_map(key);
+        let list: Vec<serde_json::Value> = paths
+            .iter()
+            .map(|p| serde_json::Value::String(p.display().to_string()))
+            .collect();
+        let _prev = map.insert(caller.label(), serde_json::Value::Array(list));
+        raw_set(&self.db, key, &serde_json::Value::Object(map))
+    }
+}
+
+impl ExecPolicy for SqliteExecPolicy {
+    fn declared_programs(&self, caller: &CallerId) -> Vec<PathBuf> {
+        self.paths_for(EXEC_DECLARED_KEY, caller)
+    }
+
+    fn declare_for(&self, caller: &CallerId, programs: &[PathBuf]) -> Result<(), String> {
+        self.write_paths(EXEC_DECLARED_KEY, caller, programs)
+    }
+
+    fn has_consent(&self, caller: &CallerId, program: &Path) -> bool {
+        self.paths_for(EXEC_CONSENT_KEY, caller)
+            .iter()
+            .any(|p| p == program)
+    }
+
+    fn grant_consent(&self, caller: &CallerId, program: &Path) -> Result<(), String> {
+        let mut approved = self.paths_for(EXEC_CONSENT_KEY, caller);
+        if !approved.iter().any(|p| p == program) {
+            approved.push(program.to_path_buf());
+        }
+        self.write_paths(EXEC_CONSENT_KEY, caller, &approved)
+    }
+}
+
 // ─── SQLite helpers ──────────────────────────────────────────────────────────
 
+/// Rows whose payload is encrypted at rest (Phase C.3).
+///
+/// `account_tokens` is the OAuth access/refresh-token array. `app_settings`
+/// is deliberately *not* sealed: it is read on the boot path by every
+/// shell, holds no key material, and sealing it would put the whole UI
+/// behind a key-file read for no confidentiality gain.
+fn is_sealed_key(key: &str) -> bool {
+    key == ACCOUNT_TOKENS_KEY
+}
+
 fn lock_db(
-    state: &HostState,
+    db: &Arc<Mutex<ConnectionThreadSafe>>,
 ) -> Result<std::sync::MutexGuard<'_, ConnectionThreadSafe>, String> {
-    state
-        .db
-        .lock()
+    db.lock()
         .map_err(|_poison| "sqlite mutex poisoned".to_string())
 }
 
+/// Read a row verbatim — no unsealing. Used by the host-internal stores
+/// (which are never sealed) and by [`sqlite_get`].
 #[allow(clippy::significant_drop_tightening)] // stmt borrows db; cannot release db before stmt
-fn sqlite_get(state: &HostState, key: &str) -> Result<Option<serde_json::Value>, String> {
-    let db = lock_db(state)?;
+fn raw_get(
+    db: &Arc<Mutex<ConnectionThreadSafe>>,
+    key: &str,
+) -> Result<Option<serde_json::Value>, String> {
+    let db = lock_db(db)?;
     let mut stmt = db
         .prepare("SELECT payload FROM poly_kv WHERE key = ?1 LIMIT 1")
         .map_err(|e| format!("prepare get({key}): {e}"))?;
@@ -1235,11 +1941,16 @@ fn sqlite_get(state: &HostState, key: &str) -> Result<Option<serde_json::Value>,
     }
 }
 
+/// Write a row verbatim — no sealing. See [`raw_get`].
 #[allow(clippy::significant_drop_tightening)] // stmt borrows db; cannot release db before stmt
-fn sqlite_set(state: &HostState, key: &str, value: &serde_json::Value) -> Result<(), String> {
+fn raw_set(
+    db: &Arc<Mutex<ConnectionThreadSafe>>,
+    key: &str,
+    value: &serde_json::Value,
+) -> Result<(), String> {
     let serialized =
         serde_json::to_string(value).map_err(|e| format!("serde set({key}): {e}"))?;
-    let db = lock_db(state)?;
+    let db = lock_db(db)?;
     let mut stmt = db
         .prepare(
             "INSERT INTO poly_kv(key, payload) VALUES(?1, ?2) \
@@ -1258,9 +1969,42 @@ fn sqlite_set(state: &HostState, key: &str, value: &serde_json::Value) -> Result
     Ok(())
 }
 
+/// Read a row, unsealing it if the key is one of the sealed ones.
+fn sqlite_get(state: &HostState, key: &str) -> Result<Option<serde_json::Value>, String> {
+    let raw = raw_get(&state.db, key)?;
+    let Some(value) = raw else { return Ok(None) };
+    if !is_sealed_key(key) {
+        return Ok(Some(value));
+    }
+    // A sealed row is stored as a JSON string holding the envelope; a row
+    // written before C.3 landed is still the bare value and passes through.
+    let Some(envelope) = value.as_str().filter(|s| s.starts_with(SEAL_PREFIX)) else {
+        return Ok(Some(value));
+    };
+    let plaintext = state
+        .sealer
+        .unseal(envelope)
+        .map_err(|e| format!("unseal {key}: {e}"))?;
+    serde_json::from_str(&plaintext).map_err(|e| format!("serde unsealed {key}: {e}"))
+}
+
+/// Write a row, sealing it if the key is one of the sealed ones.
+fn sqlite_set(state: &HostState, key: &str, value: &serde_json::Value) -> Result<(), String> {
+    if !is_sealed_key(key) {
+        return raw_set(&state.db, key, value);
+    }
+    let plaintext =
+        serde_json::to_string(value).map_err(|e| format!("serde set({key}): {e}"))?;
+    let envelope = state
+        .sealer
+        .seal(&plaintext)
+        .map_err(|e| format!("seal {key}: {e}"))?;
+    raw_set(&state.db, key, &serde_json::Value::String(envelope))
+}
+
 #[allow(clippy::significant_drop_tightening)] // stmt borrows db; cannot release db before stmt
 fn sqlite_delete(state: &HostState, key: &str) -> Result<(), String> {
-    let db = lock_db(state)?;
+    let db = lock_db(&state.db)?;
     let mut stmt = db
         .prepare("DELETE FROM poly_kv WHERE key = ?1")
         .map_err(|e| format!("prepare delete({key}): {e}"))?;
@@ -1275,7 +2019,7 @@ fn sqlite_delete(state: &HostState, key: &str) -> Result<(), String> {
 }
 
 fn sqlite_clear(state: &HostState) -> Result<(), String> {
-    lock_db(state)?
+    lock_db(&state.db)?
         .execute("DELETE FROM poly_kv")
         .map_err(|e| format!("clear: {e}"))?;
     Ok(())
@@ -1385,27 +2129,62 @@ mod tests {
     use base64::Engine as _;
     use tower::util::ServiceExt as _;
 
+    /// Fixed shell token so tests can present the right (and the wrong)
+    /// credentials deterministically.
+    const TEST_TOKEN: &str = "test-shell-session-token";
+
     fn test_state() -> HostState {
         let dir = tempfile::tempdir().expect("tempdir");
         let path = dir.keep().join("test.sqlite3");
-        HostState::open(path).expect("open")
+        HostState::open(path)
+            .expect("open")
+            .with_auth(HostAuth::with_token(TEST_TOKEN))
+    }
+
+    /// Token a given plugin would be handed by the shell.
+    fn plugin_token(id: &str) -> String {
+        HostAuth::with_token(TEST_TOKEN).derive_plugin_token(id)
     }
 
     fn b64(s: &[u8]) -> String {
         base64::engine::general_purpose::STANDARD.encode(s)
     }
 
+    /// POST as the shell (the common case).
     async fn post_json(
         app: &Router,
         path: &str,
         body: serde_json::Value,
     ) -> (StatusCode, String) {
-        let req = Request::builder()
+        post_as(app, path, body, Some(TEST_TOKEN), None).await
+    }
+
+    /// POST with explicit credentials — `None` token means "send no
+    /// `Authorization` header at all".
+    async fn post_as(
+        app: &Router,
+        path: &str,
+        body: serde_json::Value,
+        token: Option<&str>,
+        plugin: Option<&str>,
+    ) -> (StatusCode, String) {
+        let mut builder = Request::builder()
             .method("POST")
             .uri(path)
-            .header("content-type", "application/json")
+            .header("content-type", "application/json");
+        if let Some(tok) = token {
+            builder = builder.header("authorization", format!("Bearer {tok}"));
+        }
+        if let Some(id) = plugin {
+            builder = builder.header(PLUGIN_HEADER, id);
+        }
+        let req = builder
             .body(Body::from(serde_json::to_vec(&body).unwrap()))
             .unwrap();
+        send(app, req).await
+    }
+
+    async fn send(app: &Router, req: Request<Body>) -> (StatusCode, String) {
         let resp = app.clone().oneshot(req).await.unwrap();
         let status = resp.status();
         let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
@@ -1659,14 +2438,10 @@ mod tests {
         let req = Request::builder()
             .method("GET")
             .uri(path)
+            .header("authorization", format!("Bearer {TEST_TOKEN}"))
             .body(Body::empty())
             .unwrap();
-        let resp = app.clone().oneshot(req).await.unwrap();
-        let status = resp.status();
-        let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
-            .await
-            .unwrap();
-        (status, String::from_utf8(bytes.to_vec()).unwrap())
+        send(app, req).await
     }
 
     fn read_settings_json(state: &HostState) -> serde_json::Value {
@@ -2271,5 +3046,614 @@ mod tests {
             StatusCode::BAD_REQUEST,
             "valid http URL must not be 400: {body}"
         );
+    }
+
+    // ─── Phase A — caller identity (`plan-host-substrate-capability-gating.md`) ──
+
+    #[tokio::test]
+    async fn unauthenticated_host_request_is_rejected() {
+        let app = router(test_state());
+        let (status, body) = post_as(
+            &app,
+            "/host/kv/get",
+            serde_json::json!({ "key": "account_tokens" }),
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED, "{body}");
+        assert!(!body.contains("account_tokens"), "leaked state: {body}");
+    }
+
+    #[tokio::test]
+    async fn wrong_token_is_rejected() {
+        let app = router(test_state());
+        for bad in ["not-the-token", ""] {
+            let (status, body) = post_as(
+                &app,
+                "/host/kv/get",
+                serde_json::json!({ "key": "anything" }),
+                Some(bad),
+                None,
+            )
+            .await;
+            assert_eq!(status, StatusCode::UNAUTHORIZED, "`{bad}`: {body}");
+        }
+    }
+
+    #[tokio::test]
+    async fn correct_token_is_accepted() {
+        let app = router(test_state());
+        let (status, body) = post_json(
+            &app,
+            "/host/kv/set",
+            serde_json::json!({ "key": "theme", "value": "dark" }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        let resp: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(resp["ok"], true, "{body}");
+    }
+
+    /// Every guarded route rejects a missing token — not just the KV one
+    /// the other tests exercise.
+    #[tokio::test]
+    async fn the_whole_host_surface_is_guarded() {
+        let app = router(test_state());
+        for path in [
+            "/host/kv/get",
+            "/host/kv/set",
+            "/host/kv/delete",
+            "/host/kv/clear",
+            "/host/plugin-kv/get",
+            "/host/exec",
+            "/host/http",
+            "/host/plugins/add",
+            "/host/accounts/add",
+            "/host/open-external",
+            "/host",
+        ] {
+            let (status, body) =
+                post_as(&app, path, serde_json::json!({}), None, None).await;
+            assert_eq!(status, StatusCode::UNAUTHORIZED, "{path} was open: {body}");
+        }
+    }
+
+    /// The mint route is the bootstrap, so it must not itself be reachable
+    /// from a page on another origin.
+    #[tokio::test]
+    async fn session_route_refuses_a_foreign_origin() {
+        let app = router(test_state());
+        let req = Request::builder()
+            .method("GET")
+            .uri(ROUTE_SESSION)
+            .header("origin", "https://evil.test")
+            .header("sec-fetch-site", "cross-site")
+            .body(Body::empty())
+            .unwrap();
+        let (status, body) = send(&app, req).await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
+        assert!(!body.contains(TEST_TOKEN), "token leaked: {body}");
+    }
+
+    #[tokio::test]
+    async fn session_route_refuses_a_cross_site_fetch_metadata_header() {
+        let app = router(test_state());
+        let req = Request::builder()
+            .method("GET")
+            .uri(ROUTE_SESSION)
+            .header("sec-fetch-site", "cross-site")
+            .body(Body::empty())
+            .unwrap();
+        let (status, body) = send(&app, req).await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
+        assert!(!body.contains(TEST_TOKEN), "token leaked: {body}");
+    }
+
+    #[tokio::test]
+    async fn session_route_mints_for_the_shells_own_origin() {
+        let app = router(test_state());
+        let req = Request::builder()
+            .method("GET")
+            .uri(ROUTE_SESSION)
+            .header("origin", "http://127.0.0.1:3000")
+            .header("sec-fetch-site", "same-origin")
+            .body(Body::empty())
+            .unwrap();
+        let (status, body) = send(&app, req).await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        let resp: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(resp["token"], TEST_TOKEN);
+    }
+
+    /// Phase A.4: `CorsLayer::allow_origin(Any)` is gone, so a foreign
+    /// origin never gets an `Access-Control-Allow-Origin` echo and the
+    /// browser refuses to hand the reply to the attacker's script.
+    #[tokio::test]
+    async fn cors_does_not_echo_a_foreign_origin() {
+        let app = router(test_state());
+        let req = Request::builder()
+            .method("POST")
+            .uri("/host/kv/get")
+            .header("content-type", "application/json")
+            .header("origin", "https://evil.test")
+            .header("authorization", format!("Bearer {TEST_TOKEN}"))
+            .body(Body::from(
+                serde_json::to_vec(&serde_json::json!({"key": "x"})).unwrap(),
+            ))
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert!(
+            resp.headers().get("access-control-allow-origin").is_none(),
+            "foreign origin was echoed: {:?}",
+            resp.headers()
+        );
+    }
+
+    #[tokio::test]
+    async fn cors_echoes_the_shells_own_origin() {
+        let app = router(test_state());
+        let req = Request::builder()
+            .method("POST")
+            .uri("/host/kv/get")
+            .header("content-type", "application/json")
+            .header("origin", "http://localhost:3001")
+            .header("authorization", format!("Bearer {TEST_TOKEN}"))
+            .body(Body::from(
+                serde_json::to_vec(&serde_json::json!({"key": "x"})).unwrap(),
+            ))
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(
+            resp.headers()
+                .get("access-control-allow-origin")
+                .and_then(|v| v.to_str().ok()),
+            Some("http://localhost:3001")
+        );
+    }
+
+    /// The named escape hatch keeps the tree runnable while the client
+    /// half learns to send the header. It must be the *only* thing that
+    /// opens the surface.
+    #[tokio::test]
+    async fn opt_out_env_var_disables_enforcement() {
+        let state = test_state().with_auth(HostAuth::unenforced(TEST_TOKEN));
+        let app = router(state);
+        let (status, body) = post_as(
+            &app,
+            "/host/kv/set",
+            serde_json::json!({ "key": "theme", "value": "dark" }),
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+    }
+
+    // ─── Phase B — exec allowlist + consent ──────────────────────────────
+
+    /// A program that exists on every CI box and is safe to run.
+    fn probe_program() -> PathBuf {
+        for candidate in ["/bin/echo", "/usr/bin/echo", "/bin/true"] {
+            let p = PathBuf::from(candidate);
+            if p.exists() {
+                return p;
+            }
+        }
+        panic!("no probe program available");
+    }
+
+    async fn exec(app: &Router, program: &str, token: Option<&str>, plugin: Option<&str>) -> (StatusCode, String) {
+        post_as(
+            app,
+            "/host/exec",
+            serde_json::json!({ "call": "exec-command", "program": program, "args": [] }),
+            token,
+            plugin,
+        )
+        .await
+    }
+
+    #[tokio::test]
+    async fn exec_of_a_non_allowlisted_program_is_denied() {
+        let app = router(test_state());
+        let (status, body) = exec(&app, "/bin/sh", Some(TEST_TOKEN), None).await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
+        assert!(body.contains("exec denied"), "{body}");
+    }
+
+    #[tokio::test]
+    async fn exec_of_a_relative_path_is_denied() {
+        let app = router(test_state());
+        for bad in ["./echo", "sub/echo", ""] {
+            let (status, body) = exec(&app, bad, Some(TEST_TOKEN), None).await;
+            assert_eq!(status, StatusCode::FORBIDDEN, "`{bad}`: {body}");
+        }
+    }
+
+    #[tokio::test]
+    async fn exec_of_a_traversal_path_is_denied() {
+        let app = router(test_state());
+        let (status, body) = exec(&app, "/usr/../bin/sh", Some(TEST_TOKEN), None).await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
+        assert!(body.contains(".."), "{body}");
+    }
+
+    /// Declaring is not consenting; consenting completes the gate.
+    #[tokio::test]
+    async fn declared_plus_consented_program_runs() {
+        let app = router(test_state());
+        let prog = probe_program();
+        let prog_str = prog.display().to_string();
+
+        let (status, body) = exec(&app, &prog_str, Some(TEST_TOKEN), None).await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "undeclared must fail: {body}");
+
+        let (status, body) = post_json(
+            &app,
+            "/host/exec/declare",
+            serde_json::json!({ "programs": [prog_str] }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+
+        let (status, body) = exec(&app, &prog_str, Some(TEST_TOKEN), None).await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "consent still missing: {body}");
+        assert!(body.contains("consent"), "{body}");
+
+        let (status, body) = post_json(
+            &app,
+            "/host/exec/consent",
+            serde_json::json!({ "program": prog_str }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+
+        let (status, body) = exec(&app, &prog_str, Some(TEST_TOKEN), None).await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        let resp: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(resp["ok"]["exit_code"], 0_i32, "{body}");
+    }
+
+    /// One caller's grant does not carry over to another caller.
+    #[tokio::test]
+    async fn a_plugin_does_not_inherit_the_shells_consent() {
+        let app = router(test_state());
+        let prog = probe_program().display().to_string();
+        let _d = post_json(
+            &app,
+            "/host/exec/declare",
+            serde_json::json!({ "programs": [prog] }),
+        )
+        .await;
+        let _c = post_json(
+            &app,
+            "/host/exec/consent",
+            serde_json::json!({ "program": prog }),
+        )
+        .await;
+
+        let tok = plugin_token("plugin-a");
+        let (status, body) = exec(&app, &prog, Some(&tok), Some("plugin-a")).await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
+    }
+
+    /// The SOLID-item-7 seams are real: swapping in the in-memory policy
+    /// and a recording prompt drives the whole `/host/exec` route with no
+    /// SQLite row, no UI and no shell.
+    #[tokio::test]
+    async fn exec_policy_and_prompt_seams_are_substitutable() {
+        use poly_host_bridge::exec_policy::{InMemoryExecPolicy, RecordingConsentPrompt};
+
+        let policy = Arc::new(InMemoryExecPolicy::new());
+        let prompt = Arc::new(RecordingConsentPrompt::default());
+        let prog = probe_program();
+        policy.declare(&CallerId::Shell, vec![prog.clone()]);
+
+        let policy_dyn: Arc<dyn ExecPolicy> = Arc::<InMemoryExecPolicy>::clone(&policy);
+        let prompt_dyn: Arc<dyn ConsentPrompt> =
+            Arc::<RecordingConsentPrompt>::clone(&prompt);
+        let state = test_state()
+            .with_exec_policy(policy_dyn)
+            .with_consent_prompt(prompt_dyn);
+        let app = router(state);
+        let prog_str = prog.display().to_string();
+
+        let (status, body) = exec(&app, &prog_str, Some(TEST_TOKEN), None).await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
+        assert_eq!(prompt.seen().len(), 1, "prompt was not surfaced");
+
+        let canonical = std::fs::canonicalize(&prog).unwrap();
+        policy.grant_consent(&CallerId::Shell, &canonical).unwrap();
+        let (status, body) = exec(&app, &prog_str, Some(TEST_TOKEN), None).await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        assert_eq!(prompt.seen().len(), 1, "no second prompt after consent");
+    }
+
+    /// Phase B.5: the legacy tagged-union endpoint is no longer a second
+    /// way into the subprocess spawner.
+    #[tokio::test]
+    async fn legacy_post_host_never_executes() {
+        let app = router(test_state());
+        let prog = probe_program().display().to_string();
+        let _d = post_json(
+            &app,
+            "/host/exec/declare",
+            serde_json::json!({ "programs": [prog] }),
+        )
+        .await;
+        let _c = post_json(
+            &app,
+            "/host/exec/consent",
+            serde_json::json!({ "program": prog }),
+        )
+        .await;
+
+        let (status, body) = post_json(
+            &app,
+            "/host",
+            serde_json::json!({ "call": "exec-command", "program": prog, "args": [] }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        let resp: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert!(resp["err"].is_string(), "legacy endpoint executed: {body}");
+        assert!(resp["ok"].is_null(), "legacy endpoint executed: {body}");
+    }
+
+    #[tokio::test]
+    async fn declare_and_consent_are_shell_only() {
+        let app = router(test_state());
+        let tok = plugin_token("plugin-a");
+        let prog = probe_program().display().to_string();
+        for (path, body) in [
+            (
+                "/host/exec/declare",
+                serde_json::json!({ "programs": [prog.clone()] }),
+            ),
+            (
+                "/host/exec/consent",
+                serde_json::json!({ "program": prog.clone() }),
+            ),
+        ] {
+            let (status, text) =
+                post_as(&app, path, body, Some(&tok), Some("plugin-a")).await;
+            assert_eq!(status, StatusCode::FORBIDDEN, "{path}: {text}");
+        }
+    }
+
+    // ─── Phase C — KV namespacing + credential separation ────────────────
+
+    /// C.4: not merely "distinct keys" — plugin A must be *refused* when
+    /// it addresses plugin B's namespace.
+    #[tokio::test]
+    async fn plugin_a_cannot_read_plugin_bs_key() {
+        let app = router(test_state());
+        let tok_b = plugin_token("plugin-b");
+        let secret = b64(b"plugin-b-secret");
+        let (status, body) = post_as(
+            &app,
+            "/host/plugin-kv/set",
+            serde_json::json!({ "plugin": "plugin-b", "key": "k", "value_b64": secret }),
+            Some(&tok_b),
+            Some("plugin-b"),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+
+        let tok_a = plugin_token("plugin-a");
+        let (status, body) = post_as(
+            &app,
+            "/host/plugin-kv/get",
+            serde_json::json!({ "plugin": "plugin-b", "key": "k" }),
+            Some(&tok_a),
+            Some("plugin-a"),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        let resp: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(resp["ok"], false, "{body}");
+        assert!(resp["value_b64"].is_null(), "{body}");
+        assert!(!body.contains(&secret), "value leaked: {body}");
+
+        // …and asking within its own namespace sees its own (absent) key,
+        // never plugin B's value.
+        let (_s, body) = post_as(
+            &app,
+            "/host/plugin-kv/get",
+            serde_json::json!({ "plugin": "plugin-a", "key": "k" }),
+            Some(&tok_a),
+            Some("plugin-a"),
+        )
+        .await;
+        let resp: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(resp["ok"], true, "{body}");
+        assert!(resp["value_b64"].is_null(), "{body}");
+    }
+
+    /// C.2: the credential row is outside every plugin's namespace.
+    #[tokio::test]
+    async fn a_plugin_cannot_name_the_account_tokens_row() {
+        let state = test_state();
+        sqlite_set(
+            &state,
+            ACCOUNT_TOKENS_KEY,
+            &serde_json::json!([{ "backend": "matrix", "token": "super-secret" }]),
+        )
+        .unwrap();
+        let app = router(state);
+        let tok = plugin_token("plugin-a");
+        for path in ["/host/kv/get", "/host/kv/delete"] {
+            let (status, body) = post_as(
+                &app,
+                path,
+                serde_json::json!({ "key": ACCOUNT_TOKENS_KEY }),
+                Some(&tok),
+                Some("plugin-a"),
+            )
+            .await;
+            assert_eq!(status, StatusCode::OK, "{path}");
+            let resp: serde_json::Value = serde_json::from_str(&body).unwrap();
+            assert_eq!(resp["ok"], false, "{path}: {body}");
+            assert!(!body.contains("super-secret"), "{path} leaked: {body}");
+        }
+    }
+
+    /// C.1/B.4: nobody — not even the shell — can name the rows that hold
+    /// the exec declarations and consent grants.
+    #[tokio::test]
+    async fn host_internal_rows_are_unnameable_even_by_the_shell() {
+        let app = router(test_state());
+        for key in [EXEC_DECLARED_KEY, EXEC_CONSENT_KEY, "host:anything"] {
+            let (status, body) = post_json(
+                &app,
+                "/host/kv/set",
+                serde_json::json!({ "key": key, "value": ["/bin/sh"] }),
+            )
+            .await;
+            assert_eq!(status, StatusCode::OK);
+            let resp: serde_json::Value = serde_json::from_str(&body).unwrap();
+            assert_eq!(resp["ok"], false, "{key} was writable: {body}");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_plugin_cannot_clear_the_shared_table() {
+        let app = router(test_state());
+        let tok = plugin_token("plugin-a");
+        let (status, body) = post_as(
+            &app,
+            "/host/kv/clear",
+            serde_json::json!({}),
+            Some(&tok),
+            Some("plugin-a"),
+        )
+        .await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
+    }
+
+    /// C.3: a raw read of the SQLite row yields ciphertext, while the
+    /// typed accessors keep working.
+    #[tokio::test]
+    async fn account_tokens_are_sealed_at_rest() {
+        let state = test_state();
+        let plaintext =
+            serde_json::json!([{ "backend": "matrix", "token": "oauth-secret-value" }]);
+        sqlite_set(&state, ACCOUNT_TOKENS_KEY, &plaintext).unwrap();
+
+        let stored = raw_get(&state.db, ACCOUNT_TOKENS_KEY).unwrap().unwrap();
+        let envelope = stored.as_str().expect("sealed row is a JSON string");
+        assert!(envelope.starts_with(SEAL_PREFIX), "{envelope}");
+        assert!(!envelope.contains("oauth-secret-value"), "{envelope}");
+
+        assert_eq!(
+            sqlite_get(&state, ACCOUNT_TOKENS_KEY).unwrap().unwrap(),
+            plaintext
+        );
+    }
+
+    /// Databases written before C.3 hold cleartext; they must keep
+    /// loading, and get sealed on the next write.
+    #[tokio::test]
+    async fn legacy_cleartext_account_tokens_still_load() {
+        let state = test_state();
+        let legacy = serde_json::json!([{ "backend": "matrix", "token": "legacy" }]);
+        raw_set(&state.db, ACCOUNT_TOKENS_KEY, &legacy).unwrap();
+        assert_eq!(
+            sqlite_get(&state, ACCOUNT_TOKENS_KEY).unwrap().unwrap(),
+            legacy
+        );
+
+        sqlite_set(&state, ACCOUNT_TOKENS_KEY, &legacy).unwrap();
+        let stored = raw_get(&state.db, ACCOUNT_TOKENS_KEY).unwrap().unwrap();
+        assert!(
+            stored.as_str().is_some_and(|s| s.starts_with(SEAL_PREFIX)),
+            "rewrite did not seal: {stored}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_rebound_dns_name_cannot_reach_the_host_surface() {
+        let app = router(test_state());
+        // The mint route and a guarded route, both from a page whose DNS
+        // was rebound to loopback: same-origin by every browser signal,
+        // but the Host header still says `evil.test`.
+        let req = Request::builder()
+            .method("GET")
+            .uri(ROUTE_SESSION)
+            .header("host", "evil.test:3000")
+            .header("sec-fetch-site", "same-origin")
+            .body(Body::empty())
+            .unwrap();
+        let (status, body) = send(&app, req).await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
+        assert!(!body.contains(TEST_TOKEN), "token leaked: {body}");
+
+        let req = Request::builder()
+            .method("POST")
+            .uri("/host/kv/get")
+            .header("content-type", "application/json")
+            .header("host", "evil.test:3000")
+            .header("authorization", format!("Bearer {TEST_TOKEN}"))
+            .body(Body::from(
+                serde_json::to_vec(&serde_json::json!({"key": "x"})).unwrap(),
+            ))
+            .unwrap();
+        let (status, body) = send(&app, req).await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
+    }
+
+    #[tokio::test]
+    async fn loopback_hosts_are_accepted() {
+        let app = router(test_state());
+        for host in ["127.0.0.1:3000", "localhost:3002", "[::1]:9333", "127.0.0.1"] {
+            let req = Request::builder()
+                .method("GET")
+                .uri(ROUTE_SESSION)
+                .header("host", host)
+                .body(Body::empty())
+                .unwrap();
+            let (status, body) = send(&app, req).await;
+            assert_eq!(status, StatusCode::OK, "{host}: {body}");
+        }
+    }
+
+    /// The dev MCPs poll these before any WASM has run, so they must stay
+    /// reachable without a token — and must stay side-effect free.
+    #[tokio::test]
+    async fn status_and_caps_stay_unauthenticated() {
+        let app = router(test_state());
+        for path in ["/host/status", "/host/caps"] {
+            let req = Request::builder()
+                .method("GET")
+                .uri(path)
+                .body(Body::empty())
+                .unwrap();
+            let (status, body) = send(&app, req).await;
+            assert_eq!(status, StatusCode::OK, "{path}: {body}");
+            assert!(!body.contains(TEST_TOKEN), "{path} leaked the token: {body}");
+        }
+    }
+
+    /// The end-to-end shape C.5's redaction comment now depends on: the
+    /// account inventory never carries key material.
+    #[tokio::test]
+    async fn accounts_list_is_the_widest_account_view() {
+        let state = test_state();
+        let app = router(state);
+        let (status, body) = post_json(
+            &app,
+            "/host/accounts/add",
+            serde_json::json!({
+                "backend": "matrix",
+                "account_id": "@a:example.test",
+                "display_name": "A",
+                "token": "oauth-secret-value"
+            }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        let (_s, body) = get(&app, "/host/accounts/list").await;
+        assert!(!body.contains("oauth-secret-value"), "{body}");
     }
 }
