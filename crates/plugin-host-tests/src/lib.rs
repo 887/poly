@@ -22,9 +22,17 @@ pub fn workspace_root() -> PathBuf {
 }
 
 /// Directory containing the compiled WASM plugin binaries.
+///
+/// MUST match the `--target` passed to `cargo component build` in
+/// [`build_plugin`] below (`wasm32-wasip2`). This previously pointed at
+/// `wasm32-wasip1` while the build emitted wasip2, so the loader picked up
+/// whatever stale wasip1 artifact happened to be left in `target/` from an
+/// older build convention. On a machine that had one, the suite passed; on a
+/// fresh checkout the rebuild emits a core module the component loader cannot
+/// parse, and 37 tests fail with "failed to parse WebAssembly module".
 #[must_use]
 pub fn wasm_dir() -> PathBuf {
-    workspace_root().join("target/wasm32-wasip1/debug")
+    workspace_root().join("target/wasm32-wasip2/debug")
 }
 
 /// Map a plugin id → the crate name `cargo component build` expects.

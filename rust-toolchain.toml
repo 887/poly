@@ -7,10 +7,16 @@
 channel = "1.97.1"
 components = ["rustfmt", "clippy"]
 # wasm32-unknown-unknown — the Dioxus WASM client bundle.
-# wasm32-wasip1        — the WASM Component Model plugin guests. Required by
-#   `.cargo/config.toml` and `crates/plugin-host-tests`, which reads
-#   `target/wasm32-wasip1/debug`. Without it listed here rustup auto-installs
-#   it on first use, turning a plugin-host test run into a network fetch that
-#   can (and did) fail mid-suite on a corrupted partial download.
-targets = ["wasm32-unknown-unknown", "wasm32-wasip1"]
+# wasm32-wasip2         — the WASM Component Model plugin guests (`clients/*`
+#   build here; see `clients/teams/src/lib.rs`, `clients/lemmy/src/guest.rs`).
+#   This one was NOT installed, and its absence failed 37 plugin-host tests
+#   with `E0463: can't find crate for core` buried under ~500 downstream
+#   "could not compile" lines — a failure mode that reads like a code error.
+# wasm32-wasip1         — still referenced by `.cargo/config.toml` and by
+#   `crates/plugin-host-tests`, which reads `target/wasm32-wasip1/debug`.
+#
+# All three are listed so a fresh checkout provisions them via the pin rather
+# than through rustup's on-demand auto-install, which turns a test run into a
+# network fetch (and did fail mid-suite here on a corrupted partial download).
+targets = ["wasm32-unknown-unknown", "wasm32-wasip2", "wasm32-wasip1"]
 profile = "minimal"
