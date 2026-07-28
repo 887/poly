@@ -279,6 +279,22 @@ wit-bindgen = { version = "0.57", default-features = false, features = [
     "macros",
     "realloc",
 ] }
+# Linux desktop shell stack (apps/desktop-web, apps/desktop-devtools,
+# crates/host-sandbox). DO NOT bump these in isolation — see
+# docs/plans/plan-desktop-gtk-stack-bump.md for the measured constraint graph.
+# Short version:
+#   * dioxus-desktop 0.7.9 requires tao ^0.34.0 and wry ^0.53.5; the first
+#     dioxus-desktop on tao 0.35 / wry 0.55 is 0.8.0-alpha.0. Bumping wry here
+#     is a hard resolver error (wry 0.53.5 pins webkit2gtk "=2.0.1", wry 0.55.1
+#     pins "=2.0.2"); bumping tao alone silently lands TWO tao majors in the lock.
+#   * cairo-rs must stay 0.18: this pin exists only to switch the `png` feature
+#     on for the cairo-rs 0.18 instance that webkit2gtk 2.0.1 hands back from
+#     `WebViewExt::snapshot`. Moving it to 0.22 adds a second, unrelated cairo
+#     and breaks the snapshot closure's type (E0631).
+#   * webkit2gtk must stay at whatever wry pins exactly; "2.0.2" conflicts.
+# Bumping any of these buys nothing anyway: tao 0.35.3, wry 0.55.1 and
+# webkit2gtk 2.0.2 all still require gtk ^0.18, and gtk (the GTK3 bindings)
+# is permanently EOL at 0.18.2 — there is no newer generation to move to.
 cairo-rs = { version = "0.18", features = ["png"] }
 wry = "0.53"
 tao = "0.34"
