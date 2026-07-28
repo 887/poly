@@ -1,0 +1,329 @@
+# cargo-deny — supply-chain gate for the Poly workspace.
+#
+# Plan: docs/plans/plan-host-substrate-capability-gating.md Phase E.
+# CI entry point: the `supply-chain` job in .github/workflows/lint-test.yml,
+# which runs `cargo deny check advisories bans sources licenses`.
+# Locally: `cargo deny check` (cargo-deny 0.20.x).
+#
+# Policy shape mirrors this repo's lint gate: everything the tree carries today
+# is grandfathered by an *explicit, individually justified* entry, and anything
+# new fails the build. There is no blanket "warn" escape hatch — a muted class
+# is a gate that has stopped gating.
+
+[graph]
+# Only the platforms Poly actually ships. Keeps the advisory/ban graph from
+# resolving dependency trees no Poly binary ever links.
+#
+# The two `wasip*` entries are load-bearing, not decoration. Nine guest crates
+# under `clients/` declare `[target.'cfg(target_os = "wasi")'.dependencies]`
+# (forgejo, server-client, stoat, matrix, discord, …) — that is the dependency
+# surface which is compiled *into the WASM sandbox* this repo's plugin-host
+# gates. Omitting the wasi targets resolves those subtrees away, so the gate
+# silently stops auditing exactly the code the sandbox is meant to contain, and
+# any dependency moved behind a `cfg(target_os = "wasi")` gate becomes invisible
+# to advisories, licences and bans. Adding them surfaced two real duplicate
+# pairs (`wasmparser`, `wit-parser`) that the host-only graph missed.
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "aarch64-unknown-linux-gnu",
+    "x86_64-pc-windows-msvc",
+    "x86_64-apple-darwin",
+    "aarch64-apple-darwin",
+    "wasm32-unknown-unknown",
+    "wasm32-wasip1",
+    "wasm32-wasip2",
+]
+all-features = false
+
+[output]
+feature-depth = 1
+
+# ── Advisories ────────────────────────────────────────────────────────────
+[advisories]
+db-urls = ["https://github.com/rustsec/advisory-db"]
+# Report unmaintained crates anywhere in the graph, not just direct workspace
+# deps. The EOL gtk-rs cluster below is entirely transitive, so
+# `unmaintained = "workspace"` would hide the exact thing this gate exists for.
+#
+# NOTE: plan E.1 said `unmaintained = "warn"`. cargo-deny removed the per-class
+# severity strings in 0.16; 0.20 accepts "all" | "workspace" | "transitive" |
+# "none". "all" is the strict reading of the plan's intent.
+unmaintained = "all"
+yanked = "deny"
+
+# Every entry below carries a reason and a re-open trigger. An id here without
+# both is a review failure.
+#
+# DELIBERATELY NOT IGNORED — these are one-command lockfile fixes, not accepted
+# risk, and the gate stays red until they land:
+#   RUSTSEC-2026-0193 / RUSTSEC-2026-0213  ammonia 4.1.2 XSS + mXSS
+#                                    -> `cargo update -p ammonia` (>= 4.1.4)
+#   RUSTSEC-2026-0204  crossbeam-epoch invalid pointer dereference
+#                                    -> `cargo update -p crossbeam-epoch` (>= 0.9.20)
+#   yanked `spin`                    -> `cargo update -p spin`
+# Cargo.lock was outside the file ownership of the change that added this file,
+# so these are raised as blocked findings rather than silently grandfathered.
+ignore = [
+    # ── EOL gtk-rs 0.18 generation (all unmaintained, no CVE) ────────────
+    # Held by the `cairo-rs = "0.18"` / `wry = "0.53"` / `tao = "0.34"` pins.
+    # Owner + expiry story: docs/plans/plan-desktop-gtk-stack-bump.md.
+    # Re-open trigger: that plan's Phase D.1 deletes this whole block once
+    # `cargo tree -i glib` shows 0.20+. Do not *extend* this list — a new
+    # gtk-rs advisory means the bump got later, not that the ignore grew.
+    { id = "RUSTSEC-2024-0411", reason = "gdkwayland-sys unmaintained; cleared by plan-desktop-gtk-stack-bump.md" },
+    { id = "RUSTSEC-2024-0412", reason = "gdk unmaintained; cleared by plan-desktop-gtk-stack-bump.md" },
+    { id = "RUSTSEC-2024-0413", reason = "atk unmaintained; cleared by plan-desktop-gtk-stack-bump.md" },
+    { id = "RUSTSEC-2024-0414", reason = "gdkx11-sys unmaintained; cleared by plan-desktop-gtk-stack-bump.md" },
+    { id = "RUSTSEC-2024-0415", reason = "gtk unmaintained; cleared by plan-desktop-gtk-stack-bump.md" },
+    { id = "RUSTSEC-2024-0416", reason = "atk-sys unmaintained; cleared by plan-desktop-gtk-stack-bump.md" },
+    { id = "RUSTSEC-2024-0417", reason = "gdkx11 unmaintained; cleared by plan-desktop-gtk-stack-bump.md" },
+    { id = "RUSTSEC-2024-0418", reason = "gdk-sys unmaintained; cleared by plan-desktop-gtk-stack-bump.md" },
+    { id = "RUSTSEC-2024-0419", reason = "gtk3-macros unmaintained; cleared by plan-desktop-gtk-stack-bump.md" },
+    { id = "RUSTSEC-2024-0420", reason = "gtk-sys unmaintained; cleared by plan-desktop-gtk-stack-bump.md" },
+    { id = "RUSTSEC-2024-0370", reason = "proc-macro-error unmaintained, pulled by glib-macros/gtk3-macros; falls out with the same bump" },
+    #
+    # The eleventh gtk-rs id named in plan E.1, RUSTSEC-2024-0429 (glib 0.18.5
+    # soundness / GHSA-wrw7-89jp-8q8g), is intentionally ABSENT. The current
+    # advisory-db does not match it against our locked glib 0.18.5, so listing
+    # it would only emit an `advisory-not-detected` warning — and if the db
+    # ever does start matching, a soundness bug underneath crates/host-sandbox
+    # (a CLAUDE.md SOLID item 7 security boundary) *should* fail this gate
+    # rather than have been pre-silenced.
+
+    # ── No safe upgrade exists upstream ──────────────────────────────────
+    # Re-open trigger for all three: cargo-deny prints a `Solution:` line other
+    # than "No safe upgrade is available!". Re-check on every dependency bump.
+    { id = "RUSTSEC-2023-0071", reason = "rsa Marvin timing sidechannel — upstream has no patched release (RustCrypto/RSA#626); reached transitively, not used to hold Poly auth secrets" },
+    { id = "RUSTSEC-2024-0436", reason = "paste unmaintained — proc-macro only, no runtime surface, no successor adopted upstream" },
+    { id = "RUSTSEC-2026-0150", reason = "audiopus_sys unmaintained — Opus FFI shim under the voice backend; no successor crate published (Lakelezz/audiopus_sys#22)" },
+]
+
+# ── Licenses ──────────────────────────────────────────────────────────────
+[licenses]
+# Permissive-only. Anything copyleft or unlisted fails; adding a license to
+# this list is a deliberate legal decision, not a build fix.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Zlib",
+    "MPL-2.0",
+    "CDLA-Permissive-2.0",
+    "BSL-1.0",
+    "Unlicense",
+    "CC0-1.0",
+]
+confidence-threshold = 0.8
+
+# First-party workspace crates are governed by the repo's own LICENSE
+# (MIT, `[workspace.package] license = "MIT OR Apache-2.0"`), not by this
+# third-party supply-chain gate.
+private = { ignore = true }
+
+# BUSL-1.1 is source-available, NOT an OSI licence, so it stays out of `allow`
+# and is granted per-crate here instead. This records a pre-existing dependency
+# choice; it does not extend to any new BUSL crate, which will still fail.
+# Re-open trigger: before Poly ships a redistributable binary linking these,
+# the BUSL "Additional Use Grant" has to be read and this block renewed.
+[[licenses.exceptions]]
+crate = "surrealdb"
+allow = ["BUSL-1.1"]
+
+[[licenses.exceptions]]
+crate = "surrealdb-collections"
+allow = ["BUSL-1.1"]
+
+[[licenses.exceptions]]
+crate = "surrealdb-core"
+allow = ["BUSL-1.1"]
+
+[[licenses.exceptions]]
+crate = "surrealdb-protocol"
+allow = ["BUSL-1.1"]
+
+[[licenses.exceptions]]
+crate = "surrealdb-strand"
+allow = ["BUSL-1.1"]
+
+[[licenses.exceptions]]
+crate = "surrealdb-types"
+allow = ["BUSL-1.1"]
+
+[[licenses.exceptions]]
+crate = "surrealdb-types-derive"
+allow = ["BUSL-1.1"]
+
+# ── Bans (duplicate versions, banned crates) ──────────────────────────────
+[bans]
+# Duplicate versions fail. The `skip` list grandfathers exactly what the lock
+# carries today — same contract as crates/lint-gate/baseline.json: existing
+# duplication is recorded version-by-version, a newly duplicated crate is a
+# build error. Regenerate deliberately, never to make a red build green.
+multiple-versions = "deny"
+wildcards = "allow"
+highlight = "all"
+
+# Grandfathered duplicates, generated from `cargo deny --format json check bans`
+# against the lock as of this file landing. Dropping an entry once the tree
+# converges is encouraged; adding one needs a reason in the PR description.
+skip = [
+    { crate = "bitflags@1.3.2" },
+    { crate = "bitflags@2.11.1" },
+    { crate = "block-buffer@0.10.4" },
+    { crate = "block-buffer@0.12.0" },
+    { crate = "chacha20@0.10.0" },
+    { crate = "chacha20@0.9.1" },
+    { crate = "const-oid@0.10.2" },
+    { crate = "const-oid@0.9.6" },
+    { crate = "const-serialize@0.7.2" },
+    { crate = "const-serialize@0.8.0-alpha.0" },
+    { crate = "const-serialize-macro@0.7.2" },
+    { crate = "const-serialize-macro@0.8.0-alpha.0" },
+    { crate = "core-foundation@0.10.1" },
+    { crate = "core-foundation@0.9.4" },
+    { crate = "core-graphics@0.24.0" },
+    { crate = "core-graphics@0.25.0" },
+    { crate = "cpufeatures@0.2.17" },
+    { crate = "cpufeatures@0.3.0" },
+    { crate = "crypto-common@0.1.7" },
+    { crate = "crypto-common@0.2.2" },
+    { crate = "cssparser@0.35.0" },
+    { crate = "cssparser@0.37.0" },
+    { crate = "cssparser-macros@0.6.1" },
+    { crate = "cssparser-macros@0.7.0" },
+    { crate = "digest@0.10.7" },
+    { crate = "digest@0.11.3" },
+    { crate = "foreign-types@0.3.2" },
+    { crate = "foreign-types@0.5.0" },
+    { crate = "foreign-types-shared@0.1.1" },
+    { crate = "foreign-types-shared@0.3.1" },
+    { crate = "getrandom@0.2.17" },
+    { crate = "getrandom@0.3.4" },
+    { crate = "getrandom@0.4.2" },
+    { crate = "hashbrown@0.14.5" },
+    { crate = "hashbrown@0.16.1" },
+    { crate = "hashbrown@0.17.1" },
+    { crate = "heck@0.4.1" },
+    { crate = "heck@0.5.0" },
+    { crate = "html5ever@0.35.0" },
+    { crate = "html5ever@0.39.0" },
+    { crate = "io-lifetimes@2.0.4" },
+    { crate = "io-lifetimes@3.0.1" },
+    { crate = "itertools@0.11.0" },
+    { crate = "itertools@0.13.0" },
+    { crate = "itertools@0.14.0" },
+    { crate = "libloading@0.7.4" },
+    { crate = "libloading@0.8.9" },
+    { crate = "mach2@0.4.3" },
+    { crate = "mach2@0.6.0" },
+    { crate = "markup5ever@0.35.0" },
+    { crate = "markup5ever@0.39.0" },
+    { crate = "phf@0.11.3" },
+    { crate = "phf@0.13.1" },
+    { crate = "phf_codegen@0.11.3" },
+    { crate = "phf_codegen@0.13.1" },
+    { crate = "phf_generator@0.11.3" },
+    { crate = "phf_generator@0.13.1" },
+    { crate = "phf_macros@0.11.3" },
+    { crate = "phf_macros@0.13.1" },
+    { crate = "phf_shared@0.11.3" },
+    { crate = "phf_shared@0.13.1" },
+    { crate = "png@0.17.16" },
+    { crate = "png@0.18.1" },
+    { crate = "proc-macro-crate@1.3.1" },
+    { crate = "proc-macro-crate@2.0.2" },
+    { crate = "rand@0.10.1" },
+    { crate = "rand@0.8.6" },
+    { crate = "rand@0.9.4" },
+    { crate = "rand_chacha@0.3.1" },
+    { crate = "rand_chacha@0.9.0" },
+    { crate = "rand_core@0.10.1" },
+    { crate = "rand_core@0.6.4" },
+    { crate = "rand_core@0.9.5" },
+    { crate = "raw-window-handle@0.5.2" },
+    { crate = "raw-window-handle@0.6.2" },
+    { crate = "rustc-hash@1.1.0" },
+    { crate = "rustc-hash@2.1.2" },
+    { crate = "serde_spanned@0.6.9" },
+    { crate = "serde_spanned@1.0.4" },
+    { crate = "sha2@0.10.9" },
+    { crate = "sha2@0.11.0" },
+    { crate = "string_cache@0.8.9" },
+    { crate = "string_cache@0.9.0" },
+    { crate = "string_cache_codegen@0.5.4" },
+    { crate = "string_cache_codegen@0.6.1" },
+    { crate = "syn@1.0.109" },
+    { crate = "syn@2.0.117" },
+    { crate = "target-lexicon@0.12.16" },
+    { crate = "target-lexicon@0.13.5" },
+    { crate = "tendril@0.4.3" },
+    { crate = "tendril@0.5.0" },
+    { crate = "thiserror@1.0.69" },
+    { crate = "thiserror@2.0.18" },
+    { crate = "thiserror-impl@1.0.69" },
+    { crate = "thiserror-impl@2.0.18" },
+    { crate = "tokio-tungstenite@0.28.0" },
+    { crate = "tokio-tungstenite@0.29.0" },
+    { crate = "toml@0.8.2" },
+    { crate = "toml@0.9.12+spec-1.1.0" },
+    { crate = "toml_datetime@0.6.3" },
+    { crate = "toml_datetime@0.7.5+spec-1.1.0" },
+    { crate = "toml_edit@0.19.15" },
+    { crate = "toml_edit@0.20.2" },
+    { crate = "tungstenite@0.28.0" },
+    { crate = "tungstenite@0.29.0" },
+    { crate = "untrusted@0.7.1" },
+    { crate = "untrusted@0.9.0" },
+    { crate = "wasm-encoder@0.252.0" },
+    { crate = "wasm-encoder@0.254.0" },
+    { crate = "wasm-streams@0.4.2" },
+    { crate = "wasm-streams@0.5.0" },
+    # Reachable only through the wasip1/wasip2 targets (the `clients/*` guest
+    # crates' `cfg(target_os = "wasi")` deps) — invisible until those targets
+    # were added to `[graph]`. Both pairs are the wasm-tools generation split:
+    # `wit-bindgen`/`cargo-component` tooling on 0.247 vs wasmtime 47 on 0.252.
+    { crate = "wasmparser@0.247.0" },
+    { crate = "wasmparser@0.252.0" },
+    { crate = "wast@254.0.0" },
+    { crate = "wast@35.0.2" },
+    { crate = "web_atoms@0.1.3" },
+    { crate = "web_atoms@0.2.4" },
+    { crate = "windows@0.54.0" },
+    { crate = "windows@0.61.3" },
+    { crate = "windows-core@0.54.0" },
+    { crate = "windows-core@0.61.2" },
+    { crate = "windows-core@0.62.2" },
+    { crate = "windows-link@0.1.3" },
+    { crate = "windows-link@0.2.1" },
+    { crate = "windows-result@0.1.2" },
+    { crate = "windows-result@0.3.4" },
+    { crate = "windows-result@0.4.1" },
+    { crate = "windows-strings@0.4.2" },
+    { crate = "windows-strings@0.5.1" },
+    { crate = "windows-sys@0.59.0" },
+    { crate = "windows-sys@0.60.2" },
+    { crate = "windows-sys@0.61.2" },
+    { crate = "windows-targets@0.52.6" },
+    { crate = "windows-targets@0.53.5" },
+    { crate = "windows_x86_64_gnu@0.52.6" },
+    { crate = "windows_x86_64_gnu@0.53.1" },
+    { crate = "windows_x86_64_msvc@0.52.6" },
+    { crate = "windows_x86_64_msvc@0.53.1" },
+    { crate = "winnow@0.5.40" },
+    { crate = "winnow@0.7.15" },
+    { crate = "winnow@1.0.3" },
+    # Same wasip-only origin and same 0.247/0.252 wasm-tools split as the
+    # `wasmparser` pair above.
+    { crate = "wit-parser@0.247.0" },
+    { crate = "wit-parser@0.252.0" },
+]
+
+# ── Sources ───────────────────────────────────────────────────────────────
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

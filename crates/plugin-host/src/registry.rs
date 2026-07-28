@@ -153,9 +153,7 @@ impl PluginRegistry {
         let mut store = Store::new(&self.engine, host_state);
 
         // Give the plugin some fuel to work with
-        store
-            .set_fuel(1_000_000_000)
-            .map_err(|e| format!("Failed to set fuel: {e}"))?;
+        set_call_fuel(&mut store, "instantiation")?;
 
         let instance = MessengerPlugin::instantiate_async(&mut store, component, &self.linker)
             .await
@@ -172,7 +170,7 @@ impl PluginRegistry {
         let cached_backend_type = BackendType::from_slug(&wit_backend_type);
 
         // Refuel before the next call
-        drop(store.set_fuel(1_000_000_000));
+        set_call_fuel(&mut store, "get-backend-name")?;
 
         let cached_backend_name = instance
             .poly_messenger_messenger_client()
@@ -183,12 +181,12 @@ impl PluginRegistry {
         // Load plugin translations and settings schema via the plugin-metadata interface.
         // FTL strings are stored in PluginBackend.plugin_ftl; the host (poly-core) reads
         // them after instantiation and calls i18n::register_plugin_ftl().
-        drop(store.set_fuel(1_000_000_000));
+        set_call_fuel(&mut store, "plugin-metadata")?;
         let meta = instance.poly_messenger_plugin_metadata();
         let mut plugin_ftl: std::collections::HashMap<String, String> =
             std::collections::HashMap::new();
         for locale in SUPPORTED_LOCALES {
-            drop(store.set_fuel(1_000_000_000));
+            set_call_fuel(&mut store, "get-translations")?;
             match meta.call_get_translations(&mut store, locale).await {
                 Ok(ftl_src) if !ftl_src.trim().is_empty() => {
                     plugin_ftl.insert(locale.to_string(), ftl_src);
@@ -213,16 +211,16 @@ impl PluginRegistry {
         //
         // TODO(WP 1.C): call client-settings::get-settings-sections and
         // pick the `scope == account-global` section to build this list.
-        drop(store.set_fuel(1_000_000_000));
+        set_call_fuel(&mut store, "get-settings-schema")?;
         let schema: Vec<SettingDescriptor> = Vec::new();
 
-        drop(store.set_fuel(1_000_000_000));
+        set_call_fuel(&mut store, "get-display-name-key")?;
         let display_name_key = meta
             .call_get_display_name_key(&mut store)
             .await
             .unwrap_or_else(|_| format!("plugin-{plugin_id}-title"));
 
-        drop(store.set_fuel(1_000_000_000));
+        set_call_fuel(&mut store, "get-icon")?;
         let icon = meta.call_get_icon(&mut store).await.unwrap_or_default();
 
         tracing::info!(
@@ -333,11 +331,36 @@ impl std::fmt::Debug for PluginBackend {
     }
 }
 
-/// Helper to refuel the store before each guest call.
-async fn refuel(store: &Arc<Mutex<Store<PluginHostState>>>) {
+/// Re-arm the guest's fuel budget, attributing failures to `site`.
+///
+/// A dropped `set_fuel` error is invisible at the point of failure and
+/// resurfaces later as a misleading "all fuel consumed" trap on the *next*
+/// guest call, so every failure is logged with the call site that caused it.
+/// Use the [`refuel!`] macro rather than calling this directly — it fills in
+/// `site` from the caller's own `file!():line!()`.
+async fn refuel(store: &Arc<Mutex<Store<PluginHostState>>>, site: &'static str) {
     let mut guard = store.lock().await;
-    // Ignore fuel errors — fuel is best-effort
-    drop(guard.set_fuel(1_000_000_000));
+    if let Err(e) = guard.set_fuel(engine::CALL_FUEL) {
+        tracing::warn!("refuel failed at {site}: {e} — next guest call may trap out of fuel");
+    }
+}
+
+/// Call [`refuel`] with the invocation's own source location as the site.
+macro_rules! refuel {
+    ($store:expr) => {
+        refuel($store, concat!(file!(), ":", line!()))
+    };
+}
+
+/// Re-arm fuel on an owned [`Store`], propagating failure to the caller.
+///
+/// Used on the instantiation path, where the caller returns `Result` and a
+/// failed refuel should abort plugin loading rather than be logged and
+/// forgotten.
+fn set_call_fuel(store: &mut Store<PluginHostState>, site: &str) -> Result<(), String> {
+    store
+        .set_fuel(engine::CALL_FUEL)
+        .map_err(|e| format!("Failed to set fuel before {site}: {e}"))
 }
 
 /// Convert a WIT result with no conversion needed on the value.
@@ -357,7 +380,7 @@ fn convert_result_unit(
 #[async_trait]
 impl IsBackend for PluginBackend {
     async fn authenticate(&mut self, credentials: AuthCredentials) -> ClientResult<Session> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let wit_creds = bridge::to_wit_auth_credentials(credentials);
         let result = {
             let mut store = self.store.lock().await;
@@ -375,7 +398,7 @@ impl IsBackend for PluginBackend {
     }
 
     async fn logout(&mut self) -> ClientResult<()> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let result = {
             let mut store = self.store.lock().await;
             self
@@ -395,7 +418,7 @@ impl IsBackend for PluginBackend {
     }
 
     async fn get_servers(&self) -> ClientResult<Vec<Server>> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let result = {
             let mut store = self.store.lock().await;
             self
@@ -412,7 +435,7 @@ impl IsBackend for PluginBackend {
     }
 
     async fn get_server(&self, id: &str) -> ClientResult<Server> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let result = {
             let mut store = self.store.lock().await;
             self
@@ -429,7 +452,7 @@ impl IsBackend for PluginBackend {
     }
 
     async fn get_channels(&self, server_id: &str) -> ClientResult<Vec<Channel>> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let result = {
             let mut store = self.store.lock().await;
             self
@@ -446,7 +469,7 @@ impl IsBackend for PluginBackend {
     }
 
     async fn get_channel(&self, id: &str) -> ClientResult<Channel> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let result = {
             let mut store = self.store.lock().await;
             self
@@ -467,7 +490,7 @@ impl IsBackend for PluginBackend {
         channel_id: &str,
         content: MessageContent,
     ) -> ClientResult<Message> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let wit_content = bridge::to_wit_message_content(content);
         let result = {
             let mut store = self.store.lock().await;
@@ -489,7 +512,7 @@ impl IsBackend for PluginBackend {
         channel_id: &str,
         query: MessageQuery,
     ) -> ClientResult<Vec<Message>> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let wit_query = bridge::to_wit_message_query(query);
         let result = {
             let mut store = self.store.lock().await;
@@ -526,7 +549,7 @@ impl IsBackend for PluginBackend {
     }
 
     async fn get_channel_members(&self, channel_id: &str) -> ClientResult<Vec<User>> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let result = {
             let mut store = self.store.lock().await;
             self
@@ -549,7 +572,7 @@ impl IsBackend for PluginBackend {
     }
 
     async fn get_notifications(&self) -> ClientResult<Vec<Notification>> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let result = {
             let mut store = self.store.lock().await;
             self
@@ -572,7 +595,7 @@ impl IsBackend for PluginBackend {
         &self,
         channel_id: &str,
     ) -> ClientResult<Vec<VoiceParticipant>> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let result = {
             let mut store = self.store.lock().await;
             self
@@ -625,10 +648,7 @@ impl IsBackend for PluginBackend {
             tokio::spawn(async move {
                 while let Some(ws_data) = ws_rx.recv().await {
                     // Refuel before calling into guest
-                    {
-                        let mut guard = store.lock().await;
-                        drop(guard.set_fuel(1_000_000_000));
-                    }
+                    refuel!(&store).await;
 
                     // Forward WS data to guest — guest parses it and calls emit-event
                     let result = {
@@ -668,7 +688,7 @@ impl IsBackend for PluginBackend {
         target: MenuTargetKind,
         target_id: &str,
     ) -> ClientResult<Vec<MenuItem>> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let wit_target = bridge::to_wit_menu_target_kind(target);
         let result = {
             let mut store = self.store.lock().await;
@@ -691,7 +711,7 @@ impl IsBackend for PluginBackend {
         target: MenuTargetKind,
         target_id: &str,
     ) -> ClientResult<ActionOutcome> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let wit_target = bridge::to_wit_menu_target_kind(target);
         let result = {
             let mut store = self.store.lock().await;
@@ -709,7 +729,7 @@ impl IsBackend for PluginBackend {
     }
 
     async fn poll_action(&self, handle: PendingHandle) -> ClientResult<ActionOutcome> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let wit_handle = bridge::to_wit_pending_handle(handle);
         let result = {
             let mut store = self.store.lock().await;
@@ -727,7 +747,7 @@ impl IsBackend for PluginBackend {
     }
 
     async fn get_settings_sections(&self) -> ClientResult<Vec<SettingsSection>> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let result = {
             let mut store = self.store.lock().await;
             self
@@ -752,7 +772,7 @@ impl IsBackend for PluginBackend {
         scope_id: &str,
         key: &str,
     ) -> ClientResult<String> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let wit_scope = bridge::to_wit_settings_scope(scope);
         let result = {
             let mut store = self.store.lock().await;
@@ -776,7 +796,7 @@ impl IsBackend for PluginBackend {
         key: &str,
         value: &str,
     ) -> ClientResult<()> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let wit_scope = bridge::to_wit_settings_scope(scope);
         let result = {
             let mut store = self.store.lock().await;
@@ -790,7 +810,7 @@ impl IsBackend for PluginBackend {
     }
 
     async fn get_sidebar_declaration(&self) -> ClientResult<SidebarDeclaration> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let result = {
             let mut store = self.store.lock().await;
             self
@@ -807,7 +827,7 @@ impl IsBackend for PluginBackend {
     }
 
     async fn invoke_sidebar_action(&self, action_id: &str) -> ClientResult<ActionOutcome> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let result = {
             let mut store = self.store.lock().await;
             self
@@ -824,7 +844,7 @@ impl IsBackend for PluginBackend {
     }
 
     async fn get_channel_view(&self, channel_id: &str) -> ClientResult<ViewDescriptor> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let result = {
             let mut store = self.store.lock().await;
             self
@@ -848,7 +868,7 @@ impl IsBackend for PluginBackend {
         filter_id: Option<&str>,
         tab_id: Option<&str>,
     ) -> ClientResult<ViewRowsPage> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let wit_cursor = cursor.map(bridge::to_wit_view_cursor);
         let result = {
             let mut store = self.store.lock().await;
@@ -877,7 +897,7 @@ impl IsBackend for PluginBackend {
         channel_id: &str,
         row_id: &str,
     ) -> ClientResult<ViewDetail> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let result = {
             let mut store = self.store.lock().await;
             self
@@ -897,7 +917,7 @@ impl IsBackend for PluginBackend {
         &self,
         channel_id: &str,
     ) -> ClientResult<Vec<ComposerButton>> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let result = {
             let mut store = self.store.lock().await;
             self
@@ -921,7 +941,7 @@ impl IsBackend for PluginBackend {
         channel_id: &str,
         message_id: &str,
     ) -> ClientResult<Vec<MenuItem>> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let result = {
             let mut store = self.store.lock().await;
             self
@@ -945,7 +965,7 @@ impl IsBackend for PluginBackend {
         action_id: &str,
         channel_id: &str,
     ) -> ClientResult<ActionOutcome> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let result = {
             let mut store = self.store.lock().await;
             self
@@ -967,7 +987,7 @@ impl IsBackend for PluginBackend {
         channel_id: &str,
         message_id: &str,
     ) -> ClientResult<ActionOutcome> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let result = {
             let mut store = self.store.lock().await;
             self
@@ -1007,7 +1027,7 @@ impl ForumBackend for PluginBackend {
         sort: ForumSortOrder,
         limit: Option<u32>,
     ) -> ClientResult<Vec<ForumPost>> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let wit_sort = bridge::to_wit_forum_sort_order(sort);
         let result = {
             let mut store = self.store.lock().await;
@@ -1031,7 +1051,7 @@ impl ForumBackend for PluginBackend {
         body: &str,
         tags: Vec<String>,
     ) -> ClientResult<ForumPost> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let result = {
             let mut store = self.store.lock().await;
             self
@@ -1064,7 +1084,7 @@ impl ForumBackend for PluginBackend {
 #[async_trait]
 impl ThreadsBackend for PluginBackend {
     async fn get_active_threads(&self, server_id: &str) -> ClientResult<Vec<ThreadInfo>> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let result = {
             let mut store = self.store.lock().await;
             self
@@ -1085,7 +1105,7 @@ impl ThreadsBackend for PluginBackend {
         parent_channel_id: &str,
         limit: Option<u32>,
     ) -> ClientResult<Vec<ThreadInfo>> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let result = {
             let mut store = self.store.lock().await;
             self
@@ -1112,7 +1132,7 @@ impl ThreadsBackend for PluginBackend {
 #[async_trait]
 impl poly_client::SocialGraphBackend for PluginBackend {
     async fn get_user(&self, id: &str) -> ClientResult<User> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let result = {
             let mut store = self.store.lock().await;
             self
@@ -1129,7 +1149,7 @@ impl poly_client::SocialGraphBackend for PluginBackend {
     }
 
     async fn get_friends(&self) -> ClientResult<Vec<User>> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let result = {
             let mut store = self.store.lock().await;
             self
@@ -1187,7 +1207,7 @@ impl poly_client::SocialGraphBackend for PluginBackend {
     }
 
     async fn get_presence(&self, user_id: &str) -> ClientResult<PresenceStatus> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let result = {
             let mut store = self.store.lock().await;
             self
@@ -1204,7 +1224,7 @@ impl poly_client::SocialGraphBackend for PluginBackend {
     }
 
     async fn set_presence(&self, status: PresenceStatus) -> ClientResult<()> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let wit_status = bridge::to_wit_presence(status);
         let result = {
             let mut store = self.store.lock().await;
@@ -1236,7 +1256,7 @@ impl poly_client::MessagingBackend for PluginBackend {
         reply_to_message_id: &str,
         content: poly_client::MessageContent,
     ) -> ClientResult<poly_client::Message> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let result = {
             let mut store = self.store.lock().await;
             let wit_content = bridge::to_wit_message_content(content);
@@ -1257,7 +1277,7 @@ impl poly_client::MessagingBackend for PluginBackend {
         &self,
         query: poly_client::MessageSearchQuery,
     ) -> ClientResult<Vec<poly_client::MessageSearchHit>> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let result = {
             let mut store = self.store.lock().await;
             let wit_query = bridge::to_wit_message_search_query(query);
@@ -1275,7 +1295,7 @@ impl poly_client::MessagingBackend for PluginBackend {
     }
 
     async fn get_pinned_messages(&self, channel_id: &str) -> ClientResult<Vec<poly_client::Message>> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let result = {
             let mut store = self.store.lock().await;
             self
@@ -1297,7 +1317,7 @@ impl poly_client::MessagingBackend for PluginBackend {
         message_id: &str,
         pinned: bool,
     ) -> ClientResult<()> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let result = {
             let mut store = self.store.lock().await;
             self
@@ -1322,7 +1342,7 @@ impl poly_client::MessagingBackend for PluginBackend {
         &self,
         channel_id: &str,
     ) -> ClientResult<Vec<poly_client::CustomEmoji>> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let result = {
             let mut store = self.store.lock().await;
             self
@@ -1342,7 +1362,7 @@ impl poly_client::MessagingBackend for PluginBackend {
         &self,
         channel_id: &str,
     ) -> ClientResult<Vec<poly_client::StickerItem>> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let result = {
             let mut store = self.store.lock().await;
             self
@@ -1362,7 +1382,7 @@ impl poly_client::MessagingBackend for PluginBackend {
 #[async_trait]
 impl poly_client::DmsAndGroupsBackend for PluginBackend {
     async fn get_groups(&self) -> ClientResult<Vec<Group>> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let result = {
             let mut store = self.store.lock().await;
             self
@@ -1379,7 +1399,7 @@ impl poly_client::DmsAndGroupsBackend for PluginBackend {
     }
 
     async fn get_dm_channels(&self) -> ClientResult<Vec<DmChannel>> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let result = {
             let mut store = self.store.lock().await;
             self
@@ -1396,7 +1416,7 @@ impl poly_client::DmsAndGroupsBackend for PluginBackend {
     }
 
     async fn open_direct_message_channel(&self, user_id: &str) -> ClientResult<DmChannel> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let result = {
             let mut store = self.store.lock().await;
             self
@@ -1413,7 +1433,7 @@ impl poly_client::DmsAndGroupsBackend for PluginBackend {
     }
 
     async fn open_saved_messages_channel(&self) -> ClientResult<DmChannel> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let result = {
             let mut store = self.store.lock().await;
             self
@@ -1430,7 +1450,7 @@ impl poly_client::DmsAndGroupsBackend for PluginBackend {
     }
 
     async fn add_group_member(&self, group_id: &str, user_id: &str) -> ClientResult<()> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let result = {
             let mut store = self.store.lock().await;
             self
@@ -1443,7 +1463,7 @@ impl poly_client::DmsAndGroupsBackend for PluginBackend {
     }
 
     async fn remove_group_member(&self, group_id: &str, user_id: &str) -> ClientResult<()> {
-        refuel(&self.store).await;
+        refuel!(&self.store).await;
         let result = {
             let mut store = self.store.lock().await;
             self
@@ -1502,5 +1522,53 @@ impl poly_client::DmsAndGroupsBackend for PluginBackend {
         Err(ClientError::NotSupported(
             "edit_group_dm: not exposed in WIT interface".to_string(),
         ))
+    }
+}
+
+// ─── Sandbox-policy integration tests (plan Phase D.1) ────────────────────
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
+    use super::PluginRegistry;
+
+    /// The narrowed engine (`engine::apply_sandbox_policy`) must still admit
+    /// the *real* plugin linker: WASI preview-2 plus every async host import
+    /// generated from `wit/messenger-plugin.wit`.
+    ///
+    /// This is the guard on the one narrowing with a plausible blast radius —
+    /// `wasm_component_model_async(false)`. Host-side async (wasmtime fibers,
+    /// `bindgen!(imports: { default: async })`) is independent of the
+    /// guest-facing component-model-async proposal, and registering the async
+    /// host functions here proves it: if the two were coupled,
+    /// `MessengerPlugin::add_to_linker` would fail.
+    #[test]
+    fn plugin_linker_builds_on_the_narrowed_engine() {
+        let registry = PluginRegistry::new()
+            .expect("WASI p2 + async host-API linker must build on the narrowed engine");
+        // A fresh registry holds no components; the value is the linker wiring
+        // above having succeeded.
+        assert!(
+            registry.components.is_empty(),
+            "a fresh registry must start with no loaded components"
+        );
+    }
+
+    /// A registry rejects bytes that are not a component — the plugin ABI
+    /// boundary stays closed to raw core modules even though the sandbox
+    /// keeps core-wasm features enabled for the component's inner modules.
+    #[test]
+    fn load_from_bytes_rejects_a_core_module() {
+        let mut registry = PluginRegistry::new().expect("registry must build");
+        // Minimal core-wasm module header + version, not a component.
+        let core_module = b"\0asm\x01\0\0\0";
+        let err = registry
+            .load_from_bytes("not-a-component", core_module)
+            .expect_err("a core module must not load as a plugin component");
+        assert!(
+            err.contains("not-a-component"),
+            "error must name the offending plugin id, got: {err}"
+        );
     }
 }
