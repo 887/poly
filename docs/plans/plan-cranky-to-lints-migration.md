@@ -1,12 +1,18 @@
 # Plan: Retire cargo-cranky → `[workspace.lints]`
 
-## Status: ✅ SHIPPED (2026-06-08) — Phases A–C landed; **Phase D (verify) still outstanding**
+## Status: ✅ SHIPPED (2026-06-08) — Phases A–C landed; **Phase D.2 verified, D.1 RUN AND RED**
 
 > The previous `✅ DONE — all phases shipped & verified` marker was wrong: both
 > Phase D verification gates (D.1, D.2) were never ticked, and the Phase C sweep
 > did in fact miss `.agent.md`, which kept three `cargo cranky` invocations until
 > the 2026-07-28 docs-drift pass (C.4 below). Do not re-mark this plan DONE until
 > D.1 and D.2 are actually run and ticked.
+>
+> **2026-07-28 update (plan-lint-gate-integrity Phase D):** both gates have now
+> actually been run. **D.2 is green and ticked.** **D.1 is red** — 19 pre-existing
+> `-D warnings` errors across three test targets that CI never reached because its
+> Gate A omits `--all-targets`. The three sites and their exact fixes are recorded
+> under Phase D below. This plan stays `SHIPPED`, not `DONE`.
 
 cargo-cranky is **archived upstream** (no further maintenance). It was only ever a
 config-file front-end for `cargo clippy`; the same policy is now expressed natively
@@ -72,11 +78,41 @@ record what was actually run at the time.
   Replaced with `cargo clippy --workspace -- -D warnings` + `cargo check -p poly-lint-gate`.
   C.1's "all live agents.md" scope did not match the dotfile name `.agent.md`.
 
-## Phase D — Verify (the QA gate) — **NOT YET RUN**
+## Phase D — Verify (the QA gate) — **RUN 2026-07-28; D.1 FAILS, D.2 PASSES**
 
 - [ ] **D.1** `cargo clippy --workspace --all-targets -- -D warnings` is clean. This is
   the load-bearing check: the folded-in complexity/hygiene denies are now enforced in
   CI for the first time, so any code that passed CI but would have failed cranky must be
   fixed here. Iterate until a clean round finds nothing new.
-- [ ] **D.2** `cargo check -p poly-lint-gate` still rc=0 (the hang-class / persona gate
+  → **RUN and it is NOT clean — 19 errors across three test targets, all
+  pre-existing and all in code the `--all-targets` flag reaches for the first
+  time.** This is exactly the debt the migration was expected to surface (CI's
+  Gate A omits `--all-targets`, so these never failed a build). Left unticked and
+  unfixed **only** because all three sites are outside the owned-path set of the
+  PR that ran this gate (plan-lint-gate-integrity Phases B–D); they are a
+  self-contained follow-up, not a deferral of this phase's verification. The
+  three sites and their exact fixes:
+  1. `servers/server/tests/integration.rs:39` — `non_binding_let_on_must_use`:
+     `let _ = tracing_subscriber::fmt()…try_init();` → name the bind,
+     `let _init = …try_init();`.
+  2. `crates/host-bridge/tests/video.rs` — **17 errors** in `make_bgra_frame`
+     (lines 80–86) and the `min_expected` assertion (line 188):
+     `as_conversions`, `arithmetic_side_effects`, `cast_possible_truncation`,
+     `integer_division`. Fix with `u8::try_from(…)` / `usize::try_from(…)`,
+     `saturating_mul` / `saturating_add`, and `.div_euclid(n)` in place of `/`.
+  3. `apps/poly-host/src/lib.rs:1798` (inside the `#[cfg(test)]` module) —
+     `.map_or(true, std::vec::Vec::is_empty)` → `.is_none_or(std::vec::Vec::is_empty)`.
+
+  Evidence (false-zero protocol on `/tmp/d1b.log`): `Finished` = 0,
+  `grep -c '^error'` = 22 (19 lint errors + 3 `could not compile`),
+  `could not compile` = 3, exit 101.
+- [x] **D.2** `cargo check -p poly-lint-gate` still rc=0 (the hang-class / persona gate
   is independent of cranky but re-run as a regression check).
+  → **rc=0.** `Finished` present = 1, `grep -c '^error'` = 0,
+  `grep -c 'could not compile'` = 0, `773 grandfathered violations`, zero new.
+  Re-verified after the Phase B allowlist re-key and the content-keyed baseline.
+
+**Status stays `SHIPPED`, not `DONE`**, per this plan's own header rule: D.1 has
+now genuinely been run, and it fails. Tick D.1 and flip the header to
+`✅ DONE` only once the three sites above are fixed and a clean round finds
+nothing new.
