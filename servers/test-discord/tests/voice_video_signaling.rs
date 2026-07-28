@@ -4,7 +4,13 @@
 //! and asserts the server replies with op 21 bearing a fresh non-zero
 //! `video_ssrc` distinct from the audio SSRC.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::indexing_slicing,
+    clippy::wildcard_enum_match_arm
+)]
 
 use futures::{SinkExt, StreamExt};
 use poly_test_discord::DiscordState;
@@ -60,7 +66,7 @@ async fn op_12_stream_create_returns_op_21_with_video_ssrc() {
 
     // op 0 IDENTIFY
     let identify = serde_json::json!({
-        "op": 0,
+        "op": 0_i32,
         "d": {
             "server_id": "100",
             "user_id": "mock-user-1",
@@ -73,16 +79,16 @@ async fn op_12_stream_create_returns_op_21_with_video_ssrc() {
     // op 2 READY — capture the audio SSRC
     let ready_txt = text_of(ws.next().await.unwrap().unwrap());
     let ready: serde_json::Value = serde_json::from_str(&ready_txt).unwrap();
-    assert_eq!(ready["op"], 2);
-    let audio_ssrc = ready["d"]["ssrc"].as_u64().unwrap() as u32;
+    assert_eq!(ready["op"], 2_i32);
+    let audio_ssrc = u32::try_from(ready["d"]["ssrc"].as_u64().unwrap()).expect("audio ssrc fits u32");
     assert!(audio_ssrc > 0);
 
     // op 1 SELECT_PROTOCOL
     let select = serde_json::json!({
-        "op": 1,
+        "op": 1_i32,
         "d": {
             "protocol": "udp",
-            "data": { "address": "127.0.0.1", "port": 54321, "mode": "aead_xchacha20_poly1305_rtpsize" }
+            "data": { "address": "127.0.0.1", "port": 54_321_i32, "mode": "aead_xchacha20_poly1305_rtpsize" }
         }
     });
     ws.send(TungsteniteMessage::Text(select.to_string().into())).await.unwrap();
@@ -92,21 +98,21 @@ async fn op_12_stream_create_returns_op_21_with_video_ssrc() {
 
     // op 12 STREAM_CREATE — request video
     let stream_create = serde_json::json!({
-        "op": 12,
-        "d": { "type": "video", "rid": "high", "quality": 100 }
+        "op": 12_i32,
+        "d": { "type": "video", "rid": "high", "quality": 100_i32 }
     });
     ws.send(TungsteniteMessage::Text(stream_create.to_string().into())).await.unwrap();
 
     // Expect op 21 Stream Subscription back.
     let sub_txt = text_of(ws.next().await.unwrap().unwrap());
     let sub: serde_json::Value = serde_json::from_str(&sub_txt).unwrap();
-    assert_eq!(sub["op"], 21, "expected op 21 Stream Subscription, got {:?}", sub);
+    assert_eq!(sub["op"], 21_i32, "expected op 21 Stream Subscription, got {:?}", sub);
     let d = &sub["d"];
     assert_eq!(d["type"], "video");
     assert_eq!(d["rid"], "high");
-    assert_eq!(d["quality"], 100);
-    assert_eq!(d["audio_ssrc"].as_u64().unwrap() as u32, audio_ssrc);
-    let video_ssrc = d["video_ssrc"].as_u64().unwrap() as u32;
+    assert_eq!(d["quality"], 100_i32);
+    assert_eq!(u32::try_from(d["audio_ssrc"].as_u64().unwrap()).expect("audio ssrc fits u32"), audio_ssrc);
+    let video_ssrc = u32::try_from(d["video_ssrc"].as_u64().unwrap()).expect("video ssrc fits u32");
     assert!(video_ssrc > 0, "video_ssrc should be non-zero");
     assert_ne!(video_ssrc, audio_ssrc, "video_ssrc must differ from audio_ssrc");
 
@@ -117,5 +123,5 @@ async fn op_12_stream_create_returns_op_21_with_video_ssrc() {
         assert_eq!(sess.video_ssrc, Some(video_ssrc));
     }
 
-    let _ = shutdown_tx.send(());
+    let _shutdown_sent = shutdown_tx.send(());
 }

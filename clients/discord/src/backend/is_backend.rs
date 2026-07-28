@@ -346,6 +346,23 @@ impl IsBackend for DiscordClient {
         // When the `gateway` feature is disabled (WASM plugin target, plain
         // native core consumer), we can't open a WebSocket — return a pending
         // stream. Events arrive via other paths (WIT plugin host, REST poll).
+        //
+        // A configured gateway URL that no compiled-in transport can honour is
+        // a misconfiguration, not a normal state: silently returning a pending
+        // stream is exactly how `test_gateway_thread_create_flow` degraded into
+        // a 2s timeout instead of a compile error. Warn loudly.
+        #[cfg(not(any(
+            feature = "gateway",
+            all(feature = "gateway-bridge", target_arch = "wasm32")
+        )))]
+        if self.gateway_url.is_some() {
+            tracing::warn!(
+                target: "poly_discord::gateway",
+                "gateway URL configured but no gateway transport is compiled in \
+                 (enable feature `gateway` on native or `gateway-bridge` on wasm32) — \
+                 event_stream() will never yield"
+            );
+        }
         let _ = &self.gateway_url;
         Box::pin(stream::pending())
     }

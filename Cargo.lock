@@ -7524,6 +7524,7 @@ dependencies = [
  "js-sys",
  "poly-audio-backend",
  "poly-client",
+ "poly-discord",
  "poly-host-bridge",
  "poly-test-common",
  "poly-test-discord",

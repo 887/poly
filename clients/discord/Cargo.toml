@@ -192,6 +192,16 @@ js-sys = { workspace = true }
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = { workspace = true }
 [dev-dependencies]
+# Self dev-dependency: enables `gateway` for *test/bench targets only*.
+#
+# `tests/integration.rs` drives the native gateway WebSocket end-to-end, but
+# `event_stream()` only opens a WS under `feature = "gateway"` — otherwise it
+# degrades to `stream::pending()` and every gateway assertion times out instead
+# of failing to compile. `gateway` cannot become a default feature (it pulls
+# tokio-tungstenite → mio, which does not build for wasm32-unknown-unknown), so
+# it is activated here, where it applies to `cargo test` / `cargo bench` and
+# leaves plain `cargo build -p poly-discord` WASM-clean.
+poly-discord = { path = ".", features = ["gateway"] }
 poly-test-discord = { path = "../../servers/test-discord" }
 poly-test-common = { workspace = true }
 axum = { workspace = true }

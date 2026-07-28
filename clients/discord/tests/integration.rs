@@ -102,6 +102,61 @@ impl TestServer {
             .expect("authenticate");
         client
     }
+
+    /// Poll `/testhook/gateway_clients` until at least `n` gateway WS clients
+    /// are subscribed to the mock's event bus.
+    ///
+    /// `handle_gateway_socket` subscribes to the bus as its very first act —
+    /// before HELLO, before READY — so a count >= n is proof that anything
+    /// published afterwards will reach the client. This replaces a fixed sleep,
+    /// which was a race: on a loaded machine the WS handshake can take longer
+    /// than the sleep and the emit is then published to nobody.
+    async fn wait_for_gateway_clients(&self, n: u64) {
+        let poll = async {
+            let http = reqwest::Client::new();
+            loop {
+                let resp: serde_json::Value = http
+                    .get(format!("{}/testhook/gateway_clients", self.base_url))
+                    .send()
+                    .await
+                    .expect("gateway_clients GET")
+                    .json()
+                    .await
+                    .expect("parse gateway_clients response");
+                if resp["clients"].as_u64().unwrap_or(0) >= n {
+                    return;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+            }
+        };
+        tokio::time::timeout(std::time::Duration::from_secs(5), poll)
+            .await
+            .unwrap_or_else(|_| panic!("timed out waiting for {n} gateway WS client(s)"));
+    }
+
+    /// POST `/testhook/emit_thread_event` and assert the mock actually fanned
+    /// the event out to at least one subscriber.
+    ///
+    /// Asserting `receivers >= 1` is what turns "the client never got it" into
+    /// a diagnosis: a 0 here means the emit raced the WS attach (harness bug),
+    /// a non-zero here with no client event means the client dropped or
+    /// mis-parsed the frame (product bug).
+    async fn emit_thread_event(&self, body: serde_json::Value) {
+        let resp: serde_json::Value = reqwest::Client::new()
+            .post(format!("{}/testhook/emit_thread_event", self.base_url))
+            .json(&body)
+            .send()
+            .await
+            .expect("testhook POST")
+            .json()
+            .await
+            .expect("parse testhook response");
+        assert_eq!(resp["ok"], serde_json::Value::Bool(true), "testhook should return ok:true");
+        assert!(
+            resp["receivers"].as_u64().unwrap_or(0) >= 1,
+            "testhook published to zero subscribers — the gateway WS was not attached: {resp}"
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -442,8 +497,10 @@ async fn test_gateway_thread_create_flow() {
     // Open the event stream — this spawns the WS connection task.
     let mut stream = client.event_stream();
 
-    // Give the WS connection a brief moment to establish and receive READY.
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    // Readiness signal, not a sleep: wait until the mock reports the client's
+    // WS handler has subscribed to the event bus, so the emit below cannot be
+    // published before anyone is listening.
+    srv.wait_for_gateway_clients(1).await;
 
     // Inject a THREAD_CREATE event via the testhook.
     let thread_payload = serde_json::json!({
@@ -465,19 +522,11 @@ async fn test_gateway_thread_create_flow() {
         "applied_tags": []
     });
 
-    let resp: serde_json::Value = reqwest::Client::new()
-        .post(format!("{}/testhook/emit_thread_event", srv.base_url))
-        .json(&serde_json::json!({
-            "event_type": "THREAD_CREATE",
-            "thread": thread_payload
-        }))
-        .send()
-        .await
-        .expect("testhook POST")
-        .json()
-        .await
-        .expect("parse testhook response");
-    assert_eq!(resp["ok"], serde_json::Value::Bool(true), "testhook should return ok:true");
+    srv.emit_thread_event(serde_json::json!({
+        "event_type": "THREAD_CREATE",
+        "thread": thread_payload
+    }))
+    .await;
 
     // Wait up to 2s for the ChannelUpdated event to appear on the stream.
     let event = timeout(Duration::from_secs(2), stream.next())
@@ -493,6 +542,79 @@ async fn test_gateway_thread_create_flow() {
             assert_eq!(ch.parent_channel_id.as_deref(), Some("500"));
         }
         other => panic!("expected ChannelUpdated, got {:?}", other),
+    }
+}
+
+/// Same gateway path, THREAD_UPDATE then THREAD_DELETE, over one live WS.
+///
+/// Guards the ordering contract of the native gateway loop (events arrive in
+/// publish order, one `ClientEvent` per frame) and the tombstone shape, which
+/// the pure-mapping tests in `tests/mapping.rs` can only check in isolation.
+#[tokio::test]
+async fn test_gateway_thread_update_then_delete_flow() {
+    use futures::StreamExt;
+    use tokio::time::{Duration, timeout};
+
+    let srv = TestServer::start().await;
+    let client = srv.authenticated_client_with_gateway("koala").await;
+    let mut stream = client.event_stream();
+    srv.wait_for_gateway_clients(1).await;
+
+    srv.emit_thread_event(serde_json::json!({
+        "event_type": "THREAD_UPDATE",
+        "thread": {
+            "id": "9002",
+            "name": "Archived gateway thread",
+            "type": 11_i32,
+            "guild_id": "100",
+            "parent_id": "500",
+            "thread_metadata": {
+                "archived": true,
+                "locked": false,
+                "auto_archive_duration": 1_440_i32,
+                "archive_timestamp": "2026-04-19T01:00:00.000Z",
+                "create_timestamp": "2026-04-19T00:00:00.000Z"
+            },
+            "message_count": 3_i32,
+            "member_count": 2_i32
+        }
+    }))
+    .await;
+
+    let event = timeout(Duration::from_secs(2), stream.next())
+        .await
+        .expect("timed out waiting for THREAD_UPDATE")
+        .expect("stream ended unexpectedly");
+    match event {
+        ClientEvent::ChannelUpdated(ch) => {
+            assert_eq!(ch.id, "9002");
+            assert_eq!(ch.channel_type, ChannelType::Thread);
+            let meta = ch.thread_metadata.as_ref().expect("thread_metadata present");
+            assert!(meta.archived, "THREAD_UPDATE should carry archived = true");
+        }
+        other => panic!("expected ChannelUpdated, got {:?}", other),
+    }
+
+    srv.emit_thread_event(serde_json::json!({
+        "event_type": "THREAD_DELETE",
+        "thread_id": "9002",
+        "guild_id": "100",
+        "parent_id": "500"
+    }))
+    .await;
+
+    let event = timeout(Duration::from_secs(2), stream.next())
+        .await
+        .expect("timed out waiting for THREAD_DELETE")
+        .expect("stream ended unexpectedly");
+    match event {
+        ClientEvent::ChannelUpdated(ch) => {
+            assert_eq!(ch.id, "9002");
+            assert_eq!(ch.server_id, "100");
+            let meta = ch.thread_metadata.as_ref().expect("tombstone has thread_metadata");
+            assert!(meta.archived && meta.locked, "tombstone should be archived + locked");
+        }
+        other => panic!("expected ChannelUpdated tombstone, got {:?}", other),
     }
 }
 
