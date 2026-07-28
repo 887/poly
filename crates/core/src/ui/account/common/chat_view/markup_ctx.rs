@@ -4,6 +4,13 @@
 //! values in `ChatViewSignals`.  Passed by value (Clone) through the render
 //! helper call chain so each function receives only what it needs via field
 //! destructuring.
+//!
+//! **This type is being dissolved.**  Every field it carries is a field every
+//! consumer is forced to accept, and the derived `Clone` deep-copies the
+//! message / search-hit `Vec`s at each delegation.  Region by region its
+//! fields move into the small, by-reference contexts in `super::ctx`; the
+//! header region has already gone (`super::ctx::HeaderCtx`).  See
+//! `docs/plans/plan-chat-view-ctx-split.md`.
 
 use dioxus::prelude::*;
 use crate::state::BatchedSignal;
@@ -20,11 +27,9 @@ use super::composer_helpers::contextual_compose_placeholder;
 use super::virtualization::MessageVirtualWindowState;
 use super::MsgContextMenu;
 use super::ChatUtilityPanel;
+use super::ctx::{ChatViewCore, HeaderCtx};
 use super::signals::ChatViewSignals;
-use poly_client::{
-    Channel, ChatCommand, Message, MessageReplyPreview, MessageSearchHit,
-    PresenceStatus, User,
-};
+use poly_client::{Channel, ChatCommand, Message, MessageReplyPreview, MessageSearchHit};
 
 #[derive(Clone)]
 pub(super) struct ChatViewMarkupCtx {
@@ -41,7 +46,6 @@ pub(super) struct ChatViewMarkupCtx {
     pub(super) current_server: Option<poly_client::Server>,
     pub(super) loading: bool,
     pub(super) reaction_picker_id: Option<String>,
-    pub(super) group_members: Vec<poly_client::User>,
     pub(super) search_query_input_value: String,
     pub(super) search_query_value: String,
     pub(super) is_dm_channel: bool,
@@ -60,9 +64,6 @@ pub(super) struct ChatViewMarkupCtx {
     pub(super) unread_banner_date: String,
     pub(super) unread_banner_channel_id: Option<String>,
     pub(super) self_user_id: String,
-    pub(super) dm_user: Option<User>,
-    pub(super) dm_user_avatar: Option<String>,
-    pub(super) dm_user_presence: PresenceStatus,
     pub(super) search_hit_channel_id: Option<String>,
     pub(super) pinned_hit_channel_id: Option<String>,
     pub(super) search_hit_server: Option<poly_client::Server>,
@@ -93,8 +94,6 @@ pub(super) struct ChatViewMarkupCtx {
     pub(super) history_state: BatchedSignal<ChatHistoryUiState>,
     pub(super) unread_marker_on_screen: Signal<bool>,
     pub(super) virtual_window: Signal<MessageVirtualWindowState>,
-    pub(super) header_actions_overflow: Signal<bool>,
-    pub(super) header_actions_menu_open: Signal<bool>,
     /// Whether the filter/search box is open inside the Pinned tab
     pub(super) pinned_filter_open: Signal<bool>,
     /// Current filter query text for the Pinned tab
@@ -107,13 +106,41 @@ pub(super) struct ChatViewMarkupCtx {
     pub(super) scrolled_from_bottom: Signal<bool>,
     /// Count of live messages that arrived while the user was scrolled up.
     pub(super) new_messages_while_scrolled_up: Signal<u32>,
-    /// Resize-driven rerender tick — forwarded to ChatHeaderActions for overflow detection.
-    pub(super) mobile_layout_resize_tick: Signal<u64>,
 }
 
+impl ChatViewMarkupCtx {
+    /// The shared signal handles, as the region contexts in `super::ctx` see
+    /// them.
+    ///
+    /// Exists so both representations can coexist while the god-struct is
+    /// dissolved region by region: a helper already migrated to
+    /// `(&ChatViewCore, &RegionCtx)` can still be reached from a caller that
+    /// only holds the old bundle. Copies seven `Copy` handles — no allocation.
+    pub(super) const fn core(&self) -> ChatViewCore {
+        ChatViewCore {
+            nav: self.nav,
+            ui_layout: self.ui_layout,
+            ui_overlays: self.ui_overlays,
+            client_manager: self.client_manager,
+            chat_lists: self.chat_lists,
+            chat_view_state: self.chat_view_state,
+            voice_state: self.voice_state,
+        }
+    }
+}
+
+/// Build the (shrinking) legacy markup bundle for the regions not yet split
+/// out into `super::ctx`.
+///
+/// Takes the already-built `HeaderCtx` rather than re-reading the signals it
+/// derives from: the channel / server / right-wing snapshot is taken exactly
+/// once per render, in `build_header_ctx`, and flows from there.
 // lint-allow-unused: flat struct-builder mapping every signal into the markup ctx; long by field count, not complexity
 #[allow(clippy::too_many_lines)]
-pub(super) fn build_chat_view_markup_ctx(signals: &ChatViewSignals) -> ChatViewMarkupCtx {
+pub(super) fn build_chat_view_markup_ctx(
+    signals: &ChatViewSignals,
+    header: &HeaderCtx,
+) -> ChatViewMarkupCtx {
     let nav_signal = signals.nav;
     let ui_layout = signals.ui_layout;
     let ui_overlays = signals.ui_overlays;
@@ -122,13 +149,12 @@ pub(super) fn build_chat_view_markup_ctx(signals: &ChatViewSignals) -> ChatViewM
     let chat_view_state = signals.chat_view_state;
     let voice_state = signals.voice_state;
     let nav = navigator();
-    let channel_id = nav_signal.read().selected_channel.cloned();
+    let channel_id = header.channel_id.clone();
     let messages = chat_view_state.read().messages.clone();
-    let current_channel = chat_view_state.read().current_channel.clone();
-    let current_server = chat_view_state.read().current_server.clone();
+    let current_channel = header.current_channel.clone();
+    let current_server = header.current_server.clone();
     let loading = chat_view_state.read().loading;
     let reaction_picker_id = signals.reaction_picker_msg.read().clone();
-    let group_members = chat_view_state.read().active_group_members.clone();
     let search_query_input_value = signals.search_query.read().clone();
     let search_query_value = search_query_input_value.trim().to_string();
     let current_channel_name = current_channel
@@ -138,16 +164,9 @@ pub(super) fn build_chat_view_markup_ctx(signals: &ChatViewSignals) -> ChatViewM
     let search_filter_options = build_search_filter_options(&current_channel_name);
     let filtered_search_filter_options =
         filter_search_filter_options(&search_filter_options, &search_query_input_value);
-    let is_dm_channel = channel_id.as_deref().unwrap_or_default().starts_with("dm-");
-    let is_group_channel = channel_id
-        .as_deref()
-        .unwrap_or_default()
-        .starts_with("group-");
-    let member_list_visible = if is_dm_channel || is_group_channel {
-        ui_layout.read().dm_right_sidebar_visible
-    } else {
-        ui_layout.read().right_sidebar_visible
-    };
+    let is_dm_channel = header.is_dm_channel;
+    let is_group_channel = header.is_group_channel;
+    let member_list_visible = header.member_list_visible;
     let (
         unread_marker_id,
         unread_banner_visible,
@@ -170,7 +189,6 @@ pub(super) fn build_chat_view_markup_ctx(signals: &ChatViewSignals) -> ChatViewM
         current_server: current_server.clone(),
         loading,
         reaction_picker_id,
-        group_members,
         search_query_input_value,
         search_query_value: search_query_value.clone(),
         is_dm_channel,
@@ -197,9 +215,6 @@ pub(super) fn build_chat_view_markup_ctx(signals: &ChatViewSignals) -> ChatViewM
         unread_banner_date,
         unread_banner_channel_id: channel_id.clone(),
         self_user_id: current_self_user_id(nav_signal, client_manager),
-        dm_user: current_dm_user(chat_lists, &channel_id, is_dm_channel),
-        dm_user_avatar: current_dm_user_avatar(chat_lists, &channel_id, is_dm_channel),
-        dm_user_presence: current_dm_user_presence(chat_lists, &channel_id, is_dm_channel),
         search_hit_channel_id: channel_id.clone(),
         pinned_hit_channel_id: channel_id,
         search_hit_server: current_server.clone(),
@@ -230,15 +245,12 @@ pub(super) fn build_chat_view_markup_ctx(signals: &ChatViewSignals) -> ChatViewM
         history_state: signals.history_state,
         unread_marker_on_screen: signals.unread_marker_on_screen,
         virtual_window: signals.virtual_window,
-        header_actions_overflow: signals.header_actions_overflow,
-        header_actions_menu_open: signals.header_actions_menu_open,
         pinned_filter_open: signals.pinned_filter_open,
         pinned_filter_query: signals.pinned_filter_query,
         threads_filter_open: signals.threads_filter_open,
         threads_filter_query: signals.threads_filter_query,
         scrolled_from_bottom: signals.scrolled_from_bottom,
         new_messages_while_scrolled_up: signals.new_messages_while_scrolled_up,
-        mobile_layout_resize_tick: signals.mobile_layout_resize_tick,
     }
 }
 
@@ -294,58 +306,4 @@ fn current_self_user_id(
         .and_then(|aid| cm.sessions.get(aid))
         .map(|session| session.user.id.clone())
         .unwrap_or_default()
-}
-
-fn current_dm_user_avatar(
-    chat_lists: BatchedSignal<ChatLists>,
-    channel_id: &Option<String>,
-    is_dm_channel: bool,
-) -> Option<String> {
-    if !is_dm_channel {
-        return None;
-    }
-
-    let cid = channel_id.clone().unwrap_or_default();
-    chat_lists
-        .read()
-        .dm_channels
-        .iter()
-        .find(|dm| dm.id == cid)
-        .and_then(|dm| dm.user.avatar_url.clone())
-}
-
-fn current_dm_user(
-    chat_lists: BatchedSignal<ChatLists>,
-    channel_id: &Option<String>,
-    is_dm_channel: bool,
-) -> Option<User> {
-    if !is_dm_channel {
-        return None;
-    }
-
-    let cid = channel_id.clone().unwrap_or_default();
-    chat_lists
-        .read()
-        .dm_channels
-        .iter()
-        .find(|dm| dm.id == cid)
-        .map(|dm| dm.user.clone())
-}
-
-fn current_dm_user_presence(
-    chat_lists: BatchedSignal<ChatLists>,
-    channel_id: &Option<String>,
-    is_dm_channel: bool,
-) -> PresenceStatus {
-    if !is_dm_channel {
-        return PresenceStatus::Offline;
-    }
-
-    let cid = channel_id.clone().unwrap_or_default();
-    chat_lists
-        .read()
-        .dm_channels
-        .iter()
-        .find(|dm| dm.id == cid)
-        .map_or(PresenceStatus::Offline, |dm| dm.user.presence)
 }

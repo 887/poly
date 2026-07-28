@@ -23,7 +23,8 @@
 //! | `layout` | Two-column shell, header, side column, utility rail |
 //! | `effects` | Dioxus hooks wired up in `use_chat_view_effects` |
 //! | `signals` | `ChatViewSignals` — signal handle bundle |
-//! | `markup_ctx` | `ChatViewMarkupCtx` — render-time snapshot bundle |
+//! | `markup_ctx` | `ChatViewMarkupCtx` — render-time snapshot bundle (shrinking; see `ctx`) |
+//! | `ctx` | Region-scoped render contexts replacing `ChatViewMarkupCtx` |
 //! | `virtualization` | Virtual-window windowing for large message lists |
 //! | `search_filter` | Search filter option types + rendering |
 //! | `composer_helpers` | Low-level composer utilities (attachment, slash cmd) |
@@ -40,6 +41,7 @@ mod composer_helpers;
 mod effects;
 mod signals;
 mod markup_ctx;
+mod ctx;
 use composer_helpers::{
     PendingAttachmentPreview,
     append_attachment_previews, apply_builtin_command,
@@ -57,6 +59,7 @@ use search_filter::{
 };
 use signals::{ChatViewSignals, use_chat_view_signals};
 use markup_ctx::{ChatViewMarkupCtx, build_chat_view_markup_ctx};
+use ctx::{ChatViewCore, HeaderCtx, build_core, build_header_ctx};
 
 // New SOLID-split sub-modules (Phase C.1)
 mod drag;
@@ -608,9 +611,13 @@ pub fn ChatView() -> Element {
 
 fn render_chat_view() -> Element {
     let signals = use_chat_view_signals();
-    let ctx = build_chat_view_markup_ctx(&signals);
+    // Composition root for the region contexts: each region's snapshot is
+    // taken here, once, and handed to the render tree by reference.
+    let core = build_core(&signals);
+    let header = build_header_ctx(&signals);
+    let ctx = build_chat_view_markup_ctx(&signals, &header);
     use_chat_view_effects(&signals, &ctx);
-    render_chat_view_markup(ctx)
+    render_chat_view_markup(ctx, &core, &header)
 }
 
 fn use_chat_view_effects(signals: &ChatViewSignals, ctx: &ChatViewMarkupCtx) {
@@ -627,7 +634,11 @@ fn use_chat_view_effects(signals: &ChatViewSignals, ctx: &ChatViewMarkupCtx) {
     effects::use_composer_focus_effect(signals);
 }
 
-fn render_chat_view_markup(ctx: ChatViewMarkupCtx) -> Element {
+fn render_chat_view_markup(
+    ctx: ChatViewMarkupCtx,
+    core: &ChatViewCore,
+    header: &HeaderCtx,
+) -> Element {
     let mut drag_over = ctx.drag_over;
     let pending_attachments = ctx.pending_attachments;
     let is_drag_over = *drag_over.read();
@@ -652,7 +663,7 @@ fn render_chat_view_markup(ctx: ChatViewMarkupCtx) -> Element {
             },
 
             {drag::render_drag_overlay(is_drag_over)}
-            {layout::render_chat_layout_shell(ctx.clone())}
+            {layout::render_chat_layout_shell(ctx.clone(), core, header)}
             {composer::render_chat_overlays(ctx)}
         }
     }
