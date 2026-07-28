@@ -41,13 +41,14 @@ pub fn scan(walker: &WorkspaceWalker, ws_root: &Path, violations: &mut Vec<Viola
             .to_string_lossy()
             .into_owned();
 
+        let all_lines: Vec<&str> = content.lines().collect();
         for (line_idx, line) in content.lines().enumerate() {
             // Must match `use_effect(move ||`
             if !line.contains("use_effect(move") || !line.contains("||") {
                 continue;
             }
             // Inline allowlist.
-            if allowlist::has_inline_allow(line, "stale-effect-capture") {
+            if allowlist::has_inline_allow_near(&all_lines, line_idx, "stale-effect-capture") {
                 continue;
             }
             let line_no = (line_idx as u32) + 1;

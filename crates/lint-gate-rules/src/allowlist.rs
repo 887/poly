@@ -327,6 +327,162 @@ pub fn has_inline_allow(line: &str, lint_name: &str) -> bool {
     line.contains(&needle)
 }
 
+/// How far past the flagged line an inline allow may sit and still suppress it.
+///
+/// `rustfmt` relocates a trailing comment when it reformats the line it sits
+/// on. A suppression written as
+///
+/// ```text
+/// use_effect(move || { // poly-lint: allow stale-effect-capture — reason
+/// ```
+///
+/// becomes
+///
+/// ```text
+/// use_effect(move || {
+///     // poly-lint: allow stale-effect-capture — reason
+/// ```
+///
+/// — the comment moves *into* the block, one line down. A strictly same-line
+/// check therefore stops suppressing after any formatting pass. A repo-wide
+/// `cargo fmt` unsuppressed ~70 legitimately-allowed sites exactly this way;
+/// they then present as brand-new hang-class violations and invite the
+/// baseline regen `CLAUDE.md` forbids, which would grandfather them for real.
+///
+/// This is the *line-key* analogue of the content-key fix above: a content key
+/// stops a suppression drifting when the file reflows, and this stops an
+/// **inline** suppression detaching when its own line reflows.
+///
+/// Two lines covers rustfmt's relocation.
+const INLINE_ALLOW_LOOKAHEAD: usize = 2;
+
+/// Could `line` have had a trailing comment relocated off it by rustfmt?
+///
+/// Only lines that **open a block** lose their trailing comment — rustfmt moves
+/// it inside the braces. A complete statement (`let x = sig.read().clone();`)
+/// keeps its trailing comment exactly where it is.
+///
+/// This guard is load-bearing, not decorative. Without it the lookahead reaches
+/// forward from one flagged line onto the *next* one's suppression comment. In
+/// `account_bar.rs` three `.read()` calls sit on consecutive lines and only the
+/// third carries an allow; an unguarded window silently suppressed the first two
+/// as well. Over-suppression in a hang-class gate is worse than the bug it was
+/// meant to fix.
+fn opens_a_block(line: &str) -> bool {
+    let code = line.split("//").next().unwrap_or(line).trim_end();
+    code.ends_with('{')
+}
+
+/// Checks for an inline allowlist comment on `lines[idx]` — or, when that line
+/// opens a block, within [`INLINE_ALLOW_LOOKAHEAD`] lines after it.
+///
+/// Prefer this over [`has_inline_allow`] in any rule that can flag a
+/// block-opening line; see [`INLINE_ALLOW_LOOKAHEAD`] for why.
+#[must_use]
+pub fn has_inline_allow_near(lines: &[&str], idx: usize, lint_name: &str) -> bool {
+    let Some(flagged) = lines.get(idx) else {
+        return false;
+    };
+    if has_inline_allow(flagged, lint_name) {
+        return true;
+    }
+    if !opens_a_block(flagged) {
+        return false;
+    }
+    lines
+        .iter()
+        .skip(idx.saturating_add(1))
+        .take(INLINE_ALLOW_LOOKAHEAD)
+        .any(|l| has_inline_allow(l, lint_name))
+}
+
+#[cfg(test)]
+mod inline_allow_tests {
+    use super::*;
+
+    #[test]
+    fn same_line_allow_still_suppresses() {
+        let lines = vec!["use_effect(move || { // poly-lint: allow stale-effect-capture — ok"];
+        assert!(has_inline_allow_near(&lines, 0, "stale-effect-capture"));
+    }
+
+    /// The regression this exists for: rustfmt pushes the trailing comment into
+    /// the block, one line down.
+    #[test]
+    fn allow_relocated_by_rustfmt_still_suppresses() {
+        let lines = vec![
+            "use_effect(move || {",
+            "    // poly-lint: allow stale-effect-capture — ok",
+            "    let x = 1;",
+        ];
+        assert!(has_inline_allow_near(&lines, 0, "stale-effect-capture"));
+    }
+
+    #[test]
+    fn allow_beyond_the_window_does_not_suppress() {
+        let lines = vec![
+            "use_effect(move || {",
+            "    let a = 1;",
+            "    let b = 2;",
+            "    // poly-lint: allow stale-effect-capture — too far",
+        ];
+        assert!(!has_inline_allow_near(&lines, 0, "stale-effect-capture"));
+    }
+
+    #[test]
+    fn a_different_lints_allow_does_not_suppress() {
+        let lines = vec![
+            "use_effect(move || {",
+            "    // poly-lint: allow render-time-read — other",
+        ];
+        assert!(!has_inline_allow_near(&lines, 0, "stale-effect-capture"));
+    }
+
+    #[test]
+    fn no_allow_does_not_suppress() {
+        let lines = vec!["use_effect(move || {", "    let x = 1;"];
+        assert!(!has_inline_allow_near(&lines, 0, "stale-effect-capture"));
+    }
+
+    /// The over-suppression regression: consecutive flagged statements where
+    /// only the last carries an allow. Taken from a real site in
+    /// `account_bar.rs`. An unguarded lookahead suppressed all three.
+    #[test]
+    fn a_statements_allow_does_not_leak_onto_the_lines_above_it() {
+        let lines = vec![
+            "    let voice_conn = voice_state.read().voice_connection.clone();",
+            "    let nav_snap = nav_state.read().clone();",
+            "    let as_snap = account_sessions.read().clone(); // poly-lint: allow render-time-read — snapshot",
+        ];
+        assert!(
+            !has_inline_allow_near(&lines, 0, "render-time-read"),
+            "line 0 is a complete statement; the allow two lines below is not its own"
+        );
+        assert!(!has_inline_allow_near(&lines, 1, "render-time-read"));
+        assert!(
+            has_inline_allow_near(&lines, 2, "render-time-read"),
+            "the line actually carrying the allow is still suppressed"
+        );
+    }
+
+    /// A trailing comment on a non-block line is never relocated, so no
+    /// lookahead applies there.
+    #[test]
+    fn lookahead_only_applies_to_block_openers() {
+        let stmt = vec!["let x = sig.read();", "// poly-lint: allow render-time-read — nope"];
+        assert!(!has_inline_allow_near(&stmt, 0, "render-time-read"));
+
+        let block = vec!["use_effect(move || {", "// poly-lint: allow render-time-read — yes"];
+        assert!(has_inline_allow_near(&block, 0, "render-time-read"));
+    }
+
+    #[test]
+    fn window_does_not_run_past_the_end_of_file() {
+        let lines = vec!["use_effect(move || {"];
+        assert!(!has_inline_allow_near(&lines, 0, "stale-effect-capture"));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -57,6 +57,7 @@ const DETAIL: &str = "render-time .read() silently subscribes the parent compone
 #[must_use]
 pub fn candidate_lines(content: &str) -> Vec<u32> {
     let mut out = Vec::new();
+    let all_lines: Vec<&str> = content.lines().collect();
     for (line_idx, line) in content.lines().enumerate() {
         // Must contain `.read()`
         if !line.contains(".read()") {
@@ -75,7 +76,7 @@ pub fn candidate_lines(content: &str) -> Vec<u32> {
         }
 
         // Skip inline allowlist.
-        if allowlist::has_inline_allow(line, "render-time-read") {
+        if allowlist::has_inline_allow_near(&all_lines, line_idx, "render-time-read") {
             continue;
         }
 
