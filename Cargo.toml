@@ -88,8 +88,8 @@ rust-version = "1.94"
 
 [workspace.dependencies]
 # UI framework
-dioxus = { version = "0.7.9", features = ["router"] }
-dioxus-cli-config = "0.7.9"
+dioxus = { version = "0.8.0-alpha.0", features = ["router"] }
+dioxus-cli-config = "0.8.0-alpha.0"
 
 # Database
 surrealdb = { version = "3.1.2", default-features = false }
@@ -294,8 +294,8 @@ wit-bindgen = { version = "0.57", default-features = false, features = [
 # webkit2gtk 2.0.2 all still require gtk ^0.18, and gtk (the GTK3 bindings)
 # is permanently EOL at 0.18.2 — there is no newer generation to move to.
 cairo-rs = { version = "0.18", features = ["png"] }
-wry = "0.53"
-tao = "0.34"
+wry = "0.55"
+tao = "0.35"
 
 # Internal crates
 poly-core = { path = "crates/core" }
