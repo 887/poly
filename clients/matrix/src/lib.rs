@@ -70,6 +70,9 @@ mod view_descriptor;
 #[cfg(feature = "native")]
 mod context_action;
 
+#[cfg(feature = "native")]
+mod pagination;
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 #[cfg(feature = "native")]
@@ -80,7 +83,7 @@ use http::{MatrixHttpClient, MatrixSessionState};
 #[cfg(feature = "native")]
 use poly_client::{SettingsStorageCell, Session, User, PresenceStatus, BackendType, ClientResult, ClientError, Message, MessageContent, SidebarItem, IconSource, SidebarRouteKind, MenuSlot, MenuItemVariant, MenuItem};
 #[cfg(feature = "native")]
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 /// Return Fluent translations for the given locale.
 #[must_use]
@@ -126,24 +129,10 @@ pub struct MatrixClient {
     pub(crate) marked_read: std::sync::RwLock<HashSet<String>>,
     /// Stored version override (None = use http::DEFAULT_CLIENT_VERSION).
     pub(crate) version_override: std::sync::Mutex<Option<String>>,
-    /// Continuation tokens for `GET /rooms/{id}/messages`, keyed by the event ID
-    /// of the OLDEST message in the page they terminate.
-    ///
-    /// `MessageQuery::before` is documented as a *message ID*, but Matrix
-    /// paginates with opaque `end` tokens, so the two must be bridged
-    /// somewhere. Recording `oldest_event_id -> end` after each page lets the
-    /// next "load older" call resolve a real token; without it the client had no
-    /// way to produce one and history was permanently capped at one page.
-    pub(crate) pagination_tokens: std::sync::RwLock<HashMap<String, String>>,
+    /// Continuation tokens bridging `MessageQuery`'s message-ID cursors onto
+    /// Matrix's opaque pagination tokens. See [`crate::pagination`].
+    pub(crate) pagination_tokens: pagination::PaginationTokens,
 }
-
-/// Upper bound on [`MatrixClient::pagination_tokens`] entries.
-///
-/// One entry per page loaded per room; a long session across many rooms would
-/// otherwise grow it without limit. On overflow the map is cleared — the cost is
-/// one extra initial-sync fetch, not incorrect output.
-#[cfg(feature = "native")]
-pub(crate) const MAX_PAGINATION_TOKENS: usize = 1024;
 
 #[cfg(feature = "native")]
 impl MatrixClient {
@@ -157,7 +146,7 @@ impl MatrixClient {
             ignored_users: std::sync::RwLock::new(HashSet::new()),
             marked_read: std::sync::RwLock::new(HashSet::new()),
             version_override: std::sync::Mutex::new(None),
-            pagination_tokens: std::sync::RwLock::new(HashMap::new()),
+            pagination_tokens: pagination::PaginationTokens::new(),
         }
     }
 
@@ -171,7 +160,7 @@ impl MatrixClient {
             ignored_users: std::sync::RwLock::new(HashSet::new()),
             marked_read: std::sync::RwLock::new(HashSet::new()),
             version_override: std::sync::Mutex::new(None),
-            pagination_tokens: std::sync::RwLock::new(HashMap::new()),
+            pagination_tokens: pagination::PaginationTokens::new(),
         })
     }
 }
@@ -195,30 +184,6 @@ impl MatrixClient {
     #[must_use]
     pub fn instance_id(&self) -> String {
         self.http.instance_id()
-    }
-
-    /// Record the `end` token of a `/messages` page against the event ID of the
-    /// oldest message it contained, so a later `MessageQuery::before = <that id>`
-    /// can be turned back into a real Matrix pagination token.
-    pub(crate) fn record_pagination_token(&self, oldest_event_id: &str, end_token: &str) {
-        if let Ok(mut map) = self.pagination_tokens.write() {
-            if map.len() >= MAX_PAGINATION_TOKENS {
-                map.clear();
-            }
-            map.insert(oldest_event_id.to_string(), end_token.to_string());
-        }
-    }
-
-    /// Resolve a `MessageQuery::before` value to a Matrix pagination token.
-    ///
-    /// Falls back to the input verbatim on a cache miss — some callers already
-    /// hold a sync/`prev_batch` token rather than a message ID.
-    pub(crate) fn resolve_pagination_token(&self, before: &str) -> String {
-        self.pagination_tokens
-            .read()
-            .ok()
-            .and_then(|map| map.get(before).cloned())
-            .unwrap_or_else(|| before.to_string())
     }
 
     pub(crate) fn build_session(
@@ -770,22 +735,217 @@ mod tests {
     }
 
     #[test]
-    fn pagination_token_round_trips_by_oldest_event_id() {
-        let client = MatrixClient::new();
-        // Cache miss: the input is passed through verbatim.
-        assert_eq!(client.resolve_pagination_token("$oldest"), "$oldest");
-        client.record_pagination_token("$oldest", "t99-1");
-        assert_eq!(client.resolve_pagination_token("$oldest"), "t99-1");
+    fn context_response_decodes_both_window_tokens() {
+        // Phase B.3 — a captured Synapse `/context` body. `events_before` is
+        // reverse-chronological and `events_after` chronological; both edge
+        // tokens must survive so a jump-to-message can scroll either way.
+        let json = r#"{
+            "events_before": [
+                {"type":"m.room.message","event_id":"$b2","sender":"@o:s","origin_server_ts":200,"content":{"body":"two"}},
+                {"type":"m.room.message","event_id":"$b1","sender":"@o:s","origin_server_ts":100,"content":{"body":"one"}}
+            ],
+            "event": {"type":"m.room.message","event_id":"$anchor","sender":"@o:s","origin_server_ts":300,"content":{"body":"anchor"}},
+            "events_after": [
+                {"type":"m.room.message","event_id":"$a1","sender":"@o:s","origin_server_ts":400,"content":{"body":"four"}}
+            ],
+            "start": "t10-0_0",
+            "end": "t20-0_0",
+            "state": []
+        }"#;
+        let resp: api::ContextResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.events_before.len(), 2);
+        assert_eq!(resp.events_after.len(), 1);
+        assert_eq!(
+            resp.event.and_then(|event| event.event_id).as_deref(),
+            Some("$anchor")
+        );
+        assert_eq!(resp.start.as_deref(), Some("t10-0_0"));
+        assert_eq!(resp.end.as_deref(), Some("t20-0_0"));
     }
 
     #[test]
-    fn pagination_token_cache_is_bounded() {
+    fn context_response_tolerates_a_missing_anchor_event() {
+        // Synapse omits `event` when the user is not permitted to see it.
+        let resp: api::ContextResponse = serde_json::from_str("{}").unwrap();
+        assert!(resp.event.is_none());
+        assert!(resp.events_before.is_empty());
+        assert!(resp.start.is_none());
+    }
+
+    #[test]
+    fn pagination_token_round_trips_per_direction() {
         let client = MatrixClient::new();
-        for i in 0..(MAX_PAGINATION_TOKENS + 10) {
-            client.record_pagination_token(&format!("$e{i}"), &format!("t{i}"));
+        // Phase A.3: a cache miss on an EVENT-shaped cursor is a miss, not a
+        // pass-through — sending `$oldest` as `from` is 400 M_INVALID_PARAM.
+        assert_eq!(
+            client
+                .pagination_tokens
+                .resolve(pagination::PageDirection::Backwards, "$oldest"),
+            None
+        );
+        // A cursor that is already an opaque token still passes through.
+        assert_eq!(
+            client
+                .pagination_tokens
+                .resolve(pagination::PageDirection::Backwards, "t99-0_0"),
+            Some("t99-0_0".to_string())
+        );
+
+        client
+            .pagination_tokens
+            .record(pagination::PageDirection::Backwards, "$oldest", "t99-1");
+        assert_eq!(
+            client
+                .pagination_tokens
+                .resolve(pagination::PageDirection::Backwards, "$oldest"),
+            Some("t99-1".to_string())
+        );
+        // The forwards slot for the SAME event ID is independent — keying on
+        // the event ID alone let a `/context` window's `end` clobber its
+        // `start` and hand `after` a backwards token.
+        assert_eq!(
+            client
+                .pagination_tokens
+                .resolve(pagination::PageDirection::Forwards, "$oldest"),
+            None
+        );
+        client
+            .pagination_tokens
+            .record(pagination::PageDirection::Forwards, "$oldest", "t99-2");
+        assert_eq!(
+            client
+                .pagination_tokens
+                .resolve(pagination::PageDirection::Backwards, "$oldest"),
+            Some("t99-1".to_string())
+        );
+        assert_eq!(
+            client
+                .pagination_tokens
+                .resolve(pagination::PageDirection::Forwards, "$oldest"),
+            Some("t99-2".to_string())
+        );
+    }
+
+    #[test]
+    fn pagination_token_cache_is_bounded_with_both_directions() {
+        // Phase C.5 — the bound must still hold now that a `/context` window
+        // records two tokens per page instead of one.
+        let client = MatrixClient::new();
+        for i in 0..(pagination::MAX_PAGINATION_TOKENS + 10) {
+            client
+                .pagination_tokens
+                .record(pagination::PageDirection::Backwards, &format!("$e{i}"), &format!("t{i}b"));
+            client
+                .pagination_tokens
+                .record(pagination::PageDirection::Forwards, &format!("$e{i}"), &format!("t{i}f"));
         }
-        let len = client.pagination_tokens.read().unwrap().len();
-        assert!(len <= MAX_PAGINATION_TOKENS, "cache grew past its cap: {len}");
+        let len = client.pagination_tokens.len();
+        assert!(
+            len <= pagination::MAX_PAGINATION_TOKENS,
+            "cache grew past its cap: {len}"
+        );
+    }
+
+    #[test]
+    fn event_id_shape_distinguishes_cursors_from_tokens() {
+        assert!(pagination::looks_like_event_id("$abc123"));
+        assert!(pagination::looks_like_event_id("$abc:server.tld"));
+        assert!(!pagination::looks_like_event_id("t42-1234_0_0_0"));
+        assert!(!pagination::looks_like_event_id("s99_1_0"));
+        assert!(!pagination::looks_like_event_id(""));
+    }
+
+    #[test]
+    fn a_single_cursor_selects_its_strategy() {
+        let newest = poly_client::MessageQuery::default();
+        assert_eq!(
+            pagination::MessageCursor::from_query(&newest).unwrap(),
+            pagination::MessageCursor::Newest
+        );
+
+        let before = poly_client::MessageQuery {
+            before: Some("$b".to_string()),
+            ..Default::default()
+        };
+        assert_eq!(
+            pagination::MessageCursor::from_query(&before).unwrap(),
+            pagination::MessageCursor::Before("$b")
+        );
+
+        let after = poly_client::MessageQuery {
+            after: Some("$a".to_string()),
+            ..Default::default()
+        };
+        assert_eq!(
+            pagination::MessageCursor::from_query(&after).unwrap(),
+            pagination::MessageCursor::After("$a")
+        );
+
+        let around = poly_client::MessageQuery {
+            around: Some("$x".to_string()),
+            ..Default::default()
+        };
+        assert_eq!(
+            pagination::MessageCursor::from_query(&around).unwrap(),
+            pagination::MessageCursor::Around("$x")
+        );
+    }
+
+    #[test]
+    fn conflicting_cursors_are_refused_by_name() {
+        // Phase A.1/A.2 in its surviving form: `around` and `after` are real
+        // cursors now, so the only unanswerable query is a multi-cursor one —
+        // and it must say WHICH cursors conflict rather than silently serving
+        // one of them.
+        let both = poly_client::MessageQuery {
+            before: Some("$b".to_string()),
+            after: Some("$a".to_string()),
+            ..Default::default()
+        };
+        match pagination::MessageCursor::from_query(&both) {
+            Err(ClientError::NotSupported(message)) => {
+                assert!(message.contains("`before` and `after`"), "{message}");
+            }
+            other => panic!("expected NotSupported, got {other:?}"),
+        }
+
+        let all_three = poly_client::MessageQuery {
+            before: Some("$b".to_string()),
+            after: Some("$a".to_string()),
+            around: Some("$x".to_string()),
+            ..Default::default()
+        };
+        match pagination::MessageCursor::from_query(&all_three) {
+            Err(ClientError::NotSupported(message)) => {
+                assert!(message.contains("`before`, `after` and `around`"), "{message}");
+            }
+            other => panic!("expected NotSupported, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_backwards_chunk_is_reversed_not_timestamp_sorted() {
+        // `/messages?dir=b` arrives newest-first and the chat view prepends a
+        // page verbatim, so the page has to come back oldest-first. All three
+        // events here share one `origin_server_ts` — the mock homeserver stamps
+        // a whole seed batch in the same millisecond, and real homeservers may
+        // too — which is exactly the case a timestamp sort cannot order.
+        let chunk: Vec<api::RoomEvent> = serde_json::from_str(
+            r#"[
+                {"type":"m.room.message","event_id":"$c","sender":"@o:s","origin_server_ts":100,"content":{"body":"c"}},
+                {"type":"m.room.message","event_id":"$b","sender":"@o:s","origin_server_ts":100,"content":{"body":"b"}},
+                {"type":"m.room.message","event_id":"$a","sender":"@o:s","origin_server_ts":100,"content":{"body":"a"}}
+            ]"#,
+        )
+        .unwrap();
+
+        let forwards = pagination::decode_events(chunk.iter());
+        let ids: Vec<&str> = forwards.iter().map(|m| m.id.as_str()).collect();
+        assert_eq!(ids, vec!["$c", "$b", "$a"]);
+
+        let backwards = pagination::decode_events(chunk.iter().rev());
+        let ids: Vec<&str> = backwards.iter().map(|m| m.id.as_str()).collect();
+        assert_eq!(ids, vec!["$a", "$b", "$c"]);
     }
 
     #[test]
