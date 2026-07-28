@@ -76,6 +76,8 @@ use std::sync::Arc;
 /// Audio capture loop (Phase X.2). Browser-facing capture pipeline is
 /// wasm32-only; pure DSP helpers + their unit tests compile on every
 /// target. See module doc.
+pub mod lock_timeout;
+
 pub mod audio_capture;
 
 use poly_host_bridge::{

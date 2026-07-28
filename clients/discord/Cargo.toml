@@ -64,6 +64,10 @@ voice-bridge = [
     "dep:poly-video-backend",
     "dep:thiserror",
     "dep:tokio",
+    # `tracing` is used throughout voice_bridge/ but was never declared here, so
+    # `--no-default-features --features voice-bridge` (the real wasm build shape)
+    # failed to compile. It only ever built because `native` happened to pull it.
+    "dep:tracing",
     "dep:futures",
     "dep:base64",
     "dep:serde_json",

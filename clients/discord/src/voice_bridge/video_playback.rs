@@ -57,7 +57,16 @@ use super::*;
     /// Returns true if `ssrc` is a remote video SSRC for this session.
     /// Used by the audio playback loop to skip video packets.
     pub async fn is_video_ssrc(set: &Arc<tokio::sync::RwLock<HashSet<u32>>>, ssrc: u32) -> bool {
-        set.read().await.contains(&ssrc)
+        // Hang class #4 — bounded read. On timeout we answer `false` ("not a
+        // video SSRC"), so the packet stays on the audio path and is dropped by
+        // the Opus decoder. That loses one frame; blocking here would starve the
+        // WASM main thread for as long as a writer holds the lock.
+        crate::voice_bridge::lock_timeout::read_with_timeout(
+            set,
+            crate::voice_bridge::lock_timeout::LOCK_READ_TIMEOUT,
+        )
+        .await
+        .is_some_and(|s| s.contains(&ssrc))
     }
 
     /// Insert a remote video SSRC so the audio loop will start skipping it.

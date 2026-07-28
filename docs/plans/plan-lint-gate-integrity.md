@@ -58,23 +58,23 @@ resurfaces as a wedged tab that costs a multi-hour bisect (see `CLAUDE.md`
 
 ---
 
-## Phase A — Make the hang-class-#4 scanner receiver-agnostic
+## Phase A — Make the hang-class-#4 scanner receiver-agnostic — shipped in change `uqmuyqlw` (A.1–A.4; A.5 outstanding)
 
-- [ ] **A.1** Replace the literal `NEEDLE` at
+- [x] **A.1** Replace the literal `NEEDLE` at
   `crates/lint-gate-rules/src/forbid_raw_backend_read.rs:37` with a
   receiver-agnostic, whitespace-normalised matcher. Port the logic from
   `crates/core/tests/no_raw_backend_read.rs`, which already handles the
   single-line, multi-line and arbitrary-receiver forms and does not
   false-positive on `read_with_timeout` or on doc comments.
-- [ ] **A.2** Replace the rule's existing tests. The current ones re-implement
+- [x] **A.2** Replace the rule's existing tests. The current ones re-implement
   the match instead of calling `scan`, so they are tautological — they would
   pass against a scanner that matched nothing (and did). New tests must call
   `scan` on fixture source and assert the row count.
-- [ ] **A.3** Run the fixed scanner across all five scopes. It will surface
+- [x] **A.3** Run the fixed scanner across all five scopes. It will surface
   genuine sites the literal needle never saw. **Each one is a real hang-class-#4
   bug: fix it with `BackendHandleExt::read_with_timeout(5s)` plus a real
   degradation branch. Do not grandfather any of them into the baseline.**
-- [ ] **A.4** Extend the scan scope to `mcp/chat-mcp/src/persona/` (footgun P4
+- [x] **A.4** Extend the scan scope to `mcp/chat-mcp/src/persona/` (footgun P4
   requires `tokio::time::timeout(BACKEND_TIMEOUT, …)`) and to the three voice
   scopes, which the `crates/core` test cannot reach.
 - [ ] **A.5** Once A.1–A.4 land, delete `crates/core/tests/no_raw_backend_read.rs`

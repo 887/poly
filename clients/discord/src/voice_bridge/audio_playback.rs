@@ -435,12 +435,16 @@ async fn handle_datagram(ctx: HandleDatagramCtx<'_>) -> Result<(), String> {
     // Speaking indicator.
     let rms = rms_db_i16(&pcm_i16);
     if rms > SPEAKING_THRESHOLD_DB {
-        let user_id = ssrc_to_user
-            .read()
-            .await
-            .get(&info.ssrc)
-            .cloned()
-            .unwrap_or_else(|| format!("user_{}", info.ssrc));
+        // Hang class #4 — bounded read. On timeout we degrade to the synthetic
+        // `user_<ssrc>` name, which is already this lookup's miss path, so a
+        // starved lock costs a display name rather than the browser main thread.
+        let user_id = crate::voice_bridge::lock_timeout::read_with_timeout(
+            ssrc_to_user,
+            crate::voice_bridge::lock_timeout::LOCK_READ_TIMEOUT,
+        )
+        .await
+        .and_then(|m| m.get(&info.ssrc).cloned())
+        .unwrap_or_else(|| format!("user_{}", info.ssrc));
         let _ = on_remote_speaking.unbounded_send(RemoteSpeakingEvent {
             user_id,
             ssrc: info.ssrc,
