@@ -2,6 +2,11 @@
 name = "poly-ui-types"
 version = "0.1.0"
 edition = "2021"
+# The only workspace member that was neither `publish = false` nor
+# licence-bearing, so `[licenses] private = { ignore = true }` did not cover it
+# and `cargo deny check licenses` reported it as `unlicensed`.
+license.workspace = true
+publish = false
 
 [dependencies]
 # intentionally empty — no deps beyond std
