@@ -153,7 +153,7 @@ where
     let max_attempts = R::RETRIES.saturating_add(1);
     let mut i = 0usize;
     loop {
-        match do_post::<R>(http, &url, &req).await {
+        match do_post::<R>(http, base_url, &url, &req).await {
             Ok(resp) => return Ok(resp),
             Err(e) => {
                 i = i.saturating_add(1);
@@ -171,6 +171,7 @@ where
 #[cfg(not(target_arch = "wasm32"))]
 async fn do_post<R: HostRoute>(
     http: &reqwest::Client,
+    base_url: &str,
     url: &str,
     req: &R::Req,
 ) -> Result<R::Resp, R::Err>
@@ -181,7 +182,7 @@ where
 {
     use std::time::Duration;
 
-    let fut = post_and_parse::<R::Resp>(http, url, req);
+    let fut = post_and_parse::<R::Resp>(http, base_url, url, req);
     match tokio::time::timeout(Duration::from_millis(R::TIMEOUT_MS), fut).await {
         Ok(result) => result.map_err(|e: TransportError| R::Err::from(e)),
         Err(_elapsed) => {
@@ -195,6 +196,7 @@ where
 #[cfg(target_arch = "wasm32")]
 async fn do_post<R: HostRoute>(
     http: &reqwest::Client,
+    base_url: &str,
     url: &str,
     req: &R::Req,
 ) -> Result<R::Resp, R::Err>
@@ -203,22 +205,24 @@ where
     R::Resp: Send,
     R::Err: Send,
 {
-    post_and_parse::<R::Resp>(http, url, req)
+    post_and_parse::<R::Resp>(http, base_url, url, req)
         .await
         .map_err(R::Err::from)
 }
 
 // ── inner: shared POST + JSON-decode ──────────────────────────────────────────
 
+/// The shell session token is attached here (and only here) for every
+/// `HostRoute`-based client, so `/host/udp/*`, `/host/codec/opus/*` and
+/// `/host/aead/*` inherit Phase A's authentication without each client
+/// re-implementing the bootstrap. See `crate::host_auth`.
 async fn post_and_parse<Resp: DeserializeOwned + Send>(
     http: &reqwest::Client,
+    base_url: &str,
     url: &str,
     req: &(impl Serialize + Sync),
 ) -> Result<Resp, TransportError> {
-    let text = http
-        .post(url)
-        .json(req)
-        .send()
+    let text = crate::host_auth::send_authorized(http, base_url, http.post(url).json(req))
         .await
         .map_err(TransportError::Http)?
         .text()

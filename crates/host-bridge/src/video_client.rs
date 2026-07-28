@@ -136,14 +136,14 @@ impl VideoBridgeClient {
         T: serde::de::DeserializeOwned,
         B: serde::Serialize + Sync,
     {
-        let text = self
-            .http
-            .post(url)
-            .json(body)
-            .send()
-            .await?
-            .text()
-            .await?;
+        let text = crate::host_auth::send_authorized(
+            &self.http,
+            &self.base_url,
+            self.http.post(url).json(body),
+        )
+        .await?
+        .text()
+        .await?;
         let v: T = serde_json::from_str(&text)?;
         Ok(v)
     }

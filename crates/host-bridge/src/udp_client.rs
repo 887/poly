@@ -271,7 +271,7 @@ impl UdpClient {
     ) -> futures::stream::LocalBoxStream<'static, UdpDatagram> {
         let url = format!("{}/host/udp/recv_stream/{}", self.base_url, session_id.into());
         let http = self.http.clone();
-        Box::pin(make_dgram_stream(http, url))
+        Box::pin(make_dgram_stream(http, self.base_url.clone(), url))
     }
 
     /// Unboxed version — may capture `self` lifetime in Rust 2024.
@@ -279,7 +279,7 @@ impl UdpClient {
     pub fn recv_stream(&self, session_id: &str) -> impl Stream<Item = UdpDatagram> + '_ {
         let url = format!("{}/host/udp/recv_stream/{}", self.base_url, session_id);
         let http = self.http.clone();
-        make_dgram_stream(http, url)
+        make_dgram_stream(http, self.base_url.clone(), url)
     }
 
     /// `POST /host/udp/close` — close and drop a UDP session.
@@ -299,9 +299,17 @@ impl UdpClient {
 
 // ── SSE stream ─────────────────────────────────────────────────────────────────
 
-fn make_dgram_stream(http: reqwest::Client, url: String) -> impl Stream<Item = UdpDatagram> {
+/// `base_url` is carried alongside the full `url` so the SSE connect can
+/// attach the Phase-A shell session token (see `crate::host_auth`) — the
+/// `/host/udp/*` routes are authenticated like every other `/host/*` route.
+fn make_dgram_stream(
+    http: reqwest::Client,
+    base_url: String,
+    url: String,
+) -> impl Stream<Item = UdpDatagram> {
     async_stream::stream! {
-        let resp = match http.get(&url).send().await {
+        let request = http.get(&url);
+        let resp = match crate::host_auth::send_authorized(&http, &base_url, request).await {
             Ok(r) => r,
             Err(e) => {
                 tracing::warn!(target: "poly_host_bridge::udp_client", error = %e, "SSE connect failed");

@@ -1,6 +1,6 @@
 # Plan: Host-substrate capability gating (`/host/*` authn + exec/kv confinement)
 
-## Status: 📋 PLANNED
+## Status: 🔄 IN PROGRESS — Phases A, B, C shipped in this PR; D, E, F open
 
 > Opened 2026-07-28 from the multi-agent review fan-out. Two **critical**
 > findings survived adversarial verification and were judged too invasive to fix
@@ -42,59 +42,111 @@ substitute in a test that proves a caller is confined.
 
 ---
 
-## Phase A — Caller identity: a per-shell bearer token for `/host/*`
+## Phase A — Caller identity: a per-shell bearer token for `/host/*` — shipped in this PR
 
 Nothing downstream can be scoped until requests carry an identity. This phase
 adds one and is a prerequisite for Phases B, C and D.
 
-- [ ] **A.1** Add a `HostAuth` struct to `crates/host-bridge/src/lib.rs` (next to
-  the `ROUTE_*` consts at `:129`): a random 32-byte token minted at daemon start,
-  plus `fn verify(&self, header: Option<&str>) -> Result<CallerId, HostAuthError>`.
-  `CallerId` distinguishes `Shell` (the app's own WASM bundle) from
-  `Plugin { id: String }`. Include an in-memory constructor for tests.
-- [ ] **A.2** Persist/expose the token to the shell only: write it to the
-  `HostState` in `apps/poly-host/src/lib.rs` and serve it from the Dioxus
-  server half at page-render time (an injected `<meta>` or a `/host/status`
-  field readable only from same-origin — decide in A.2 and record the choice in
-  this file). It must **not** be obtainable by a cross-origin `fetch`.
-- [ ] **A.3** Add an axum middleware layer in `apps/poly-host/src/lib.rs` that
-  runs `HostAuth::verify` on every `/host/*` route and rejects with `401` on
-  failure. Apply it to the router built at `:138` and to the three additional
-  routers at `:181`, `:199`, `:216`.
-- [ ] **A.4** Replace `CorsLayer::allow_origin(Any)` at
-  `apps/poly-host/src/lib.rs:138-141`, `:181-184`, `:199-206` and `:216-219`
-  with an explicit origin list (`http://127.0.0.1:{3000,3001,3002,9333}` and
-  `http://localhost:` equivalents), derived from the bound port rather than
-  hard-coded. `Any` must not survive anywhere in the crate.
-- [ ] **A.5** Tests in `apps/poly-host/src/lib.rs`: a request with no token
-  → 401; wrong token → 401; correct token → 200; a request with an
-  `Origin` header outside the allowlist is rejected by the CORS layer.
+- [x] **A.1** `HostAuth` + `CallerId` + `HostAuthError` landed in a new module,
+  `crates/host-bridge/src/host_auth.rs`, rather than inline in `lib.rs`
+  (`lib.rs` was already 1 151 lines; SOLID item 6). 32 bytes from
+  `getrandom::fill`, hex-encoded; `HostAuth::with_token` / `::unenforced` are the
+  in-memory constructors tests use. **Signature deviation:** `verify` takes
+  `(authorization, plugin)` rather than the planned single header — a plugin's
+  token is `HMAC-SHA256(master, "poly-host-plugin-v1:" || id)`, which cannot be
+  reversed into an id, so the claimed id is a second *verified* input rather
+  than a trusted one.
+- [x] **A.2** **Decision recorded here:** the token is *not* injected into the
+  page at render time. Doing so needs an edit inside each shell's
+  `src/main.rs` (three crates outside `apps/poly-host`), and it bakes a secret
+  into the HTML cache. Instead the shell's own bundle fetches it once from
+  `GET /host/session`, and `poly_host_bridge::host_auth::send_authorized`
+  caches it per base-URL and re-bootstraps on a `401` (so a shell restart heals
+  itself). Every `/host/*` client that goes through `poly_host_bridge::Client`
+  or `route::call` therefore keeps working with **no client-side edit** — which
+  covers the whole WASM half. It does **not** cover the three callers that
+  hand-roll their own HTTP: `mcp/web-devtools-mcp`'s `reset_app`
+  (`POST /host/kv/clear` + `/host/kv/set` — fixed in review, it now bootstraps
+  from `GET /host/session` like any other local process),
+  `crates/core/src/state/bisect_log.rs` (raw `web_sys` fetch, still 401s — see
+  the findings list), and `apps/desktop-electron`'s own `sandbox_router`
+  (mounted as a sibling of `poly_host::router`, so it never reaches this
+  middleware at all). `/host/session` is unreadable cross-origin three ways
+  over: the `Origin` allowlist, the browser-set `Sec-Fetch-Site` header, and a
+  loopback-`Host` check that closes DNS rebinding.
+- [x] **A.3** `require_host_auth` (axum `from_fn_with_state`) is applied once to
+  the fully-merged router, so it covers the base routes *and* the video / voice /
+  teams-webhook feature routers without four separate layers. `401` on failure,
+  `403` for a non-shell caller on a shell-only route. `/host/status` and
+  `/host/caps` are deliberately exempt (read-only liveness probes the dev MCPs
+  poll before any WASM has run); the CORS allowlist still blocks cross-origin
+  reads of them.
+  **Known consequence, raised in review:** the `teams-webhook` feature router
+  mounts `/host/teams/notifications{,/{account_id}}`, whose only legitimate
+  caller is Microsoft Graph over a *public* HTTPS endpoint. Blanket-guarding
+  `/host/*` makes those two routes structurally unreachable (403 on the
+  loopback-`Host` check, then 401 on the bearer check). The feature is
+  off-by-default and does not currently compile (pre-existing `cbc 0.2` /
+  `aes 0.9` API break at `teams_encryption.rs:260`), so nothing regressed in
+  practice — but re-enabling it requires exempting the relay path from
+  `require_host_auth` and giving it its own authentication (Graph's
+  `clientState` / validation-token handshake), not the shell session token.
+- [x] **A.4** All four `CorsLayer::allow_origin(Any)` sites collapsed into one
+  explicit-origin layer (`cors_layer`). Origins default to
+  `http://{127.0.0.1,localhost}:{3000,3001,3002,9333}`; `serve` adds the port it
+  actually bound via `HostState::with_bound_port`, and `with_origins` replaces
+  the list wholesale. `Any` no longer appears in the crate.
+- [x] **A.5** `unauthenticated_host_request_is_rejected`,
+  `wrong_token_is_rejected`, `correct_token_is_accepted`,
+  `the_whole_host_surface_is_guarded`, `cors_does_not_echo_a_foreign_origin`,
+  `cors_echoes_the_shells_own_origin`, `session_route_refuses_a_foreign_origin`,
+  `session_route_refuses_a_cross_site_fetch_metadata_header`,
+  `session_route_mints_for_the_shells_own_origin`,
+  `a_rebound_dns_name_cannot_reach_the_host_surface`, `loopback_hosts_are_accepted`,
+  `status_and_caps_stay_unauthenticated`, `opt_out_env_var_disables_enforcement`.
 
-## Phase B — `/host/exec` program allowlist + user consent
+## Phase B — `/host/exec` program allowlist + user consent — shipped in this PR (B.1 blocked)
 
-- [ ] **B.1** Extend the plugin manifest schema so a plugin declares the
-  programs it needs (mirroring the existing `http_hosts` field). Record the
-  parsed list on the registry entry in `crates/plugin-host/src/registry.rs`.
-- [ ] **B.2** Add `fn check_exec(caller: &CallerId, program: &str) -> Result<PathBuf, ExecDenied>`
-  to `crates/host-bridge/src/lib.rs`: resolves `program` to an absolute
-  canonical path (rejecting relative paths, `..`, and symlinks that escape the
-  resolved target), then matches it against the caller's declared list. Default
-  deny with an explicit error — never a silent fallthrough.
-- [ ] **B.3** Wire `check_exec` into `exec_command`
-  (`crates/host-bridge/src/lib.rs:870`) before `Command::new` is constructed.
-  The function must take the `CallerId` from Phase A rather than trusting the
-  request body.
-- [ ] **B.4** Persist a one-time consent record per `(plugin_id, program)` in
-  `poly_kv` under a key the KV surface cannot rewrite (see C.2). Deny until
-  consent exists; surface the prompt through the existing notification sink.
-- [ ] **B.5** Retire the legacy exec branch: `apps/poly-host/src/lib.rs:533`
-  `host_exec` and the `POST /host` tagged-union `dispatch` path both reach
-  `exec_command`. Remove the legacy `POST /host` exec arm so there is exactly
-  one gated entry point, and delete the "kept one release cycle" note from
-  `CLAUDE.md` once it is gone.
-- [ ] **B.6** Tests: unlisted program → denied; listed program reached via a
-  relative path or a `..` traversal → denied; listed program with consent →
-  allowed; the legacy `POST /host` exec shape → 404/410, not execution.
+- [ ] **B.1** *Blocked — `crates/plugin-host/` is outside this PR's file
+  ownership.* The host side of the handshake exists and is complete:
+  `POST /host/exec/declare` (shell-only) records a caller's declared absolute
+  paths in the host-internal `host:exec:declared` row, which is exactly what a
+  manifest parser must push. What remains is the manifest schema field plus the
+  registry call into that route.
+- [x] **B.2** `check_exec` landed in a new `crates/host-bridge/src/exec_policy.rs`
+  (again a module rather than more `lib.rs`). Rejects relative paths, `..`
+  components and non-regular-file targets; canonicalises both the request and
+  every declared entry, so a symlink that escapes only matches if its real
+  target was also declared. **Deviation, because the code disagreed with the
+  plan:** bare program names are *not* rejected — `clients/github` calls
+  `client.exec("gh", …)`. A bare name is resolved as a *selector into the
+  declaration list* (never via `PATH`), so the absolute path still comes from
+  the declaration.
+- [x] **B.3** `dispatch_exec(policy, caller, program, args)` in
+  `crates/host-bridge/src/lib.rs` is the only path to `exec_command`, which now
+  takes the canonicalised `&Path` `check_exec` returned rather than the caller's
+  string. `apps/poly-host`'s `host_exec` passes the `CallerId` the middleware
+  stamped on the request.
+- [x] **B.4** `SqliteExecPolicy` persists declarations and grants under
+  `host:exec:declared` / `host:exec:consent`. The `host:` prefix is rejected by
+  `check_kv_key` for **every** caller, so no `/host/kv/*` request can grant
+  itself consent. Denial surfaces through the `ConsentPrompt` seam
+  (`TracingConsentPrompt` by default, `RecordingConsentPrompt` for tests);
+  `POST /host/exec/consent` (shell-only) is how the UI records the answer.
+- [x] **B.5** `dispatch` now answers `HostCall::ExecCommand` with an error
+  instead of spawning, so `POST /host` is no longer a second entry point.
+  `Client::exec` posts to `/host/exec`. *Not done:* deleting the "kept one
+  release cycle" note from `CLAUDE.md` — that file is outside this PR's
+  ownership, and the legacy route still serves `HttpRequest`.
+- [x] **B.6** `exec_of_a_non_allowlisted_program_is_denied`,
+  `exec_of_a_relative_path_is_denied`, `exec_of_a_traversal_path_is_denied`,
+  `declared_plus_consented_program_runs`,
+  `a_plugin_does_not_inherit_the_shells_consent`,
+  `legacy_post_host_never_executes`, `declare_and_consent_are_shell_only`,
+  `exec_policy_and_prompt_seams_are_substitutable` (drives the whole route with
+  the in-memory policy + recording prompt, no SQLite/UI), plus
+  the `exec_policy` unit tests (`bare_name_resolves_through_the_declaration_not_path`,
+  `one_plugins_declaration_does_not_cover_another`, …).
 
 ## Phase C — `/host/kv/*` namespacing and credential separation
 

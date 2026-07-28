@@ -47,7 +47,9 @@ codec-opus = ["dep:audiopus", "dep:uuid", "dep:axum"]
 # The typed client (aead_client.rs) compiles on all targets.
 #
 # Native deps: chacha20poly1305, aes-gcm, uuid, axum.
-aead = ["dep:chacha20poly1305", "dep:aes-gcm", "dep:uuid", "dep:axum"]
+# (chacha20poly1305 is an unconditional native dep — `secret_seal` needs it —
+# so it is not listed as an optional `dep:` here.)
+aead = ["dep:aes-gcm", "dep:uuid", "dep:axum"]
 
 # voice-primitives: convenience feature that enables all three generic voice
 # transport primitives: udp + codec-opus + aead. Use this instead of listing
@@ -65,7 +67,9 @@ voice = ["voice-primitives"]
 # (docs/plans/plan-teams-graph-subscriptions.md Phase C). Native-only —
 # the webhook is a server-side relay; WASM callers reach it through their
 # normal /host bridge.
-teams-webhook = ["dep:axum", "dep:rsa", "dep:aes", "dep:cbc", "dep:sha2", "dep:hmac", "dep:rand08"]
+# (sha2 / hmac are unconditional native deps — `host_auth` derives per-plugin
+# tokens with HMAC-SHA256 — so they are not listed as optional `dep:` here.)
+teams-webhook = ["dep:axum", "dep:rsa", "dep:aes", "dep:cbc", "dep:rand08"]
 
 [dependencies]
 serde = { workspace = true }
@@ -89,6 +93,22 @@ tracing = { workspace = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { workspace = true, features = ["process", "rt-multi-thread", "net"] }
 
+# Host-substrate capability gating (docs/plans/plan-host-substrate-capability-gating.md).
+# All native-only: the WASM bundle is a *client* of `/host/*` and never mints,
+# verifies or seals anything, so none of this links into the browser build.
+#   getrandom        — session-token + sealing-key entropy (host_auth, secret_seal)
+#   hex              — token / key encoding
+#   hmac + sha2      — per-plugin token derivation (host_auth)
+#   subtle           — constant-time token comparison (host_auth)
+#   chacha20poly1305 — XChaCha20-Poly1305 at-rest sealing (secret_seal) and the
+#                      `aead` feature's /host/aead/* service
+getrandom = { workspace = true }
+hex = { workspace = true }
+hmac = { workspace = true }
+sha2 = { workspace = true }
+subtle = { workspace = true }
+chacha20poly1305 = { workspace = true }
+
 # openh264 — H.264 encode/decode via Cisco's reference implementation.
 # Only compiled when the `video` feature is enabled and target is non-wasm.
 # Uses the `libloading` feature: loads Cisco's prebuilt binary at runtime,
@@ -105,7 +125,6 @@ axum = { workspace = true, optional = true }
 # These are native-only libraries; the cfg-gated modules (udp.rs, codec_opus.rs,
 # aead.rs) ensure they never link into the WASM bundle.
 audiopus = { workspace = true, optional = true }
-chacha20poly1305 = { workspace = true, optional = true }
 aes-gcm = { workspace = true, optional = true }
 uuid = { workspace = true, optional = true, features = ["v4"] }
 
@@ -116,8 +135,6 @@ uuid = { workspace = true, optional = true, features = ["v4"] }
 rsa = { workspace = true, optional = true }
 aes = { workspace = true, optional = true }
 cbc = { workspace = true, optional = true, features = ["alloc", "block-padding"] }
-sha2 = { workspace = true, optional = true }
-hmac = { workspace = true, optional = true }
 # `rsa 0.9` + `aes-gcm 0.10` interop on the `rand_core 0.6` trait surface
 # (exposed by `rand 0.8`). The workspace `rand = "0.10"` is `rand_core 0.10`
 # and cannot pass `RngCore` to `RsaPrivateKey::new`. Aliased as `rand08` so
@@ -163,6 +180,8 @@ tower = { workspace = true, features = ["util"] }
 axum = { workspace = true }
 # tokio runtime for voice integration test.
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+# secret_seal key-file tests need a scratch dir.
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

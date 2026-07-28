@@ -43,6 +43,22 @@ pub mod client_config;
 pub mod http;
 pub mod route;
 
+// Caller identity for the `/host/*` surface (Phase A of
+// docs/plans/plan-host-substrate-capability-gating.md). Compiles on every
+// target: the server half (`HostAuth`) is cfg-gated inside the module, the
+// client half (token cache + `send_authorized`) is what the WASM bundle uses.
+pub mod host_auth;
+
+// `/host/exec` program allowlist + user consent (Phase B). Native-only —
+// there is no subprocess to gate on wasm32.
+#[cfg(not(target_arch = "wasm32"))]
+pub mod exec_policy;
+
+// At-rest sealing for credential-bearing `poly_kv` rows (Phase C.3).
+// Native-only: only the shell that owns the SQLite file seals anything.
+#[cfg(not(target_arch = "wasm32"))]
+pub mod secret_seal;
+
 // Outbound-destination guard (SSRF filter) shared by `/host/http` and
 // `/host/udp/*`. Native-only — it resolves DNS, which wasm32 cannot do.
 #[cfg(not(target_arch = "wasm32"))]
@@ -127,6 +143,10 @@ pub const BRIDGE_PREFIX: &str = "/host";
 
 /// Sub-route for `ExecCommand`.
 pub const ROUTE_EXEC: &str = "/host/exec";
+/// Sub-route for recording user consent for one `(caller, program)` pair.
+/// Shell-only — see `exec_policy` and Phase B.4 of
+/// `docs/plans/plan-host-substrate-capability-gating.md`.
+pub const ROUTE_EXEC_CONSENT: &str = "/host/exec/consent";
 /// Sub-route for `HttpRequest`.
 pub const ROUTE_HTTP: &str = "/host/http";
 /// Sub-route for app KV `get`.
@@ -529,6 +549,19 @@ pub struct AccountListResponse {
 /// One entry in the `GET /host/accounts/list` response. Sensitive fields
 /// (`token`, `refresh_token`) are deliberately **not** serialized — the
 /// listing is meant for inventory / display, not key-material recovery.
+///
+/// # Why the redaction is load-bearing (Phase C.5)
+///
+/// It used to be cosmetic: anyone who could call this route could equally
+/// call `POST /host/kv/get {"key":"account_tokens"}` and get the tokens
+/// verbatim, so omitting them here changed nothing. After Phase C that
+/// row is host-internal — the only callers who may name it are the shell
+/// itself, and the payload is sealed at rest (`secret_seal`). This
+/// inventory is therefore the widest account view that exists, and it is
+/// the shape that flows into logs, MCP transcripts and agent tooling.
+/// Adding `token` / `refresh_token` here would re-open the disclosure
+/// path that C.1–C.3 closed, so the `serde` surface of this struct is a
+/// security boundary, not a display preference.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AccountListEntry {
     pub backend: String,
@@ -636,16 +669,22 @@ impl Client {
     /// Returns the typed [`HostOk`] payload on success, or [`BridgeError`]
     /// on transport / dispatch failure.
     pub async fn call(&self, call: HostCall) -> Result<HostOk, BridgeError> {
-        let resp = self
-            .http
-            .post(&self.url)
-            .json(&call)
-            .send()
-            .await
-            .map_err(|e| BridgeError::Unreachable {
-                url: self.url.clone(),
-                source: e,
-            })?;
+        self.call_at(&self.url, &call).await
+    }
+
+    /// Send a [`HostCall`] to an explicit endpoint under this client's
+    /// base URL, with the shell session token attached.
+    async fn call_at(&self, url: &str, call: &HostCall) -> Result<HostOk, BridgeError> {
+        let resp = host_auth::send_authorized(
+            &self.http,
+            &self.base,
+            self.http.post(url).json(call),
+        )
+        .await
+        .map_err(|e| BridgeError::Unreachable {
+            url: url.to_string(),
+            source: e,
+        })?;
 
         let body = resp.text().await?;
         let parsed: HostResponse =
@@ -661,14 +700,13 @@ impl Client {
     /// before making real requests.
     pub async fn status(&self) -> Result<(), BridgeError> {
         let url = format!("{}{}", self.base, ROUTE_STATUS);
-        self.http
-            .get(&url)
-            .send()
-            .await
-            .map_err(|e| BridgeError::Unreachable {
-                url: url.clone(),
-                source: e,
-            })?;
+        let _resp =
+            host_auth::send_authorized(&self.http, &self.base, self.http.get(&url))
+                .await
+                .map_err(|e| BridgeError::Unreachable {
+                    url: url.clone(),
+                    source: e,
+                })?;
         Ok(())
     }
 
@@ -756,16 +794,16 @@ impl Client {
         url: &str,
         body: &B,
     ) -> Result<T, BridgeError> {
-        let resp = self
-            .http
-            .post(url)
-            .json(body)
-            .send()
-            .await
-            .map_err(|e| BridgeError::Unreachable {
-                url: url.to_string(),
-                source: e,
-            })?;
+        let resp = host_auth::send_authorized(
+            &self.http,
+            &self.base,
+            self.http.post(url).json(body),
+        )
+        .await
+        .map_err(|e| BridgeError::Unreachable {
+            url: url.to_string(),
+            source: e,
+        })?;
         let text = resp.text().await?;
         serde_json::from_str(&text).map_err(|e| BridgeError::ParseResponse(e.to_string()))
     }
@@ -792,16 +830,26 @@ impl Client {
 
     /// Convenience: run an [`HostCall::ExecCommand`] and decode the
     /// `ExecOutput` variant. Returns `(exit_code, stdout, stderr)`.
+    ///
+    /// Posts to [`ROUTE_EXEC`], **not** the legacy `/host` dispatch
+    /// endpoint — the latter no longer executes anything (Phase B.5).
+    /// `program` must be an absolute path that the calling identity
+    /// declared and the user consented to, or the shell answers with
+    /// [`BridgeError::Host`].
     pub async fn exec(
         &self,
         program: impl Into<String>,
         args: Vec<String>,
     ) -> Result<(i32, Vec<u8>, Vec<u8>), BridgeError> {
+        let url = format!("{}{}", self.base, ROUTE_EXEC);
         let ok = self
-            .call(HostCall::ExecCommand {
-                program: program.into(),
-                args,
-            })
+            .call_at(
+                &url,
+                &HostCall::ExecCommand {
+                    program: program.into(),
+                    args,
+                },
+            )
             .await?;
         match ok {
             HostOk::ExecOutput {
@@ -853,10 +901,25 @@ fn default_base_url() -> String {
 /// **Not available on WASM** — the dispatcher needs subprocess / network
 /// access that wasm32-unknown-unknown doesn't have. WASM-side callers use
 /// [`Client`] instead, which routes through whichever shell *is* native.
+///
+/// # Exec is not reachable from here
+///
+/// [`HostCall::ExecCommand`] is answered with an error rather than being
+/// executed. Spawning a subprocess now requires a verified
+/// [`CallerId`](host_auth::CallerId) and an
+/// [`ExecPolicy`](exec_policy::ExecPolicy) decision, neither of which a
+/// bare `HostCall` carries — see [`dispatch_exec`]. This is Phase B.5 of
+/// `docs/plans/plan-host-substrate-capability-gating.md`: the legacy
+/// `POST /host` tagged-union endpoint used to be a second, ungated way
+/// into `exec_command`, and there is now exactly one gated entry point.
 #[cfg(not(target_arch = "wasm32"))]
 pub async fn dispatch(call: HostCall) -> HostResponse {
     match call {
-        HostCall::ExecCommand { program, args } => exec_command(program, args).await,
+        HostCall::ExecCommand { .. } => HostResponse::Err(
+            "exec is not available through the legacy /host dispatch endpoint; \
+             POST /host/exec with an authenticated caller identity instead"
+                .to_string(),
+        ),
         HostCall::HttpRequest {
             method,
             url,
@@ -866,16 +929,34 @@ pub async fn dispatch(call: HostCall) -> HostResponse {
     }
 }
 
+/// The single gated entry point for subprocess execution.
+///
+/// `caller` must come from [`host_auth::HostAuth::verify`] — never from a
+/// request body — and `policy` decides what that caller declared and
+/// whether the user consented. The program actually spawned is the
+/// canonicalised path [`exec_policy::check_exec`] returned, not the string
+/// the caller sent, so the check and the spawn cannot disagree.
 #[cfg(not(target_arch = "wasm32"))]
-async fn exec_command(program: String, args: Vec<String>) -> HostResponse {
+pub async fn dispatch_exec(
+    policy: &dyn exec_policy::ExecPolicy,
+    caller: &host_auth::CallerId,
+    program: &str,
+    args: &[String],
+) -> Result<HostResponse, exec_policy::ExecDenied> {
+    let resolved = exec_policy::check_exec(policy, caller, program)?;
+    Ok(exec_command(&resolved, args).await)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+async fn exec_command(program: &std::path::Path, args: &[String]) -> HostResponse {
     use std::process::Stdio;
     use tokio::process::Command;
 
-    let mut cmd = Command::new(&program);
-    cmd.args(&args);
-    cmd.stdin(Stdio::null());
-    cmd.stdout(Stdio::piped());
-    cmd.stderr(Stdio::piped());
+    let mut cmd = Command::new(program);
+    let _c = cmd.args(args);
+    let _c = cmd.stdin(Stdio::null());
+    let _c = cmd.stdout(Stdio::piped());
+    let _c = cmd.stderr(Stdio::piped());
 
     match cmd.output().await {
         Ok(output) => HostResponse::Ok(HostOk::ExecOutput {
@@ -883,7 +964,7 @@ async fn exec_command(program: String, args: Vec<String>) -> HostResponse {
             stdout_b64: b64_encode(&output.stdout),
             stderr_b64: b64_encode(&output.stderr),
         }),
-        Err(e) => HostResponse::Err(format!("failed to spawn `{program}`: {e}")),
+        Err(e) => HostResponse::Err(format!("failed to spawn `{}`: {e}", program.display())),
     }
 }
 
