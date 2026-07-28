@@ -49,7 +49,7 @@ async fn test_forum_channel_in_guild_channels() {
     let forum = arr.iter().find(|c| c["id"] == "500");
     assert!(forum.is_some(), "channel 500 missing from guild 100 channels");
     let forum = forum.unwrap();
-    assert_eq!(forum["type"], 15, "channel 500 should be GUILD_FORUM (type 15)");
+    assert_eq!(forum["type"], 15_i32, "channel 500 should be GUILD_FORUM (type 15)");
     assert_eq!(forum["name"], "general-discussion");
     let tags = forum["available_tags"].as_array().unwrap();
     assert_eq!(tags.len(), 3);
@@ -68,8 +68,8 @@ async fn test_get_forum_channel_direct() {
     let state = seeded_state();
     let (status, json) = get_json(&state, "/api/v10/channels/500").await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(json["type"], 15);
-    assert_eq!(json["default_forum_layout"], 1);
+    assert_eq!(json["type"], 15_i32);
+    assert_eq!(json["default_forum_layout"], 1_i32);
     let tags = json["available_tags"].as_array().unwrap();
     assert_eq!(tags.len(), 3);
 }
@@ -103,7 +103,7 @@ async fn test_active_thread_fields() {
     assert_eq!(status, StatusCode::OK);
     let threads = json["threads"].as_array().unwrap();
     let t501 = threads.iter().find(|t| t["id"] == "501").unwrap();
-    assert_eq!(t501["type"], 11, "thread type should be PUBLIC_THREAD (11)");
+    assert_eq!(t501["type"], 11_i32, "thread type should be PUBLIC_THREAD (11)");
     assert_eq!(t501["parent_id"], "500");
     assert_eq!(t501["thread_metadata"]["archived"], false);
     assert_eq!(t501["thread_metadata"]["locked"], false);
@@ -178,8 +178,8 @@ async fn test_media_gallery_channel() {
     let gallery = arr.iter().find(|c| c["id"] == "600");
     assert!(gallery.is_some(), "channel 600 missing from guild 101 channels");
     let gallery = gallery.unwrap();
-    assert_eq!(gallery["type"], 16, "channel 600 should be GUILD_MEDIA (type 16)");
-    assert_eq!(gallery["default_forum_layout"], 2);
+    assert_eq!(gallery["type"], 16_i32, "channel 600 should be GUILD_MEDIA (type 16)");
+    assert_eq!(gallery["default_forum_layout"], 2_i32);
     let tags = gallery["available_tags"].as_array().unwrap();
     assert_eq!(tags.len(), 2);
 }
@@ -199,8 +199,8 @@ async fn test_media_thread_op_attachment() {
     assert_eq!(attachments.len(), 1);
     assert_eq!(attachments[0]["filename"], "billabong_sunset.jpg");
     assert_eq!(attachments[0]["content_type"], "image/jpeg");
-    assert_eq!(attachments[0]["width"], 1920);
-    assert_eq!(attachments[0]["height"], 1080);
+    assert_eq!(attachments[0]["width"], 1_920_i32);
+    assert_eq!(attachments[0]["height"], 1_080_i32);
 }
 
 // ---------------------------------------------------------------------------

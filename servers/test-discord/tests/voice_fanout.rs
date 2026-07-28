@@ -5,7 +5,13 @@
 //! SESSION_DESCRIPTION) and verifies that audio bytes sent by one client are
 //! delivered to the other (and NOT echoed back to the sender).
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::indexing_slicing,
+    clippy::wildcard_enum_match_arm
+)]
 
 use futures::{SinkExt, StreamExt};
 use poly_test_discord::DiscordState;
@@ -49,33 +55,30 @@ fn text_of(msg: TungsteniteMessage) -> String {
     }
 }
 
-/// Drive one client end-to-end through the gateway op-4 + voice WS handshake,
-/// bind a UDP socket on a random ephemeral port, register that port via
-/// SELECT_PROTOCOL, and return `(udp_sock, udp_port_on_server, voice_ws,
-/// gateway_ws)`. The voice_ws and gateway_ws are returned so the caller can
-/// keep them alive — dropping them would deregister the session.
-async fn establish_client(
+/// A connected client WebSocket (main gateway or voice gateway).
+type ClientWs =
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
+
+/// Step 1 — main gateway WS: IDENTIFY, then op 4 voice-state-update.
+///
+/// Returns `(gateway_ws, session_id, voice_endpoint)`. The gateway WS is
+/// handed back because dropping it deregisters the voice session.
+async fn gateway_join_voice(
     server_port: u16,
     user_token: &str,
     guild_id: &str,
     channel_id: &str,
-) -> (
-    UdpSocket,
-    u16,
-    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
-    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
-) {
-    // 1. Gateway WS — IDENTIFY + op 4 voice-state-update.
+) -> (ClientWs, String, String) {
     let gw_url = format!("ws://127.0.0.1:{server_port}/gateway/ws");
     let (mut gw_ws, _) = connect_async(&gw_url).await.unwrap();
     // op 10 HELLO + op 0 READY
     gw_ws.next().await.unwrap().unwrap();
     gw_ws.next().await.unwrap().unwrap();
 
-    let id = serde_json::json!({"op":2,"d":{"token":user_token,"intents":513,"properties":{}}});
+    let id = serde_json::json!({"op":2_i32,"d":{"token":user_token,"intents":513_i32,"properties":{}}});
     gw_ws.send(TungsteniteMessage::Text(id.to_string().into())).await.unwrap();
 
-    let op4 = serde_json::json!({"op":4,"d":{"guild_id":guild_id,"channel_id":channel_id,"self_mute":false,"self_deaf":false}});
+    let op4 = serde_json::json!({"op":4_i32,"d":{"guild_id":guild_id,"channel_id":channel_id,"self_mute":false,"self_deaf":false}});
     gw_ws.send(TungsteniteMessage::Text(op4.to_string().into())).await.unwrap();
 
     // VOICE_STATE_UPDATE → grab session_id
@@ -89,19 +92,30 @@ async fn establish_client(
     let vsup: serde_json::Value = serde_json::from_str(&vsup_txt).unwrap();
     let endpoint = vsup["d"]["endpoint"].as_str().unwrap().to_string();
 
-    // 2. Voice WS handshake.
+    (gw_ws, session_id, endpoint)
+}
+
+/// Step 2 — voice WS handshake: HELLO, IDENTIFY, READY, bind a local UDP
+/// socket, SELECT_PROTOCOL with the real ephemeral port, SESSION_DESCRIPTION.
+///
+/// Returns `(udp_sock, udp_port_on_server, voice_ws)`.
+async fn voice_ws_handshake(
+    endpoint: &str,
+    guild_id: &str,
+    session_id: &str,
+) -> (UdpSocket, u16, ClientWs) {
     let voice_url = format!("ws://{endpoint}/voice/ws");
     let (mut voice_ws, _) = connect_async(&voice_url).await.unwrap();
 
     // HELLO
     let hello_txt = text_of(voice_ws.next().await.unwrap().unwrap());
     let hello: serde_json::Value = serde_json::from_str(&hello_txt).unwrap();
-    assert_eq!(hello["op"], 8);
+    assert_eq!(hello["op"], 8_i32);
 
     // IDENTIFY — pass the session_id from the gateway so the voice WS can
     // resolve our channel_id via voice_session_channels.
     let identify = serde_json::json!({
-        "op": 0,
+        "op": 0_i32,
         "d": {
             "server_id": guild_id,
             "user_id": "mock-user-x",
@@ -114,7 +128,7 @@ async fn establish_client(
     // READY → get the announced UDP port.
     let ready_txt = text_of(voice_ws.next().await.unwrap().unwrap());
     let ready: serde_json::Value = serde_json::from_str(&ready_txt).unwrap();
-    assert_eq!(ready["op"], 2);
+    assert_eq!(ready["op"], 2_i32);
     let server_udp_port = u16::try_from(ready["d"]["port"].as_u64().unwrap()).unwrap();
 
     // 3. Bind our local UDP socket BEFORE sending SELECT_PROTOCOL so we can
@@ -129,7 +143,7 @@ async fn establish_client(
 
     // SELECT_PROTOCOL
     let select = serde_json::json!({
-        "op": 1,
+        "op": 1_i32,
         "d": {
             "protocol": "udp",
             "data": {
@@ -144,8 +158,26 @@ async fn establish_client(
     // SESSION_DESCRIPTION
     let sd_txt = text_of(voice_ws.next().await.unwrap().unwrap());
     let sd: serde_json::Value = serde_json::from_str(&sd_txt).unwrap();
-    assert_eq!(sd["op"], 4);
+    assert_eq!(sd["op"], 4_i32);
 
+    (client_sock, server_udp_port, voice_ws)
+}
+
+/// Drive one client end-to-end: gateway join + voice handshake.
+///
+/// Returns `(udp_sock, udp_port_on_server, voice_ws, gateway_ws)`. Both WS
+/// handles are returned so the caller can keep them alive — dropping either
+/// deregisters the session.
+async fn establish_client(
+    server_port: u16,
+    user_token: &str,
+    guild_id: &str,
+    channel_id: &str,
+) -> (UdpSocket, u16, ClientWs, ClientWs) {
+    let (gw_ws, session_id, endpoint) =
+        gateway_join_voice(server_port, user_token, guild_id, channel_id).await;
+    let (client_sock, server_udp_port, voice_ws) =
+        voice_ws_handshake(&endpoint, guild_id, &session_id).await;
     (client_sock, server_udp_port, voice_ws, gw_ws)
 }
 
@@ -200,7 +232,7 @@ async fn test_cross_client_audio_fanout() {
         "B unexpectedly received its own packet back"
     );
 
-    let _ = shutdown_tx.send(());
+    let _shutdown_sent = shutdown_tx.send(());
 }
 
 #[tokio::test]
@@ -235,5 +267,5 @@ async fn test_ip_discovery_still_self_echoes() {
     assert_eq!(n, 74);
     assert_eq!(&buf[..8], &discovery[..8]);
 
-    let _ = shutdown_tx.send(());
+    let _shutdown_sent = shutdown_tx.send(());
 }

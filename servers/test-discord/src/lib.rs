@@ -129,6 +129,10 @@ pub fn routes_only(_state: Arc<DiscordState>) -> Router<Arc<DiscordState>> {
         .route("/voice/ws", get(routes::voice_gateway_ws))
         // Test-only: inject gateway events
         .route("/testhook/emit_thread_event", post(routes::emit_thread_event))
+        // Test-only: readiness probe — how many gateway WS clients are subscribed.
+        // Lets a test emit *after* the client's WS loop is provably attached,
+        // instead of racing a fixed sleep.
+        .route("/testhook/gateway_clients", get(routes::gateway_clients))
         // NOTE: no .with_state() here — build_router() provides it via the outer chain
 }
 

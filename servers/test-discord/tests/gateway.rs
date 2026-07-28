@@ -1,6 +1,12 @@
 //! Integration tests for Phase 6.5: mock Gateway WebSocket + testhook.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::indexing_slicing,
+    clippy::wildcard_enum_match_arm
+)]
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
@@ -68,13 +74,13 @@ async fn test_testhook_thread_create_ok() {
     let thread_payload = serde_json::json!({
         "id": "9001",
         "name": "Test thread",
-        "type": 11,
+        "type": 11_i32,
         "guild_id": "100",
         "parent_id": "500",
         "thread_metadata": {
             "archived": false,
             "locked": false,
-            "auto_archive_duration": 1440,
+            "auto_archive_duration": 1_440_i32,
             "archive_timestamp": null,
             "create_timestamp": "2026-04-19T00:00:00.000Z"
         },
@@ -161,7 +167,7 @@ async fn test_ws_gateway_route_exists_and_sends_ready() {
         other => panic!("expected text frame, got {:?}", other),
     };
     let frame: serde_json::Value = serde_json::from_str(&text).unwrap();
-    assert_eq!(frame["op"], 10);
+    assert_eq!(frame["op"], 10_i32);
     assert!(frame["d"]["heartbeat_interval"].as_u64().is_some());
 
     // Second message should be READY (op 0, t "READY").
@@ -171,8 +177,8 @@ async fn test_ws_gateway_route_exists_and_sends_ready() {
         other => panic!("expected text frame, got {:?}", other),
     };
     let frame: serde_json::Value = serde_json::from_str(&text).unwrap();
-    assert_eq!(frame["op"], 0);
+    assert_eq!(frame["op"], 0_i32);
     assert_eq!(frame["t"], "READY");
 
-    let _ = shutdown_tx.send(());
+    let _shutdown_sent = shutdown_tx.send(());
 }

@@ -1206,6 +1206,16 @@ pub async fn emit_thread_event(
     Json(serde_json::json!({ "ok": true, "receivers": receivers })).into_response()
 }
 
+/// `GET /testhook/gateway_clients` — number of live gateway WS subscribers.
+///
+/// `handle_gateway_socket` subscribes to the event bus as its very first act,
+/// so a non-zero count proves at least one WS client is attached and will
+/// receive anything published from here on. Tests poll this instead of
+/// sleeping a fixed interval before `POST /testhook/emit_thread_event`.
+pub async fn gateway_clients(State(state): State<Arc<DiscordState>>) -> impl IntoResponse {
+    Json(serde_json::json!({ "clients": state.events.subscriber_count() }))
+}
+
 // ---------------------------------------------------------------------------
 // Moderation routes (B-DS)
 // ---------------------------------------------------------------------------

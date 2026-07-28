@@ -1,6 +1,12 @@
 //! Integration tests for Phase A: mock Discord voice signaling + voice WS + UDP echo.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::indexing_slicing,
+    clippy::wildcard_enum_match_arm
+)]
 
 use futures::{SinkExt, StreamExt};
 use poly_test_discord::DiscordState;
@@ -60,19 +66,19 @@ async fn test_op4_voice_state_and_server_update() {
     // Receive the initial READY dispatch.
     let ready_txt = text_of(ws.next().await.unwrap().unwrap());
     let ready: serde_json::Value = serde_json::from_str(&ready_txt).unwrap();
-    assert_eq!(ready["op"], 0);
+    assert_eq!(ready["op"], 0_i32);
     assert_eq!(ready["t"], "READY");
 
     // Send op 2 IDENTIFY (extract user id from token; empty token → "mock-user-1").
     let identify = serde_json::json!({
-        "op": 2,
-        "d": { "token": "test-token", "intents": 513, "properties": {} }
+        "op": 2_i32,
+        "d": { "token": "test-token", "intents": 513_i32, "properties": {} }
     });
     ws.send(TungsteniteMessage::Text(identify.to_string().into())).await.unwrap();
 
     // Send op 4 Voice State Update — join a voice channel.
     let op4 = serde_json::json!({
-        "op": 4,
+        "op": 4_i32,
         "d": { "guild_id": "100", "channel_id": "200", "self_mute": false, "self_deaf": false }
     });
     ws.send(TungsteniteMessage::Text(op4.to_string().into())).await.unwrap();
@@ -80,7 +86,7 @@ async fn test_op4_voice_state_and_server_update() {
     // Expect VOICE_STATE_UPDATE.
     let vsu_txt = text_of(ws.next().await.unwrap().unwrap());
     let vsu: serde_json::Value = serde_json::from_str(&vsu_txt).unwrap();
-    assert_eq!(vsu["op"], 0);
+    assert_eq!(vsu["op"], 0_i32);
     assert_eq!(vsu["t"], "VOICE_STATE_UPDATE");
     let d = &vsu["d"];
     assert_eq!(d["guild_id"], "100");
@@ -91,7 +97,7 @@ async fn test_op4_voice_state_and_server_update() {
     // Expect VOICE_SERVER_UPDATE.
     let vsup_txt = text_of(ws.next().await.unwrap().unwrap());
     let vsup: serde_json::Value = serde_json::from_str(&vsup_txt).unwrap();
-    assert_eq!(vsup["op"], 0);
+    assert_eq!(vsup["op"], 0_i32);
     assert_eq!(vsup["t"], "VOICE_SERVER_UPDATE");
     let d2 = &vsup["d"];
     assert_eq!(d2["guild_id"], "100");
@@ -106,7 +112,7 @@ async fn test_op4_voice_state_and_server_update() {
     let expected_addr = state.server_addr.read().await.clone();
     assert_eq!(endpoint, expected_addr, "endpoint should match server_addr");
 
-    let _ = shutdown_tx.send(());
+    let _shutdown_sent = shutdown_tx.send(());
 }
 
 // ---------------------------------------------------------------------------
@@ -123,13 +129,13 @@ async fn test_voice_ws_full_handshake() {
     // Step 1: receive op 8 HELLO.
     let hello_txt = text_of(ws.next().await.unwrap().unwrap());
     let hello: serde_json::Value = serde_json::from_str(&hello_txt).unwrap();
-    assert_eq!(hello["op"], 8, "expected HELLO op=8, got {:?}", hello);
+    assert_eq!(hello["op"], 8_i32, "expected HELLO op=8, got {:?}", hello);
     let hb_interval = hello["d"]["heartbeat_interval"].as_u64().unwrap();
     assert_eq!(hb_interval, 13750);
 
     // Step 2: send op 0 IDENTIFY.
     let identify = serde_json::json!({
-        "op": 0,
+        "op": 0_i32,
         "d": {
             "server_id": "100",
             "user_id": "mock-user-1",
@@ -142,9 +148,9 @@ async fn test_voice_ws_full_handshake() {
     // Step 3: receive op 2 READY.
     let ready_txt = text_of(ws.next().await.unwrap().unwrap());
     let ready: serde_json::Value = serde_json::from_str(&ready_txt).unwrap();
-    assert_eq!(ready["op"], 2, "expected READY op=2, got {:?}", ready);
+    assert_eq!(ready["op"], 2_i32, "expected READY op=2, got {:?}", ready);
     let d = &ready["d"];
-    assert_eq!(d["ssrc"], 1);
+    assert_eq!(d["ssrc"], 1_i32);
     assert_eq!(d["ip"], "127.0.0.1");
     let udp_port = d["port"].as_u64().unwrap();
     assert_ne!(udp_port, 0, "UDP port in READY should be non-zero");
@@ -153,10 +159,10 @@ async fn test_voice_ws_full_handshake() {
 
     // Step 4: send op 1 SELECT_PROTOCOL.
     let select = serde_json::json!({
-        "op": 1,
+        "op": 1_i32,
         "d": {
             "protocol": "udp",
-            "data": { "address": "127.0.0.1", "port": 54321, "mode": "aead_xchacha20_poly1305_rtpsize" }
+            "data": { "address": "127.0.0.1", "port": 54_321_i32, "mode": "aead_xchacha20_poly1305_rtpsize" }
         }
     });
     ws.send(TungsteniteMessage::Text(select.to_string().into())).await.unwrap();
@@ -164,14 +170,14 @@ async fn test_voice_ws_full_handshake() {
     // Step 5: receive op 4 SESSION_DESCRIPTION.
     let sd_txt = text_of(ws.next().await.unwrap().unwrap());
     let sd: serde_json::Value = serde_json::from_str(&sd_txt).unwrap();
-    assert_eq!(sd["op"], 4, "expected SESSION_DESCRIPTION op=4, got {:?}", sd);
+    assert_eq!(sd["op"], 4_i32, "expected SESSION_DESCRIPTION op=4, got {:?}", sd);
     let mode = sd["d"]["mode"].as_str().unwrap();
     assert_eq!(mode, "aead_xchacha20_poly1305_rtpsize");
     let secret_key = sd["d"]["secret_key"].as_array().unwrap();
     assert_eq!(secret_key.len(), 32, "secret_key should be 32 bytes");
-    assert!(secret_key.iter().all(|b| b == &serde_json::Value::Number(0.into())));
+    assert!(secret_key.iter().all(|b| b == &serde_json::Value::Number(0_i32.into())));
 
-    let _ = shutdown_tx.send(());
+    let _shutdown_sent = shutdown_tx.send(());
 }
 
 // ---------------------------------------------------------------------------
@@ -189,15 +195,15 @@ async fn test_voice_ws_heartbeat() {
     ws.next().await.unwrap().unwrap();
 
     // Send HEARTBEAT (op 3) before IDENTIFY — server should reply ACK.
-    let hb = serde_json::json!({ "op": 3, "d": 12345 });
+    let hb = serde_json::json!({ "op": 3_i32, "d": 12_345_i32 });
     ws.send(TungsteniteMessage::Text(hb.to_string().into())).await.unwrap();
 
     let ack_txt = text_of(ws.next().await.unwrap().unwrap());
     let ack: serde_json::Value = serde_json::from_str(&ack_txt).unwrap();
-    assert_eq!(ack["op"], 6, "expected HEARTBEAT_ACK op=6");
-    assert_eq!(ack["d"], 12345);
+    assert_eq!(ack["op"], 6_i32, "expected HEARTBEAT_ACK op=6");
+    assert_eq!(ack["d"], 12_345_i32);
 
-    let _ = shutdown_tx.send(());
+    let _shutdown_sent = shutdown_tx.send(());
 }
 
 // ---------------------------------------------------------------------------
@@ -242,7 +248,7 @@ async fn test_udp_echo_ip_discovery() {
     // The mock echoes verbatim, so the first 8 bytes match.
     assert_eq!(&buf[..8], &discovery[..8]);
 
-    let _ = shutdown_tx.send(());
+    let _shutdown_sent = shutdown_tx.send(());
 }
 
 // ---------------------------------------------------------------------------
@@ -260,10 +266,10 @@ async fn test_full_voice_pipeline() {
     gw_ws.next().await.unwrap().unwrap();
     gw_ws.next().await.unwrap().unwrap();
     // Send IDENTIFY.
-    let id = serde_json::json!({"op":2,"d":{"token":"t","intents":513,"properties":{}}});
+    let id = serde_json::json!({"op":2_i32,"d":{"token":"t","intents":513_i32,"properties":{}}});
     gw_ws.send(TungsteniteMessage::Text(id.to_string().into())).await.unwrap();
     // Send op 4.
-    let op4 = serde_json::json!({"op":4,"d":{"guild_id":"100","channel_id":"200","self_mute":false,"self_deaf":false}});
+    let op4 = serde_json::json!({"op":4_i32,"d":{"guild_id":"100","channel_id":"200","self_mute":false,"self_deaf":false}});
     gw_ws.send(TungsteniteMessage::Text(op4.to_string().into())).await.unwrap();
     // Receive VOICE_STATE_UPDATE.
     let _vsu = gw_ws.next().await.unwrap().unwrap();
@@ -280,26 +286,26 @@ async fn test_full_voice_pipeline() {
     // Receive HELLO.
     let hello_txt = text_of(voice_ws.next().await.unwrap().unwrap());
     let hello: serde_json::Value = serde_json::from_str(&hello_txt).unwrap();
-    assert_eq!(hello["op"], 8);
+    assert_eq!(hello["op"], 8_i32);
 
     // Send IDENTIFY.
-    let vid = serde_json::json!({"op":0,"d":{"server_id":"100","user_id":"mock-user-1","session_id":"sess-x","token":"mock-voice-token"}});
+    let vid = serde_json::json!({"op":0_i32,"d":{"server_id":"100","user_id":"mock-user-1","session_id":"sess-x","token":"mock-voice-token"}});
     voice_ws.send(TungsteniteMessage::Text(vid.to_string().into())).await.unwrap();
 
     // Receive READY.
     let ready_txt = text_of(voice_ws.next().await.unwrap().unwrap());
     let ready: serde_json::Value = serde_json::from_str(&ready_txt).unwrap();
-    assert_eq!(ready["op"], 2);
-    let udp_port = ready["d"]["port"].as_u64().unwrap() as u16;
+    assert_eq!(ready["op"], 2_i32);
+    let udp_port = u16::try_from(ready["d"]["port"].as_u64().unwrap()).expect("udp port fits u16");
 
     // Send SELECT_PROTOCOL.
-    let sel = serde_json::json!({"op":1,"d":{"protocol":"udp","data":{"address":"127.0.0.1","port":12345,"mode":"aead_xchacha20_poly1305_rtpsize"}}});
+    let sel = serde_json::json!({"op":1_i32,"d":{"protocol":"udp","data":{"address":"127.0.0.1","port":12_345_i32,"mode":"aead_xchacha20_poly1305_rtpsize"}}});
     voice_ws.send(TungsteniteMessage::Text(sel.to_string().into())).await.unwrap();
 
     // Receive SESSION_DESCRIPTION.
     let sd_txt = text_of(voice_ws.next().await.unwrap().unwrap());
     let sd: serde_json::Value = serde_json::from_str(&sd_txt).unwrap();
-    assert_eq!(sd["op"], 4);
+    assert_eq!(sd["op"], 4_i32);
 
     // 3. Verify UDP echo works on the port from READY.
     let client_sock = UdpSocket::bind("127.0.0.1:0").await.unwrap();
@@ -316,5 +322,5 @@ async fn test_full_voice_pipeline() {
     .unwrap();
     assert_eq!(&buf[..n], probe);
 
-    let _ = shutdown_tx.send(());
+    let _shutdown_sent = shutdown_tx.send(());
 }
