@@ -29,7 +29,7 @@ anyhow = { workspace = true }
 webkit2gtk = { workspace = true }
 cairo-rs = { workspace = true }
 wry = { workspace = true }
-tao = "0.34"
+tao = { workspace = true }
 
 [lints]
 workspace = true
