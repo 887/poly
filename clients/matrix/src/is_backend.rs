@@ -10,6 +10,7 @@ use std::pin::Pin;
 use crate::api;
 use crate::http::DEFAULT_CLIENT_VERSION;
 use crate::MatrixClient;
+use crate::pagination::{MessageCursor, PageDirection};
 
 // ── Sync retry policy ─────────────────────────────────────────────────────────
 
@@ -265,65 +266,42 @@ impl IsBackend for MatrixClient {
         Some(self)
     }
 
+    /// Fetch one page of room history, honouring the `MessageQuery` cursor
+    /// contract.
+    ///
+    /// `MessageQuery` addresses history by MESSAGE ID; Matrix `/messages`
+    /// paginates with opaque tokens and rejects an event ID as `from`. Warm
+    /// cursors resolve through the token recorded when their page was fetched;
+    /// cold ones go through `/context/{eventId}`, the only Matrix read endpoint
+    /// addressed by event ID. Returned pages are oldest-first and exclude the
+    /// anchor message for `before` / `after`, per the trait contract.
+    ///
+    /// A query supplying more than one cursor is refused with `NotSupported`
+    /// rather than served from whichever cursor happens to be checked first —
+    /// answering a different question than the caller asked is the LSP
+    /// violation this method used to commit for `after` and `around`.
     async fn get_messages(
         &self,
         channel_id: &str,
         query: MessageQuery,
     ) -> ClientResult<Vec<Message>> {
-        // `query.before` is a MESSAGE ID (see `MessageQuery`), but Matrix
-        // paginates with opaque tokens. Resolve it through the continuation
-        // token recorded when that message's page was fetched; fall back to
-        // treating it as a raw token for callers that already hold one.
-        let from = if let Some(before) = &query.before {
-            self.resolve_pagination_token(before)
-        } else {
-            let session = self.http.session().ok_or_else(|| {
-                ClientError::AuthFailed("not logged in".into())
-            })?;
-            session.sync_next_batch.unwrap_or_default()
-        };
-
         let limit = u64::from(query.limit.unwrap_or(50));
-        // "b" (backwards) is the only direction whose `end` token continues
-        // OLDER history, so it is the only one worth caching.
-        let paging_backwards = from.is_empty() || query.after.is_none();
-        let response = if from.is_empty() {
-            // No pagination token; do an initial sync to get one
-            let sync = self.http.sync(None, Some(0)).await?;
-            let prev_batch = sync
-                .rooms
-                .as_ref()
-                .and_then(|rooms| rooms.join.as_ref())
-                .and_then(|join| join.get(channel_id))
-                .and_then(|room| room.timeline.as_ref())
-                .and_then(|tl| tl.prev_batch.clone())
-                .unwrap_or(sync.next_batch);
-
-            self.http
-                .fetch_messages(channel_id, &prev_batch, "b", Some(limit))
-                .await?
-        } else {
-            let dir = if paging_backwards { "b" } else { "f" };
-            self.http
-                .fetch_messages(channel_id, &from, dir, Some(limit))
-                .await?
-        };
-
-        let messages = response
-            .chunk
-            .iter()
-            .filter_map(Self::room_event_to_message)
-            .collect::<Vec<_>>();
-
-        // Remember where this page ends so the NEXT "load older" call has a
-        // real continuation token. `dir=b` returns newest-first, so the last
-        // decoded message is the oldest one the caller will render — and only
-        // in that direction does `end` point further back in history.
-        if paging_backwards
-            && let (Some(end), Some(oldest)) = (response.end.as_deref(), messages.last())
-        {
-            self.record_pagination_token(&oldest.id, end);
+        if limit == 0 {
+            return Ok(Vec::new());
         }
+
+        let messages = match MessageCursor::from_query(&query)? {
+            MessageCursor::Newest => self.fetch_newest_page(channel_id, limit).await?,
+            MessageCursor::Before(id) => {
+                self.fetch_directional_page(channel_id, PageDirection::Backwards, id, limit)
+                    .await?
+            }
+            MessageCursor::After(id) => {
+                self.fetch_directional_page(channel_id, PageDirection::Forwards, id, limit)
+                    .await?
+            }
+            MessageCursor::Around(id) => self.fetch_window_around(channel_id, id, limit).await?,
+        };
 
         Ok(self.hydrate_message_authors(messages).await)
     }

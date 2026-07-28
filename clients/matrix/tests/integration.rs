@@ -385,13 +385,13 @@ async fn test_presence_stubs() {
     // so the UI hides the presence dot honestly"). Test must accept either
     // (real Matrix server returns presence; mock returns NotSupported).
     match client.get_presence("@axolotl:localhost").await {
-        Ok(_) => {} // real Matrix server with presence enabled
-        Err(poly_client::ClientError::NotSupported(_)) => {} // mock / disabled
+        // Real Matrix server with presence enabled, or mock / disabled.
+        Ok(_) | Err(poly_client::ClientError::NotSupported(_)) => {}
         Err(e) => panic!("get_presence: unexpected error {e:?}"),
     }
 
     // set_presence: same — real wire now; mock allows it via PUT echo.
-    let _ = client.set_presence(poly_client::PresenceStatus::Online).await;
+    let _set = client.set_presence(poly_client::PresenceStatus::Online).await;
 }
 
 #[tokio::test]

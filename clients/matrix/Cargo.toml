@@ -74,5 +74,9 @@ path = "tests/back_and_forth.rs"
 name = "version_override"
 path = "tests/version_override.rs"
 
+[[test]]
+name = "message_query_contract"
+path = "tests/message_query_contract.rs"
+
 [lints]
 workspace = true

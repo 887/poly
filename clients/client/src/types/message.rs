@@ -162,13 +162,38 @@ pub struct StickerItem {
 }
 
 /// Query options for fetching messages.
+///
+/// # Backend contract
+///
+/// Every cursor is a **message ID**, never a backend-native pagination token.
+/// A backend whose wire protocol paginates by opaque token (Matrix's
+/// `prev_batch` / `end`, for instance) is responsible for translating the
+/// message ID into one — the caller never sees that translation.
+///
+/// A backend that **cannot honour a supplied cursor MUST return
+/// [`ClientError::NotSupported`] naming it, and MUST NOT substitute a
+/// different page.** Returning the newest page when `around` was asked for is
+/// a Liskov violation: it answers a different question than the caller asked
+/// and there is no way for the caller to detect it, so the UI silently drops
+/// the user at the wrong place in the room. Refusing is always the correct
+/// failure mode — the caller can fall back, it cannot un-mix a wrong page.
+///
+/// Results are ordered **oldest-first** regardless of cursor. `before` and
+/// `after` are **exclusive** of the anchor message; `around` is **inclusive**
+/// of it. `limit` is a maximum, not a target. `poly-demo`'s
+/// `apply_message_query` is the reference implementation of these semantics,
+/// and `clients/matrix/tests/message_query_contract.rs` asserts them against a
+/// live backend.
+///
+/// [`ClientError::NotSupported`]: crate::ClientError::NotSupported
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MessageQuery {
-    /// Fetch messages before this message ID.
+    /// Fetch messages strictly before this message ID, oldest-first.
     pub before: Option<String>,
-    /// Fetch messages after this message ID.
+    /// Fetch messages strictly after this message ID, oldest-first.
     pub after: Option<String>,
-    /// Fetch a window of messages centered around this message ID.
+    /// Fetch a window of messages centered around this message ID, including
+    /// it, oldest-first.
     ///
     /// Used for jump-to-message flows (search results, pinned messages,
     /// notifications) where the UI needs surrounding history even if the

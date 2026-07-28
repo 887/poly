@@ -5,7 +5,8 @@
 //! resume after interruptions.
 
 use crate::api::{
-    BanRequest, CreateRoomRequest, CreateRoomResponse, IgnoredUserListContent, InviteRequest,
+    BanRequest, ContextResponse, CreateRoomRequest, CreateRoomResponse, IgnoredUserListContent,
+    InviteRequest,
     JoinedRoomsResponse, KickRequest, LoginIdentifier, LoginRequest, LoginResponse,
     MessagesResponse, PinnedEventsContent, PowerLevelsContent, ProfileResponse, PushRuleRequest,
     RedactRequest, RoomAvatarRequest, RoomEvent, RoomMembersResponse, RoomNameRequest,
@@ -388,6 +389,37 @@ impl MatrixHttpClient {
         let path = build_path(
             &format!("/_matrix/client/v3/rooms/{room_id}/messages"),
             &params,
+        );
+        let response = self
+            .authenticated_request(Method::GET, &path)?
+            .send()
+            .await
+            .map_err(|e| Self::network_error(&e))?;
+
+        if !response.status().is_success() {
+            return Err(Self::parse_error(response).await);
+        }
+
+        response.json().await.map_err(|e| Self::network_error(&e))
+    }
+
+    /// Fetch the events surrounding a single event via
+    /// `GET /_matrix/client/v3/rooms/{roomId}/context/{eventId}`.
+    ///
+    /// `limit` caps the SUM of `events_before` and `events_after`; the
+    /// homeserver splits it evenly between the two sides. The response's
+    /// `start` / `end` tokens are the only way to turn a caller-supplied event
+    /// ID into a `from` value `fetch_messages` will accept — passing an event ID
+    /// straight to `/messages` is a `400 M_INVALID_PARAM`.
+    pub async fn fetch_context(
+        &self,
+        room_id: &str,
+        event_id: &str,
+        limit: u64,
+    ) -> ClientResult<ContextResponse> {
+        let path = build_path(
+            &format!("/_matrix/client/v3/rooms/{room_id}/context/{event_id}"),
+            &[("limit", limit.to_string())],
         );
         let response = self
             .authenticated_request(Method::GET, &path)?

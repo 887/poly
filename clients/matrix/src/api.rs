@@ -298,6 +298,38 @@ pub struct MessagesResponse {
     pub end: Option<String>,
 }
 
+/// Response from `GET /_matrix/client/v3/rooms/{roomId}/context/{eventId}`.
+///
+/// The only Matrix read endpoint addressed by **event ID** rather than by an
+/// opaque pagination token, which makes it the bridge between `MessageQuery`'s
+/// message-ID cursors (`before` / `after` / `around`) and `/messages`' token
+/// pagination. Without it a cold client can produce no valid `from` for a
+/// caller-supplied message ID at all.
+#[derive(Debug, Default, Deserialize)]
+pub struct ContextResponse {
+    /// Events immediately before `event`, in REVERSE chronological order.
+    #[serde(default)]
+    pub events_before: Vec<RoomEvent>,
+
+    /// The requested event itself. Absent when the server withholds it.
+    #[serde(default)]
+    pub event: Option<RoomEvent>,
+
+    /// Events immediately after `event`, in chronological order.
+    #[serde(default)]
+    pub events_after: Vec<RoomEvent>,
+
+    /// Token that paginates BACKWARDS from the start of this window — feed it
+    /// to `/messages?dir=b` to continue into older history.
+    #[serde(default)]
+    pub start: Option<String>,
+
+    /// Token that paginates FORWARDS from the end of this window — feed it to
+    /// `/messages?dir=f` to continue into newer history.
+    #[serde(default)]
+    pub end: Option<String>,
+}
+
 // ---------------------------------------------------------------------------
 // Moderation (B-MX — plan-permissions-moderation.md §1.2)
 // ---------------------------------------------------------------------------
