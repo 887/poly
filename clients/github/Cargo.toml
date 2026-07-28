@@ -31,6 +31,10 @@ tokio = { workspace = true, features = ["process", "rt-multi-thread"] }
 
 [dev-dependencies]
 poly-test-github = { path = "../../servers/test-github" }
+# Decodes the `stdout_b64` / `stderr_b64` fields of a real `/host/exec`
+# `exec-output` body in the exec-gate tests, so those tests are pinned to the
+# wire shape rather than to a hand-rolled tuple.
+base64 = { workspace = true }
 axum = { workspace = true }
 serde_json = { workspace = true }
 reqwest = { workspace = true }

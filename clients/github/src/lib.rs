@@ -178,8 +178,23 @@ impl GitHubClient {
         self.session.as_ref().map_or("gh", |s| s.id.as_str())
     }
 
+    /// Map the `gh` transport's errors onto the substrate's [`ClientError`].
+    ///
+    /// The variants are kept distinguishable on purpose, matching the Forgejo
+    /// client's 401/403/404/429 split: the host reacts differently to "install
+    /// the tool" (`Internal`), "log in again" (`AuthFailed`), "the request
+    /// failed" (`Network`) and "a permission you do not hold"
+    /// (`PermissionDenied`). Collapsing the capability-gate refusal into
+    /// `Network` would make the host retry a decision only the user can change.
     pub(crate) fn convert_err(e: GhError) -> ClientError {
         match e {
+            // `/host/exec` is default-deny: `gh` must be declared for this
+            // caller and consented to by the user. Neither is a network fault
+            // and neither is fixed by installing anything, so this is the one
+            // gh error that maps to `PermissionDenied`.
+            ref denied @ GhError::ExecNotAuthorised { .. } => {
+                ClientError::PermissionDenied(denied.to_string())
+            }
             GhError::Spawn(msg) => ClientError::Internal(format!(
                 "gh CLI not available: {msg} — install from https://cli.github.com"
             )),

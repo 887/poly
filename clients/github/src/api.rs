@@ -61,6 +61,43 @@ pub enum GhError {
     /// JSON parse error from `gh` output.
     #[error("failed to parse gh output: {0}")]
     Parse(String),
+    /// The host shell refused to spawn `gh` at the capability gate: the
+    /// program is not on this caller's declared-program list, or the user has
+    /// not consented to it yet.
+    ///
+    /// Distinct from [`GhError::Spawn`] on purpose. `Spawn` means "the
+    /// transport is missing / broken", which the UI answers with "install the
+    /// gh CLI" and the host answers by retrying. This means "the transport is
+    /// present and working and deliberately said no", which only a user
+    /// decision can clear — retrying is pointless and the install hint is
+    /// actively misleading.
+    #[error(
+        "the gh CLI has not been authorised for this app: {detail} — approve it on \
+         Poly's host-capability surface: POST /host/exec/declare with the absolute \
+         path to the `gh` binary, then POST /host/exec/consent for that same path"
+    )]
+    ExecNotAuthorised {
+        /// The shell's own denial text, verbatim.
+        detail: String,
+    },
+}
+
+/// Prefix that every `/host/exec` capability-gate refusal starts with.
+///
+/// The denial reaches this crate as an opaque string inside
+/// `BridgeError::Host`: the shell's `exec_policy::ExecDenied` type is
+/// native-only and this code path is wasm32, so there is no shared enum to
+/// match on. The prefix is the contract instead — every `ExecDenied` variant
+/// (`NotAllowlisted`, `NoConsent`, `NotAbsolute`, `Traversal`, `Unresolvable`)
+/// renders as `exec denied: …`.
+#[cfg(any(target_arch = "wasm32", test))]
+const EXEC_DENIED_PREFIX: &str = "exec denied";
+
+/// Does this host error text mean "the capability gate refused", as opposed to
+/// any other backend failure?
+#[cfg(any(target_arch = "wasm32", test))]
+fn is_exec_denied(msg: &str) -> bool {
+    msg.trim_start().starts_with(EXEC_DENIED_PREFIX)
 }
 
 /// Convert a flat JSON object into `gh api` field arguments.
@@ -141,11 +178,19 @@ fn graphql_argv(hostname: Option<&str>, body: &serde_json::Value) -> Result<Vec<
 }
 
 /// Map a host-bridge transport failure onto [`GhError`].
-#[cfg(target_arch = "wasm32")]
+///
+/// Single mapping for every `gh`-over-bridge call site, so a new host-side
+/// refusal shape only has to be classified once.
+#[cfg(any(target_arch = "wasm32", test))]
 fn map_bridge_error(err: poly_host_bridge::BridgeError) -> GhError {
     use poly_host_bridge::BridgeError;
 
     match err {
+        // Checked first: a capability-gate refusal is a *policy* answer, not a
+        // transport fault, and must not be flattened into `Spawn`.
+        BridgeError::Host(ref msg) if is_exec_denied(msg) => GhError::ExecNotAuthorised {
+            detail: msg.clone(),
+        },
         BridgeError::Unreachable { url, source } => GhError::Spawn(format!(
             "host bridge unreachable at {url}: {source} — this build of Poly \
              needs a native shell (apps/desktop-web, apps/desktop-electron-web, …) \
@@ -155,6 +200,28 @@ fn map_bridge_error(err: poly_host_bridge::BridgeError) -> GhError {
         | BridgeError::ParseResponse(_)
         | BridgeError::Host(_)
         | BridgeError::VariantMismatch { .. }) => GhError::Spawn(other.to_string()),
+    }
+}
+
+/// Turn one `Client::exec("gh", …)` result into `gh`'s stdout.
+///
+/// The three bridge-backed call sites (`api_raw`, `exec_gh`, `api_delete`) all
+/// need exactly this: classify the transport/policy error, then treat a
+/// non-zero exit as [`GhError::Exit`]. Keeping it in one place is what lets the
+/// denial classification be unit-tested on a native target, where the wasm-only
+/// call sites do not even compile.
+#[cfg(any(target_arch = "wasm32", test))]
+fn exec_outcome(
+    result: Result<(i32, Vec<u8>, Vec<u8>), poly_host_bridge::BridgeError>,
+) -> Result<Vec<u8>, GhError> {
+    let (exit_code, stdout, stderr) = result.map_err(map_bridge_error)?;
+    if exit_code == 0_i32 {
+        Ok(stdout)
+    } else {
+        Err(GhError::Exit {
+            code: exit_code,
+            stderr: String::from_utf8_lossy(&stderr).into_owned(),
+        })
     }
 }
 
@@ -290,7 +357,7 @@ impl GhCli {
             return self.api_raw_http(base_url, endpoint).await;
         }
 
-        use poly_host_bridge::{BridgeError, Client};
+        use poly_host_bridge::Client;
 
         let mut args: Vec<String> = Vec::with_capacity(4_usize.saturating_add(extra_args.len()));
         args.push("api".to_string());
@@ -304,25 +371,7 @@ impl GhCli {
         }
 
         let client = Client::new();
-        let (exit_code, stdout, stderr) = client.exec("gh", args).await.map_err(|e| match e {
-            BridgeError::Unreachable { url, source } => GhError::Spawn(format!(
-                "host bridge unreachable at {url}: {source} — this build of Poly \
-                 needs a native shell (apps/desktop-web, apps/desktop-electron-web, …) \
-                 to forward gh CLI calls."
-            )),
-            other @ (BridgeError::Transport(_)
-            | BridgeError::ParseResponse(_)
-            | BridgeError::Host(_)
-            | BridgeError::VariantMismatch { .. }) => GhError::Spawn(other.to_string()),
-        })?;
-
-        if exit_code != 0_i32 {
-            return Err(GhError::Exit {
-                code: exit_code,
-                stderr: String::from_utf8_lossy(&stderr).into_owned(),
-            });
-        }
-        Ok(stdout)
+        exec_outcome(client.exec("gh", args).await)
     }
 
     /// HTTP-based transport for testing. Sends GET requests directly to the mock server.
@@ -687,15 +736,7 @@ impl GhCli {
         use poly_host_bridge::Client;
 
         let client = Client::new();
-        let (exit_code, stdout, stderr) =
-            client.exec("gh", args).await.map_err(map_bridge_error)?;
-        if exit_code != 0_i32 {
-            return Err(GhError::Exit {
-                code: exit_code,
-                stderr: String::from_utf8_lossy(&stderr).into_owned(),
-            });
-        }
-        Ok(stdout)
+        exec_outcome(client.exec("gh", args).await)
     }
 
     /// HTTP POST transport (test mode on native, default on WASM for POST).
@@ -773,7 +814,7 @@ impl GhCli {
         }
         #[cfg(target_arch = "wasm32")]
         {
-            use poly_host_bridge::{BridgeError, Client};
+            use poly_host_bridge::Client;
             let mut args: Vec<String> = vec!["api".into(), "-X".into(), "DELETE".into()];
             if let Some(host) = &self.hostname {
                 args.push("--hostname".into());
@@ -781,22 +822,7 @@ impl GhCli {
             }
             args.push(endpoint.to_string());
             let client = Client::new();
-            let (exit_code, _stdout, stderr) =
-                client.exec("gh", args).await.map_err(|e| match e {
-                    BridgeError::Unreachable { url, source } => GhError::Spawn(format!(
-                        "host bridge unreachable at {url}: {source}"
-                    )),
-                    other @ (BridgeError::Transport(_)
-                    | BridgeError::ParseResponse(_)
-                    | BridgeError::Host(_)
-                    | BridgeError::VariantMismatch { .. }) => GhError::Spawn(other.to_string()),
-                })?;
-            if exit_code != 0_i32 {
-                return Err(GhError::Exit {
-                    code: exit_code,
-                    stderr: String::from_utf8_lossy(&stderr).into_owned(),
-                });
-            }
+            let _stdout = exec_outcome(client.exec("gh", args).await)?;
             Ok(())
         }
     }
@@ -1006,5 +1032,140 @@ mod transport_tests {
 
         let fields = json_object_to_gh_fields(&serde_json::json!({ "a": true })).unwrap();
         assert_eq!(fields, vec!["-F".to_string(), "a=true".to_string()]);
+    }
+}
+
+/// `/host/exec` is default-deny: `gh` has to be declared for the calling
+/// identity and then consented to by the user. These cover the classification
+/// of the shell's refusal and the transition to the happy path once both steps
+/// have happened.
+///
+/// The wasm-only call sites cannot run here, so the tests drive
+/// [`exec_outcome`] — the single function all three of them funnel through —
+/// with the exact wire payloads the shell produces.
+#[cfg(test)]
+mod exec_gate_tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
+    use super::{exec_outcome, GhError};
+    use crate::GitHubClient;
+    use poly_client::ClientError;
+    use poly_host_bridge::{BridgeError, HostResponse};
+
+    /// Decode the body the shell actually returns and turn it into the
+    /// `BridgeError` `Client::exec` would hand us, so the tests are pinned to
+    /// the wire shape rather than to a hand-written string.
+    fn bridge_error_from_body(body: &str) -> BridgeError {
+        match serde_json::from_str::<HostResponse>(body)
+            .expect("the shell's error body must be a HostResponse")
+        {
+            HostResponse::Err(msg) => BridgeError::Host(msg),
+            HostResponse::Ok(ok) => panic!("expected an error body, got {ok:?}"),
+        }
+    }
+
+    /// `403` + `exec denied: … is not in the declared program list …` is what
+    /// an un-declared `gh` produces. It must NOT look like a network fault.
+    #[test]
+    fn undeclared_gh_maps_to_the_typed_authorisation_error() {
+        let err = exec_outcome(Err(bridge_error_from_body(
+            r#"{"err":"exec denied: `gh` is not in the declared program list for shell"}"#,
+        )))
+        .unwrap_err();
+
+        assert!(
+            matches!(err, GhError::ExecNotAuthorised { .. }),
+            "must be the typed gate error, got {err:?}"
+        );
+        assert!(
+            err.to_string().contains("/host/exec/declare"),
+            "the error must name the remediation: {err}"
+        );
+    }
+
+    /// Declared but not yet consented is the same class of failure — a user
+    /// decision, not a transport problem.
+    #[test]
+    fn declared_but_unconsented_gh_maps_to_the_typed_authorisation_error() {
+        let err = exec_outcome(Err(bridge_error_from_body(
+            r#"{"err":"exec denied: shell has not been granted user consent to run `/usr/bin/gh`"}"#,
+        )))
+        .unwrap_err();
+        assert!(
+            matches!(err, GhError::ExecNotAuthorised { .. }),
+            "{err:?}"
+        );
+        assert!(
+            err.to_string().contains("/host/exec/consent"),
+            "the error must name the consent step: {err}"
+        );
+    }
+
+    /// The substrate-level mapping is the part the UI and the host see. It has
+    /// to be `PermissionDenied`, never `Network` — a retry loop cannot clear a
+    /// missing consent, and the `Internal` "install the gh CLI" hint is wrong
+    /// when the binary is present and the shell simply said no.
+    #[test]
+    fn the_gate_refusal_surfaces_as_permission_denied_not_network() {
+        let err = exec_outcome(Err(bridge_error_from_body(
+            r#"{"err":"exec denied: `gh` is not in the declared program list for shell"}"#,
+        )))
+        .unwrap_err();
+
+        let mapped = GitHubClient::convert_err(err);
+        assert!(
+            matches!(mapped, ClientError::PermissionDenied(_)),
+            "gate refusal must be PermissionDenied, got {mapped:?}"
+        );
+        assert!(
+            mapped.to_string().contains("gh CLI has not been authorised"),
+            "the remediation must survive the mapping: {mapped}"
+        );
+    }
+
+    /// Once the program is declared AND consented the shell runs it and answers
+    /// `200` with an `exec-output`; the same call site then yields stdout.
+    #[test]
+    fn declared_and_consented_gh_returns_stdout() {
+        let body = r#"{"ok":{"kind":"exec-output","exit_code":0,"stdout_b64":"eyJvayI6dHJ1ZX0=","stderr_b64":""}}"#;
+        let HostResponse::Ok(poly_host_bridge::HostOk::ExecOutput {
+            exit_code,
+            stdout_b64,
+            stderr_b64,
+        }) = serde_json::from_str::<HostResponse>(body).expect("valid exec-output body")
+        else {
+            panic!("expected an exec-output payload");
+        };
+        use base64::Engine as _;
+        let engine = base64::engine::general_purpose::STANDARD;
+        let stdout = engine.decode(&stdout_b64).expect("valid base64 stdout");
+        let stderr = engine.decode(&stderr_b64).expect("valid base64 stderr");
+
+        let out = exec_outcome(Ok((exit_code, stdout, stderr))).expect("consented exec succeeds");
+        assert_eq!(String::from_utf8_lossy(&out), r#"{"ok":true}"#);
+    }
+
+    /// A `gh` that ran and failed is a *different* error from a `gh` that was
+    /// never allowed to run — otherwise "not authorised" would swallow every
+    /// ordinary API failure.
+    #[test]
+    fn a_nonzero_exit_is_still_an_exit_error() {
+        let err = exec_outcome(Ok((1_i32, Vec::new(), b"gh: not found".to_vec()))).unwrap_err();
+        assert!(matches!(err, GhError::Exit { code: 1_i32, .. }), "{err:?}");
+    }
+
+    /// Other host-side failures must keep their old classification; only the
+    /// `exec denied` prefix is special.
+    #[test]
+    fn unrelated_host_errors_are_not_misread_as_a_gate_refusal() {
+        let err = exec_outcome(Err(BridgeError::Host(
+            "failed to spawn `/usr/bin/gh`: No such file or directory".to_string(),
+        )))
+        .unwrap_err();
+        assert!(matches!(err, GhError::Spawn(_)), "{err:?}");
+        assert!(
+            matches!(GitHubClient::convert_err(err), ClientError::Internal(_)),
+            "a genuine spawn failure keeps the install hint"
+        );
     }
 }
