@@ -1,6 +1,7 @@
 //! `SocialGraphBackend` capability sub-trait (Phase H.3.b).
 //!
-//! Carved out of [`ClientBackend`] in Phase H.3.b. Implemented by backends
+//! Carved out of the former `ClientBackend` god-trait (replaced by
+//! [`IsBackend`]) in Phase H.3.b. Implemented by backends
 //! that expose social operations: `poly-demo`, `poly-discord`, `poly-matrix`,
 //! `poly-server-client`, `poly-stoat` (writable), and `poly-forgejo`,
 //! `poly-github`, `poly-hackernews`, `poly-lemmy`, `poly-reddit`,
@@ -29,7 +30,7 @@
 //! }
 //! ```
 //!
-//! [`ClientBackend`]: crate::ClientBackend
+//! [`IsBackend`]: crate::IsBackend
 //! [`IsBackend::as_social_graph`]: crate::IsBackend::as_social_graph
 //! [`WritableSocialGraphBackend`]: crate::WritableSocialGraphBackend
 

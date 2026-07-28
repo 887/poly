@@ -3,11 +3,12 @@
 //! Tier 2 of `plan-trait-split-readable-vs-writable.md`:
 //! `create_server`, `create_channel`, `update_server_banner` are now
 //! default-delegating shims that consult
-//! [`Self::as_writable_server_admin`] and forward to
+//! [`ServerAdminBackend::as_writable_server_admin`] and forward to
 //! [`WritableServerAdminBackend`] when `Some`, else return
 //! `Err(NotSupported)`.
 //!
-//! [`ClientBackend`]: crate::ClientBackend
+//! [`IsBackend`]: crate::IsBackend
+//! [`ServerAdminBackend::as_writable_server_admin`]: crate::ServerAdminBackend::as_writable_server_admin
 //! [`WritableServerAdminBackend`]: crate::WritableServerAdminBackend
 
 use async_trait::async_trait;

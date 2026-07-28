@@ -1,6 +1,11 @@
 # Plan — Trait split: readable vs writable sibling traits
 
-## Status: ✅ DONE — all 5 writable sub-traits shipped.
+## Status: ✅ SHIPPED — all 5 writable sub-traits landed; **Phase J follow-ups outstanding**
+
+> Not DONE: Phase J still has two unticked items — `WritablePinningBackend`
+> (`set_message_pinned`) and the `ServerAdminBackend` enforcement lint banning
+> `Err(NotSupported)` inside opt-in capability impls. The trait split itself is
+> complete; these are the remaining enforcement gaps.
 ##   - Tier 1: `WritableMessagingBackend` (commit `9ad515c8`)
 ##   - Tier 2: `WritableSocialGraphBackend`, `WritableModerationBackend`,
 ##     `WritableServerAdminBackend`, `WritableDmsAndGroupsBackend`

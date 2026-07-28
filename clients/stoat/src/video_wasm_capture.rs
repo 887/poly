@@ -45,6 +45,15 @@ use super::video_common::{
 };
 use super::voice_common::{build_outbound_frame, FrameKind};
 
+// ── Event-loop yield ──────────────────────────────────────────────────────────
+
+/// How often the capture task checks the shutdown flags, in milliseconds.
+///
+/// This is a *liveness* poll, not a data path — the real encoder delivers frames
+/// through the `VideoEncoder` output callback, not through this loop. 250 ms
+/// keeps camera-release latency imperceptible while costing ~4 wakeups/second.
+const SHUTDOWN_POLL_INTERVAL_MS: i32 = 250;
+
 // ── Public handle ─────────────────────────────────────────────────────────────
 
 /// A live video capture session. Drop or call [`StoatVideoCaptureHandle::stop`]
@@ -168,21 +177,22 @@ pub async fn start_video_capture(
         // The capture loop terminates when EITHER shutdown flag is set; this
         // matches the audio task's tear-down semantics so the connection is
         // a single logical unit.
-        // Yield to JS task queue between polls so the WASM main thread isn't
-        // monopolised by this loop. The real encoder runs off browser microtasks
-        // (VideoEncoder output callback) — this poll exists purely so the
-        // skeleton respects shutdown. Once the real encoder ships, this loop
-        // is replaced by encoder.output = closure { send fragments }.
+        //
+        // The poll MUST yield via a MACROtask (`setTimeout`), never a microtask.
+        // `Promise::resolve().await` schedules a microtask, and the browser
+        // drains the entire microtask queue before returning to the event loop —
+        // so a loop that re-enqueues one every iteration never lets rendering,
+        // input, timers or the WASM scheduler run. That is exactly the CLAUDE.md
+        // "tight CPU loop the Chrome scheduler can't preempt" hang class, and it
+        // wedges the tab across reloads. The sibling audio task is safe because
+        // it awaits a real `ReadableStream` read (a macrotask).
         loop {
             if local_shutdown_task.load(Ordering::Relaxed)
                 || global_shutdown_task.load(Ordering::Relaxed)
             {
                 break;
             }
-            // js_sys::Promise::resolve(&JsValue::NULL) + JsFuture::from is a
-            // safe microtask yield on wasm32. The audio task uses the
-            // ReadableStream reader's await for the same effect.
-            let _ = JsFuture::from(js_sys::Promise::resolve(&JsValue::NULL)).await;
+            super::voice_common::sleep_ms(SHUTDOWN_POLL_INTERVAL_MS).await;
         }
 
         // Cleanup: stop the camera so the browser releases the device.

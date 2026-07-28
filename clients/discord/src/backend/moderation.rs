@@ -378,7 +378,7 @@ impl poly_client::ModerationBackend for DiscordClient {
             .collect();
 
         // Sort by position descending (highest rank first).
-        roles.sort_by(|a, b| b.position.cmp(&a.position));
+        roles.sort_by_key(|r| std::cmp::Reverse(r.position));
         Ok(roles)
     }
 }

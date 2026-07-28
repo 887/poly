@@ -1,6 +1,10 @@
 # Voice UI integration test harness — follow-up from K.4
 
-## Status: ✅ DONE — initial harness shipped (Phase A all sub-steps). Phase B (broader UI coverage) deferred.
+## Status: ✅ SHIPPED — Phase A (initial harness) complete; **Phase B deferred, all 4 sub-steps unticked**
+
+> Not DONE: B.1–B.4 (reusable CDP helper crate, `k4.rs` integration test,
+> held-call swap UI test, Teams "coming soon" toast assertion) are tracked
+> deferrals, not delivered scope.
 
 This plan tracks the UI integration test harness called out as the
 prerequisite for K.4 in `docs/plans/plan-voice-video-calls.md`. K.4

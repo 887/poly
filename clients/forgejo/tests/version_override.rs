@@ -142,3 +142,48 @@ async fn test_version_override_clear_restores_default() {
         "Expected default User-Agent after clearing override. Got: {entries:#?}"
     );
 }
+
+/// The override must reach EVERY request, not just the ones routed through
+/// `ForgejoApi::get()`. `is_starred` built its request by hand and omitted the
+/// User-Agent header, so a UA-filtering instance rejected the star probe while
+/// repo browsing succeeded.
+#[tokio::test]
+async fn test_version_override_reaches_is_starred_probe() {
+    let base_url = start_server().await;
+    let client = authenticated_client(&base_url).await;
+
+    client
+        .set_client_version_override(Some("test-version/4.5.6".to_string()))
+        .await
+        .expect("set_client_version_override");
+
+    // The repo context menu probes star state via `ForgejoApi::is_starred`.
+    let servers = client.get_servers().await.expect("get_servers");
+    let server = servers.first().expect("test fixture seeds at least one repo");
+    let _items = client
+        .get_context_menu_items(poly_client::MenuTargetKind::Server, &server.id)
+        .await
+        .expect("context menu should succeed");
+    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+
+    let entries = captured_headers(&base_url).await;
+    let starred_requests: Vec<&serde_json::Value> = entries
+        .iter()
+        .filter(|e| {
+            e["path"]
+                .as_str()
+                .is_some_and(|p| p.contains("/user/starred/"))
+        })
+        .collect();
+    assert!(
+        !starred_requests.is_empty(),
+        "the context menu must have probed /user/starred/. Got: {entries:#?}"
+    );
+    for entry in starred_requests {
+        assert_eq!(
+            entry["headers"]["user-agent"].as_str(),
+            Some("test-version/4.5.6"),
+            "is_starred must carry the overridden User-Agent: {entry:#?}"
+        );
+    }
+}

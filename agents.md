@@ -123,7 +123,10 @@ Someone should be able to build Poly with only `discord + teams` or any other co
 - Run `cargo fmt --all` — consistent formatting
 - Write doc comments on all public items
 - Write `// TODO(phase-X.Y.Z):` comments referencing the plan item number
-- Add `// DECISION(DX):` comments referencing decision numbers from overall-plan.md
+- Add `// DECISION(DX):` comments referencing the plan file + phase the decision
+  was made in (e.g. `// DECISION(DX): plan-batched-signal.md Phase C — …`).
+  Legacy `DECISION(DX)` comments cite numbers from the archived
+  `docs/archive/overall-plan.md` section 10 registry.
 
 ### 7a. ABSOLUTE PROHIBITION — `#[allow(...)]` is FORBIDDEN
 
@@ -229,8 +232,12 @@ deciding *how* to split an `rsx!` block.
 
 When making architectural decisions:
 1. Document in the relevant crate's `agents.md`
-2. If project-wide, also add to `docs/overall-plan.md` Decision Registry
-3. Update the relevant phase plan checklist
+2. If project-wide, record it in the plan doc under `docs/plans/` that the work
+   belongs to, and link it from `docs/INDEX.md`. (The old central registry —
+   `docs/overall-plan.md` section 10 — was archived to
+   `docs/archive/overall-plan.md` and is **read-only history**; do not add new
+   decisions there and do not recreate `docs/overall-plan.md`.)
+3. Update the relevant plan's checkboxes
 4. Write code comments explaining non-obvious choices
 
 ### 9. poly-core Changes — MANDATORY DevTools Visual Verification
@@ -428,9 +435,12 @@ able to render normally.
 At the START of each coding session:
 1. Read this `agents.md`
 2. Read `last-crate-update-date` — update crates if >3 months old
-3. Read the relevant phase plan to know what to work on next
+3. Read `docs/INDEX.md`, then the relevant plan in `docs/plans/` to know what to
+   work on next
 4. Read the `agents.md` of the crate(s) you'll work on
-5. Check `docs/overall-plan.md` for any open decisions
+5. Check the relevant `docs/plans/` file for open decisions and unticked phases
+   (the old `docs/overall-plan.md` registry is archived at
+   `docs/archive/overall-plan.md` — history only)
 
 At the END of each session:
 1. Run `cargo clippy --workspace` — fix ALL lint errors before committing
@@ -532,17 +542,19 @@ When implementing messenger backends, consult:
 |---|---|
 | `agents.md` (this file) | Root agent instructions — read first |
 | `last-crate-update-date` | When crates were last updated |
-| `docs/overall-plan.md` | Comprehensive project plan + decisions |
-| `docs/phase-1-plan.md` | Phase 1 checklist (planning) |
-| `docs/phase-2-plan.md` | Phase 2 checklist (structure + UI) |
-| `docs/phase-3-plan.md` | Phase 3 overview (client implementations) |
-| `docs/phase-3.1-stoat-plan.md` | Stoat (Revolt) client plan |
-| `docs/phase-3.2-matrix-plan.md` | Matrix client plan (custom HTTP, no matrix-sdk) |
-| `docs/phase-3.3-discord-plan.md` | Discord client plan |
-| `docs/phase-3.4-teams-plan.md` | Teams client plan (Graph API) |
-| `docs/phase-4-test-servers-plan.md` | Mock test servers for all backends |
-| `docs/phase-5-social-agent-plan.md` | Social Agent — MCP, AI, memory, personality |
-| `docs/research/` | Technology research notes |
+| `docs/INDEX.md` | **Current documentation index — start here** |
+| `docs/plans/` | Active plans (see the plan-file discipline rules) |
+| `docs/dev/` | Contributor guides (`reactive-state.md`, `test-backends.md`, …) |
+| `docs/archive/overall-plan.md` | **Historical** — superseded project plan; section 10 "Key Decisions Registry" is the old decision log |
+| `docs/archive/phases/phase-1-plan.md` | **Historical** — Phase 1 checklist (planning) |
+| `docs/archive/phases/phase-2-plan.md` | **Historical** — Phase 2 checklist (structure + UI) |
+| `docs/archive/phases/phase-3-plan.md` | **Historical** — Phase 3 overview (client implementations) |
+| `docs/archive/phases/phase-3.1-stoat-plan.md` | **Historical** — Stoat (Revolt) client plan |
+| `docs/archive/phases/phase-3.2-matrix-plan.md` | **Historical** — Matrix client plan (custom HTTP, no matrix-sdk) |
+| `docs/archive/phases/phase-3.3-discord-plan.md` | **Historical** — Discord client plan |
+| `docs/archive/phases/phase-3.4-teams-plan.md` | **Historical** — Teams client plan (Graph API) |
+| `docs/archive/phases/phase-4-test-servers-plan.md` | **Historical** — Mock test servers for all backends |
+| `docs/archive/phases/phase-5-social-agent-plan.md` | **Historical** — Social Agent — MCP, AI, memory, personality |
 | `crates/*/agents.md` | Per-crate agent instructions |
 | `crates/*/README.md` | Per-crate documentation |
 | `apps/*/agents.md` | Per-app agent instructions |

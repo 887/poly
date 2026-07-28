@@ -21,6 +21,7 @@
 
 use std::{
     collections::HashMap,
+    net::SocketAddr,
     sync::{Arc, Mutex},
 };
 
@@ -49,19 +50,45 @@ pub use crate::udp_client::{
 // ── Session state ──────────────────────────────────────────────────────────────
 
 /// Shared state for the UDP service.
+///
+/// `policy` decides whether a session may be pointed at a loopback / private
+/// / link-local peer. It is default-deny so an untrusted caller that reaches
+/// `/host/udp/*` cannot use the host as a datagram cannon into the LAN or
+/// into loopback-only services.
 #[derive(Clone, Default)]
 pub struct UdpState {
     sessions: Arc<Mutex<HashMap<String, UdpSessionEntry>>>,
+    policy: crate::net_guard::PrivateNetworkPolicy,
 }
 
 struct UdpSessionEntry {
     socket: Arc<UdpSocket>,
+    /// Peer fixed by `/host/udp/connect`. `send` may only ever target this
+    /// address — a per-datagram `dst` override is accepted solely when it
+    /// matches, so a caller cannot re-aim an already-vetted socket.
+    peer: Option<SocketAddr>,
 }
 
 impl UdpState {
+    /// Production constructor — destination policy comes from
+    /// [`crate::net_guard::PrivateNetworkPolicy::from_env`] (deny by default,
+    /// `POLY_ALLOW_PRIVATE_NETWORK=1` to opt out for local development).
     #[must_use]
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            sessions: Arc::default(),
+            policy: crate::net_guard::PrivateNetworkPolicy::from_env(),
+        }
+    }
+
+    /// Constructor for tests and local development against a loopback voice
+    /// server: skips the private-destination filter.
+    #[must_use]
+    pub fn allow_private() -> Self {
+        Self {
+            sessions: Arc::default(),
+            policy: crate::net_guard::PrivateNetworkPolicy::Allow,
+        }
     }
 }
 
@@ -128,7 +155,7 @@ async fn handle_bind(State(state): State<UdpState>) -> impl IntoResponse {
                 );
             }
         };
-        map.insert(session_id.clone(), UdpSessionEntry { socket });
+        map.insert(session_id.clone(), UdpSessionEntry { socket, peer: None });
     }
 
     (
@@ -151,7 +178,7 @@ async fn handle_connect(
         );
     };
 
-    let peer: std::net::SocketAddr = match req.peer_addr.parse() {
+    let peer: SocketAddr = match req.peer_addr.parse() {
         Ok(a) => a,
         Err(e) => {
             return (
@@ -163,9 +190,18 @@ async fn handle_connect(
             );
         }
     };
+    if let Err(e) = crate::net_guard::check_socket_addr(peer, state.policy) {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(UdpConnectResponse { ok: false, err: Some(e) }),
+        );
+    }
 
     match socket.connect(peer).await {
-        Ok(()) => (StatusCode::OK, Json(UdpConnectResponse { ok: true, err: None })),
+        Ok(()) => {
+            set_peer(&state, &req.session_id, peer);
+            (StatusCode::OK, Json(UdpConnectResponse { ok: true, err: None }))
+        }
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(UdpConnectResponse {
@@ -180,7 +216,7 @@ async fn handle_send(
     State(state): State<UdpState>,
     Json(req): Json<UdpSendRequest>,
 ) -> impl IntoResponse {
-    let Some(socket) = get_socket(&state, &req.session_id) else {
+    let Some(session) = get_session(&state, &req.session_id) else {
         return (
             StatusCode::NOT_FOUND,
             Json(UdpSendResponse {
@@ -205,23 +241,19 @@ async fn handle_send(
         }
     };
 
-    let result = if let Some(dst) = req.dst {
-        let addr: std::net::SocketAddr = match dst.parse() {
-            Ok(a) => a,
-            Err(e) => {
-                return (
-                    StatusCode::BAD_REQUEST,
-                    Json(UdpSendResponse {
-                        ok: false,
-                        bytes_sent: 0,
-                        err: Some(format!("invalid dst addr: {e}")),
-                    }),
-                );
-            }
-        };
-        socket.send_to(&data, addr).await
-    } else {
-        socket.send(&data).await
+    let dst = match resolve_dst(session.peer, req.dst.as_deref()) {
+        Ok(d) => d,
+        Err((code, err)) => {
+            return (
+                code,
+                Json(UdpSendResponse { ok: false, bytes_sent: 0, err: Some(err) }),
+            );
+        }
+    };
+
+    let result = match dst {
+        Some(addr) => session.socket.send_to(&data, addr).await,
+        None => session.socket.send(&data).await,
     };
 
     match result {
@@ -328,6 +360,60 @@ fn get_socket(state: &UdpState, session_id: &str) -> Option<Arc<UdpSocket>> {
         .and_then(|m| m.get(session_id).map(|e| Arc::clone(&e.socket)))
 }
 
+/// Immutable view of a session, taken while the map lock is held so no
+/// handler keeps the mutex across an `.await`.
+struct SessionSnapshot {
+    socket: Arc<UdpSocket>,
+    peer: Option<SocketAddr>,
+}
+
+fn get_session(state: &UdpState, session_id: &str) -> Option<SessionSnapshot> {
+    state.sessions.lock().ok().and_then(|m| {
+        m.get(session_id).map(|e| SessionSnapshot {
+            socket: Arc::clone(&e.socket),
+            peer: e.peer,
+        })
+    })
+}
+
+fn set_peer(state: &UdpState, session_id: &str, peer: SocketAddr) {
+    if let Ok(mut map) = state.sessions.lock()
+        && let Some(entry) = map.get_mut(session_id)
+    {
+        entry.peer = Some(peer);
+    }
+}
+
+/// Decide which address `send` may target.
+///
+/// `Ok(None)` means "use the connected peer" (`UdpSocket::send`). An explicit
+/// `dst` is honoured **only** when it is byte-for-byte the peer the session
+/// was connected to — otherwise a caller could bind one socket and then spray
+/// datagrams at arbitrary hosts, bypassing the `connect`-time destination
+/// filter entirely.
+fn resolve_dst(
+    peer: Option<SocketAddr>,
+    dst: Option<&str>,
+) -> Result<Option<SocketAddr>, (StatusCode, String)> {
+    let Some(raw) = dst else {
+        return Ok(None);
+    };
+    let addr: SocketAddr = raw
+        .parse()
+        .map_err(|e| (StatusCode::BAD_REQUEST, format!("invalid dst addr: {e}")))?;
+    match peer {
+        Some(connected) if connected == addr => Ok(Some(addr)),
+        Some(connected) => Err((
+            StatusCode::FORBIDDEN,
+            format!("dst {addr} does not match the connected peer {connected}"),
+        )),
+        None => Err((
+            StatusCode::FORBIDDEN,
+            "dst requires a prior /host/udp/connect to the same address".to_string(),
+        )),
+    }
+}
+
 // ── Tests ──────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -346,6 +432,41 @@ mod tests {
         let json = serde_json::to_string(&r).unwrap();
         assert!(json.contains("\"ok\":true"));
         assert!(json.contains("\"local_port\":12345"));
+    }
+
+    /// A `dst` override may only ever name the address the session was
+    /// connected to — otherwise `/host/udp/send` is an arbitrary-datagram
+    /// cannon for anyone who can reach the bridge.
+    #[test]
+    fn dst_override_is_pinned_to_the_connected_peer() {
+        let peer: SocketAddr = "203.0.113.7:9000".parse().unwrap();
+
+        assert_eq!(resolve_dst(Some(peer), None).unwrap(), None);
+        assert_eq!(
+            resolve_dst(Some(peer), Some("203.0.113.7:9000")).unwrap(),
+            Some(peer)
+        );
+
+        let (code, msg) = resolve_dst(Some(peer), Some("8.8.8.8:53")).unwrap_err();
+        assert_eq!(code, StatusCode::FORBIDDEN);
+        assert!(msg.contains("connected peer"), "{msg}");
+
+        let (code, msg) = resolve_dst(None, Some("8.8.8.8:53")).unwrap_err();
+        assert_eq!(code, StatusCode::FORBIDDEN);
+        assert!(msg.contains("connect"), "{msg}");
+    }
+
+    #[test]
+    fn dst_override_rejects_unparseable_addresses() {
+        let (code, _) = resolve_dst(None, Some("not-an-addr")).unwrap_err();
+        assert_eq!(code, StatusCode::BAD_REQUEST);
+    }
+
+    /// The production constructor is default-deny; the dev constructor is not.
+    #[test]
+    fn state_policy_defaults_to_deny() {
+        assert!(UdpState::default().policy.denies_private());
+        assert!(!UdpState::allow_private().policy.denies_private());
     }
 
     #[test]

@@ -1,0 +1,10 @@
+[toolchain]
+# Pinned stable toolchain for the whole workspace.
+#
+# Floor is set by the wasmtime 47 plugin runtime (`rust-version = 1.94.0`);
+# pinning an exact patch release keeps CI, agents and local dev on one
+# compiler so `[workspace.lints]` denies fire identically everywhere.
+channel = "1.97.1"
+components = ["rustfmt", "clippy"]
+targets = ["wasm32-unknown-unknown"]
+profile = "minimal"

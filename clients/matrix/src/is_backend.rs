@@ -11,6 +11,84 @@ use crate::api;
 use crate::http::DEFAULT_CLIENT_VERSION;
 use crate::MatrixClient;
 
+// ── Sync retry policy ─────────────────────────────────────────────────────────
+
+/// First delay after a failed `/sync`.
+#[cfg(not(target_arch = "wasm32"))]
+const INITIAL_SYNC_BACKOFF: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Ceiling for the exponential `/sync` retry backoff. A homeserver that is down
+/// must not be polled every 5 s indefinitely.
+#[cfg(not(target_arch = "wasm32"))]
+const MAX_SYNC_BACKOFF: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// Double the backoff, capped at [`MAX_SYNC_BACKOFF`].
+#[cfg(not(target_arch = "wasm32"))]
+fn next_sync_backoff(current: std::time::Duration) -> std::time::Duration {
+    current.saturating_mul(2).min(MAX_SYNC_BACKOFF)
+}
+
+/// Project one `/sync` response's joined-room updates into `ClientEvent`s.
+///
+/// Returns `false` as soon as a send fails, which means the consumer dropped
+/// the `ReceiverStream` (logout / account removed). The caller MUST terminate
+/// on `false`: ignoring send errors is what previously leaked one immortal sync
+/// task per `event_stream()` call.
+#[cfg(not(target_arch = "wasm32"))]
+async fn dispatch_sync_events(
+    tx: &tokio::sync::mpsc::Sender<ClientEvent>,
+    rooms: &Option<api::SyncRooms>,
+) -> bool {
+    let Some(joined) = rooms.as_ref().and_then(|r| r.join.as_ref()) else {
+        return true;
+    };
+    for (room_id, room) in joined {
+        // Timeline events → MessageReceived
+        if let Some(timeline) = &room.timeline {
+            for event in &timeline.events {
+                if let Some(message) = MatrixClient::room_event_to_message(event)
+                    && tx
+                        .send(ClientEvent::MessageReceived {
+                            channel_id: room_id.clone(),
+                            message,
+                        })
+                        .await
+                        .is_err()
+                {
+                    return false;
+                }
+            }
+        }
+        // Ephemeral events → typing
+        if let Some(ephemeral) = &room.ephemeral {
+            for ev in &ephemeral.events {
+                if ev.get("type").and_then(|t| t.as_str()) == Some("m.typing")
+                    && let Some(user_ids) = ev
+                        .get("content")
+                        .and_then(|c| c.get("user_ids"))
+                        .and_then(|u| u.as_array())
+                {
+                    for uid in user_ids {
+                        if let Some(user_id) = uid.as_str()
+                            && tx
+                                .send(ClientEvent::TypingStarted {
+                                    channel_id: room_id.clone(),
+                                    user_id: user_id.to_string(),
+                                    timestamp: chrono::Utc::now(),
+                                })
+                                .await
+                                .is_err()
+                        {
+                            return false;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    true
+}
+
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl IsBackend for MatrixClient {
@@ -192,8 +270,12 @@ impl IsBackend for MatrixClient {
         channel_id: &str,
         query: MessageQuery,
     ) -> ClientResult<Vec<Message>> {
+        // `query.before` is a MESSAGE ID (see `MessageQuery`), but Matrix
+        // paginates with opaque tokens. Resolve it through the continuation
+        // token recorded when that message's page was fetched; fall back to
+        // treating it as a raw token for callers that already hold one.
         let from = if let Some(before) = &query.before {
-            before.clone()
+            self.resolve_pagination_token(before)
         } else {
             let session = self.http.session().ok_or_else(|| {
                 ClientError::AuthFailed("not logged in".into())
@@ -201,7 +283,11 @@ impl IsBackend for MatrixClient {
             session.sync_next_batch.unwrap_or_default()
         };
 
-        let messages = if from.is_empty() {
+        let limit = u64::from(query.limit.unwrap_or(50));
+        // "b" (backwards) is the only direction whose `end` token continues
+        // OLDER history, so it is the only one worth caching.
+        let paging_backwards = from.is_empty() || query.after.is_none();
+        let response = if from.is_empty() {
             // No pagination token; do an initial sync to get one
             let sync = self.http.sync(None, Some(0)).await?;
             let prev_batch = sync
@@ -213,31 +299,31 @@ impl IsBackend for MatrixClient {
                 .and_then(|tl| tl.prev_batch.clone())
                 .unwrap_or(sync.next_batch);
 
-            let limit = u64::from(query.limit.unwrap_or(50));
-            let response = self
-                .http
+            self.http
                 .fetch_messages(channel_id, &prev_batch, "b", Some(limit))
-                .await?;
-
-            response
-                .chunk
-                .iter()
-                .filter_map(Self::room_event_to_message)
-                .collect::<Vec<_>>()
+                .await?
         } else {
-            let dir = if query.after.is_some() { "f" } else { "b" };
-            let limit = u64::from(query.limit.unwrap_or(50));
-            let response = self
-                .http
+            let dir = if paging_backwards { "b" } else { "f" };
+            self.http
                 .fetch_messages(channel_id, &from, dir, Some(limit))
-                .await?;
-
-            response
-                .chunk
-                .iter()
-                .filter_map(Self::room_event_to_message)
-                .collect::<Vec<_>>()
+                .await?
         };
+
+        let messages = response
+            .chunk
+            .iter()
+            .filter_map(Self::room_event_to_message)
+            .collect::<Vec<_>>();
+
+        // Remember where this page ends so the NEXT "load older" call has a
+        // real continuation token. `dir=b` returns newest-first, so the last
+        // decoded message is the oldest one the caller will render — and only
+        // in that direction does `end` point further back in history.
+        if paging_backwards
+            && let (Some(end), Some(oldest)) = (response.end.as_deref(), messages.last())
+        {
+            self.record_pagination_token(&oldest.id, end);
+        }
 
         Ok(self.hydrate_message_authors(messages).await)
     }
@@ -250,6 +336,7 @@ impl IsBackend for MatrixClient {
 
     async fn get_channel_members(&self, channel_id: &str) -> ClientResult<Vec<User>> {
         let members = self.http.fetch_room_members(channel_id).await?;
+        let homeserver_url = self.homeserver_url().to_string();
         let users: Vec<User> = members
             .chunk
             .iter()
@@ -269,11 +356,13 @@ impl IsBackend for MatrixClient {
                     .and_then(serde_json::Value::as_str)
                     .unwrap_or(user_id)
                     .to_string();
+                // `m.room.member` carries an `mxc://` URI, which no browser can
+                // load — map it to the media thumbnail endpoint.
                 let avatar_url = ev
                     .content
                     .get("avatar_url")
                     .and_then(serde_json::Value::as_str)
-                    .map(str::to_string);
+                    .map(|url| crate::mxc_to_http_thumbnail(url, &homeserver_url));
 
                 Some(User {
                     id: user_id.to_string(),
@@ -327,70 +416,68 @@ impl IsBackend for MatrixClient {
 
             tokio::spawn(async move {
                 let mut since = http.sync_next_batch();
+                let mut backoff = INITIAL_SYNC_BACKOFF;
+                let mut announced_connected = false;
                 loop {
                     match http.sync(since.as_deref(), Some(30000)).await {
                         Ok(response) => {
+                            backoff = INITIAL_SYNC_BACKOFF;
+                            // Announce liveness once per healthy connection —
+                            // `crates/core/src/event_stream.rs` only records
+                            // `ConnectionStatus::Connected` off this event, so
+                            // without it Matrix accounts stayed "Disconnected"
+                            // even while sync was healthy.
+                            if !announced_connected {
+                                announced_connected = true;
+                                if tx
+                                    .send(ClientEvent::ConnectionStateChanged {
+                                        backend: BackendType::from(crate::SLUG),
+                                        connected: true,
+                                    })
+                                    .await
+                                    .is_err()
+                                {
+                                    break;
+                                }
+                            }
+
                             // Update the batch token
                             since = Some(response.next_batch.clone());
                             http.set_sync_next_batch(response.next_batch);
 
-                            // Process joined rooms
-                            if let Some(rooms) = &response.rooms
-                                && let Some(joined) = &rooms.join {
-                                    for (room_id, room) in joined {
-                                        // Timeline events → MessageReceived
-                                        if let Some(timeline) = &room.timeline {
-                                            for event in &timeline.events {
-                                                if let Some(msg) =
-                                                    Self::room_event_to_message(event)
-                                                {
-                                                    drop(
-                                                        tx.send(ClientEvent::MessageReceived {
-                                                            channel_id: room_id.clone(),
-                                                            message: msg,
-                                                        })
-                                                        .await,
-                                                    );
-                                                }
-                                            }
-                                        }
-                                        // Ephemeral events → typing
-                                        if let Some(ephemeral) = &room.ephemeral {
-                                            for ev in &ephemeral.events {
-                                                if ev
-                                                    .get("type")
-                                                    .and_then(|t| t.as_str())
-                                                    == Some("m.typing")
-                                                    && let Some(user_ids) = ev
-                                                        .get("content")
-                                                        .and_then(|c| c.get("user_ids"))
-                                                        .and_then(|u| u.as_array())
-                                                {
-                                                    for uid in user_ids {
-                                                        if let Some(user_id) = uid.as_str() {
-                                                            drop(
-                                                                tx.send(
-                                                                    ClientEvent::TypingStarted {
-                                                                        channel_id: room_id
-                                                                            .clone(),
-                                                                        user_id: user_id
-                                                                            .to_string(),
-                                                                        timestamp: chrono::Utc::now(),
-                                                                    },
-                                                                )
-                                                                .await,
-                                                            );
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
+                            // Fan the sync response out into ClientEvents.
+                            // Extracted so `event_stream` stays a connection
+                            // loop rather than also being an event projector.
+                            if !dispatch_sync_events(&tx, &response.rooms).await {
+                                return; // consumer dropped the stream
                             }
                         }
                         Err(e) => {
+                            let fatal = matches!(e, ClientError::AuthFailed(_));
                             tracing::warn!("Matrix sync error: {e:?}");
-                            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                            announced_connected = false;
+                            if tx
+                                .send(ClientEvent::ConnectionStateChanged {
+                                    backend: BackendType::from(crate::SLUG),
+                                    connected: false,
+                                })
+                                .await
+                                .is_err()
+                            {
+                                return;
+                            }
+                            if fatal {
+                                // A revoked/expired access token never recovers
+                                // by retrying. Terminate instead of logging the
+                                // same 401 every 5 seconds forever behind a
+                                // normal-looking, permanently stale UI.
+                                tracing::warn!(
+                                    "Matrix sync stopped: access token rejected; re-authentication required"
+                                );
+                                return;
+                            }
+                            tokio::time::sleep(backoff).await;
+                            backoff = next_sync_backoff(backoff);
                         }
                     }
                 }
@@ -467,5 +554,21 @@ impl IsBackend for MatrixClient {
         }
         self.http.set_user_agent(new_ua);
         Ok(())
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::{next_sync_backoff, INITIAL_SYNC_BACKOFF, MAX_SYNC_BACKOFF};
+
+    #[test]
+    fn sync_backoff_grows_and_is_capped() {
+        let mut d = INITIAL_SYNC_BACKOFF;
+        assert_eq!(next_sync_backoff(d), INITIAL_SYNC_BACKOFF * 2_u32);
+        for _ in 0..32_u32 {
+            d = next_sync_backoff(d);
+        }
+        assert_eq!(d, MAX_SYNC_BACKOFF, "backoff must saturate, not overflow");
     }
 }

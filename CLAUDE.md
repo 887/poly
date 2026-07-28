@@ -246,22 +246,42 @@ Data dir resolution (via `poly_host::resolve_data_dir()`):
 Override with `POLY_DATA_DIR=/some/path`. All shells open the same
 file, so accounts added in one shell show up in the others.
 
-Routes: `GET /host/status`, `POST /host/kv/{get,set,delete,clear}`,
-`POST /host/exec`, `POST /host/http`, `POST /host` (legacy tagged-union
-dispatch, kept one release cycle).
+Routes (registered in `apps/poly-host/src/lib.rs`):
+
+| Group | Routes |
+|-------|--------|
+| Status / caps | `GET /host/status`, `GET /host/caps` |
+| KV (shared) | `POST /host/kv/{get,set,delete,clear}` |
+| KV (per-plugin) | `POST /host/plugin-kv/{get,set,delete}` |
+| Exec / HTTP | `POST /host/exec`, `POST /host/http` |
+| Plugins | `POST /host/plugins/{add,remove,set-enabled}`, `GET /host/plugins/list` |
+| Accounts | `POST /host/accounts/{add,remove}`, `GET /host/accounts/list` |
+| Shell | `POST /host/open-external` |
+| Legacy | `POST /host` (tagged-union dispatch, kept one release cycle) |
+| Video (feature `video`) | `POST /host/video/{encode_h264,decode_h264,close_session}` |
+
+Non-`/host` routes on the same router: `GET /sandbox/{id}` (OAuth redirect
+shim) and `GET /poly-service-worker.js`.
+
+**Per-plugin storage goes through `/host/plugin-kv/*`, not `/host/kv/*`** —
+the latter is the shared `poly_kv` namespace.
 
 ### Running `apps/web` with persistent storage
 
 ```bash
 cd apps/web
-dx serve --platform web --fullstack \
+dx serve --platform web --port 3000 --fullstack \
   @client --no-default-features --features "dev-plugins,web" \
   @server --platform server --no-default-features --features "dev-plugins,server"
 ```
 
+`--port` is REQUIRED — no `Dioxus.toml` in this repo pins a serve port, so
+without it dx picks its own default and the shells/MCPs (which hardcode
+3000/3001/3002, see `mcp/*/src/main.rs`) connect to nothing.
+
 The `@server --platform server` flag is REQUIRED — without it dx tries
 to build the server half for `wasm32-unknown-unknown` and fails. See
-`docs/plans/phase-2.21-host-bridge-unification-plan.md`.
+`docs/archive/phases/phase-2.21-host-bridge-unification-plan.md`.
 
 ## WASM Hot-Reload Architecture
 
@@ -406,6 +426,7 @@ animal mapping rationale (Phase A).
 | test-hackernews | 9105 | N/A — HN has no user avatars; UI falls back to initial| —                                                    |
 | test-forgejo    | 9106 | `/avatars/{name}` (bare animal name, no extension)    | `/avatars/otter`                                     |
 | test-github     | 9107 | `/avatars/{login}.png`                                | `/avatars/penguin.png`                               |
+| test-reddit     | 9108 | `/avatars/{animal}` (bare animal name, no extension)  | `/avatars/cat`                                       |
 
 All backends are started by `poly-test-runner` (see `servers/test-runner/`). For
 detailed per-backend curl recipes, seed users, and reset endpoints, see
@@ -560,7 +581,7 @@ queued before the wedge are recoverable on the next session.
 
 5. **Beware: the freeze persists across page reloads** because it's a tight CPU loop the Chrome scheduler can't preempt. Hard-kill Chrome (`mcp__poly-web__hard_kill`) and `launch_app` between attempts; reload-from-overlay rarely clears the wedge.
 
-6. **The boot-hang watchdog** (`crates/core/src/wasm_crash_handler.rs`,
+6. **The boot-hang watchdog** (`crates/core/src/wasm_crash_handler/watchdog.rs`,
    `BOOT_HANG_TIMEOUT_MS`) shows an "App not responding" overlay if the
    startup overlay doesn't dismiss in time. False positives are common
    when boot involves many restored accounts/servers; if the friends
@@ -575,13 +596,35 @@ means a missed migration site, an escape-hatch `#[allow]`, or a genuinely new
 class worth documenting. (Commit hashes / phase history live in git + the
 referenced plan docs; only the actionable pattern is kept here.)
 
+**How the gate runs (there are no lint shell scripts any more).** Every
+hang-class and persona scanner is a Rust module in
+`crates/lint-gate-rules/src/forbid_*.rs`, invoked from
+`crates/lint-gate/build.rs`. The single entry point — locally and in CI
+(`.github/workflows/lint-test.yml`) — is:
+
+```bash
+cargo check -p poly-lint-gate
+```
+
+Enforcement is **uniform across all scanners**: violations that already
+existed when a scanner landed are grandfathered in
+`crates/lint-gate/baseline.json`; any **new** violation fails the build.
+There is no per-rule "continue-on-error" vs "hard-fail" split. The baseline
+can be refreshed with `cargo check --features regen-baseline -p poly-lint-gate`,
+but **regen is not the fix for a new violation** — it silently grandfathers a
+genuine hang-class bug. Fix the code, or add a documented inline
+`// poly-lint: allow <rule> — <reason>` / allowlist entry; regen only with
+explicit human sign-off. The `tools/scripts/*-allowlist.txt` files still
+exist and are read by the Rust scanners.
+
 1. **`Signal::write()` chains in a click handler / loader.** Each `.write()`
    guard-drop schedules a Dioxus re-render; 5–7 in a row starve the WASM
    single-thread scheduler.
    **Countermeasure:** `BatchedSignal<T>` newtype — use `.batch(|v| …)` /
    `.pending_update()` instead of `.write()`. Lint
-   `tools/scripts/forbid-signal-write.sh` bans raw `Signal::write()` in
-   `crates/core/src/ui/`; allowlist `signal-write-allowlist.txt`. Plan:
+   `crates/lint-gate-rules/src/forbid_signal_write.rs` bans raw
+   `Signal::write()` in
+   `crates/core/src/ui/`; allowlist `tools/scripts/signal-write-allowlist.txt`. Plan:
    `docs/plans/plan-batched-signal.md`.
 
 2. **Live `Signal::read()` guard across a `.write()` of the same signal.**
@@ -589,14 +632,15 @@ referenced plan docs; only the actionable pattern is kept here.)
    guard drops before any write.
    **Countermeasure:** `BatchedSignal::batch(|v| …)` (mutation through a
    closure) + `BatchedSignal::with(|v| …)` for multi-statement reads. Lint
-   `forbid-long-read-guard.sh`; inline allow: `// poly-lint: allow
+   `crates/lint-gate-rules/src/forbid_long_read_guard.rs`; inline allow: `// poly-lint: allow
    long-read-guard — <reason>`. Patterns: `docs/dev/reactive-state.md`.
 
 3. **`.write()` inside a `use_effect` that also subscribes to that signal**
    (directly or via a spawned task) → infinite re-render loop.
    **Countermeasure:** `use_spawn_once<K>(key, async_fn)` hook bakes in the
-   `spawned_for` guard. Lint `forbid-use-effect-spawn-cycle.sh`; allowlist
-   `use-effect-spawn-cycle-allowlist.txt`. Plan: `plan-use-spawn-once.md`.
+   `spawned_for` guard. Lint
+   `crates/lint-gate-rules/src/forbid_use_effect_spawn_cycle.rs`; allowlist
+   `tools/scripts/use-effect-spawn-cycle-allowlist.txt`. Plan: `plan-use-spawn-once.md`.
 
 4. **`tokio::sync::RwLock::read().await` on a backend with a perpetual
    writer.** WASM scheduler starves readers. **WARNING:** the naive
@@ -604,7 +648,8 @@ referenced plan docs; only the actionable pattern is kept here.)
    (`Instant::now()` unimplemented on `wasm32-unknown-unknown`).
    **Countermeasure:** `BackendHandleExt::read_with_timeout(dur)` — cfg-gated
    (tokio timeout native / `gloo_timers` raced via `futures::select` on WASM).
-   Lint `forbid-raw-backend-read.sh` bans raw `backend.read().await` in
+   Lint `crates/lint-gate-rules/src/forbid_raw_backend_read.rs` bans raw
+   `backend.read().await` in
    `crates/core/src/ui/`; inline allow: `// poly-lint: allow raw
    backend.read().await — <reason>`. Plan: `plan-backend-read-timeout.md`.
 
@@ -621,8 +666,8 @@ referenced plan docs; only the actionable pattern is kept here.)
    never re-fires. Symptom: "second navigation has no effect" / stale UI.
    **Countermeasure:** `use_reactive_effect<Deps>(deps, body)` mirrors `deps`
    into a Signal each render so the body re-fires via PartialEq dedup
-   (`use_spawn_once` uses the same pattern). Lint (HARD-FAIL)
-   `forbid-stale-effect-capture.sh`; inline allow: `// poly-lint: allow
+   (`use_spawn_once` uses the same pattern). Lint
+   `crates/lint-gate-rules/src/forbid_stale_effect_capture.rs`; inline allow: `// poly-lint: allow
    stale-effect-capture — <reason>`. Plan: `plan-use-reactive-effect.md`.
 
 7. **Render-time `signal.read()` for a value used only as a hook key /
@@ -630,8 +675,9 @@ referenced plan docs; only the actionable pattern is kept here.)
    component; any later write to that signal re-renders → re-reads → loop.
    **Countermeasure:** use `.peek()` whenever the value isn't needed
    reactively (hook keys, one-shot snapshots, props the child re-subscribes
-   to). Lint `forbid-render-time-read.sh` (continue-on-error; ~988 legit
-   rsx!/cond-render sites allowlisted); inline allow: `// poly-lint: allow
+   to). Lint `crates/lint-gate-rules/src/forbid_render_time_read.rs` (~988 legit
+   rsx!/cond-render sites allowlisted in
+   `tools/scripts/render-time-read-allowlist.txt`); inline allow: `// poly-lint: allow
    render-time-read — <reason>`. (No type-system fix: `peek`/`read` return
    identical guards.) Plan: `plan-peek-vs-read.md`.
 
@@ -642,7 +688,8 @@ referenced plan docs; only the actionable pattern is kept here.)
    Distinct from #2 (borrow panic) and #6 (effect NOT re-firing).
    **Countermeasure:** `BatchedSignal::set_if_changed(next)` /
    `batch_if_changed(|cur| -> next)` skip the write when unchanged (needs
-   `T: PartialEq`). Lint `forbid-effect-self-write.sh`; inline allow:
+   `T: PartialEq`). Lint
+   `crates/lint-gate-rules/src/forbid_effect_self_write.rs`; inline allow:
    `// poly-lint: allow effect-self-write — <reason>`.
 
 **Last-resort diagnostic path — the out-of-band trace sink.** When a hang
@@ -665,24 +712,28 @@ or ask the user to paste a stack trace from the Sources panel.
 
 ## Persona-subsystem footguns
 
-Persona subsystem (`mcp/chat-mcp/src/persona/`, `mcp/chat-mcp/src/tools.rs`):
+Persona subsystem (`mcp/chat-mcp/src/persona/`, `mcp/chat-mcp/src/tools/`):
 **privacy and contract bugs** (not concurrency). Same countermeasure shape —
-allowlisted regex lints, all hard-fail CI (`continue-on-error: false`).
+allowlisted scanners in `crates/lint-gate-rules/`, run by
+`cargo check -p poly-lint-gate`, baseline-grandfathered and hard-fail on new
+violations (see "How the gate runs" above).
 Plan: `docs/plans/plan-persona-quality-gates.md`.
 
 - **P1 — Cross-persona memory leak.** DML (`SELECT`/`DELETE`/`UPDATE`) against
   a persona-scoped table (`persona_facts`, `persona_audit`, `persona_sources`,
   `persona_tool_whitelist`, `persona_outbound_allowlist`) WITHOUT a
   `WHERE persona_slug = ?` binding hits the wrong persona's rows — silent, no
-  error. Lint `forbid-cross-persona-memory.sh` (requires a `persona_slug`
-  binding within 10 lines); allowlist `cross-persona-memory-allowlist.txt`;
+  error. Lint `crates/lint-gate-rules/src/forbid_cross_persona_memory.rs`
+  (requires a `persona_slug`
+  binding within 10 lines); allowlist `tools/scripts/cross-persona-memory-allowlist.txt`;
   inline: `// poly-lint: allow cross-persona-memory — <reason>`.
 
 - **P2 — Unaudited persona handler.** A `fn handle_meta_persona_*` that mutates
   persona state but doesn't call `audit()` / `record_persona_audit()` on the
   success path → the `persona_audit` forensic trail silently loses an event.
-  Lint `forbid-unaudited-persona-tool.sh`; read-only handlers (`_list`,
-  `_recent_actions`) in `unaudited-persona-tool-allowlist.txt`; inline:
+  Lint `crates/lint-gate-rules/src/forbid_unaudited_persona_tool.rs`;
+  read-only handlers (`_list`,
+  `_recent_actions`) in `tools/scripts/unaudited-persona-tool-allowlist.txt`; inline:
   `// poly-lint: allow unaudited-persona-tool — <reason>`.
 
 - **P4 — Raw backend read in persona builder.** `BackendPoolProvider`
@@ -690,6 +741,6 @@ Plan: `docs/plans/plan-persona-quality-gates.md`.
   `tokio::time::timeout` blocks the native async runtime thread indefinitely
   (no WASM scheduler here, but still hangs the MCP call). Use
   `tokio::time::timeout(BACKEND_TIMEOUT, …)` (5s). Lint
-  `forbid-raw-backend-read.sh` scans `persona/` too; allowlist
-  `raw-backend-read-allowlist.txt`; inline: `// poly-lint: allow raw
+  `crates/lint-gate-rules/src/forbid_raw_backend_read.rs` scans `persona/` too; allowlist
+  `tools/scripts/raw-backend-read-allowlist.txt`; inline: `// poly-lint: allow raw
   backend.read().await — <reason>`.

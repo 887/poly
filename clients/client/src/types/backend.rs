@@ -33,7 +33,7 @@ impl BackendId {
     ///
     /// Per D12 of `docs/plans/plan-client-ui-surface.md`, the authoritative
     /// human-readable backend name is the plugin's own `backend-name` WIT
-    /// export (`ClientBackend::backend_name()` on the trait). UI callers
+    /// export (`IsBackend::backend_name()` on the trait). UI callers
     /// should prefer the plugin-provided string. This method stays as a
     /// fallback for call sites that only have a `BackendType` (slug) in
     /// hand, and simply returns the slug itself — never a hardcoded brand
@@ -64,11 +64,22 @@ impl BackendId {
 
 /// Static capability lookup for a backend slug.
 ///
-/// **Internal use only** — used to seed `ClientManager::backend_capabilities`
-/// at startup and as the compile-time fallback when no live backend instance
-/// is available. UI code MUST use `ClientManager::capabilities_for_slug`
-/// which consults the runtime registry first (populated from each backend's
-/// own `backend_capabilities()` trait impl at connect/restore time).
+/// Compile-time fallback for consumers that have a slug but no live backend
+/// instance. UI code MUST use `ClientManager::capabilities_for_slug`, which
+/// consults the runtime registry first (populated from each backend's own
+/// `backend_capabilities()` trait impl at connect/restore time).
+///
+/// # Known drift hazard — this table is duplicated
+///
+/// This function does **not** seed `ClientManager::backend_capabilities`
+/// (poly-core declares its own literal table in `ClientManager::new()` and
+/// never calls this function). The two tables are maintained by hand and
+/// nothing detects divergence: `chat-mcp` reads this copy, the UI reads
+/// poly-core's. Adding or changing a slug means editing **both**.
+///
+/// Do not restate the "seeds ClientManager" claim that used to live here —
+/// it was false, and it hid the fact that a slug can advertise a capability
+/// in one process and not the other.
 ///
 /// This function stays `pub` for processes that genuinely cannot reach the
 /// runtime registry (notably the `chat-mcp` MCP server, which runs out of
@@ -158,6 +169,25 @@ pub fn capabilities_for_slug_static(slug: &str) -> BackendCapabilities {
 /// Returns `true` for backends that allow creating a server/workspace in the
 /// host UI (Discord, Demo, Poly). All other backends show the unsupported
 /// placeholder instead of the create-server form.
+///
+/// # OCP hazard — this is a slug ladder, not a capability
+///
+/// Every sibling affordance in this substrate is a [`BackendCapabilities`]
+/// field (`has_channel_mgmt`, `community_search`, `video_capture`) precisely
+/// so a new backend can opt in without editing poly-client. Server creation
+/// has no such field, so a backend that implements
+/// [`crate::WritableServerAdminBackend::create_server`] still gets the
+/// unsupported placeholder until its slug is added to the `matches!` below.
+///
+/// Worse, poly-core reuses this predicate as a proxy for an unrelated
+/// capability — gating the `ServerInvites` notification filter chip, which is
+/// really [`crate::ServerAdminBackend::respond_to_server_invite`].
+///
+/// The fix is two `#[serde(default)] bool` fields on [`BackendCapabilities`]
+/// (`has_server_create`, `has_server_invites`) plus repointing both call
+/// sites; it is blocked on `crates/plugin-host/src/bridge.rs`, which builds
+/// `BackendCapabilities` with an exhaustive struct literal and must be
+/// updated in the same change.
 #[must_use]
 pub fn slug_supports_creating_server(slug: &str) -> bool {
     matches!(slug, "discord" | "demo" | "poly")
@@ -412,9 +442,20 @@ pub struct BackendCapabilities {
     /// Whether the backend supports a community-level recent-comments feed
     /// (Phase D — Posts | Comments toggle in the forum view).
     ///
-    /// When `true`, `ForumView` renders the Posts | Comments pill; clicking
-    /// "Comments" calls `ForumBackend::get_recent_comments` instead of the
-    /// normal post feed. Currently only Lemmy sets this to `true`.
+    /// When `true`, `ForumView` renders the Posts | Comments pill.
+    ///
+    /// # Actual contract (do not assume `get_recent_comments` is called)
+    ///
+    /// Clicking "Comments" does **not** dispatch to
+    /// [`crate::ForumBackend::get_recent_comments`] — that method currently
+    /// has no caller anywhere in the repo. The generic forum view instead
+    /// rewrites the channel id `lemmy-feed-{id}` → `lemmy-comments-{id}` and
+    /// re-runs the ordinary `get_view_rows` path.
+    ///
+    /// So a backend may only set this flag if its feed channel ids use the
+    /// `lemmy-feed-` prefix **and** it serves a `lemmy-comments-` channel.
+    /// Any other backend that sets it renders a pill that silently re-renders
+    /// the identical post list — no comments, no error.
     ///
     /// `#[serde(default)]` keeps older WASM plugin capability blobs valid —
     /// they get `false` on deserialisation.

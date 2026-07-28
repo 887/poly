@@ -1,6 +1,12 @@
 # Plan: Retire cargo-cranky → `[workspace.lints]`
 
-## Status: ✅ DONE (2026-06-08) — all phases shipped & verified
+## Status: ✅ SHIPPED (2026-06-08) — Phases A–C landed; **Phase D (verify) still outstanding**
+
+> The previous `✅ DONE — all phases shipped & verified` marker was wrong: both
+> Phase D verification gates (D.1, D.2) were never ticked, and the Phase C sweep
+> did in fact miss `.agent.md`, which kept three `cargo cranky` invocations until
+> the 2026-07-28 docs-drift pass (C.4 below). Do not re-mark this plan DONE until
+> D.1 and D.2 are actually run and ticked.
 
 cargo-cranky is **archived upstream** (no further maintenance). It was only ever a
 config-file front-end for `cargo clippy`; the same policy is now expressed natively
@@ -60,8 +66,13 @@ record what was actually run at the time.
 - [x] **C.3** Fix file-reference stragglers: `clients/server-client/agents.md` ("has its
   own cranky.toml"), `servers/backup-server/agents.md` (file-tree line), and the
   `crates/core/src/lib.rs` "make cranky quiet" comment.
+- [x] **C.4** Sweep miss caught 2026-07-28: the root `.agent.md` (a live
+  agent-instruction file, `applyTo: **/*.rs`) still mandated `cargo cranky` in three
+  places (Section 5, the Section 14 checklist, and the Example Workflow step 6).
+  Replaced with `cargo clippy --workspace -- -D warnings` + `cargo check -p poly-lint-gate`.
+  C.1's "all live agents.md" scope did not match the dotfile name `.agent.md`.
 
-## Phase D — Verify (the QA gate)
+## Phase D — Verify (the QA gate) — **NOT YET RUN**
 
 - [ ] **D.1** `cargo clippy --workspace --all-targets -- -D warnings` is clean. This is
   the load-bearing check: the folded-in complexity/hygiene denies are now enforced in

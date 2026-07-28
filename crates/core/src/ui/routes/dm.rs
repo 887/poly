@@ -3,7 +3,7 @@
 //! All account-scoped DM routes + the DMs layout wrapper + the shared
 //! `restore_dm_chat` helper (called by DM viewers and the pending-call adapters).
 
-use crate::client_manager::ClientManager;
+use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::i18n::t;
 use crate::state::{
     AccountSessions, BatchedSignal, ChatLists, ChatViewState, NavState, UiOverlays, VoiceState,
@@ -120,10 +120,10 @@ pub(super) fn restore_dm_chat(
             return;
         };
 
-        // tokio::time::timeout uses Instant::now() which panics on
-        // wasm32-unknown-unknown ("time not implemented on this platform").
-        // The executor is single-threaded on web so plain .await is fine.
-        let guard = backend_arc.read().await;
+        // Hang class #4: a single-threaded executor makes an unbounded read
+        // MORE dangerous, not safe — a writer wedges this task forever.
+        // read_with_timeout is cfg-gated (gloo_timers race on wasm32).
+        let Ok(guard) = backend_arc.read_with_timeout(std::time::Duration::from_secs(5)).await else { chat_view_state.batch(|cv| cv.loading = false); return; };
         let messages = guard
             .get_messages(&dm_id, initial_message_query(unread_count))
             .await

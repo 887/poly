@@ -1,6 +1,7 @@
 //! `CodeRepoBackend` capability sub-trait (Phase H.2.a).
 //!
-//! Carved out of [`ClientBackend`] in Phase H.2.a.  Implemented by backends
+//! Carved out of the former `ClientBackend` god-trait (replaced by
+//! [`IsBackend`]) in Phase H.2.a.  Implemented by backends
 //! that expose code-repository channels (`ChannelType::Code`): currently
 //! `poly-github` and `poly-forgejo`.
 //!
@@ -16,7 +17,7 @@
 //! WIT interface: `poly:messenger/messenger-client` — `list-files` and
 //! `read-file` functions.
 //!
-//! [`ClientBackend`]: crate::ClientBackend
+//! [`IsBackend`]: crate::IsBackend
 
 use async_trait::async_trait;
 

@@ -97,7 +97,7 @@ pub use routes::Route;
 pub(crate) use runtime_js::load_js_asset;
 pub use setup_wizard::SetupWizard;
 
-use crate::client_manager::{ClientManager, SignupEntry};
+use crate::client_manager::{BackendHandleExt, ClientManager, SignupEntry};
 use crate::state::{AccountSessions, BatchedSignal, ChatLists, ChatViewState, DragState, LayoutMode, NavState, SettingsSection, UiLayout, UiOverlays, UserPrefs, View, VoiceState};
 use dioxus::prelude::*;
 use poly_ui_macros::{context_menu, ui_action};
@@ -1097,9 +1097,9 @@ async fn restore_poly_accounts(
 
                 // Build server→account map.
                 let mut server_map = HashMap::new();
-                let servers = {
-                    let guard = backend_handle.read().await;
-                    guard.get_servers().await.unwrap_or_default()
+                let servers = match backend_handle.read_with_timeout(std::time::Duration::from_secs(5)).await {
+                    Ok(guard) => guard.get_servers().await.unwrap_or_default(),
+                    Err(_timeout) => Vec::new(),
                 };
                 for srv in &servers {
                     server_map.insert(srv.id.clone(), account_id.clone());
@@ -1164,9 +1164,9 @@ async fn restore_poly_accounts(
                     crate::ui::favorites_sidebar::persist_favorites(all_fav_ids).await;
                 }
 
-                // Fetch DMs and friends in background.
-                {
-                    let guard = backend_handle.read().await;
+                // Fetch DMs+friends. Bounded read (#4): handle is published above.
+                'hydrate_dms: {
+                    let Ok(guard) = backend_handle.read_with_timeout(std::time::Duration::from_secs(5)).await else { break 'hydrate_dms; };
                     let dms = if let Some(dg) = guard.as_dms_and_groups() {
                         dg.get_dm_channels().await.ok()
                     } else {

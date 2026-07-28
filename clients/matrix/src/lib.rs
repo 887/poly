@@ -80,7 +80,7 @@ use http::{MatrixHttpClient, MatrixSessionState};
 #[cfg(feature = "native")]
 use poly_client::{SettingsStorageCell, Session, User, PresenceStatus, BackendType, ClientResult, ClientError, Message, MessageContent, SidebarItem, IconSource, SidebarRouteKind, MenuSlot, MenuItemVariant, MenuItem};
 #[cfg(feature = "native")]
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 /// Return Fluent translations for the given locale.
 #[must_use]
@@ -126,7 +126,24 @@ pub struct MatrixClient {
     pub(crate) marked_read: std::sync::RwLock<HashSet<String>>,
     /// Stored version override (None = use http::DEFAULT_CLIENT_VERSION).
     pub(crate) version_override: std::sync::Mutex<Option<String>>,
+    /// Continuation tokens for `GET /rooms/{id}/messages`, keyed by the event ID
+    /// of the OLDEST message in the page they terminate.
+    ///
+    /// `MessageQuery::before` is documented as a *message ID*, but Matrix
+    /// paginates with opaque `end` tokens, so the two must be bridged
+    /// somewhere. Recording `oldest_event_id -> end` after each page lets the
+    /// next "load older" call resolve a real token; without it the client had no
+    /// way to produce one and history was permanently capped at one page.
+    pub(crate) pagination_tokens: std::sync::RwLock<HashMap<String, String>>,
 }
+
+/// Upper bound on [`MatrixClient::pagination_tokens`] entries.
+///
+/// One entry per page loaded per room; a long session across many rooms would
+/// otherwise grow it without limit. On overflow the map is cleared — the cost is
+/// one extra initial-sync fetch, not incorrect output.
+#[cfg(feature = "native")]
+pub(crate) const MAX_PAGINATION_TOKENS: usize = 1024;
 
 #[cfg(feature = "native")]
 impl MatrixClient {
@@ -140,6 +157,7 @@ impl MatrixClient {
             ignored_users: std::sync::RwLock::new(HashSet::new()),
             marked_read: std::sync::RwLock::new(HashSet::new()),
             version_override: std::sync::Mutex::new(None),
+            pagination_tokens: std::sync::RwLock::new(HashMap::new()),
         }
     }
 
@@ -153,6 +171,7 @@ impl MatrixClient {
             ignored_users: std::sync::RwLock::new(HashSet::new()),
             marked_read: std::sync::RwLock::new(HashSet::new()),
             version_override: std::sync::Mutex::new(None),
+            pagination_tokens: std::sync::RwLock::new(HashMap::new()),
         })
     }
 }
@@ -176,6 +195,30 @@ impl MatrixClient {
     #[must_use]
     pub fn instance_id(&self) -> String {
         self.http.instance_id()
+    }
+
+    /// Record the `end` token of a `/messages` page against the event ID of the
+    /// oldest message it contained, so a later `MessageQuery::before = <that id>`
+    /// can be turned back into a real Matrix pagination token.
+    pub(crate) fn record_pagination_token(&self, oldest_event_id: &str, end_token: &str) {
+        if let Ok(mut map) = self.pagination_tokens.write() {
+            if map.len() >= MAX_PAGINATION_TOKENS {
+                map.clear();
+            }
+            map.insert(oldest_event_id.to_string(), end_token.to_string());
+        }
+    }
+
+    /// Resolve a `MessageQuery::before` value to a Matrix pagination token.
+    ///
+    /// Falls back to the input verbatim on a cache miss — some callers already
+    /// hold a sync/`prev_batch` token rather than a message ID.
+    pub(crate) fn resolve_pagination_token(&self, before: &str) -> String {
+        self.pagination_tokens
+            .read()
+            .ok()
+            .and_then(|map| map.get(before).cloned())
+            .unwrap_or_else(|| before.to_string())
     }
 
     pub(crate) fn build_session(
@@ -672,6 +715,89 @@ mod tests {
     fn translations_return_nonempty_for_en() {
         let t = plugin_translations("en");
         assert!(t.contains("plugin-matrix-title"));
+    }
+
+    #[test]
+    fn power_levels_default_matches_serde_defaults() {
+        // `#[derive(Default)]` ignores `#[serde(default = "...")]`, so a derived
+        // Default produced all-zero thresholds and `fetch_power_levels`'s 404
+        // path handed every member full moderator rights.
+        let hand = api::PowerLevelsContent::default();
+        let parsed: api::PowerLevelsContent = serde_json::from_str("{}").unwrap();
+        assert_eq!(hand.ban, 50);
+        assert_eq!(hand.kick, 50);
+        assert_eq!(hand.redact, 50);
+        assert_eq!(hand.state_default, 50);
+        assert_eq!(hand.users_default, 0);
+        assert!(hand.users.is_empty());
+        assert_eq!(hand.ban, parsed.ban);
+        assert_eq!(hand.kick, parsed.kick);
+        assert_eq!(hand.redact, parsed.redact);
+        assert_eq!(hand.state_default, parsed.state_default);
+        assert_eq!(hand.users_default, parsed.users_default);
+    }
+
+    #[test]
+    fn power_levels_default_denies_an_ordinary_member() {
+        // The concrete symptom of the old all-zero default: `0 >= 0` was true
+        // for every threshold, so the moderation panel rendered kick/ban/redact
+        // controls to a plain member.
+        let pl = api::PowerLevelsContent::default();
+        let level = pl.user_level("@nobody:example.org");
+        assert_eq!(level, 0);
+        assert!(level < pl.kick);
+        assert!(level < pl.ban);
+        assert!(level < pl.redact);
+        assert!(level < pl.state_default);
+    }
+
+    #[test]
+    fn messages_response_keeps_the_end_pagination_token() {
+        let json = r#"{"chunk":[],"start":"s1","end":"t42-999"}"#;
+        let resp: api::MessagesResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.end.as_deref(), Some("t42-999"));
+    }
+
+    #[test]
+    fn room_event_decodes_room_id_from_search_results() {
+        let json = r#"{"type":"m.room.message","event_id":"$a","room_id":"!r:s"}"#;
+        let ev: api::RoomEvent = serde_json::from_str(json).unwrap();
+        assert_eq!(ev.room_id.as_deref(), Some("!r:s"));
+        // Absent on /messages and /sync — must stay optional.
+        let ev2: api::RoomEvent =
+            serde_json::from_str(r#"{"type":"m.room.message"}"#).unwrap();
+        assert!(ev2.room_id.is_none());
+    }
+
+    #[test]
+    fn pagination_token_round_trips_by_oldest_event_id() {
+        let client = MatrixClient::new();
+        // Cache miss: the input is passed through verbatim.
+        assert_eq!(client.resolve_pagination_token("$oldest"), "$oldest");
+        client.record_pagination_token("$oldest", "t99-1");
+        assert_eq!(client.resolve_pagination_token("$oldest"), "t99-1");
+    }
+
+    #[test]
+    fn pagination_token_cache_is_bounded() {
+        let client = MatrixClient::new();
+        for i in 0..(MAX_PAGINATION_TOKENS + 10) {
+            client.record_pagination_token(&format!("$e{i}"), &format!("t{i}"));
+        }
+        let len = client.pagination_tokens.read().unwrap().len();
+        assert!(len <= MAX_PAGINATION_TOKENS, "cache grew past its cap: {len}");
+    }
+
+    #[test]
+    fn mxc_uris_are_mapped_to_a_browser_loadable_url() {
+        let out = mxc_to_http_thumbnail("mxc://matrix.org/AbCdEf", "https://matrix.org/");
+        assert!(out.starts_with("https://matrix.org/_matrix/media/v3/thumbnail/"));
+        assert!(!out.starts_with("mxc://"));
+        // Non-mxc input (test fixtures) passes through untouched.
+        assert_eq!(
+            mxc_to_http_thumbnail("https://cdn/a.png", "https://matrix.org"),
+            "https://cdn/a.png"
+        );
     }
 
     // ─── F4: build_sidebar_items unit tests ───────────────────────────────────

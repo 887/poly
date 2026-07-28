@@ -132,7 +132,16 @@ impl poly_client::VoiceTransportBackend for StoatClient {
                 .ok_or_else(|| ClientError::Internal("join_call: missing url".into()))?
                 .to_string();
 
-            tracing::info!(channel_id, token = %token, ws_url = %ws_url, "Stoat join_call OK");
+            // SECURITY: never log `token` — it is a live voice credential that
+            // lets any reader join this user's call. `ws_url` can carry the same
+            // token in its query string, so strip the query before logging.
+            let ws_host = ws_url.split('?').next().unwrap_or("");
+            tracing::info!(
+                channel_id,
+                token_len = token.len(),
+                ws_url = %ws_host,
+                "Stoat join_call OK"
+            );
             return Ok(());
         }
 
@@ -350,8 +359,10 @@ impl poly_client::VoiceTransportBackend for StoatClient {
             );
             let body = serde_json::json!({ "muted": self_mute, "deafened": self_deaf });
 
+            // Stoat authenticates with `x-session-token`, not `Authorization:
+            // Bearer` — see `crate::voice_common::SESSION_TOKEN_HEADER`.
             let resp = gloo_net::http::Request::patch(&url)
-                .header("Authorization", &format!("Bearer {auth_token}"))
+                .header(crate::voice_common::SESSION_TOKEN_HEADER, &auth_token)
                 .json(&body)
                 .map_err(|e| ClientError::Network(format!("set_voice_mute build: {e:?}")))?
                 .send()

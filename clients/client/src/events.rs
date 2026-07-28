@@ -73,7 +73,7 @@ pub enum ClientEvent {
 
     /// D19 — the plugin's sidebar declaration has changed; the host
     /// should re-fetch via
-    /// [`ClientBackend::get_sidebar_declaration`](crate::ClientBackend::get_sidebar_declaration).
+    /// [`IsBackend::get_sidebar_declaration`](crate::IsBackend::get_sidebar_declaration).
     SidebarInvalidated,
 
     /// Phase D.3 — an incoming DM call is ringing for the local user.

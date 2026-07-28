@@ -1,8 +1,17 @@
 # Plan — Discord Anti-Ban Hardening for Poly's Discord Plugin
 
-## Status: ✅ DONE — all phases shipped (changes `yuvzoprz`, `rorooxlm`, Phase F shipped in change `ptovooksvvpm`)
+## Status: ✅ SHIPPED — data layer complete (changes `yuvzoprz`, `rorooxlm`, `ptovooksvvpm`); **two UI sub-steps outstanding: A.6, F.2**
 
-## Status detail: Phases A/B/C/D/E SHIPPED — A/B/C shipped in change `yuvzoprz`; D/E shipped in change `rorooxlm`; F shipped in change `ptovooksvvpm`
+> Not DONE: **A.6** ("Refresh Discord build" settings button) and **F.2**
+> (Settings → Discord "Backend health" panel) both touch `crates/core/src/ui/`
+> and were deferred to a UI-focused agent pass. Their data layers exist; only
+> the UI surfaces are missing. Re-mark DONE when both are ticked.
+
+### Status detail
+Phases A/B/C/D/E SHIPPED — A/B/C in change `yuvzoprz`; D/E in change `rorooxlm`;
+Phase F's data layer + telemetry (F.1) in change `ptovooksvvpm`. **F.2 (the
+Backend-health settings panel) and A.6 (the "Refresh Discord build" button) are
+UI work and are NOT shipped** — see the top-level Status heading.
 
 > Last updated: 2026-05-11
 

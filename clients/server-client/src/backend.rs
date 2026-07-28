@@ -33,8 +33,24 @@ use poly_client::{
     SettingsStorageCell, SidebarDeclaration, SidebarLayoutKind, SignupMethod,
     StickerItem, UpdateChannelParams, User, ViewBody, ViewDescriptor, ViewDetail,
     ViewHeader, ViewKind, ViewRow, ViewRowsPage, VoiceParticipant, Attachment,
-    SocialGraphBackend,
+    MessageReplyPreview, SocialGraphBackend,
 };
+
+/// Build the reply preview from a wire message's `reply_to` FK.
+///
+/// The wire payload carries only the parent's id — the server does not inline
+/// the parent's author or body. Emitting the id alone is still strictly better
+/// than dropping it: the UI can resolve the rest from its already-loaded
+/// message cache, and a reply at minimum renders *as* a reply.
+fn reply_preview(reply_to_id: Option<&String>) -> Option<MessageReplyPreview> {
+    reply_to_id.map(|id| MessageReplyPreview {
+        message_id: id.clone(),
+        author_id: String::new(),
+        author_display_name: String::new(),
+        author_avatar_url: None,
+        snippet: String::new(),
+    })
+}
 
 /// A [`ClientBackend`] implementation for poly-server instances.
 ///
@@ -202,7 +218,7 @@ impl PolyServerBackend {
             timestamp: msg.created_at,
             attachments,
             reactions: Vec::new(),
-            reply_to: None,
+            reply_to: reply_preview(msg.reply_to_id.as_ref()),
             edited: msg.edited_at.is_some(),
             thread: None,
             preview_image_url: None,
@@ -776,10 +792,51 @@ impl poly_client::ModerationBackend for PolyServerBackend {
             .collect())
     }
 
+    /// poly-server's role model is a fixed four-tier ladder
+    /// (`member` < `moderator` < `admin` < `owner`) enforced server-side by
+    /// `RoleTier`; there is no per-server role table and therefore no list
+    /// endpoint to call. Return the closed set directly.
+    ///
+    /// `backend_capabilities()` advertises `has_roles: true`, which gates the
+    /// Roles tab in server settings — returning `NotSupported` here rendered
+    /// that tab and then failed it on open.
     async fn get_server_roles(&self, _server_id: &str) -> ClientResult<Vec<Role>> {
-        Err(ClientError::NotSupported(
-            "poly-server: get_server_roles not yet implemented".to_string(),
-        ))
+        Ok(vec![
+            Self::static_role("owner", "Owner", 3),
+            Self::static_role("admin", "Admin", 2),
+            Self::static_role("moderator", "Moderator", 1),
+            Self::static_role("member", "Member", 0),
+        ])
+    }
+}
+
+impl PolyServerBackend {
+    /// One rung of poly-server's fixed role ladder.
+    ///
+    /// Permission flags mirror `PermissionsResponse::from_tier` in
+    /// `servers/server/src/api/moderation.rs` — the authority that actually
+    /// enforces them. Keep the two in step.
+    fn static_role(id: &str, name: &str, position: u32) -> Role {
+        let is_owner = position >= 3;
+        let can_manage_roles = position >= 2;
+        let can_moderate = position >= 1;
+        Role {
+            id: id.to_string(),
+            name: name.to_string(),
+            color: None,
+            permissions: MemberPermissions {
+                manage_server: is_owner,
+                manage_channels: can_manage_roles,
+                manage_roles: can_manage_roles,
+                kick_members: can_moderate,
+                ban_members: can_moderate,
+                manage_messages: can_moderate,
+                timeout_members: can_moderate,
+                display_role: name.to_string(),
+                power_level: None,
+            },
+            position,
+        }
     }
 }
 
@@ -957,6 +1014,16 @@ impl poly_client::DmsAndGroupsBackend for PolyServerBackend {
                 .await
                 .map_err(|e| ClientError::Network(e.to_string()))?;
 
+            // A server-less channel with 3+ participants is a group DM, and
+            // `get_groups` already returns it as a `Group`. Emitting it here
+            // too listed one conversation twice in the sidebar — once under
+            // Groups with every member, once under Direct Messages titled with
+            // whichever participant `find` happened to hit first. The two
+            // methods must partition the same set, not overlap on it.
+            if participants.len() > 2 {
+                continue;
+            }
+
             let other = participants.iter().find(|p| p.user != account_id);
 
             let user = if let Some(p) = other {
@@ -1097,7 +1164,7 @@ fn map_server_event(event: srv::ServerEvent) -> Option<ClientEvent> {
                 timestamp: payload.created_at,
                 attachments: Vec::new(),
                 reactions: Vec::new(),
-                reply_to: None,
+                reply_to: reply_preview(payload.reply_to_id.as_ref()),
                 edited: payload.edited_at.is_some(),
                 thread: None,
                 preview_image_url: None,
@@ -1118,7 +1185,7 @@ fn map_server_event(event: srv::ServerEvent) -> Option<ClientEvent> {
                 timestamp: payload.created_at,
                 attachments: Vec::new(),
                 reactions: Vec::new(),
-                reply_to: None,
+                reply_to: reply_preview(payload.reply_to_id.as_ref()),
                 edited: true,
                 thread: None,
                 preview_image_url: None,
@@ -1500,8 +1567,7 @@ impl poly_client::ViewDescriptorBackend for PolyServerBackend {
                 self.http
                     .get_server(&server_id)
                     .await
-                    .map(|detail| detail.members.len())
-                    .unwrap_or(0)
+                    .map_or(0, |detail| detail.members.len())
             };
 
             let meta_text = format!(

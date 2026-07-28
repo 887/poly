@@ -48,6 +48,7 @@ impl poly_client::ModerationBackend for MatrixClient {
 
     async fn get_bans(&self, server_id: &str) -> ClientResult<Vec<BannedMember>> {
         let members_resp = self.http.fetch_banned_members(server_id).await?;
+        let homeserver_url = self.homeserver_url().to_string();
 
         let banned: Vec<BannedMember> = members_resp
             .chunk
@@ -68,11 +69,13 @@ impl poly_client::ModerationBackend for MatrixClient {
                     .and_then(serde_json::Value::as_str)
                     .unwrap_or(user_id)
                     .to_string();
+                // `mxc://` URIs are not browser-loadable — map to the media
+                // thumbnail endpoint like every other avatar path does.
                 let avatar_url = ev
                     .content
                     .get("avatar_url")
                     .and_then(serde_json::Value::as_str)
-                    .map(str::to_string);
+                    .map(|url| crate::mxc_to_http_thumbnail(url, &homeserver_url));
                 let reason = ev
                     .content
                     .get("reason")

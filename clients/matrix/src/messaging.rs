@@ -78,15 +78,17 @@ impl poly_client::MessagingBackend for MatrixClient {
                 if event.event_type != "m.room.message" {
                     return None;
                 }
-                let room_id_str = event.event_id.as_deref()
-                    .and_then(|_| room_id.map(str::to_string))
-                    .unwrap_or_default();
+                // Prefer the room the RESULT belongs to: the Matrix search
+                // response attaches `room_id` per event, and `query.channel_id`
+                // is `None` for a global search. Emitting an empty
+                // `channel_id` (the old fallback) made every global-search hit
+                // navigate to a dead route, so a hit we cannot attribute is
+                // dropped instead of shipped broken.
+                let room_id_str = event
+                    .room_id
+                    .clone()
+                    .or_else(|| room_id.map(str::to_string))?;
 
-                // Extract the room ID the event belongs to from the event itself.
-                // The Matrix search response attaches `room_id` directly on the event
-                // but our `RoomEvent` struct doesn't decode it yet — use the filter
-                // room_id when available, otherwise fall back to an empty string.
-                // TODO: add `room_id` field to `RoomEvent` and remove this fallback.
                 let _ = &homeserver_url; // used for future avatar hydration
                 let msg = Self::room_event_to_message(&event)?;
                 Some(MessageSearchHit {

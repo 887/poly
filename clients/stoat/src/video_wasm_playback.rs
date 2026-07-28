@@ -31,7 +31,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-use super::video_common::{canvas_id_for, reassemble_fua};
+use super::video_common::{canvas_id_for, FuaAppend, FuaReassembler};
 
 // ── Thread-local state ────────────────────────────────────────────────────────
 
@@ -41,7 +41,7 @@ thread_local! {
     static PUMPS: RefCell<HashMap<String, UserVideoPump>> = RefCell::new(HashMap::new());
 }
 
-// ── UserVideoPump ─────────────────────────────────────────────────────────────
+// ── UserVideoPump ───────────────────────────────────────────────────
 
 /// Playback state for a single remote participant's video stream.
 ///
@@ -49,9 +49,10 @@ thread_local! {
 /// reassembled NAL to the `VideoDecoder` and draws the resulting `VideoFrame`
 /// to the canvas identified by [`canvas_id_for`].
 struct UserVideoPump {
-    /// Buffer of in-flight FU-A fragments for a single NAL unit. Cleared after
-    /// each successful reassembly.
-    pending_fragments: Vec<Vec<u8>>,
+    /// FU-A reassembly state machine. Lives in the cfg-free `video_common`
+    /// module so the network-facing buffering logic (bounded buffer, stale-NAL
+    /// eviction, malformed-fragment rejection) is unit-testable on the host.
+    reassembler: FuaReassembler,
     /// Canvas DOM id the decoded frames should draw into. Stored once at pump
     /// creation so the per-frame path doesn't recompute the format string.
     canvas_id: String,
@@ -60,7 +61,7 @@ struct UserVideoPump {
 impl UserVideoPump {
     fn new(user_id: &str) -> Self {
         Self {
-            pending_fragments: Vec::new(),
+            reassembler: FuaReassembler::default(),
             canvas_id: canvas_id_for(user_id),
         }
     }
@@ -68,28 +69,19 @@ impl UserVideoPump {
     /// Append a fragment. If the fragment carries the FU-A E bit (or is a
     /// standalone non-fragmented NAL), reassemble and return the complete NAL.
     fn append(&mut self, fragment: Vec<u8>) -> Option<Vec<u8>> {
-        if fragment.is_empty() {
-            return None;
+        match self.reassembler.append(fragment) {
+            FuaAppend::Complete(nal) => Some(nal),
+            FuaAppend::Buffered => None,
+            FuaAppend::Discarded(reason) => {
+                tracing::warn!(
+                    target: "poly_stoat::video_wasm_playback",
+                    canvas_id = %self.canvas_id,
+                    ?reason,
+                    "FU-A fragment sequence discarded"
+                );
+                None
+            }
         }
-        // Detect whether this is an FU-A fragment (FU-indicator type = 28) or
-        // a standalone NAL (any other type). Bits 0..4 of the indicator byte
-        // are the NAL type per RFC 6184 §5.3 (and FU-A is type 28).
-        let nal_type_in_indicator = fragment[0] & 0x1F;
-        if nal_type_in_indicator != 28 {
-            // Standalone NAL — emit immediately. Clear any in-flight FU buffer.
-            self.pending_fragments.clear();
-            return Some(fragment);
-        }
-        // FU-A fragment.
-        self.pending_fragments.push(fragment);
-        // If the last appended fragment has the E bit set, reassemble.
-        let last = self.pending_fragments.last()?;
-        if last.len() >= 2 && (last[1] & 0x40) != 0 {
-            let nal = reassemble_fua(&self.pending_fragments);
-            self.pending_fragments.clear();
-            return nal;
-        }
-        None
     }
 
     /// Hand a complete NAL unit to the decoder + canvas draw pipeline.

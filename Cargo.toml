@@ -64,14 +64,15 @@ members = [
 # It is a dylint lint library (cdylib) that depends on rustc internal
 # crates (`rustc_hir`, `rustc_lint`, …) via `extern crate rustc_*`,
 # which requires a nightly toolchain with `rustc-dev` — bringing the
-# whole workspace onto nightly would break the rust-version = "1.91"
-# stable pin. The crate has its own `rust-toolchain.toml` scoped to
+# whole workspace onto nightly would break the pinned stable toolchain
+# (see `rust-toolchain.toml` at the repo root, and `rust-version` below).
+# The crate has its own `rust-toolchain.toml` scoped to
 # its directory and is built + run separately by `cargo dylint`.
 # See `tools/lints/poly-lints/README.md` + `.github/workflows/lint-test.yml`.
 exclude = [
     "tools/lints/poly-lints",
-    # cargo fuzz requires nightly; excluded to preserve rust-version = "1.91"
-    # stable pin for the main workspace. Mirrors poly-lints exclusion pattern.
+    # cargo fuzz requires nightly; excluded to preserve the pinned stable
+    # toolchain for the main workspace. Mirrors poly-lints exclusion pattern.
     # See mcp/chat-mcp/fuzz/README.md for usage.
     "mcp/chat-mcp/fuzz",
 ]
@@ -81,7 +82,11 @@ version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/user/poly"
-rust-version = "1.91"
+# Real floor, not an aspiration: wasmtime / wasmtime-wasi 47 declare
+# `rust-version = 1.94.0` (RELEASES.md 46.0.0, "Wasmtime now requires Rust
+# 1.94.0 to compile"), so nothing older can resolve this graph. Keep this in
+# sync with `clippy.toml`'s `msrv` and with `rust-toolchain.toml`.
+rust-version = "1.94"
 
 [workspace.dependencies]
 # UI framework
@@ -205,7 +210,21 @@ web-sys = { version = "0.3", features = [
     "console",
 ] }
 tower = { version = "0.5" }
-jsonwebtoken = "10"
+# jsonwebtoken 10 picks its crypto backend from ITS OWN cargo features and
+# `CryptoProvider::from_crate_features()` panics unless EXACTLY ONE of
+# `rust_crypto` / `aws_lc_rs` is on. Cargo unifies features across the graph,
+# so this must be pinned here rather than per-crate: `surrealdb-core` hard-
+# enables `jsonwebtoken/aws_lc_rs` for every non-wasm target, and any crate
+# that additionally turned on `rust_crypto` produced *both* — which panics
+# with the same "could not automatically determine the process-level
+# CryptoProvider" message as enabling neither. Matching surrealdb's native
+# selection is the only choice that unifies to exactly one provider.
+# jsonwebtoken is native-only here (poly-server is a dev-dependency of
+# poly-client), so `aws_lc_rs` never has to build for wasm32.
+jsonwebtoken = { version = "10", default-features = false, features = [
+    "use_pem",
+    "aws_lc_rs",
+] }
 urlencoding = "2.1"
 tokio-stream = { version = "0.1", features = ["sync"] }
 tokio-tungstenite = { version = "0.29", features = ["native-tls"] }
@@ -252,8 +271,8 @@ nokhwa = { version = "0.10", features = ["input-native"] }
 # scap = { version = "0.1.0-beta.1" }  # disabled until libspa-sys compat fix
 
 # WASM plugin runtime (native-only — wasmtime cannot target wasm32)
-wasmtime = { version = "45", features = ["component-model", "cranelift"] }
-wasmtime-wasi = "45"
+wasmtime = { version = "47", features = ["component-model", "cranelift"] }
+wasmtime-wasi = "47"
 
 # WASM plugin guest bindings (used by client plugin crates)
 wit-bindgen = { version = "0.57", default-features = false, features = [

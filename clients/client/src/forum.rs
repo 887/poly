@@ -1,6 +1,7 @@
 //! `ForumBackend` capability sub-trait (Phase H.2.b).
 //!
-//! Carved out of [`ClientBackend`] in Phase H.2.b.  Implemented by backends
+//! Carved out of the former `ClientBackend` god-trait (replaced by
+//! [`IsBackend`]) in Phase H.2.b.  Implemented by backends
 //! that expose forum-style channels (`ChannelType::Forum`): currently
 //! `poly-discord` (thread-based forum posts) and `poly-lemmy` (community posts
 //! with comments).
@@ -18,7 +19,7 @@
 //! `create-forum-post` functions.  `get-recent-comments` is a Rust-only
 //! extension (Lemmy-specific; not in WIT).
 //!
-//! [`ClientBackend`]: crate::ClientBackend
+//! [`IsBackend`]: crate::IsBackend
 
 use async_trait::async_trait;
 
@@ -75,6 +76,16 @@ pub trait ForumBackend: Send + Sync {
     ///
     /// Backends that do not support a comment-feed should return
     /// `Err(ClientError::NotSupported(...))`.
+    ///
+    /// # Status: no callers
+    ///
+    /// Nothing in the workspace calls this method. The Posts | Comments
+    /// toggle gated by [`crate::BackendCapabilities::supports_comment_feed`]
+    /// is implemented in the generic forum view as a `lemmy-feed-` →
+    /// `lemmy-comments-` channel-id rewrite that goes through the ordinary
+    /// `get_view_rows` path instead. Either wire the toggle here (and drop
+    /// the hardcoded `lemmy-` literal from the generic view) or delete this
+    /// method — do not add a fourth impl on the assumption it is dispatched.
     async fn get_recent_comments(
         &self,
         channel_id: &str,

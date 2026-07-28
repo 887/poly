@@ -587,8 +587,7 @@ impl ElectronCdpBackend {
                 .timeout(Duration::from_secs(2))
                 .send()
                 .await
-                .map(|r| r.status().as_u16())
-                .unwrap_or(0);
+                .map_or(0, |r| r.status().as_u16());
             if bundle_status == 200 {
                 return Ok(());
             }
@@ -598,8 +597,7 @@ impl ElectronCdpBackend {
                 .timeout(Duration::from_secs(2))
                 .send()
                 .await
-                .map(|r| r.status().is_success())
-                .unwrap_or(false);
+                .is_ok_and(|r| r.status().is_success());
             if port_up && port_up_since.is_none() {
                 port_up_since = Some(std::time::Instant::now());
             }

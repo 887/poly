@@ -360,8 +360,7 @@ pub fn filter_active_repos(repos: Vec<ForgejoRepo>) -> Vec<ForgejoRepo> {
             }
             r.updated_at.as_ref().is_none_or(|s| {
                 DateTime::parse_from_rfc3339(s)
-                    .map(|dt| dt.with_timezone(&Utc) >= cutoff)
-                    .unwrap_or(true)
+                    .map_or(true, |dt| dt.with_timezone(&Utc) >= cutoff)
             })
         })
         .collect()

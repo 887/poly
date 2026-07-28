@@ -183,36 +183,157 @@ pub fn fragment_nal_units_to_fua(nal: &[u8], mtu: usize) -> Vec<Vec<u8>> {
 ///
 /// Ported verbatim from
 /// `clients/discord/src/voice_bridge/video_playback.rs::reassemble_fua`.
-// Indexing: `first[0]`, `first[1]`, `last[1]` — safe because of the `len() < 2` guards.
-// `f.len() - 2` — safe because the `f.len() < 2` guard returns None before subtracting.
-// `f[2..]` — safe because the `f.len() < 2` guard ensures len >= 2.
-// Arithmetic: `1 + sum` — bounded by available memory; overflow would OOM before wrapping.
+// Indexing: `first[0]`, `first[1]`, `last[1]`, `f[2..]` — safe because the
+// `any(|f| f.len() < 2)` guard below rejects EVERY short fragment before any
+// indexing or subtraction happens.
+// Arithmetic: the per-fragment `len() - 2` uses `saturating_sub`; `1 + sum` is
+// bounded by available memory (overflow would OOM before wrapping).
 #[allow(clippy::arithmetic_side_effects, clippy::indexing_slicing)]
 #[must_use]
 pub fn reassemble_fua(fragments: &[Vec<u8>]) -> Option<Vec<u8>> {
     if fragments.is_empty() {
         return None;
     }
+    // Validate EVERY fragment up-front, not just the first/last. Fragments come
+    // straight off the network (`voice_wasm.rs` → `push_h264`), so a 0- or
+    // 1-byte MIDDLE fragment is remote-triggerable; it must be rejected before
+    // the capacity computation subtracts 2 from its length.
+    if fragments.iter().any(|f| f.len() < 2) {
+        return None;
+    }
     let first = fragments.first()?;
-    if first.len() < 2 || first[1] & 0x80 == 0 {
+    if first[1] & 0x80 == 0 {
         return None; // first fragment must have S bit
     }
     let last = fragments.last()?;
-    if last.len() < 2 || last[1] & 0x40 == 0 {
+    if last[1] & 0x40 == 0 {
         return None; // last fragment must have E bit
     }
     let fu_indicator = first[0];
     let nal_type = first[1] & 0x1F;
     let reconstructed_header = (fu_indicator & 0xE0) | nal_type;
-    let mut out = Vec::with_capacity(1 + fragments.iter().map(|f| f.len() - 2).sum::<usize>());
+    let body_len: usize = fragments.iter().map(|f| f.len().saturating_sub(2)).sum();
+    let mut out = Vec::with_capacity(body_len.saturating_add(1));
     out.push(reconstructed_header);
     for f in fragments {
-        if f.len() < 2 {
-            return None;
-        }
         out.extend_from_slice(&f[2..]);
     }
     Some(out)
+}
+
+// ── FU-A reassembly state machine ─────────────────────────────────────────────
+
+/// Hard cap on the number of FU-A fragments buffered for a single in-flight NAL.
+///
+/// At the 1200-byte [`RTP_VIDEO_MTU`] this is ~300 KB — far above any legitimate
+/// H.264 access unit at 640x360 — so hitting it means the terminating `E`-bit
+/// fragment was lost, or a peer is deliberately never sending one.
+pub const MAX_FU_FRAGMENTS: usize = 256;
+
+/// Buffers the FU-A fragments of ONE in-flight NAL unit and emits the complete
+/// NAL when the terminating `E`-bit fragment arrives.
+///
+/// Lives here (cfg-free) rather than in the wasm32-only playback module so the
+/// state machine — which is fed straight from the network and is therefore the
+/// crate's most attacker-exposed code — is unit-testable on the host.
+#[derive(Debug, Default)]
+pub struct FuaReassembler {
+    pending: Vec<Vec<u8>>,
+}
+
+/// What [`FuaReassembler::append`] did with a fragment.
+#[derive(Debug, PartialEq, Eq)]
+pub enum FuaAppend {
+    /// A complete NAL unit is ready to decode.
+    Complete(Vec<u8>),
+    /// The fragment was buffered; more are needed.
+    Buffered,
+    /// The fragment (or the sequence it belongs to) was discarded.
+    Discarded(FuaDiscardReason),
+}
+
+/// Why a fragment sequence was thrown away.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FuaDiscardReason {
+    /// The fragment carried no bytes at all.
+    EmptyFragment,
+    /// More than [`MAX_FU_FRAGMENTS`] fragments arrived without an `E` bit.
+    BufferOverflow,
+    /// An `E`-bit fragment arrived but the buffered sequence was malformed.
+    MalformedSequence,
+    /// An `S`-bit fragment arrived while a previous NAL was still in flight.
+    AbandonedPreviousNal,
+}
+
+impl FuaReassembler {
+    /// Number of fragments currently buffered. Exposed for assertions/metrics.
+    #[must_use]
+    pub fn pending_len(&self) -> usize {
+        self.pending.len()
+    }
+
+    /// Drop any in-flight fragments.
+    pub fn reset(&mut self) {
+        self.pending.clear();
+    }
+
+    /// Feed one wire fragment.
+    ///
+    /// A non-FU-A NAL (indicator type != 28) is passed straight through and
+    /// clears any in-flight buffer. An FU-A fragment is buffered until its
+    /// `E`-bit sibling arrives.
+    ///
+    /// The buffer is bounded by [`MAX_FU_FRAGMENTS`]: without the cap a peer
+    /// that only ever sends `S`/middle fragments (or ordinary packet loss of
+    /// the `E` fragment) grows it forever until the tab OOMs.
+    pub fn append(&mut self, fragment: Vec<u8>) -> FuaAppend {
+        // `first()` doubles as the empty-fragment guard, so the indicator byte
+        // is read without indexing (CLAUDE.md bans `#[allow(indexing_slicing)]`).
+        let Some(&indicator) = fragment.first() else {
+            return FuaAppend::Discarded(FuaDiscardReason::EmptyFragment);
+        };
+        // Bits 0..4 of the indicator byte are the NAL type per RFC 6184 §5.3;
+        // FU-A is type 28.
+        if indicator & 0x1F != 28 {
+            self.pending.clear();
+            return FuaAppend::Complete(fragment);
+        }
+
+        // An `S`-bit fragment starts a NEW NAL, so anything still buffered
+        // belongs to a NAL whose `E` fragment never arrived. Drop it rather than
+        // concatenating the stale prefix into the next NAL.
+        let starts_new_nal = fragment.get(1).is_some_and(|fu_header| fu_header & 0x80 != 0);
+        let abandoned = starts_new_nal && !self.pending.is_empty();
+        if abandoned {
+            self.pending.clear();
+        }
+
+        self.pending.push(fragment);
+        if self.pending.len() > MAX_FU_FRAGMENTS {
+            self.pending.clear();
+            return FuaAppend::Discarded(FuaDiscardReason::BufferOverflow);
+        }
+
+        let ends_nal = self
+            .pending
+            .last()
+            .and_then(|last| last.get(1))
+            .is_some_and(|fu_header| fu_header & 0x40 != 0);
+        if !ends_nal {
+            return if abandoned {
+                FuaAppend::Discarded(FuaDiscardReason::AbandonedPreviousNal)
+            } else {
+                FuaAppend::Buffered
+            };
+        }
+
+        let nal = reassemble_fua(&self.pending);
+        self.pending.clear();
+        nal.map_or(
+            FuaAppend::Discarded(FuaDiscardReason::MalformedSequence),
+            FuaAppend::Complete,
+        )
+    }
 }
 
 /// Canvas ID convention for the per-participant video tile.
@@ -293,6 +414,124 @@ mod tests {
     fn reassemble_rejects_missing_start_bit() {
         let bad = vec![vec![0x7C, 0x05, 0xAA], vec![0x7C, 0x45, 0xBB]];
         assert!(reassemble_fua(&bad).is_none());
+    }
+
+    #[test]
+    fn reassemble_rejects_short_middle_fragment() {
+        // A remote peer can interleave a 1-byte "fragment" between a valid
+        // S-bit and E-bit fragment. Before the fix this underflowed
+        // `f.len() - 2` inside the `Vec::with_capacity` sum (debug: subtract
+        // overflow panic; release: ~usize::MAX capacity → alloc abort).
+        let bad = vec![
+            vec![0x7C, 0x85, 0xAA], // S bit
+            vec![0x1C],             // 1-byte middle fragment
+            vec![0x7C, 0x45, 0xBB], // E bit
+        ];
+        assert!(reassemble_fua(&bad).is_none());
+
+        // Zero-length middle fragment is equally rejected.
+        let bad_empty = vec![
+            vec![0x7C, 0x85, 0xAA],
+            Vec::new(),
+            vec![0x7C, 0x45, 0xBB],
+        ];
+        assert!(reassemble_fua(&bad_empty).is_none());
+    }
+
+    #[test]
+    fn reassemble_rejects_short_first_and_last_fragments() {
+        assert!(reassemble_fua(&[vec![0x7C]]).is_none());
+        assert!(reassemble_fua(&[vec![0x7C, 0x85, 0xAA], vec![0x7C]]).is_none());
+    }
+
+    #[test]
+    fn reassembler_round_trips_a_fragmented_nal() {
+        let mut nal = vec![0x65u8];
+        nal.extend(std::iter::repeat_n(0xABu8, 2500));
+        let frags = fragment_nal_units_to_fua(&nal, 800);
+        let mut r = FuaReassembler::default();
+        let last_idx = frags.len() - 1;
+        for (i, f) in frags.into_iter().enumerate() {
+            let out = r.append(f);
+            if i == last_idx {
+                assert_eq!(out, FuaAppend::Complete(nal.clone()));
+            } else {
+                assert_eq!(out, FuaAppend::Buffered);
+            }
+        }
+        assert_eq!(r.pending_len(), 0, "buffer cleared after reassembly");
+    }
+
+    #[test]
+    fn reassembler_passes_standalone_nal_through() {
+        let mut r = FuaReassembler::default();
+        // Type 5 (IDR) — not FU-A.
+        let nal = vec![0x65u8, 0xAA];
+        assert_eq!(r.append(nal.clone()), FuaAppend::Complete(nal));
+    }
+
+    #[test]
+    fn reassembler_caps_pending_fragments() {
+        let mut r = FuaReassembler::default();
+        assert_eq!(r.append(vec![0x7C, 0x85, 0xAA]), FuaAppend::Buffered);
+        let mut overflowed = false;
+        for _ in 0..(MAX_FU_FRAGMENTS * 3) {
+            // Middle fragment: neither S nor E bit.
+            if r.append(vec![0x7C, 0x05, 0xBB])
+                == FuaAppend::Discarded(FuaDiscardReason::BufferOverflow)
+            {
+                overflowed = true;
+            }
+            assert!(
+                r.pending_len() <= MAX_FU_FRAGMENTS,
+                "FU-A buffer must never exceed the cap"
+            );
+        }
+        assert!(overflowed, "expected at least one overflow discard");
+    }
+
+    #[test]
+    fn reassembler_drops_stale_nal_on_new_start_bit() {
+        let mut r = FuaReassembler::default();
+        assert_eq!(r.append(vec![0x7C, 0x85, 0xAA]), FuaAppend::Buffered);
+        assert_eq!(r.append(vec![0x7C, 0x05, 0x11]), FuaAppend::Buffered);
+        assert_eq!(r.pending_len(), 2);
+        // New S bit abandons the previous NAL.
+        assert_eq!(
+            r.append(vec![0x7C, 0x85, 0xBB]),
+            FuaAppend::Discarded(FuaDiscardReason::AbandonedPreviousNal)
+        );
+        assert_eq!(r.pending_len(), 1);
+        // The terminating fragment yields ONLY the new NAL's body — the stale
+        // 0xAA/0x11 prefix must not be concatenated in.
+        assert_eq!(
+            r.append(vec![0x7C, 0x45, 0xCC]),
+            FuaAppend::Complete(vec![0x65, 0xBB, 0xCC])
+        );
+    }
+
+    #[test]
+    fn reassembler_rejects_short_middle_fragment_without_panicking() {
+        let mut r = FuaReassembler::default();
+        assert_eq!(r.append(vec![0x7C, 0x85, 0xAA]), FuaAppend::Buffered);
+        // 1-byte FU-A fragment: indicator only, no FU header.
+        assert_eq!(r.append(vec![0x1C]), FuaAppend::Buffered);
+        // The E-bit fragment triggers reassembly, which must reject rather than
+        // underflow `f.len() - 2` in the capacity computation.
+        assert_eq!(
+            r.append(vec![0x7C, 0x45, 0xBB]),
+            FuaAppend::Discarded(FuaDiscardReason::MalformedSequence)
+        );
+        assert_eq!(r.pending_len(), 0);
+    }
+
+    #[test]
+    fn reassembler_discards_empty_fragment() {
+        let mut r = FuaReassembler::default();
+        assert_eq!(
+            r.append(Vec::new()),
+            FuaAppend::Discarded(FuaDiscardReason::EmptyFragment)
+        );
     }
 
     #[test]

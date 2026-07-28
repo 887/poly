@@ -14,6 +14,12 @@ use super::types::{
     PrivateMessageView,
 };
 
+/// Prefix stamped on post `ViewRow` ids so they carry the LOCAL post id.
+///
+/// `ViewDescriptorBackend::get_view_detail` strips it back off before calling
+/// `GET /api/v3/post?id=…` against the user's own instance.
+pub const LOCAL_POST_ID_PREFIX: &str = "lemmy-post-";
+
 /// Determine whether a `LemmyPost` links to a video source.
 ///
 /// Returns `true` when `embed_video_url` is populated (the canonical Lemmy
@@ -253,7 +259,12 @@ pub fn map_post_to_viewrow(view: &PostView, now: DateTime<Utc>, render_previews:
     let creator = &view.creator;
     let counts = &view.counts;
 
-    let id = post.ap_id.clone().unwrap_or_else(|| post.id.to_string());
+    // Row ids must be resolvable against THIS instance. `ap_id` is the
+    // ActivityPub canonical URL, which for a federated post points at the
+    // ORIGIN instance and whose trailing path segment is that instance's
+    // primary key — unrelated to `post.id` here. Encode the local id so
+    // `get_view_detail` can recover it exactly instead of guessing.
+    let id = format!("{LOCAL_POST_ID_PREFIX}{}", post.id);
     let secondary = format!("by {}", creator.display_name.clone().unwrap_or_else(|| creator.name.clone()));
     let meta = format!(
         "SCORE:{} · {} comments · {}",
@@ -412,7 +423,7 @@ mod tests {
         let now = Utc.with_ymd_and_hms(2026, 4, 18, 12, 0, 0).unwrap();
 
         let row0 = map_post_to_viewrow(&resp.posts[0], now, true);
-        assert_eq!(row0.id, "https://lemmy.example.com/post/101");
+        assert_eq!(row0.id, "lemmy-post-101");
         assert_eq!(row0.primary_text, "Rust 2025 edition is here");
         assert_eq!(row0.secondary_text.as_deref(), Some("by Alice A."));
         let meta = row0.meta_text.expect("meta required");
@@ -427,6 +438,43 @@ mod tests {
         let meta1 = row1.meta_text.expect("meta required");
         assert!(meta1.starts_with("SCORE:128"));
         assert!(meta1.contains("5 comments"));
+    }
+
+    /// A federated post's `ap_id` points at the ORIGIN instance and its
+    /// trailing path segment is that instance's primary key. The row id must
+    /// still carry OUR local `post.id`, otherwise `get_view_detail` resolves a
+    /// completely unrelated post against the user's own instance.
+    #[test]
+    fn viewrow_id_uses_local_post_id_for_federated_posts() {
+        // Rewrite the fixture so the payload's ap_id points at another
+        // instance and its trailing segment (70123) differs from the local
+        // post id (101) — the shape of every federated post.
+        let raw = include_str!("../../tests/fixtures/post_list.json")
+            .replace("https://lemmy.example.com/post/101", "https://beehaw.org/post/70123");
+        let resp: PostListResponse =
+            serde_json::from_str(&raw).expect("fixture must still deserialize with a foreign ap_id");
+
+        let local_id = resp.posts[0].post.id;
+        assert_eq!(local_id, 101, "the local primary key is unchanged");
+
+        let now = Utc.with_ymd_and_hms(2026, 4, 18, 12, 0, 0).unwrap();
+        let row = map_post_to_viewrow(&resp.posts[0], now, true);
+
+        assert_eq!(
+            row.id,
+            format!("{LOCAL_POST_ID_PREFIX}{local_id}"),
+            "row id must encode the LOCAL post id, not the remote ap_id"
+        );
+        assert!(
+            !row.id.contains("70123"),
+            "the origin instance's primary key must never leak into the row id: {}",
+            row.id
+        );
+        assert_eq!(
+            row.id.strip_prefix(LOCAL_POST_ID_PREFIX).and_then(|s| s.parse::<i64>().ok()),
+            Some(local_id),
+            "get_view_detail must be able to recover the local id exactly"
+        );
     }
 
     #[test]

@@ -219,3 +219,37 @@ async fn wrong_password_is_logged_out() {
         .expect_err("wrong password rejected");
     assert!(matches!(err, poly_reddit::RedditError::LoggedOut));
 }
+
+/// `get_view_rows` must thread the pagination cursor through, otherwise the
+/// view is permanently capped at the ~25 posts old.reddit returns on page 1
+/// (ListBody gates its "Load more" affordance on `next_cursor.is_some()`).
+#[tokio::test]
+async fn view_rows_surface_and_accept_the_pagination_cursor() {
+    use poly_client::ViewDescriptorBackend as _;
+
+    let server = TestServer::start().await;
+    let client = RedditClient::with_base_url(server.base_url.clone()).expect("client");
+    let backend = poly_reddit::backend::RedditBackend::new(client);
+
+    let page = backend
+        .get_view_rows("c_posts_rust", None, None, None, None)
+        .await
+        .expect("first page of r/rust");
+    assert!(!page.rows.is_empty(), "first page must have rows");
+
+    let cursor = page
+        .next_cursor
+        .clone()
+        .expect("the fixture carries a next-button, so the cursor must reach the UI");
+    assert!(
+        cursor.value.starts_with("t3_"),
+        "cursor value is reddit's `after` token: {cursor:?}"
+    );
+
+    // The cursor must be accepted back — it used to be ignored entirely.
+    let page2 = backend
+        .get_view_rows("c_posts_rust", Some(cursor), None, None, None)
+        .await
+        .expect("second page must fetch with the cursor applied");
+    assert!(!page2.rows.is_empty(), "second page must have rows");
+}

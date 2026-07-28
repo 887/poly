@@ -57,6 +57,9 @@ async fn authenticated_dog() -> DemoClient2 {
 // ---------------------------------------------------------------------------
 
 /// API-contract back-and-forth: Cat (A) and Dog (B) in demo channels.
+///
+/// Split into per-animal halves so each stays under the workspace
+/// `clippy::too_many_lines` budget (100).
 #[tokio::test]
 async fn back_and_forth_cat_dog() {
     // Step 1 — Authenticate both demo animals.
@@ -73,8 +76,13 @@ async fn back_and_forth_cat_dog() {
     assert!(!cat_servers.is_empty(), "Cat should have at least one server");
     assert!(!dog_servers.is_empty(), "Dog should have at least one server");
 
+    cat_flow(&cat, &cat_servers[0].id).await;
+    dog_flow(&dog, &dog_servers[0].id).await;
+}
+
+/// Steps 3-8 — Cat's discovery / read / send / reply flow.
+async fn cat_flow(cat: &DemoClient, cat_server_id: &str) {
     // Step 3 — Channel discovery for Cat's first server.
-    let cat_server_id = &cat_servers[0].id;
     let cat_channels = cat
         .get_channels(cat_server_id)
         .await
@@ -119,8 +127,13 @@ async fn back_and_forth_cat_dog() {
         "Sent message should contain 'hello from cat'"
     );
 
-    // Step 6 — Reaction: no send_reaction in ClientBackend; skipped.
+    // Step 6 — Reaction: no send_reaction in IsBackend; skipped.
 
+    cat_reply_flow(cat).await;
+}
+
+/// Steps 7-8 — Cat's reply flow, including the unknown-target degradation.
+async fn cat_reply_flow(cat: &DemoClient) {
     // Step 7 — Reply using a known seeded message ID. The demo
     // `send_reply_message` looks up the reply target in the seeded message
     // list; if found it sets `reply_to`.
@@ -165,8 +178,10 @@ async fn back_and_forth_cat_dog() {
         "Reply to unknown message ID should have reply_to = None"
     );
 
-    // Step 9 — Dog performs the same discovery + read flow.
-    let dog_server_id = &dog_servers[0].id;
+}
+
+/// Step 9 — Dog performs the same discovery + read flow.
+async fn dog_flow(dog: &DemoClient2, dog_server_id: &str) {
     let dog_channels = dog
         .get_channels(dog_server_id)
         .await

@@ -94,7 +94,7 @@ mod voice_tests {
     #[tokio::test]
     async fn second_connect_fails_with_already_connected() {
         if !voice_smoke_enabled() {
-            eprintln!(
+            tracing::info!(
                 "SKIP — anti_ban::second_connect_fails_with_already_connected: \
                  set RUN_VOICE_SMOKE=1 to run (requires real Discord credentials). \
                  Phase K.7 — docs/plans/plan-voice-video-calls.md."
@@ -211,7 +211,7 @@ mod voice_tests {
 #[cfg(not(feature = "voice"))]
 #[test]
 fn anti_ban_tests_require_voice_feature() {
-    eprintln!(
+    tracing::info!(
         "SKIP — anti_ban tests require `--features voice`. \
          Compile with: cargo test -p poly-discord --test anti_ban --features voice \
          (and set RUN_VOICE_SMOKE=1 for the network-dependent test). \

@@ -29,6 +29,7 @@ pub(super) async fn voice_ws_loop(
     speaking_tx: Option<(String, tokio::sync::mpsc::UnboundedSender<ClientEvent>)>,
     mut ws_out_rx: mpsc::Receiver<serde_json::Value>,
     bandwidth_ctrl: Arc<rtcp::BandwidthController>,
+    mut shutdown: ShutdownRx,
 ) {
     let interval = Duration::from_millis(heartbeat_interval_ms);
     let mut heartbeat_tick = time::interval(interval);
@@ -41,6 +42,10 @@ pub(super) async fn voice_ws_loop(
 
     loop {
         tokio::select! {
+            biased;
+            // Stop heartbeating the voice gateway as soon as the session ends.
+            // Also fires (as an error) when the connection handle is dropped.
+            _ = shutdown.changed() => break,
             _ = heartbeat_tick.tick() => {
                 nonce = nonce.wrapping_add(1);
                 let hb = serde_json::json!({ "op": 3, "d": nonce });

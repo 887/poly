@@ -2,9 +2,19 @@
 //!
 //! Shared messenger client trait and data types for Poly.
 //!
-//! This crate defines the [`ClientBackend`] trait that all messenger backend
-//! implementations (Stoat, Matrix, Discord, Teams, Demo) must implement.
+//! This crate defines the [`IsBackend`] trait that all messenger backend
+//! implementations (Stoat, Matrix, Discord, Teams, Demo) must implement,
+//! plus the capability sub-traits ([`MessagingBackend`], [`ModerationBackend`],
+//! [`ForumBackend`], …) that a backend opts into via the `as_*` accessors.
 //! It also defines the shared data types used across all backends.
+//!
+//! The former `ClientBackend` god-trait was deleted in Phase H.4.f; any doc
+//! or comment still naming it is describing history, not current API.
+
+// The substrate's docs ARE its contract: a dangling `[`Trait::method`]` link
+// silently rots into plain text and points implementors at API that no longer
+// exists (that is exactly how ~16 `ClientBackend` links survived H.4.f).
+#![deny(rustdoc::broken_intra_doc_links)]
 
 pub mod code_repo;
 pub mod content_policy;
@@ -105,7 +115,7 @@ pub type ClientResult<T> = Result<T, ClientError>;
 /// Unified trait shared by every Poly backend.
 ///
 /// Every backend crate implements this trait directly.
-/// `Box<dyn IsBackend>` is the storage type in [`ClientManager`].
+/// `Box<dyn IsBackend>` is the storage type in `ClientManager` (poly-core).
 ///
 /// # Capability accessors
 ///
@@ -962,7 +972,8 @@ pub type TestAuthFn = fn(
 
 /// A single pre-configured test account for local development.
 ///
-/// Registered by each native plugin via [`ClientManager::register_test_account`].
+/// Registered by each native plugin via `ClientManager::register_test_account`
+/// (poly-core).
 /// The Test Accounts panel reads these at runtime — core has no compile-time
 /// knowledge of which plugins provide test accounts.
 #[derive(Clone, Copy, Debug)]

@@ -47,4 +47,9 @@ electron.
       "registered 16 test accounts") appear in `list_console_messages`
       without the human pasting them.
 
-## Status: ✅ DONE — Phase Z shipped 2026-05-27 (Phase Z+ deferred for desktop)
+## Status: ✅ SHIPPED — Phase Z landed 2026-05-27; **Phase Z+ deferred (desktop) and the Verification phase (V.1–V.3) never run**
+
+> Not DONE: **Z+.1** is deliberately deferred until desktop becomes the active
+> debug target, but **V.1–V.3 are unrun verification gates**, not deferrals —
+> the fix shipped without its own regression check. Run V.1–V.3 and tick them
+> before this plan can be marked DONE.

@@ -61,6 +61,55 @@ async fn test_authenticate_guest() {
     assert!(client.is_authenticated(), "should be authenticated after call");
 }
 
+/// Restoring a persisted HN session cookie must rebuild the NAMED session.
+///
+/// The host restores accounts with `AuthCredentials::Token(<persisted
+/// Session.token>)`, and for a signed-in HN account that token is the
+/// `user=<name>&<opaque>` cookie captured at login. Falling through to the
+/// guest session here silently logged the user out, emptied the write cookie,
+/// and flipped the account id from `hn-<name>` to `hn-anonymous`.
+#[tokio::test]
+async fn test_authenticate_restores_named_session_from_cookie() {
+    let server = TestHnServer::start().await;
+    let mut client = HackerNewsClient::with_base_url(hn_base_url(&server));
+
+    let cookie = "user=alice&AAAABBBBCCCC";
+    let session = client
+        .authenticate(AuthCredentials::Token(cookie.to_string()))
+        .await
+        .expect("restoring a user cookie should succeed");
+
+    assert_eq!(session.id, "hn-alice", "restored session must keep the account id");
+    assert_eq!(session.user.id, "alice");
+    assert_eq!(session.user.display_name, "alice");
+    assert_eq!(
+        session.token, cookie,
+        "the write cookie must survive restore, otherwise send_message fails"
+    );
+
+    // The account id the host keys server/channel state on must match too.
+    let servers = client.get_servers().await.expect("get_servers");
+    let srv = servers.first().expect("exactly one HN server");
+    assert_eq!(srv.account_id, "hn-alice");
+}
+
+/// A token that is not a populated `user=` cookie has no identity to restore,
+/// so the guest session is the correct (and only honest) answer.
+#[tokio::test]
+async fn test_authenticate_falls_back_to_guest_for_non_cookie_token() {
+    let server = TestHnServer::start().await;
+    let mut client = HackerNewsClient::with_base_url(hn_base_url(&server));
+
+    for token in ["", "user=", "not-a-cookie"] {
+        let session = client
+            .authenticate(AuthCredentials::Token(token.to_string()))
+            .await
+            .expect("authenticate should succeed");
+        assert_eq!(session.id, "hn-anonymous", "token {token:?} must land on guest");
+        assert!(session.token.is_empty());
+    }
+}
+
 /// `get_servers()` returns exactly one virtual "Hacker News" server with ID "hn".
 #[tokio::test]
 async fn test_get_servers() {

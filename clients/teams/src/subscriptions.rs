@@ -218,16 +218,28 @@ pub fn generate_client_state() -> String {
 /// Decide whether to register Graph change-notification subscriptions
 /// (webhooks) vs. long-poll the test server.
 ///
-/// **Rule:** if `base_url` contains `"/test/"` it's the in-tree test
-/// server (`servers/test-teams`) — it offers `/test/events/poll` and
-/// does NOT speak the Graph subscriptions API. Real Graph deployments
-/// (`https://graph.microsoft.com`) use webhooks. Pre-production
-/// deployments that DO speak webhooks but still want to disable them
-/// (operator hasn't stood up the relay yet) can layer the
+/// **Rule:** webhooks are opt-IN, matched positively against the
+/// production Graph origin. Everything else — most importantly the
+/// in-tree test server (`servers/test-teams`), which offers
+/// `/test/events/poll` and does NOT implement `/v1.0/subscriptions` —
+/// stays on the long-poll event stream.
+///
+/// `base_url` is always a bare origin: every construction site passes
+/// either `"https://graph.microsoft.com"` ([`crate::TeamsClient::new`])
+/// or `format!("http://127.0.0.1:{port}")` (the integration fixtures).
+/// The `/test/...` path segment is appended per-request inside
+/// `http.rs`, so it never appears here — an earlier
+/// `!base_url.contains("/test/")` rule classified the local test server
+/// as production Graph.
+///
+/// Pre-production deployments that DO speak webhooks but still want to
+/// disable them (operator hasn't stood up the relay yet) can layer the
 /// [`use_webhooks_kv_key`] flag on top — see Phase E.2.
 #[must_use]
 pub fn should_use_webhooks(base_url: &str) -> bool {
-    !base_url.contains("/test/")
+    base_url
+        .trim_end_matches('/')
+        .starts_with("https://graph.microsoft.com")
 }
 
 // ── Phase E.2 — migration KV flag ────────────────────────────────────────────
@@ -393,13 +405,21 @@ mod tests {
 
     #[test]
     fn should_use_webhooks_skips_test_server() {
-        assert!(!should_use_webhooks("http://localhost:9103/test/graph"));
-        assert!(!should_use_webhooks("https://example.com/test/whatever"));
+        // The shapes the integration fixtures actually build: a bare
+        // loopback origin, with the `/test/...` segment appended per-request.
+        assert!(!should_use_webhooks("http://127.0.0.1:9103"));
+        assert!(!should_use_webhooks("http://127.0.0.1:41234"));
+        assert!(!should_use_webhooks("http://localhost:9103"));
+        assert!(!should_use_webhooks("http://[::1]:9103"));
+        // And an unrelated third-party origin is not production Graph either.
+        assert!(!should_use_webhooks("https://example.com"));
+        assert!(!should_use_webhooks("http://graph.microsoft.com"));
     }
 
     #[test]
     fn should_use_webhooks_picks_production_graph() {
         assert!(should_use_webhooks("https://graph.microsoft.com"));
+        assert!(should_use_webhooks("https://graph.microsoft.com/"));
         assert!(should_use_webhooks("https://graph.microsoft.com/v1.0"));
     }
 

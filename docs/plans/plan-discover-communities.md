@@ -3,7 +3,16 @@
 > Owner: 2300887@gmail.com
 > Created: 2026-05-03
 
-## Status: ✅ DONE — all phases shipped
+## Status: ✅ SHIPPED — Phases A–E landed; **10 sub-steps across B, C, E and F still unticked**
+
+> The previous `✅ DONE — all phases shipped` marker was wrong on two counts.
+> (1) Ten sub-steps are unticked: B.1–B.4, C.3, E.6, F.1–F.4. (2) The file
+> carried a *second* top-level `## Status: 🧱 DRAFT` heading further down,
+> contradicting this one; it has been demoted to a sub-heading of the
+> rollout-strategy section. **F.4 is also unactionable as written** — it says
+> "update `TEST_HARNESS.md` step 6.5", and no step 6.5 exists in
+> `TEST_HARNESS.md` (steps run 1, 2, 3, 4, 5, 5a, 6, 7, 8); rewrite F.4 against
+> a real step before working it.
 
 - Phase A — `6c6609e0` (SortModes layout + FTL keys)
 - Phase B — `af8edb20` (Lemmy on SortModes, CommunitiesLayout deleted)
@@ -171,8 +180,9 @@ Bar 1.
       Test stubs: `servers/test-lemmy` + `servers/test-reddit`.
 - [x] **E.4** Add route `/:backend/:instance_id/:account_id/discover`
       → `DiscoverCommunitiesView { … }` route component in
-      `crates/core/src/ui/routes.rs`. Also added `View::DiscoverCommunities`
-      to `crates/core/src/state.rs`.
+      `crates/core/src/ui/routes/server.rs` (dispatch in
+      `crates/core/src/ui/routes/mod.rs` — there is no `ui/routes.rs`).
+      Also added `View::DiscoverCommunities` to `crates/core/src/state.rs`.
 - [x] **E.5** Implement `DiscoverCommunitiesView` in
       `crates/core/src/ui/account/common/discover_communities.rs`:
       header (search input + scope tabs), results cards with Open action.
@@ -222,4 +232,7 @@ Bar 1.
 
 ---
 
-## Status: 🧱 DRAFT
+### Rollout-strategy status (historical): 🧱 DRAFT
+
+> Kept for history. The authoritative status is the single `## Status:` heading
+> at the top of this file.

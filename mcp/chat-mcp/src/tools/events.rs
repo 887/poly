@@ -125,8 +125,7 @@ pub(super) async fn handle_start_typing_simulation(args: &Value, pool: &BackendP
     // `next_tick_decision` directly, not this path.
     let seed = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| u64::try_from(d.as_nanos()).unwrap_or(u64::MAX))
-        .unwrap_or(0xCAFE_u64);
+        .map_or(0xCAFE_u64, |d| u64::try_from(d.as_nanos()).unwrap_or(u64::MAX));
 
     let stop_on_other_typing = params.stop_on_other_typing;
     let (abort_tx, abort_rx) = tokio::sync::oneshot::channel();

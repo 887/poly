@@ -418,8 +418,7 @@ pub fn new_subscription_id() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
     let ms = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis())
-        .unwrap_or(0);
+        .map_or(0, |d| d.as_millis());
     // Combine millis with a pseudo-random u32 from the thread-local rng via rand.
     let r: u32 = rand::random();
     format!("sub_{ms:x}_{r:08x}")

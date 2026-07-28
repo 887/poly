@@ -29,6 +29,20 @@ use std::pin::Pin;
 
 use super::StoatClient;
 
+// ── Bonfire reconnect policy ──────────────────────────────────────────────────
+
+/// First delay before retrying a dropped Bonfire WS connection.
+const INITIAL_RECONNECT_BACKOFF: std::time::Duration = std::time::Duration::from_secs(1);
+
+/// Ceiling for the exponential reconnect backoff. A wedged homeserver must not
+/// be hammered, but a returning laptop must reconnect within ~30 s.
+const MAX_RECONNECT_BACKOFF: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Double the backoff, capped at [`MAX_RECONNECT_BACKOFF`].
+fn next_reconnect_backoff(current: std::time::Duration) -> std::time::Duration {
+    current.saturating_mul(2).min(MAX_RECONNECT_BACKOFF)
+}
+
 impl StoatClient {
     pub(crate) fn build_session(&self, authenticated: api::StoatAuthenticatedSession) -> Session {
         Session {
@@ -400,7 +414,7 @@ impl IsBackend for StoatClient {
         )
         .await?;
 
-        notifications.sort_by(|left, right| right.timestamp.cmp(&left.timestamp));
+        notifications.sort_by_key(|n| std::cmp::Reverse(n.timestamp));
         Ok(notifications)
     }
 
@@ -457,56 +471,115 @@ impl IsBackend for StoatClient {
                 }));
             }
 
+            let http = self.http.clone();
+
             tokio::spawn(async move {
                 use futures::{SinkExt, StreamExt};
 
-                let (mut ws_stream, _) = match tokio_tungstenite::connect_async(&ws_url).await {
-                    Ok(conn) => conn,
-                    Err(e) => {
-                        tracing::warn!("Bonfire WS connect failed: {e}");
-                        return;
-                    }
-                };
-
-                // Authenticate
-                let auth_msg = serde_json::json!({"type": "Authenticate", "token": token});
-                if ws_stream
-                    .send(WsMessage::Text(auth_msg.to_string().into()))
+                // Media base URL for attachment download links. Fetched once —
+                // it is instance configuration, not per-message state.
+                let autumn_base_url = http
+                    .fetch_server_config()
                     .await
-                    .is_err()
-                {
-                    return;
-                }
+                    .ok()
+                    .and_then(|cfg| cfg.autumn_base_url().map(str::to_string));
 
+                let mut backoff = INITIAL_RECONNECT_BACKOFF;
                 loop {
-                    tokio::select! {
-                        // Inbound: Bonfire events → parse → forward to event channel.
-                        msg = ws_stream.next() => {
-                            match msg {
-                                Some(Ok(WsMessage::Text(text))) => {
-                                    if let Ok(event_json) =
-                                        serde_json::from_str::<serde_json::Value>(&text)
-                                        && let Some(ev) = parse_bonfire_event(&event_json)
-                                        && tx.send(ev).await.is_err()
+                    // `receiver_gone` distinguishes "our consumer dropped the
+                    // stream" (terminate the task — otherwise it would poll the
+                    // homeserver forever, surviving logout) from "the socket
+                    // died" (reconnect — a 10-second wifi blip must not kill
+                    // live events for the rest of the process lifetime).
+                    let mut receiver_gone = false;
+
+                    let connected = match tokio_tungstenite::connect_async(&ws_url).await {
+                        Ok((mut ws_stream, _)) => {
+                            let auth_msg =
+                                serde_json::json!({"type": "Authenticate", "token": token});
+                            if ws_stream
+                                .send(WsMessage::Text(auth_msg.to_string().into()))
+                                .await
+                                .is_ok()
+                            {
+                                Some(ws_stream)
+                            } else {
+                                tracing::warn!("Bonfire WS authenticate send failed");
+                                None
+                            }
+                        }
+                        Err(e) => {
+                            tracing::warn!("Bonfire WS connect failed: {e}");
+                            None
+                        }
+                    };
+
+                    if let Some(mut ws_stream) = connected {
+                        backoff = INITIAL_RECONNECT_BACKOFF;
+                        if tx
+                            .send(ClientEvent::ConnectionStateChanged {
+                                backend: BackendType::from(crate::SLUG),
+                                connected: true,
+                            })
+                            .await
+                            .is_err()
+                        {
+                            break;
+                        }
+
+                        loop {
+                            tokio::select! {
+                                // Inbound: Bonfire events → parse → forward to event channel.
+                                msg = ws_stream.next() => {
+                                    match msg {
+                                        Some(Ok(WsMessage::Text(text))) => {
+                                            if let Ok(event_json) =
+                                                serde_json::from_str::<serde_json::Value>(&text)
+                                                && let Some(ev) = parse_bonfire_event(
+                                                    &event_json,
+                                                    autumn_base_url.as_deref(),
+                                                )
+                                                && tx.send(ev).await.is_err()
+                                            {
+                                                receiver_gone = true;
+                                                break;
+                                            }
+                                        }
+                                        Some(Ok(WsMessage::Close(_)) | Err(_)) | None => break,
+                                        _ => {}
+                                    }
+                                }
+                                // Outbound: write commands from send_typing / future callers.
+                                // `ws_out_rx` outlives each socket, so typing writes
+                                // queued during a reconnect are drained by the next one.
+                                Some(json) = ws_out_rx.recv() => {
+                                    if ws_stream
+                                        .send(WsMessage::Text(json.into()))
+                                        .await
+                                        .is_err()
                                     {
                                         break;
                                     }
                                 }
-                                Some(Ok(WsMessage::Close(_)) | Err(_)) | None => break,
-                                _ => {}
-                            }
-                        }
-                        // Outbound: write commands from send_typing / future callers.
-                        Some(json) = ws_out_rx.recv() => {
-                            if ws_stream
-                                .send(WsMessage::Text(json.into()))
-                                .await
-                                .is_err()
-                            {
-                                break;
                             }
                         }
                     }
+
+                    if receiver_gone {
+                        break;
+                    }
+                    if tx
+                        .send(ClientEvent::ConnectionStateChanged {
+                            backend: BackendType::from(crate::SLUG),
+                            connected: false,
+                        })
+                        .await
+                        .is_err()
+                    {
+                        break;
+                    }
+                    tokio::time::sleep(backoff).await;
+                    backoff = next_reconnect_backoff(backoff);
                 }
             });
 
@@ -544,56 +617,105 @@ impl IsBackend for StoatClient {
             };
 
             let (tx, rx) = futures::channel::mpsc::unbounded::<ClientEvent>();
+            let http = self.http.clone();
 
             wasm_bindgen_futures::spawn_local(async move {
                 use futures::StreamExt as _;
                 use gloo_net::websocket::Message as GlooWsMsg;
                 use gloo_net::websocket::futures::WebSocket;
 
-                let ws = match WebSocket::open(&ws_url) {
-                    Ok(ws) => ws,
-                    Err(e) => {
-                        tracing::warn!("Bonfire WS open failed (WASM): {e:?}");
-                        // Emit a Connected=false so the UI knows.
-                        let _ = tx.unbounded_send(ClientEvent::ConnectionStateChanged {
-                            backend: BackendType::from(crate::SLUG),
-                            connected: false,
-                        });
-                        return;
-                    }
-                };
+                // Media base URL for attachment download links (fetched once).
+                let autumn_base_url = http
+                    .fetch_server_config()
+                    .await
+                    .ok()
+                    .and_then(|cfg| cfg.autumn_base_url().map(str::to_string));
 
-                let (mut write, mut read) = futures::StreamExt::split(ws);
+                let mut backoff = INITIAL_RECONNECT_BACKOFF;
+                loop {
+                    // See the native arm: `receiver_gone` terminates the task,
+                    // a dead socket only triggers a backed-off reconnect.
+                    let mut receiver_gone = false;
 
-                // Authenticate over Bonfire.
-                let auth_msg = serde_json::json!({"type": "Authenticate", "token": token});
-                if let Err(e) = futures::SinkExt::send(
-                    &mut write,
-                    GlooWsMsg::Text(auth_msg.to_string()),
-                ).await {
-                    tracing::warn!("Bonfire WS authenticate failed (WASM): {e:?}");
-                    return;
-                }
-
-                // Forward all Bonfire text events through parse_bonfire_event.
-                while let Some(msg) = read.next().await {
-                    match msg {
-                        Ok(GlooWsMsg::Text(text)) => {
-                            if let Ok(event_json) =
-                                serde_json::from_str::<serde_json::Value>(&text)
-                                && let Some(ev) = parse_bonfire_event(&event_json)
+                    let opened = match WebSocket::open(&ws_url) {
+                        Ok(ws) => {
+                            let (mut write, read) = futures::StreamExt::split(ws);
+                            let auth_msg =
+                                serde_json::json!({"type": "Authenticate", "token": token});
+                            match futures::SinkExt::send(
+                                &mut write,
+                                GlooWsMsg::Text(auth_msg.to_string()),
+                            )
+                            .await
                             {
-                                if tx.unbounded_send(ev).is_err() {
-                                    break; // receiver dropped — stream closed
+                                Ok(()) => Some(read),
+                                Err(e) => {
+                                    tracing::warn!(
+                                        "Bonfire WS authenticate failed (WASM): {e:?}"
+                                    );
+                                    None
                                 }
                             }
                         }
-                        Ok(GlooWsMsg::Bytes(_)) => {}
                         Err(e) => {
-                            tracing::warn!("Bonfire WS error (WASM): {e:?}");
+                            tracing::warn!("Bonfire WS open failed (WASM): {e:?}");
+                            None
+                        }
+                    };
+
+                    if let Some(mut read) = opened {
+                        backoff = INITIAL_RECONNECT_BACKOFF;
+                        if tx
+                            .unbounded_send(ClientEvent::ConnectionStateChanged {
+                                backend: BackendType::from(crate::SLUG),
+                                connected: true,
+                            })
+                            .is_err()
+                        {
                             break;
                         }
+
+                        // Forward all Bonfire text events through parse_bonfire_event.
+                        while let Some(msg) = read.next().await {
+                            match msg {
+                                Ok(GlooWsMsg::Text(text)) => {
+                                    if let Ok(event_json) =
+                                        serde_json::from_str::<serde_json::Value>(&text)
+                                        && let Some(ev) = parse_bonfire_event(
+                                            &event_json,
+                                            autumn_base_url.as_deref(),
+                                        )
+                                        && tx.unbounded_send(ev).is_err()
+                                    {
+                                        receiver_gone = true; // stream consumer dropped
+                                        break;
+                                    }
+                                }
+                                Ok(GlooWsMsg::Bytes(_)) => {}
+                                Err(e) => {
+                                    tracing::warn!("Bonfire WS error (WASM): {e:?}");
+                                    break;
+                                }
+                            }
+                        }
                     }
+
+                    if receiver_gone {
+                        break;
+                    }
+                    if tx
+                        .unbounded_send(ClientEvent::ConnectionStateChanged {
+                            backend: BackendType::from(crate::SLUG),
+                            connected: false,
+                        })
+                        .is_err()
+                    {
+                        break;
+                    }
+                    let backoff_ms =
+                        i32::try_from(backoff.as_millis()).unwrap_or(i32::MAX);
+                    crate::voice_common::sleep_ms(backoff_ms).await;
+                    backoff = next_reconnect_backoff(backoff);
                 }
             });
 
@@ -625,15 +747,20 @@ impl IsBackend for StoatClient {
             has_timed_ban: true,
             has_channel_mgmt: true,
             has_moderation_log: false,
-            // Phase C of `plan-stoat-video-wasm.md` — advertise video capture support
-            // on wasm32. The capability gate flips the `VoiceBannerAction::ToggleCamera`
-            // branch from "coming soon toast" to "toggle is_video_on and start capture";
-            // the inherent `StoatClient::start_video_capture` (wired via
-            // `VoiceTransportBackend::start_video_capture`) acquires the camera and
-            // routes encoded H.264 frames over the shared Vortex WS. Native is still
-            // audio-only (the A.5 plan decision).
+            // Phase C of `plan-stoat-video-wasm.md` — video capture is `None`
+            // until the WebCodecs pipeline actually encodes and decodes.
+            //
+            // status: gated — `video_wasm_capture::start_video_capture` acquires
+            // the camera but its encoder is a skeleton (`send_h264_nal` is never
+            // called), and `video_wasm_playback::decode_and_draw` only logs. So
+            // advertising `Full` turned the camera light on, flipped `is_video_on`
+            // true, and sent zero frames — an LSP break: the capability contract
+            // says "this backend can capture video" and the impl cannot.
+            // Re-open trigger: flip this back to `Full` in the same change that
+            // lands the `VideoEncoder` output callback + `VideoDecoder` canvas
+            // draw, so the flag and the pipeline ship together.
             #[cfg(target_arch = "wasm32")]
-            video_capture: poly_client::VideoCaptureCapability::Full,
+            video_capture: poly_client::VideoCaptureCapability::None,
             ..BackendCapabilities::FULL_SOCIAL_CHAT
         }
     }
@@ -680,32 +807,28 @@ impl IsBackend for StoatClient {
 /// on both native and wasm32 targets.
 // Complexity comes from the event-type dispatch table, not from nesting.
 #[allow(clippy::cognitive_complexity)]
-pub fn parse_bonfire_event(json: &serde_json::Value) -> Option<ClientEvent> {
+pub fn parse_bonfire_event(
+    json: &serde_json::Value,
+    autumn_base_url: Option<&str>,
+) -> Option<ClientEvent> {
     match json.get("type")?.as_str()? {
         "Message" => {
             let channel_id = json.get("channel")?.as_str()?.to_string();
             let msg_json = json.get("message")?;
-            let id = msg_json.get("_id")?.as_str()?.to_string();
-            let content = msg_json.get("content")?.as_str()?.to_string();
-            let author_id = msg_json.get("author")?.as_str()?.to_string();
-            let message = Message {
-                id,
-                author: User {
-                    id: author_id,
-                    display_name: String::new(),
-                    avatar_url: None,
-                    presence: poly_client::PresenceStatus::Online,
-                    backend: BackendType::from(crate::SLUG),
-                },
-                content: MessageContent::Text(content),
-                timestamp: chrono::Utc::now(),
-                attachments: vec![],
-                reactions: vec![],
-                reply_to: None,
-                edited: false,
-                thread: None,
-                preview_image_url: None,
-            };
+            // Decode through the SAME path as the REST fetch
+            // (`map_messages_response` → `StoatMessage::into_poly_message`) so a
+            // live message and a refetched one agree on timestamp (ULID-derived,
+            // not `Utc::now()`), author name/avatar, attachments and reactions.
+            // Hand-rolling the mapping here made a live message sort by local
+            // clock and re-materialise elsewhere on refetch.
+            let stoat_msg: api::StoatMessage =
+                serde_json::from_value(msg_json.clone()).ok()?;
+            let message = stoat_msg.into_poly_message(
+                &HashMap::new(),
+                &HashMap::new(),
+                None,
+                autumn_base_url,
+            );
             Some(ClientEvent::MessageReceived { channel_id, message })
         }
         "ChannelStartTyping" => {
@@ -793,5 +916,106 @@ impl poly_client::WritableMessagingBackend for StoatClient {
         content: MessageContent,
     ) -> ClientResult<Message> {
         self.send_message_internal(channel_id, content, None).await
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::{
+        next_reconnect_backoff, parse_bonfire_event, INITIAL_RECONNECT_BACKOFF,
+        MAX_RECONNECT_BACKOFF,
+    };
+    use poly_client::ClientEvent;
+
+    #[test]
+    fn reconnect_backoff_grows_and_is_capped() {
+        let mut d = INITIAL_RECONNECT_BACKOFF;
+        assert_eq!(next_reconnect_backoff(d), INITIAL_RECONNECT_BACKOFF * 2_u32);
+        for _ in 0..32_u32 {
+            d = next_reconnect_backoff(d);
+        }
+        assert_eq!(d, MAX_RECONNECT_BACKOFF, "backoff must saturate, not overflow");
+    }
+
+    /// A live Bonfire `Message` must derive its timestamp from the ULID in
+    /// `_id`, exactly like the REST path (`StoatMessage::into_poly_message`).
+    /// Stamping `Utc::now()` made the same message sort differently depending on
+    /// whether it arrived live or was refetched.
+    #[test]
+    fn bonfire_message_timestamp_comes_from_the_ulid_not_the_clock() {
+        // 01ARZ3NDEK... is the canonical ULID example: 2016-07-30T23:54:10.259Z.
+        let json = serde_json::json!({
+            "type": "Message",
+            "channel": "CHAN1",
+            "message": {
+                "_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+                "channel": "CHAN1",
+                "author": "USER1",
+                "content": "hi",
+            }
+        });
+        let ev = parse_bonfire_event(&json, None).expect("Message event should parse");
+        let ClientEvent::MessageReceived { channel_id, message } = ev else {
+            panic!("expected MessageReceived");
+        };
+        assert_eq!(channel_id, "CHAN1");
+        assert_eq!(message.id, "01ARZ3NDEKTSV4RRFFQ69G5FAV");
+        assert_eq!(message.timestamp.timestamp_millis(), 1_469_922_850_259);
+        assert!(
+            message.timestamp < chrono::Utc::now(),
+            "ULID timestamp, not the local clock"
+        );
+    }
+
+    /// A message whose only payload is an attachment used to be dropped
+    /// entirely, because the old parser required a `content` string.
+    #[test]
+    fn bonfire_message_without_content_is_not_dropped() {
+        let json = serde_json::json!({
+            "type": "Message",
+            "channel": "CHAN1",
+            "message": {
+                "_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+                "channel": "CHAN1",
+                "author": "USER1",
+                "attachments": [{
+                    "_id": "FILE1",
+                    "tag": "attachments",
+                    "filename": "cat.png",
+                    "content_type": "image/png",
+                    "size": 10_u64,
+                }],
+            }
+        });
+        let ev = parse_bonfire_event(&json, Some("https://autumn.test"))
+            .expect("attachment-only message should still surface");
+        let ClientEvent::MessageReceived { message, .. } = ev else {
+            panic!("expected MessageReceived");
+        };
+        assert_eq!(message.attachments.len(), 1, "attachment must survive");
+    }
+
+    /// The bundled `user` object on the WS payload must populate the author so a
+    /// live message does not render with a blank name until refetch.
+    #[test]
+    fn bonfire_message_resolves_the_bundled_author() {
+        let json = serde_json::json!({
+            "type": "Message",
+            "channel": "CHAN1",
+            "message": {
+                "_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+                "channel": "CHAN1",
+                "author": "USER1",
+                "content": "hi",
+                "user": { "_id": "USER1", "username": "otter", "discriminator": "0001", "online": true },
+            }
+        });
+        let ev = parse_bonfire_event(&json, None).expect("Message event should parse");
+        let ClientEvent::MessageReceived { message, .. } = ev else {
+            panic!("expected MessageReceived");
+        };
+        assert_eq!(message.author.id, "USER1");
+        assert_eq!(message.author.display_name, "otter");
     }
 }

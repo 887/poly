@@ -1,6 +1,7 @@
 //! `ThreadsBackend` capability sub-trait (Phase H.2.c).
 //!
-//! Carved out of [`ClientBackend`] in Phase H.2.c.  Implemented by backends
+//! Carved out of the former `ClientBackend` god-trait (replaced by
+//! [`IsBackend`]) in Phase H.2.c.  Implemented by backends
 //! that expose Discord-style thread channels (`ChannelType::Thread`): currently
 //! `poly-discord` and `poly-plugin-host` (via WIT bridge).
 //!
@@ -16,7 +17,7 @@
 //! WIT interface: `poly:messenger/messenger-client` — `get-active-threads`
 //! and `get-archived-threads` functions.
 //!
-//! [`ClientBackend`]: crate::ClientBackend
+//! [`IsBackend`]: crate::IsBackend
 
 use async_trait::async_trait;
 

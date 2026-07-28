@@ -4,9 +4,10 @@
 //! group/DM methods (`add_group_member`, `remove_group_member`,
 //! `add_users_to_group_dm`, `edit_group_dm`, `close_dm_channel`) are
 //! default-delegating shims that consult
-//! [`Self::as_writable_dms_and_groups`].
+//! [`DmsAndGroupsBackend::as_writable_dms_and_groups`].
 //!
-//! [`ClientBackend`]: crate::ClientBackend
+//! [`IsBackend`]: crate::IsBackend
+//! [`DmsAndGroupsBackend::as_writable_dms_and_groups`]: crate::DmsAndGroupsBackend::as_writable_dms_and_groups
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};

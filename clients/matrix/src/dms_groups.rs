@@ -48,7 +48,12 @@ impl poly_client::DmsAndGroupsBackend for MatrixClient {
             let (display_name, avatar_url) = match profile_result {
                 Ok(p) => (
                     p.displayname.unwrap_or_else(|| other_user_id.clone()),
-                    p.avatar_url,
+                    // `avatar_url` is an `mxc://` URI; browsers cannot load that
+                    // scheme, so it MUST go through the media thumbnail mapper
+                    // (the same conversion `hydrate_message_authors` applies).
+                    p.avatar_url
+                        .as_deref()
+                        .map(|url| crate::mxc_to_http_thumbnail(url, self.homeserver_url())),
                 ),
                 Err(_) => (other_user_id.clone(), None),
             };

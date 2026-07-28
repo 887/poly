@@ -1,4 +1,10 @@
-## Status: ✅ DONE — all phases A–H shipped.
+## Status: ✅ SHIPPED — Phases A–H landed, **except two unrun smoke tests (H.5, H.6)** and the explicitly-deferred A.3.
+
+> Not DONE: **H.5** (compose-DM UI smoke flow) and **H.6** (manual smoke against
+> real `old.reddit.com` with a throwaway account) were never run — the previous
+> `✅ DONE — all phases A–H shipped` marker hid that. **A.3** (WIT bindings +
+> guest module) is a documented deferral to its own future phase, not an
+> omission. Run H.5/H.6 and tick them before re-marking DONE.
 
 **Shipped:**
 - Phase A scaffold (`6a0d8927`), Phase B parsers (`3809e0ac`), Phase C cookie

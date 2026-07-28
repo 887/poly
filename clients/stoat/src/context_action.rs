@@ -47,7 +47,7 @@ impl poly_client::ContextActionBackend for StoatClient {
         let (is_channel_muted, is_server_muted, is_user_blocked, is_friend, is_dm_muted) =
             self.menu_state
                 .lock()
-                .map(|state| {
+                .map_or((false, false, false, false, false), |state| {
                     (
                         state.muted_channels.contains(target_id),
                         state.muted_servers.contains(target_id),
@@ -55,8 +55,7 @@ impl poly_client::ContextActionBackend for StoatClient {
                         state.friends.contains(target_id),
                         state.muted_dms.contains(target_id),
                     )
-                })
-                .unwrap_or((false, false, false, false, false));
+                });
 
         match target {
             MenuTargetKind::Channel => {

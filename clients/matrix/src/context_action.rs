@@ -32,8 +32,7 @@ impl poly_client::ContextActionBackend for MatrixClient {
                 // Distinct id per state: mark-read-room / mark-unread-room
                 // Poisoned lock treated as "not read" — safe default.
                 let is_read = self.marked_read.read()
-                    .map(|g| g.contains(target_id))
-                    .unwrap_or(false);
+                    .is_ok_and(|g| g.contains(target_id));
                 let read_item = if is_read {
                     Self::simple_item("mark-unread-room", MenuSlot::Top, "plugin-matrix-menu-mark-unread-room-label", MenuItemVariant::Normal)
                 } else {
@@ -42,8 +41,7 @@ impl poly_client::ContextActionBackend for MatrixClient {
 
                 // Distinct id per state: mute-room / unmute-room
                 let is_muted = self.muted_rooms.read()
-                    .map(|g| g.contains(target_id))
-                    .unwrap_or(false);
+                    .is_ok_and(|g| g.contains(target_id));
                 let mute_item = if is_muted {
                     Self::simple_item("unmute-room", MenuSlot::AfterFavorites, "plugin-matrix-menu-unmute-room-label", MenuItemVariant::Normal)
                 } else {
@@ -60,8 +58,7 @@ impl poly_client::ContextActionBackend for MatrixClient {
             // ── DM Channel ─────────────────────────────────────────────────
             MenuTargetKind::Dm => {
                 let is_read = self.marked_read.read()
-                    .map(|g| g.contains(target_id))
-                    .unwrap_or(false);
+                    .is_ok_and(|g| g.contains(target_id));
                 let read_item = if is_read {
                     Self::simple_item("mark-unread-room", MenuSlot::Top, "plugin-matrix-menu-mark-unread-room-label", MenuItemVariant::Normal)
                 } else {
@@ -78,8 +75,7 @@ impl poly_client::ContextActionBackend for MatrixClient {
             MenuTargetKind::User => {
                 // Distinct id per state: ignore-user / unignore-user
                 let is_ignored = self.ignored_users.read()
-                    .map(|g| g.contains(target_id))
-                    .unwrap_or(false);
+                    .is_ok_and(|g| g.contains(target_id));
                 let ignore_item = if is_ignored {
                     Self::simple_item("unignore-user", MenuSlot::AfterFavorites, "plugin-matrix-menu-unignore-user-label", MenuItemVariant::Normal)
                 } else {

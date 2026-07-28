@@ -182,31 +182,35 @@ poly/
 
 ```bash
 cd apps/web
-dx serve --platform web --fullstack \
+dx serve --platform web --port 3000 --fullstack \
   @client --no-default-features --features "dev-plugins,web" \
   @server --platform server --no-default-features --features "dev-plugins,server"
 ```
 
 The `@server --platform server` flag is required — without it dx tries to build the server half for wasm32 and fails.
 
+`--port` is also required: no `Dioxus.toml` here pins a serve port, so without
+it dx binds its own default while the native shells and MCPs connect to the
+hardcoded 3000 / 3001 / 3002 (see `mcp/*/src/main.rs`).
+
 ### Running Desktop (Wry)
 
 ```bash
 cd apps/desktop
-dx serve --platform web --fullstack \
+dx serve --platform web --port 3002 --fullstack \
   @client --no-default-features --features "dev-plugins,web" \
   @server --platform server --no-default-features --features "dev-plugins,server"
-# Then launch the Wry shell pointing at port 3002
+# Then launch the Wry shell — it loads http://127.0.0.1:3002
 ```
 
 ### Running Desktop (Electron)
 
 ```bash
 cd apps/desktop-electron
-dx serve --platform web --fullstack \
+dx serve --platform web --port 3001 --fullstack \
   @client --no-default-features --features "dev-plugins,web" \
   @server --platform server --no-default-features --features "dev-plugins,server"
-# Then launch Electron pointing at port 3001
+# Then launch Electron — it loads http://127.0.0.1:3001
 ```
 
 ### Run Tests

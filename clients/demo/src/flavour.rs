@@ -125,6 +125,50 @@ pub trait DemoFlavour: Send + Sync + 'static {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Shared capability declarations
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// These MUST stay in sync with `poly_client::capabilities_for_slug_static`
+// for the `"demo"` / `"demo_forum"` arms — that table (and its duplicate in
+// `ClientManager`) is what gates the Roles / Bans / Mod-Log tabs before a
+// live handle exists. A flag declared here is backed by a real accessor on
+// `DemoClientGeneric` (`as_moderation`, `as_discover`, …); `clients/demo/tests/
+// capability_accessor_parity.rs` enforces that invariant.
+
+/// Capabilities for the two chat flavours (Cat / Dog), slug `"demo"`.
+#[cfg(feature = "native")]
+#[must_use]
+pub(crate) fn demo_chat_capabilities() -> poly_client::BackendCapabilities {
+    poly_client::BackendCapabilities {
+        has_roles: true,
+        has_kick: true,
+        has_ban: true,
+        has_timed_ban: true,
+        has_channel_mgmt: true,
+        has_moderation_log: true,
+        ..poly_client::BackendCapabilities::FULL_SOCIAL_CHAT
+    }
+}
+
+/// Capabilities for the forum flavour (Platypus), slug `"demo_forum"`.
+///
+/// `supports_comment_feed` stays `false`: that flag makes the generic forum
+/// view rewrite a `lemmy-feed-*` channel id to `lemmy-comments-*`, which no
+/// demo channel id matches — declaring it would render a Comments pill that
+/// silently re-renders the same post list.
+#[cfg(feature = "native")]
+#[must_use]
+pub(crate) fn demo_forum_capabilities() -> poly_client::BackendCapabilities {
+    poly_client::BackendCapabilities {
+        has_ban: true,
+        has_timed_ban: true,
+        has_moderation_log: true,
+        community_search: poly_client::CommunitySearchSupport::SubscribedLocalAll,
+        ..poly_client::BackendCapabilities::MESSAGING_NO_SOCIAL
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Cat (DemoClient — the original "demo" account)
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -143,7 +187,7 @@ impl DemoFlavour for Demo {
     }
 
     fn capabilities() -> poly_client::BackendCapabilities {
-        poly_client::BackendCapabilities::FULL_SOCIAL_CHAT
+        demo_chat_capabilities()
     }
 
     fn session() -> poly_client::Session {
@@ -507,7 +551,7 @@ impl DemoFlavour for DemoChat {
     }
 
     fn capabilities() -> poly_client::BackendCapabilities {
-        poly_client::BackendCapabilities::FULL_SOCIAL_CHAT
+        demo_chat_capabilities()
     }
 
     fn session() -> poly_client::Session {
@@ -755,7 +799,7 @@ impl DemoFlavour for DemoForum {
     }
 
     fn capabilities() -> poly_client::BackendCapabilities {
-        poly_client::BackendCapabilities::MESSAGING_NO_SOCIAL
+        demo_forum_capabilities()
     }
 
     fn session() -> poly_client::Session {

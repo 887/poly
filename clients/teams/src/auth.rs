@@ -60,7 +60,7 @@ where
             1u64 << attempt.saturating_sub(1)
         }
         .min(MAX_BACKOFF_SECS);
-        tokio::time::sleep(Duration::from_secs(delay)).await;
+        crate::timing::sleep(Duration::from_secs(delay)).await;
     }
 }
 

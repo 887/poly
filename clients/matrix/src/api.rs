@@ -168,6 +168,12 @@ pub struct RoomEvent {
     #[serde(default)]
     pub state_key: Option<String>,
 
+    /// Room the event belongs to. Absent on `/messages` and `/sync` results
+    /// (the room is implied by the request), present on `/search` results —
+    /// which is the only way a global (unscoped) search can attribute a hit.
+    #[serde(default)]
+    pub room_id: Option<String>,
+
     /// Event content (type-dependent).
     #[serde(default)]
     pub content: serde_json::Value,
@@ -283,6 +289,13 @@ pub struct MessagesResponse {
     /// Message events (most recent first when `dir=b`).
     #[serde(default)]
     pub chunk: Vec<RoomEvent>,
+
+    /// Token corresponding to the END of `chunk` — feed this back as the next
+    /// request's `from` to keep paginating. Dropping it (as this struct used to)
+    /// caps history at a single page: nothing else in the client can produce a
+    /// valid continuation token.
+    #[serde(default)]
+    pub end: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -335,7 +348,13 @@ pub struct RoomTopicRequest {
 /// Subset of the full Matrix spec content; extra fields are deserialised-and-dropped
 /// (serde ignores unknown fields by default). All fields use Matrix spec defaults when
 /// absent: `ban=50`, `kick=50`, `redact=50`, `state_default=50`, `users_default=0`.
-#[derive(Debug, Default, Deserialize)]
+///
+/// NOTE: `Default` is hand-written below, NOT derived. `#[derive(Default)]`
+/// ignores `#[serde(default = "...")]` and would produce all-zero thresholds, so
+/// `fetch_power_levels`'s 404 path (a room with no explicit `m.room.power_levels`
+/// event) would grant every member `ban`/`kick`/`redact`/`state_default` at
+/// level 0 — i.e. full moderator rights.
+#[derive(Debug, Deserialize)]
 pub struct PowerLevelsContent {
     #[serde(default = "default_50")]
     pub ban: i64,
@@ -354,6 +373,22 @@ pub struct PowerLevelsContent {
 
 const fn default_50() -> i64 {
     50
+}
+
+impl Default for PowerLevelsContent {
+    /// Matrix spec defaults — MUST stay in lockstep with the `#[serde(default)]`
+    /// attributes above so `PowerLevelsContent::default()` and
+    /// `serde_json::from_str("{}")` agree.
+    fn default() -> Self {
+        Self {
+            ban: default_50(),
+            kick: default_50(),
+            redact: default_50(),
+            state_default: default_50(),
+            users_default: 0,
+            users: std::collections::HashMap::new(),
+        }
+    }
 }
 
 impl PowerLevelsContent {

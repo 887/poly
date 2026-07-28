@@ -167,7 +167,7 @@ pub struct ModalRef {
 }
 
 /// D16 — handle for a pending async action. Host polls via
-/// [`ClientBackend::poll_action`](crate::ClientBackend::poll_action).
+/// [`IsBackend::poll_action`](crate::IsBackend::poll_action).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PendingHandle {
     /// Plugin-opaque; the host returns it verbatim via `poll_action`.
@@ -264,7 +264,7 @@ impl SettingsScope {
 
 /// Compose a plugin-side settings storage key from (scope, scope-id, key).
 ///
-/// This is the canonical key format used by every `ClientBackend` impl that
+/// This is the canonical key format used by every [`IsBackend`](crate::IsBackend) impl that
 /// keeps a per-instance `HashMap<String, String>` for its settings storage
 /// (Pack C P18). Centralizing it here means scope isolation (setting on
 /// per-server scope-id `"A"` vs `"B"`) is enforced uniformly across backends.
@@ -273,7 +273,7 @@ pub fn settings_storage_key(scope: SettingsScope, scope_id: &str, key: &str) -> 
     format!("{}:{}:{}", scope.as_label(), scope_id, key)
 }
 
-/// Shared in-memory settings storage cell used by `ClientBackend` impls
+/// Shared in-memory settings storage cell used by [`IsBackend`](crate::IsBackend) impls
 /// that don't yet persist to disk / host-api.kv (Pack C P18).
 ///
 /// Wraps a `RwLock<HashMap<String, String>>` keyed by
@@ -310,7 +310,7 @@ impl SettingsStorageCell {
 
     /// Store `value` under (scope, scope_id, key).
     ///
-    /// Returns an [`ClientError::Internal`] if the RwLock is poisoned.
+    /// Returns a [`crate::ClientError::Internal`] if the RwLock is poisoned.
     pub fn set(
         &self,
         scope: SettingsScope,

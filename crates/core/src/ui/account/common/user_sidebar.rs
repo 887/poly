@@ -209,7 +209,7 @@ pub fn UserSidebar() -> Element {
                         let mut offline: Vec<User> = after_offline.iter().filter(|u| matches!(u.presence, PresenceStatus::Offline | PresenceStatus::Invisible)).cloned().collect();
                         if !matches!(sort_order, MemberListSortOrder::JoinOrder) {
                             for bucket in [&mut online, &mut idle, &mut dnd, &mut offline] {
-                                bucket.sort_by(|a, b| a.display_name.to_lowercase().cmp(&b.display_name.to_lowercase()));
+                                bucket.sort_by_key(|u| u.display_name.to_lowercase());
                             }
                         }
                         rsx! {

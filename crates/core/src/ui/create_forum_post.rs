@@ -1,6 +1,6 @@
 //! Create Forum Post and Forum Search pages, rendered inside `ServerLayout`.
 
-use crate::client_manager::ClientManager;
+use crate::client_manager::{BackendHandleExt, ClientManager};
 use crate::state::BatchedSignal;
 use crate::ui::account::common::forum_composer::{ComposerMode, ForumComposer, SubmitPayload};
 use crate::ui::actions::{ActionCx, UiAction};
@@ -104,17 +104,17 @@ pub(crate) fn CreateForumPostPage(
                         let dest = back_route_submit.clone();
                         spawn(async move {
                             if let Some(bh) = backend_handle {
-                                // read_with_timeout per CLAUDE.md hang class #4 countermeasure.
-                                // poly-lint: allow raw backend.read().await — read_with_timeout
-                                // is imported via BackendHandleExt; keep as direct .read() here
-                                // because read_with_timeout is not stable on all build targets yet.
-                                let guard = bh.read().await;
-                                // H.2.b — capability-gate via ForumBackend accessor.
-                                if let Some(fb) = guard.as_forum() {
-                                    drop(
-                                        fb.create_forum_post(&channel, &title, &body_text, vec![])
-                                            .await,
-                                    );
+                                // Hang class #4: bound the read so a backend mid-reauth
+                                // (holding the write half) cannot strand the composer.
+                                // On timeout we skip the post; the nav below still runs.
+                                if let Ok(guard) = bh.read_with_timeout(std::time::Duration::from_secs(5)).await {
+                                    // H.2.b — capability-gate via ForumBackend accessor.
+                                    if let Some(fb) = guard.as_forum() {
+                                        drop(
+                                            fb.create_forum_post(&channel, &title, &body_text, vec![])
+                                                .await,
+                                        );
+                                    }
                                 }
                                 // Navigate back regardless of result — error feedback is a
                                 // Phase D / E concern (toast system not yet wired here).

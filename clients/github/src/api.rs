@@ -63,6 +63,101 @@ pub enum GhError {
     Parse(String),
 }
 
+/// Convert a flat JSON object into `gh api` field arguments.
+///
+/// * strings → `-f key=value` (always sent as a raw string)
+/// * booleans / numbers → `-F key=value` (gh parses these as JSON literals)
+/// * `null` → omitted (an absent optional field / GraphQL variable)
+/// * arrays / nested objects → [`GhError::Spawn`]
+///
+/// The bridge exec API passes argv only, so a nested payload genuinely cannot
+/// be expressed on this transport. Rejecting it is deliberate: the alternative
+/// (silently switching to a hard-coded `https://api.github.com` HTTP POST)
+/// sends GitHub Enterprise payloads to the public host, unauthenticated.
+#[cfg(any(target_arch = "wasm32", test))]
+fn json_object_to_gh_fields(body: &serde_json::Value) -> Result<Vec<String>, GhError> {
+    let obj = body.as_object().ok_or_else(|| {
+        GhError::Spawn("gh CLI transport: request body must be a JSON object".to_string())
+    })?;
+    let mut out: Vec<String> = Vec::with_capacity(obj.len().saturating_mul(2));
+    for (key, value) in obj {
+        match *value {
+            serde_json::Value::Null => {}
+            serde_json::Value::String(ref s) => {
+                out.push("-f".to_string());
+                out.push(format!("{key}={s}"));
+            }
+            serde_json::Value::Bool(_) | serde_json::Value::Number(_) => {
+                out.push("-F".to_string());
+                out.push(format!("{key}={value}"));
+            }
+            serde_json::Value::Array(_) | serde_json::Value::Object(_) => {
+                return Err(GhError::Spawn(format!(
+                    "gh CLI transport cannot express nested field '{key}' as an argument; \
+                     this request needs a stdin-capable transport"
+                )));
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// Build the argv for `gh api -X POST … <endpoint>`.
+#[cfg(any(target_arch = "wasm32", test))]
+fn post_argv(
+    hostname: Option<&str>,
+    endpoint: &str,
+    body: &serde_json::Value,
+) -> Result<Vec<String>, GhError> {
+    let mut args: Vec<String> = vec!["api".to_string(), "-X".to_string(), "POST".to_string()];
+    if let Some(host) = hostname {
+        args.push("--hostname".to_string());
+        args.push(host.to_string());
+    }
+    args.extend(json_object_to_gh_fields(body)?);
+    args.push(endpoint.to_string());
+    Ok(args)
+}
+
+/// Build the argv for `gh api graphql …` from a `{ query, variables }` body.
+///
+/// gh treats every field other than `query` as a GraphQL variable.
+#[cfg(any(target_arch = "wasm32", test))]
+fn graphql_argv(hostname: Option<&str>, body: &serde_json::Value) -> Result<Vec<String>, GhError> {
+    let query = body.get("query").and_then(serde_json::Value::as_str).ok_or_else(|| {
+        GhError::Spawn("gh CLI transport: GraphQL body must carry a string 'query'".to_string())
+    })?;
+    let mut args: Vec<String> = vec!["api".to_string(), "graphql".to_string()];
+    if let Some(host) = hostname {
+        args.push("--hostname".to_string());
+        args.push(host.to_string());
+    }
+    args.push("-f".to_string());
+    args.push(format!("query={query}"));
+    if let Some(variables) = body.get("variables") {
+        args.extend(json_object_to_gh_fields(variables)?);
+    }
+    Ok(args)
+}
+
+/// Map a host-bridge transport failure onto [`GhError`].
+#[cfg(target_arch = "wasm32")]
+fn map_bridge_error(err: poly_host_bridge::BridgeError) -> GhError {
+    use poly_host_bridge::BridgeError;
+
+    match err {
+        BridgeError::Unreachable { url, source } => GhError::Spawn(format!(
+            "host bridge unreachable at {url}: {source} — this build of Poly \
+             needs a native shell (apps/desktop-web, apps/desktop-electron-web, …) \
+             to forward gh CLI calls."
+        )),
+        other @ (BridgeError::Transport(_)
+        | BridgeError::ParseResponse(_)
+        | BridgeError::Host(_)
+        | BridgeError::VariantMismatch { .. }) => GhError::Spawn(other.to_string()),
+    }
+}
+
 /// Wrapper that runs `gh` subprocesses for a single GitHub instance
 /// (either github.com or a GHE hostname).
 #[derive(Debug, Clone)]
@@ -448,11 +543,17 @@ impl GhCli {
         Ok(output.stdout)
     }
 
-    /// WASM: route the GraphQL call via the host bridge HTTP transport.
+    /// WASM: route the GraphQL call through the host bridge exec transport so
+    /// `--hostname` (GitHub Enterprise) and gh's own stored credentials are
+    /// honoured. Only the explicit test-mode `http_base_url` uses direct HTTP —
+    /// we never silently retarget a GHE request at github.com.
     #[cfg(target_arch = "wasm32")]
     async fn graphql_raw(&self, body: &serde_json::Value) -> Result<Vec<u8>, GhError> {
-        let base_url = self.http_base_url.as_deref().unwrap_or("https://api.github.com");
-        self.graphql_raw_http(base_url, body).await
+        if let Some(base_url) = &self.http_base_url {
+            return self.graphql_raw_http(base_url, body).await;
+        }
+        let args = graphql_argv(self.hostname.as_deref(), body)?;
+        self.exec_gh(args).await
     }
 
     /// Shared HTTP POST path for GraphQL (test mode on native, default on WASM).
@@ -560,6 +661,12 @@ impl GhCli {
     }
 
     /// WASM: route through the host bridge exec transport, same pattern as `api_raw`.
+    ///
+    /// The bridge exec API passes argv only (no stdin), so the JSON body is
+    /// expressed as `gh api` field arguments — see [`json_object_to_gh_fields`].
+    /// This keeps `--hostname` and gh's own credentials in play; the previous
+    /// implementation dropped both and POSTed unauthenticated to
+    /// `api.github.com`, which leaked GitHub Enterprise payloads to github.com.
     #[cfg(target_arch = "wasm32")]
     async fn api_post_raw(
         &self,
@@ -570,39 +677,25 @@ impl GhCli {
             return self.api_post_raw_http(base_url, endpoint, body).await;
         }
 
-        use poly_host_bridge::{BridgeError, Client};
+        let args = post_argv(self.hostname.as_deref(), endpoint, &body)?;
+        self.exec_gh(args).await
+    }
 
-        let body_str =
-            serde_json::to_string(&body).map_err(|e| GhError::Parse(e.to_string()))?;
+    /// Run `gh <args>` through the host bridge and return stdout.
+    #[cfg(target_arch = "wasm32")]
+    async fn exec_gh(&self, args: Vec<String>) -> Result<Vec<u8>, GhError> {
+        use poly_host_bridge::Client;
 
-        // gh api -X POST -f body=<json-string> <endpoint>
-        // We pass the body as a JSON field using `-f`; the gh CLI serialises it.
-        // For structured JSON payloads this is the correct CLI approach.
-        let mut args: Vec<String> = vec![
-            "api".to_string(),
-            "-X".to_string(),
-            "POST".to_string(),
-            "--header".to_string(),
-            "Content-Type: application/json".to_string(),
-            "--input".to_string(),
-            "-".to_string(),
-        ];
-        if let Some(host) = &self.hostname {
-            args.push("--hostname".to_string());
-            args.push(host.clone());
+        let client = Client::new();
+        let (exit_code, stdout, stderr) =
+            client.exec("gh", args).await.map_err(map_bridge_error)?;
+        if exit_code != 0_i32 {
+            return Err(GhError::Exit {
+                code: exit_code,
+                stderr: String::from_utf8_lossy(&stderr).into_owned(),
+            });
         }
-        args.push(endpoint.to_string());
-
-        // Pass body via stdin is not directly possible through the bridge exec API
-        // (which passes argv only). Fall back to embedding the body in the args.
-        // The bridge exec API does support stdin via the body field — use raw HTTP
-        // fallback instead by using the bridge HTTP client directly.
-        drop(body_str); // unused in this path; keep the pattern clean
-        drop(args);
-
-        // WASM: call the REST API directly via the bridge HTTP client.
-        let base_url = "https://api.github.com";
-        self.api_post_raw_http(base_url, endpoint, body).await
+        Ok(stdout)
     }
 
     /// HTTP POST transport (test mode on native, default on WASM for POST).
@@ -815,5 +908,103 @@ query($owner: String!, $name: String!, $first: Int!, $after: String) {
         };
         let discussions = conn.nodes.into_iter().flatten().collect();
         Ok((discussions, next_cursor))
+    }
+}
+
+#[cfg(test)]
+mod transport_tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
+    use super::{graphql_argv, json_object_to_gh_fields, post_argv, GhError};
+
+    /// The GHE hostname MUST reach the argv — the old wasm POST path dropped it
+    /// and hard-coded `https://api.github.com`, leaking enterprise payloads.
+    #[test]
+    fn post_argv_threads_enterprise_hostname_and_body_field() {
+        let body = serde_json::json!({ "body": "internal issue text" });
+        let args = post_argv(
+            Some("github.acme-internal.com"),
+            "/repos/o/r/issues/7/comments",
+            &body,
+        )
+        .expect("a flat string body is expressible as gh fields");
+
+        assert_eq!(
+            args,
+            vec![
+                "api".to_string(),
+                "-X".to_string(),
+                "POST".to_string(),
+                "--hostname".to_string(),
+                "github.acme-internal.com".to_string(),
+                "-f".to_string(),
+                "body=internal issue text".to_string(),
+                "/repos/o/r/issues/7/comments".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn post_argv_without_hostname_omits_the_flag() {
+        let body = serde_json::json!({ "body": "hi" });
+        let args = post_argv(None, "/repos/o/r/issues/1/comments", &body).unwrap();
+        assert!(
+            !args.iter().any(|a| a == "--hostname"),
+            "dotcom must not pass --hostname: {args:?}"
+        );
+        assert_eq!(args.last().map(String::as_str), Some("/repos/o/r/issues/1/comments"));
+    }
+
+    /// A payload the argv transport cannot express must fail loudly rather than
+    /// be silently retargeted at a different host.
+    #[test]
+    fn nested_body_is_rejected_not_retargeted() {
+        let body = serde_json::json!({ "labels": ["bug", "p1"] });
+        let err = post_argv(None, "/repos/o/r/issues/1/labels", &body).unwrap_err();
+        assert!(
+            matches!(err, GhError::Spawn(_)),
+            "nested payloads must be rejected: {err:?}"
+        );
+    }
+
+    #[test]
+    fn graphql_argv_threads_hostname_types_variables_and_omits_nulls() {
+        let body = serde_json::json!({
+            "query": "query($owner: String!) { x }",
+            "variables": {
+                "owner": "acme",
+                "first": 25_u32,
+                "after": serde_json::Value::Null,
+            },
+        });
+        let args = graphql_argv(Some("github.acme-internal.com"), &body).unwrap();
+
+        let pos = args
+            .iter()
+            .position(|a| a == "--hostname")
+            .expect("GHE hostname must be threaded into the graphql argv");
+        assert_eq!(
+            args.get(pos.saturating_add(1)).map(String::as_str),
+            Some("github.acme-internal.com")
+        );
+        assert!(args.contains(&"query=query($owner: String!) { x }".to_string()));
+        assert!(args.contains(&"owner=acme".to_string()));
+        assert!(
+            args.contains(&"first=25".to_string()),
+            "numeric variables use -F so gh sends them as JSON numbers: {args:?}"
+        );
+        assert!(
+            !args.iter().any(|a| a.starts_with("after=")),
+            "null variables must be omitted, not sent as the string \"null\": {args:?}"
+        );
+    }
+
+    #[test]
+    fn fields_use_raw_string_flag_for_strings_and_typed_flag_for_scalars() {
+        let fields = json_object_to_gh_fields(&serde_json::json!({ "a": "1" })).unwrap();
+        assert_eq!(fields, vec!["-f".to_string(), "a=1".to_string()]);
+
+        let fields = json_object_to_gh_fields(&serde_json::json!({ "a": true })).unwrap();
+        assert_eq!(fields, vec!["-F".to_string(), "a=true".to_string()]);
     }
 }

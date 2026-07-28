@@ -23,7 +23,9 @@ use tokio::net::TcpListener;
 async fn spawn_server() -> String {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
-    let app = router(UdpState::new());
+    // The loopback peers below are exactly what the production default-deny
+    // destination filter blocks, so the harness opts into the dev policy.
+    let app = router(UdpState::allow_private());
     tokio::spawn(async move {
         axum::serve(listener, app).await.unwrap();
     });
@@ -80,6 +82,65 @@ async fn send_and_recv_loopback() {
         .decode(received.data.as_bytes())
         .expect("base64 decode");
     assert_eq!(decoded, payload, "received bytes must match sent bytes");
+}
+
+/// A `dst` that is not the connected peer must be refused: `/host/udp/send`
+/// may never be used to re-aim a session at an arbitrary address.
+#[tokio::test(flavor = "multi_thread")]
+async fn send_rejects_dst_other_than_connected_peer() {
+    let base = spawn_server().await;
+    let client = UdpClient::new(&base);
+
+    let a = client.bind().await.expect("bind A");
+    let b = client.bind().await.expect("bind B");
+    let b_addr = format!("127.0.0.1:{}", b.local_port);
+    client.connect(&a.session_id, &b_addr).await.expect("connect A→B");
+
+    // Matching dst is fine.
+    client
+        .send(&a.session_id, b"ok", Some(&b_addr))
+        .await
+        .expect("dst == connected peer must be allowed");
+
+    // A different destination is refused.
+    let err = client
+        .send(&a.session_id, b"nope", Some("203.0.113.9:9999"))
+        .await
+        .expect_err("dst != connected peer must be refused");
+    assert!(
+        format!("{err}").contains("connected peer"),
+        "unexpected error: {err}"
+    );
+
+    // So is a dst on a session that was never connected.
+    let err = client
+        .send(&b.session_id, b"nope", Some("203.0.113.9:9999"))
+        .await
+        .expect_err("dst without connect must be refused");
+    assert!(format!("{err}").contains("connect"), "unexpected error: {err}");
+}
+
+/// `connect` applies the destination filter: a strict-policy service refuses
+/// to point a session at loopback / private space.
+#[tokio::test(flavor = "multi_thread")]
+async fn connect_rejects_private_peers_under_strict_policy() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let app = router(UdpState::default()); // default == deny private
+    tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    let client = UdpClient::new(format!("http://{addr}"));
+
+    let session = client.bind().await.expect("bind");
+    let err = client
+        .connect(&session.session_id, "127.0.0.1:9999")
+        .await
+        .expect_err("loopback peer must be refused under the default policy");
+    assert!(
+        format!("{err}").contains("loopback/private/reserved"),
+        "unexpected error: {err}"
+    );
 }
 
 /// After close, a subsequent send returns a server error (session not found).

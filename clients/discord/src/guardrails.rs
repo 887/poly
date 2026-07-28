@@ -184,12 +184,50 @@ pub struct SlowModeGuard {
 struct SlowModeInner {
     /// channel_id → last_send_at
     last_send: HashMap<String, Instant>,
+    /// channel_id → `rate_limit_per_user` (seconds; 0 = no slow mode).
+    ///
+    /// Populated from the Discord channel object every time one is mapped, so
+    /// the send path no longer has to guess.  Passing a hard-coded `0` made
+    /// [`SlowModeGuard::check`] a permanent no-op — it returns early before
+    /// even looking at `last_send`.
+    rate_limits: HashMap<String, u32>,
 }
 
 impl SlowModeGuard {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Record a channel's `rate_limit_per_user` (seconds; 0 = no slow mode).
+    ///
+    /// Call this whenever a `DiscordChannel` is observed.
+    pub fn set_rate_limit(&self, channel_id: &str, rate_limit_per_user: u32) {
+        let mut inner = self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        inner
+            .rate_limits
+            .insert(channel_id.to_string(), rate_limit_per_user);
+    }
+
+    /// The cached slow-mode interval for `channel_id` (0 when unknown).
+    #[must_use]
+    pub fn rate_limit_for(&self, channel_id: &str) -> u32 {
+        let inner = self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        inner.rate_limits.get(channel_id).copied().unwrap_or(0)
+    }
+
+    /// Check a send against the channel's *cached* slow-mode interval.
+    ///
+    /// This is what the send path should call: it uses the real
+    /// `rate_limit_per_user` observed from the channel object rather than the
+    /// hard-coded `0` that made the guard unreachable.
+    ///
+    /// # Errors
+    ///
+    /// Returns `ClientError::Network` when the channel is in slow mode and the
+    /// previous send is still inside the window.
+    pub fn check_channel(&self, channel_id: &str) -> Result<(), ClientError> {
+        self.check(channel_id, self.rate_limit_for(channel_id))
     }
 
     /// Check whether a message can be sent on `channel_id`.
@@ -727,7 +765,7 @@ mod tests {
     #[test]
     fn rate_guard_allows_burst() {
         let g = RateGuard::new();
-        for _ in 0..10 {
+        for _ in 0..10_u32 {
             assert!(g.check().is_ok(), "burst of 10 should be allowed");
         }
     }
@@ -735,8 +773,8 @@ mod tests {
     #[test]
     fn rate_guard_blocks_after_burst() {
         let g = RateGuard::new();
-        for _ in 0..10 {
-            let _ = g.check();
+        for _ in 0..10_u32 {
+            let _consumed = g.check();
         }
         // 11th request should fail
         assert!(g.check().is_err(), "11th request should be rate-limited");
@@ -774,6 +812,46 @@ mod tests {
         let g = SlowModeGuard::new();
         assert!(g.check("ch2", 5).is_ok(), "first send should pass");
         assert!(g.check("ch2", 5).is_err(), "second immediate send should be blocked");
+    }
+
+    #[test]
+    fn slow_mode_check_channel_uses_cached_rate_limit() {
+        // Regression guard: the send path used to call `check(channel_id, 0)`,
+        // which returns Ok immediately without consulting `last_send`, so a
+        // 30 s slow-mode channel never blocked and Discord answered with a 429.
+        let g = SlowModeGuard::new();
+        g.set_rate_limit("ch_slow", 30);
+        assert_eq!(g.rate_limit_for("ch_slow"), 30);
+        assert!(g.check_channel("ch_slow").is_ok(), "first send passes");
+        assert!(
+            g.check_channel("ch_slow").is_err(),
+            "second send inside the 30 s window must be blocked client-side"
+        );
+    }
+
+    #[test]
+    fn slow_mode_check_channel_is_permissive_for_unknown_channel() {
+        let g = SlowModeGuard::new();
+        assert!(g.check_channel("never_seen").is_ok());
+        assert!(g.check_channel("never_seen").is_ok());
+    }
+
+    #[test]
+    fn slow_mode_check_channel_permissive_when_rate_limit_zero() {
+        let g = SlowModeGuard::new();
+        g.set_rate_limit("ch_free", 0);
+        assert!(g.check_channel("ch_free").is_ok());
+        assert!(g.check_channel("ch_free").is_ok());
+    }
+
+    #[test]
+    fn slow_mode_rate_limit_can_be_updated() {
+        let g = SlowModeGuard::new();
+        g.set_rate_limit("ch", 30);
+        g.set_rate_limit("ch", 0); // moderator turned slow mode off
+        assert_eq!(g.rate_limit_for("ch"), 0);
+        assert!(g.check_channel("ch").is_ok());
+        assert!(g.check_channel("ch").is_ok());
     }
 
     #[test]

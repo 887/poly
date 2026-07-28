@@ -418,12 +418,18 @@ async fn test_get_view_detail_returns_custom_block() {
         .await
         .unwrap();
 
-    // Row ids produced by map_post_to_viewrow are the post's ap_id.
+    // Row ids produced by map_post_to_viewrow carry the LOCAL post id
+    // (`lemmy-post-<id>`), never the federated ap_id URL.
     let page = client
         .get_view_rows("lemmy-feed-1", None, None, None, None)
         .await
         .unwrap();
     let row = page.rows.first().expect("fixture seeds at least one post");
+    assert!(
+        row.id.starts_with("lemmy-post-"),
+        "row id must carry the local post id, got {}",
+        row.id
+    );
 
     let detail = client
         .get_view_detail("lemmy-feed-1", &row.id)

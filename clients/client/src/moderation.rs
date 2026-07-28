@@ -3,13 +3,14 @@
 //! Tier 2 of `plan-trait-split-readable-vs-writable.md`: the mutating
 //! methods (kick/ban/timeout/update/reorder/delete_message) are now
 //! default-delegating shims that consult
-//! [`Self::as_writable_moderation`] and forward to
+//! [`ModerationBackend::as_writable_moderation`] and forward to
 //! [`WritableModerationBackend`] when `Some`, else return
 //! `Err(NotSupported)`. Read-only moderation backends (forge indexes,
 //! news feeds that surface a ban list but don't allow mutating it)
 //! leave the accessor `None` and skip implementing the writable trait.
 //!
-//! [`ClientBackend`]: crate::ClientBackend
+//! [`IsBackend`]: crate::IsBackend
+//! [`ModerationBackend::as_writable_moderation`]: crate::ModerationBackend::as_writable_moderation
 //! [`IsBackend::as_moderation`]: crate::IsBackend::as_moderation
 //! [`WritableModerationBackend`]: crate::WritableModerationBackend
 
@@ -26,7 +27,7 @@ use crate::{
 /// The read surface (`get_my_permissions`, `get_bans`,
 /// `get_moderation_log`, `get_server_roles`) is abstract. Write
 /// methods are default-delegating shims via
-/// [`Self::as_writable_moderation`].
+/// [`ModerationBackend::as_writable_moderation`].
 ///
 /// [`IsBackend::as_moderation`]: crate::IsBackend::as_moderation
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]

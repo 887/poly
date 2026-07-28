@@ -24,6 +24,9 @@ const MAX_ATTEMPTS: u32 = 3;
 const DEFAULT_RETRY_AFTER_SECS: u64 = 1;
 /// Hard cap on any single backoff — don't let a server hold us forever.
 const MAX_BACKOFF_SECS: u64 = 30;
+/// Hard cap on `@odata.nextLink` follows per logical list request. Bounds the
+/// worst-case latency of a paged fetch against a pathological tenant.
+const MAX_PAGES: u32 = 50;
 
 /// Run `make_req` and retry on 429/5xx. The closure rebuilds the request each
 /// attempt because `RequestBuilder` isn't `Clone`.
@@ -59,7 +62,7 @@ where
             delay_secs = delay,
             "teams: retrying after transient failure"
         );
-        tokio::time::sleep(Duration::from_secs(delay)).await;
+        crate::timing::sleep(Duration::from_secs(delay)).await;
     }
 }
 
@@ -119,7 +122,14 @@ impl TeamsHttpClient {
     }
 
     async fn get<T: serde::de::DeserializeOwned>(&self, path: &str) -> Result<T, ClientError> {
-        let url = self.url(path);
+        self.get_absolute(&self.url(path)).await
+    }
+
+    /// `GET` an already-absolute URL. Graph's `@odata.nextLink` is a fully
+    /// qualified URL (it carries an opaque `$skiptoken`), so continuation
+    /// requests must NOT be re-prefixed with `base_url`.
+    async fn get_absolute<T: serde::de::DeserializeOwned>(&self, url: &str) -> Result<T, ClientError> {
+        let url = url.to_string();
         let ua = self.ua();
         let resp = send_with_retry(|| {
             self.http
@@ -132,6 +142,47 @@ impl TeamsHttpClient {
             return Err(ClientError::Network(format!("HTTP {}", resp.status().as_u16())));
         }
         resp.json::<T>().await.map_err(|e| ClientError::Internal(e.to_string()))
+    }
+
+    /// `GET` an OData list endpoint and follow `@odata.nextLink` until the
+    /// server stops handing out a cursor.
+    ///
+    /// Graph pages `/me/joinedTeams`, `/me/chats`, `/teams/{id}/channels`,
+    /// `/teams/{id}/members` and `/chats/{id}/members` well below typical
+    /// tenant sizes; taking only `value` from the first response silently
+    /// truncates the list with no error, which in turn makes owner-detection
+    /// in [`crate::TeamsClient`]'s moderation surface report `false` for real
+    /// owners who happen to land on a later page.
+    ///
+    /// Bounded by [`MAX_PAGES`], and by a self-link check, so a server that
+    /// echoes its own `nextLink` cannot spin us forever.
+    async fn get_paged<T: serde::de::DeserializeOwned>(
+        &self,
+        path: &str,
+    ) -> Result<Vec<T>, ClientError> {
+        let mut url = self.url(path);
+        let mut out: Vec<T> = Vec::new();
+        let mut pages: u32 = 0;
+        loop {
+            let col: GraphCollection<T> = self.get_absolute(&url).await?;
+            out.extend(col.value);
+            pages = pages.saturating_add(1);
+            let Some(next) = col.next_link else {
+                return Ok(out);
+            };
+            if pages >= MAX_PAGES {
+                tracing::warn!(
+                    pages,
+                    "teams: stopped following @odata.nextLink at the page cap"
+                );
+                return Ok(out);
+            }
+            if next == url {
+                tracing::warn!("teams: @odata.nextLink pointed at itself — stopping");
+                return Ok(out);
+            }
+            url = next;
+        }
     }
 
     async fn post_json<B: serde::Serialize + Sync, T: serde::de::DeserializeOwned>(
@@ -279,8 +330,7 @@ impl TeamsHttpClient {
     }
 
     pub async fn get_joined_teams(&self) -> Result<Vec<GraphTeam>, ClientError> {
-        let col: GraphCollection<GraphTeam> = self.get("/v1.0/me/joinedTeams").await?;
-        Ok(col.value)
+        self.get_paged("/v1.0/me/joinedTeams").await
     }
 
     pub async fn get_team(&self, team_id: &str) -> Result<GraphTeam, ClientError> {
@@ -288,8 +338,7 @@ impl TeamsHttpClient {
     }
 
     pub async fn get_team_channels(&self, team_id: &str) -> Result<Vec<GraphChannel>, ClientError> {
-        let col: GraphCollection<GraphChannel> = self.get(&format!("/v1.0/teams/{team_id}/channels")).await?;
-        Ok(col.value)
+        self.get_paged(&format!("/v1.0/teams/{team_id}/channels")).await
     }
 
     pub async fn get_channel_messages(
@@ -347,8 +396,7 @@ impl TeamsHttpClient {
     pub async fn get_chats(&self) -> Result<Vec<GraphChat>, ClientError> {
         // $expand=members fetches member list (with displayName) inline so
         // get_dm_channels can resolve contact display names without extra round-trips.
-        let col: GraphCollection<GraphChat> = self.get("/v1.0/me/chats?$expand=members").await?;
-        Ok(col.value)
+        self.get_paged("/v1.0/me/chats?$expand=members").await
     }
 
     pub async fn get_chat_messages(
@@ -419,9 +467,7 @@ impl TeamsHttpClient {
 
     /// GET /v1.0/teams/{team_id}/members — returns team membership list.
     pub async fn get_team_members(&self, team_id: &str) -> Result<Vec<GraphMember>, ClientError> {
-        let col: GraphCollection<GraphMember> =
-            self.get(&format!("/v1.0/teams/{team_id}/members")).await?;
-        Ok(col.value)
+        self.get_paged(&format!("/v1.0/teams/{team_id}/members")).await
     }
 
     /// DELETE /v1.0/teams/{team_id}/members/{membership_id} — kick a member.
@@ -516,9 +562,7 @@ impl TeamsHttpClient {
 
     /// GET /v1.0/chats/{chat_id}/members — list members of a chat.
     pub async fn get_chat_members(&self, chat_id: &str) -> Result<Vec<GraphChatMember>, ClientError> {
-        let col: GraphCollection<GraphChatMember> =
-            self.get(&format!("/v1.0/chats/{chat_id}/members")).await?;
-        Ok(col.value)
+        self.get_paged(&format!("/v1.0/chats/{chat_id}/members")).await
     }
 
     /// DELETE /v1.0/chats/{chat_id}/members/{membership_id} — remove a member from a group chat.

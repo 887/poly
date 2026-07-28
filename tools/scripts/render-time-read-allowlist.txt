@@ -30,7 +30,7 @@ crates/core/src/ui/account/common/agent_panel.rs:64 # MEDIUM — render-time rea
 crates/core/src/ui/account/common/agent_panel.rs:106 # MEDIUM — render-time read drives output or child prop, subscription is intent
 crates/core/src/ui/account/common/agent_panel.rs:110 # MEDIUM — render-time read drives output or child prop, subscription is intent
 crates/core/src/ui/account/common/agent_panel.rs:265 # MEDIUM — render-time read drives output or child prop, subscription is intent
-crates/core/src/ui/account/common/agent_panel.rs:268 # MEDIUM — render-time read drives output or child prop, subscription is intent
+crates/core/src/ui/account/common/agent_panel.rs:267 # MEDIUM — render-time read drives output or child prop, subscription is intent
 crates/core/src/ui/account/common/agent_panel.rs:271 # MEDIUM — render-time read drives output or child prop, subscription is intent
 crates/core/src/ui/account/common/channel_context_menu.rs:36 # MEDIUM — render-time read drives output or child prop, subscription is intent
 crates/core/src/ui/account/common/channel_context_menu.rs:98 # MEDIUM — render-time read drives output or child prop, subscription is intent
