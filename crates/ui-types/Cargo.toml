@@ -9,6 +9,7 @@ license.workspace = true
 publish = false
 
 [dependencies]
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 # intentionally empty — no deps beyond std
 
 [dev-dependencies]

@@ -88,6 +88,7 @@ futures = { workspace = true }
 async-stream = { workspace = true }
 # Used by voice_client.rs for warn! logging on SSE parse failures.
 tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 # Native: subprocess + HTTP server-side dispatch needs tokio process / fs.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

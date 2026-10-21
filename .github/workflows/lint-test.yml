@@ -39,6 +39,18 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-lint-
 
+      # Merge gate: workspace-hack must be in sync (same order as .claude/hooks/hakari-gate.sh).
+      - name: Install cargo-hakari
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-hakari
+
+      - name: Hakari manage-deps (dry run)
+        run: cargo hakari manage-deps --dry-run
+
+      - name: Hakari verify
+        run: cargo hakari verify
+
       - name: Clippy
         run: cargo clippy --workspace -- -D warnings
 

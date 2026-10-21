@@ -54,6 +54,7 @@ poly-core = { workspace = true, features = [
 ] }
 dioxus = { workspace = true }
 tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 # Native-side deps. `tokio` is always on for the desktop renderer's async
 # pieces; `axum`/`poly-host`/`dioxus-cli-config` only come in under the

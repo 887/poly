@@ -4,7 +4,9 @@
   "skipDangerousModePermissionPrompt": true,
   "permissions": {
     "defaultMode": "bypassPermissions",
-    "additionalDirectories": ["/tmp"],
+    "additionalDirectories": [
+      "/tmp"
+    ],
     "allow": [
       "Bash(*)",
       "Read(*)",
@@ -30,6 +32,17 @@
           {
             "type": "command",
             "command": "find .claude/worktrees -maxdepth 1 -name 'agent-*' -mtime +1 2>/dev/null | while read wt; do id=$(basename \"$wt\"); jj workspace forget \"$id\" 2>/dev/null; rm -rf \"$wt\"; done; exit 0"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/hakari-gate.sh"
           }
         ]
       }

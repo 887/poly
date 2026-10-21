@@ -24,6 +24,7 @@ async-trait = { workspace = true }
 # Always-on tokio (workspace default = rt/macros/sync/time/io-util — WASM safe).
 # The native target adds `process` + `rt-multi-thread` for the subprocess path.
 tokio = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 # Native: subprocess support for the gh CLI.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

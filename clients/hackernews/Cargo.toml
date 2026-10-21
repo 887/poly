@@ -21,6 +21,7 @@ futures = { workspace = true, optional = true }
 thiserror = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [features]
 default = ["native"]

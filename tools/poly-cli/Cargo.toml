@@ -22,6 +22,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 reqwest = { workspace = true }
 anyhow = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [lints]
 workspace = true

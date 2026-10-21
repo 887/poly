@@ -27,6 +27,7 @@ poly-plugin-host = { workspace = true }
 
 # Shared client trait (for BackendType, ClientBackend, etc.)
 poly-client = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net"] }

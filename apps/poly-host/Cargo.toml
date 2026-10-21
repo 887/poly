@@ -37,6 +37,7 @@ tracing-subscriber = { workspace = true }
 anyhow = { workspace = true }
 base64 = { workspace = true }
 webbrowser = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]
 tempfile = { workspace = true }

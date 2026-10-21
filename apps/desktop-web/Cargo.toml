@@ -30,6 +30,7 @@ webkit2gtk = { workspace = true }
 cairo-rs = { workspace = true }
 wry = { workspace = true }
 tao = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [lints]
 workspace = true

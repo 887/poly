@@ -26,6 +26,7 @@ futures = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 # WASM plugin guest bindings (only needed on WASI targets, not wasm32-unknown-unknown)
 [target.'cfg(target_os = "wasi")'.dependencies]

@@ -50,6 +50,7 @@ regex = { version = "1", optional = true }
 # Form-encoded body building. reqwest's `.form()` is workspace-disabled
 # (default-features = false drops serde_urlencoded), so we encode manually.
 serde_urlencoded = { version = "0.7", optional = true }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 # scraper → ahash transitively pulls getrandom 0.3 on wasm32 targets;
 # the wasm_js feature must be unified through this crate or the WASM
